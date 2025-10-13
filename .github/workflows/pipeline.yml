@@ -45,7 +45,7 @@ jobs:
       - name: Create .npmrc file
         run: |
           echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_TOKEN }}" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
 
       - name: Install CDK
         run: npm install -g aws-cdk
@@ -55,7 +55,7 @@ jobs:
         run: |
           npm ci
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy ECR stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
