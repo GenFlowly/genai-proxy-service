@@ -6,8 +6,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  CDK_APP_PATH: ./genai-proxy-server-cdk
-  SERVICE_APP_PATH: ./genai-proxy-server
+  CDK_APP_PATH: genai-proxy-server-cdk
+  SERVICE_APP_PATH: genai-proxy-server
 
 permissions:
   contents: read
