@@ -22,7 +22,7 @@ export class EcrStack extends cdk.Stack {
 
         let importedRepo: IRepository | undefined;
         try {
-            importedRepo = Repository.fromRepositoryName(this, `${repoName}-id`, repoName);
+            importedRepo = Repository.fromRepositoryName(this, `${repoName}-imported-id`, repoName);
         } catch (err) {
             importedRepo = undefined;
         }
