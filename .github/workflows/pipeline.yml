@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
 
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY_NAME: genai-proxy-repo
+  CDK_APP_PATH: genai-proxy-server-cdk
+  SERVICE_APP_PATH: genai-proxy-server
+
 permissions:
   contents: read
   id-token: write
@@ -20,12 +26,6 @@ jobs:
       ecs-service: ${{ steps.stack-outputs.outputs.ecs-service }}
 
     steps:
-      - name: Checkout app repo
-        uses: actions/checkout@v4
-        with:
-          repository: GenFlowly/genai-proxy-server
-          token: ${{ secrets.GH_TOKEN }}
-          path: genai-proxy-server
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -40,20 +40,50 @@ jobs:
         with:
           node-version: 20
 
-      - name: Create .npmrc file
-        run: |
-          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_TOKEN }}" >> .npmrc
-
       - name: Install CDK
         run: npm install -g aws-cdk
 
       - name: Install dependencies
+        working-directory: ${{ env.CDK_APP_PATH }}
         run: |
           npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
 
-      - name: Compile and Test CDK
+      - name: Deploy ECR stack (CDK)
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: npx cdk deploy EcrStack --require-approval never
+
+      - name: Get ECR Repository URI
+        id: get-ecr-uri
         run: |
-          npm run build
+          ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name $ECR_STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
+            --output text)
+          echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
+          echo "Using ECR URI: $ECR_URI"
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        working-directory: ${{ env.SERVICE_APP_PATH }}
+        run: |
+          docker build -t $ECR_REPOSITORY_NAME .
+
+      - name: Tag and push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker tag $ECR_REPOSITORY_NAME:latest $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG
+          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy ECS stack (CDK)
+        working-directory: ${{ env.CDK_APP_PATH }}
+        env:
+          IMAGE_URI: ${{ env.IMAGE_URI }}
+        run: npx cdk deploy EcsStack --require-approval never

@@ -6,10 +6,12 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
 import { ALLOWED_HTTPS_PORT, ASG_CAPACITY, createDefaultVpc, STAGES } from "@genflowly/cdk-commons";
+import {IRepository} from "aws-cdk-lib/aws-ecr";
 
 export interface EcsStackProps extends cdk.StackProps {
   serviceName: string;
   stage: STAGES;
+  ecrRepo: IRepository
 }
 
 export class EcsStack extends cdk.Stack {
@@ -24,7 +26,6 @@ export class EcsStack extends cdk.Stack {
     const logGroupName = `${props.serviceName}-${props.stage}-log-group`;
     const LATEST_TAG = 'latest';
 
-    // Create or get VPC
     const vpc: Vpc = createDefaultVpc(
       this,
       `${props.serviceName}-${props.stage}-VpcId`,
@@ -34,21 +35,12 @@ export class EcsStack extends cdk.Stack {
       true
     );
 
-    // ECS Cluster
     const cluster = new ecs.Cluster(
       this, `${props.serviceName}-${props.stage}-clusterId`, {
       vpc,
       clusterName
     });
 
-    // Import existing ECR Repository (should already exist)
-    const ecrRepo = ecr.Repository.fromRepositoryName(
-      this,
-      `${props.serviceName}-${props.stage}-repoId`,
-      repositoryName
-    );
-
-    // Logs
     const logGroup = new logs.LogGroup(this, `${props.serviceName}-${props.stage}-logGroupId`, {
       logGroupName,
       retention: logs.RetentionDays.ONE_WEEK,
@@ -66,7 +58,7 @@ export class EcsStack extends cdk.Stack {
         cpu: 512,
         memoryLimitMiB: 1024,
         taskImageOptions: {
-          image: ecs.ContainerImage.fromEcrRepository(ecrRepo, LATEST_TAG),
+          image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, LATEST_TAG),
           containerName,
           containerPort: 8080,
           logDriver: ecs.LogDrivers.awsLogs({
