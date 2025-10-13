@@ -42,6 +42,11 @@ jobs:
         with:
           node-version: 20
 
+      - name: Create .npmrc file
+        run: |
+          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_TOKEN }}" >> .npmrc
+
       - name: Install CDK
         run: npm install -g aws-cdk
 
