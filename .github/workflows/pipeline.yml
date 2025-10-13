@@ -43,6 +43,7 @@ jobs:
           node-version: 20
 
       - name: Create .npmrc file
+        working-directory: ${{ env.CDK_APP_PATH }}
         run: |
           echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
