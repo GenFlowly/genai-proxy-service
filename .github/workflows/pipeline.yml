@@ -6,9 +6,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY_NAME: genai-proxy-repo
-  CDK_APP_PATH: genai-proxy-server-cdk
-  SERVICE_APP_PATH: genai-proxy-server
+  CDK_APP_PATH: ${{ github.workspace }}/genai-proxy-server-cdk
+  SERVICE_APP_PATH: ${{ github.workspace }}/genai-proxy-server
 
 permissions:
   contents: read
