@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 jobs:
-  build:
+  development:
     environment: development
     runs-on: ubuntu-latest
     outputs:
@@ -25,6 +25,9 @@ jobs:
       ecs-service: ${{ steps.stack-outputs.outputs.ecs-service }}
 
     steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
