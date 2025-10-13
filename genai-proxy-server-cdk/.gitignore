@@ -1,0 +1,18 @@
+# dependencies
+/node_modules
+
+# IDE related
+.idea
+
+# production
+*.d.ts
+/dist
+/public
+/build
+
+# misc
+.DS_Store
+
+# js related
+*.js
+!jest.config.js

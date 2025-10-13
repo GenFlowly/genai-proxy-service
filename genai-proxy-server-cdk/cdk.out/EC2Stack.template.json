@@ -1,0 +1,833 @@
+{
+ "Resources": {
+  "GenAIProxyServicedevelopmentvpc031A49FD": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "EC2Stack/GenAIProxyService-development-vpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/Resource"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1Subnet57E682C6": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AssignIpv6AddressOnCreation": true,
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.0.0/16",
+    "Ipv6CidrBlock": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::Cidr": [
+        {
+         "Fn::Select": [
+          0,
+          {
+           "Fn::GetAtt": [
+            "GenAIProxyServicedevelopmentvpc031A49FD",
+            "Ipv6CidrBlocks"
+           ]
+          }
+         ]
+        },
+        256,
+        "64"
+       ]
+      }
+     ]
+    },
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "GenAIProxyService-development-vpc-development-IPv6SubnetConfig"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "EC2Stack/GenAIProxyService-development-vpc/GenAIProxyService-development-vpc-development-IPv6SubnetConfigSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "GenAIProxyServicedevelopmentvpc031A49FD"
+    }
+   },
+   "DependsOn": [
+    "GenAIProxyServicedevelopmentvpcIpv6Cidr67334284"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/GenAIProxyService-development-vpc-development-IPv6SubnetConfigSubnet1/Subnet"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1RouteTableD6278770": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "EC2Stack/GenAIProxyService-development-vpc/GenAIProxyService-development-vpc-development-IPv6SubnetConfigSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "GenAIProxyServicedevelopmentvpc031A49FD"
+    }
+   },
+   "DependsOn": [
+    "GenAIProxyServicedevelopmentvpcIpv6Cidr67334284"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/GenAIProxyService-development-vpc-development-IPv6SubnetConfigSubnet1/RouteTable"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1RouteTableAssociationC8B674C2": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1RouteTableD6278770"
+    },
+    "SubnetId": {
+     "Ref": "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1Subnet57E682C6"
+    }
+   },
+   "DependsOn": [
+    "GenAIProxyServicedevelopmentvpcIpv6Cidr67334284"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/GenAIProxyService-development-vpc-development-IPv6SubnetConfigSubnet1/RouteTableAssociation"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1DefaultRouteD63E1B53": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "GenAIProxyServicedevelopmentvpcIGW388DAD35"
+    },
+    "RouteTableId": {
+     "Ref": "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1RouteTableD6278770"
+    }
+   },
+   "DependsOn": [
+    "GenAIProxyServicedevelopmentvpcIpv6Cidr67334284",
+    "GenAIProxyServicedevelopmentvpcVPCGW52A98088"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/GenAIProxyService-development-vpc-development-IPv6SubnetConfigSubnet1/DefaultRoute"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1Default6RouteEB940916": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationIpv6CidrBlock": "::/0",
+    "GatewayId": {
+     "Ref": "GenAIProxyServicedevelopmentvpcIGW388DAD35"
+    },
+    "RouteTableId": {
+     "Ref": "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1RouteTableD6278770"
+    }
+   },
+   "DependsOn": [
+    "GenAIProxyServicedevelopmentvpcIpv6Cidr67334284"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/GenAIProxyService-development-vpc-development-IPv6SubnetConfigSubnet1/Default6Route"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcIGW388DAD35": {
+   "Type": "AWS::EC2::InternetGateway",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "EC2Stack/GenAIProxyService-development-vpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/IGW"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcVPCGW52A98088": {
+   "Type": "AWS::EC2::VPCGatewayAttachment",
+   "Properties": {
+    "InternetGatewayId": {
+     "Ref": "GenAIProxyServicedevelopmentvpcIGW388DAD35"
+    },
+    "VpcId": {
+     "Ref": "GenAIProxyServicedevelopmentvpc031A49FD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/VPCGW"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcRestrictDefaultSecurityGroupCustomResource9EA4C857": {
+   "Type": "Custom::VpcRestrictDefaultSG",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E",
+      "Arn"
+     ]
+    },
+    "DefaultSecurityGroupId": {
+     "Fn::GetAtt": [
+      "GenAIProxyServicedevelopmentvpc031A49FD",
+      "DefaultSecurityGroup"
+     ]
+    },
+    "Account": {
+     "Ref": "AWS::AccountId"
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/RestrictDefaultSecurityGroupCustomResource/Default"
+   }
+  },
+  "GenAIProxyServicedevelopmentvpcIpv6Cidr67334284": {
+   "Type": "AWS::EC2::VPCCidrBlock",
+   "Properties": {
+    "AmazonProvidedIpv6CidrBlock": true,
+    "VpcId": {
+     "Ref": "GenAIProxyServicedevelopmentvpc031A49FD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-vpc/Ipv6Cidr"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyName": "Inline",
+      "PolicyDocument": {
+       "Version": "2012-10-17",
+       "Statement": [
+        {
+         "Effect": "Allow",
+         "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress"
+         ],
+         "Resource": [
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:",
+             {
+              "Ref": "AWS::Partition"
+             },
+             ":ec2:",
+             {
+              "Ref": "AWS::Region"
+             },
+             ":",
+             {
+              "Ref": "AWS::AccountId"
+             },
+             ":security-group/",
+             {
+              "Fn::GetAtt": [
+               "GenAIProxyServicedevelopmentvpc031A49FD",
+               "DefaultSecurityGroup"
+              ]
+             }
+            ]
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "__entrypoint__.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Description": "Lambda function for removing all inbound/outbound rules from the VPC default security group"
+   },
+   "DependsOn": [
+    "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200",
+    "aws:asset:property": "Code"
+   }
+  },
+  "GenAIProxyServicedevelopmentSecurityGroupdevelopmentB11C56BC": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "GenAIProxyService-development-SecurityGroup for VPC: GenAIProxyService-development-vpc and EC2 Instance: GenAIProxyService-development-EC2Instance ",
+    "GroupName": "GenAIProxyService-development-SecurityGroup-development",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIpv6": "::/0",
+      "Description": "Allow list Port 80",
+      "FromPort": 80,
+      "IpProtocol": "tcp",
+      "ToPort": 80
+     },
+     {
+      "CidrIpv6": "::/0",
+      "Description": "Allow list Port 443",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": {
+     "Ref": "GenAIProxyServicedevelopmentvpc031A49FD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-SecurityGroup-development/Resource"
+   }
+  },
+  "GenAIProxyServicedevelopmentEC2InstancedevelopmentIPv6SecurityGroupF434202F": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "EC2Stack/GenAIProxyService-development-EC2Instance-development:IPv6SecurityGroup",
+    "GroupName": "GenAIProxyService-development-EC2Instance-development:IPv6SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     },
+     {
+      "CidrIpv6": "::/0",
+      "Description": "Allow all outbound ipv6 traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIpv6": "::/0",
+      "Description": "Allow HTTPS on IPv6",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     },
+     {
+      "CidrIpv6": "::/0",
+      "Description": "Allow HTTP on IPv6",
+      "FromPort": 80,
+      "IpProtocol": "tcp",
+      "ToPort": 80
+     },
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "from 0.0.0.0/0:22",
+      "FromPort": 22,
+      "IpProtocol": "tcp",
+      "ToPort": 22
+     },
+     {
+      "CidrIpv6": "::/0",
+      "Description": "from ::/0:22",
+      "FromPort": 22,
+      "IpProtocol": "tcp",
+      "ToPort": 22
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "GenAIProxyService-development-EC2Instance-development"
+     }
+    ],
+    "VpcId": {
+     "Ref": "GenAIProxyServicedevelopmentvpc031A49FD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-EC2Instance-development:IPv6SecurityGroup/Resource"
+   }
+  },
+  "GenAIProxyServicedevelopmentEC2InstancedevelopmentInstanceRole4D71845A": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "GenAIProxyService-development-EC2Instance-development"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-EC2Instance-development/InstanceRole/Resource"
+   }
+  },
+  "GenAIProxyServicedevelopmentEC2InstancedevelopmentInstanceProfile5ADFA17D": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "GenAIProxyServicedevelopmentEC2InstancedevelopmentInstanceRole4D71845A"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-EC2Instance-development/InstanceProfile"
+   }
+  },
+  "GenAIProxyServicedevelopmentEC2InstancedevelopmentEDCE9867": {
+   "Type": "AWS::EC2::Instance",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "IamInstanceProfile": {
+     "Ref": "GenAIProxyServicedevelopmentEC2InstancedevelopmentInstanceProfile5ADFA17D"
+    },
+    "ImageId": {
+     "Ref": "SsmParameterValueawsservicecanonicalubuntuserver2404stablecurrentamd64hvmebsgp3amiidC96584B6F00A464EAD1953AFF4B05118Parameter"
+    },
+    "InstanceType": "t2.nano",
+    "NetworkInterfaces": [
+     {
+      "AssociatePublicIpAddress": false,
+      "DeviceIndex": "0",
+      "GroupSet": [
+       {
+        "Fn::GetAtt": [
+         "GenAIProxyServicedevelopmentEC2InstancedevelopmentIPv6SecurityGroupF434202F",
+         "GroupId"
+        ]
+       }
+      ],
+      "SubnetId": {
+       "Ref": "GenAIProxyServicedevelopmentvpcGenAIProxyServicedevelopmentvpcdevelopmentIPv6SubnetConfigSubnet1Subnet57E682C6"
+      }
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "GenAIProxyService-development-EC2Instance-development"
+     }
+    ],
+    "UserData": {
+     "Fn::Base64": ""
+    }
+   },
+   "DependsOn": [
+    "GenAIProxyServicedevelopmentEC2InstancedevelopmentInstanceRole4D71845A"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/GenAIProxyService-development-EC2Instance-development/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/3WOMW+DQAyFf0v249qwtB0JQ5SpCKqslTlM6gB36OwLihD/vaKQog6d/N73bD3Hev/6pvc7GDgyVRO1VOqxEDCNgoE/RzSxHs+9UWltz1mqslC2ZIpQWpSZbSp3QfADyhY3vrGE2RkCIWd/l2dxsoLeohxBcID7WrO6RATMV4dWVp5S5Q+tM40q0ARPcj96F/qfwj/gZFnAmrVi0ZMi6PSYu+XDx3zEmXc1tThNKkd2wc/HgcV1m63tP1Hm3Y0q9AdgVAkzSiFwIXuZbzLw0KGgn817kD7IpKyrUF/56Rbv9Yt+3l2ZKPLBCnWo82V+AwXiDnecAQAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "EC2Stack/CDKMetadata/Default"
+   },
+   "Condition": "CDKMetadataAvailable"
+  }
+ },
+ "Parameters": {
+  "SsmParameterValueawsservicecanonicalubuntuserver2404stablecurrentamd64hvmebsgp3amiidC96584B6F00A464EAD1953AFF4B05118Parameter": {
+   "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+   "Default": "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
+  },
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Outputs": {
+  "InstanceId": {
+   "Value": {
+    "Ref": "GenAIProxyServicedevelopmentEC2InstancedevelopmentEDCE9867"
+   }
+  }
+ },
+ "Conditions": {
+  "CDKMetadataAvailable": {
+   "Fn::Or": [
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "af-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-3"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-4"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-northwest-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-2"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "il-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "sa-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-west-1"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Equals": [
+      {
+       "Ref": "AWS::Region"
+      },
+      "us-west-2"
+     ]
+    }
+   ]
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}
