@@ -60,7 +60,7 @@ jobs:
 
       - name: Deploy ECR stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: npx cdk deploy EcrStack --require-approval never
+        run: cdk deploy EcrStack --require-approval never
 
       - name: Get ECR Repository URI
         id: get-ecr-uri
@@ -94,4 +94,4 @@ jobs:
         working-directory: ${{ env.CDK_APP_PATH }}
         env:
           IMAGE_URI: ${{ env.IMAGE_URI }}
-        run: npx cdk deploy EcsStack --require-approval never
+        run: cdk deploy EcsStack --require-approval never
