@@ -103,7 +103,7 @@ export class EcsStack extends cdk.Stack {
     });
 
     // Grant pull permissions for ECS
-    ecrRepo.grantPull(fargateService.taskDefinition.executionRole!);
+    props.ecrRepo.grantPull(fargateService.taskDefinition.executionRole!);
 
     // Outputs for GitHub Actions
     new cdk.CfnOutput(this, 'ECRRepositoryName', {
@@ -112,7 +112,7 @@ export class EcsStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'ECRRepositoryURI', {
-      value: ecrRepo.repositoryUri,
+      value: props.ecrRepo.repositoryUri,
       exportName: `${props.serviceName}-ECRRepositoryURI`,
     });
 
