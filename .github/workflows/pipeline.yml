@@ -1,0 +1,59 @@
+name: Pipeline
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    environment: development
+    runs-on: ubuntu-latest
+    outputs:
+      image-uri: ${{ steps.push-image.outputs.image-uri }}
+      aws-region: ${{ steps.stack-outputs.outputs.aws-region }}
+      ecr-repo: ${{ steps.stack-outputs.outputs.ecr-repo }}
+      ecs-cluster: ${{ steps.stack-outputs.outputs.ecs-cluster }}
+      ecs-service: ${{ steps.stack-outputs.outputs.ecs-service }}
+
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+        with:
+          repository: GenFlowly/genai-proxy-server
+          token: ${{ secrets.GH_TOKEN }}
+          path: genai-proxy-server
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create .npmrc file
+        run: |
+          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_TOKEN }}" >> .npmrc
+
+      - name: Install CDK
+        run: npm install -g aws-cdk
+
+      - name: Install dependencies
+        run: |
+          npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Compile and Test CDK
+        run: |
+          npm run build

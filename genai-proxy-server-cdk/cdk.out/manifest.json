@@ -1,0 +1,508 @@
+{
+  "version": "41.0.0",
+  "artifacts": {
+    "BootstrapStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "BootstrapStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "BootstrapStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "BootstrapStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/21bb2dc7e3a944656394ffaad58a440ccd17cf299f34aaab86e889b457c83d54.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "BootstrapStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "BootstrapStack.assets"
+      ],
+      "metadata": {
+        "/BootstrapStack/GitHubActionsPolicy-production/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GitHubActionsPolicyproduction458C5E78"
+          }
+        ],
+        "/BootstrapStack/GitHubActions-development/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GitHubActionsdevelopment7871746D"
+          }
+        ],
+        "/BootstrapStack/GitHubActionsActionKey-development": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GitHubActionsActionKeydevelopment"
+          }
+        ],
+        "/BootstrapStack/GitHubAccessKeyId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GitHubAccessKeyId"
+          }
+        ],
+        "/BootstrapStack/GitHubSecretAccessKey": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GitHubSecretAccessKey"
+          }
+        ],
+        "/BootstrapStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/BootstrapStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/BootstrapStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/BootstrapStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "BootstrapStack"
+    },
+    "DynamoDBStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "DynamoDBStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "DynamoDBStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "DynamoDBStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c763b4d3b37f56ec6d134f9922da21ca676e19d8d37cee1487b4d92542d7663c.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "DynamoDBStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "DynamoDBStack.assets"
+      ],
+      "metadata": {
+        "/DynamoDBStack/User": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "User00B015A1"
+            }
+          }
+        ],
+        "/DynamoDBStack/User/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "User00B015A1"
+          }
+        ],
+        "/DynamoDBStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/DynamoDBStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/DynamoDBStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/DynamoDBStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "DynamoDBStack"
+    },
+    "EcsStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "EcsStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "EcsStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "EcsStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/9712fba72f5bb8a18b2d5fa45e479ca57375ca6fcc50d8ee95f8ad665e7e3537.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "EcsStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "EcsStack.assets"
+      ],
+      "metadata": {
+        "/EcsStack/GenAIProxyService-development-VpcId/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcId99C4A2B1"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/GenAIProxyService-development-vpc-development-SubnetConfigSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdGenAIProxyServicedevelopmentvpcdevelopmentSubnetConfigSubnet1Subnet8436D160"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/GenAIProxyService-development-vpc-development-SubnetConfigSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdGenAIProxyServicedevelopmentvpcdevelopmentSubnetConfigSubnet1RouteTable03AD431C"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/GenAIProxyService-development-vpc-development-SubnetConfigSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdGenAIProxyServicedevelopmentvpcdevelopmentSubnetConfigSubnet1RouteTableAssociation4A78101C"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/GenAIProxyService-development-vpc-development-SubnetConfigSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdGenAIProxyServicedevelopmentvpcdevelopmentSubnetConfigSubnet1DefaultRouteCD176231"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/GenAIProxyService-development-vpc-development-SubnetConfigSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdGenAIProxyServicedevelopmentvpcdevelopmentSubnetConfigSubnet2Subnet1AB2B632"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/GenAIProxyService-development-vpc-development-SubnetConfigSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdGenAIProxyServicedevelopmentvpcdevelopmentSubnetConfigSubnet2RouteTable51356E1A"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/GenAIProxyService-development-vpc-development-SubnetConfigSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdGenAIProxyServicedevelopmentvpcdevelopmentSubnetConfigSubnet2RouteTableAssociation14F1E7AE"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/GenAIProxyService-development-vpc-development-SubnetConfigSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdGenAIProxyServicedevelopmentvpcdevelopmentSubnetConfigSubnet2DefaultRouteE7BB30E0"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/IGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdIGWC0D2E583"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/VPCGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdVPCGW2F7BCDE7"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-VpcId/RestrictDefaultSecurityGroupCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentVpcIdRestrictDefaultSecurityGroupCustomResource6C40B603"
+          }
+        ],
+        "/EcsStack/Custom::VpcRestrictDefaultSGCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/EcsStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+          }
+        ],
+        "/EcsStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-clusterId/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentclusterId0033C501"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-logGroupId/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentlogGroupId3CC82DAF"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/LB/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdLBF24A5ACE"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/LB/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdLBSecurityGroup04E746CF"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/LB/SecurityGroup/to EcsStackGenAIProxyServicedevelopmentServiceIdServiceSecurityGroup27E37841:8080": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdLBSecurityGrouptoEcsStackGenAIProxyServicedevelopmentServiceIdServiceSecurityGroup27E3784180801640E2A6"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/LB/PublicListener/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdLBPublicListener122CE163"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/LB/PublicListener/ECSGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdLBPublicListenerECSGroup2802A5CF"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/LoadBalancerDNS": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdLoadBalancerDNS0FB25E36"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/ServiceURL": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdServiceURLD3250B37"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/TaskDef/TaskRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdTaskDefTaskRole5CDE6DB8"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/TaskDef/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdTaskDef35E98713"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/TaskDef/ExecutionRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdTaskDefExecutionRoleE40305CD"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/TaskDef/ExecutionRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdTaskDefExecutionRoleDefaultPolicy835BFA51"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/Service": [
+          {
+            "type": "aws:cdk:warning",
+            "data": "minHealthyPercent has not been configured so the default value of 50% is used. The number of running tasks will decrease below the desired count during deployments etc. See https://github.com/aws/aws-cdk/issues/31705 [ack: @aws-cdk/aws-ecs:minHealthyPercent]",
+            "trace": [
+              "Annotations.addMessage (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/aws-cdk-lib/core/lib/annotations.js:1:1608)",
+              "Annotations.addWarningV2 (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/aws-cdk-lib/core/lib/annotations.js:1:825)",
+              "new BaseService (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/aws-cdk-lib/aws-ecs/lib/base/base-service.js:1:8100)",
+              "new FargateService (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/aws-cdk-lib/aws-ecs/lib/fargate/fargate-service.js:1:3551)",
+              "new ApplicationLoadBalancedFargateService (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/aws-cdk-lib/aws-ecs-patterns/lib/fargate/application-load-balanced-fargate-service.js:1:3340)",
+              "new EcsStack (/Users/nk/workplace/genai-proxy-server-cdk/lib/ecs-stack.ts:59:28)",
+              "Object.<anonymous> (/Users/nk/workplace/genai-proxy-server-cdk/bin/cdk.ts:17:1)",
+              "Module._compile (node:internal/modules/cjs/loader:1368:14)",
+              "Module.m._compile (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/ts-node/src/index.ts:1618:23)",
+              "Module._extensions..js (node:internal/modules/cjs/loader:1426:10)",
+              "Object.require.extensions.<computed> [as .ts] (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/ts-node/src/index.ts:1621:12)",
+              "Module.load (node:internal/modules/cjs/loader:1205:32)",
+              "Function.Module._load (node:internal/modules/cjs/loader:1021:12)",
+              "Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:142:12)",
+              "phase4 (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/ts-node/src/bin.ts:649:14)",
+              "bootstrap (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/ts-node/src/bin.ts:95:10)",
+              "main (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/ts-node/src/bin.ts:55:10)",
+              "Object.<anonymous> (/Users/nk/workplace/genai-proxy-server-cdk/node_modules/ts-node/src/bin.ts:800:3)",
+              "Module._compile (node:internal/modules/cjs/loader:1368:14)",
+              "Object.Module._extensions..js (node:internal/modules/cjs/loader:1426:10)",
+              "Module.load (node:internal/modules/cjs/loader:1205:32)",
+              "Function.Module._load (node:internal/modules/cjs/loader:1021:12)",
+              "Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:142:12)",
+              "node:internal/main/run_main_module:28:49"
+            ]
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/Service/Service": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdService1A013B58"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/Service/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdServiceSecurityGroup88E5FEAD"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/Service/SecurityGroup/from EcsStackGenAIProxyServicedevelopmentServiceIdLBSecurityGroupBE0B8598:8080": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdServiceSecurityGroupfromEcsStackGenAIProxyServicedevelopmentServiceIdLBSecurityGroupBE0B859880806FFA7CCF"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/Service/TaskCount/Target/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdServiceTaskCountTarget86DA156C"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/Service/TaskCount/Target/CpuScaling/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdServiceTaskCountTargetCpuScaling46645793"
+          }
+        ],
+        "/EcsStack/GenAIProxyService-development-ServiceId/Service/TaskCount/Target/MemoryScaling/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GenAIProxyServicedevelopmentServiceIdServiceTaskCountTargetMemoryScalingC38AA3BF"
+          }
+        ],
+        "/EcsStack/ECRRepositoryName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ECRRepositoryName"
+          }
+        ],
+        "/EcsStack/ECRRepositoryURI": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ECRRepositoryURI"
+          }
+        ],
+        "/EcsStack/ECSClusterName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ECSClusterName"
+          }
+        ],
+        "/EcsStack/ECSServiceName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ECSServiceName"
+          }
+        ],
+        "/EcsStack/AWSRegion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AWSRegion"
+          }
+        ],
+        "/EcsStack/ServiceURL": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ServiceURL"
+          }
+        ],
+        "/EcsStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/EcsStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/EcsStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/EcsStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "EcsStack"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  },
+  "minimumCliVersion": "2.1005.0"
+}

@@ -1,0 +1,36 @@
+{
+  "name": "cdk-app-template",
+  "version": "1.0.0",
+  "description": "",
+  "bin": {
+    "cdk": "bin/cdk.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prettier-check": "prettier --check .",
+    "pretty": "prettier --write .",
+    "prepare": "husky",
+    "cdk": "cdk",
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@genflowly/cdk-commons": "^0.1.21",
+    "aws-cdk-lib": "2.189.1",
+    "constructs": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@typescript-eslint/eslint-plugin": "^8.5.0",
+    "@typescript-eslint/parser": "^8.5.0",
+    "aws-cdk": "^2.152.0",
+    "eslint": "^9.10.0",
+    "husky": "^9.1.6",
+    "prettier": "^3.3.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.2"
+  }
+}

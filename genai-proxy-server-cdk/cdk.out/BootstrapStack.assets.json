@@ -1,0 +1,20 @@
+{
+  "version": "41.0.0",
+  "files": {
+    "21bb2dc7e3a944656394ffaad58a440ccd17cf299f34aaab86e889b457c83d54": {
+      "displayName": "BootstrapStack Template",
+      "source": {
+        "path": "BootstrapStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "21bb2dc7e3a944656394ffaad58a440ccd17cf299f34aaab86e889b457c83d54.json",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}
