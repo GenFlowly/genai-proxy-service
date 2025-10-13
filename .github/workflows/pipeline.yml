@@ -71,6 +71,7 @@ jobs:
             --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
             --output text)
           echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
+          echo "ECR_REPOSITORY_NAME=$(basename $ECR_URI)" >> $GITHUB_ENV
           echo "Using ECR URI: $ECR_URI"
 
       - name: Login to Amazon ECR
