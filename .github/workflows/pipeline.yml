@@ -91,9 +91,10 @@ jobs:
           docker tag $ECR_REPOSITORY_NAME:latest $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Deploy ECS stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
         env:
-          IMAGE_URI: ${{ env.IMAGE_URI }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: cdk deploy EcsStack --require-approval never
