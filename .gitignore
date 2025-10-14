@@ -45,6 +45,6 @@ out/
 
 
 # cdk
-!**/cdk.out/*
+!**/cdk.out/**
 !**/genai-proxy-server-cdk/cdk.out
-cdk.out/*
+genai-proxy-server-cdk/cdk.out/**
