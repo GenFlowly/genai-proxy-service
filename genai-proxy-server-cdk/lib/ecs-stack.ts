@@ -4,7 +4,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import {Construct} from 'constructs';
-import {InterfaceVpcEndpointAwsService, Vpc} from 'aws-cdk-lib/aws-ec2';
+import {InterfaceVpcEndpointAwsService, Peer, Port, SecurityGroup, Vpc} from 'aws-cdk-lib/aws-ec2';
 import {ALLOWED_HTTPS_PORT, ASG_CAPACITY, createDefaultVpc, STAGES} from "@genflowly/cdk-commons";
 import {IRepository, Repository} from "aws-cdk-lib/aws-ecr";
 
@@ -30,6 +30,30 @@ export class EcsStack extends cdk.Stack {
             maxAzs,
             props.stage,
             true
+        );
+
+
+        vpc.addGatewayEndpoint('S3Endpoint', {
+            service: InterfaceVpcEndpointAwsService.S3,
+        });
+
+        // Fix the interface endpoints with proper security groups
+        const vpcEndpointSecurityGroup = new SecurityGroup(this, 'VpcEndpointSecurityGroup', {
+            vpc,
+            description: 'Security group for VPC endpoints',
+            allowAllOutbound: true,
+        });
+
+        vpcEndpointSecurityGroup.addIngressRule(
+            Peer.ipv4(vpc.vpcCidrBlock),
+            Port.tcp(443),
+            'Allow HTTPS from VPC'
+        );
+
+        vpcEndpointSecurityGroup.addIngressRule(
+            Peer.ipv4(vpc.vpcCidrBlock),
+            Port.tcp(8080),
+            'Allow 8080 from VPC'
         );
 
 
