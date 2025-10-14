@@ -6,7 +6,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 import {InterfaceVpcEndpointAwsService, Vpc} from 'aws-cdk-lib/aws-ec2';
 import { ALLOWED_HTTPS_PORT, ASG_CAPACITY, createDefaultVpc, STAGES } from "@genflowly/cdk-commons";
-import {IRepository} from "aws-cdk-lib/aws-ecr";
+import {IRepository, Repository} from "aws-cdk-lib/aws-ecr";
 
 export interface EcsStackProps extends cdk.StackProps {
   serviceName: string;
@@ -24,7 +24,6 @@ export class EcsStack extends cdk.Stack {
     const repositoryName = `${props.serviceName}-${props.stage}-repo`;
     const containerName = `${props.serviceName}-${props.stage}-container`;
     const logGroupName = `${props.serviceName}-${props.stage}-log-group`;
-    const LATEST_TAG = 'latest';
 
     const vpc: Vpc = createDefaultVpc(
       this,
@@ -52,7 +51,9 @@ export class EcsStack extends cdk.Stack {
       clusterName
     });
 
-    // Fargate Service + ALB
+      const imageTag = process.env.IMAGE_TAG || "8d956bc";
+
+      // Fargate Service + ALB
     const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(
       this,
       `${props.serviceName}-${props.stage}-ServiceId`,
@@ -63,7 +64,7 @@ export class EcsStack extends cdk.Stack {
         cpu: 512,
         memoryLimitMiB: 1024,
         taskImageOptions: {
-          image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, LATEST_TAG),
+          image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, imageTag),
           containerName,
           containerPort: 8080,
         },
