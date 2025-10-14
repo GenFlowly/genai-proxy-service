@@ -41,12 +41,6 @@ export class EcsStack extends cdk.Stack {
       clusterName
     });
 
-    const logGroup = new logs.LogGroup(this, `${props.serviceName}-${props.stage}-logGroupId`, {
-      logGroupName,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
     // Fargate Service + ALB
     const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(
       this,
@@ -61,79 +55,18 @@ export class EcsStack extends cdk.Stack {
           image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, LATEST_TAG),
           containerName,
           containerPort: 8080,
-          logDriver: ecs.LogDrivers.awsLogs({
-            logGroup,
-            streamPrefix: props.serviceName,
-          }),
-          environment: {
-            ENV: props.stage,
-            PORT: '8080',
-          },
         },
+        capacityProviderStrategies: [
+          { capacityProvider: 'FARGATE_SPOT', weight: 1 },
+        ],
         publicLoadBalancer: true,
-        healthCheckGracePeriod: cdk.Duration.seconds(60),
-      }
+      },
     );
 
-    // Health Check
-    fargateService.targetGroup.configureHealthCheck({
-      path: '/health',
-      interval: cdk.Duration.seconds(30),
-      timeout: cdk.Duration.seconds(5),
-      healthyThresholdCount: 2,
-      unhealthyThresholdCount: 3,
-    });
+    new cdk.CfnOutput(this, 'EcsClusterName', { value: cluster.clusterName });
+    new cdk.CfnOutput(this, 'EcsServiceName', { value: fargateService.service.serviceName });
+    new cdk.CfnOutput(this, 'LoadBalancerDNS', { value: fargateService.loadBalancer.loadBalancerDnsName });
 
-    // Autoscaling
-    const scaling = fargateService.service.autoScaleTaskCount({
-      minCapacity: 1,
-      maxCapacity: 2,
-    });
 
-    scaling.scaleOnCpuUtilization('CpuScaling', {
-      targetUtilizationPercent: 90,
-      scaleInCooldown: cdk.Duration.seconds(60),
-      scaleOutCooldown: cdk.Duration.seconds(60),
-    });
-
-    scaling.scaleOnMemoryUtilization('MemoryScaling', {
-      targetUtilizationPercent: 90,
-      scaleInCooldown: cdk.Duration.seconds(60),
-      scaleOutCooldown: cdk.Duration.seconds(60),
-    });
-
-    // Grant pull permissions for ECS
-    props.ecrRepo.grantPull(fargateService.taskDefinition.executionRole!);
-
-    // Outputs for GitHub Actions
-    new cdk.CfnOutput(this, 'ECRRepositoryName', {
-      value: repositoryName,
-      exportName: `${props.serviceName}-ECRRepositoryName`,
-    });
-
-    new cdk.CfnOutput(this, 'ECRRepositoryURI', {
-      value: props.ecrRepo.repositoryUri,
-      exportName: `${props.serviceName}-ECRRepositoryURI`,
-    });
-
-    new cdk.CfnOutput(this, 'ECSClusterName', {
-      value: cluster.clusterName,
-      exportName: `${props.serviceName}-ECSClusterName`,
-    });
-
-    new cdk.CfnOutput(this, 'ECSServiceName', {
-      value: fargateService.service.serviceName,
-      exportName: `${props.serviceName}-ECSServiceName`,
-    });
-
-    new cdk.CfnOutput(this, 'AWSRegion', {
-      value: this.region,
-      exportName: `${props.serviceName}-AWSRegion`,
-    });
-
-    new cdk.CfnOutput(this, 'ServiceURL', {
-      value: `http://${fargateService.loadBalancer.loadBalancerDnsName}`,
-      description: 'Public URL of the service',
-    });
   }
 }
