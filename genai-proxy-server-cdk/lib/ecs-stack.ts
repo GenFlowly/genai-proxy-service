@@ -4,7 +4,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
-import { Vpc } from 'aws-cdk-lib/aws-ec2';
+import {InterfaceVpcEndpointAwsService, Vpc} from 'aws-cdk-lib/aws-ec2';
 import { ALLOWED_HTTPS_PORT, ASG_CAPACITY, createDefaultVpc, STAGES } from "@genflowly/cdk-commons";
 import {IRepository} from "aws-cdk-lib/aws-ecr";
 
@@ -34,6 +34,17 @@ export class EcsStack extends cdk.Stack {
       props.stage,
       true
     );
+
+
+      vpc.addInterfaceEndpoint('EcrApiEndpoint', {
+          service: InterfaceVpcEndpointAwsService.ECR,
+      });
+      vpc.addInterfaceEndpoint('EcrDkrEndpoint', {
+          service: InterfaceVpcEndpointAwsService.ECR_DOCKER,
+      });
+      vpc.addInterfaceEndpoint('CloudWatchLogsEndpoint', {
+          service: InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+      });
 
     const cluster = new ecs.Cluster(
       this, `${props.serviceName}-${props.stage}-clusterId`, {
