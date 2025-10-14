@@ -89,6 +89,7 @@ export class EcsStack extends cdk.Stack {
                     image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, imageTag),
                     containerName,
                     containerPort: 8080,
+                    enableLogging: true,
                 },
                 capacityProviderStrategies: [
                     {capacityProvider: 'FARGATE_SPOT', weight: 1},
@@ -96,6 +97,10 @@ export class EcsStack extends cdk.Stack {
                 publicLoadBalancer: true,
             },
         );
+
+        fargateService.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
+
+        fargateService.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30');
 
         new cdk.CfnOutput(this, 'EcsClusterName', {value: cluster.clusterName});
         new cdk.CfnOutput(this, 'EcsServiceName', {value: fargateService.service.serviceName});
