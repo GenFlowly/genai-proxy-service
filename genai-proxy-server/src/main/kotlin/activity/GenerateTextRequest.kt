@@ -23,16 +23,28 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import models.GenerateTextRequest
 import models.GenerateTextResponse
+import org.slf4j.LoggerFactory
+
+private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
 fun Route.registerGenerateTextRoutes() {
     post(Routes.GENERATE_TEXT) {
         val request = call.receive<GenerateTextRequest>()
+
+        logger.info(
+            "Received GenerateText request: vendor={}, model={}, promptLength={}",
+            request.vendor, request.model, request.prompt.length
+        )
+
+        println("DEBUG prompt: ${request.prompt}")
 
         val aiService = AIRequestService()
 
         val aiRequest: AIRequest
 
         var aiResponse: AIResponse? = null
+
+        val startTime = System.currentTimeMillis()
 
         when(request.vendor) {
             AIVendor.OPENAI -> {
@@ -62,6 +74,15 @@ fun Route.registerGenerateTextRoutes() {
         val response = GenerateTextResponse(
             text = aiResponse.getText()
         )
+
+        val durationMs = System.currentTimeMillis() - startTime
+
+        logger.info(
+            "AI response received: vendor={}, model={}, durationMs={}, response={}",
+            request.vendor, request.model, durationMs, response.text
+        )
+
+        println("DEBUG response: ${response.text}")
         call.respond(response)
     }
 }

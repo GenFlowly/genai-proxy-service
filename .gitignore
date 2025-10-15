@@ -1,4 +1,6 @@
 .gradle
+gradlew
+gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
@@ -47,4 +49,4 @@ out/
 # cdk
 !**/cdk.out/**
 !**/genai-proxy-server-cdk/cdk.out
-genai-proxy-server-cdk/cdk.out/**
+genai-proxy-server-cdk/cdk.out/**!/genai-proxy-server-cdk/cdk.out/

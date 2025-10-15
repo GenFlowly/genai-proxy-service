@@ -38,6 +38,11 @@ dependencies {
     api("io.ktor:ktor-server-content-negotiation:3.0.0")
     api("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
 
+    // Kotlin‑logging (nice DSL) + SLF4J API
+    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    // Logback classic (SLF4J implementation)
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.6")
+
     implementation("com.genflowly:ai-caller-lib:0.0.25")
 }
 
