@@ -17,6 +17,7 @@ object Routes {
 fun Application.configureRouting() {
     routing {
         get("/") {
+            println("Receiving GET request")
             call.respondText("Hello World!")
         }
 

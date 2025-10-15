@@ -31,7 +31,7 @@ fun Application.module() {
                 "openai.api.key" to openAIApiKey
             )
         )
-        modules(commonModule()) // Using your commonModule here
+        modules(commonModule())
     }
 
 
