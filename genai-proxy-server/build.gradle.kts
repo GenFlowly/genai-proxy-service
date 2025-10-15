@@ -43,6 +43,12 @@ dependencies {
     // Logback classic (SLF4J implementation)
     runtimeOnly("ch.qos.logback:logback-classic:1.5.6")
 
+    implementation(platform("software.amazon.awssdk:bom:2.25.42"))
+    // DynamoDB client
+    implementation("software.amazon.awssdk:dynamodb")
+    // Core HTTP client (Netty works well in Ktor)
+    implementation("software.amazon.awssdk:url-connection-client")
+
     implementation("com.genflowly:ai-caller-lib:0.0.25")
 }
 

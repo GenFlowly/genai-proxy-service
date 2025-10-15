@@ -9,6 +9,8 @@ import {
 export interface DynamoDBStackProps extends cdk.StackProps {}
 
 export class DynamoDBStack extends cdk.Stack {
+
+  public readonly userTable: dynamodb.Table;
   constructor(scope: Construct, id: string, props: DynamoDBStackProps) {
     super(scope, id, props);
 
@@ -18,6 +20,6 @@ export class DynamoDBStack extends cdk.Stack {
       sortKey: { name: 'oidp_provider', type: dynamodb.AttributeType.STRING },
     };
 
-    createDefaultDynamoDbTable(this, createUserTableProps);
+    this.userTable = createDefaultDynamoDbTable(this, createUserTableProps);
   }
 }
