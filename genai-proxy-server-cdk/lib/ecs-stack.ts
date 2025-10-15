@@ -101,7 +101,7 @@ export class EcsStack extends cdk.Stack {
             },
         );
 
-        props.userTable.grantReadData(fargateService.taskDefinition.taskRole);
+        props.userTable.grantReadWriteData(fargateService.taskDefinition.taskRole);
 
         fargateService.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
 
