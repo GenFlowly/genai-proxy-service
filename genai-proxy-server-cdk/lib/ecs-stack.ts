@@ -95,6 +95,7 @@ export class EcsStack extends cdk.Stack {
                     {capacityProvider: 'FARGATE_SPOT', weight: 1},
                 ],
                 publicLoadBalancer: true,
+                assignPublicIp: true,
             },
         );
 
