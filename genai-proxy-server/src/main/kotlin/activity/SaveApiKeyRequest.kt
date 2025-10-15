@@ -7,18 +7,27 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import kotlinx.serialization.Serializable
 import models.SaveApiKeyResponse
+import org.slf4j.LoggerFactory
+import service.ApiKeyService
 
 @Serializable
-data class SaveApiKeyRequest(val vendor: String, val apiKey: String)
+data class SaveApiKeyRequest(
+    val email: String,
+    val oidpProvider: String,
+    val apiKey: String
+)
 
-val apiKeys = mutableMapOf<String, String>()
+private val logger = LoggerFactory.getLogger("SaveApiKeyRoute")
 
-fun Route.registerSaveApiKeyRoutes() {
+fun Route.registerSaveApiKeyRoutes(apiKeyService: ApiKeyService = ApiKeyService()) {
     post(Routes.SAVE_API_KEY) {
         val request = call.receive<SaveApiKeyRequest>()
-        apiKeys[request.vendor] = request.apiKey
+        logger.info("Received SaveApiKeyRequest: {}", request)
+
+        apiKeyService.saveApiKey(request.email, request.oidpProvider, request.apiKey)
+
         val response = SaveApiKeyResponse(
-            status = "API key saved for vendor ${request.vendor}"
+            status = "API key saved for vendor ${request.oidpProvider}"
         )
         call.respond(response)
     }
