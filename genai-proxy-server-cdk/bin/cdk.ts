@@ -14,6 +14,6 @@ const app = new cdk.App();
 
 new OneTimeDeploymentPerStageStack(app, 'BootstrapStack', {stage})
 
-new DynamoDBStack(app, 'DynamoDBStack', {});
+const dynamoDBStack = new DynamoDBStack(app, 'DynamoDBStack', {});
 const ecrStack = new EcrStack(app, 'EcrStack', { serviceName, stage });
-new EcsStack(app, 'EcsStack', { serviceName, stage, ecrRepo: ecrStack.repository });
+new EcsStack(app, 'EcsStack', { serviceName, stage, ecrRepo: ecrStack.repository, userTable: dynamoDBStack.userTable });

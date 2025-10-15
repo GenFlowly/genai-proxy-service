@@ -7,11 +7,13 @@ import {Construct} from 'constructs';
 import {InterfaceVpcEndpointAwsService, Peer, Port, SecurityGroup, Vpc} from 'aws-cdk-lib/aws-ec2';
 import {ALLOWED_HTTPS_PORT, ASG_CAPACITY, createDefaultVpc, STAGES} from "@genflowly/cdk-commons";
 import {IRepository, Repository} from "aws-cdk-lib/aws-ecr";
+import {ITable} from "aws-cdk-lib/aws-dynamodb";
 
 export interface EcsStackProps extends cdk.StackProps {
     serviceName: string;
     stage: STAGES;
-    ecrRepo: IRepository
+    ecrRepo: IRepository,
+    userTable: ITable;
 }
 
 export class EcsStack extends cdk.Stack {
@@ -98,6 +100,8 @@ export class EcsStack extends cdk.Stack {
                 assignPublicIp: true,
             },
         );
+
+        props.userTable.grantReadData(fargateService.taskDefinition.taskRole);
 
         fargateService.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
 

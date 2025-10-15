@@ -6,6 +6,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
 import org.koin.core.context.startKoin
+import providers.ApiKeyProvider
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
@@ -16,12 +17,9 @@ fun Application.module() {
         json()
     }
 
-    val claudeApiKey = "sk-ant-api03-WVWUa692W-uK88UAP0xd1Oz-A1plP" +
-            "-Sq0yXXbASG3CGywclHFSUch1Tn77iT3UrVX_vlbgkaklZAnfMsEv9Ycw-m1g5rgAA"
-
-    val geminiApiKey = "AIzaSyCnwizVIg4MMvhxE5QxpJrjayxdmRS5xe8"
-
-    val openAIApiKey = "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"
+    val claudeApiKey = ApiKeyProvider.getApiKey("claude") ?: error("Missing Claude API key")
+    val geminiApiKey = ApiKeyProvider.getApiKey("gemini") ?: error("Missing Gemini API key")
+    val openAIApiKey = ApiKeyProvider.getApiKey("openai") ?: error("Missing OpenAI API key")
 
     startKoin {
         properties(
