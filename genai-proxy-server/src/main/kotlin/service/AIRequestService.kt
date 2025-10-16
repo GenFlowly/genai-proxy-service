@@ -19,7 +19,7 @@ import org.koin.java.KoinJavaComponent.get
 class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
     KoinComponent {
 
-    private fun getApiKeyForVendor(vendor: AIVendor): String {
+    fun getApiKeyForVendor(vendor: AIVendor): String {
         val apiKey = dynamoDBProvider.getApiKey(vendor.name)
         require(!apiKey.isNullOrBlank()) { "API key not found for vendor: " +
                 vendor.name

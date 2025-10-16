@@ -5,10 +5,29 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: genai-proxy-server
+    container_name: ktor-app
     ports:
       - "8080:8080"
     environment:
-      # Pass any environment variables your app needs here
+      # ✅ Core environment variables (mirroring GitHub Actions + ECS)
+      AWS_REGION: us-east-1
+      IMAGE_TAG: "local-dev"   # For local builds; in CI this is set from GITHUB_SHA
+      # You can inject any other app-specific environment vars here, e.g.:
+      # DATABASE_URL: postgres://user:pass@host/db
+      # API_KEY: ${API_KEY}   # If you want to pass from .env
       JAVA_OPTS: "-Xmx512m -Xms256m"
+
+    # Optional: load more env vars from a .env file for local dev secrets
+    env_file:
+      - .env
+
+    # Restart policy like ECS
     restart: unless-stopped
+
+    # Same healthcheck logic as Dockerfile
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
