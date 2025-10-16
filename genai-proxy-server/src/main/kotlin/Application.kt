@@ -2,6 +2,7 @@ package com.genflowly
 
 
 import com.genflowly.aicallerlib.di.commonModule
+import com.genflowly.di.appModule
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
@@ -17,19 +18,11 @@ fun Application.module() {
         json()
     }
 
-    val claudeApiKey = ApiKeyProvider.getApiKey("claude") ?: error("Missing Claude API key")
-    val geminiApiKey = ApiKeyProvider.getApiKey("gemini") ?: error("Missing Gemini API key")
-    val openAIApiKey = ApiKeyProvider.getApiKey("openai") ?: error("Missing OpenAI API key")
-
     startKoin {
-        properties(
-            mapOf(
-                "claude.api.key" to claudeApiKey,
-                "gemini.api.key" to geminiApiKey,
-                "openai.api.key" to openAIApiKey
-            )
+        modules(
+            appModule(),
+            commonModule()
         )
-        modules(commonModule())
     }
 
 
