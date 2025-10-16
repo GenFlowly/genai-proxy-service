@@ -3,11 +3,12 @@ package com.genflowly
 
 import com.genflowly.aicallerlib.di.commonModule
 import com.genflowly.di.appModule
+import com.genflowly.service.AIRequestService
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
 import org.koin.core.context.startKoin
-import providers.ApiKeyProvider
+import org.koin.ktor.ext.get
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
@@ -26,5 +27,7 @@ fun Application.module() {
     }
 
 
-    configureRouting()
+    val aiService = get<AIRequestService>()
+
+    configureRouting(aiService)
 }

@@ -23,13 +23,11 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import models.GenerateTextRequest
 import models.GenerateTextResponse
-import org.koin.ktor.ext.inject
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
-fun Route.registerGenerateTextRoutes() {
-    val aiService by inject<AIRequestService>()
+fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
 
     post(Routes.GENERATE_TEXT) {
         val request = call.receive<GenerateTextRequest>()
