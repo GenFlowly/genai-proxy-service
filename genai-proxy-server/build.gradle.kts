@@ -45,6 +45,7 @@ dependencies {
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
     // Logback classic (SLF4J implementation)
     runtimeOnly("ch.qos.logback:logback-classic:1.5.6")
+    implementation("io.ktor:ktor-server-routing:2.3.11")
 
     implementation(platform("software.amazon.awssdk:bom:2.25.42"))
     // DynamoDB client
