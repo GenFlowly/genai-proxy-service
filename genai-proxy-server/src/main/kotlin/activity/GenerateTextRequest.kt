@@ -39,8 +39,6 @@ fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
 
         println("DEBUG prompt: ${request.prompt}")
 
-        val apiKey = ""
-
         val aiRequest: AIRequest
 
         var aiResponse: AIResponse? = null
@@ -51,6 +49,7 @@ fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
             AIVendor.OPENAI -> {
                 val responseCreateParams: ResponseCreateParams =
                     aiService.buildOpenAIRequest(request.prompt, request.model)
+                val apiKey = aiService.getApiKeyForVendor(AIVendor.OPENAI)
                 val openAIProvider: AIClient<OpenAIResponse> =
                     aiService.getOpenAIProvider(apiKey)
                 aiRequest = OpenAIRequest(responseCreateParams)
@@ -65,6 +64,7 @@ fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
                             .model
                     )
 
+                val apiKey = aiService.getApiKeyForVendor(AIVendor.GEMINI)
                 val geminiProvider: AIClient<GeminiResponse> =
                     aiService.getGeminiProvider(apiKey)
 
@@ -75,7 +75,7 @@ fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
             AIVendor.CLAUDE -> {
                 val messageCreateParams: MessageCreateParams =
                     aiService.buildClaudeRequest(request.prompt, request.model)
-
+                val apiKey = aiService.getApiKeyForVendor(AIVendor.CLAUDE)
                 val claudeProvider: AIClient<ClaudeResponse> =
                     aiService.getClaudeProvider(apiKey)
 
