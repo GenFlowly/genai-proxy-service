@@ -2,7 +2,7 @@ package com.genflowly.activity
 
 import com.anthropic.models.messages.MessageCreateParams
 import com.genflowly.Routes
-import com.genflowly.aicallerlib.clients.AIProvider
+import com.genflowly.aicallerlib.clients.AIClient
 import com.genflowly.aicallerlib.models.AIRequest
 import com.genflowly.aicallerlib.models.AIResponse
 import com.genflowly.aicallerlib.models.AIVendor
@@ -23,11 +23,14 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import models.GenerateTextRequest
 import models.GenerateTextResponse
+import org.koin.ktor.ext.inject
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
 fun Route.registerGenerateTextRoutes() {
+    val aiService by inject<AIRequestService>()
+
     post(Routes.GENERATE_TEXT) {
         val request = call.receive<GenerateTextRequest>()
 
@@ -38,7 +41,7 @@ fun Route.registerGenerateTextRoutes() {
 
         println("DEBUG prompt: ${request.prompt}")
 
-        val aiService = AIRequestService()
+        val apiKey = ""
 
         val aiRequest: AIRequest
 
@@ -46,25 +49,38 @@ fun Route.registerGenerateTextRoutes() {
 
         val startTime = System.currentTimeMillis()
 
-        when(request.vendor) {
+        when (request.vendor) {
             AIVendor.OPENAI -> {
                 val responseCreateParams: ResponseCreateParams =
                     aiService.buildOpenAIRequest(request.prompt, request.model)
-                val openAIProvider: AIProvider<OpenAIResponse> = aiService.getOpenAIProvider()
+                val openAIProvider: AIClient<OpenAIResponse> =
+                    aiService.getOpenAIProvider(apiKey)
                 aiRequest = OpenAIRequest(responseCreateParams)
                 aiResponse = openAIProvider.generateResponse(aiRequest)
             }
+
             AIVendor.GEMINI -> {
-                val params: GenerateContentParameters = aiService.buildGeminiRequest(request
-                    .prompt, request
-                    .model)
-                val geminiProvider: AIProvider<GeminiResponse> = aiService.getGeminiProvider()
+                val params: GenerateContentParameters =
+                    aiService.buildGeminiRequest(
+                        request
+                            .prompt, request
+                            .model
+                    )
+
+                val geminiProvider: AIClient<GeminiResponse> =
+                    aiService.getGeminiProvider(apiKey)
+
                 aiRequest = GeminiRequest(params)
                 aiResponse = geminiProvider.generateResponse(aiRequest)
             }
+
             AIVendor.CLAUDE -> {
-                val messageCreateParams: MessageCreateParams = aiService.buildClaudeRequest(request.prompt, request.model)
-                val claudeProvider: AIProvider<ClaudeResponse> = aiService.getClaudeProvider()
+                val messageCreateParams: MessageCreateParams =
+                    aiService.buildClaudeRequest(request.prompt, request.model)
+
+                val claudeProvider: AIClient<ClaudeResponse> =
+                    aiService.getClaudeProvider(apiKey)
+
                 aiRequest = ClaudeRequest(messageCreateParams)
                 aiResponse = claudeProvider.generateResponse(aiRequest)
             }

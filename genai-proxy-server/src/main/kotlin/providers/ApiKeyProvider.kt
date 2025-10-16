@@ -3,7 +3,6 @@ package providers
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
-import java.net.URI
 
 object ApiKeyProvider {
     private val dynamoDb = DynamoDbClient.builder()
