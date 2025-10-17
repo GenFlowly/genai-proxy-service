@@ -12,7 +12,8 @@ class KMSProvider(
     private val logger: KLogger
 ) {
     private val keyId =
-        "arn:aws:kms:us-east-1:571600870493:key/8bc6d55c-6c42-4e0e-8851-eb59740223d4"
+        System.getenv("KMS_KEY_ID") ?: error("KMS_KEY_ID is not set")
+
 
     suspend fun encrypt(plainText: String): String =
         withContext(Dispatchers.IO) {
