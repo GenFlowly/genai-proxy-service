@@ -34,7 +34,7 @@ class DynamoDBProvider(
         try {
             val item = mapOf(
                 "email" to AttributeValue.builder().s(email).build(),
-                "provider" to AttributeValue.builder().s(provider).build(),
+                "oidp_provider" to AttributeValue.builder().s(provider).build(),
                 "api_key" to AttributeValue.builder().s(encryptedKey).build()
             )
 
