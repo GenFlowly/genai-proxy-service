@@ -95,7 +95,7 @@ jobs:
 
       - name: Deploy KMS stack
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy $KMS_STACK_NAME --require-approval never
+        run: cdk deploy KmsStack --require-approval never
 
       - name: Get KMS Key ARN
         id: get-kms-arn
