@@ -4,16 +4,29 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import {Construct} from 'constructs';
-import {InterfaceVpcEndpointAwsService, Peer, Port, SecurityGroup, Vpc} from 'aws-cdk-lib/aws-ec2';
-import {ALLOWED_HTTPS_PORT, ASG_CAPACITY, createDefaultVpc, STAGES} from "@genflowly/cdk-commons";
+import {
+    InterfaceVpcEndpointAwsService,
+    Peer,
+    Port,
+    SecurityGroup,
+    Vpc
+} from 'aws-cdk-lib/aws-ec2';
+import {
+    ALLOWED_HTTPS_PORT,
+    ASG_CAPACITY,
+    createDefaultVpc,
+    STAGES
+} from "@genflowly/cdk-commons";
 import {IRepository, Repository} from "aws-cdk-lib/aws-ecr";
 import {ITable} from "aws-cdk-lib/aws-dynamodb";
+import {IKey} from "aws-cdk-lib/aws-kms";
 
 export interface EcsStackProps extends cdk.StackProps {
     serviceName: string;
     stage: STAGES;
     ecrRepo: IRepository,
     userTable: ITable;
+    kmsKey: IKey;
 }
 
 export class EcsStack extends cdk.Stack {
@@ -103,9 +116,16 @@ export class EcsStack extends cdk.Stack {
 
         props.userTable.grantReadWriteData(fargateService.taskDefinition.taskRole);
 
+        props.kmsKey.grantEncryptDecrypt(fargateService.taskDefinition.taskRole);
+
         fargateService.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
 
         fargateService.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30');
+
+        fargateService.taskDefinition.defaultContainer?.addEnvironment(
+            'KMS_KEY_ID',
+            props.kmsKey.keyArn
+        );
 
         new cdk.CfnOutput(this, 'EcsClusterName', {value: cluster.clusterName});
         new cdk.CfnOutput(this, 'EcsServiceName', {value: fargateService.service.serviceName});
