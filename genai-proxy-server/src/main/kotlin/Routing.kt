@@ -6,6 +6,7 @@ import com.genflowly.service.AIRequestService
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import service.ApiKeyService
 
 
 object Routes {
@@ -15,7 +16,7 @@ object Routes {
     const val SAVE_API_KEY = "$API_V1/save-api-key"
 }
 
-fun Application.configureRouting(aiService: AIRequestService) {
+fun Application.configureRouting(aiService: AIRequestService, apiKeyService: ApiKeyService) {
     routing {
         get("/") {
             println("Receiving GET request")
@@ -23,6 +24,6 @@ fun Application.configureRouting(aiService: AIRequestService) {
         }
 
         registerGenerateTextRoutes(aiService)
-        registerSaveApiKeyRoutes()
+        registerSaveApiKeyRoutes(apiKeyService)
     }
 }
