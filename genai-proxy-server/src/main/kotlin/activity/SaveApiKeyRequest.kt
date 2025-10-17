@@ -19,12 +19,16 @@ data class SaveApiKeyRequest(
 
 private val logger = LoggerFactory.getLogger("SaveApiKeyRoute")
 
-fun Route.registerSaveApiKeyRoutes(apiKeyService: ApiKeyService = ApiKeyService()) {
+fun Route.registerSaveApiKeyRoutes(apiKeyService: ApiKeyService) {
     post(Routes.SAVE_API_KEY) {
         val request = call.receive<SaveApiKeyRequest>()
         logger.info("Received SaveApiKeyRequest: {}", request)
 
-        apiKeyService.saveApiKey(request.email, request.oidpProvider, request.apiKey)
+        apiKeyService.saveApiKey(
+            email = request.email,
+            provider = request.oidpProvider,
+            apiKey = request.apiKey
+        )
 
         val response = SaveApiKeyResponse(
             status = "API key saved for vendor ${request.oidpProvider}"

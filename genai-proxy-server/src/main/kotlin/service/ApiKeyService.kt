@@ -1,12 +1,14 @@
 package service
 
-import repository.ApiKeyRepository
+import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.providers.KMSProvider
 
 class ApiKeyService(
-    private val repository: ApiKeyRepository = ApiKeyRepository()
+    private val kmsProvider: KMSProvider,
+    private val ddbProvider: DynamoDBProvider
 ) {
-    fun saveApiKey(email: String, oidpProvider: String, apiKey: String) {
-        // 📝 Add any business validation here if needed
-        repository.saveApiKey(email, oidpProvider, apiKey)
+    suspend fun saveApiKey(email: String, provider: String, apiKey: String) {
+        val encrypted = kmsProvider.encrypt(apiKey)
+        ddbProvider.saveApiKey(email, provider, encrypted)
     }
 }

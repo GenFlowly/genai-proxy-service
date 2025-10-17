@@ -49,6 +49,7 @@ dependencies {
     implementation(platform("software.amazon.awssdk:bom:2.25.42"))
     // DynamoDB client
     implementation("software.amazon.awssdk:dynamodb")
+    implementation("software.amazon.awssdk:kms")
     // Core HTTP client (Netty works well in Ktor)
     implementation("software.amazon.awssdk:url-connection-client")
 
