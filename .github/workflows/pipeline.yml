@@ -101,11 +101,15 @@ jobs:
         id: get-kms-arn
         run: |
           KMS_KEY_ARN=$(aws cloudformation describe-stacks \
-            --stack-name $KMS_STACK_NAME \
+            --stack-name KmsStack \
             --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArnOutput'].OutputValue" \
             --output text)
           echo "KMS_KEY_ARN=$KMS_KEY_ARN" >> $GITHUB_ENV
           echo "Using KMS Key ARN: $KMS_KEY_ARN"
+
+      - name: Deploy DynamoDB stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy $DDB_STACK_NAME --require-approval never
 
       - name: Deploy ECS stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
