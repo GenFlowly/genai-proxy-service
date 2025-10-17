@@ -109,7 +109,7 @@ jobs:
 
       - name: Deploy DynamoDB stack
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy $DDB_STACK_NAME --require-approval never
+        run: cdk deploy DynamoDBStack --require-approval never
 
       - name: Deploy ECS stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
