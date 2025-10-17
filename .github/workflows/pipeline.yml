@@ -93,8 +93,23 @@ jobs:
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG" >> $GITHUB_ENV
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
+      - name: Deploy KMS stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy $KMS_STACK_NAME --require-approval never
+
+      - name: Get KMS Key ARN
+        id: get-kms-arn
+        run: |
+          KMS_KEY_ARN=$(aws cloudformation describe-stacks \
+            --stack-name $KMS_STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArnOutput'].OutputValue" \
+            --output text)
+          echo "KMS_KEY_ARN=$KMS_KEY_ARN" >> $GITHUB_ENV
+          echo "Using KMS Key ARN: $KMS_KEY_ARN"
+
       - name: Deploy ECS stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          KMS_KEY_ARN: ${{ env.KMS_KEY_ARN }}
         run: cdk deploy EcsStack --require-approval never
