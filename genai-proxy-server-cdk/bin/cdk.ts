@@ -24,6 +24,6 @@ new EcsStack(app, 'EcsStack', {
     serviceName,
     stage,
     ecrRepo: ecrStack.repository,
-    userTable: dynamoDBStack.userTable,
+    dynamoDbTableList: dynamoDBStack.dynamoDbTableList,
     kmsKey: kmsStack.kmsKey
 });

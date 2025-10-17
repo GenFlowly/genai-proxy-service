@@ -25,7 +25,7 @@ export interface EcsStackProps extends cdk.StackProps {
     serviceName: string;
     stage: STAGES;
     ecrRepo: IRepository,
-    userTable: ITable;
+    dynamoDbTableList: ITable[];
     kmsKey: IKey;
 }
 
@@ -114,7 +114,8 @@ export class EcsStack extends cdk.Stack {
             },
         );
 
-        props.userTable.grantReadWriteData(fargateService.taskDefinition.taskRole);
+        props.dynamoDbTableList.forEach((it) =>
+            it.grantReadWriteData(fargateService.taskDefinition.taskRole))
 
         props.kmsKey.grantEncryptDecrypt(fargateService.taskDefinition.taskRole);
 
