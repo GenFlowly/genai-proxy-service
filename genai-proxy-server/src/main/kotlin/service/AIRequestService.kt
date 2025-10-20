@@ -19,15 +19,6 @@ import org.koin.java.KoinJavaComponent.get
 class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
     KoinComponent {
 
-    fun getApiKeyForVendor(vendor: AIVendor): String {
-        val apiKey = dynamoDBProvider.getApiKey(vendor.name)
-        require(!apiKey.isNullOrBlank()) { "API key not found for vendor: " +
-                vendor.name
-        }
-        return apiKey
-    }
-
-
     fun buildClaudeRequest(prompt: String, model: String): MessageCreateParams {
         return MessageCreateParams.builder()
             .maxTokens(1024L)

@@ -54,5 +54,11 @@ dependencies {
     implementation("software.amazon.awssdk:url-connection-client")
 
     implementation("com.genflowly:ai-caller-lib:0.0.27")
+
+    implementation("io.ktor:ktor-server-auth-jvm:3.0.0")
+    implementation("io.ktor:ktor-server-auth-jwt-jvm:3.0.0")
+
+    // ✅ Auth0 JWK
+    implementation("com.auth0:jwks-rsa:0.22.1")
 }
 
