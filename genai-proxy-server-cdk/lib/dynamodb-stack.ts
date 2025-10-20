@@ -18,9 +18,9 @@ export class DynamoDBStack extends cdk.Stack {
 
         const createCustomerTableProps: CreateTableProps = {
             tableName: 'Customer',
-            partitionKey: {name: 'email', type: dynamodb.AttributeType.STRING},
+            partitionKey: {name: 'sub', type: dynamodb.AttributeType.STRING},
             sortKey: {
-                name: 'oidpProvider',
+                name: 'idProvider',
                 type: dynamodb.AttributeType.STRING
             },
         };
