@@ -24,10 +24,14 @@ import io.ktor.server.routing.Route
 import models.GenerateTextRequest
 import models.GenerateTextResponse
 import org.slf4j.LoggerFactory
+import service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
-fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
+fun Route.registerGenerateTextRoutes(
+    aiRequestService: AIRequestService,
+    customerProfileService: CustomerProfileService
+) {
 
     post(Routes.GENERATE_TEXT) {
         val request = call.receive<GenerateTextRequest>()
@@ -36,8 +40,6 @@ fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
             "Received GenerateText request: vendor={}, model={}, promptLength={}",
             request.vendor, request.model, request.prompt.length
         )
-
-        println("DEBUG prompt: ${request.prompt}")
 
         val aiRequest: AIRequest
 
@@ -48,25 +50,37 @@ fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
         when (request.vendor) {
             AIVendor.OPENAI -> {
                 val responseCreateParams: ResponseCreateParams =
-                    aiService.buildOpenAIRequest(request.prompt, request.model)
-                val apiKey = aiService.getApiKeyForVendor(AIVendor.OPENAI)
+                    aiRequestService.buildOpenAIRequest(
+                        request.prompt,
+                        request.model
+                    )
+                val apiKey =
+                    fetchApiKey(
+                        AIVendor.OPENAI,
+                        request.customerId,
+                        customerProfileService
+                    )
                 val openAIProvider: AIClient<OpenAIResponse> =
-                    aiService.getOpenAIProvider(apiKey)
+                    aiRequestService.getOpenAIProvider(apiKey)
                 aiRequest = OpenAIRequest(responseCreateParams)
                 aiResponse = openAIProvider.generateResponse(aiRequest)
             }
 
             AIVendor.GEMINI -> {
                 val params: GenerateContentParameters =
-                    aiService.buildGeminiRequest(
-                        request
-                            .prompt, request
-                            .model
+                    aiRequestService.buildGeminiRequest(
+                        request.prompt,
+                        request.model
                     )
 
-                val apiKey = aiService.getApiKeyForVendor(AIVendor.GEMINI)
+                val apiKey =
+                    fetchApiKey(
+                        AIVendor.GEMINI,
+                        request.customerId,
+                        customerProfileService
+                    )
                 val geminiProvider: AIClient<GeminiResponse> =
-                    aiService.getGeminiProvider(apiKey)
+                    aiRequestService.getGeminiProvider(apiKey)
 
                 aiRequest = GeminiRequest(params)
                 aiResponse = geminiProvider.generateResponse(aiRequest)
@@ -74,10 +88,18 @@ fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
 
             AIVendor.CLAUDE -> {
                 val messageCreateParams: MessageCreateParams =
-                    aiService.buildClaudeRequest(request.prompt, request.model)
-                val apiKey = aiService.getApiKeyForVendor(AIVendor.CLAUDE)
+                    aiRequestService.buildClaudeRequest(
+                        request.prompt,
+                        request.model
+                    )
+                val apiKey =
+                    fetchApiKey(
+                        AIVendor.CLAUDE,
+                        request.customerId,
+                        customerProfileService
+                    )
                 val claudeProvider: AIClient<ClaudeResponse> =
-                    aiService.getClaudeProvider(apiKey)
+                    aiRequestService.getClaudeProvider(apiKey)
 
                 aiRequest = ClaudeRequest(messageCreateParams)
                 aiResponse = claudeProvider.generateResponse(aiRequest)
@@ -96,7 +118,17 @@ fun Route.registerGenerateTextRoutes(aiService: AIRequestService) {
             request.vendor, request.model, durationMs, response.text
         )
 
-        println("DEBUG response: ${response.text}")
         call.respond(response)
     }
+}
+
+private fun fetchApiKey(
+    aiVendor: AIVendor,
+    customerId: String,
+    customerProfileService: CustomerProfileService
+): String {
+    return customerProfileService.getCustomerApiKeyForVendor(
+        aiVendor,
+        customerId
+    )
 }

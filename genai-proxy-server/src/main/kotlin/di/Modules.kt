@@ -8,7 +8,7 @@ import mu.KLogger
 import mu.KotlinLogging.logger
 import org.koin.core.module.Module
 import org.koin.dsl.module
-import service.ApiKeyService
+import service.CustomerProfileService
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
@@ -16,10 +16,6 @@ import software.amazon.awssdk.services.kms.KmsClient
 fun appModule(): Module = module {
     single { provideJson() }
     single<KLogger> { logger("Logger") }
-
-
-    single { AIRequestService(get()) }
-
 
     single {
         DynamoDbClient.builder()
@@ -35,7 +31,8 @@ fun appModule(): Module = module {
 
     single { DynamoDBProvider(get(), get()) }
     single { KMSProvider(get(), get()) }
-    single { ApiKeyService(get(), get()) }
+    single { AIRequestService(get()) }
+    single { CustomerProfileService(get(), get()) }
 
 }
 
