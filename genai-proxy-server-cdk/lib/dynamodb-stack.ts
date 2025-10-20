@@ -17,7 +17,7 @@ export class DynamoDBStack extends cdk.Stack {
         super(scope, id, props);
 
         const createCustomerTableProps: CreateTableProps = {
-            tableName: 'Customer',
+            tableName: 'CustomerProfile',
             partitionKey: {name: 'sub', type: dynamodb.AttributeType.STRING},
             sortKey: {
                 name: 'idProvider',
@@ -26,7 +26,7 @@ export class DynamoDBStack extends cdk.Stack {
         };
 
         const createCustomerApiKeyTableProps: CreateTableProps = {
-            tableName: 'CustomerApiKey',
+            tableName: 'CustomerVendorApiKeys',
             partitionKey: {
                 name: 'customerId',
                 type: dynamodb.AttributeType.STRING
@@ -35,7 +35,7 @@ export class DynamoDBStack extends cdk.Stack {
         };
 
         const customerApiUsageTableProps: CreateTableProps = {
-            tableName: 'CustomerUsage',
+            tableName: 'CustomerAIUsage',
             partitionKey: {
                 name: 'customerId',
                 type: dynamodb.AttributeType.STRING
