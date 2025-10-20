@@ -20,7 +20,7 @@ export class DynamoDBStack extends cdk.Stack {
             tableName: 'CustomerProfile',
             partitionKey: {name: 'sub', type: dynamodb.AttributeType.STRING},
             sortKey: {
-                name: 'idProvider',
+                name: 'client',
                 type: dynamodb.AttributeType.STRING
             },
         };
