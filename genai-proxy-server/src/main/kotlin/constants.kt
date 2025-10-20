@@ -9,5 +9,5 @@ object DynamoDBConstants {
 
     const val CUSTOMER_API_KEY_TABLE = "CustomerVendorApiKeys"
     const val CUSTOMER_ID_PARTITION_KEY = "customerId"
-    const val AI_VENDOR_SORT_KEY = "customerId"
+    const val AI_VENDOR_SORT_KEY = "aiVendor"
 }
