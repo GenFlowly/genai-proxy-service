@@ -57,8 +57,8 @@ fun Application.module() {
 
 
 private fun Application.configureAuth0Security() {
-    val domain = environment.config.property("auth0.domain").getString()
-    val audience = environment.config.property("auth0.audience").getString()
+    val domain = "dev-abh5z7416lwy3xhv.us.auth0.com"
+    val audience = "https://dev-abh5z7416lwy3xhv.us.auth0.com/api/v2/"
 
     val jwkProvider = JwkProviderBuilder("https://$domain/")
         .cached(10, 24, TimeUnit.HOURS)
@@ -68,11 +68,8 @@ private fun Application.configureAuth0Security() {
         jwt("auth0") {
             verifier(jwkProvider, "https://$domain/")
             validate { credential ->
-                if (credential.payload.audience.contains(audience)) {
-                    JWTPrincipal(credential.payload)
-                } else {
-                    null
-                }
+                val hasAudience = credential.payload.audience.contains(audience)
+                if (hasAudience) JWTPrincipal(credential.payload) else null
             }
         }
     }
