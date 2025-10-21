@@ -11,7 +11,7 @@ class CustomerProfileService(
     private val kmsProvider: KMSProvider,
     private val dynamoDBProvider: DynamoDBProvider
 ) {
-    suspend fun onboardUser(
+    suspend fun onboardCustomer(
         sub: String,
         client: String,
         customerId: String,
@@ -20,12 +20,16 @@ class CustomerProfileService(
     ) {
         try {
             dynamoDBProvider.onboardCustomer(
-                sub, client, customerId, email,
-                name
+                sub = sub,
+                client = client,
+                customerId = customerId,
+                email = email,
+                name = name
             )
-            logger.info { "Synced user $email ($sub)" }
+            logger.info { "Synced user with sub=$sub, " +
+                    "customerId=$customerId, email=${email ?: "not provided"}" }
         } catch (e: Exception) {
-            logger.error(e) { "Failed to sync user" }
+            logger.error(e) { "Failed to sync user with sub=$sub" }
             throw e
         }
     }

@@ -63,23 +63,26 @@ class DynamoDBProvider(
         client: String,
         customerId: String,
         email: String?,
-        name: String?) =
-        withContext(Dispatchers.IO) {
-            val item = mapOf(
-                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
-                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build(),
-                "customerId" to AttributeValue.builder().s(customerId).build(),
-                "email" to AttributeValue.builder().s(email).build(),
-                "name" to AttributeValue.builder().s(name).build(),
-            )
+        name: String?
+    ) = withContext(Dispatchers.IO) {
+        val item = buildMap {
+            // Required fields
+            put(SUB_PARTITION_KEY, AttributeValue.builder().s(sub).build())
+            put(CLIENT_SORT_KEY, AttributeValue.builder().s(client).build())
+            put("customerId", AttributeValue.builder().s(customerId).build())
 
-            val putReq = PutItemRequest.builder()
-                .tableName(CUSTOMER_PROFILE_TABLE)
-                .item(item)
-                .build()
-
-            dynamoDbClient.putItem(putReq)
-            logger.info { "Onboarded user $sub in DynamoDB" }
+            // Optional fields - only add if not null
+            email?.let { put("email", AttributeValue.builder().s(it).build()) }
+            name?.let { put("name", AttributeValue.builder().s(it).build()) }
         }
+
+        val putReq = PutItemRequest.builder()
+            .tableName(CUSTOMER_PROFILE_TABLE)
+            .item(item)
+            .build()
+
+        dynamoDbClient.putItem(putReq)
+        logger.info { "Onboarded user $sub in DynamoDB with customerId: $customerId" }
+    }
 
 }
