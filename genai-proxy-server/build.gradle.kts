@@ -32,11 +32,14 @@ dependencies {
     implementation("io.ktor:ktor-server-config-yaml")
     testImplementation("io.ktor:ktor-server-test-host")
 
+    implementation("io.ktor:ktor-server-cors:3.0.0")
+
     // OpenAPI plugin
     implementation("io.ktor:ktor-server-openapi:3.0.0")
     implementation("io.ktor:ktor-server-swagger:3.0.0")
     api("io.ktor:ktor-server-content-negotiation:3.0.0")
     api("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
+
 
     implementation("io.insert-koin:koin-ktor:3.5.6") // or latest stable
     implementation("io.insert-koin:koin-logger-slf4j:3.5.6")
