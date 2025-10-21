@@ -19,11 +19,14 @@ import io.ktor.server.response.respondText
 import java.util.concurrent.TimeUnit
 import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get
+import org.slf4j.LoggerFactory
 import service.CustomerProfileService
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
 }
+
+private val logger = LoggerFactory.getLogger("Application")
 
 fun Application.module() {
     install(ContentNegotiation) {
@@ -49,6 +52,8 @@ fun Application.module() {
 
             val auth0Audience = "https://beta-genflowly/api"
 
+            logger.info("🔐 Configuring Auth0 JWT with domain: $auth0Domain, audience: $auth0Audience")
+
             val jwkProvider = JwkProviderBuilder(auth0Domain)
                 .cached(10, 24, TimeUnit.HOURS)
                 .rateLimited(10, 1, TimeUnit.MINUTES)
@@ -58,14 +63,21 @@ fun Application.module() {
 
             validate { credential ->
                 try {
+                    logger.info("✅ JWT Token validation starting")
+                    logger.info("Token claims: ${credential.payload.claims}")
+                    logger.info("Token audience: ${credential.payload.audience}")
+                    logger.info("Token issuer: ${credential.payload.issuer}")
+
                     JWTPrincipal(credential.payload)
                 } catch (e: Exception) {
+                    logger.error("❌ JWT validation failed: ${e.message}", e)
                     null
                 }
             }
 
 
             challenge { defaultScheme, realm ->
+                logger.warn("⚠️ JWT Challenge triggered - token missing or invalid")
                 call.respondText(
                     """{"error": "Invalid or missing token"}""",
                     io.ktor.http.ContentType.Application.Json,
