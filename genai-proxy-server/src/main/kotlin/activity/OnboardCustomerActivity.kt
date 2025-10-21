@@ -27,7 +27,7 @@ fun Route.registerOnboardCustomerRoutes(
         val customerId: String = generateCustomerId()
         logger.info("Generated customer ID: {}", customerId)
 
-        customerProfileService.onboardUser(
+        customerProfileService.onboardCustomer(
             sub = request.sub,
             client = request.client,
             customerId = customerId,
