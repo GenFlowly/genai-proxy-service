@@ -3,6 +3,8 @@ package activity
 import com.genflowly.Routes
 import com.genflowly.models.OnboardCustomerResponse
 import io.ktor.server.auth.authenticate
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -19,7 +21,25 @@ fun Route.registerOnboardCustomerRoutes(
 ) {
     authenticate("auth0") {
         post(Routes.ONBOARD_CUSTOMER) {
+            val principal = call.principal<JWTPrincipal>()
+            val sub = principal?.payload?.getClaim("sub")?.asString()
+                ?: return@post call.respond(
+                    io.ktor.http.HttpStatusCode.Unauthorized,
+                    mapOf("error" to "Missing 'sub' in token")
+                )
+
+
             val request = call.receive<OnboardCustomerRequest>()
+
+            if (request.sub != sub) {
+                logger.warn("Sub mismatch! Token sub: $sub, Request sub: ${request.sub}")
+                return@post call.respond(
+                    io.ktor.http.HttpStatusCode.Forbidden,
+                    mapOf("error" to "Token subject does not match request")
+                )
+            }
+
+
             logger.info(
                 "Onboarding user: sub={}, email={}, name={}",
                 request.sub,

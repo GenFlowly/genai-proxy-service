@@ -7,6 +7,7 @@ import com.genflowly.di.appModule
 import com.genflowly.service.AIRequestService
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.Authentication
@@ -14,6 +15,7 @@ import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.response.respondText
 import java.util.concurrent.TimeUnit
 import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get
@@ -41,7 +43,38 @@ fun Application.module() {
         allowHost("your-frontend-domain.com", schemes = listOf("https"))
     }
 
-    configureAuth0Security()
+    install(Authentication) {
+        jwt("auth0") {
+            val auth0Domain = "dev-abh5z7416lwy3xhv.us.auth0.com"
+
+            val auth0Audience = "https://beta-genflowly/api"
+
+            val jwkProvider = JwkProviderBuilder(auth0Domain)
+                .cached(10, 24, TimeUnit.HOURS)
+                .rateLimited(10, 1, TimeUnit.MINUTES)
+                .build()
+
+            verifier(jwkProvider, auth0Audience)
+
+            validate { credential ->
+                try {
+                    JWTPrincipal(credential.payload)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+
+
+            challenge { defaultScheme, realm ->
+                call.respondText(
+                    """{"error": "Invalid or missing token"}""",
+                    io.ktor.http.ContentType.Application.Json,
+                    HttpStatusCode.Unauthorized
+                )
+            }
+        }
+    }
+
 
     startKoin {
         modules(
@@ -58,21 +91,4 @@ fun Application.module() {
 }
 
 
-private fun Application.configureAuth0Security() {
-    val domain = "dev-abh5z7416lwy3xhv.us.auth0.com"
-    val audience = "https://dev-abh5z7416lwy3xhv.us.auth0.com/api/v2/"
 
-    val jwkProvider = JwkProviderBuilder("https://$domain/")
-        .cached(10, 24, TimeUnit.HOURS)
-        .build()
-
-    install(Authentication) {
-        jwt("auth0") {
-            verifier(jwkProvider, "https://$domain/")
-            validate { credential ->
-                val hasAudience = credential.payload.audience.contains(audience)
-                if (hasAudience) JWTPrincipal(credential.payload) else null
-            }
-        }
-    }
-}
