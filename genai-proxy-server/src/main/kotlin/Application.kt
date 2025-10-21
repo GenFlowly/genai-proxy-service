@@ -41,6 +41,8 @@ fun Application.module() {
         allowHost("your-frontend-domain.com", schemes = listOf("https"))
     }
 
+    configureAuth0Security()
+
     startKoin {
         modules(
             appModule(),
