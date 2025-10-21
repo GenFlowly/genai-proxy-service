@@ -60,7 +60,7 @@ fun Application.module() {
 
 private fun Application.configureAuth0Security() {
     val domain = "dev-abh5z7416lwy3xhv.us.auth0.com"
-    val audience = "https://dev-abh5z7416lwy3xhv.us.auth0.com/api/v2/"
+    val audience = "https://beta-genflowly/api"
 
     val jwkProvider = JwkProviderBuilder("https://$domain/")
         .cached(10, 24, TimeUnit.HOURS)
