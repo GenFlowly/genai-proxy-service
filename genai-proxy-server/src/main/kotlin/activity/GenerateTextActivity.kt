@@ -15,6 +15,7 @@ import com.genflowly.aicallerlib.models.openai.OpenAIResponse
 import com.genflowly.service.AIRequestService
 import com.google.genai.types.GenerateContentParameters
 import com.openai.models.responses.ResponseCreateParams
+import io.ktor.server.auth.authenticate
 
 
 import io.ktor.server.routing.post
@@ -32,93 +33,94 @@ fun Route.registerGenerateTextRoutes(
     aiRequestService: AIRequestService,
     customerProfileService: CustomerProfileService
 ) {
+    authenticate("auth0") {
+        post(Routes.GENERATE_TEXT) {
+            val request = call.receive<GenerateTextRequest>()
 
-    post(Routes.GENERATE_TEXT) {
-        val request = call.receive<GenerateTextRequest>()
+            logger.info(
+                "Received GenerateText request: vendor={}, model={}, promptLength={}",
+                request.vendor, request.model, request.prompt.length
+            )
 
-        logger.info(
-            "Received GenerateText request: vendor={}, model={}, promptLength={}",
-            request.vendor, request.model, request.prompt.length
-        )
+            val aiRequest: AIRequest
 
-        val aiRequest: AIRequest
+            var aiResponse: AIResponse? = null
 
-        var aiResponse: AIResponse? = null
+            val startTime = System.currentTimeMillis()
 
-        val startTime = System.currentTimeMillis()
+            when (request.vendor) {
+                AIVendor.OPENAI -> {
+                    val responseCreateParams: ResponseCreateParams =
+                        aiRequestService.buildOpenAIRequest(
+                            request.prompt,
+                            request.model
+                        )
+                    val apiKey =
+                        fetchApiKey(
+                            AIVendor.OPENAI,
+                            request.customerId,
+                            customerProfileService
+                        )
+                    val openAIProvider: AIClient<OpenAIResponse> =
+                        aiRequestService.getOpenAIProvider(apiKey)
+                    aiRequest = OpenAIRequest(responseCreateParams)
+                    aiResponse = openAIProvider.generateResponse(aiRequest)
+                }
 
-        when (request.vendor) {
-            AIVendor.OPENAI -> {
-                val responseCreateParams: ResponseCreateParams =
-                    aiRequestService.buildOpenAIRequest(
-                        request.prompt,
-                        request.model
-                    )
-                val apiKey =
-                    fetchApiKey(
-                        AIVendor.OPENAI,
-                        request.customerId,
-                        customerProfileService
-                    )
-                val openAIProvider: AIClient<OpenAIResponse> =
-                    aiRequestService.getOpenAIProvider(apiKey)
-                aiRequest = OpenAIRequest(responseCreateParams)
-                aiResponse = openAIProvider.generateResponse(aiRequest)
+                AIVendor.GEMINI -> {
+                    val params: GenerateContentParameters =
+                        aiRequestService.buildGeminiRequest(
+                            request.prompt,
+                            request.model
+                        )
+
+                    val apiKey =
+                        fetchApiKey(
+                            AIVendor.GEMINI,
+                            request.customerId,
+                            customerProfileService
+                        )
+                    val geminiProvider: AIClient<GeminiResponse> =
+                        aiRequestService.getGeminiProvider(apiKey)
+
+                    aiRequest = GeminiRequest(params)
+                    aiResponse = geminiProvider.generateResponse(aiRequest)
+                }
+
+                AIVendor.CLAUDE -> {
+                    val messageCreateParams: MessageCreateParams =
+                        aiRequestService.buildClaudeRequest(
+                            request.prompt,
+                            request.model
+                        )
+                    val apiKey =
+                        fetchApiKey(
+                            AIVendor.CLAUDE,
+                            request.customerId,
+                            customerProfileService
+                        )
+                    val claudeProvider: AIClient<ClaudeResponse> =
+                        aiRequestService.getClaudeProvider(apiKey)
+
+                    aiRequest = ClaudeRequest(messageCreateParams)
+                    aiResponse = claudeProvider.generateResponse(aiRequest)
+                }
             }
 
-            AIVendor.GEMINI -> {
-                val params: GenerateContentParameters =
-                    aiRequestService.buildGeminiRequest(
-                        request.prompt,
-                        request.model
-                    )
 
-                val apiKey =
-                    fetchApiKey(
-                        AIVendor.GEMINI,
-                        request.customerId,
-                        customerProfileService
-                    )
-                val geminiProvider: AIClient<GeminiResponse> =
-                    aiRequestService.getGeminiProvider(apiKey)
+            val response = GenerateTextResponse(
+                text = aiResponse.getText()
+            )
 
-                aiRequest = GeminiRequest(params)
-                aiResponse = geminiProvider.generateResponse(aiRequest)
-            }
+            val durationMs = System.currentTimeMillis() - startTime
 
-            AIVendor.CLAUDE -> {
-                val messageCreateParams: MessageCreateParams =
-                    aiRequestService.buildClaudeRequest(
-                        request.prompt,
-                        request.model
-                    )
-                val apiKey =
-                    fetchApiKey(
-                        AIVendor.CLAUDE,
-                        request.customerId,
-                        customerProfileService
-                    )
-                val claudeProvider: AIClient<ClaudeResponse> =
-                    aiRequestService.getClaudeProvider(apiKey)
+            logger.info(
+                "AI response received: vendor={}, model={}, durationMs={}, response={}",
+                request.vendor, request.model, durationMs, response.text
+            )
 
-                aiRequest = ClaudeRequest(messageCreateParams)
-                aiResponse = claudeProvider.generateResponse(aiRequest)
-            }
+            call.respond(response)
         }
-
-
-        val response = GenerateTextResponse(
-            text = aiResponse.getText()
-        )
-
-        val durationMs = System.currentTimeMillis() - startTime
-
-        logger.info(
-            "AI response received: vendor={}, model={}, durationMs={}, response={}",
-            request.vendor, request.model, durationMs, response.text
-        )
-
-        call.respond(response)
     }
 }
 
