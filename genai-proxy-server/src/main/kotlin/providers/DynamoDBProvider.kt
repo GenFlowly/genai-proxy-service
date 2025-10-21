@@ -21,7 +21,8 @@ class DynamoDBProvider(
 
     fun getCustomerApiKey(aiVendor: String, customerId: String): String? {
         val key = mapOf(
-            CUSTOMER_ID_PARTITION_KEY to AttributeValue.builder().s(customerId).build(),
+            CUSTOMER_ID_PARTITION_KEY to AttributeValue.builder().s(customerId)
+                .build(),
             AI_VENDOR_SORT_KEY to AttributeValue.builder().s(aiVendor).build()
         )
 
@@ -40,8 +41,10 @@ class DynamoDBProvider(
     ) = withContext(Dispatchers.IO) {
         try {
             val item = mapOf(
-                CUSTOMER_ID_PARTITION_KEY to AttributeValue.builder().s(customerId).build(),
-                AI_VENDOR_SORT_KEY to AttributeValue.builder().s(aiVendor).build(),
+                CUSTOMER_ID_PARTITION_KEY to AttributeValue.builder()
+                    .s(customerId).build(),
+                AI_VENDOR_SORT_KEY to AttributeValue.builder().s(aiVendor)
+                    .build(),
                 "apiKey" to AttributeValue.builder().s(encryptedKey).build()
             )
 
