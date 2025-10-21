@@ -12,7 +12,7 @@ class KMSProvider(
     private val logger: KLogger
 ) {
     private val keyId =
-        System.getenv("KMS_KEY_ARN") ?: error("KMS_KEY_ID is not set")
+        System.getenv("KMS_KEY_ID") ?: error("KMS_KEY_ID is not set")
 
 
     suspend fun encrypt(plainText: String): String =
