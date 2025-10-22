@@ -6,6 +6,7 @@ import com.genflowly.DynamoDBConstants.CUSTOMER_API_KEY_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_PARTITION_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_TABLE
 import com.genflowly.DynamoDBConstants.SUB_PARTITION_KEY
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mu.KLogger
@@ -40,13 +41,13 @@ class DynamoDBProvider(
         encryptedKey: String
     ) = withContext(Dispatchers.IO) {
         try {
-            val item = mapOf(
+            val item = withTimestamps(mapOf(
                 CUSTOMER_ID_PARTITION_KEY to AttributeValue.builder()
                     .s(customerId).build(),
                 AI_VENDOR_SORT_KEY to AttributeValue.builder().s(aiVendor)
                     .build(),
-                "apiKey" to AttributeValue.builder().s(encryptedKey).build()
-            )
+                "apiKey" to AttributeValue.builder().s(encryptedKey).build(),
+            ))
 
             val putReq = PutItemRequest.builder()
                 .tableName(CUSTOMER_API_KEY_TABLE)
@@ -68,16 +69,16 @@ class DynamoDBProvider(
         email: String?,
         name: String?
     ) = withContext(Dispatchers.IO) {
-        val item = buildMap {
-            // Required fields
+        val baseItem = buildMap {
             put(SUB_PARTITION_KEY, AttributeValue.builder().s(sub).build())
             put(CLIENT_SORT_KEY, AttributeValue.builder().s(client).build())
             put("customerId", AttributeValue.builder().s(customerId).build())
 
-            // Optional fields - only add if not null
             email?.let { put("email", AttributeValue.builder().s(it).build()) }
             name?.let { put("name", AttributeValue.builder().s(it).build()) }
         }
+
+        val item = withTimestamps(baseItem)
 
         val putReq = PutItemRequest.builder()
             .tableName(CUSTOMER_PROFILE_TABLE)
@@ -86,6 +87,14 @@ class DynamoDBProvider(
 
         dynamoDbClient.putItem(putReq)
         logger.info { "Onboarded user $sub in DynamoDB with customerId: $customerId" }
+    }
+
+    private fun withTimestamps(base: Map<String, AttributeValue>): Map<String, AttributeValue> {
+        val now = Instant.now().toString()
+        return base + mapOf(
+            "createdAt" to AttributeValue.builder().s(now).build(),
+            "updatedAt" to AttributeValue.builder().s(now).build()
+        )
     }
 
 }
