@@ -31,9 +31,9 @@ private val logger = LoggerFactory.getLogger("Application")
 
 
 fun validateCredentials(credential: JWTCredential): JWTPrincipal? {
-    val auth0Audience = "https://genflowly-beta" //TODO fetch from env
+    val auth0Audience = System.getenv("AUTH0_API_AUDIENCE")
+        ?: error("AUTH0_API_AUDIENCE not set")
     val containsAudience = credential.payload.audience.contains(auth0Audience)
-    logger.info("Audience {}", credential.payload.audience)
 
     if (containsAudience) {
         return JWTPrincipal(credential.payload)
@@ -47,8 +47,10 @@ fun Application.module() {
         json()
     }
 
-    val issuer = "https://dev-abh5z7416lwy3xhv.us.auth0.com/" //TODO fetch
-    // from env
+    val auth0Domain = System.getenv("AUTH0_SPA_DOMAIN")
+        ?: error("AUTH0_SPA_DOMAIN not set")
+
+    val issuer = "https://$auth0Domain/"
 
     val jwkProvider = JwkProviderBuilder(issuer)
         .cached(10, 24, TimeUnit.HOURS)

@@ -115,5 +115,7 @@ jobs:
         working-directory: ${{ env.CDK_APP_PATH }}
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
-          KMS_KEY_ARN: ${{ env.KMS_KEY_ARN }}
+          AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+          AUTH0_SPA_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
+          AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
         run: cdk deploy EcsStack --require-approval never

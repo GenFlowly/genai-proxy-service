@@ -88,7 +88,14 @@ export class EcsStack extends cdk.Stack {
                 vpc,
             });
 
-        const imageTag = process.env.IMAGE_TAG || "8d956bc";
+        const requiredEnvVars = ['AUTH0_SPA_DOMAIN', 'AUTH0_SPA_CLIENT_ID', 'AUTH0_API_AUDIENCE', 'IMAGE_TAG'];
+        for (const key of requiredEnvVars) {
+            if (!process.env[key]) {
+                throw new Error(`Missing required environment variable: ${key}`);
+            }
+        }
+
+        const imageTag = process.env.IMAGE_TAG
 
         // Fargate Service + ALB
         const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(
@@ -105,6 +112,12 @@ export class EcsStack extends cdk.Stack {
                     containerName,
                     containerPort: 8080,
                     enableLogging: true,
+                    environment: {
+                        AUTH0_SPA_DOMAIN: process.env.AUTH0_SPA_DOMAIN ?? '',
+                        AUTH0_SPA_CLIENT_ID: process.env.AUTH0_SPA_CLIENT_ID ?? '',
+                        AUTH0_API_AUDIENCE: process.env.AUTH0_API_AUDIENCE ?? '',
+                        KMS_KEY_ID: props.kmsKey.keyArn,
+                    },
                 },
                 capacityProviderStrategies: [
                     {capacityProvider: 'FARGATE_SPOT', weight: 1},
@@ -122,11 +135,6 @@ export class EcsStack extends cdk.Stack {
         fargateService.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
 
         fargateService.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30');
-
-        fargateService.taskDefinition.defaultContainer?.addEnvironment(
-            'KMS_KEY_ID',
-            props.kmsKey.keyArn
-        );
 
         new cdk.CfnOutput(this, 'EcsClusterName', {value: cluster.clusterName});
         new cdk.CfnOutput(this, 'EcsServiceName', {value: fargateService.service.serviceName});
