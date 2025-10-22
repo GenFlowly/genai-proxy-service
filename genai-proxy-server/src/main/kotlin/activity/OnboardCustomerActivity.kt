@@ -22,17 +22,7 @@ fun Route.registerOnboardCustomerRoutes(
 ) {
     authenticate("auth0") {
         post(Routes.ONBOARD_CUSTOMER) {
-
-
-
-
-
-
-
             val request = call.receive<OnboardCustomerRequest>()
-
-
-
             logger.info(
                 "Onboarding user: sub={}, email={}, name={}",
                 request.sub,

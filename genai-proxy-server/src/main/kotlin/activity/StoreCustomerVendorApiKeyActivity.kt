@@ -1,6 +1,7 @@
 package activity
 
 import com.genflowly.Routes
+import io.ktor.server.auth.authenticate
 import io.ktor.server.routing.post
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -13,20 +14,22 @@ import service.CustomerProfileService
 private val logger = LoggerFactory.getLogger("StoreCustomerVendorApiKeyRoute")
 
 fun Route.registerStoreApiKeyRoutes(customerProfileService: CustomerProfileService) {
-    post(Routes.SAVE_API_KEY) {
-        val request = call.receive<StoreCustomerVendorApiKeyRequest>()
-        logger.info("Received SaveApiKeyRequest: {}", request)
+    authenticate("auth0") {
+        post(Routes.SAVE_API_KEY) {
+            val request = call.receive<StoreCustomerVendorApiKeyRequest>()
+            logger.info("Received SaveApiKeyRequest: {}", request)
 
-        customerProfileService.storeApiKey(
-            customerId = request.customerId,
-            aiVendor = request.aiVendor,
-            apiKey = request.apiKey
-        )
+            customerProfileService.storeApiKey(
+                customerId = request.customerId,
+                aiVendor = request.aiVendor,
+                apiKey = request.apiKey
+            )
 
-        val response = StoreCustomerVendorApiKeyResponse(
-            status = "API key saved for customer ${request.customerId}" +
-                    "vendor ${request.aiVendor}"
-        )
-        call.respond(response)
+            val response = StoreCustomerVendorApiKeyResponse(
+                status = "API key saved for customer ${request.customerId}" +
+                        "vendor ${request.aiVendor}"
+            )
+            call.respond(response)
+        }
     }
 }
