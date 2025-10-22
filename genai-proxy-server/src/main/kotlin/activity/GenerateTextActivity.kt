@@ -33,7 +33,7 @@ fun Route.registerGenerateTextRoutes(
     aiRequestService: AIRequestService,
     customerProfileService: CustomerProfileService
 ) {
-
+    authenticate("auth0") {
         post(Routes.GENERATE_TEXT) {
             val request = call.receive<GenerateTextRequest>()
 
@@ -121,6 +121,7 @@ fun Route.registerGenerateTextRoutes(
 
             call.respond(response)
         }
+    }
 }
 
 private fun fetchApiKey(
