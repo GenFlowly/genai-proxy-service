@@ -9,6 +9,9 @@ env:
   CDK_APP_PATH: genai-proxy-server-cdk
   SERVICE_APP_PATH: genai-proxy-server
   ECR_STACK_NAME: EcrStack
+  AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+  AUTH0_SPA_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
+  AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
 
 permissions:
   contents: read
@@ -35,9 +38,6 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
-          AUTH0_SPA_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
-          AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
 
 
       - name: Set up Node.js
@@ -117,7 +117,4 @@ jobs:
         working-directory: ${{ env.CDK_APP_PATH }}
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
-          AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
-          AUTH0_SPA_CLIENT_ID: ${{ env.AUTH0_SPA_CLIENT_ID }}
-          AUTH0_API_AUDIENCE: ${{ env.AUTH0_API_AUDIENCE }}
         run: cdk deploy EcsStack --require-approval never
