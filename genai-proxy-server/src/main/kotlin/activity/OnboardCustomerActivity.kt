@@ -22,40 +22,15 @@ fun Route.registerOnboardCustomerRoutes(
 ) {
     authenticate("auth0") {
         post(Routes.ONBOARD_CUSTOMER) {
-            val principal = call.principal<JWTPrincipal>()
-
-            if (principal == null) {
-                logger.error("❌ Principal is NULL - Authentication failed at route level")
-                return@post call.respond(
-                    HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Principal is null")
-                )
-            }
 
 
-            logger.info("✅ Principal retrieved: ${principal.payload.subject}")
-            logger.info("📋 All claims in token: ${principal.payload.claims.keys}")
 
-            val sub = principal.payload.getClaim("sub")?.asString()
-            logger.info("📌 Sub from token: $sub")
 
-            if (sub == null) {
-                logger.error("❌ Missing 'sub' in token claims")
-                return@post call.respond(
-                    HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Missing 'sub' in token")
-                )
-            }
+
+
 
             val request = call.receive<OnboardCustomerRequest>()
 
-            if (request.sub != sub) {
-                logger.warn("Sub mismatch! Token sub: $sub, Request sub: ${request.sub}")
-                return@post call.respond(
-                    io.ktor.http.HttpStatusCode.Forbidden,
-                    mapOf("error" to "Token subject does not match request")
-                )
-            }
 
 
             logger.info(
