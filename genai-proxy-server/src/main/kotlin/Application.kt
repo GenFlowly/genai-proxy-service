@@ -68,6 +68,16 @@ fun Application.module() {
                     logger.info("Token audience: ${credential.payload.audience}")
                     logger.info("Token issuer: ${credential.payload.issuer}")
 
+                    // Check if audience contains our expected audience
+                    val tokenAudience = credential.payload.audience
+                    val hasValidAudience = tokenAudience?.contains(auth0Audience) == true
+
+                    if (!hasValidAudience) {
+                        logger.error("❌ Invalid audience. Expected: $auth0Audience, Got: $tokenAudience")
+                        return@validate null
+                    }
+
+                    logger.info("✅ Audience validation passed")
                     JWTPrincipal(credential.payload)
                 } catch (e: Exception) {
                     logger.error("❌ JWT validation failed: ${e.message}", e)
