@@ -88,7 +88,7 @@ export class EcsStack extends cdk.Stack {
                 vpc,
             });
 
-        const requiredEnvVars = ['AUTH0_SPA_DOMAIN', 'AUTH0_SPA_CLIENT_ID', 'AUTH0_API_AUDIENCE', 'IMAGE_TAG'];
+        const requiredEnvVars = ['AUTH0_SPA_DOMAIN', 'AUTH0_SPA_CLIENT_ID', 'AUTH0_API_AUDIENCE'];
         for (const key of requiredEnvVars) {
             if (!process.env[key]) {
                 throw new Error(`Missing required environment variable: ${key}`);

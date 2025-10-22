@@ -63,7 +63,7 @@ jobs:
 
       - name: Deploy ECR stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy $ECR_STACK_NAME --require-approval never -c target=EcrStack
+        run: cdk deploy $ECR_STACK_NAME --require-approval never
 
       - name: Get ECR Repository URI
         id: get-ecr-uri
@@ -97,7 +97,7 @@ jobs:
 
       - name: Deploy KMS stack
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy KmsStack --require-approval never -c target=KmsStack
+        run: cdk deploy KmsStack --require-approval never
 
       - name: Get KMS Key ARN
         id: get-kms-arn
@@ -111,8 +111,10 @@ jobs:
 
       - name: Deploy DynamoDB stack
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy DynamoDBStack --require-approval never -c target=DynamoDBStack
+        run: cdk deploy DynamoDBStack --require-approval never
 
       - name: Deploy ECS stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy EcsStack --require-approval never -c target=EcsStack
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: cdk deploy EcsStack --require-approval never
