@@ -33,6 +33,7 @@ private val logger = LoggerFactory.getLogger("Application")
 fun validateCredentials(credential: JWTCredential): JWTPrincipal? {
     val auth0Audience = "https://genflowly-beta" //TODO fetch from env
     val containsAudience = credential.payload.audience.contains(auth0Audience)
+    logger.info("Audience {}", credential.payload.audience)
 
     if (containsAudience) {
         return JWTPrincipal(credential.payload)
@@ -46,7 +47,8 @@ fun Application.module() {
         json()
     }
 
-    val issuer = "https://dev-abh5z7416lwy3xhv.us.auth0.com" //TODO fetch from env
+    val issuer = "https://dev-abh5z7416lwy3xhv.us.auth0.com/" //TODO fetch
+    // from env
 
     val jwkProvider = JwkProviderBuilder(issuer)
         .cached(10, 24, TimeUnit.HOURS)
@@ -55,6 +57,7 @@ fun Application.module() {
 
     install(Authentication) {
         jwt("auth0") {
+            logger.info("jwkProvider {}", jwkProvider)
             verifier(jwkProvider, issuer)
             validate { credential -> validateCredentials(credential) }
         }
@@ -67,6 +70,7 @@ fun Application.module() {
         allowHeader(HttpHeaders.ContentType)
         allowHeader(HttpHeaders.Authorization)
         allowCredentials = true
+        allowNonSimpleContentTypes = true
 
         // 👇 Adjust for your frontend origins
         allowHost("localhost:3000", schemes = listOf("http"))
