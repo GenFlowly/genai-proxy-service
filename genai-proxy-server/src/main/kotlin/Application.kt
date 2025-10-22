@@ -46,12 +46,12 @@ fun Application.module() {
         json()
     }
 
-    val jwkProvider = JwkProviderBuilder(System.getenv("ISSUER"))
+    val issuer = "https://dev-abh5z7416lwy3xhv.us.auth0.com" //TODO fetch from env
+
+    val jwkProvider = JwkProviderBuilder(issuer)
         .cached(10, 24, TimeUnit.HOURS)
         .rateLimited(10, 1, TimeUnit.MINUTES)
         .build()
-
-    val issuer = "https://dev-abh5z7416lwy3xhv.us.auth0.com" //TODO fetch from env
 
     install(Authentication) {
         jwt("auth0") {
