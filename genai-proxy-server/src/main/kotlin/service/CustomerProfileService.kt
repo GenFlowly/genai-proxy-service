@@ -16,7 +16,8 @@ class CustomerProfileService(
         client: String,
         customerId: String,
         email: String?,
-        name: String?
+        name: String?,
+        picture: String?
     ) {
         try {
             dynamoDBProvider.onboardCustomer(
@@ -24,7 +25,8 @@ class CustomerProfileService(
                 client = client,
                 customerId = customerId,
                 email = email,
-                name = name
+                name = name,
+                picture = picture
             )
             logger.info { "Synced user with sub=$sub, " +
                     "customerId=$customerId, email=${email ?: "not provided"}" }
