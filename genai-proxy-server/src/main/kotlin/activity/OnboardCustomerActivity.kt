@@ -24,10 +24,11 @@ fun Route.registerOnboardCustomerRoutes(
         post(Routes.ONBOARD_CUSTOMER) {
             val request = call.receive<OnboardCustomerRequest>()
             logger.info(
-                "Onboarding user: sub={}, email={}, name={}",
+                "Onboarding user: sub={}, email={}, name={}, picture={}",
                 request.sub,
                 request.email ?: "not provided",
-                request.name ?: "not provided"
+                request.name ?: "not provided",
+                request.picture ?: "not provided",
             )
 
             val customerId: String = generateCustomerId()
@@ -38,7 +39,8 @@ fun Route.registerOnboardCustomerRoutes(
                 client = request.client,
                 customerId = customerId,
                 email = request.email,
-                name = request.name
+                name = request.name,
+                picture = request.picture
             )
 
             val response = OnboardCustomerResponse(

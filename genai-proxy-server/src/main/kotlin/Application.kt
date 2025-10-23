@@ -74,7 +74,6 @@ fun Application.module() {
         allowCredentials = true
         allowNonSimpleContentTypes = true
 
-        // 👇 Adjust for your frontend origins
         allowHost("localhost:3000", schemes = listOf("http"))
         // allowHost("your-frontend-domain.com", schemes = listOf("https"))
     }

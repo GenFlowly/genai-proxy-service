@@ -67,7 +67,8 @@ class DynamoDBProvider(
         client: String,
         customerId: String,
         email: String?,
-        name: String?
+        name: String?,
+        picture: String?
     ) = withContext(Dispatchers.IO) {
         val baseItem = buildMap {
             put(SUB_PARTITION_KEY, AttributeValue.builder().s(sub).build())
@@ -76,6 +77,7 @@ class DynamoDBProvider(
 
             email?.let { put("email", AttributeValue.builder().s(it).build()) }
             name?.let { put("name", AttributeValue.builder().s(it).build()) }
+            picture?.let { put("picture", AttributeValue.builder().s(it).build()) }
         }
 
         val item = withTimestamps(baseItem)
