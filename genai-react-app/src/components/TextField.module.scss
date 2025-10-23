@@ -1,0 +1,42 @@
+@import '../styles/variables.scss';
+
+.container {
+  width: 100%;
+  max-width: 42rem;
+}
+
+.label {
+  display: block;
+  color: $text-secondary;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: $spacing-sm;
+}
+
+.input {
+  width: 100%;
+  padding: $spacing-md $spacing-lg;
+  border: 2px solid $border-color;
+  border-radius: $radius-md;
+  font-size: 1rem;
+  transition: border-color $transition-normal;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+  }
+
+  &::placeholder {
+    color: $text-muted;
+  }
+}
+
+.output {
+  margin-top: $spacing-sm;
+  font-size: 0.875rem;
+  color: $text-light;
+}
+
+.outputText {
+  font-weight: 600;
+}

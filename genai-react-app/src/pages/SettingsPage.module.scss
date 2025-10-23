@@ -1,0 +1,90 @@
+@import '../styles/variables.scss';
+
+.page {
+  min-height: 100vh;
+  background-color: $background-gray;
+}
+
+.content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: $spacing-3xl $spacing-lg;
+}
+
+.card {
+  max-width: 42rem;
+  margin: 0 auto;
+  background-color: $white;
+  border-radius: $radius-md;
+  box-shadow: $shadow-md;
+  padding: $spacing-2xl;
+}
+
+.title {
+  font-size: 1.875rem;
+  font-weight: bold;
+  color: $text-primary;
+  margin-bottom: $spacing-xl;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xl;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.formLabel {
+  display: block;
+  color: $text-secondary;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: $spacing-sm;
+}
+
+.formSelect,
+.formInput {
+  width: 100%;
+  padding: $spacing-md $spacing-lg;
+  border: 2px solid $border-color;
+  border-radius: $radius-md;
+  font-size: 1rem;
+  transition: border-color $transition-normal;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+  }
+}
+
+.formInput::placeholder {
+  color: $text-muted;
+}
+
+.submitButton {
+  width: 100%;
+  background-color: $primary-color;
+  color: $white;
+  padding: $spacing-md;
+  border-radius: $radius-md;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background-color $transition-normal;
+
+  &:hover {
+    background-color: $primary-dark;
+  }
+}
+
+.successMessage {
+  background-color: $success-bg;
+  border: 1px solid $success-border;
+  color: $success-text;
+  padding: $spacing-md $spacing-lg;
+  border-radius: $radius-sm;
+}
