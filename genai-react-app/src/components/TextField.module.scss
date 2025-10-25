@@ -1,8 +1,12 @@
 @import '../styles/variables.scss';
 
+$editor-width: 88rem;
+
 .container {
   width: 100%;
-  max-width: 42rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .label {
@@ -11,32 +15,97 @@
   font-size: 0.875rem;
   font-weight: 600;
   margin-bottom: $spacing-sm;
+  align-self: flex-start;
 }
 
-.input {
+.editorWrapper {
   width: 100%;
-  padding: $spacing-md $spacing-lg;
+  display: flex;
+  justify-content: center; // centers the inner editor
+}
+
+.mdxEditorRoot {
+  width: 100%;
+  max-width: $editor-width;
   border: 2px solid $border-color;
   border-radius: $radius-md;
-  font-size: 1rem;
+  background-color: $white;
   transition: border-color $transition-normal;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  &:focus-within {
+    border-color: $primary-color;
+  }
+}
+
+.editorContent {
+  padding: $spacing-xl $spacing-2xl;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: $text-primary;
+  min-height: 16rem;
+  width: 100%;
 
   &:focus {
     outline: none;
-    border-color: $primary-color;
   }
 
-  &::placeholder {
-    color: $text-muted;
+  p,
+  ul,
+  ol,
+  pre,
+  blockquote {
+    margin: 0 0 $spacing-md 0;
+  }
+
+  ul,
+  ol {
+    padding-left: $spacing-xl;
+  }
+
+  // Inline code (single backtick)
+  code {
+    background-color: $background-gray;
+    color: $text-primary;
+    padding: 0.2rem 0.4rem;
+    border-radius: $radius-sm;
+    font-family: monospace;
+  }
+
+  // Code block (``` code fence)
+  pre {
+    background-color: $background-gray; // ✅ use theme background
+    color: $text-primary;               // ✅ consistent text color
+    padding: $spacing-lg $spacing-xl;   // ✅ more comfortable padding
+    border-radius: $radius-md;
+    overflow-x: auto;
+    font-size: 0.9rem;
+    font-family: monospace;
+    border: 1px solid $border-light;    // ✅ subtle border for separation
+  }
+
+  blockquote {
+    border-left: 4px solid $border-color;
+    padding-left: $spacing-md;
+    color: $text-secondary;
+    font-style: italic;
   }
 }
 
-.output {
-  margin-top: $spacing-sm;
-  font-size: 0.875rem;
-  color: $text-light;
+.codeBlock {
+  margin: $spacing-lg 0;
+  border-radius: $radius-md;
+  overflow: hidden;
 }
 
-.outputText {
-  font-weight: 600;
+@media (max-width: 768px) {
+  .mdxEditorRoot {
+    max-width: 100%;
+    border-width: 1px;
+  }
+
+  .editorContent {
+    padding: $spacing-md $spacing-lg;
+  }
 }
