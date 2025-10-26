@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React from 'react'
 import '@mdxeditor/editor/style.css'
 import {
     MDXEditor,
@@ -17,41 +17,48 @@ import {
     InsertImage,
     InsertTable,
     codeMirrorPlugin,
-    InsertThematicBreak, CreateLink, linkDialogPlugin, imagePlugin, tablePlugin,
+    InsertThematicBreak,
+    CreateLink,
+    linkDialogPlugin,
+    imagePlugin,
+    tablePlugin,
 } from '@mdxeditor/editor'
 import styles from './TextField.module.scss'
 
-export default function TextField(): React.ReactElement {
-    const [markdown, setMarkdown] = useState<string>(
-        `# Write me code for hello world`
-    )
+interface TextFieldProps {
+    markdown: string
+    onMarkdownChange: (value: string) => void
+}
+
+export default function TextField({
+                                      markdown,
+                                      onMarkdownChange,
+                                  }: TextFieldProps): React.ReactElement {
     return (
         <div className={styles.container}>
             <label className={styles.label}>Prompt</label>
-
             <div className={styles.editorWrapper}>
                 <MDXEditor
                     markdown={markdown}
-                    onChange={setMarkdown}
+                    onChange={onMarkdownChange}
                     className={styles.mdxEditorRoot}
                     contentEditableClassName={styles.editorContent}
                     plugins={[
                         toolbarPlugin({
                             toolbarContents: () => (
                                 <>
-                                    <UndoRedo/>
-                                    <BoldItalicUnderlineToggles/>
+                                    <UndoRedo />
+                                    <BoldItalicUnderlineToggles />
                                     <InsertImage />
-                                    <BlockTypeSelect/>
-                                    <ListsToggle/>
+                                    <BlockTypeSelect />
+                                    <ListsToggle />
                                     <InsertTable />
                                     <CreateLink />
                                     <InsertThematicBreak />
-                                    <InsertCodeBlock/>
+                                    <InsertCodeBlock />
                                 </>
                             ),
                         }),
-
                         headingsPlugin(),
                         imagePlugin(),
                         quotePlugin(),
@@ -60,7 +67,7 @@ export default function TextField(): React.ReactElement {
                         tablePlugin(),
                         linkDialogPlugin(),
                         thematicBreakPlugin(),
-                        codeBlockPlugin({defaultCodeBlockLanguage: 'js'}),
+                        codeBlockPlugin({ defaultCodeBlockLanguage: 'js' }),
                         codeMirrorPlugin({
                             codeBlockLanguages: {
                                 js: 'JavaScript',
@@ -68,8 +75,8 @@ export default function TextField(): React.ReactElement {
                                 css: 'CSS',
                                 java: 'Java',
                                 kotlin: 'Kotlin',
-                                python: 'Python'
-                            }
+                                python: 'Python',
+                            },
                         }),
                     ]}
                 />

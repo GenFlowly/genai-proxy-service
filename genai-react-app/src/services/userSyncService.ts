@@ -1,13 +1,13 @@
-import { User } from '../types/auth.types';
-import {endpoints} from "../config/endpoints";
-import {HttpMethod} from "../constants/http";
+import { User } from '../types/auth.types'
+import { endpoints } from '../config/endpoints'
+import { HttpMethod } from '../constants/http'
 
-const CLIENT_IDENTIFIER = 'firefox';
+const CLIENT_IDENTIFIER = 'firefox'
 
 export async function onboardCustomer(
     user: User,
     token: string
-): Promise<void> {
+): Promise<{ customerId: string }> {
     const response = await fetch(endpoints.onboardCustomer, {
         method: HttpMethod.POST,
         headers: {
@@ -18,9 +18,11 @@ export async function onboardCustomer(
             ...user,
             client: CLIENT_IDENTIFIER,
         }),
-    });
+    })
 
     if (!response.ok) {
-        throw new Error(`Backend sync failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Backend sync failed: ${response.status} ${response.statusText}`)
     }
+
+    return response.json()
 }
