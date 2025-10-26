@@ -12,6 +12,8 @@ export interface AuthContextType {
     loginWithRedirect: () => void;
     logout: (options: { returnTo: string }) => void;
     getAccessTokenSilently: () => Promise<string>;
+    customerId: string | null;
+    setCustomerId: (id: string | null) => void
 }
 
 export interface AuthProviderProps {
