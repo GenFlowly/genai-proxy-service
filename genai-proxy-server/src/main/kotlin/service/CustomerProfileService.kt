@@ -3,6 +3,7 @@ package service
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
+import java.util.*
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -14,26 +15,33 @@ class CustomerProfileService(
     suspend fun onboardCustomer(
         sub: String,
         client: String,
-        customerId: String,
         email: String?,
         name: String?,
         picture: String?
-    ) {
-        try {
-            dynamoDBProvider.onboardCustomer(
-                sub = sub,
-                client = client,
-                customerId = customerId,
-                email = email,
-                name = name,
-                picture = picture
-            )
-            logger.info { "Synced user with sub=$sub, " +
-                    "customerId=$customerId, email=${email ?: "not provided"}" }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to sync user with sub=$sub" }
-            throw e
+    ): String {
+        // Check if customer exists
+        val existingCustomer = dynamoDBProvider.getCustomerProfile(sub, client)
+        if (existingCustomer != null) {
+            val existingCustomerId = existingCustomer["customerId"]?.s()
+            logger.info { "User already onboarded with customerId=$existingCustomerId" }
+            return existingCustomerId
+                ?: error("Customer profile exists but missing customerId field")
         }
+
+        // New user path
+        val newCustomerId = generateCustomerId()
+        dynamoDBProvider.onboardCustomer(
+            sub,
+            client,
+            newCustomerId,
+            email,
+            name,
+            picture
+        )
+        logger.info { "New user onboarded with customerId=$newCustomerId" }
+        return newCustomerId
+
+
     }
 
     suspend fun storeApiKey(
@@ -54,4 +62,11 @@ class CustomerProfileService(
         }
         return apiKey
     }
+}
+
+
+fun generateCustomerId(): String {
+    val uuid =
+        UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
+    return "CUSTOMER-$uuid"
 }

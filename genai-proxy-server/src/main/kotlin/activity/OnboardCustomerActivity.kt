@@ -31,13 +31,11 @@ fun Route.registerOnboardCustomerRoutes(
                 request.picture ?: "not provided",
             )
 
-            val customerId: String = generateCustomerId()
-            logger.info("Generated customer ID: {}", customerId)
+//            logger.info("Generated customer ID: {}", customerId)
 
-            customerProfileService.onboardCustomer(
+            val customerId: String = customerProfileService.onboardCustomer(
                 sub = request.sub,
                 client = request.client,
-                customerId = customerId,
                 email = request.email,
                 name = request.name,
                 picture = request.picture
@@ -52,8 +50,4 @@ fun Route.registerOnboardCustomerRoutes(
     }
 }
 
-fun generateCustomerId(): String {
-    val uuid =
-        UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
-    return "CUSTOMER-$uuid"
-}
+

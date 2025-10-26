@@ -91,6 +91,23 @@ class DynamoDBProvider(
         logger.info { "Onboarded user $sub in DynamoDB with customerId: $customerId" }
     }
 
+    suspend fun getCustomerProfile(sub: String, client: String): Map<String, AttributeValue>? =
+        withContext(Dispatchers.IO) {
+            val key = mapOf(
+                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+            )
+
+            val request = GetItemRequest.builder()
+                .tableName(CUSTOMER_PROFILE_TABLE)
+                .key(key)
+                .build()
+
+            val response = dynamoDbClient.getItem(request)
+            return@withContext if (response.hasItem()) response.item() else null
+        }
+
+
     private fun withTimestamps(base: Map<String, AttributeValue>): Map<String, AttributeValue> {
         val now = Instant.now().toString()
         return base + mapOf(
