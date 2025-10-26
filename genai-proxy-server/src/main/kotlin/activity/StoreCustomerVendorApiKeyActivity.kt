@@ -15,7 +15,7 @@ private val logger = LoggerFactory.getLogger("StoreCustomerVendorApiKeyRoute")
 
 fun Route.registerStoreApiKeyRoutes(customerProfileService: CustomerProfileService) {
     authenticate("auth0") {
-        post(Routes.SAVE_API_KEY) {
+        post(Routes.STORE_API_KEY) {
             val request = call.receive<StoreCustomerVendorApiKeyRequest>()
             logger.info("Received SaveApiKeyRequest: {}", request)
 
