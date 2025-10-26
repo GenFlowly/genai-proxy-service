@@ -8,10 +8,8 @@ interface GenerateTextRequest {
     customerId: string
 }
 
-
 export interface GenerateTextResponse {
-    // matches the Kotlin backend: data class GenerateTextResponse(val text: String?)
-    text?: string | null
+    text: string
 }
 
 
