@@ -29,5 +29,5 @@ new EcsStack(app, 'EcsStack', {
     kmsKey: kmsStack.kmsKey,
     domainName: rootDomain,
     subdomain: 'api',
-    certificateArn: 'arn:aws:acm:us-east-1:571600870493:certificate/d4d0dac3-8ed7-4ab2-90aa-ed22d8c1c39f',
+    certificateArn: 'arn:aws:acm:us-east-1:571600870493:certificate/194b5a31-3d3a-4436-bb19-045294e9c25a',
 });
