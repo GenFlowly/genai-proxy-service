@@ -1,8 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import {Construct} from 'constructs';
 import {
     InterfaceVpcEndpointAwsService,
@@ -20,6 +18,7 @@ import {
 import {IRepository, Repository} from "aws-cdk-lib/aws-ecr";
 import {ITable} from "aws-cdk-lib/aws-dynamodb";
 import {IKey} from "aws-cdk-lib/aws-kms";
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 
 export interface EcsStackProps extends cdk.StackProps {
     serviceName: string;
@@ -27,6 +26,9 @@ export interface EcsStackProps extends cdk.StackProps {
     ecrRepo: IRepository,
     dynamoDbTableList: ITable[];
     kmsKey: IKey;
+    domainName?: string;
+    subdomain?: string;
+    certificateArn?: string;
 }
 
 export class EcsStack extends cdk.Stack {
@@ -97,6 +99,19 @@ export class EcsStack extends cdk.Stack {
 
         const imageTag = process.env.IMAGE_TAG
 
+
+        let domainNameFull: string | undefined = undefined;
+        let certificate: acm.ICertificate | undefined = undefined;
+
+        if (props.domainName && props.subdomain && props.certificateArn) {
+            domainNameFull = `${props.subdomain}-${props.stage}.${props.domainName}`;
+            certificate = acm.Certificate.fromCertificateArn(
+                this,
+                'ImportedCertificate',
+                props.certificateArn
+            );
+        }
+
         // Fargate Service + ALB
         const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(
             this,
@@ -107,6 +122,10 @@ export class EcsStack extends cdk.Stack {
                 desiredCount: 1,
                 cpu: 256,
                 memoryLimitMiB: 512,
+                publicLoadBalancer: true,
+                assignPublicIp: true,
+                domainName: domainNameFull,    // if undefined, ALB will use default DNS
+                certificate,                   // optional ACM certificate
                 taskImageOptions: {
                     image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, imageTag),
                     containerName,
@@ -120,11 +139,9 @@ export class EcsStack extends cdk.Stack {
                     },
                 },
                 capacityProviderStrategies: [
-                    {capacityProvider: 'FARGATE_SPOT', weight: 1},
+                    { capacityProvider: 'FARGATE_SPOT', weight: 1 },
                 ],
-                publicLoadBalancer: true,
-                assignPublicIp: true,
-            },
+            }
         );
 
         props.dynamoDbTableList.forEach((it) =>
@@ -139,6 +156,9 @@ export class EcsStack extends cdk.Stack {
         new cdk.CfnOutput(this, 'EcsClusterName', {value: cluster.clusterName});
         new cdk.CfnOutput(this, 'EcsServiceName', {value: fargateService.service.serviceName});
         new cdk.CfnOutput(this, 'LoadBalancerDNS', {value: fargateService.loadBalancer.loadBalancerDnsName});
+        if (domainNameFull) {
+            new cdk.CfnOutput(this, 'CustomDomain', { value: domainNameFull });
+        }
 
 
     }
