@@ -16,7 +16,7 @@ object Routes {
     const val API_ROOT = "/"
 
     const val GENERATE_TEXT = "$API_V1/generate-text"
-    const val SAVE_API_KEY = "$API_V1/save-api-key"
+    const val STORE_API_KEY = "$API_V1/store-api-key"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
 }
 
