@@ -4,12 +4,8 @@ import TextField from '../components/TextField'
 import { generateText } from '../services/textGenService'
 import { useAuth } from '../context/AuthContext'
 import { AIVendor } from '../constants/vendors'
+import ResponseViewer from '../components/ResponseViewer'
 import styles from './LandingPage.module.scss'
-
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeHighlight from 'rehype-highlight'
-import 'highlight.js/styles/github.css'
 
 export default function LandingPage(): React.ReactElement {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
@@ -42,7 +38,6 @@ export default function LandingPage(): React.ReactElement {
 
         try {
             const token = await getAccessTokenSilently()
-
             const results: { vendor: AIVendor; text: string }[] = []
 
             for (const vendor of selectedVendors) {
@@ -95,22 +90,7 @@ export default function LandingPage(): React.ReactElement {
                     {isLoading ? 'Generating...' : 'Send to API'}
                 </button>
 
-                {responses.length > 0 && (
-                    <div className={styles.responseBox}>
-
-                        {responses.map(({ vendor, text }) => (
-                            <div key={vendor} className={styles.responseContent}>
-
-                                <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    rehypePlugins={[rehypeHighlight]}
-                                >
-                                    {text}
-                                </ReactMarkdown>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                <ResponseViewer responses={responses} />
             </div>
         </div>
     )
