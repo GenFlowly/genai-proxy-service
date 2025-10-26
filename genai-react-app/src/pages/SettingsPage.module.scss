@@ -33,6 +33,20 @@
   gap: $spacing-xl;
 }
 
+.vendorSection {
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  padding: $spacing-lg;
+  background-color: $background-gray;
+}
+
+.vendorName {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: $spacing-md;
+}
+
 .formGroup {
   display: flex;
   flex-direction: column;
@@ -46,7 +60,6 @@
   margin-bottom: $spacing-sm;
 }
 
-.formSelect,
 .formInput {
   width: 100%;
   padding: $spacing-md $spacing-lg;
@@ -61,8 +74,10 @@
   }
 }
 
-.formInput::placeholder {
-  color: $text-muted;
+.keyStatus {
+  color: $success-text;
+  font-size: 0.875rem;
+  margin-top: $spacing-xs;
 }
 
 .submitButton {
@@ -75,9 +90,15 @@
   border: none;
   cursor: pointer;
   transition: background-color $transition-normal;
+  margin-top: $spacing-md;
 
   &:hover {
     background-color: $primary-dark;
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
   }
 }
 

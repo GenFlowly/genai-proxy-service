@@ -70,9 +70,7 @@ export default function LandingPage(): React.ReactElement {
             <div className={styles.content}>
                 <TextField markdown={markdown} onMarkdownChange={setMarkdown} />
 
-                {/* Vendor Selection */}
                 <div className={styles.vendorSection}>
-                    <label>Select Vendors:</label>
                     <div className={styles.vendorList}>
                         {allVendors.map(vendor => (
                             <button
@@ -87,19 +85,8 @@ export default function LandingPage(): React.ReactElement {
                             </button>
                         ))}
                     </div>
-
-                    {selectedVendors.length > 0 && (
-                        <div className={styles.selectedVendors}>
-                            {selectedVendors.map(v => (
-                                <span key={v} className={styles.vendorTag}>
-                  {v}
-                </span>
-                            ))}
-                        </div>
-                    )}
                 </div>
 
-                {/* Submit */}
                 <button
                     onClick={handleGenerateText}
                     className={styles.submitButton}
@@ -108,7 +95,6 @@ export default function LandingPage(): React.ReactElement {
                     {isLoading ? 'Generating...' : 'Send to API'}
                 </button>
 
-                {/* Response Section */}
                 {responses.length > 0 && (
                     <div className={styles.responseBox}>
 
