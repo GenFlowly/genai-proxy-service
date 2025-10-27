@@ -124,8 +124,7 @@ export class EcsStack extends cdk.Stack {
                 memoryLimitMiB: 512,
                 publicLoadBalancer: true,
                 assignPublicIp: true,
-                domainName: domainNameFull,    // if undefined, ALB will use default DNS
-                certificate,                   // optional ACM certificate
+                certificate,
                 taskImageOptions: {
                     image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, imageTag),
                     containerName,
