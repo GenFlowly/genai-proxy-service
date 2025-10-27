@@ -3,8 +3,11 @@ package com.genflowly.service
 import com.anthropic.models.messages.MessageCreateParams
 import com.genflowly.aicallerlib.clients.AIClient
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.aicallerlib.models.claude.ClaudeModelsListResponse
 import com.genflowly.aicallerlib.models.claude.ClaudeResponse
+import com.genflowly.aicallerlib.models.gemini.GeminiModelsListResponse
 import com.genflowly.aicallerlib.models.gemini.GeminiResponse
+import com.genflowly.aicallerlib.models.openai.OpenAIModelsListResponse
 import com.genflowly.aicallerlib.models.openai.OpenAIResponse
 import com.genflowly.providers.DynamoDBProvider
 import com.google.genai.types.Content
@@ -27,7 +30,7 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
             .build()
     }
 
-    fun getClaudeProvider(apiKey: String): AIClient<ClaudeResponse> {
+    fun getClaudeProvider(apiKey: String): AIClient<ClaudeResponse, ClaudeModelsListResponse> {
         return get(
             AIClient::class.java,
             named(AIVendor.CLAUDE)
@@ -44,7 +47,7 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
             .build()
     }
 
-    fun getOpenAIProvider(apiKey: String): AIClient<OpenAIResponse> {
+    fun getOpenAIProvider(apiKey: String): AIClient<OpenAIResponse, OpenAIModelsListResponse> {
         return get(
             AIClient::class.java,
             named(AIVendor.OPENAI)
@@ -70,7 +73,7 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
             .build()
     }
 
-    fun getGeminiProvider(apiKey: String): AIClient<GeminiResponse> {
+    fun getGeminiProvider(apiKey: String): AIClient<GeminiResponse, GeminiModelsListResponse> {
         return get(
             AIClient::class.java,
             named(AIVendor.GEMINI)

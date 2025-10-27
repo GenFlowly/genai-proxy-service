@@ -6,10 +6,13 @@ import com.genflowly.aicallerlib.clients.AIClient
 import com.genflowly.aicallerlib.models.AIRequest
 import com.genflowly.aicallerlib.models.AIResponse
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.aicallerlib.models.claude.ClaudeModelsListResponse
 import com.genflowly.aicallerlib.models.claude.ClaudeRequest
 import com.genflowly.aicallerlib.models.claude.ClaudeResponse
+import com.genflowly.aicallerlib.models.gemini.GeminiModelsListResponse
 import com.genflowly.aicallerlib.models.gemini.GeminiRequest
 import com.genflowly.aicallerlib.models.gemini.GeminiResponse
+import com.genflowly.aicallerlib.models.openai.OpenAIModelsListResponse
 import com.genflowly.aicallerlib.models.openai.OpenAIRequest
 import com.genflowly.aicallerlib.models.openai.OpenAIResponse
 import com.genflowly.service.AIRequestService
@@ -61,7 +64,7 @@ fun Route.registerGenerateTextRoutes(
                             request.customerId,
                             customerProfileService
                         )
-                    val openAIProvider: AIClient<OpenAIResponse> =
+                    val openAIProvider: AIClient<OpenAIResponse, OpenAIModelsListResponse> =
                         aiRequestService.getOpenAIProvider(apiKey)
                     aiRequest = OpenAIRequest(responseCreateParams)
                     aiResponse = openAIProvider.generateResponse(aiRequest)
@@ -80,7 +83,7 @@ fun Route.registerGenerateTextRoutes(
                             request.customerId,
                             customerProfileService
                         )
-                    val geminiProvider: AIClient<GeminiResponse> =
+                    val geminiProvider: AIClient<GeminiResponse, GeminiModelsListResponse> =
                         aiRequestService.getGeminiProvider(apiKey)
 
                     aiRequest = GeminiRequest(params)
@@ -99,7 +102,7 @@ fun Route.registerGenerateTextRoutes(
                             request.customerId,
                             customerProfileService
                         )
-                    val claudeProvider: AIClient<ClaudeResponse> =
+                    val claudeProvider: AIClient<ClaudeResponse, ClaudeModelsListResponse> =
                         aiRequestService.getClaudeProvider(apiKey)
 
                     aiRequest = ClaudeRequest(messageCreateParams)

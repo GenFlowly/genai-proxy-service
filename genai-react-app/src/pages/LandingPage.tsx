@@ -43,7 +43,7 @@ export default function LandingPage(): React.ReactElement {
             for (const vendor of selectedVendors) {
                 const res = await generateText(token, {
                     vendor,
-                    model: 'gemini-2.0-flash', // TODO take from UI
+                    model: 'gpt-oss-120b', // TODO make it dynamic
                     prompt: markdown,
                     customerId,
                 })
