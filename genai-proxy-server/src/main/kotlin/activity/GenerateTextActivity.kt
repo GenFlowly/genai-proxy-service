@@ -124,7 +124,7 @@ fun Route.registerGenerateTextRoutes(
     }
 }
 
-private fun fetchApiKey(
+private suspend fun fetchApiKey(
     aiVendor: AIVendor,
     customerId: String,
     customerProfileService: CustomerProfileService
