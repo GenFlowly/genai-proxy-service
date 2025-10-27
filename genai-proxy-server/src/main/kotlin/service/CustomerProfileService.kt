@@ -51,16 +51,17 @@ class CustomerProfileService(
         dynamoDBProvider.saveCustomerApiKey(customerId, aiVendor, encrypted)
     }
 
-    fun getCustomerApiKeyForVendor(
+    suspend fun getCustomerApiKeyForVendor(
         vendor: AIVendor,
         customerId: String
     ): String {
         val apiKey = dynamoDBProvider.getCustomerApiKey(vendor.name, customerId)
-        require(!apiKey.isNullOrBlank()) {
+        val decrypted = apiKey?.let { kmsProvider.decrypt(it) }
+        require(!decrypted.isNullOrBlank()) {
             "API key not found for vendor: " +
                     vendor.name
         }
-        return apiKey
+        return decrypted
     }
 }
 

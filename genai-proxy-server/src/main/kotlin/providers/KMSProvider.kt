@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import mu.KLogger
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.kms.KmsClient
+import software.amazon.awssdk.services.kms.model.DecryptRequest
 import software.amazon.awssdk.services.kms.model.EncryptRequest
 
 class KMSProvider(
@@ -28,6 +29,22 @@ class KMSProvider(
                 java.util.Base64.getEncoder().encodeToString(cipherTextBytes)
             } catch (e: Exception) {
                 logger.error("Failed to encrypt text with KMS", e)
+                throw e
+            }
+        }
+
+    suspend fun decrypt(cipherTextBase64: String): String =
+        withContext(Dispatchers.IO) {
+            try {
+                val cipherBytes = java.util.Base64.getDecoder().decode(cipherTextBase64)
+                val request = DecryptRequest.builder()
+                    .ciphertextBlob(SdkBytes.fromByteArray(cipherBytes))
+                    .build()
+
+                val result = kmsClient.decrypt(request)
+                result.plaintext().asUtf8String()
+            } catch (e: Exception) {
+                logger.error("Failed to decrypt text with KMS", e)
                 throw e
             }
         }
