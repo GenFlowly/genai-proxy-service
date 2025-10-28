@@ -12,20 +12,20 @@ export default function SettingsPage(): React.ReactElement {
 
     const [apiKeys, setApiKeys] = useState<Record<AIVendor, string>>({
         [AIVendor.OPENAI]: '',
-        [AIVendor.ANTHROPIC]: '',
+        [AIVendor.CLAUDE]: '',
         [AIVendor.GEMINI]: '',
     })
 
     const [savedVendors, setSavedVendors] = useState<Record<AIVendor, boolean>>({
         [AIVendor.OPENAI]: false,
-        [AIVendor.ANTHROPIC]: false,
+        [AIVendor.CLAUDE]: false,
         [AIVendor.GEMINI]: false,
     })
 
     const [message, setMessage] = useState<string | null>(null)
     const [loading, setLoading] = useState<Record<AIVendor, boolean>>({
         [AIVendor.OPENAI]: false,
-        [AIVendor.ANTHROPIC]: false,
+        [AIVendor.CLAUDE]: false,
         [AIVendor.GEMINI]: false,
     })
 
