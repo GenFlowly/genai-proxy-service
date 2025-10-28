@@ -1,5 +1,5 @@
 export enum AIVendor {
     OPENAI = 'OPENAI',
-    ANTHROPIC = 'ANTHROPIC',
+    CLAUDE = 'CLAUDE',
     GEMINI = 'GEMINI',
 }

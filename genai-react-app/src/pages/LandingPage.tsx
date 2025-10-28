@@ -5,22 +5,17 @@ import { generateText } from '../services/textGenService'
 import { useAuth } from '../context/AuthContext'
 import { AIVendor } from '../constants/vendors'
 import ResponseViewer from '../components/ResponseViewer'
+import LeftSidebar from '../components/LeftSidebar'
+import RightSidebar from '../components/RightSidebar'
+import { useAI, AIProvider } from '../context/AIContext'
 import styles from './LandingPage.module.scss'
 
-export default function LandingPage(): React.ReactElement {
+function LandingContent() {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
-    const [markdown, setMarkdown] = useState<string>('# Write me code for hello world')
+    const { config } = useAI()
+    const [markdown, setMarkdown] = useState('# Write me code for hello world')
     const [isLoading, setIsLoading] = useState(false)
     const [responses, setResponses] = useState<{ vendor: AIVendor; text: string }[]>([])
-    const [selectedVendors, setSelectedVendors] = useState<AIVendor[]>([])
-
-    const allVendors = Object.values(AIVendor) as AIVendor[]
-
-    const toggleVendor = (vendor: AIVendor) => {
-        setSelectedVendors(prev =>
-            prev.includes(vendor) ? prev.filter(v => v !== vendor) : [...prev, vendor]
-        )
-    }
 
     const handleGenerateText = async () => {
         if (!isAuthenticated || !customerId) {
@@ -28,8 +23,9 @@ export default function LandingPage(): React.ReactElement {
             return
         }
 
-        if (selectedVendors.length === 0) {
-            alert('Please select at least one vendor.')
+        const activeVendors = Object.entries(config.vendorSelections).filter(([_, m]) => m)
+        if (activeVendors.length === 0) {
+            alert('Please select at least one vendor and model.')
             return
         }
 
@@ -40,14 +36,14 @@ export default function LandingPage(): React.ReactElement {
             const token = await getAccessTokenSilently()
             const results: { vendor: AIVendor; text: string }[] = []
 
-            for (const vendor of selectedVendors) {
+            for (const [vendor, model] of activeVendors) {
                 const res = await generateText(token, {
-                    vendor,
-                    model: 'gpt-oss-120b', // TODO make it dynamic
+                    vendor: vendor as AIVendor,
+                    model,
                     prompt: markdown,
                     customerId,
                 })
-                results.push({ vendor, text: res.text ?? '' })
+                results.push({ vendor: vendor as AIVendor, text: res.text ?? '' })
             }
 
             setResponses(results)
@@ -60,38 +56,39 @@ export default function LandingPage(): React.ReactElement {
     }
 
     return (
+        <div className={styles.layout}>
+            <div className={styles.sidebarLeft}>
+                <LeftSidebar />
+            </div>
+
+            <div className={styles.centerSection}>
+                <div className={styles.contentWrapper}>
+                    <TextField markdown={markdown} onMarkdownChange={setMarkdown} />
+                    <button
+                        onClick={handleGenerateText}
+                        className={styles.submitButton}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? 'Generating...' : 'Send to API'}
+                    </button>
+                    <ResponseViewer responses={responses} />
+                </div>
+            </div>
+
+            <div className={styles.sidebarRight}>
+                <RightSidebar />
+            </div>
+        </div>
+    )
+}
+
+export default function LandingPage() {
+    return (
         <div className={styles.page}>
             <Navbar />
-            <div className={styles.content}>
-                <TextField markdown={markdown} onMarkdownChange={setMarkdown} />
-
-                <div className={styles.vendorSection}>
-                    <div className={styles.vendorList}>
-                        {allVendors.map(vendor => (
-                            <button
-                                key={vendor}
-                                type="button"
-                                className={`${styles.vendorButton} ${
-                                    selectedVendors.includes(vendor) ? styles.selected : ''
-                                }`}
-                                onClick={() => toggleVendor(vendor)}
-                            >
-                                {vendor}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <button
-                    onClick={handleGenerateText}
-                    className={styles.submitButton}
-                    disabled={isLoading}
-                >
-                    {isLoading ? 'Generating...' : 'Send to API'}
-                </button>
-
-                <ResponseViewer responses={responses} />
-            </div>
+            <AIProvider>
+                <LandingContent />
+            </AIProvider>
         </div>
     )
 }
