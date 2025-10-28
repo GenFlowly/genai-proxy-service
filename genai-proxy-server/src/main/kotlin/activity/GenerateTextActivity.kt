@@ -16,6 +16,7 @@ import com.genflowly.aicallerlib.models.openai.OpenAIModelsListResponse
 import com.genflowly.aicallerlib.models.openai.OpenAIRequest
 import com.genflowly.aicallerlib.models.openai.OpenAIResponse
 import com.genflowly.service.AIRequestService
+import com.genflowly.utils.fetchApiKey
 import com.google.genai.types.GenerateContentParameters
 import com.openai.models.responses.ResponseCreateParams
 import io.ktor.server.auth.authenticate
@@ -125,15 +126,4 @@ fun Route.registerGenerateTextRoutes(
             call.respond(response)
         }
     }
-}
-
-private suspend fun fetchApiKey(
-    aiVendor: AIVendor,
-    customerId: String,
-    customerProfileService: CustomerProfileService
-): String {
-    return customerProfileService.getCustomerApiKeyForVendor(
-        aiVendor,
-        customerId
-    )
 }

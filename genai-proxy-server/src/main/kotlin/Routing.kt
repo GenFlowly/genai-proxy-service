@@ -4,6 +4,7 @@ import activity.registerOnboardCustomerRoutes
 import activity.registerStoreApiKeyRoutes
 import com.genflowly.Routes.API_ROOT
 import com.genflowly.activity.registerGenerateTextRoutes
+import com.genflowly.activity.registerGetTextGenerationModelsRoutes
 import com.genflowly.service.AIRequestService
 import io.ktor.server.application.*
 import io.ktor.server.response.*
@@ -18,6 +19,7 @@ object Routes {
     const val GENERATE_TEXT = "$API_V1/generate-text"
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
+    const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
 }
 
 fun Application.configureRouting(
@@ -33,5 +35,6 @@ fun Application.configureRouting(
         registerGenerateTextRoutes(aiRequestService, customerProfileService)
         registerStoreApiKeyRoutes(customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService)
+        registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)
     }
 }
