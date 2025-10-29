@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import Navbar from '../components/Navbar'
+import Navbar from '../components/navbar/Navbar'
 import styles from './SettingsPage.module.scss'
 import { useAuth } from '../context/AuthContext'
 import { AIVendor } from '../constants/vendors'
