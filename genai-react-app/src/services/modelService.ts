@@ -1,6 +1,7 @@
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import { AIVendor } from '../constants/vendors'
+import { CacheManager } from '../utils/cache'
 
 export interface GetTextGenerationModelsRequest {
     vendor: AIVendor
@@ -12,10 +13,33 @@ export interface GetTextGenerationModelsResponse {
     modelsList: string[]
 }
 
+const modelCache = new CacheManager({
+    ttlMs: 30 * 24 * 60 * 60 * 1000, // 30 days
+    prefix: 'ai_models_',
+})
+
+function getCacheKey(vendor: AIVendor, customerId: string): string {
+    return `${vendor}_${customerId}`
+}
+
 export async function getTextGenerationModels(
     token: string,
-    request: GetTextGenerationModelsRequest
+    request: GetTextGenerationModelsRequest,
+    bypassCache: boolean = false
 ): Promise<GetTextGenerationModelsResponse> {
+    const { vendor, customerId } = request
+    const cacheKey = getCacheKey(vendor, customerId)
+
+    // Check cache first (unless bypassed)
+    if (!bypassCache) {
+        const cached = modelCache.get<GetTextGenerationModelsResponse>(cacheKey)
+        if (cached) {
+            console.log(`Using cached models for ${vendor}`)
+            return cached
+        }
+    }
+
+    // Fetch from API
     const response = await fetch(endpoints.getTextGenerationModels, {
         method: HttpMethod.POST,
         headers: {
@@ -29,5 +53,23 @@ export async function getTextGenerationModels(
         throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`)
     }
 
-    return (await response.json()) as GetTextGenerationModelsResponse
+    const data = (await response.json()) as GetTextGenerationModelsResponse
+
+    // Save to cache
+    modelCache.set(cacheKey, data)
+
+    return data
+}
+
+export function clearModelCache(vendor: AIVendor, customerId: string): void {
+    const cacheKey = getCacheKey(vendor, customerId)
+    modelCache.delete(cacheKey)
+}
+
+export function clearAllModelCache(): void {
+    modelCache.clear()
+}
+
+export function getModelCacheStats() {
+    return modelCache.getStats()
 }
