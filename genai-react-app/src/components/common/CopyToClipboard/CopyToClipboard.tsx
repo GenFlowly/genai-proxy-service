@@ -5,7 +5,7 @@ interface CopyToClipboardProps {
     content: string
     label?: string
     successMessage?: string
-    successDuration: number
+    successDuration?: number
     disabled?: boolean
     className?: string
     size?: 'sm' | 'md' | 'lg'
@@ -28,7 +28,7 @@ export default function CopyToClipboard({
         try {
             await navigator.clipboard.writeText(content)
             setCopied(true)
-            setTimeout(() => setCopied(false), successDuration)
+            setTimeout(() => setCopied(false), successDuration!)
         } catch (err) {
             console.error('Failed to copy:', err)
         }

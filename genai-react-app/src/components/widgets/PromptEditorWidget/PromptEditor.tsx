@@ -4,9 +4,9 @@ import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import { useConversation } from '../../../context/ConversationContext'
-import styles from './Prompt.module.scss'
+import styles from './PromptEditor.module.scss'
 
-export default function Prompt(): React.ReactElement {
+export default function PromptEditor(): React.ReactElement {
     const { markdown, setMarkdown } = useConversation()
 
     return (

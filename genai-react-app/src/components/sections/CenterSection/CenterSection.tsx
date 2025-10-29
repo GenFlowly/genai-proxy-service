@@ -1,5 +1,5 @@
 import React from 'react'
-import Prompt from '../../widgets/PromptWidget/Prompt'
+import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import Response from '../../widgets/ResponseWidget/Response'
 import { useConversation } from '../../../context/ConversationContext'
 import styles from './CenterSection.module.scss'
@@ -11,7 +11,7 @@ export default function CenterSection() {
     return (
         <div className={styles.centerSection}>
             <div className={styles.contentWrapper}>
-                <Prompt />
+                <PromptEditor />
                 <MultiPurposeButton
                     onClick={generateResponses}
                     label={isLoading ? 'Generating...' : 'Send to API'}
