@@ -21,7 +21,7 @@ fun Route.registerStoreApiKeyRoutes(customerProfileService: CustomerProfileServi
 
             customerProfileService.storeApiKey(
                 customerId = request.customerId,
-                aiVendor = request.aiVendor,
+                aiVendor = request.aiVendor, //TODO add validation with enum
                 apiKey = request.apiKey
             )
 

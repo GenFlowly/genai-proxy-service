@@ -3,19 +3,26 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import 'highlight.js/styles/github.css'
-import styles from './ResponseViewer.module.scss'
-import { AIVendor } from '../constants/vendors'
+import styles from './Response.module.scss'
+import { useConversation } from '../../../context/ConversationContext'
+import { useLayout } from '../../../context/LayoutContext'
 
-interface ResponseViewerProps {
-    responses: { vendor: AIVendor; text: string }[]
-}
+export default function Response() {
+    const { responses } = useConversation()
+    const { isLeftVisible, isRightVisible } = useLayout()
 
-export default function ResponseViewer({ responses }: ResponseViewerProps) {
     if (responses.length === 0) return null
+
+    // When both sidebars are hidden → show side-by-side
+    const sidebarsHidden = !isLeftVisible && !isRightVisible
 
     return (
         <div className={styles.container}>
-            <div className={styles.inner}>
+            <div
+                className={`${styles.inner} ${
+                    sidebarsHidden ? styles.sideBySide : ''
+                }`}
+            >
                 {responses.map(({ vendor, text }) => (
                     <article key={vendor} className={styles.article}>
                         <header className={styles.header}>

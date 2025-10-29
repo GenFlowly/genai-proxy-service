@@ -23,24 +23,19 @@ import {
     imagePlugin,
     tablePlugin,
 } from '@mdxeditor/editor'
-import styles from './TextField.module.scss'
+import { useConversation } from '../../../context/ConversationContext'
+import styles from './Prompt.module.scss'
 
-interface TextFieldProps {
-    markdown: string
-    onMarkdownChange: (value: string) => void
-}
+export default function Prompt(): React.ReactElement {
+    const { markdown, setMarkdown } = useConversation()
 
-export default function TextField({
-                                      markdown,
-                                      onMarkdownChange,
-                                  }: TextFieldProps): React.ReactElement {
     return (
         <div className={styles.container}>
             <label className={styles.label}>Prompt</label>
             <div className={styles.editorWrapper}>
                 <MDXEditor
                     markdown={markdown}
-                    onChange={onMarkdownChange}
+                    onChange={setMarkdown}
                     className={styles.mdxEditorRoot}
                     contentEditableClassName={styles.editorContent}
                     plugins={[

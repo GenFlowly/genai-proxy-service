@@ -1,6 +1,6 @@
 import React from 'react'
-import { useAI } from '../context/AIContext'
-import AIVendorWidget from './AIVendorWidget'
+import { useAI } from '../../../context/AIContext'
+import AIVendorWidget from '../../widgets/AIVendorWidget/AIVendorWidget'
 import styles from './RightSidebar.module.scss'
 
 export default function RightSidebar(): React.ReactElement {

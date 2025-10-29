@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { useAI } from '../context/AIContext'
-import { useAuth } from '../context/AuthContext'
-import { AIVendor } from '../constants/vendors'
-import { getTextGenerationModels } from '../services/modelService'
+import { useAI } from '../../../context/AIContext'
+import { useAuth } from '../../../context/AuthContext'
+import { AIVendor } from '../../../constants/vendors'
+import { getTextGenerationModels } from '../../../services/modelService'
 import styles from './AIVendorWidget.module.scss'
 
 export default function AIVendorWidget(): React.ReactElement {

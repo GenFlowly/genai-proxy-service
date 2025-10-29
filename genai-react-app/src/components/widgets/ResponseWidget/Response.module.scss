@@ -1,4 +1,4 @@
-@import '../styles/variables.scss';
+@import '../../../styles/variables.scss';
 
 $editor-width: 88rem;
 
@@ -11,10 +11,19 @@ $editor-width: 88rem;
 
 .inner {
   width: 100%;
-  max-width: $editor-width;
+  //max-width: $editor-width;
   display: flex;
   flex-direction: column;
   gap: 2rem;
+}
+
+/* 💡 Side-by-side modifier (applied to same div as .inner) */
+.sideBySide {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-evenly;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .article {
@@ -26,6 +35,10 @@ $editor-width: 88rem;
   border: 1px solid $border-light;
   font-family: 'Georgia', 'Times New Roman', serif;
   line-height: 1.7;
+  flex: 1 1 45%; /* ~half width when side-by-side */
+  min-width: 28rem;
+  max-width: 32%;
+  transition: all 0.25s ease-in-out;
 
   h1, h2, h3, h4 {
     margin-top: 1.5rem;
@@ -78,12 +91,14 @@ $editor-width: 88rem;
   }
 }
 
+/* 📱 Responsive */
 @media (max-width: 768px) {
   .inner {
-    max-width: 100%;
+    flex-direction: column;
   }
 
   .article {
+    min-width: 100%;
     padding: $spacing-md $spacing-lg;
   }
 }

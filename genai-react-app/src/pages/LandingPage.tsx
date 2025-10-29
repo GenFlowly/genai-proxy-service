@@ -1,83 +1,33 @@
-import React, { useState } from 'react'
-import Navbar from '../components/Navbar'
-import TextField from '../components/TextField'
-import { generateText } from '../services/textGenService'
-import { useAuth } from '../context/AuthContext'
-import { AIVendor } from '../constants/vendors'
-import ResponseViewer from '../components/ResponseViewer'
-import LeftSidebar from '../components/LeftSidebar'
-import RightSidebar from '../components/RightSidebar'
-import { useAI, AIProvider } from '../context/AIContext'
+import React from 'react'
+import Navbar from '../components/navbar/Navbar'
+import LeftSidebar from '../components/sections/LeftSidebar/LeftSidebar'
+import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
+import CenterSection from '../components/sections/CenterSection/CenterSection'
+import { AIProvider } from '../context/AIContext'
+import { ConversationProvider } from '../context/ConversationContext'
+import { LayoutProvider, useLayout } from '../context/LayoutContext'
 import styles from './LandingPage.module.scss'
 
-function LandingContent() {
-    const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
-    const { config } = useAI()
-    const [markdown, setMarkdown] = useState('# Write me code for hello world')
-    const [isLoading, setIsLoading] = useState(false)
-    const [responses, setResponses] = useState<{ vendor: AIVendor; text: string }[]>([])
-
-    const handleGenerateText = async () => {
-        if (!isAuthenticated || !customerId) {
-            alert('Please log in first.')
-            return
-        }
-
-        const activeVendors = Object.entries(config.vendorSelections).filter(([_, m]) => m)
-        if (activeVendors.length === 0) {
-            alert('Please select at least one vendor and model.')
-            return
-        }
-
-        setIsLoading(true)
-        setResponses([])
-
-        try {
-            const token = await getAccessTokenSilently()
-            const results: { vendor: AIVendor; text: string }[] = []
-
-            for (const [vendor, model] of activeVendors) {
-                const res = await generateText(token, {
-                    vendor: vendor as AIVendor,
-                    model,
-                    prompt: markdown,
-                    customerId,
-                })
-                results.push({ vendor: vendor as AIVendor, text: res.text ?? '' })
-            }
-
-            setResponses(results)
-        } catch (error) {
-            console.error('❌ Failed to generate text:', error)
-            setResponses([{ vendor: AIVendor.OPENAI, text: 'Error generating text. Check console.' }])
-        } finally {
-            setIsLoading(false)
-        }
-    }
+function LandingPageContent() {
+    const { isLeftVisible, isRightVisible } = useLayout()
 
     return (
         <div className={styles.layout}>
-            <div className={styles.sidebarLeft}>
-                <LeftSidebar />
-            </div>
-
-            <div className={styles.centerSection}>
-                <div className={styles.contentWrapper}>
-                    <TextField markdown={markdown} onMarkdownChange={setMarkdown} />
-                    <button
-                        onClick={handleGenerateText}
-                        className={styles.submitButton}
-                        disabled={isLoading}
-                    >
-                        {isLoading ? 'Generating...' : 'Send to API'}
-                    </button>
-                    <ResponseViewer responses={responses} />
+            {isLeftVisible && (
+                <div className={styles.sidebarLeft}>
+                    <LeftSidebar />
                 </div>
-            </div>
+            )}
 
-            <div className={styles.sidebarRight}>
-                <RightSidebar />
-            </div>
+            <ConversationProvider>
+                <CenterSection />
+            </ConversationProvider>
+
+            {isRightVisible && (
+                <div className={styles.sidebarRight}>
+                    <RightSidebar />
+                </div>
+            )}
         </div>
     )
 }
@@ -87,7 +37,9 @@ export default function LandingPage() {
         <div className={styles.page}>
             <Navbar />
             <AIProvider>
-                <LandingContent />
+                <LayoutProvider>
+                    <LandingPageContent />
+                </LayoutProvider>
             </AIProvider>
         </div>
     )

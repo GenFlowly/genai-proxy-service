@@ -1,9 +1,9 @@
 import React, {useState} from 'react';
 import {useNavigate, Link} from 'react-router-dom';
-import {useAuth} from '../context/AuthContext';
-import UserIcon from './icons/UserIcon';
-import LoginIcon from './icons/LoginIcon';
-import SettingsIcon from './icons/SettingsIcon';
+import {useAuth} from '../../context/AuthContext';
+import UserIcon from '../icons/UserIcon';
+import LoginIcon from '../icons/LoginIcon';
+import SettingsIcon from '../icons/SettingsIcon';
 import styles from './Navbar.module.scss';
 
 export default function Navbar(): React.ReactElement {
