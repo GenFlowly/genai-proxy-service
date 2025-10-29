@@ -1,28 +1,8 @@
 import React from 'react'
-import '@mdxeditor/editor/style.css'
-import {
-    MDXEditor,
-    toolbarPlugin,
-    headingsPlugin,
-    quotePlugin,
-    markdownShortcutPlugin,
-    listsPlugin,
-    codeBlockPlugin,
-    UndoRedo,
-    BoldItalicUnderlineToggles,
-    BlockTypeSelect,
-    ListsToggle,
-    InsertCodeBlock,
-    thematicBreakPlugin,
-    InsertImage,
-    InsertTable,
-    codeMirrorPlugin,
-    InsertThematicBreak,
-    CreateLink,
-    linkDialogPlugin,
-    imagePlugin,
-    tablePlugin,
-} from '@mdxeditor/editor'
+import '@uiw/react-markdown-editor/markdown-editor.css'
+import '@uiw/react-markdown-preview/markdown.css'
+import MarkdownEditor from '@uiw/react-markdown-editor'
+import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import { useConversation } from '../../../context/ConversationContext'
 import styles from './Prompt.module.scss'
 
@@ -31,50 +11,36 @@ export default function Prompt(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <label className={styles.label}>Prompt</label>
+            <div className={styles.headerSection}>
+                <label className={styles.label}>Prompt</label>
+                <CopyToClipboard content={markdown} label="Copy"  successDuration={2000}/>
+            </div>
             <div className={styles.editorWrapper}>
-                <MDXEditor
-                    markdown={markdown}
-                    onChange={setMarkdown}
-                    className={styles.mdxEditorRoot}
-                    contentEditableClassName={styles.editorContent}
-                    plugins={[
-                        toolbarPlugin({
-                            toolbarContents: () => (
-                                <>
-                                    <UndoRedo />
-                                    <BoldItalicUnderlineToggles />
-                                    <InsertImage />
-                                    <BlockTypeSelect />
-                                    <ListsToggle />
-                                    <InsertTable />
-                                    <CreateLink />
-                                    <InsertThematicBreak />
-                                    <InsertCodeBlock />
-                                </>
-                            ),
-                        }),
-                        headingsPlugin(),
-                        imagePlugin(),
-                        quotePlugin(),
-                        markdownShortcutPlugin(),
-                        listsPlugin(),
-                        tablePlugin(),
-                        linkDialogPlugin(),
-                        thematicBreakPlugin(),
-                        codeBlockPlugin({ defaultCodeBlockLanguage: 'js' }),
-                        codeMirrorPlugin({
-                            codeBlockLanguages: {
-                                js: 'JavaScript',
-                                ts: 'TypeScript',
-                                css: 'CSS',
-                                java: 'Java',
-                                kotlin: 'Kotlin',
-                                python: 'Python',
-                            },
-                        }),
-                    ]}
-                />
+                <div className={styles.mdxEditorRoot}>
+                    <MarkdownEditor
+                        value={markdown}
+                        onChange={(value) => setMarkdown(value)}
+                        height="400px"
+                        visible={true}
+                        enablePreview={true}
+                        className={styles.markdownEditor}
+                        toolbars={[
+                            'bold',
+                            'italic',
+                            'underline',
+                            'strike',
+                            'header',
+                            'quote',
+                            'ulist',
+                            'olist',
+                            'todo',
+                            'link',
+                            'image',
+                            'code',
+                            'codeBlock',
+                        ]}
+                    />
+                </div>
             </div>
         </div>
     )
