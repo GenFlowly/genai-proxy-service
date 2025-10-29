@@ -2,8 +2,22 @@ import React, { useEffect, useState } from 'react'
 import { useAI } from '../../../context/AIContext'
 import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
-import { getTextGenerationModels, clearModelCache } from '../../../services/modelService'
+import {
+    getTextGenerationModels,
+    clearModelCache,
+    GetTextGenerationModelsResponse,
+} from '../../../services/modelService'
+import { CacheManager } from '../../../utils/cache'
 import styles from './AIVendorWidget.module.scss'
+
+const modelCache = new CacheManager({
+    ttlMs: 30 * 24 * 60 * 60 * 1000,
+    prefix: 'ai_models_',
+})
+
+function getCacheKey(vendor: AIVendor, customerId: string): string {
+    return `${vendor}_${customerId}`
+}
 
 export default function AIVendorWidget(): React.ReactElement {
     const { config, setVendorModel } = useAI()
@@ -18,6 +32,20 @@ export default function AIVendorWidget(): React.ReactElement {
     })
 
     const vendors = Object.values(AIVendor) as AIVendor[]
+
+    // Load cached models immediately if available
+    const loadCachedModels = () => {
+        if (!customerId) return
+        const updatedModels = { ...vendorModels }
+        vendors.forEach(vendor => {
+            const cacheKey = getCacheKey(vendor, customerId)
+            const cached = modelCache.get<GetTextGenerationModelsResponse>(cacheKey)
+            if (cached) {
+                updatedModels[vendor].models = cached.modelsList
+            }
+        })
+        setVendorModels(updatedModels)
+    }
 
     const fetchModels = async (bypassCache: boolean = false) => {
         if (!isAuthenticated || !customerId) return
@@ -58,7 +86,14 @@ export default function AIVendorWidget(): React.ReactElement {
         }
     }
 
-    // Initial load
+    // Load cached models on mount
+    useEffect(() => {
+        if (customerId) {
+            loadCachedModels()
+        }
+    }, [customerId])
+
+    // Fetch fresh models in the background
     useEffect(() => {
         if (!isAuthenticated || !customerId) return
         fetchModels()
