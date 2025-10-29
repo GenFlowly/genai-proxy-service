@@ -1,0 +1,60 @@
+@import '../../../styles/variables.scss';
+
+.conversationBlock {
+  width: 100%;
+  max-width: 88rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #fdfdfd;
+  padding: 2rem 2.5rem;
+  border-radius: $radius-lg;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  border: 1px solid $border-light;
+  transition: box-shadow 0.3s ease;
+  scroll-margin-top: 5rem;
+
+  &:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+  }
+
+  &:not(:last-child) {
+    margin-bottom: 3rem;
+  }
+}
+
+.followUpButtonWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 1.5rem;
+}
+
+.followUpButton {
+  background-color: #f0f4ff;
+  color: #2a5bd7;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid #d6e1ff;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background-color: #e2ebff;
+  }
+
+  &:active {
+    background-color: #cddcff;
+  }
+}
+
+@media (max-width: 768px) {
+  .conversationBlock {
+    padding: 1.25rem;
+  }
+
+  .followUpButtonWrapper {
+    justify-content: center;
+  }
+}
