@@ -14,14 +14,22 @@ $editor-width: 88rem;
   color: $text-secondary;
   font-size: 0.875rem;
   font-weight: 600;
-  margin-bottom: $spacing-sm;
   align-self: flex-start;
+}
+
+.headerSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: $spacing-sm;
+  gap: $spacing-md;
 }
 
 .editorWrapper {
   width: 100%;
   display: flex;
-  justify-content: center; // centers the inner editor
+  justify-content: center;
 }
 
 .mdxEditorRoot {
@@ -37,75 +45,115 @@ $editor-width: 88rem;
   &:focus-within {
     border-color: $primary-color;
   }
+
+  // Target the markdown editor container
+  :global(.w-md-editor) {
+    border: none !important;
+    border-radius: 0;
+    background-color: $white;
+  }
+
+  // Target the editor input area
+  :global(.w-md-editor-text-input) {
+    padding: $spacing-xl $spacing-2xl !important;
+    font-size: 1rem !important;
+    line-height: 1.6 !important;
+    color: $text-primary !important;
+    min-height: 16rem !important;
+
+    &:focus {
+      outline: none;
+    }
+  }
+
+  // Target the textarea
+  :global(.w-md-editor-text-input textarea) {
+    padding: $spacing-xl $spacing-2xl !important;
+    font-size: 1rem !important;
+    line-height: 1.6 !important;
+    color: $text-primary !important;
+  }
+
+  // Target the toolbar
+  :global(.w-md-editor-toolbar) {
+    background-color: $white !important;
+    border-bottom: 1px solid $border-color !important;
+    border-radius: 0;
+  }
+
+  // Target toolbar buttons
+  :global(.w-md-editor-toolbar button) {
+    color: $text-primary !important;
+
+    &:hover {
+      background-color: $background-gray !important;
+    }
+  }
+
+  // Markdown content styling
+  :global(.w-md-editor-preview) {
+    padding: $spacing-xl $spacing-2xl !important;
+    background-color: $white !important;
+
+    p,
+    ul,
+    ol,
+    pre,
+    blockquote {
+      margin: 0 0 $spacing-md 0;
+    }
+
+    ul,
+    ol {
+      padding-left: $spacing-xl;
+    }
+
+    // Inline code
+    code {
+      background-color: $background-gray;
+      color: $text-primary;
+      padding: 0.2rem 0.4rem;
+      border-radius: $radius-sm;
+      font-family: monospace;
+    }
+
+    // Code block
+    pre {
+      background-color: $background-gray;
+      color: $text-primary;
+      padding: $spacing-lg $spacing-xl;
+      border-radius: $radius-md;
+      overflow-x: auto;
+      font-size: 0.9rem;
+      font-family: monospace;
+      border: 1px solid $border-light;
+    }
+
+    blockquote {
+      border-left: 4px solid $border-color;
+      padding-left: $spacing-md;
+      color: $text-secondary;
+      font-style: italic;
+    }
+  }
 }
 
-.editorContent {
-  padding: $spacing-xl $spacing-2xl;
-  font-size: 1rem;
-  line-height: 1.6;
-  color: $text-primary;
-  min-height: 16rem;
+.markdownEditor {
   width: 100%;
-
-  &:focus {
-    outline: none;
-  }
-
-  p,
-  ul,
-  ol,
-  pre,
-  blockquote {
-    margin: 0 0 $spacing-md 0;
-  }
-
-  ul,
-  ol {
-    padding-left: $spacing-xl;
-  }
-
-  // Inline code (single backtick)
-  code {
-    background-color: $background-gray;
-    color: $text-primary;
-    padding: 0.2rem 0.4rem;
-    border-radius: $radius-sm;
-    font-family: monospace;
-  }
-
-  // Code block (``` code fence)
-  pre {
-    background-color: $background-gray; // ✅ use theme background
-    color: $text-primary;               // ✅ consistent text color
-    padding: $spacing-lg $spacing-xl;   // ✅ more comfortable padding
-    border-radius: $radius-md;
-    overflow-x: auto;
-    font-size: 0.9rem;
-    font-family: monospace;
-    border: 1px solid $border-light;    // ✅ subtle border for separation
-  }
-
-  blockquote {
-    border-left: 4px solid $border-color;
-    padding-left: $spacing-md;
-    color: $text-secondary;
-    font-style: italic;
-  }
-}
-
-.codeBlock {
-  margin: $spacing-lg 0;
-  border-radius: $radius-md;
-  overflow: hidden;
+  border: none !important;
 }
 
 @media (max-width: 768px) {
   .mdxEditorRoot {
     max-width: 100%;
     border-width: 1px;
-  }
 
-  .editorContent {
-    padding: $spacing-md $spacing-lg;
+    :global(.w-md-editor-text-input) {
+      padding: $spacing-md $spacing-lg !important;
+    }
+
+    :global(.w-md-editor-preview) {
+      padding: $spacing-md $spacing-lg !important;
+    }
   }
 }
