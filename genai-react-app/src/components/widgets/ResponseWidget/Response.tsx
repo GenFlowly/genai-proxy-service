@@ -5,16 +5,17 @@ import rehypeHighlight from 'rehype-highlight'
 import 'highlight.js/styles/github.css'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import styles from './Response.module.scss'
-import { useConversation } from '../../../context/ConversationContext'
+import { AIVendor } from '../../../constants/vendors'
 import { useLayout } from '../../../context/LayoutContext'
 
-export default function Response() {
-    const { responses } = useConversation()
+interface ResponseProps {
+    responses: { vendor: AIVendor; text: string }[]
+}
+
+export default function Response({ responses }: ResponseProps) {
     const { isLeftVisible, isRightVisible } = useLayout()
+    if (!responses || responses.length === 0) return null
 
-    if (responses.length === 0) return null
-
-    // When both sidebars are hidden → show side-by-side
     const sidebarsHidden = !isLeftVisible && !isRightVisible
 
     return (
