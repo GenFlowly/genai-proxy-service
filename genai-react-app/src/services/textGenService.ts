@@ -13,7 +13,6 @@ export interface GenerateTextResponse {
 }
 
 
-
 export async function generateText(
     token: string,
     request: GenerateTextRequest
