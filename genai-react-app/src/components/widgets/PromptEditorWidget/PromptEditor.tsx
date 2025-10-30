@@ -5,6 +5,7 @@ import MarkdownEditor from '@uiw/react-markdown-editor'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import { useConversation } from '../../../context/ConversationContext'
 import styles from './PromptEditor.module.scss'
+import { EditorView } from '@codemirror/view'
 
 interface PromptEditorProps {
     id: string
@@ -54,7 +55,7 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
                     <MarkdownEditor
                         value={block.markdown}
                         onChange={(value) => handleChange(value)}
-                        height={"600px"}
+                        height="600px"
                         visible={false}
                         enablePreview={true}
                         className={styles.markdownEditor}
@@ -73,7 +74,10 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
                             'code',
                             'codeBlock',
                         ]}
+                        extensions={[EditorView.lineWrapping]}
                     />
+
+
                 </div>
             </div>
         </div>

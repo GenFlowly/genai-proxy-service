@@ -152,3 +152,10 @@ $editor-width: 88rem;
     }
   }
 }
+
+/* Disable line numbers and enforce word wrap in CodeMirror editor */
+:global(.cm-gutters) {
+  display: none !important;
+}
+
+
