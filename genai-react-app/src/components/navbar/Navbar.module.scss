@@ -111,3 +111,28 @@
     background-color: $background-gray;
   }
 }
+
+.leftControls,
+.rightControls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.toggleButton {
+  background: transparent;
+  border: none;
+  color: $white;
+  cursor: pointer;
+  padding: 0.4rem;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+
+  svg {
+    display: block;
+  }
+}

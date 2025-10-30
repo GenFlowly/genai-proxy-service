@@ -10,6 +10,10 @@ import {
 import { CacheManager } from '../../../utils/cache'
 import styles from './AIVendorWidget.module.scss'
 
+interface Props {
+    collapsed?: boolean
+}
+
 const modelCache = new CacheManager({
     ttlMs: 30 * 24 * 60 * 60 * 1000,
     prefix: 'ai_models_',
@@ -19,7 +23,7 @@ function getCacheKey(vendor: AIVendor, customerId: string): string {
     return `${vendor}_${customerId}`
 }
 
-export default function AIVendorWidget(): React.ReactElement {
+export default function AIVendorWidget({ collapsed = false }: Props): React.ReactElement {
     const { config, setVendorModel } = useAI()
     const { getAccessTokenSilently, customerId, isAuthenticated } = useAuth()
 
@@ -33,84 +37,81 @@ export default function AIVendorWidget(): React.ReactElement {
 
     const vendors = Object.values(AIVendor) as AIVendor[]
 
-    // Load cached models immediately if available
-    const loadCachedModels = () => {
-        if (!customerId) return
-        const updatedModels = { ...vendorModels }
-        vendors.forEach(vendor => {
-            const cacheKey = getCacheKey(vendor, customerId)
-            const cached = modelCache.get<GetTextGenerationModelsResponse>(cacheKey)
-            if (cached) {
-                updatedModels[vendor].models = cached.modelsList
-            }
-        })
-        setVendorModels(updatedModels)
-    }
-
-    const fetchModels = async (bypassCache: boolean = false) => {
-        if (!isAuthenticated || !customerId) return
-
-        try {
-            const token = await getAccessTokenSilently()
-            for (const vendor of vendors) {
-                setVendorModels(prev => ({
-                    ...prev,
-                    [vendor]: { ...prev[vendor], loading: true },
-                }))
-
-                try {
-                    // Clear cache for this vendor if bypassing
-                    if (bypassCache) {
-                        clearModelCache(vendor, customerId)
-                    }
-
-                    const res = await getTextGenerationModels(
-                        token,
-                        { vendor, customerId },
-                        bypassCache
-                    )
-                    setVendorModels(prev => ({
-                        ...prev,
-                        [vendor]: { loading: false, models: res.modelsList },
-                    }))
-                } catch (err) {
-                    console.error(`Error fetching models for ${vendor}:`, err)
-                    setVendorModels(prev => ({
-                        ...prev,
-                        [vendor]: { loading: false, models: [], error: 'Failed to load models' },
-                    }))
-                }
-            }
-        } catch (err) {
-            console.error('Error fetching vendor models:', err)
-        }
-    }
-
-    // Load cached models on mount
     useEffect(() => {
-        if (customerId) {
-            loadCachedModels()
-        }
+        if (!customerId) return
+        const updated = { ...vendorModels }
+        vendors.forEach(vendor => {
+            const cached = modelCache.get<GetTextGenerationModelsResponse>(getCacheKey(vendor, customerId))
+            if (cached) updated[vendor].models = cached.modelsList
+        })
+        setVendorModels(updated)
     }, [customerId])
 
-    // Fetch fresh models in the background
     useEffect(() => {
-        if (!isAuthenticated || !customerId) return
+        const fetchModels = async () => {
+            if (!isAuthenticated || !customerId) return
+            try {
+                const token = await getAccessTokenSilently()
+                for (const vendor of vendors) {
+                    setVendorModels(prev => ({
+                        ...prev,
+                        [vendor]: { ...prev[vendor], loading: true },
+                    }))
+                    try {
+                        const res = await getTextGenerationModels(token, { vendor, customerId })
+                        setVendorModels(prev => ({
+                            ...prev,
+                            [vendor]: { loading: false, models: res.modelsList },
+                        }))
+                    } catch (err) {
+                        console.error(err)
+                        setVendorModels(prev => ({
+                            ...prev,
+                            [vendor]: { loading: false, models: [], error: 'Failed to load' },
+                        }))
+                    }
+                }
+            } catch (err) {
+                console.error('Model fetch error:', err)
+            }
+        }
         fetchModels()
     }, [isAuthenticated, customerId, getAccessTokenSilently])
 
-    const handleRefresh = () => {
-        fetchModels(true) // bypass cache
+    // 💡 Compact collapsed view
+    if (collapsed) {
+        return (
+            <div className={`${styles.vendorWidget} ${styles.collapsed}`}>
+                {vendors.map(vendor => (
+                    <button
+                        key={vendor}
+                        type="button"
+                        className={`${styles.iconButton} ${
+                            config.vendorSelections[vendor] ? styles.active : ''
+                        }`}
+                        onClick={() =>
+                            setVendorModel(
+                                vendor,
+                                config.vendorSelections[vendor] ? null : vendorModels[vendor].models[0]
+                            )
+                        }
+                        title={vendor}
+                    >
+                        {vendor[0]}
+                    </button>
+                ))}
+            </div>
+        )
     }
 
+    // 🧱 Normal expanded view
     return (
         <div className={styles.vendorWidget}>
             <div className={styles.header}>
                 <h3 className={styles.title}>AI Models</h3>
                 <button
-                    onClick={handleRefresh}
                     className={styles.refreshButton}
-                    title="Refresh model list"
+                    onClick={() => window.location.reload()}
                     disabled={Object.values(vendorModels).some(v => v.loading)}
                 >
                     ↻ Refresh
@@ -127,9 +128,7 @@ export default function AIVendorWidget(): React.ReactElement {
                         onClick={() =>
                             setVendorModel(
                                 vendor,
-                                config.vendorSelections[vendor]
-                                    ? null
-                                    : vendorModels[vendor].models[0]
+                                config.vendorSelections[vendor] ? null : vendorModels[vendor].models[0]
                             )
                         }
                         disabled={vendorModels[vendor].loading}
