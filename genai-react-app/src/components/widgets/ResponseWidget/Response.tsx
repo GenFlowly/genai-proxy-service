@@ -18,6 +18,54 @@ export default function Response({ responses }: ResponseProps) {
 
     const sidebarsHidden = !isLeftVisible && !isRightVisible
 
+    // Custom code block component with copy button
+    const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
+        if (inline) {
+            return <code className={className} {...props}>{children}</code>
+        }
+
+        // Recursively extract all text from AST nodes
+        const extractText = (nodes: any[]): string => {
+            return nodes
+                .map((node: any) => {
+                    if (node.value) return node.value
+                    if (node.children) return extractText(node.children)
+                    return ''
+                })
+                .join('')
+        }
+
+        const codeString = node?.children
+            ? extractText(node.children).replace(/\n$/, '')
+            : String(children).replace(/\n$/, '')
+        const language = className?.replace('language-', '') || ''
+
+        return (
+            <div style={{ position: 'relative' }}>
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '0.5rem',
+                        right: '0.5rem',
+                        zIndex: 10,
+                    }}
+                >
+                    <CopyToClipboard
+                        content={codeString}
+                        label="Copy"
+                        successMessage="✓ Copied"
+                        successDuration={2000}
+                        size="sm"
+                        variant="secondary"
+                    />
+                </div>
+                <pre className={className} {...props}>
+                    <code>{children}</code>
+                </pre>
+            </div>
+        )
+    }
+
     return (
         <div className={styles.container}>
             <div
@@ -43,6 +91,9 @@ export default function Response({ responses }: ResponseProps) {
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeHighlight]}
+                            components={{
+                                code: CodeBlock,
+                            }}
                         >
                             {text}
                         </ReactMarkdown>
