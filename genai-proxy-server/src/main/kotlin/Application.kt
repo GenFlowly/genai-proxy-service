@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit
 import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get
 import org.slf4j.LoggerFactory
+import service.AIRequestManager
 import service.CustomerProfileService
 
 fun main(args: Array<String>) {
@@ -88,9 +89,10 @@ fun Application.module() {
 
 
     val aiRequestService = get<AIRequestService>()
+    val aiRequestManager = get<AIRequestManager>()
     val customerProfileService = get<CustomerProfileService>()
 
-    configureRouting(aiRequestService, customerProfileService)
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService)
 }
 
 
