@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext'
 import { useAI } from './AIContext'
 import { generateText } from '../services/textGenService'
 import { useLayout } from './LayoutContext'
+import {batchGenerateText} from "../services/batchTextGenService";
 
 interface ResponseType {
     vendor: AIVendor
@@ -55,10 +56,10 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     // 🔵 Generate responses for a specific block
     const generateResponses = async (id: string) => {
         const block = conversations.find(c => c.id === id)
-        if (!block || !isAuthenticated || !customerId) return alert('Please log in first.')
+        if (!block || !isAuthenticated || !customerId) return alert("Please log in first.")
 
         const activeVendors = Object.entries(config.vendorSelections).filter(([_, model]) => model)
-        if (activeVendors.length === 0) return alert('Select at least one vendor and model.')
+        if (activeVendors.length === 0) return alert("Select at least one vendor and model.")
 
         setConversations(prev =>
             prev.map(c => (c.id === id ? { ...c, isLoading: true, responses: [] } : c))
@@ -66,24 +67,52 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             const token = await getAccessTokenSilently()
-            const results: ResponseType[] = []
 
-            for (const [vendor, model] of activeVendors) {
+            // 🟡 If only one vendor -> single API call
+            if (activeVendors.length === 1) {
+                const [vendor, model] = activeVendors[0]
                 const res = await generateText(token, {
                     vendor: vendor as AIVendor,
                     model,
                     prompt: block.markdown,
                     customerId,
                 })
-                results.push({ vendor: vendor as AIVendor, text: res.text ?? '' })
+                setConversations(prev =>
+                    prev.map(c =>
+                        c.id === id
+                            ? {
+                                ...c,
+                                responses: [{ vendor: vendor as AIVendor, text: res.text ?? "" }],
+                                isLoading: false,
+                            }
+                            : c
+                    )
+                )
+            } else {
+                // 🟢 Multiple vendors → batch call
+                const batchRequest = {
+                    requests: activeVendors.map(([vendor, model]) => ({
+                        vendor,
+                        model,
+                        prompt: block.markdown,
+                        customerId,
+                    })),
+                }
+
+                const batchResponse = await batchGenerateText(token, batchRequest)
+                const results = batchResponse.results.map(r => ({
+                    vendor: r.vendor as AIVendor,
+                    text: r.text ?? "",
+                }))
+
+                setConversations(prev =>
+                    prev.map(c =>
+                        c.id === id ? { ...c, responses: results, isLoading: false } : c
+                    )
+                )
             }
 
-            // Update responses and toggle layout visibility
-            setConversations(prev =>
-                prev.map(c =>
-                    c.id === id ? { ...c, responses: results, isLoading: false } : c
-                )
-            )
+            // toggle layout visibility
             setLeftVisible(false)
             setRightVisible(false)
         } catch (err) {
@@ -93,7 +122,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     c.id === id
                         ? {
                             ...c,
-                            responses: [{ vendor: AIVendor.OPENAI, text: 'Error generating text.' }],
+                            responses: [{ vendor: AIVendor.OPENAI, text: "Error generating text." }],
                             isLoading: false,
                         }
                         : c
@@ -101,6 +130,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             )
         }
     }
+
 
     return (
         <ConversationContext.Provider
