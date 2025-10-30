@@ -18,27 +18,22 @@ export default function Response({ responses }: ResponseProps) {
 
     const sidebarsHidden = !isLeftVisible && !isRightVisible
 
-    // Custom code block component with copy button
-    const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
-        if (inline) {
-            return <code className={className} {...props}>{children}</code>
-        }
+    // Recursively extract all text from AST nodes
+    const extractText = (nodes: any[]): string => {
+        return nodes
+            .map((node: any) => {
+                if (node.value) return node.value
+                if (node.children) return extractText(node.children)
+                return ''
+            })
+            .join('')
+    }
 
-        // Recursively extract all text from AST nodes
-        const extractText = (nodes: any[]): string => {
-            return nodes
-                .map((node: any) => {
-                    if (node.value) return node.value
-                    if (node.children) return extractText(node.children)
-                    return ''
-                })
-                .join('')
-        }
-
+    // Custom pre component for code blocks
+    const PreBlock = ({ node, children, ...props }: any) => {
         const codeString = node?.children
             ? extractText(node.children).replace(/\n$/, '')
-            : String(children).replace(/\n$/, '')
-        const language = className?.replace('language-', '') || ''
+            : ''
 
         return (
             <div style={{ position: 'relative' }}>
@@ -59,9 +54,7 @@ export default function Response({ responses }: ResponseProps) {
                         variant="secondary"
                     />
                 </div>
-                <pre className={className} {...props}>
-                    <code>{children}</code>
-                </pre>
+                <pre {...props}>{children}</pre>
             </div>
         )
     }
@@ -92,7 +85,7 @@ export default function Response({ responses }: ResponseProps) {
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeHighlight]}
                             components={{
-                                code: CodeBlock,
+                                pre: PreBlock,
                             }}
                         >
                             {text}
