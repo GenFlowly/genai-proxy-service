@@ -55,7 +55,7 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
                         value={block.markdown}
                         onChange={(value) => handleChange(value)}
                         height={"600px"}
-                        visible={true}
+                        visible={false}
                         enablePreview={true}
                         className={styles.markdownEditor}
                         toolbars={[
