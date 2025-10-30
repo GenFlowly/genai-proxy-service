@@ -8,6 +8,7 @@ import mu.KLogger
 import mu.KotlinLogging.logger
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import service.AIRequestManager
 import service.CustomerProfileService
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
@@ -33,6 +34,7 @@ fun appModule(): Module = module {
     single { KMSProvider(get(), get()) }
     single { AIRequestService(get()) }
     single { CustomerProfileService(get(), get()) }
+    single { AIRequestManager(get(), get()) }
 
 }
 
