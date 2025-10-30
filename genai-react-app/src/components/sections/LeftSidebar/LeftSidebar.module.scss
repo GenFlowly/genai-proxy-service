@@ -6,6 +6,38 @@
   gap: 2rem;
   overflow-y: hidden;
   background: #fafafa;
+  transition: all 0.3s ease;
+
+  &.collapsed {
+    width: 4rem;
+    padding: 1rem 0.5rem;
+    align-items: center;
+    overflow: hidden;
+    gap: 1rem;
+
+    .title,
+    .list,
+    .actionButton {
+      display: none;
+    }
+
+    /* Optional icon placeholders for sections */
+    .section::before {
+      font-size: 1.2rem;
+      color: #555;
+    }
+
+    /* Example icons (replace with actual icons in React) */
+    .section:nth-child(1)::before {
+      content: '📁'; /* Projects */
+    }
+    .section:nth-child(2)::before {
+      content: '⚡'; /* Quick Actions */
+    }
+    .section:nth-child(3)::before {
+      content: '🕓'; /* History */
+    }
+  }
 }
 
 .section {
