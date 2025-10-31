@@ -6,11 +6,10 @@ import { useConversation } from '../../../context/ConversationContext'
 import styles from './ConversationBlock.module.scss'
 
 export default function ConversationBlock({ id }: { id: string }) {
-    const { conversations, generateResponses, addConversation } = useConversation()
-    const block = conversations.find(b => b.id === id)
+    const { conversationBlockList, generateResponses, addNewConversationBlock } = useConversation()
+    const block = conversationBlockList.find(b => b.id === id)
     const responseRef = useRef<HTMLDivElement | null>(null)
 
-    // 🧷 Scroll to response when generated
     useEffect(() => {
         if (block?.responses?.length && responseRef.current) {
             if ("scrollIntoView" in responseRef.current) {
@@ -26,7 +25,7 @@ export default function ConversationBlock({ id }: { id: string }) {
 
     // ✅ Move follow-up logic into callback
     const handleFollowUp = () => {
-        addConversation()
+        addNewConversationBlock()
         setTimeout(() => {
             const last = document.querySelector(
                 `.${styles.conversationBlock}:last-child`

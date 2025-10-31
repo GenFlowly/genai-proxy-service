@@ -1,11 +1,9 @@
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
+import {
+    StoreCustomerVendorApiKeyRequest
+} from "../models/storeCustomerVendorAPIKeys.models";
 
-export interface StoreCustomerVendorApiKeyRequest {
-    customerId: string
-    aiVendor: string
-    apiKey: string
-}
 
 /**
  * Stores or updates a vendor API key for a given customer.

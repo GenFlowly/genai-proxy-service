@@ -10,10 +10,10 @@ interface ResponseProps {
 }
 
 export default function Response({ responses, onFollowUp }: ResponseProps) {
-    const { isLeftVisible, isRightVisible } = useLayout()
+    const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
     if (!responses || responses.length === 0) return null
 
-    const sidebarsHidden = !isLeftVisible && !isRightVisible
+    const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
 
     return (
         <div className={styles.container}>

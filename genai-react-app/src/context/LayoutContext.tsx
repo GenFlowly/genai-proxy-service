@@ -1,41 +1,39 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react'
+import { LayoutContextType } from '../models/layout.models'
 
-interface LayoutContextType {
-    isLeftVisible: boolean
-    isRightVisible: boolean
-    toggleLeftSidebar: () => void
-    toggleRightSidebar: () => void
-    setLeftVisible: (visible: boolean) => void
-    setRightVisible: (visible: boolean) => void
-}
+/* ---------- Context ---------- */
 
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined)
 
+/* ---------- Provider ---------- */
+
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
-    const [isLeftVisible, setIsLeftVisible] = useState(true)
-    const [isRightVisible, setIsRightVisible] = useState(true)
+    const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(true)
+    const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(true)
 
-    const toggleLeftSidebar = () => setIsLeftVisible(prev => !prev)
-    const toggleRightSidebar = () => setIsRightVisible(prev => !prev)
+    const toggleLeftSidebar = () => setIsLeftSidebarExpanded(prev => !prev)
+    const toggleRightSidebar = () => setIsRightSidebarExpanded(prev => !prev)
 
-    const setLeftVisible = (visible: boolean) => setIsLeftVisible(visible)
-    const setRightVisible = (visible: boolean) => setIsRightVisible(visible)
+    const setLeftSidebarExpanded = (visible: boolean) => setIsLeftSidebarExpanded(visible)
+    const setRightSidebarExpanded = (visible: boolean) => setIsRightSidebarExpanded(visible)
 
     return (
         <LayoutContext.Provider
             value={{
-                isLeftVisible,
-                isRightVisible,
+                isLeftSidebarExpanded,
+                isRightSidebarExpanded,
                 toggleLeftSidebar,
                 toggleRightSidebar,
-                setLeftVisible,
-                setRightVisible,
+                setLeftSidebarExpanded,
+                setRightSidebarExpanded,
             }}
         >
             {children}
         </LayoutContext.Provider>
     )
 }
+
+/* ---------- Hook ---------- */
 
 export const useLayout = (): LayoutContextType => {
     const context = useContext(LayoutContext)

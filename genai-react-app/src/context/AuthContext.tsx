@@ -8,7 +8,7 @@ import React, {
 import { AuthContextType, AuthProviderProps, User } from '../types/auth.types'
 import { parseJwt } from '../utils/parseJwt'
 import { HttpMethod } from '../constants/http'
-import { onboardCustomer } from '../services/userSyncService'
+import { onboardCustomer } from '../services/onboardUserService'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 

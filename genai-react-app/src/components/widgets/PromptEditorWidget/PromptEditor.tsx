@@ -12,8 +12,8 @@ interface PromptEditorProps {
 }
 
 export default function PromptEditor({ id }: PromptEditorProps): React.ReactElement {
-    const { conversations, updateMarkdown } = useConversation()
-    const block = conversations.find(b => b.id === id)
+    const { conversationBlockList, updateResponseInConversationBlock } = useConversation()
+    const block = conversationBlockList.find(b => b.id === id)
 
     const STORAGE_KEY = `prompt_editor_content_${id}`
 
@@ -22,15 +22,15 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
         if (!block) return
         try {
             const saved = localStorage.getItem(STORAGE_KEY)
-            if (saved && !block.markdown) updateMarkdown(id, saved)
+            if (saved && !block.markdown) updateResponseInConversationBlock(id, saved)
         } catch (err) {
             console.error('Failed to load from localStorage:', err)
         }
-    }, [id, block, updateMarkdown])
+    }, [id, block, updateResponseInConversationBlock])
 
     // Save markdown to localStorage whenever it changes
     const handleChange = (value: string) => {
-        updateMarkdown(id, value)
+        updateResponseInConversationBlock(id, value)
         try {
             localStorage.setItem(STORAGE_KEY, value)
         } catch (err) {

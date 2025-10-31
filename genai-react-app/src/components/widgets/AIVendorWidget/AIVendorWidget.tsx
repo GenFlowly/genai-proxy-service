@@ -4,11 +4,12 @@ import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
 import {
     getTextGenerationModels,
-    clearModelCache,
-    GetTextGenerationModelsResponse,
-} from '../../../services/modelService'
+} from '../../../services/getTextGenerationModelsService'
 import { CacheManager } from '../../../utils/cache'
 import styles from './AIVendorWidget.module.scss'
+import {
+    GetTextGenerationModelsResponse
+} from "../../../models/getTextGenerationModels.models";
 
 interface Props {
     collapsed?: boolean

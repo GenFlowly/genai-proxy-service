@@ -1,26 +1,11 @@
 // src/services/batchTextGenService.ts
 import { HttpMethod } from "../constants/http"
 import { endpoints } from "../config/endpoints"
-
-interface GenerateTextRequest {
-    vendor: string
-    model: string
-    prompt: string
-    customerId: string
-}
-
-interface GenerateTextResponse {
-    text: string
-    vendor: string
-}
-
-interface BatchGenerateTextRequest {
-    requests: GenerateTextRequest[]
-}
-
-interface BatchGenerateTextResponse {
-    results: GenerateTextResponse[]
-}
+import {
+    BatchGenerateTextRequest, BatchGenerateTextResponse,
+    GenerateTextRequest,
+    GenerateTextResponse
+} from "../models/generateText.models";
 
 export async function batchGenerateText(
     token: string,

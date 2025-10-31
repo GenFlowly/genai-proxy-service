@@ -1,17 +1,9 @@
 import {HttpMethod} from "../constants/http";
 import {endpoints} from "../config/endpoints";
-
-interface GenerateTextRequest {
-    vendor: string
-    model: string
-    prompt: string
-    customerId: string
-}
-
-export interface GenerateTextResponse {
-    text: string
-}
-
+import {
+    GenerateTextRequest,
+    GenerateTextResponse
+} from "../models/generateText.models";
 
 export async function generateText(
     token: string,

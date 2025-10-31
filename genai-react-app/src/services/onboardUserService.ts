@@ -2,7 +2,7 @@ import { User } from '../types/auth.types'
 import { endpoints } from '../config/endpoints'
 import { HttpMethod } from '../constants/http'
 
-const CLIENT_IDENTIFIER = 'firefox'
+const CLIENT_IDENTIFIER = 'REACT_APP'
 
 export async function onboardCustomer(
     user: User,

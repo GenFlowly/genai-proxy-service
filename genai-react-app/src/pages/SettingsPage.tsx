@@ -3,7 +3,7 @@ import Navbar from '../components/navbar/Navbar'
 import styles from './SettingsPage.module.scss'
 import { useAuth } from '../context/AuthContext'
 import { AIVendor } from '../constants/vendors'
-import { storeCustomerVendorApiKey } from '../services/storeApiKeys'
+import { storeCustomerVendorApiKey } from '../services/storeCustomerVendorApiKeysService'
 
 export default function SettingsPage(): React.ReactElement {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()

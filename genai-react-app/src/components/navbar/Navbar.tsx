@@ -10,7 +10,7 @@ import styles from './Navbar.module.scss'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
-    const { isLeftVisible, isRightVisible, toggleLeftSidebar, toggleRightSidebar } = useLayout()
+    const { isLeftSidebarExpanded, isRightSidebarExpanded, toggleLeftSidebar, toggleRightSidebar } = useLayout()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
 
@@ -30,9 +30,9 @@ export default function Navbar(): React.ReactElement {
                     <button
                         onClick={toggleLeftSidebar}
                         className={styles.toggleButton}
-                        title={isLeftVisible ? 'Collapse Left Sidebar' : 'Expand Left Sidebar'}
+                        title={isLeftSidebarExpanded ? 'Collapse Left Sidebar' : 'Expand Left Sidebar'}
                     >
-                        {isLeftVisible ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+                        {isLeftSidebarExpanded ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
                     </button>
 
                     <Link to="/" className={styles.logo}>
@@ -44,9 +44,9 @@ export default function Navbar(): React.ReactElement {
                     <button
                         onClick={toggleRightSidebar}
                         className={styles.toggleButton}
-                        title={isRightVisible ? 'Collapse Right Sidebar' : 'Expand Right Sidebar'}
+                        title={isRightSidebarExpanded ? 'Collapse Right Sidebar' : 'Expand Right Sidebar'}
                     >
-                        {isRightVisible ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
+                        {isRightSidebarExpanded ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
                     </button>
 
                     <div className={styles.auth}>
