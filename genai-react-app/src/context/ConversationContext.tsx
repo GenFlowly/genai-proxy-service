@@ -23,7 +23,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
 
     const [conversationBlockList, setConversationBlockList] = useState<ConversationBlock[]>([
-        { id: `conv-${Date.now()}`, markdown: '', responses: [], isLoading: false },
+        { id: `conv-default`, markdown: '', responses: [], isLoading: false },
     ])
 
     /* ---------- Helpers ---------- */
