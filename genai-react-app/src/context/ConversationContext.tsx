@@ -1,145 +1,148 @@
-// ConversationContext.tsx
-import React, { createContext, useContext, useState, ReactNode, useRef } from 'react'
+import React, { createContext, useContext, useState, ReactNode } from 'react'
 import { AIVendor } from '../constants/vendors'
 import { useAuth } from './AuthContext'
 import { useAI } from './AIContext'
-import { generateText } from '../services/textGenService'
 import { useLayout } from './LayoutContext'
-import {batchGenerateText} from "../services/batchTextGenService";
+import { generateText } from '../services/generateTextService'
+import { batchGenerateText } from '../services/batchGenerateTextService'
+import {
+    ConversationBlock,
+    ConversationContextType,
+    ResponseType,
+} from '../models/conversation.models'
 
-interface ResponseType {
-    vendor: AIVendor
-    text: string
-}
-
-interface ConversationBlock {
-    id: string
-    markdown: string
-    responses: ResponseType[]
-    isLoading: boolean
-}
-
-interface ConversationContextType {
-    conversations: ConversationBlock[]
-    addConversation: () => void
-    updateMarkdown: (id: string, value: string) => void
-    generateResponses: (id: string) => Promise<void>
-}
+/* ---------- Context ---------- */
 
 const ConversationContext = createContext<ConversationContextType | undefined>(undefined)
+
+/* ---------- Provider ---------- */
 
 export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
     const { config } = useAI()
-    const { setLeftVisible, setRightVisible } = useLayout()
-    const [conversations, setConversations] = useState<ConversationBlock[]>([
-        { id: 'conv-1', markdown: '', responses: [], isLoading: false },
+    const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
+
+    const [conversationBlockList, setConversationBlockList] = useState<ConversationBlock[]>([
+        { id: `conv-${Date.now()}`, markdown: '', responses: [], isLoading: false },
     ])
 
-    // 🟢 Add new conversation
-    const addConversation = () => {
-        setConversations(prev => [
-            ...prev,
-            { id: `conv-${Date.now()}`, markdown: '', responses: [], isLoading: false },
-        ])
-    }
+    /* ---------- Helpers ---------- */
 
-    // 🟡 Update markdown for a specific block
-    const updateMarkdown = (id: string, value: string) => {
-        setConversations(prev =>
-            prev.map(block =>
-                block.id === id ? { ...block, markdown: value } : block
-            )
+    const updateConversationBlock = (id: string, updater: Partial<ConversationBlock>) => {
+        setConversationBlockList(prev =>
+            prev.map(block => (block.id === id ? { ...block, ...updater } : block))
         )
     }
 
-    // 🔵 Generate responses for a specific block
+    /* ---------- Private API Methods ---------- */
+
+    const fetchSingleVendorResponse = async (
+        token: string,
+        vendor: string,
+        model: string,
+        prompt: string
+    ): Promise<ResponseType[]> => {
+        const res = await generateText(token, {
+            vendor: vendor as AIVendor,
+            model,
+            prompt: prompt,
+            customerId: customerId!,
+        })
+
+        return [{ vendor: vendor as AIVendor, text: res.text ?? '' }]
+    }
+
+    const fetchBatchVendorResponses = async (
+        token: string,
+        activeVendors: [string, string][],
+        prompt: string
+    ): Promise<ResponseType[]> => {
+        const batchRequest = {
+            requests: activeVendors.map(([vendor, model]) => ({
+                vendor,
+                model,
+                prompt: prompt,
+                customerId: customerId!,
+            })),
+        }
+
+
+        const batchResponse = await batchGenerateText(token, batchRequest)
+
+        return batchResponse.results.map(r => ({
+            vendor: r.vendor as AIVendor,
+            text: r.text ?? '',
+        }))
+    }
+
+    /* ---------- Actions ---------- */
+
+    const addNewConversationBlock = () => {
+        const newConversation: ConversationBlock = {
+            id: `conv-${Date.now()}`,
+            markdown: '',
+            responses: [],
+            isLoading: false,
+        }
+        setConversationBlockList(prev => [...prev, newConversation])
+    }
+
+    const updateResponseInConversationBlock = (id: string, value: string) => {
+        updateConversationBlock(id, { markdown: value })
+    }
+
     const generateResponses = async (id: string) => {
-        const block = conversations.find(c => c.id === id)
-        if (!block || !isAuthenticated || !customerId) return alert("Please log in first.")
+        const conversationBlock = conversationBlockList.find(c => c.id === id)
+        if (!conversationBlock) return
+        if (!isAuthenticated || !customerId) return alert('Please log in first.')
 
         const activeVendors = Object.entries(config.vendorSelections).filter(([_, model]) => model)
-        if (activeVendors.length === 0) return alert("Select at least one vendor and model.")
+        if (activeVendors.length === 0) return alert('Select at least one vendor and model.')
 
-        setConversations(prev =>
-            prev.map(c => (c.id === id ? { ...c, isLoading: true, responses: [] } : c))
-        )
+        updateConversationBlock(id, { isLoading: true, responses: [] })
 
         try {
             const token = await getAccessTokenSilently()
+            let responses: ResponseType[] = []
 
-            // 🟡 If only one vendor -> single API call
             if (activeVendors.length === 1) {
                 const [vendor, model] = activeVendors[0]
-                const res = await generateText(token, {
-                    vendor: vendor as AIVendor,
-                    model,
-                    prompt: block.markdown,
-                    customerId,
-                })
-                setConversations(prev =>
-                    prev.map(c =>
-                        c.id === id
-                            ? {
-                                ...c,
-                                responses: [{ vendor: vendor as AIVendor, text: res.text ?? "" }],
-                                isLoading: false,
-                            }
-                            : c
-                    )
-                )
+                responses = await fetchSingleVendorResponse(token, vendor, model, conversationBlock.markdown)
             } else {
-                // 🟢 Multiple vendors → batch call
-                const batchRequest = {
-                    requests: activeVendors.map(([vendor, model]) => ({
-                        vendor,
-                        model,
-                        prompt: block.markdown,
-                        customerId,
-                    })),
-                }
-
-                const batchResponse = await batchGenerateText(token, batchRequest)
-                const results = batchResponse.results.map(r => ({
-                    vendor: r.vendor as AIVendor,
-                    text: r.text ?? "",
-                }))
-
-                setConversations(prev =>
-                    prev.map(c =>
-                        c.id === id ? { ...c, responses: results, isLoading: false } : c
-                    )
-                )
+                responses = await fetchBatchVendorResponses(token, activeVendors, conversationBlock.markdown)
             }
 
-            // toggle layout visibility
-            setLeftVisible(false)
-            setRightVisible(false)
+            updateConversationBlock(id, { responses, isLoading: false })
+
+            // Hide sidebars after generating
+            setLeftSidebarExpanded(false)
+            setRightSidebarExpanded(false)
         } catch (err) {
             console.error(err)
-            setConversations(prev =>
-                prev.map(c =>
-                    c.id === id
-                        ? {
-                            ...c,
-                            responses: [{ vendor: AIVendor.OPENAI, text: "Error generating text." }],
-                            isLoading: false,
-                        }
-                        : c
-                )
-            )
+            updateConversationBlock(id, {
+                responses: [{ vendor: AIVendor.OPENAI, text: 'Error generating text.' }],
+                isLoading: false,
+            })
         }
     }
 
+    /* ---------- Render ---------- */
 
     return (
         <ConversationContext.Provider
-            value={{ conversations, addConversation, updateMarkdown, generateResponses }}
+            value={{
+                conversationBlockList,
+                addNewConversationBlock,
+                updateResponseInConversationBlock,
+                generateResponses,
+            }}
         >
             {children}
         </ConversationContext.Provider>
     )
 }
+
+/* ---------- Hook ---------- */
 
 export const useConversation = () => {
     const ctx = useContext(ConversationContext)

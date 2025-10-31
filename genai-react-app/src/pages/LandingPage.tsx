@@ -9,13 +9,13 @@ import {LayoutProvider, useLayout} from '../context/LayoutContext'
 import styles from './LandingPage.module.scss'
 
 function LandingPageContent() {
-    const {isLeftVisible, isRightVisible} = useLayout()
+    const {isLeftSidebarExpanded, isRightSidebarExpanded} = useLayout()
 
     return (
         <div className={styles.layout}>
             <div
                 className={`${styles.sidebarLeft} ${
-                    !isLeftVisible ? styles.collapsed : ''
+                    !isLeftSidebarExpanded ? styles.collapsed : ''
                 }`}
             >
                 <LeftSidebar/>
@@ -27,7 +27,7 @@ function LandingPageContent() {
 
             <div
                 className={`${styles.sidebarRight} ${
-                    !isRightVisible ? styles.collapsed : ''
+                    !isRightSidebarExpanded ? styles.collapsed : ''
                 }`}
             >
                 <RightSidebar/>
@@ -39,14 +39,14 @@ function LandingPageContent() {
 export default function LandingPage() {
     return (
         <div className={styles.page}>
-            <LayoutProvider>
+
                 <Navbar/>
                 <AIProvider>
 
                     <LandingPageContent/>
 
                 </AIProvider>
-            </LayoutProvider>
+
         </div>
     )
 }

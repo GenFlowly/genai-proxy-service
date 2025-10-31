@@ -6,8 +6,8 @@ import {useLayout} from "../../../context/LayoutContext";
 
 export default function RightSidebar(): React.ReactElement {
     const { config, setTemperature, setMaxTokens, setTone, resetConfig } = useAI()
-    const { isRightVisible } = useLayout()
-    const collapsed = !isRightVisible
+    const { isRightSidebarExpanded } = useLayout()
+    const collapsed = !isRightSidebarExpanded
 
     return (
         <div className={styles.sidebar}>

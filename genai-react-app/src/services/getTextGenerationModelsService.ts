@@ -2,17 +2,9 @@ import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import { AIVendor } from '../constants/vendors'
 import { CacheManager } from '../utils/cache'
-
-export interface GetTextGenerationModelsRequest {
-    vendor: AIVendor
-    customerId: string
-}
-
-export interface GetTextGenerationModelsResponse {
-    vendor: AIVendor
-    modelsList: string[]
-}
-
+import {
+    GetTextGenerationModelsRequest, GetTextGenerationModelsResponse
+} from "../models/getTextGenerationModels.models";
 const modelCache = new CacheManager({
     ttlMs: 30 * 24 * 60 * 60 * 1000, // 30 days
     prefix: 'ai_models_',
