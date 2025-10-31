@@ -4,6 +4,7 @@ import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import { useConversation } from '../../../context/ConversationContext'
+import { useAI } from '../../../context/AIContext' // ✅ NEW
 import styles from './PromptEditor.module.scss'
 import { EditorView } from '@codemirror/view'
 
@@ -13,6 +14,7 @@ interface PromptEditorProps {
 
 export default function PromptEditor({ id }: PromptEditorProps): React.ReactElement {
     const { conversationBlockList, updateResponseInConversationBlock } = useConversation()
+    const { setActiveText } = useAI() // ✅ NEW — from AI Context
     const block = conversationBlockList.find(b => b.id === id)
 
     const STORAGE_KEY = `prompt_editor_content_conv-default`
@@ -31,12 +33,20 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
     // Save markdown to localStorage whenever it changes
     const handleChange = (value: string) => {
         updateResponseInConversationBlock(id, value)
+        setActiveText(value) // ✅ sync with AI context for token counting
         try {
             localStorage.setItem(STORAGE_KEY, value)
         } catch (err) {
             console.error('Failed to save to localStorage:', err)
         }
     }
+
+    // ✅ When block changes externally (e.g., loaded from cache), also sync to context
+    useEffect(() => {
+        if (block?.markdown) {
+            setActiveText(block.markdown)
+        }
+    }, [block?.markdown, setActiveText])
 
     if (!block) return <></>
 
@@ -76,8 +86,6 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
                         ]}
                         extensions={[EditorView.lineWrapping]}
                     />
-
-
                 </div>
             </div>
         </div>
