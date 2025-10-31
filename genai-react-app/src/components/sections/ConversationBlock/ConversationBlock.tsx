@@ -1,4 +1,3 @@
-// ConversationBlock.tsx
 import React, { useEffect, useRef } from 'react'
 import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import Response from '../../widgets/ResponseWidget/Response'
@@ -23,8 +22,18 @@ export default function ConversationBlock({ id }: { id: string }) {
         }
     }, [block?.responses])
 
-
     if (!block) return null
+
+    // ✅ Move follow-up logic into callback
+    const handleFollowUp = () => {
+        addConversation()
+        setTimeout(() => {
+            const last = document.querySelector(
+                `.${styles.conversationBlock}:last-child`
+            )
+            last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 300)
+    }
 
     return (
         <>
@@ -34,25 +43,13 @@ export default function ConversationBlock({ id }: { id: string }) {
                 label={block.isLoading ? 'Generating...' : 'Send to API'}
                 disabled={block.isLoading}
             />
-            <div ref={responseRef}>
-                <Response responses={block.responses} />
-            </div>
 
-            {block.responses.length > 0 && (
-                <div className={styles.followUpButtonWrapper}>
-                    <button className={styles.followUpButton} onClick={() => {
-                        addConversation()
-                        setTimeout(() => {
-                            const last = document.querySelector(
-                                `.${styles.conversationBlock}:last-child`
-                            )
-                            last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                        }, 300)
-                    }}>
-                        ➕ Follow up
-                    </button>
-                </div>
-            )}
+            <div ref={responseRef}>
+                <Response
+                    responses={block.responses}
+                    onFollowUp={handleFollowUp} // ✅ Pass down handler
+                />
+            </div>
         </>
     )
 }
