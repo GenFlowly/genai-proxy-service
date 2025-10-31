@@ -15,7 +15,7 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
     const { conversationBlockList, updateResponseInConversationBlock } = useConversation()
     const block = conversationBlockList.find(b => b.id === id)
 
-    const STORAGE_KEY = `prompt_editor_content_${id}`
+    const STORAGE_KEY = `prompt_editor_content_conv-default`
 
     // Load markdown from localStorage on mount
     useEffect(() => {
