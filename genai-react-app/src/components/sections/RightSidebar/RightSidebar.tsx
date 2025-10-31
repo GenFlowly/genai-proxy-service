@@ -3,6 +3,7 @@ import { useAI } from '../../../context/AIContext'
 import AIVendorWidget from '../../widgets/AIVendorWidget/AIVendorWidget'
 import styles from './RightSidebar.module.scss'
 import {useLayout} from "../../../context/LayoutContext";
+import TokenCounter from "../../widgets/TokenCounter/TokenCounter";
 
 export default function RightSidebar(): React.ReactElement {
     const { config, setTemperature, setMaxTokens, setTone, resetConfig } = useAI()
@@ -18,6 +19,14 @@ export default function RightSidebar(): React.ReactElement {
                 {!collapsed && <h4 className={styles.sectionTitle}>Vendors</h4>}
                 <AIVendorWidget collapsed={collapsed} />
             </div>
+
+
+            {!collapsed && (
+                <div className={styles.section}>
+                    <h4 className={styles.sectionTitle}>Token Usage</h4>
+                    <TokenCounter  />
+                </div>
+            )}
 
 
         </div>
