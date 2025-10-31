@@ -1,63 +1,19 @@
 import React from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeHighlight from 'rehype-highlight'
-import 'highlight.js/styles/github.css'
-import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import styles from './Response.module.scss'
 import { AIVendor } from '../../../constants/vendors'
 import { useLayout } from '../../../context/LayoutContext'
+import TextContainer from '../../common/TextContainer/TextContainer'
 
 interface ResponseProps {
     responses: { vendor: AIVendor; text: string }[]
+    onFollowUp?: () => void // ✅ new prop
 }
 
-export default function Response({ responses }: ResponseProps) {
+export default function Response({ responses, onFollowUp }: ResponseProps) {
     const { isLeftVisible, isRightVisible } = useLayout()
     if (!responses || responses.length === 0) return null
 
     const sidebarsHidden = !isLeftVisible && !isRightVisible
-
-    // Recursively extract all text from AST nodes
-    const extractText = (nodes: any[]): string => {
-        return nodes
-            .map((node: any) => {
-                if (node.value) return node.value
-                if (node.children) return extractText(node.children)
-                return ''
-            })
-            .join('')
-    }
-
-    // Custom pre component for code blocks
-    const PreBlock = ({ node, children, ...props }: any) => {
-        const codeString = node?.children
-            ? extractText(node.children).replace(/\n$/, '')
-            : ''
-
-        return (
-            <div style={{ position: 'relative' }}>
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '0.5rem',
-                        right: '0.5rem',
-                        zIndex: 10,
-                    }}
-                >
-                    <CopyToClipboard
-                        content={codeString}
-                        label="Copy"
-                        successMessage="✓ Copied"
-                        successDuration={2000}
-                        size="sm"
-                        variant="secondary"
-                    />
-                </div>
-                <pre {...props}>{children}</pre>
-            </div>
-        )
-    }
 
     return (
         <div className={styles.container}>
@@ -67,30 +23,20 @@ export default function Response({ responses }: ResponseProps) {
                 }`}
             >
                 {responses.map(({ vendor, text }) => (
-                    <article key={vendor} className={styles.article}>
-                        <header className={styles.header}>
-                            <div className={styles.headerContent}>
-                                <h2>{vendor}</h2>
-                                <CopyToClipboard
-                                    content={text}
-                                    label="Copy"
-                                    successMessage="✓ Copied"
-                                    successDuration={2000}
-                                    size="sm"
-                                    variant="secondary"
-                                />
+                    <div key={vendor} className={styles.responseWrapper}>
+                        <TextContainer title={vendor} content={text} />
+
+                        {onFollowUp && (
+                            <div className={styles.followUpButtonWrapper}>
+                                <button
+                                    className={styles.followUpButton}
+                                    onClick={onFollowUp}
+                                >
+                                    ➕ Follow up
+                                </button>
                             </div>
-                        </header>
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeHighlight]}
-                            components={{
-                                pre: PreBlock,
-                            }}
-                        >
-                            {text}
-                        </ReactMarkdown>
-                    </article>
+                        )}
+                    </div>
                 ))}
             </div>
         </div>

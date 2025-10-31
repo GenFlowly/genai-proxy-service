@@ -9,92 +9,61 @@
 
 .inner {
   display: grid;
-  width: 100vw; /* ✅ ensures edge-to-edge width */
-  grid-template-columns: repeat(auto-fit, minmax(30rem, 1fr)); /* ✅ 1–3 columns */
+  width: 94vw; /* ✅ edge-to-edge layout */
+  grid-template-columns: repeat(auto-fit, minmax(30rem, 1fr)); /* ✅ flexible columns */
   gap: 2rem;
   justify-items: stretch;
   align-items: stretch;
-  padding: 0 2rem; /* ✅ small side padding to prevent clipping */
+  padding: 0 2rem;
   box-sizing: border-box;
 }
 
-/* Each response card */
-.article {
-  background: #ffffff;
-  color: #1c1c1c;
-  border-radius: $radius-md;
-  padding: 2rem 2.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid $border-light;
-  line-height: 1.7;
-  transition: all 0.25s ease-in-out;
+.responseWrapper {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+}
 
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  width: 100%; /* ✅ full width of grid cell */
-  height: 100%; /* ✅ uniform height in each row */
-  box-sizing: border-box; /* ✅ padding safe */
+.responseWrapper:hover {
+  border-color: #e0e0e0;
+}
 
-  h1, h2, h3, h4 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-    color: $text-primary;
-  }
+.selected {
+  border-color: #007aff;
+  box-shadow: 0 0 6px rgba(0, 122, 255, 0.4);
+  background-color: #f0f8ff;
+}
 
-  p {
-    margin-bottom: 1rem;
-    font-size: 1.05rem;
-    word-wrap: break-word;
-  }
+.followUpButtonWrapper {
+  margin-top: 0.75rem;
+  text-align: right;
+}
 
-  code {
-    background: $background-gray;
-    padding: 0.2rem 0.4rem;
-    border-radius: $radius-sm;
-    font-family: monospace;
-    font-size: 0.95rem;
-  }
+.followUpButton {
+  background: #007aff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
 
-  pre {
-    background: $background-gray;
-    padding: $spacing-lg $spacing-xl;
-    border-radius: $radius-md;
-    overflow-x: auto;
-    font-size: 0.9rem;
-    border: 1px solid $border-light;
-    margin-bottom: 1.5rem;
-  }
+.followUpButton:hover {
+  background: #005fcc;
+}
 
-  blockquote {
-    border-left: 4px solid $border-color;
-    padding-left: $spacing-md;
-    color: $text-secondary;
-    font-style: italic;
-    margin: 1.2rem 0;
-  }
+.followUpButton:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
 
 
-.header {
-  border-bottom: 1px solid $border-light;
-  margin-bottom: 1.25rem;
 
-  h2 {
-    color: $primary-color;
-    font-weight: 600;
-    font-size: 1.2rem;
-    margin: 0;
-  }
-}
 
-.headerContent {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: $spacing-md;
-  width: 100%;
-}
+
 
 @media (max-width: 1200px) {
   .inner {
@@ -106,9 +75,5 @@
   .inner {
     grid-template-columns: 1fr;
     padding: 0 1rem;
-  }
-
-  .article {
-    padding: $spacing-md $spacing-lg;
   }
 }
