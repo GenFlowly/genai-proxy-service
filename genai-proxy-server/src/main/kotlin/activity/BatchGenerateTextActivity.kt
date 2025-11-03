@@ -33,7 +33,7 @@ fun Route.registerBatchGenerateTextRoutes(
                     async {
                         try {
                             aiRequestManager.handleRequest(
-                                vendor = request.vendor,
+                                vendor = request.aiVendor,
                                 model = request.model,
                                 prompt = request.prompt,
                                 customerId = request.customerId,
@@ -44,7 +44,7 @@ fun Route.registerBatchGenerateTextRoutes(
                         } catch (e: Exception) {
                             logger.error(
                                 "Error processing request for vendor={} model={}",
-                                request.vendor, request.model, e
+                                request.aiVendor, request.model, e
                             ) // todo create error object
                             GenerateTextResponse(
                                 text = "[Error: ${e.message}]",
