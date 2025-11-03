@@ -34,8 +34,12 @@ fun Route.registerBatchGenerateTextRoutes(
                             logger.error(
                                 "Error processing request for vendor={} model={}",
                                 req.vendor, req.model, e
+                            ) // todo create error object
+                            GenerateTextResponse(
+                                text = "[Error: ${e.message}]",
+                                messageId = null,
+                                conversationId = null
                             )
-                            GenerateTextResponse(text = "[Error: ${e.message}]")
                         }
                     }
                 }.awaitAll()
