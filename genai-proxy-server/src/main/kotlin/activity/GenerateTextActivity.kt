@@ -31,7 +31,7 @@ fun Route.registerGenerateTextRoutes(
                     .getConversationId(request)
 
                 val response = aiRequestManager.handleRequest(
-                    vendor = request.aiVendor,
+                    aiVendor = request.aiVendor,
                     model = request.model,
                     prompt = request.prompt,
                     customerId = request.customerId,

@@ -32,7 +32,7 @@ class AIRequestManager(
      * Handles a single AI text generation request.
      */
     suspend fun handleRequest(
-        vendor: AIVendor,
+        aiVendor: AIVendor,
         model: String,
         prompt: String,
         customerId: String,
@@ -43,7 +43,7 @@ class AIRequestManager(
         val startTime = System.currentTimeMillis()
 
         val apiKey = fetchApiKey(
-            vendor,
+            aiVendor,
             customerId,
             customerProfileService
         )
@@ -52,13 +52,13 @@ class AIRequestManager(
             conversationId = conversationId,
             customerId = customerId,
             role = "user",
-            client = client, 
-            vendor = vendor,
+            client = client,
+            aiVendor = aiVendor,
             text = prompt,
             previousMessageId = selectedResponseId
         )
 
-        val aiResponse = when (vendor) {
+        val aiResponse = when (aiVendor) {
             AIVendor.OPENAI -> {
                 val params = aiRequestService.buildOpenAIRequest(prompt, model)
                 val httpClient = aiRequestService.getOpenAIProvider(apiKey)
@@ -98,7 +98,7 @@ class AIRequestManager(
                     customerId,
                     "assistant",
                     client,
-                    vendor,
+                    aiVendor,
                     responseText,
                     previousMessageId = selectedResponseId
                 )
@@ -116,7 +116,7 @@ class AIRequestManager(
         val durationMs = System.currentTimeMillis() - startTime
         logger.info(
             "AI response received: vendor={}, model={}, durationMs={}",
-            vendor,
+            aiVendor,
             model,
             durationMs
         )
@@ -125,7 +125,7 @@ class AIRequestManager(
             text = aiResponse.getText(),
             conversationId = conversationId,
             messageId = messageId,
-            aiVendor = vendor.name
+            aiVendor = aiVendor.name
         )
     }
 }
