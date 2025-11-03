@@ -9,7 +9,7 @@ data class GenerateTextRequest(
     val model: String,
     val prompt: String,
     val customerId: String,
-    val selectedResponseId: String,
-    val conversationId: String,
+    val selectedResponseId: String?,
+    val conversationId: String?,
     val client: String
 )
