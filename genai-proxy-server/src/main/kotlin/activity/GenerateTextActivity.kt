@@ -31,7 +31,10 @@ fun Route.registerGenerateTextRoutes(
                     vendor = request.vendor,
                     model = request.model,
                     prompt = request.prompt,
-                    customerId = request.customerId
+                    customerId = request.customerId,
+                    conversationId = request.conversationId,
+                    selectedResponseId = request.selectedResponseId,
+                    client = request.client
                 )
 
                 val response = GenerateTextResponse(text = aiResponse.getText())

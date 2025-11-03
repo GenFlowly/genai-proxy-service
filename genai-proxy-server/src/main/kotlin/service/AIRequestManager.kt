@@ -3,12 +3,15 @@ package service
 import com.genflowly.aicallerlib.models.AIResponse
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.service.AIRequestService
+import com.genflowly.service.ConversationService
 import com.genflowly.utils.fetchApiKey
+import models.Conversation
 import org.slf4j.LoggerFactory
 
 class AIRequestManager(
     private val aiRequestService: AIRequestService,
-    private val customerProfileService: CustomerProfileService
+    private val customerProfileService: CustomerProfileService,
+    private val conversationService: ConversationService
 ) {
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
@@ -19,7 +22,10 @@ class AIRequestManager(
         vendor: AIVendor,
         model: String,
         prompt: String,
-        customerId: String
+        customerId: String,
+        conversationId: String?,
+        selectedResponseId: String?,
+        client: String
     ): AIResponse {
         val startTime = System.currentTimeMillis()
 
@@ -29,25 +35,54 @@ class AIRequestManager(
             customerProfileService
         )
 
+        val activeConversationId = if (conversationId.isNullOrBlank()) {
+            conversationService.createConversation(customerId, client)
+        } else {
+            conversationId
+        }
+
+        conversationService.addMessageInConversation(activeConversationId,
+            customerId, "user", client, vendor, prompt, selectedResponseId)
+
         val aiResponse = when (vendor) {
             AIVendor.OPENAI -> {
                 val params = aiRequestService.buildOpenAIRequest(prompt, model)
-                val client = aiRequestService.getOpenAIProvider(apiKey)
-                client.generateResponse(com.genflowly.aicallerlib.models.openai.OpenAIRequest(params))
+                val httpClient = aiRequestService.getOpenAIProvider(apiKey)
+                httpClient.generateResponse(com.genflowly.aicallerlib.models.openai.OpenAIRequest(params))
             }
 
             AIVendor.GEMINI -> {
                 val params = aiRequestService.buildGeminiRequest(prompt, model)
-                val client = aiRequestService.getGeminiProvider(apiKey)
-                client.generateResponse(com.genflowly.aicallerlib.models.gemini.GeminiRequest(params))
+                val httpClient = aiRequestService.getGeminiProvider(apiKey)
+                httpClient.generateResponse(com.genflowly.aicallerlib.models.gemini.GeminiRequest(params))
             }
 
             AIVendor.CLAUDE -> {
                 val params = aiRequestService.buildClaudeRequest(prompt, model)
-                val client = aiRequestService.getClaudeProvider(apiKey)
-                client.generateResponse(com.genflowly.aicallerlib.models.claude.ClaudeRequest(params))
+                val httpClient = aiRequestService.getClaudeProvider(apiKey)
+                httpClient.generateResponse(com.genflowly.aicallerlib.models.claude.ClaudeRequest(params))
             }
         }
+
+        try {
+            val responseText = aiResponse.getText()
+            if (!responseText.isNullOrBlank()) {
+                conversationService.addMessageInConversation(
+                    activeConversationId,
+                    customerId,
+                    "assistant",
+                    client,
+                    vendor,
+                    responseText,
+                    previousMessageId = selectedResponseId
+                )
+            } else {
+                logger.warn("AI response text is null or blank for conversationId=$activeConversationId")
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to add assistant message to conversationId=$activeConversationId", e)
+        }
+
 
         val durationMs = System.currentTimeMillis() - startTime
         logger.info("AI response received: vendor={}, model={}, durationMs={}", vendor, model, durationMs)
@@ -59,8 +94,9 @@ class AIRequestManager(
      * Convenience wrapper for handling a GenerateTextRequest.
      */
     suspend fun handleGenerateTextRequest(request: models.GenerateTextRequest): models.GenerateTextResponse {
-        val apiKey = fetchApiKey(request.vendor, request.customerId, customerProfileService)
-        val aiResponse = handleRequest(request.vendor, request.model, request.prompt, request.customerId)
+        val aiResponse = handleRequest(request.vendor, request.model, request
+            .prompt, request.customerId, request.conversationId,
+            request.selectedResponseId, request.client)
         return models.GenerateTextResponse(text = aiResponse.getText())
     }
 }

@@ -1,14 +1,21 @@
 package com.genflowly.providers
 
-import com.genflowly.DynamoDBConstants.AI_VENDOR_SORT_KEY
+import com.genflowly.DynamoDBConstants.AI_VENDOR_KEY
 import com.genflowly.DynamoDBConstants.CLIENT_SORT_KEY
+import com.genflowly.DynamoDBConstants.CONVERSATION_ID_KEY
+import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_API_KEY_TABLE
-import com.genflowly.DynamoDBConstants.CUSTOMER_ID_PARTITION_KEY
+import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_TABLE
+import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
+import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
 import com.genflowly.DynamoDBConstants.SUB_PARTITION_KEY
+import com.genflowly.aicallerlib.models.AIVendor
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import models.Conversation
+import models.Message
 import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
@@ -19,12 +26,85 @@ class DynamoDBProvider(
     private val dynamoDbClient: DynamoDbClient,
     private val logger: KLogger
 ) {
+//    suspend fun getConversation(conversationId: String, customerId: String): Conversation? =
+//        withContext(Dispatchers.IO) {
+//            try {
+//                val key = mapOf(
+//                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build(),
+//                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()
+//                )
+//
+//                val request = GetItemRequest.builder()
+//                    .tableName(CONVERSATION_TABLE)
+//                    .key(key)
+//                    .build()
+//
+//                val response = dynamoDbClient.getItem(request)
+//                val item = response.item() ?: return@withContext null
+//
+//                val client = item["client"]?.s() ?: return@withContext null
+//
+//                Conversation(
+//                    conversationId = conversationId,
+//                    customerId = customerId,
+//                    client = client
+//                )
+//            } catch (e: Exception) {
+//                logger.error("Failed to Get Conversation from DynamoDB", e)
+//                throw e
+//            }
+//        }
+
+    fun getMessage(conversationId: String, messageId: String): Message? {
+        val key = mapOf(
+            "conversationId" to AttributeValue.builder().s(conversationId).build(),
+            "messageId" to AttributeValue.builder().s(messageId).build()
+        )
+
+        val request = GetItemRequest.builder()
+            .tableName(MESSAGE_TABLE)
+            .key(key)
+            .build()
+
+        val response = dynamoDbClient.getItem(request)
+        val item = response.item() ?: return null
+
+        // Return null if any required attribute is missing
+        val vendorStr = item["vendor"]?.s() ?: return null
+        val text = item["text"]?.s() ?: return null
+        val sequenceStr = item["sequence"]?.n() ?: return null
+        val client = item["client"]?.s() ?: return null
+        val role = item["role"]?.s() ?: return null
+        val customerId = item["customerId"]?.s() ?: return null
+
+        val vendor = try {
+            AIVendor.valueOf(vendorStr)
+        } catch (e: IllegalArgumentException) {
+            // Unknown enum constant
+            return null
+        }
+
+        val sequence = sequenceStr.toIntOrNull() ?: return null
+
+        return Message(
+            messageId = item["messageId"]?.s() ?: return null,
+            conversationId = item["conversationId"]?.s() ?: return null,
+            vendor = vendor,
+            text = text,
+            sequence = sequence,
+            client = client,
+            role = role,
+            customerId = customerId
+        )
+    }
+
+
 
     fun getCustomerApiKey(aiVendor: String, customerId: String): String? {
         val key = mapOf(
-            CUSTOMER_ID_PARTITION_KEY to AttributeValue.builder().s(customerId)
+            CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId)
                 .build(),
-            AI_VENDOR_SORT_KEY to AttributeValue.builder().s(aiVendor).build()
+            AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()
         )
 
         val request =
@@ -35,6 +115,81 @@ class DynamoDBProvider(
         return response.item()?.get("apiKey")?.s()
     }
 
+
+    suspend fun createConversation(
+        conversation: Conversation
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder()
+                    .s(conversation.customerId).build(),
+                CONVERSATION_ID_KEY to AttributeValue.builder().s
+                    (conversation.conversationId)
+                    .build(),
+                "client" to AttributeValue.builder().s(conversation.client).build(),
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Created Conversation for ${conversation
+                .customerId} to DynamoDB")
+        } catch (e: Exception) {
+            logger.error("Failed to Create Conversation in DynamoDB", e)
+            throw e
+        }
+    }
+
+    suspend fun createMessage(
+        message: Message
+    ) = withContext(Dispatchers.IO) {
+        try {
+
+            val item = withTimestamps(mapOf(
+                CONVERSATION_ID_KEY to AttributeValue.builder()
+                    .s(message.conversationId).build(),
+                MESSAGE_ID_SORT_KEY to AttributeValue.builder().s(message.messageId)
+                    .build(),
+                CUSTOMER_ID_KEY to AttributeValue.builder().s
+                    (message.customerId)
+                    .build(),
+                "sequence" to AttributeValue.builder().n
+                    (message.sequence.toString())
+                    .build(),
+                "client" to AttributeValue.builder().n
+                    (message.client)
+                    .build(),
+                AI_VENDOR_KEY to AttributeValue.builder().s
+                    (message.vendor.name)
+                    .build(),
+                "role" to AttributeValue.builder().s
+                    (message.role)
+                    .build(),
+                "text" to AttributeValue.builder().s
+                    (message.text)
+                    .build(),
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(MESSAGE_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Saved message for conversation" +
+                    " ${message.conversationId} to " +
+                    "DynamoDB")
+
+        } catch (e: Exception) {
+            logger.error("Failed to Create Message in DynamoDB", e)
+            throw e
+        }
+
+    }
+
     suspend fun saveCustomerApiKey(
         customerId: String,
         aiVendor: String,
@@ -42,9 +197,9 @@ class DynamoDBProvider(
     ) = withContext(Dispatchers.IO) {
         try {
             val item = withTimestamps(mapOf(
-                CUSTOMER_ID_PARTITION_KEY to AttributeValue.builder()
+                CUSTOMER_ID_KEY to AttributeValue.builder()
                     .s(customerId).build(),
-                AI_VENDOR_SORT_KEY to AttributeValue.builder().s(aiVendor)
+                AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor)
                     .build(),
                 "apiKey" to AttributeValue.builder().s(encryptedKey).build(),
             ))
