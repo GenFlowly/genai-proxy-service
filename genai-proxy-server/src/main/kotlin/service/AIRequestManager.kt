@@ -1,11 +1,9 @@
 package service
 
-import com.genflowly.aicallerlib.models.AIResponse
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationService
 import com.genflowly.utils.fetchApiKey
-import models.Conversation
 import models.GenerateTextResponse
 import org.slf4j.LoggerFactory
 
@@ -113,7 +111,8 @@ class AIRequestManager(
         return GenerateTextResponse(
             text = aiResponse.getText(),
             conversationId = activeConversationId,
-            messageId = messageId
+            messageId = messageId,
+            aiVendor = vendor.name
         )
     }
 

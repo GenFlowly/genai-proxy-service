@@ -38,7 +38,8 @@ fun Route.registerBatchGenerateTextRoutes(
                             GenerateTextResponse(
                                 text = "[Error: ${e.message}]",
                                 messageId = null,
-                                conversationId = null
+                                conversationId = null,
+                                aiVendor = null
                             )
                         }
                     }
