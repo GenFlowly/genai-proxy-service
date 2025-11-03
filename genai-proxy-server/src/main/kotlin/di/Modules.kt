@@ -3,6 +3,7 @@ package com.genflowly.di
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import com.genflowly.service.AIRequestService
+import com.genflowly.service.ConversationService
 import kotlinx.serialization.json.Json
 import mu.KLogger
 import mu.KotlinLogging.logger
@@ -34,7 +35,8 @@ fun appModule(): Module = module {
     single { KMSProvider(get(), get()) }
     single { AIRequestService(get()) }
     single { CustomerProfileService(get(), get()) }
-    single { AIRequestManager(get(), get()) }
+    single { ConversationService(get(), get()) }
+    single { AIRequestManager(get(), get(), get()) }
 
 }
 

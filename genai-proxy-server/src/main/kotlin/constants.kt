@@ -9,6 +9,13 @@ object DynamoDBConstants {
     const val USAGE_DATE_SORT_KEY = "usageDate"
 
     const val CUSTOMER_API_KEY_TABLE = "CustomerVendorApiKeys"
-    const val CUSTOMER_ID_PARTITION_KEY = "customerId"
-    const val AI_VENDOR_SORT_KEY = "aiVendor"
+    const val CUSTOMER_ID_KEY = "customerId"
+    const val AI_VENDOR_KEY = "aiVendor"
+
+    const val CONVERSATION_TABLE = "Conversation"
+    const val CONVERSATION_ID_KEY = "conversationId"
+
+    const val MESSAGE_TABLE = "Message"
+    const val MESSAGE_ID_SORT_KEY = "messageId"
+
 }
