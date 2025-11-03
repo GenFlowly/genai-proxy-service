@@ -3,7 +3,6 @@ package com.genflowly.activity
 import com.genflowly.Routes
 import com.genflowly.aicallerlib.clients.AIClient
 import com.genflowly.aicallerlib.models.AIModelsListResponse
-import com.genflowly.aicallerlib.models.AIResponse
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.aicallerlib.models.claude.ClaudeModelsListResponse
 import com.genflowly.aicallerlib.models.claude.ClaudeResponse
@@ -19,7 +18,6 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
-import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
 import service.CustomerProfileService
 import io.ktor.server.response.respond
@@ -39,7 +37,7 @@ fun Route.registerGetTextGenerationModelsRoutes(
 
             val startTime = System.currentTimeMillis()
 
-            when (request.vendor) {
+            when (request.aiVendor) {
                 AIVendor.OPENAI -> {
                     val apiKey =
                         fetchApiKey(
@@ -98,11 +96,11 @@ fun Route.registerGetTextGenerationModelsRoutes(
             logger.info(
                 "AI response received: vendor={}, durationMs={}, " +
                         "response={}",
-                request.vendor, durationMs, modelsListResponse
+                request.aiVendor, durationMs, modelsListResponse
             )
 
             val response = GetTextGenerationModelsResponse(
-                vendor = request.vendor,
+                aiVendor = request.aiVendor,
                 modelsList = modelsListResponse.toList()
             )
 

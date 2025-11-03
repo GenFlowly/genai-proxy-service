@@ -33,7 +33,7 @@ fun Route.registerBatchGenerateTextRoutes(
                     async {
                         try {
                             aiRequestManager.handleRequest(
-                                vendor = request.aiVendor,
+                                aiVendor = request.aiVendor,
                                 model = request.model,
                                 prompt = request.prompt,
                                 customerId = request.customerId,
