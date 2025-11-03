@@ -37,8 +37,9 @@ class ConversationService(
         text: String,
         previousMessageId: String?,
     ): String {
-        val previousMessage =
-            previousMessageId?.let { getMessage(conversationId, it) }
+        val previousMessage = previousMessageId
+            ?.takeIf { it.isNotBlank() }
+            ?.let { getMessage(conversationId, it) }
         var sequence = 1
         if (previousMessage != null) {
             sequence = previousMessage.sequence + 1
