@@ -1,5 +1,5 @@
 // src/utils/tokenizer.ts
-import type { Tiktoken, TiktokenModel } from "js-tiktoken";
+import type {Tiktoken, TiktokenModel} from "js-tiktoken";
 
 /**
  * Cache for loaded tokenizers (store Promise<Tiktoken> to dedupe concurrent loads)
@@ -26,8 +26,7 @@ export async function getTokenizer(model: string): Promise<Tiktoken> {
         // Dynamically import to reduce bundle size
         const { encodingForModel } = await import("js-tiktoken");
         // Cast to TiktokenModel — caller is responsible for providing a valid model
-        const encoding = encodingForModel(key as TiktokenModel);
-        return encoding;
+        return encodingForModel(key as TiktokenModel);
     })();
 
     return tokenizerCache[key]!;
