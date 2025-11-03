@@ -76,6 +76,7 @@ class DynamoDBProvider(
         val client = item["client"]?.s() ?: return null
         val role = item["role"]?.s() ?: return null
         val customerId = item["customerId"]?.s() ?: return null
+        val previousMessageId = item["previousMessageId"]?.s() ?: return null
 
         val vendor = try {
             AIVendor.valueOf(vendorStr)
@@ -94,7 +95,8 @@ class DynamoDBProvider(
             sequence = sequence,
             client = client,
             role = role,
-            customerId = customerId
+            customerId = customerId,
+            previousMessageId = previousMessageId
         )
     }
 
@@ -170,6 +172,9 @@ class DynamoDBProvider(
                     .build(),
                 "text" to AttributeValue.builder().s
                     (message.text)
+                    .build(),
+                "previousMessageId" to AttributeValue.builder().s
+                    (message.previousMessageId)
                     .build(),
             ))
 
