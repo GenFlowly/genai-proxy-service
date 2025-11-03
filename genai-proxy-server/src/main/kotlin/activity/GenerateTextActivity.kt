@@ -27,12 +27,15 @@ fun Route.registerGenerateTextRoutes(
             val startTime = System.currentTimeMillis()
 
             try {
+                val conversationId = aiRequestManager
+                    .getConversationId(request)
+
                 val response = aiRequestManager.handleRequest(
                     vendor = request.vendor,
                     model = request.model,
                     prompt = request.prompt,
                     customerId = request.customerId,
-                    conversationId = request.conversationId,
+                    conversationId = conversationId,
                     selectedResponseId = request.selectedResponseId,
                     client = request.client
                 )

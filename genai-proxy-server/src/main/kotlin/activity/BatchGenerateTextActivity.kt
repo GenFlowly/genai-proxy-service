@@ -26,14 +26,25 @@ fun Route.registerBatchGenerateTextRoutes(
             logger.info("Received BatchGenerateText request: size={}", batchRequest.requests.size)
 
             val results = coroutineScope {
-                batchRequest.requests.map { req ->
+                val conversationId = aiRequestManager
+                    .getConversationId(batchRequest.requests[0]) // only
+                // check first message for conversation id
+                batchRequest.requests.map { request ->
                     async {
                         try {
-                            aiRequestManager.handleGenerateTextRequest(req)
+                            aiRequestManager.handleRequest(
+                                vendor = request.vendor,
+                                model = request.model,
+                                prompt = request.prompt,
+                                customerId = request.customerId,
+                                conversationId = conversationId,
+                                selectedResponseId = request.selectedResponseId,
+                                client = request.client
+                            )
                         } catch (e: Exception) {
                             logger.error(
                                 "Error processing request for vendor={} model={}",
-                                req.vendor, req.model, e
+                                request.vendor, request.model, e
                             ) // todo create error object
                             GenerateTextResponse(
                                 text = "[Error: ${e.message}]",

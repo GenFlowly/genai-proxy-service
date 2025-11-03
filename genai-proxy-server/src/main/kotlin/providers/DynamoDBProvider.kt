@@ -161,7 +161,7 @@ class DynamoDBProvider(
                 "sequence" to AttributeValue.builder().n
                     (message.sequence.toString())
                     .build(),
-                "client" to AttributeValue.builder().n
+                "client" to AttributeValue.builder().s
                     (message.client)
                     .build(),
                 AI_VENDOR_KEY to AttributeValue.builder().s

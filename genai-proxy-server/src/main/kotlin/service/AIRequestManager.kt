@@ -4,6 +4,7 @@ import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationService
 import com.genflowly.utils.fetchApiKey
+import models.GenerateTextRequest
 import models.GenerateTextResponse
 import org.slf4j.LoggerFactory
 
@@ -14,6 +15,19 @@ class AIRequestManager(
 ) {
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
+
+    suspend fun getConversationId(
+        request: GenerateTextRequest
+    ): String {
+        val activeConversationId = if (request.conversationId.isNullOrBlank()) {
+            conversationService.createConversation(request.customerId,
+                request.client)
+        } else {
+            request.conversationId
+        }
+        return activeConversationId
+    }
+
     /**
      * Handles a single AI text generation request.
      */
@@ -22,7 +36,7 @@ class AIRequestManager(
         model: String,
         prompt: String,
         customerId: String,
-        conversationId: String?,
+        conversationId: String,
         selectedResponseId: String?,
         client: String
     ): GenerateTextResponse {
@@ -34,15 +48,14 @@ class AIRequestManager(
             customerProfileService
         )
 
-        val activeConversationId = if (conversationId.isNullOrBlank()) {
-            conversationService.createConversation(customerId, client)
-        } else {
-            conversationId
-        }
-
         conversationService.addMessageInConversation(
-            activeConversationId,
-            customerId, "user", client, vendor, prompt, selectedResponseId
+            conversationId = conversationId,
+            customerId = customerId,
+            role = "user",
+            client = client, 
+            vendor = vendor,
+            text = prompt,
+            previousMessageId = selectedResponseId
         )
 
         val aiResponse = when (vendor) {
@@ -81,7 +94,7 @@ class AIRequestManager(
             val responseText = aiResponse.getText()
             if (!responseText.isNullOrBlank()) {
                 messageId = conversationService.addMessageInConversation(
-                    activeConversationId,
+                    conversationId,
                     customerId,
                     "assistant",
                     client,
@@ -90,11 +103,11 @@ class AIRequestManager(
                     previousMessageId = selectedResponseId
                 )
             } else {
-                logger.warn("AI response text is null or blank for conversationId=$activeConversationId")
+                logger.warn("AI response text is null or blank for conversationId=$conversationId")
             }
         } catch (e: Exception) {
             logger.error(
-                "Failed to add assistant message to conversationId=$activeConversationId",
+                "Failed to add assistant message to conversationId=$conversationId",
                 e
             )
         }
@@ -110,20 +123,9 @@ class AIRequestManager(
 
         return GenerateTextResponse(
             text = aiResponse.getText(),
-            conversationId = activeConversationId,
+            conversationId = conversationId,
             messageId = messageId,
             aiVendor = vendor.name
-        )
-    }
-
-    /**
-     * Convenience wrapper for handling a GenerateTextRequest.
-     */
-    suspend fun handleGenerateTextRequest(request: models.GenerateTextRequest): GenerateTextResponse {
-        return handleRequest(
-            request.vendor, request.model, request
-                .prompt, request.customerId, request.conversationId,
-            request.selectedResponseId, request.client
         )
     }
 }
