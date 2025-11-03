@@ -70,7 +70,7 @@ class DynamoDBProvider(
         val item = response.item() ?: return null
 
         // Return null if any required attribute is missing
-        val vendorStr = item["vendor"]?.s() ?: return null
+        val aiVendorStr = item["aiVendor"]?.s() ?: return null
         val text = item["text"]?.s() ?: return null
         val sequenceStr = item["sequence"]?.n() ?: return null
         val client = item["client"]?.s() ?: return null
@@ -78,8 +78,8 @@ class DynamoDBProvider(
         val customerId = item["customerId"]?.s() ?: return null
         val previousMessageId = item["previousMessageId"]?.s() ?: return null
 
-        val vendor = try {
-            AIVendor.valueOf(vendorStr)
+        val aiVendor = try {
+            AIVendor.valueOf(aiVendorStr)
         } catch (e: IllegalArgumentException) {
             // Unknown enum constant
             return null
@@ -90,7 +90,7 @@ class DynamoDBProvider(
         return Message(
             messageId = item["messageId"]?.s() ?: return null,
             conversationId = item["conversationId"]?.s() ?: return null,
-            vendor = vendor,
+            aiVendor = aiVendor,
             text = text,
             sequence = sequence,
             client = client,
@@ -165,7 +165,7 @@ class DynamoDBProvider(
                     (message.client)
                     .build(),
                 AI_VENDOR_KEY to AttributeValue.builder().s
-                    (message.vendor.name)
+                    (message.aiVendor.name)
                     .build(),
                 "role" to AttributeValue.builder().s
                     (message.role)

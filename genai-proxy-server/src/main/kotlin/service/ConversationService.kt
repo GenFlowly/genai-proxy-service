@@ -33,7 +33,7 @@ class ConversationService(
         customerId: String,
         role: String,
         client: String,
-        vendor: AIVendor,
+        aiVendor: AIVendor,
         text: String,
         previousMessageId: String?,
     ): String {
@@ -48,7 +48,7 @@ class ConversationService(
             conversationId = conversationId,
             customerId = customerId,
             client = client,
-            vendor = vendor,
+            aiVendor = aiVendor,
             role = role,
             text = text,
             sequence = sequence,
