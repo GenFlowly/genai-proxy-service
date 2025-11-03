@@ -36,7 +36,7 @@ class ConversationService(
         vendor: AIVendor,
         text: String,
         previousMessageId: String?,
-    ) {
+    ): String {
         val previousMessage =
             previousMessageId?.let { getMessage(conversationId, it) }
         var sequence = 1
@@ -54,5 +54,6 @@ class ConversationService(
             previousMessageId = previousMessageId
         )
         dynamoDBProvider.createMessage(message)
+        return message.messageId
     }
 }

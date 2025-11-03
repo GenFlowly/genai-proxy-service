@@ -27,7 +27,7 @@ fun Route.registerGenerateTextRoutes(
             val startTime = System.currentTimeMillis()
 
             try {
-                val aiResponse = aiRequestManager.handleRequest(
+                val response = aiRequestManager.handleRequest(
                     vendor = request.vendor,
                     model = request.model,
                     prompt = request.prompt,
@@ -37,7 +37,6 @@ fun Route.registerGenerateTextRoutes(
                     client = request.client
                 )
 
-                val response = GenerateTextResponse(text = aiResponse.getText())
                 val durationMs = System.currentTimeMillis() - startTime
 
                 logger.info(
@@ -56,7 +55,9 @@ fun Route.registerGenerateTextRoutes(
                 )
                 call.respond(
                     GenerateTextResponse(
-                        text = "[Error: ${e.message}]"
+                        text = "[Error: ${e.message}]",
+                        messageId = null,
+                        conversationId = null
                     )
                 )
             }
