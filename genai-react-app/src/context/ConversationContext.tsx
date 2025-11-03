@@ -26,12 +26,26 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         { id: `conv-default`, markdown: '', responses: [], isLoading: false },
     ])
 
+    /**
+     * Store the selected response ID per conversation block.
+     * key = conversationBlock.id, value = responseId string or null
+     */
+    const [selectedResponseByBlock, setSelectedResponseByBlock] = useState<Record<string, string | null>>({})
+
     /* ---------- Helpers ---------- */
 
     const updateConversationBlock = (id: string, updater: Partial<ConversationBlock>) => {
         setConversationBlockList(prev =>
             prev.map(block => (block.id === id ? { ...block, ...updater } : block))
         )
+    }
+
+    const setSelectedResponseForBlock = (blockId: string, responseId: string | null) => {
+        setSelectedResponseByBlock(prev => ({ ...prev, [blockId]: responseId }))
+    }
+
+    const getSelectedResponseForBlock = (blockId: string) => {
+        return selectedResponseByBlock[blockId] ?? null
     }
 
     /* ---------- Private API Methods ---------- */
@@ -65,7 +79,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 customerId: customerId!,
             })),
         }
-
 
         const batchResponse = await batchGenerateText(token, batchRequest)
 
@@ -135,6 +148,10 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 addNewConversationBlock,
                 updateResponseInConversationBlock,
                 generateResponses,
+                // new APIs for selected response
+                selectedResponseByBlock,
+                setSelectedResponseForBlock,
+                getSelectedResponseForBlock,
             }}
         >
             {children}
