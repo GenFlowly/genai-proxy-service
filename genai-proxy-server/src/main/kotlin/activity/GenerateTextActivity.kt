@@ -21,7 +21,7 @@ fun Route.registerGenerateTextRoutes(
             val request = call.receive<GenerateTextRequest>()
             logger.info(
                 "Received GenerateText request: vendor={}, model={}, promptLength={}",
-                request.vendor, request.model, request.prompt.length
+                request.aiVendor, request.model, request.prompt.length
             )
 
             val startTime = System.currentTimeMillis()
@@ -31,7 +31,7 @@ fun Route.registerGenerateTextRoutes(
                     .getConversationId(request)
 
                 val response = aiRequestManager.handleRequest(
-                    vendor = request.vendor,
+                    vendor = request.aiVendor,
                     model = request.model,
                     prompt = request.prompt,
                     customerId = request.customerId,
@@ -44,7 +44,7 @@ fun Route.registerGenerateTextRoutes(
 
                 logger.info(
                     "AI response received: vendor={}, model={}, durationMs={},",
-                    request.vendor,
+                    request.aiVendor,
                     request.model,
                     durationMs,
                 )
@@ -54,7 +54,7 @@ fun Route.registerGenerateTextRoutes(
             } catch (e: Exception) {
                 logger.error(
                     "Error generating text: vendor={}, model={}, message={}",
-                    request.vendor, request.model, e.message, e
+                    request.aiVendor, request.model, e.message, e
                 )
                 call.respond(
                     GenerateTextResponse(
