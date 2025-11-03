@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class GenerateTextResponse(
     val text: String?,
+    val aiVendor: String?,
     val conversationId: String?,
     val messageId: String?
 )
