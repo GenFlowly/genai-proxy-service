@@ -43,10 +43,33 @@ export class DynamoDBStack extends cdk.Stack {
             sortKey: {name: 'usageDate', type: dynamodb.AttributeType.STRING},
         };
 
+        const conversationTableProps: CreateTableProps = {
+            tableName: 'Conversation',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING
+            },
+            sortKey: {
+                name: 'conversationId',
+                type: dynamodb.AttributeType.STRING
+            },
+        };
+
+        const messageTableProps: CreateTableProps = {
+            tableName: 'Message',
+            partitionKey: {
+                name: 'conversationId',
+                type: dynamodb.AttributeType.STRING
+            },
+            sortKey: {name: 'messageId', type: dynamodb.AttributeType.STRING},
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
+        const conversationTable = createDefaultDynamoDbTable(this, conversationTableProps);
+        const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
 
-        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable)
+        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable)
     }
 }
