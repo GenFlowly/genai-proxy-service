@@ -55,7 +55,7 @@ class DynamoDBProvider(
 //            }
 //        }
 
-    fun getMessage(conversationId: String, messageId: String): Message? {
+    suspend fun getMessage(conversationId: String, messageId: String): Message? = withContext(Dispatchers.IO) {
         val key = mapOf(
             "conversationId" to AttributeValue.builder().s(conversationId).build(),
             "messageId" to AttributeValue.builder().s(messageId).build()
@@ -67,29 +67,27 @@ class DynamoDBProvider(
             .build()
 
         val response = dynamoDbClient.getItem(request)
-        val item = response.item() ?: return null
+        val item = response.item() ?: return@withContext null
 
-        // Return null if any required attribute is missing
-        val aiVendorStr = item["aiVendor"]?.s() ?: return null
-        val text = item["text"]?.s() ?: return null
-        val sequenceStr = item["sequence"]?.n() ?: return null
-        val client = item["client"]?.s() ?: return null
-        val role = item["role"]?.s() ?: return null
-        val customerId = item["customerId"]?.s() ?: return null
-        val previousMessageId = item["previousMessageId"]?.s() ?: return null
+        val aiVendorStr = item["aiVendor"]?.s() ?: return@withContext null
+        val text = item["text"]?.s() ?: return@withContext null
+        val sequenceStr = item["sequence"]?.n() ?: return@withContext null
+        val client = item["client"]?.s() ?: return@withContext null
+        val role = item["role"]?.s() ?: return@withContext null
+        val customerId = item["customerId"]?.s() ?: return@withContext null
+        val previousMessageId = item["previousMessageId"]?.s() ?: return@withContext null
 
         val aiVendor = try {
             AIVendor.valueOf(aiVendorStr)
         } catch (e: IllegalArgumentException) {
-            // Unknown enum constant
-            return null
+            return@withContext null
         }
 
-        val sequence = sequenceStr.toIntOrNull() ?: return null
+        val sequence = sequenceStr.toIntOrNull() ?: return@withContext null
 
-        return Message(
-            messageId = item["messageId"]?.s() ?: return null,
-            conversationId = item["conversationId"]?.s() ?: return null,
+        return@withContext Message(
+            messageId = item["messageId"]?.s() ?: return@withContext null,
+            conversationId = item["conversationId"]?.s() ?: return@withContext null,
             aiVendor = aiVendor,
             text = text,
             sequence = sequence,
@@ -102,7 +100,9 @@ class DynamoDBProvider(
 
 
 
-    fun getCustomerApiKey(aiVendor: String, customerId: String): String? {
+
+    suspend fun getCustomerApiKey(aiVendor: String, customerId: String): String? =
+        withContext(Dispatchers.IO) {
         val key = mapOf(
             CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId)
                 .build(),
@@ -114,7 +114,7 @@ class DynamoDBProvider(
                 .build()
 
         val response = dynamoDbClient.getItem(request)
-        return response.item()?.get("apiKey")?.s()
+            return@withContext response.item()?.get("apiKey")?.s()
     }
 
 

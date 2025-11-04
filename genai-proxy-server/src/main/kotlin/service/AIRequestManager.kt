@@ -6,6 +6,7 @@ import com.genflowly.service.ConversationService
 import com.genflowly.utils.fetchApiKey
 import models.GenerateTextRequest
 import models.GenerateTextResponse
+import models.Message
 import org.slf4j.LoggerFactory
 
 class AIRequestManager(
@@ -16,12 +17,32 @@ class AIRequestManager(
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
 
+    private suspend fun includeThreadContextInPrompt(
+        conversationId: String,
+        messageId: String,
+        prompt: String
+    ): String {
+        val messages = conversationService.getMessageThread(conversationId, messageId)
+
+        if (messages.isEmpty()) return prompt.trim()
+
+        return buildString {
+            messages.forEach { msg ->
+                appendLine("${msg.role}: ${msg.text.trim()}")
+            }
+            append("user: ${prompt.trim()}")
+        }.trimEnd()
+    }
+
+
     suspend fun getConversationId(
         request: GenerateTextRequest
     ): String {
         val activeConversationId = if (request.conversationId.isNullOrBlank()) {
-            conversationService.createConversation(request.customerId,
-                request.client)
+            conversationService.createConversation(
+                request.customerId,
+                request.client
+            )
         } else {
             request.conversationId
         }
@@ -48,7 +69,7 @@ class AIRequestManager(
             customerProfileService
         )
 
-        conversationService.addMessageInConversation(
+        val promptMessageId = conversationService.addMessageInConversation(
             conversationId = conversationId,
             customerId = customerId,
             role = "user",
@@ -58,9 +79,18 @@ class AIRequestManager(
             previousMessageId = selectedResponseId
         )
 
+        val promptWithContext = includeThreadContextInPrompt(
+            conversationId,
+            promptMessageId,
+            prompt
+        )
+
         val aiResponse = when (aiVendor) {
             AIVendor.OPENAI -> {
-                val params = aiRequestService.buildOpenAIRequest(prompt, model)
+                val params = aiRequestService.buildOpenAIRequest(
+                    promptWithContext,
+                    model
+                )
                 val httpClient = aiRequestService.getOpenAIProvider(apiKey)
                 httpClient.generateResponse(
                     com.genflowly.aicallerlib.models.openai.OpenAIRequest(
@@ -70,7 +100,10 @@ class AIRequestManager(
             }
 
             AIVendor.GEMINI -> {
-                val params = aiRequestService.buildGeminiRequest(prompt, model)
+                val params = aiRequestService.buildGeminiRequest(
+                    promptWithContext,
+                    model
+                )
                 val httpClient = aiRequestService.getGeminiProvider(apiKey)
                 httpClient.generateResponse(
                     com.genflowly.aicallerlib.models.gemini.GeminiRequest(
@@ -80,7 +113,10 @@ class AIRequestManager(
             }
 
             AIVendor.CLAUDE -> {
-                val params = aiRequestService.buildClaudeRequest(prompt, model)
+                val params = aiRequestService.buildClaudeRequest(
+                    promptWithContext,
+                    model
+                )
                 val httpClient = aiRequestService.getClaudeProvider(apiKey)
                 httpClient.generateResponse(
                     com.genflowly.aicallerlib.models.claude.ClaudeRequest(
@@ -89,11 +125,11 @@ class AIRequestManager(
                 )
             }
         }
-        var messageId = ""
+        var responseMessageId = ""
         try {
             val responseText = aiResponse.getText()
             if (!responseText.isNullOrBlank()) {
-                messageId = conversationService.addMessageInConversation(
+                responseMessageId = conversationService.addMessageInConversation(
                     conversationId,
                     customerId,
                     "assistant",
@@ -112,7 +148,6 @@ class AIRequestManager(
             )
         }
 
-
         val durationMs = System.currentTimeMillis() - startTime
         logger.info(
             "AI response received: vendor={}, model={}, durationMs={}",
@@ -124,7 +159,7 @@ class AIRequestManager(
         return GenerateTextResponse(
             text = aiResponse.getText(),
             conversationId = conversationId,
-            messageId = messageId,
+            messageId = responseMessageId,
             aiVendor = aiVendor.name
         )
     }
