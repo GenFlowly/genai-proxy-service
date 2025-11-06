@@ -17,8 +17,10 @@ class ConversationService(
         customerId: String,
         client: String
     ): String {
-        val conversation = Conversation(customerId = customerId, client =
-        client)
+        val conversation = Conversation(
+            customerId = customerId, client =
+            client
+        )
         dynamoDBProvider.createConversation(conversation)
         return conversation.conversationId
     }
@@ -49,32 +51,22 @@ class ConversationService(
     }
 
     suspend fun addMessageInConversation(
-        conversationId: String,
-        customerId: String,
-        role: String,
-        client: String,
-        aiVendor: AIVendor,
-        text: String,
-        previousMessageId: String?,
+        message: Message
     ): String {
-        val previousMessage = previousMessageId
-            ?.takeIf { it.isNotBlank() }
-            ?.let { getMessage(conversationId, it) }
-        var sequence = 1
-        if (previousMessage != null) {
-            sequence = previousMessage.sequence + 1
-        }
-        val message = Message(
-            conversationId = conversationId,
-            customerId = customerId,
-            client = client,
-            aiVendor = aiVendor,
-            role = role,
-            text = text,
-            sequence = sequence,
-            previousMessageId = previousMessageId
-        )
+        val updateSequenceMessage =
+            updateSequenceOfMessageInConversation(message)
         dynamoDBProvider.createMessage(message)
         return message.messageId
+    }
+
+    private suspend fun updateSequenceOfMessageInConversation(message: Message):
+            Message {
+        val previousMessage = message.previousMessageId
+            ?.takeIf { it.isNotBlank() }
+            ?.let { getMessage(message.conversationId, it) }
+        if (previousMessage != null) {
+            message.sequence = previousMessage.sequence?.plus(1) ?: 1
+        }
+        return message
     }
 }

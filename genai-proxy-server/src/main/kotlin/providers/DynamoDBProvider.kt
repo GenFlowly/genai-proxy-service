@@ -165,7 +165,7 @@ class DynamoDBProvider(
                     (message.client)
                     .build(),
                 AI_VENDOR_KEY to AttributeValue.builder().s
-                    (message.aiVendor.name)
+                    (message.aiVendor?.name ?: "")
                     .build(),
                 "role" to AttributeValue.builder().s
                     (message.role)

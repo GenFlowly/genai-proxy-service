@@ -2,7 +2,6 @@ package com.genflowly
 
 import activity.registerOnboardCustomerRoutes
 import activity.registerStoreApiKeyRoutes
-import com.genflowly.activity.registerBatchGenerateTextRoutes
 import com.genflowly.activity.registerGenerateTextRoutes
 import com.genflowly.activity.registerGetTextGenerationModelsRoutes
 import com.genflowly.service.AIRequestService
@@ -17,7 +16,6 @@ object Routes {
     const val API_ROOT = "/"
 
     const val GENERATE_TEXT = "$API_V1/generate-text"
-    const val BATCH_GENERATE_TEXT = "$API_V1/batch-generate-text"
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
@@ -34,7 +32,6 @@ fun Application.configureRouting(
         }
 
         registerGenerateTextRoutes(aiRequestManager)
-        registerBatchGenerateTextRoutes(aiRequestManager)
         registerStoreApiKeyRoutes(customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService)
         registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)
