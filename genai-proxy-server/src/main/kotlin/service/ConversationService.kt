@@ -55,8 +55,8 @@ class ConversationService(
     ): String {
         val updateSequenceMessage =
             updateSequenceOfMessageInConversation(message)
-        dynamoDBProvider.createMessage(message)
-        return message.messageId
+        dynamoDBProvider.createMessage(updateSequenceMessage)
+        return updateSequenceMessage.messageId
     }
 
     private suspend fun updateSequenceOfMessageInConversation(message: Message):

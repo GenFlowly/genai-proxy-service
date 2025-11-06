@@ -28,8 +28,9 @@ fun Route.registerGenerateTextRoutes(
                 val request = call.receive<GenerateTextRequest>()
 
                 // Validate aiVendors list
-                if (request.aiVendors.isEmpty()) {
-                    logger.warn("Received GenerateText request with no AI vendors")
+                if (request.aiConfig.isEmpty()) {
+                    logger.warn("Received GenerateText request with no AI " +
+                            "config")
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "At least one AI vendor must be provided")
@@ -38,11 +39,10 @@ fun Route.registerGenerateTextRoutes(
                 }
 
                 logger.info(
-                    "Received GenerateText request: vendors={}, model={}, promptLength={}, vendorCount={}",
-                    request.aiVendors.joinToString(",") { it.name },
-                    request.model,
+                    "Received GenerateText request: vendors={}, promptLength={}, vendorCount={}",
+                    request.aiConfig.joinToString(",") { it.aiVendor.name },
                     request.prompt.length,
-                    request.aiVendors.size
+                    request.aiConfig.size
                 )
 
                 val conversationId = aiRequestManager.getConversationId(request)
@@ -57,15 +57,15 @@ fun Route.registerGenerateTextRoutes(
                 )
 
                 val results = coroutineScope {
-                    request.aiVendors.map { aiVendor ->
+                    request.aiConfig.map { aiConfig ->
                         async {
                             val startTime = System.currentTimeMillis()
                             try {
 
 
                                 val response = aiRequestManager.handleRequest(
-                                    aiVendor = aiVendor,
-                                    model = request.model,
+                                    aiVendor = aiConfig.aiVendor,
+                                    model = aiConfig.model,
                                     message = message
                                 )
 
@@ -73,8 +73,8 @@ fun Route.registerGenerateTextRoutes(
 
                                 logger.info(
                                     "AI response received: vendor={}, model={}, durationMs={}",
-                                    aiVendor,
-                                    request.model,
+                                    aiConfig.aiVendor,
+                                    aiConfig.model,
                                     durationMs
                                 )
 
@@ -83,8 +83,8 @@ fun Route.registerGenerateTextRoutes(
                             } catch (e: Exception) {
                                 logger.error(
                                     "Error generating text: vendor={}, model={}, message={}",
-                                    aiVendor,
-                                    request.model,
+                                    aiConfig.aiVendor,
+                                    aiConfig.model,
                                     e.message,
                                     e
                                 )
