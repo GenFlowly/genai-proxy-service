@@ -6,11 +6,11 @@ import java.util.UUID
 data class Message(
     val messageId: String = UUID.randomUUID().toString(),
     val conversationId: String,
-    val aiVendor: AIVendor,
     val text: String,
-    val sequence: Int,
     val client: String,
     val role: String,
     val customerId: String,
+    var sequence: Int? = 0,
+    val aiVendor: AIVendor? = null,
     val previousMessageId: String?
 )

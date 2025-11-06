@@ -7,7 +7,6 @@ import com.genflowly.di.appModule
 import com.genflowly.service.AIRequestService
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
-import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.Authentication
@@ -16,7 +15,6 @@ import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.CORS
-import io.ktor.server.response.respondText
 import java.util.concurrent.TimeUnit
 import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get

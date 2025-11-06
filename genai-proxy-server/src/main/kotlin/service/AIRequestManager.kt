@@ -55,35 +55,26 @@ class AIRequestManager(
     suspend fun handleRequest(
         aiVendor: AIVendor,
         model: String,
-        prompt: String,
-        customerId: String,
-        conversationId: String,
-        selectedResponseId: String?,
-        client: String
+        message: Message
     ): GenerateTextResponse {
         val startTime = System.currentTimeMillis()
 
         val apiKey = fetchApiKey(
             aiVendor,
-            customerId,
+            message.customerId,
             customerProfileService
         )
 
-        val promptMessageId = conversationService.addMessageInConversation(
-            conversationId = conversationId,
-            customerId = customerId,
-            role = "user",
-            client = client,
-            aiVendor = aiVendor,
-            text = prompt,
-            previousMessageId = selectedResponseId
-        )
+        val promptMessageId = conversationService.addMessageInConversation(message)
 
         val promptWithContext = includeThreadContextInPrompt(
-            conversationId,
+            message.conversationId,
             promptMessageId,
-            prompt
+            message.text
         )
+
+
+        logger.info("Sending prompt = {}", promptWithContext)
 
         val aiResponse = when (aiVendor) {
             AIVendor.OPENAI -> {
@@ -125,25 +116,28 @@ class AIRequestManager(
                 )
             }
         }
+
         var responseMessageId = ""
         try {
             val responseText = aiResponse.getText()
+            logger.info("Received response = {}", responseText)
             if (!responseText.isNullOrBlank()) {
-                responseMessageId = conversationService.addMessageInConversation(
-                    conversationId,
-                    customerId,
-                    "assistant",
-                    client,
-                    aiVendor,
-                    responseText,
-                    previousMessageId = selectedResponseId
+                val responseMessage = Message(
+                    conversationId = message.conversationId,
+                    customerId = message.customerId,
+                    client = message.client,
+                    role = "assistant",
+                    text = responseText,
+                    previousMessageId = message.previousMessageId,
+                    aiVendor = aiVendor
                 )
+                responseMessageId = conversationService.addMessageInConversation(responseMessage)
             } else {
-                logger.warn("AI response text is null or blank for conversationId=$conversationId")
+                logger.warn("AI response text is null or blank for conversationId=$message.conversationId")
             }
         } catch (e: Exception) {
             logger.error(
-                "Failed to add assistant message to conversationId=$conversationId",
+                "Failed to add assistant message to conversationId=$message.conversationId",
                 e
             )
         }
@@ -158,7 +152,7 @@ class AIRequestManager(
 
         return GenerateTextResponse(
             text = aiResponse.getText(),
-            conversationId = conversationId,
+            conversationId = message.conversationId,
             messageId = responseMessageId,
             aiVendor = aiVendor.name
         )
