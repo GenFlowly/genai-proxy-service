@@ -5,11 +5,16 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class GenerateTextRequest(
-    val aiVendors: List<AIVendor>,
-    val model: String,
+    val aiConfig: List<AIConfig>,
     val prompt: String,
     val customerId: String,
     val selectedResponseId: String?,
     val conversationId: String?,
     val client: String
+)
+
+@Serializable
+data class AIConfig(
+    val aiVendor: AIVendor,
+    val model: String
 )

@@ -4,6 +4,7 @@ import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationService
 import com.genflowly.utils.fetchApiKey
+import models.AIConfig
 import models.GenerateTextRequest
 import models.GenerateTextResponse
 import models.Message
@@ -129,7 +130,7 @@ class AIRequestManager(
                     role = "assistant",
                     text = responseText,
                     previousMessageId = message.previousMessageId,
-                    aiVendor = aiVendor
+                    aiConfig = AIConfig(aiVendor = aiVendor, model = model)
                 )
                 responseMessageId = conversationService.addMessageInConversation(responseMessage)
             } else {

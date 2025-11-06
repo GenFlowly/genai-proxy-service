@@ -14,6 +14,9 @@ import com.genflowly.aicallerlib.models.AIVendor
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import models.AIConfig
 import models.Conversation
 import models.Message
 import mu.KLogger
@@ -69,7 +72,11 @@ class DynamoDBProvider(
         val response = dynamoDbClient.getItem(request)
         val item = response.item() ?: return@withContext null
 
-        val aiVendorStr = item["aiVendor"]?.s() ?: return@withContext null
+        val aiConfigJson = item["aiConfig"]?.s()
+        val aiConfig = aiConfigJson?.takeIf { it.isNotBlank() }?.let {
+            runCatching { Json.decodeFromString<AIConfig>(it) }.getOrNull()
+        }
+
         val text = item["text"]?.s() ?: return@withContext null
         val sequenceStr = item["sequence"]?.n() ?: return@withContext null
         val client = item["client"]?.s() ?: return@withContext null
@@ -77,18 +84,14 @@ class DynamoDBProvider(
         val customerId = item["customerId"]?.s() ?: return@withContext null
         val previousMessageId = item["previousMessageId"]?.s() ?: return@withContext null
 
-        val aiVendor = try {
-            AIVendor.valueOf(aiVendorStr)
-        } catch (e: IllegalArgumentException) {
-            return@withContext null
-        }
+
 
         val sequence = sequenceStr.toIntOrNull() ?: return@withContext null
 
         return@withContext Message(
             messageId = item["messageId"]?.s() ?: return@withContext null,
             conversationId = item["conversationId"]?.s() ?: return@withContext null,
-            aiVendor = aiVendor,
+            aiConfig = aiConfig,
             text = text,
             sequence = sequence,
             client = client,
@@ -149,7 +152,7 @@ class DynamoDBProvider(
         message: Message
     ) = withContext(Dispatchers.IO) {
         try {
-
+            val aiConfigJson = message.aiConfig?.let { Json.encodeToString(it) } ?: ""
             val item = withTimestamps(mapOf(
                 CONVERSATION_ID_KEY to AttributeValue.builder()
                     .s(message.conversationId).build(),
@@ -164,9 +167,7 @@ class DynamoDBProvider(
                 "client" to AttributeValue.builder().s
                     (message.client)
                     .build(),
-                AI_VENDOR_KEY to AttributeValue.builder().s
-                    (message.aiVendor?.name ?: "")
-                    .build(),
+                "aiConfig" to AttributeValue.builder().s(aiConfigJson).build(),
                 "role" to AttributeValue.builder().s
                     (message.role)
                     .build(),
