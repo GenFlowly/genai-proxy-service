@@ -11,6 +11,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerializationException
+import models.BatchGenerateTextResponse
 import models.GenerateTextRequest
 import models.GenerateTextResponse
 import models.Message
@@ -29,8 +30,10 @@ fun Route.registerGenerateTextRoutes(
 
                 // Validate aiVendors list
                 if (request.aiConfig.isEmpty()) {
-                    logger.warn("Received GenerateText request with no AI " +
-                            "config")
+                    logger.warn(
+                        "Received GenerateText request with no AI " +
+                                "config"
+                    )
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "At least one AI vendor must be provided")
@@ -69,7 +72,8 @@ fun Route.registerGenerateTextRoutes(
                                     message = message
                                 )
 
-                                val durationMs = System.currentTimeMillis() - startTime
+                                val durationMs =
+                                    System.currentTimeMillis() - startTime
 
                                 logger.info(
                                     "AI response received: vendor={}, model={}, durationMs={}",
@@ -99,17 +103,16 @@ fun Route.registerGenerateTextRoutes(
                     }.awaitAll()
                 }
 
-                // Return single response if only one vendor, otherwise return list
                 if (results.size == 1) {
                     call.respond(results.first())
                 } else {
                     call.respond(
-                        mapOf(
-                            "responses" to results,
-                            "count" to results.size
+                        BatchGenerateTextResponse(
+                            results = results
                         )
                     )
                 }
+
 
             } catch (e: SerializationException) {
                 logger.error("Malformed GenerateText request: {}", e.message, e)
@@ -118,7 +121,11 @@ fun Route.registerGenerateTextRoutes(
                     mapOf("error" to "Invalid request format: ${e.message}")
                 )
             } catch (e: Exception) {
-                logger.error("Unexpected error in GenerateText controller: {}", e.message, e)
+                logger.error(
+                    "Unexpected error in GenerateText controller: {}",
+                    e.message,
+                    e
+                )
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     mapOf("error" to "Internal server error: ${e.message}")
