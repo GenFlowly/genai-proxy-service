@@ -31,7 +31,6 @@ class AIRequestManager(
             messages.forEach { msg ->
                 appendLine("${msg.role}: ${msg.text.trim()}")
             }
-            append("user: ${prompt.trim()}")
         }.trimEnd()
     }
 
@@ -68,6 +67,8 @@ class AIRequestManager(
 
         val promptMessageId = conversationService.addMessageInConversation(message)
 
+        logger.info("Added Message id {} to conversation", promptMessageId)
+
         val promptWithContext = includeThreadContextInPrompt(
             message.conversationId,
             promptMessageId,
@@ -75,7 +76,7 @@ class AIRequestManager(
         )
 
 
-        logger.info("Sending prompt = {}", promptWithContext)
+        logger.info("Sending prompt with context = {}", promptWithContext)
 
         val aiResponse = when (aiVendor) {
             AIVendor.OPENAI -> {
@@ -129,7 +130,7 @@ class AIRequestManager(
                     client = message.client,
                     role = "assistant",
                     text = responseText,
-                    previousMessageId = message.previousMessageId,
+                    previousMessageId = message.messageId,
                     aiConfig = AIConfig(aiVendor = aiVendor, model = model)
                 )
                 responseMessageId = conversationService.addMessageInConversation(responseMessage)

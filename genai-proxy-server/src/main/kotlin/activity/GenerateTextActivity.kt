@@ -42,13 +42,13 @@ fun Route.registerGenerateTextRoutes(
                 }
 
                 logger.info(
-                    "Received GenerateText request: vendors={}, promptLength={}, vendorCount={}",
-                    request.aiConfig.joinToString(",") { it.aiVendor.name },
-                    request.prompt.length,
-                    request.aiConfig.size
+                    "Received GenerateText request: {}",
+                    request.toString()
                 )
 
                 val conversationId = aiRequestManager.getConversationId(request)
+
+                logger.info("Retrieved conversationId: {}", conversationId)
 
                 val message = Message(
                     conversationId = conversationId,
@@ -64,14 +64,11 @@ fun Route.registerGenerateTextRoutes(
                         async {
                             val startTime = System.currentTimeMillis()
                             try {
-
-
                                 val response = aiRequestManager.handleRequest(
                                     aiVendor = aiConfig.aiVendor,
                                     model = aiConfig.model,
                                     message = message
                                 )
-
                                 val durationMs =
                                     System.currentTimeMillis() - startTime
 
