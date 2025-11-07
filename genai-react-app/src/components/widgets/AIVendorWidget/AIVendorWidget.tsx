@@ -1,61 +1,113 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useAI } from '../../../context/AIContext'
 import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
-import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
-import { GetTextGenerationModelsResponse, AIVendorModelList } from '../../../models/getTextGenerationModels.models'
+import {
+    getTextGenerationModels,
+    clearAllModelCache,
+} from '../../../services/getTextGenerationModelsService'
+import {
+    GetTextGenerationModelsResponse,
+    AIVendorModelList,
+} from '../../../models/getTextGenerationModels.models'
+import { CacheManager } from '../../../utils/cache'
 import styles from './AIVendorWidget.module.scss'
 
-interface Props {
+interface AIVendorWidgetProps {
     collapsed?: boolean
 }
 
 const vendors = Object.values(AIVendor) as AIVendor[]
 
-export default function AIVendorWidget({ collapsed = false }: Props): React.ReactElement {
-    const { config, setSelectedModelForAIVendor } = useAI()
+// 🧠 Cache 1: for selected model states (UI-level)
+const aiConfigCache = new CacheManager({ prefix: 'aiConfigCache_' })
+
+export default function AIVendorWidget({
+                                           collapsed = false,
+                                       }: AIVendorWidgetProps): React.ReactElement {
+    const { config, setSelectedModelForAIVendor, resetConfig } = useAI()
+
     const { getAccessTokenSilently, customerId, isAuthenticated } = useAuth()
 
-    const [vendorModels, setVendorModels] = useState<AIVendorModelList[]>([])
+    const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
+    const [isRefreshing, setIsRefreshing] = useState(false)
 
-    const isVendorActive = (vendor: AIVendor) =>
-        config.some(c => c.aiVendor === vendor && c.model)
+    const isAIVendorModelsPopulated = (aiVendor: AIVendor) =>
+        config.some(c => c.aiVendor === aiVendor && c.model)
 
-    const getSelectedModel = (vendor: AIVendor) =>
-        config.find(c => c.aiVendor === vendor)?.model ?? ''
+    const getSelectedModel = (aiVendor: AIVendor) =>
+        config.find(c => c.aiVendor === aiVendor)?.model ?? ''
 
-    // --- Load models (cached or remote) ---
-    useEffect(() => {
-        const fetchModels = async () => {
+    // --- Fetch models (with bypass option for refresh) ---
+    const fetchModels = useCallback(
+        async (bypassCache = false) => {
             if (!isAuthenticated || !customerId) return
 
             try {
                 const token = await getAccessTokenSilently()
-                const res: GetTextGenerationModelsResponse = await getTextGenerationModels(token, {
-                    aiVendor: vendors,
-                    customerId,
-                })
+                const response: GetTextGenerationModelsResponse =
+                    await getTextGenerationModels(
+                        token,
+                        { aiVendor: vendors, customerId },
+                        bypassCache
+                    )
 
-                setVendorModels(res.aiVendorModelList || [])
+                const data = response.aiVendorModelList || []
+                setAiVendorModels(data)
+
+                // ✅ Update UI cache
+                aiConfigCache.set('aiVendorModels', data)
             } catch (err) {
                 console.error('Failed to fetch AI models:', err)
-                setVendorModels([])
+                setAiVendorModels([])
             }
+        },
+        [isAuthenticated, customerId, getAccessTokenSilently]
+    )
+
+    // --- Initial load: use cache or fetch ---
+    useEffect(() => {
+        if (!isAuthenticated || !customerId) return
+
+        const cached = aiConfigCache.get<AIVendorModelList[]>('aiVendorModels')
+        if (cached && cached.length > 0) {
+            setAiVendorModels(cached)
+        } else {
+            fetchModels()
         }
+    }, [isAuthenticated, customerId, fetchModels])
 
-        fetchModels()
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
+    // --- Refresh handler ---
+    const handleRefresh = async () => {
+        if (!customerId) return
 
-    const getModelsForVendor = (vendor: AIVendor): string[] => {
-        return vendorModels.find(v => v.aiVendor === vendor)?.modelsList ?? []
+        try {
+            setIsRefreshing(true)
+
+            // ✅ 1. Clear both caches
+            aiConfigCache.clear()
+            clearAllModelCache()
+
+            // ✅ 2. Reset selected models in AI context
+            resetConfig()
+
+            // ✅ 3. Fetch from API again (bypass cache)
+            await fetchModels(true)
+        } finally {
+            setIsRefreshing(false)
+        }
     }
+
+
+    const getModelsForVendor = (vendor: AIVendor): string[] =>
+        aiVendorModels.find(v => v.aiVendor === vendor)?.modelsList ?? []
 
     // --- Collapsed view ---
     if (collapsed) {
         return (
             <div className={`${styles.vendorWidget} ${styles.collapsed}`}>
                 {vendors.map(vendor => {
-                    const isActive = isVendorActive(vendor)
+                    const isActive = isAIVendorModelsPopulated(vendor)
                     const models = getModelsForVendor(vendor)
                     const disabled = models.length === 0
 
@@ -92,14 +144,15 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
                 <h3 className={styles.title}>AI Models</h3>
                 <button
                     className={styles.refreshButton}
-                    onClick={() => window.location.reload()}
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
                 >
-                    ↻ Refresh
+                    {isRefreshing ? 'Refreshing...' : '↻ Refresh'}
                 </button>
             </div>
 
             {vendors.map(vendor => {
-                const isActive = isVendorActive(vendor)
+                const isActive = isAIVendorModelsPopulated(vendor)
                 const selectedModel = getSelectedModel(vendor)
                 const models = getModelsForVendor(vendor)
                 const disabled = models.length === 0
@@ -108,7 +161,9 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
                     <div key={vendor} className={styles.vendorBlock}>
                         <button
                             type="button"
-                            className={`${styles.vendorButton} ${isActive ? styles.selected : ''}`}
+                            className={`${styles.vendorButton} ${
+                                isActive ? styles.selected : ''
+                            }`}
                             onClick={() => {
                                 if (disabled) return
                                 if (isActive) {
