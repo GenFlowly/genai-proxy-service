@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import { useConversation } from '../../../context/ConversationContext'
-import { useAI } from '../../../context/AIContext' // ✅ NEW
+import { useAI } from '../../../context/AIContext'
 import styles from './PromptEditor.module.scss'
 import { EditorView } from '@codemirror/view'
 
@@ -14,39 +14,61 @@ interface PromptEditorProps {
 
 export default function PromptEditor({ id }: PromptEditorProps): React.ReactElement {
     const { conversationBlockList, updateResponseInConversationBlock } = useConversation()
-    const { setActiveText } = useAI() // ✅ NEW — from AI Context
-    const block = conversationBlockList.find(b => b.id === id)
+    const { setPrompt } = useAI()
+    const block = conversationBlockList.find(b => b.conversationBlockId === id)
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    const STORAGE_KEY = `prompt_editor_content_conv-default`
+    const STORAGE_KEY = `prompt_editor_content_conv-${block?.conversationBlockId}`
 
-    // Load markdown from localStorage on mount
+    // Load markdown from localStorage only on initial mount
     useEffect(() => {
         if (!block) return
         try {
             const saved = localStorage.getItem(STORAGE_KEY)
-            if (saved && !block.markdown) updateResponseInConversationBlock(id, saved)
+            if (saved && !block.prompt) updateResponseInConversationBlock(id, saved)
         } catch (err) {
             console.error('Failed to load from localStorage:', err)
         }
-    }, [id, block, updateResponseInConversationBlock])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []) // Empty dependency array = runs only once on mount
 
-    // Save markdown to localStorage whenever it changes
+    // Debounced save to localStorage (300ms after user stops typing)
     const handleChange = (value: string) => {
+        // ✅ Update context immediately for token counting
+        setPrompt(value)
+
+        // ✅ Update conversation block immediately for UI
         updateResponseInConversationBlock(id, value)
-        setActiveText(value) // ✅ sync with AI context for token counting
-        try {
-            localStorage.setItem(STORAGE_KEY, value)
-        } catch (err) {
-            console.error('Failed to save to localStorage:', err)
+
+        // ✅ Debounce localStorage to avoid blocking the thread
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current)
         }
+
+        debounceTimerRef.current = setTimeout(() => {
+            try {
+                localStorage.setItem(STORAGE_KEY, value)
+            } catch (err) {
+                console.error('Failed to save to localStorage:', err)
+            }
+        }, 300) // Adjust delay as needed (300ms is reasonable)
     }
 
-    // ✅ When block changes externally (e.g., loaded from cache), also sync to context
+    // Cleanup timer on unmount
     useEffect(() => {
-        if (block?.markdown) {
-            setActiveText(block.markdown)
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current)
+            }
         }
-    }, [block?.markdown, setActiveText])
+    }, [])
+
+    // When block changes externally, sync to context
+    useEffect(() => {
+        if (block?.prompt) {
+            setPrompt(block.prompt)
+        }
+    }, [block?.prompt, setPrompt])
 
     if (!block) return <></>
 
@@ -55,7 +77,7 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
             <div className={styles.headerSection}>
                 <label className={styles.label}>Prompt</label>
                 <CopyToClipboard
-                    content={block.markdown}
+                    content={block.prompt}
                     label="Copy"
                     successDuration={2000}
                 />
@@ -63,7 +85,7 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
             <div className={styles.editorWrapper}>
                 <div className={styles.mdxEditorRoot}>
                     <MarkdownEditor
-                        value={block.markdown}
+                        value={block.prompt}
                         onChange={(value) => handleChange(value)}
                         height="600px"
                         visible={false}

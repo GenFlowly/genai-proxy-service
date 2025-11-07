@@ -1,65 +1,55 @@
-// src/context/AIContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { AIVendor } from '../constants/vendors'
 import { CacheManager } from '../utils/cache'
 import { countTokens } from '../utils/tokenizer'
 
 export interface AIConfig {
-    vendorSelections: Record<AIVendor, string>
-    temperature: number
-    maxTokens: number
-    tone?: string
+    aiVendor: AIVendor
+    model: string
 }
 
 interface AIContextType {
-    config: AIConfig
+    config: AIConfig[]
     activeText: string
     tokenCount: number
     isTokenLoading: boolean
-    setActiveText: (text: string) => void
-    setVendorModel: (vendor: AIVendor, model: string | null) => void
-    setTemperature: (temp: number) => void
-    setMaxTokens: (max: number) => void
-    setTone: (tone: string) => void
-    getActiveModel: (vendor?: AIVendor) => string
+    setPrompt: (prompt: string) => void
+    setSelectedModelForAIVendor: (aiVendor: AIVendor, model: string) => void
+    getOpenAIActiveModel: () => string
     resetConfig: () => void
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined)
 
-const defaultVendorSelections: Record<AIVendor, string> = Object.values(AIVendor).reduce(
-    (acc, vendor) => {
-        acc[vendor as AIVendor] = ''
-        return acc
-    },
-    {} as Record<AIVendor, string>
-)
-
-const defaultConfig: AIConfig = {
-    vendorSelections: defaultVendorSelections,
-    temperature: 0.7,
-    maxTokens: 1024,
-    tone: 'neutral',
-}
-
 const aiConfigCache = new CacheManager({
-    ttlMs: 30 * 24 * 60 * 60 * 1000,
+    ttlMs: 30 * 24 * 60 * 60 * 1000, // 30 days
     prefix: 'ai_config_',
 })
 
 const CONFIG_CACHE_KEY = 'current_config'
 
 export const AIProvider = ({ children }: { children: ReactNode }) => {
-    const [config, setConfig] = useState<AIConfig>(defaultConfig)
-    const [activeText, setActiveText] = useState<string>('')
+    const [config, setConfig] = useState<AIConfig[]>([])
+    const [prompt, setPrompt] = useState<string>('')
     const [tokenCount, setTokenCount] = useState<number>(0)
     const [isTokenLoading, setIsTokenLoading] = useState(false)
     const [isHydrated, setIsHydrated] = useState(false)
 
+    // 🔹 Load cached config safely
     useEffect(() => {
         try {
-            const cached = aiConfigCache.get<AIConfig>(CONFIG_CACHE_KEY)
-            if (cached) setConfig(cached)
+            const cached = aiConfigCache.get<AIConfig[]>(CONFIG_CACHE_KEY)
+            if (cached && Array.isArray(cached)) {
+                // Normalize and remove invalid entries
+                const normalized = cached
+                    .filter(c => c?.aiVendor && typeof c.model === 'string')
+                    .map(c => ({
+                        ...c,
+                        aiVendor: c.aiVendor as AIVendor,
+                        model: c.model.trim(),
+                    }))
+                setConfig(normalized)
+            }
         } catch (e) {
             console.error('Failed to load config:', e)
         } finally {
@@ -67,23 +57,36 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [])
 
+    // 🔹 Persist config to cache safely
     useEffect(() => {
         if (!isHydrated) return
-        aiConfigCache.set(CONFIG_CACHE_KEY, config)
+        try {
+            aiConfigCache.set(CONFIG_CACHE_KEY, config)
+        } catch (e) {
+            console.error('Failed to save config:', e)
+        }
     }, [config, isHydrated])
 
-    // 🔹 Token count auto-update (debounced)
+    // 🔹 Token count auto-update (debounced, safe for missing model)
     useEffect(() => {
-        if (!activeText) {
+        if (!isHydrated) return
+
+        if (!prompt?.trim()) {
             setTokenCount(0)
             return
         }
 
         const timeout = setTimeout(async () => {
+            const model = getOpenAIActiveModel()
+            if (!model) {
+                // Graceful fallback — no model selected yet
+                setTokenCount(0)
+                return
+            }
+
             setIsTokenLoading(true)
             try {
-                const model = getActiveModel()
-                const count = await countTokens(activeText, model)
+                const count = await countTokens(prompt, model)
                 setTokenCount(count)
             } catch (err) {
                 console.error('Token counting failed:', err)
@@ -91,43 +94,71 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
             } finally {
                 setIsTokenLoading(false)
             }
-        }, 400) // debounce typing
+        }, 400)
 
         return () => clearTimeout(timeout)
-    }, [activeText, config.vendorSelections])
+    }, [prompt, config, isHydrated])
 
-    const setVendorModel = (vendor: AIVendor, model: string | null) => {
-        setConfig(prev => ({
-            ...prev,
-            vendorSelections: { ...prev.vendorSelections, [vendor]: model ?? '' },
-        }))
+    // 🔹 Update or insert vendor+model config safely
+    const setSelectedModelForAIVendor = (aiVendor: AIVendor, model: string) => {
+        if (!aiVendor) return // skip invalid vendor
+        setConfig(prevConfigs => {
+            const existingIndex = prevConfigs.findIndex(c => c.aiVendor === aiVendor)
+
+            if (existingIndex !== -1) {
+                const updated = [...prevConfigs]
+                updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    aiVendor,
+                    model: model ?? updated[existingIndex].model ?? '',
+                }
+                return updated
+            }
+
+            // otherwise add new vendor config
+            return [
+                ...prevConfigs,
+                {
+                    aiVendor,
+                    model: model ?? '',
+                },
+            ]
+        })
     }
 
-    const setTemperature = (temp: number) => setConfig(prev => ({ ...prev, temperature: temp }))
-    const setMaxTokens = (max: number) => setConfig(prev => ({ ...prev, maxTokens: max }))
-    const setTone = (tone: string) => setConfig(prev => ({ ...prev, tone }))
+    // 🔹 Always return OPENAI model (gracefully handles missing)
+    const getOpenAIActiveModel = (): string => {
+        const openaiConfig = config.find(
+            c => c.aiVendor === AIVendor.OPENAI && !!c.model?.trim()
+        )
 
-    const getActiveModel = (vendor: AIVendor = AIVendor.OPENAI): string =>
-        config.vendorSelections[vendor] || 'gpt-4-turbo'
+        if (!openaiConfig) {
+            // Don't throw — just return empty
+            return ''
+        }
+
+        return openaiConfig.model
+    }
 
     const resetConfig = () => {
-        setConfig(defaultConfig)
-        aiConfigCache.delete(CONFIG_CACHE_KEY)
+        try {
+            setConfig([])
+            aiConfigCache.delete(CONFIG_CACHE_KEY)
+        } catch (e) {
+            console.error('Failed to reset config:', e)
+        }
     }
 
     return (
         <AIContext.Provider
             value={{
                 config,
-                activeText,
+                activeText: prompt,
                 tokenCount,
                 isTokenLoading,
-                setActiveText,
-                setVendorModel,
-                setTemperature,
-                setMaxTokens,
-                setTone,
-                getActiveModel,
+                setPrompt,
+                setSelectedModelForAIVendor,
+                getOpenAIActiveModel,
                 resetConfig,
             }}
         >
@@ -138,6 +169,19 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAI = (): AIContextType => {
     const ctx = useContext(AIContext)
-    if (!ctx) throw new Error('useAI must be used within AIProvider')
+    if (!ctx) {
+        // Graceful fallback instead of throwing
+        console.warn('useAI must be used within AIProvider — returning fallback.')
+        return {
+            config: [],
+            activeText: '',
+            tokenCount: 0,
+            isTokenLoading: false,
+            setPrompt: () => {},
+            setSelectedModelForAIVendor: () => {},
+            getOpenAIActiveModel: () => '',
+            resetConfig: () => {},
+        }
+    }
     return ctx
 }

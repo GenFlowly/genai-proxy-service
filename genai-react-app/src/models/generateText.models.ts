@@ -1,14 +1,20 @@
 // models/textGen.models.ts
+import {AIConfig} from "../context/AIContext";
+
 export interface GenerateTextRequest {
-    vendor: string
-    model: string
+    aiConfig: AIConfig[]
     prompt: string
     customerId: string
+    selectedResponseId: string
+    conversationId: string
+    client: string
 }
 
 export interface GenerateTextResponse {
     text: string
-    vendor: string
+    aiVendor: string
+    messageId: string
+    conversationId: string
 }
 
 export interface BatchGenerateTextRequest {

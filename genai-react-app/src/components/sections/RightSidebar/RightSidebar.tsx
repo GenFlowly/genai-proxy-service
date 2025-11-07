@@ -6,7 +6,7 @@ import {useLayout} from "../../../context/LayoutContext";
 import TokenCounter from "../../widgets/TokenCounter/TokenCounter";
 
 export default function RightSidebar(): React.ReactElement {
-    const { config, setTemperature, setMaxTokens, setTone, resetConfig } = useAI()
+    const { config } = useAI()
     const { isRightSidebarExpanded } = useLayout()
     const collapsed = !isRightSidebarExpanded
 
