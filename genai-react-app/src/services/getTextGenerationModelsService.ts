@@ -3,15 +3,17 @@ import { endpoints } from '../config/endpoints'
 import { AIVendor } from '../constants/vendors'
 import { CacheManager } from '../utils/cache'
 import {
-    GetTextGenerationModelsRequest, GetTextGenerationModelsResponse
-} from "../models/getTextGenerationModels.models";
+    GetTextGenerationModelsRequest,
+    GetTextGenerationModelsResponse,
+} from '../models/getTextGenerationModels.models'
+
 const modelCache = new CacheManager({
     ttlMs: 30 * 24 * 60 * 60 * 1000, // 30 days
     prefix: 'ai_models_',
 })
 
-function getCacheKey(vendor: AIVendor, customerId: string): string {
-    return `${vendor}_${customerId}`
+function getCacheKey(customerId: string): string {
+    return `models_${customerId}`
 }
 
 export async function getTextGenerationModels(
@@ -19,19 +21,17 @@ export async function getTextGenerationModels(
     request: GetTextGenerationModelsRequest,
     bypassCache: boolean = false
 ): Promise<GetTextGenerationModelsResponse> {
-    const { aiVendor, customerId } = request
-    const cacheKey = getCacheKey(aiVendor, customerId)
+    const { customerId } = request
+    const cacheKey = getCacheKey(customerId)
 
-    // Check cache first (unless bypassed)
     if (!bypassCache) {
         const cached = modelCache.get<GetTextGenerationModelsResponse>(cacheKey)
         if (cached) {
-            console.log(`Using cached models for ${aiVendor}`)
+            console.log(`✅ Using cached models for all vendors (customer ${customerId})`)
             return cached
         }
     }
 
-    // Fetch from API
     const response = await fetch(endpoints.getTextGenerationModels, {
         method: HttpMethod.POST,
         headers: {
@@ -53,9 +53,8 @@ export async function getTextGenerationModels(
     return data
 }
 
-export function clearModelCache(aiVendor: AIVendor, customerId: string): void {
-    const cacheKey = getCacheKey(aiVendor, customerId)
-    modelCache.delete(cacheKey)
+export function clearModelCache(customerId: string): void {
+    modelCache.delete(getCacheKey(customerId))
 }
 
 export function clearAllModelCache(): void {
