@@ -37,11 +37,14 @@ export async function getTokenizer(model: string): Promise<Tiktoken> {
  * May throw if model is unsupported.
  */
 export async function countTokens(text: string, model: string): Promise<number> {
+    console.log("COUNT TOKENS", text, model)
     if (!text) return 0;
-    if (!model) throw new Error("countTokens: model string is required (strict mode).");
-
-    const tokenizer = await getTokenizer(model);
-    const tokens = tokenizer.encode(text);
+    if (!model) throw new Error("No model selected");
+    let tokens = []
+    if(model) {
+        const tokenizer = await getTokenizer(model);
+        tokens = tokenizer.encode(text);
+    }
     return tokens.length;
 }
 

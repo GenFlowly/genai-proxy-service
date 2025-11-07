@@ -11,7 +11,7 @@ export default function CenterSection() {
         <div className={styles.centerSection}>
             <div className={styles.contentWrapper}>
                 {conversationBlockList.map(block => (
-                    <ConversationBlock key={block.id} id={block.id} />
+                    <ConversationBlock key={block.conversationBlockId} id={block.conversationBlockId} />
                 ))}
             </div>
         </div>

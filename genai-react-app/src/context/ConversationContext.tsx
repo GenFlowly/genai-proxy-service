@@ -1,46 +1,53 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react'
+// src/context/ConversationContext.tsx
+import React, { createContext, useContext, useState, ReactNode, useRef, useEffect } from 'react'
 import { AIVendor } from '../constants/vendors'
 import { useAuth } from './AuthContext'
-import { useAI } from './AIContext'
+import { AIConfig, useAI } from './AIContext'
 import { useLayout } from './LayoutContext'
 import { generateText } from '../services/generateTextService'
-import { batchGenerateText } from '../services/batchGenerateTextService'
 import {
     ConversationBlock,
     ConversationContextType,
-    ResponseType,
+    Message,
 } from '../models/conversation.models'
-
-/* ---------- Context ---------- */
 
 const ConversationContext = createContext<ConversationContextType | undefined>(undefined)
 
-/* ---------- Provider ---------- */
-
 export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
-    const { config } = useAI()
+    const { config } = useAI() // now an array of AIConfig[]
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
 
+    const [conversationId, setConversationId] = useState<string>('')
+
+    // ✅ Ref to always hold the latest conversationId
+    const conversationIdRef = useRef(conversationId)
+    useEffect(() => {
+        conversationIdRef.current = conversationId
+    }, [conversationId])
+
     const [conversationBlockList, setConversationBlockList] = useState<ConversationBlock[]>([
-        { id: `conv-default`, markdown: '', responses: [], isLoading: false },
+        {
+            conversationBlockId: `conv-default`,
+            prompt: '',
+            responseMessages: [],
+            isLoading: false,
+        },
     ])
 
-    /**
-     * Store the selected response ID per conversation block.
-     * key = conversationBlock.id, value = responseId string or null
-     */
     const [selectedResponseByBlock, setSelectedResponseByBlock] = useState<Record<string, string | null>>({})
 
-    /* ---------- Helpers ---------- */
-
-    const updateConversationBlock = (id: string, updater: Partial<ConversationBlock>) => {
+    const updateConversationBlock = (conversationBlockId: string, updater: Partial<ConversationBlock>) => {
         setConversationBlockList(prev =>
-            prev.map(block => (block.id === id ? { ...block, ...updater } : block))
+            prev.map(block =>
+                block.conversationBlockId === conversationBlockId
+                    ? { ...block, ...updater }
+                    : block
+            )
         )
     }
 
-    const setSelectedResponseForBlock = (blockId: string, responseId: string | null) => {
+    const setSelectedResponseForBlock = (blockId: string, responseId: string) => {
         setSelectedResponseByBlock(prev => ({ ...prev, [blockId]: responseId }))
     }
 
@@ -48,107 +55,120 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         return selectedResponseByBlock[blockId] ?? null
     }
 
-    /* ---------- Private API Methods ---------- */
-
-    const fetchSingleVendorResponse = async (
+    // --- API Calls ---
+    const fetchVendorResponses = async (
         token: string,
-        vendor: string,
-        model: string,
-        prompt: string
-    ): Promise<ResponseType[]> => {
-        const res = await generateText(token, {
-            vendor: vendor as AIVendor,
-            model,
-            prompt: prompt,
+        aiConfigs: AIConfig[],
+        prompt: string,
+        selectedResponseId: string | null
+    ): Promise<Message[]> => {
+        const response = await generateText(token, {
+            aiConfig: aiConfigs.filter(c => c.aiVendor && c.model),
+            prompt,
             customerId: customerId!,
+            selectedResponseId: selectedResponseId ?? '',
+            conversationId: conversationIdRef.current,
+            client: 'REACT_APP',
         })
 
-        return [{ vendor: vendor as AIVendor, text: res.text ?? '' }]
-    }
+        // ✅ Extract conversationId from the first result if missing at root
+        const newConversationId =
+            response.conversationId ??
+            response.results?.[0]?.conversationId ??
+            ''
 
-    const fetchBatchVendorResponses = async (
-        token: string,
-        activeVendors: [string, string][],
-        prompt: string
-    ): Promise<ResponseType[]> => {
-        const batchRequest = {
-            requests: activeVendors.map(([vendor, model]) => ({
-                vendor,
-                model,
-                prompt: prompt,
-                customerId: customerId!,
-            })),
+        if (newConversationId && newConversationId !== conversationIdRef.current) {
+            setConversationId(newConversationId)
+            conversationIdRef.current = newConversationId
+            console.log('SET Conversation ID', newConversationId)
         }
 
-        const batchResponse = await batchGenerateText(token, batchRequest)
+        console.log('DEBUG response:', response)
 
-        return batchResponse.results.map(r => ({
-            vendor: r.vendor as AIVendor,
-            text: r.text ?? '',
-        }))
+        return (
+            response.results?.map((r: any) => ({
+                aiVendor: r.aiVendor as AIVendor,
+                text: r.text ?? '',
+                messageId: r.messageId ?? '',
+            })) ?? []
+        )
     }
 
-    /* ---------- Actions ---------- */
-
+    // --- Core Actions ---
     const addNewConversationBlock = () => {
         const newConversation: ConversationBlock = {
-            id: `conv-${Date.now()}`,
-            markdown: '',
-            responses: [],
+            conversationBlockId: `conv-${Date.now()}`,
+            prompt: '',
+            responseMessages: [],
             isLoading: false,
         }
         setConversationBlockList(prev => [...prev, newConversation])
     }
 
-    const updateResponseInConversationBlock = (id: string, value: string) => {
-        updateConversationBlock(id, { markdown: value })
+    const updatePromptInConversationBlock = (conversationBlockId: string, prompt: string) => {
+        updateConversationBlock(conversationBlockId, { prompt })
     }
 
     const generateResponses = async (id: string) => {
-        const conversationBlock = conversationBlockList.find(c => c.id === id)
+        const conversationBlock = conversationBlockList.find(c => c.conversationBlockId === id)
         if (!conversationBlock) return
         if (!isAuthenticated || !customerId) return alert('Please log in first.')
 
-        const activeVendors = Object.entries(config.vendorSelections).filter(([_, model]) => model)
-        if (activeVendors.length === 0) return alert('Select at least one vendor and model.')
+        const aiConfigs = config
+        if (aiConfigs.length === 0) return alert('Select at least one vendor and model.')
 
-        updateConversationBlock(id, { isLoading: true, responses: [] })
+        updateConversationBlock(id, { isLoading: true, responseMessages: [] })
 
         try {
             const token = await getAccessTokenSilently()
-            let responses: ResponseType[] = []
+            const selectedResponseId = getSelectedResponseForBlock(id)
+            console.log('DEBUG selectedResponseId for block', id, selectedResponseId)
 
-            if (activeVendors.length === 1) {
-                const [vendor, model] = activeVendors[0]
-                responses = await fetchSingleVendorResponse(token, vendor, model, conversationBlock.markdown)
-            } else {
-                responses = await fetchBatchVendorResponses(token, activeVendors, conversationBlock.markdown)
-            }
+            const responses = await fetchVendorResponses(
+                token,
+                aiConfigs,
+                conversationBlock.prompt,
+                selectedResponseId
+            )
 
-            updateConversationBlock(id, { responses, isLoading: false })
-
-            // Hide sidebars after generating
+            updateConversationBlock(id, { responseMessages: responses, isLoading: false })
+            setSelectedResponseForBlock(id, '')
             setLeftSidebarExpanded(false)
             setRightSidebarExpanded(false)
         } catch (err) {
             console.error(err)
             updateConversationBlock(id, {
-                responses: [{ vendor: AIVendor.OPENAI, text: 'Error generating text.' }],
+                responseMessages: [
+                    {
+                        aiVendor: AIVendor.OPENAI,
+                        text: 'Error generating text.',
+                        messageId: 'error',
+                    },
+                ],
                 isLoading: false,
             })
         }
     }
 
-    /* ---------- Render ---------- */
+    const addNewConversationBlockWithId = (id: string) => {
+        const newConversation: ConversationBlock = {
+            conversationBlockId: id,
+            prompt: '',
+            responseMessages: [],
+            isLoading: false,
+        }
+        setConversationBlockList(prev => [...prev, newConversation])
+    }
 
     return (
         <ConversationContext.Provider
             value={{
                 conversationBlockList,
+                conversationId,
                 addNewConversationBlock,
-                updateResponseInConversationBlock,
+                addNewConversationBlockWithId,
+                updateResponseInConversationBlock: updatePromptInConversationBlock,
                 generateResponses,
-                // new APIs for selected response
                 selectedResponseByBlock,
                 setSelectedResponseForBlock,
                 getSelectedResponseForBlock,
@@ -158,8 +178,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         </ConversationContext.Provider>
     )
 }
-
-/* ---------- Hook ---------- */
 
 export const useConversation = () => {
     const ctx = useContext(ConversationContext)

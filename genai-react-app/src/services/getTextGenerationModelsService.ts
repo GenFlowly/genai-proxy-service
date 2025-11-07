@@ -19,14 +19,14 @@ export async function getTextGenerationModels(
     request: GetTextGenerationModelsRequest,
     bypassCache: boolean = false
 ): Promise<GetTextGenerationModelsResponse> {
-    const { vendor, customerId } = request
-    const cacheKey = getCacheKey(vendor, customerId)
+    const { aiVendor, customerId } = request
+    const cacheKey = getCacheKey(aiVendor, customerId)
 
     // Check cache first (unless bypassed)
     if (!bypassCache) {
         const cached = modelCache.get<GetTextGenerationModelsResponse>(cacheKey)
         if (cached) {
-            console.log(`Using cached models for ${vendor}`)
+            console.log(`Using cached models for ${aiVendor}`)
             return cached
         }
     }
@@ -53,8 +53,8 @@ export async function getTextGenerationModels(
     return data
 }
 
-export function clearModelCache(vendor: AIVendor, customerId: string): void {
-    const cacheKey = getCacheKey(vendor, customerId)
+export function clearModelCache(aiVendor: AIVendor, customerId: string): void {
+    const cacheKey = getCacheKey(aiVendor, customerId)
     modelCache.delete(cacheKey)
 }
 

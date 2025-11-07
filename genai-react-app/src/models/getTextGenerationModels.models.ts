@@ -2,11 +2,11 @@
 import { AIVendor } from '../constants/vendors'
 
 export interface GetTextGenerationModelsRequest {
-    vendor: AIVendor
+    aiVendor: AIVendor
     customerId: string
 }
 
 export interface GetTextGenerationModelsResponse {
-    vendor: AIVendor
+    aiVendor: AIVendor
     modelsList: string[]
 }
