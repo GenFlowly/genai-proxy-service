@@ -3,9 +3,8 @@ import { useAI } from '../../../context/AIContext'
 import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
-import { CacheManager } from '../../../utils/cache'
+import { GetTextGenerationModelsResponse, AIVendorModelList } from '../../../models/getTextGenerationModels.models'
 import styles from './AIVendorWidget.module.scss'
-import { GetTextGenerationModelsResponse } from '../../../models/getTextGenerationModels.models'
 
 interface Props {
     collapsed?: boolean
@@ -17,15 +16,7 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
     const { config, setSelectedModelForAIVendor } = useAI()
     const { getAccessTokenSilently, customerId, isAuthenticated } = useAuth()
 
-    const [vendorModels, setVendorModels] = useState<Record<
-        AIVendor,
-        { models: string[]; loading: boolean; error?: string }
-    >>(
-        Object.fromEntries(
-            vendors.map(v => [v, { models: [], loading: false, error: undefined }])
-        ) as unknown as Record<AIVendor, { models: string[]; loading: boolean; error?: string }>
-    )
-
+    const [vendorModels, setVendorModels] = useState<AIVendorModelList[]>([])
 
     const isVendorActive = (vendor: AIVendor) =>
         config.some(c => c.aiVendor === vendor && c.model)
@@ -38,47 +29,26 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
         const fetchModels = async () => {
             if (!isAuthenticated || !customerId) return
 
-            setVendorModels(prev =>
-                Object.fromEntries(
-                    vendors.map(v => [v, { ...prev[v], loading: true, error: undefined }])
-                ) as Record<AIVendor, { models: string[]; loading: boolean; error?: string }>
-            )
-
             try {
                 const token = await getAccessTokenSilently()
-
                 const res: GetTextGenerationModelsResponse = await getTextGenerationModels(token, {
                     aiVendor: vendors,
                     customerId,
                 })
 
-                const updated: Record<AIVendor, { models: string[]; loading: boolean }> = {
-                    ...vendorModels,
-                }
-
-                res.aiVendorModelList.forEach(entry => {
-                    updated[entry.aiVendor] = {
-                        models: entry.modelsList,
-                        loading: false,
-                    }
-                })
-
-                setVendorModels(updated)
+                setVendorModels(res.aiVendorModelList || [])
             } catch (err) {
                 console.error('Failed to fetch AI models:', err)
-                setVendorModels(prev =>
-                    Object.fromEntries(
-                        vendors.map(v => [
-                            v,
-                            { ...prev[v], loading: false, error: 'Failed to load' },
-                        ])
-                    ) as Record<AIVendor, { models: string[]; loading: boolean; error?: string }>
-                )
+                setVendorModels([])
             }
         }
 
         fetchModels()
     }, [isAuthenticated, customerId, getAccessTokenSilently])
+
+    const getModelsForVendor = (vendor: AIVendor): string[] => {
+        return vendorModels.find(v => v.aiVendor === vendor)?.modelsList ?? []
+    }
 
     // --- Collapsed view ---
     if (collapsed) {
@@ -86,8 +56,8 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
             <div className={`${styles.vendorWidget} ${styles.collapsed}`}>
                 {vendors.map(vendor => {
                     const isActive = isVendorActive(vendor)
-                    const models = vendorModels[vendor].models
-                    const disabled = vendorModels[vendor].loading || !models.length
+                    const models = getModelsForVendor(vendor)
+                    const disabled = models.length === 0
 
                     return (
                         <button
@@ -123,7 +93,6 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
                 <button
                     className={styles.refreshButton}
                     onClick={() => window.location.reload()}
-                    disabled={Object.values(vendorModels).some(v => v.loading)}
                 >
                     ↻ Refresh
                 </button>
@@ -132,8 +101,8 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
             {vendors.map(vendor => {
                 const isActive = isVendorActive(vendor)
                 const selectedModel = getSelectedModel(vendor)
-                const { models, loading, error } = vendorModels[vendor]
-                const disabled = loading || !models.length
+                const models = getModelsForVendor(vendor)
+                const disabled = models.length === 0
 
                 return (
                     <div key={vendor} className={styles.vendorBlock}>
@@ -153,7 +122,6 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
                             disabled={disabled}
                         >
                             {vendor}
-                            {loading && <span className={styles.spinner}></span>}
                         </button>
 
                         {isActive && models.length > 0 && (
@@ -163,7 +131,6 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
                                     setSelectedModelForAIVendor(vendor, e.target.value)
                                 }
                                 className={styles.modelSelect}
-                                disabled={loading}
                             >
                                 {models.map(model => (
                                     <option key={model} value={model}>
@@ -173,7 +140,9 @@ export default function AIVendorWidget({ collapsed = false }: Props): React.Reac
                             </select>
                         )}
 
-                        {error && <span className={styles.errorText}>{error}</span>}
+                        {!isActive && models.length === 0 && (
+                            <span className={styles.errorText}>No models available</span>
+                        )}
                     </div>
                 )
             })}
