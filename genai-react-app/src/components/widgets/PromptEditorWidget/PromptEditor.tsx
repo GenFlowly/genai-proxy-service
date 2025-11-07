@@ -75,7 +75,6 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
     return (
         <div className={styles.container}>
             <div className={styles.headerSection}>
-                <label className={styles.label}>Prompt</label>
                 <CopyToClipboard
                     content={block.prompt}
                     label="Copy"
