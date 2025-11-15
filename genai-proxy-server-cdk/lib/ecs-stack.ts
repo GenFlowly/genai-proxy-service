@@ -4,18 +4,14 @@ import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import {Construct} from 'constructs';
 import {
     InterfaceVpcEndpointAwsService,
-    Peer,
-    Port,
-    SecurityGroup,
     Vpc
 } from 'aws-cdk-lib/aws-ec2';
 import {
-    ALLOWED_HTTPS_PORT,
     ASG_CAPACITY,
     createDefaultVpc,
     STAGES
 } from "@genflowly/cdk-commons";
-import {IRepository, Repository} from "aws-cdk-lib/aws-ecr";
+import {IRepository} from "aws-cdk-lib/aws-ecr";
 import {ITable} from "aws-cdk-lib/aws-dynamodb";
 import {IKey} from "aws-cdk-lib/aws-kms";
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
@@ -49,40 +45,10 @@ export class EcsStack extends cdk.Stack {
             true
         );
 
-
         vpc.addGatewayEndpoint('S3Endpoint', {
             service: InterfaceVpcEndpointAwsService.S3,
         });
 
-        // Fix the interface endpoints with proper security groups
-        const vpcEndpointSecurityGroup = new SecurityGroup(this, 'VpcEndpointSecurityGroup', {
-            vpc,
-            description: 'Security group for VPC endpoints',
-            allowAllOutbound: true,
-        });
-
-        vpcEndpointSecurityGroup.addIngressRule(
-            Peer.ipv4(vpc.vpcCidrBlock),
-            Port.tcp(443),
-            'Allow HTTPS from VPC'
-        );
-
-        vpcEndpointSecurityGroup.addIngressRule(
-            Peer.ipv4(vpc.vpcCidrBlock),
-            Port.tcp(8080),
-            'Allow 8080 from VPC'
-        );
-
-
-        vpc.addInterfaceEndpoint('EcrApiEndpoint', {
-            service: InterfaceVpcEndpointAwsService.ECR,
-        });
-        vpc.addInterfaceEndpoint('EcrDkrEndpoint', {
-            service: InterfaceVpcEndpointAwsService.ECR_DOCKER,
-        });
-        vpc.addInterfaceEndpoint('CloudWatchLogsEndpoint', {
-            service: InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
-        });
 
         const cluster = new ecs.Cluster(
             this, `${props.serviceName}-${props.stage}-clusterId`, {
@@ -97,8 +63,7 @@ export class EcsStack extends cdk.Stack {
             }
         }
 
-        const imageTag = process.env.IMAGE_TAG
-
+        const imageTag = process.env.IMAGE_TAG;
 
         let domainNameFull: string | undefined = undefined;
         let certificate: acm.ICertificate | undefined = undefined;
@@ -112,7 +77,6 @@ export class EcsStack extends cdk.Stack {
             );
         }
 
-        // Fargate Service + ALB
         const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(
             this,
             `${props.serviceName}-${props.stage}-ServiceId`,
@@ -144,12 +108,11 @@ export class EcsStack extends cdk.Stack {
         );
 
         props.dynamoDbTableList.forEach((it) =>
-            it.grantReadWriteData(fargateService.taskDefinition.taskRole))
+            it.grantReadWriteData(fargateService.taskDefinition.taskRole));
 
         props.kmsKey.grantEncryptDecrypt(fargateService.taskDefinition.taskRole);
 
         fargateService.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
-
         fargateService.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30');
 
         new cdk.CfnOutput(this, 'EcsClusterName', {value: cluster.clusterName});
@@ -158,7 +121,5 @@ export class EcsStack extends cdk.Stack {
         if (domainNameFull) {
             new cdk.CfnOutput(this, 'CustomDomain', { value: domainNameFull });
         }
-
-
     }
 }
