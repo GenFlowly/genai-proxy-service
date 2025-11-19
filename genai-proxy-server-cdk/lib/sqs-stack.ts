@@ -21,7 +21,7 @@ export class SqsStack extends cdk.Stack {
             visibilityTimeout: cdk.Duration.seconds(300),
         });
 
-        new CfnOutput(this, 'IngestionQueueUrl', {
+        new CfnOutput(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-queue-output`, {
             value: this.ingestionQueue.queueUrl,
         });
     }

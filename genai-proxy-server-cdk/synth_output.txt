@@ -1,0 +1,67 @@
+
+> cdk-app-template@1.0.0 cdk
+> cdk synth GenAIWorkflowStack
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!                                                                            !!
+!!  Node 21 has reached end-of-life on 2024-06-01 and is not supported.       !!
+!!  Please upgrade to a supported node version as soon as possible.           !!
+!!                                                                            !!
+!!  This software is currently running on node v21.7.0.                       !!
+!!  As of the current release of this software, supported node releases are:  !!
+!!  - ^22.0.0 (Planned end-of-life: 2027-04-30)                               !!
+!!  - ^20.0.0 (Planned end-of-life: 2026-04-30)                               !!
+!!                                                                            !!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Add the above secrets to repository settings > Security > Actions
+[WARNING] aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+[WARNING] aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+[WARNING] aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+[WARNING] aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+[WARNING] aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+/Users/nk/workplace/genai-proxy-service/genai-proxy-server-cdk/lib/ecs-stack.ts:62
+                throw new Error(`Missing required environment variable: ${key}`);
+                      ^
+Error: Missing required environment variable: AUTH0_SPA_DOMAIN
+    at new EcsStack (/Users/nk/workplace/genai-proxy-service/genai-proxy-server-cdk/lib/ecs-stack.ts:62:23)
+    at Object.<anonymous> (/Users/nk/workplace/genai-proxy-service/genai-proxy-server-cdk/bin/cdk.ts:24:1)
+    at Module._compile (node:internal/modules/cjs/loader:1368:14)
+    at Module.m._compile (/Users/nk/workplace/genai-proxy-service/genai-proxy-server-cdk/node_modules/ts-node/src/index.ts:1618:23)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1426:10)
+    at Object.require.extensions.<computed> [as .ts] (/Users/nk/workplace/genai-proxy-service/genai-proxy-server-cdk/node_modules/ts-node/src/index.ts:1621:12)
+    at Module.load (node:internal/modules/cjs/loader:1205:32)
+    at Function.Module._load (node:internal/modules/cjs/loader:1021:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:142:12)
+    at phase4 (/Users/nk/workplace/genai-proxy-service/genai-proxy-server-cdk/node_modules/ts-node/src/bin.ts:649:14)
+
+NOTICES         (What's this? https://github.com/aws/aws-cdk/wiki/CLI-Notices)
+
+34892	CDK CLI will collect telemetry data on command usage starting at version 2.1100.0 (unless opted out)
+
+	Overview: We do not collect customer content and we anonymize the
+	          telemetry we do collect. See the attached issue for more
+	          information on what data is collected, why, and how to
+	          opt-out. Telemetry will NOT be collected for any CDK CLI
+	          version prior to version 2.1100.0 - regardless of
+	          opt-in/out. You can also preview the telemetry we will start
+	          collecting by logging it to a local file, by adding
+	          `--unstable=telemetry --telemetry-file=my/local/file` to any
+	          `cdk` command.
+
+	Affected versions: cli: ^2.0.0
+
+	More information at: https://github.com/aws/aws-cdk/issues/34892
+
+
+If you don’t want to see a notice anymore, use "cdk acknowledge <id>". For example, "cdk acknowledge 34892".
+Subprocess exited with error 1

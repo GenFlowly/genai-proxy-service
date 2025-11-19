@@ -32,7 +32,7 @@ export class ApiGatewayStack extends cdk.Stack {
         const syncResource = this.api.root.addResource('sync');
         syncResource.addMethod('POST', integration);
 
-        new CfnOutput(this, 'ApiEndpoint', {
+        new CfnOutput(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-apigw-ApiEndpoint`, {
             value: this.api.url,
         });
     }
