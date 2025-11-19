@@ -1,13 +1,13 @@
 import * as cdk from "aws-cdk-lib";
-import {STAGES} from "@genflowly/cdk-commons";
-import {Construct} from "constructs";
-import {EcsStackProps} from "./ecs-stack";
-import {CfnOutput, RemovalPolicy} from "aws-cdk-lib";
-import {IRepository, Repository} from "aws-cdk-lib/aws-ecr";
+import { STAGES } from "@genflowly/cdk-commons";
+import { Construct } from "constructs";
+import { EcsStackProps } from "./ecs-stack";
+import { CfnOutput, RemovalPolicy } from "aws-cdk-lib";
+import { IRepository, Repository } from "aws-cdk-lib/aws-ecr";
+import { RESOURCE_NAMES } from "./constants";
 
 
 export interface EcrStackProps extends cdk.StackProps {
-    serviceName: string;
     stage: STAGES;
 }
 
@@ -15,10 +15,12 @@ export interface EcrStackProps extends cdk.StackProps {
 export class EcrStack extends cdk.Stack {
 
     public readonly repository: IRepository;
+    public readonly processingRepository: IRepository;
+
     constructor(scope: Construct, id: string, props: EcrStackProps) {
         super(scope, id, props);
 
-        const repoName = `${props.serviceName}-${props.stage}-repo`;
+        const repoName = `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-repo`;
 
         let importedRepo: IRepository | undefined;
         try {
@@ -33,13 +35,23 @@ export class EcrStack extends cdk.Stack {
             lifecycleRules: [
                 { maxImageCount: 5, description: 'Keep last 5 images only' },
             ],
-            removalPolicy: RemovalPolicy.RETAIN,  // don't auto-delete on stack destroy
+            removalPolicy: RemovalPolicy.RETAIN,
         });
 
         this.repository = importedRepo ?? newRepo;
 
         new CfnOutput(this, 'EcrRepositoryUri', {
             value: this.repository.repositoryUri,
+        });
+
+        this.processingRepository = new Repository(this, 'ProcessingLambdaRepo', {
+            repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-repo`,
+            removalPolicy: RemovalPolicy.RETAIN,
+            lifecycleRules: [{ maxImageCount: 5 }],
+        });
+
+        new CfnOutput(this, 'ProcessingRepoUri', {
+            value: this.processingRepository.repositoryUri,
         });
 
     }
