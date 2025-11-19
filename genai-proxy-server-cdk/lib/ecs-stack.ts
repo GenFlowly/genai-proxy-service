@@ -15,9 +15,9 @@ import {IRepository} from "aws-cdk-lib/aws-ecr";
 import {ITable} from "aws-cdk-lib/aws-dynamodb";
 import {IKey} from "aws-cdk-lib/aws-kms";
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import {RESOURCE_NAMES} from "./constants";
 
 export interface EcsStackProps extends cdk.StackProps {
-    serviceName: string;
     stage: STAGES;
     ecrRepo: IRepository,
     dynamoDbTableList: ITable[];
@@ -32,13 +32,13 @@ export class EcsStack extends cdk.Stack {
         super(scope, id, props);
 
         const maxAzs: number = ASG_CAPACITY.MAX;
-        const vpcName = `${props.serviceName}-${props.stage}-vpc`;
-        const clusterName = `${props.serviceName}-${props.stage}-cluster`;
-        const containerName = `${props.serviceName}-${props.stage}-container`;
+        const vpcName = `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-vpc`;
+        const clusterName = `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-cluster`;
+        const containerName = `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-container`;
 
         const vpc: Vpc = createDefaultVpc(
             this,
-            `${props.serviceName}-${props.stage}-VpcId`,
+            `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-VpcId`,
             vpcName,
             maxAzs,
             props.stage,
@@ -51,7 +51,7 @@ export class EcsStack extends cdk.Stack {
 
 
         const cluster = new ecs.Cluster(
-            this, `${props.serviceName}-${props.stage}-clusterId`, {
+            this, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-clusterId`, {
                 clusterName,
                 vpc,
             });
@@ -79,10 +79,10 @@ export class EcsStack extends cdk.Stack {
 
         const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(
             this,
-            `${props.serviceName}-${props.stage}-ServiceId`,
+            `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-ServiceId`,
             {
                 cluster,
-                serviceName: `${props.serviceName}-${props.stage}`,
+                serviceName: `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}`,
                 desiredCount: 1,
                 cpu: 256,
                 memoryLimitMiB: 512,

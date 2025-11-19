@@ -2,10 +2,10 @@ import { Stack, StackProps, CfnOutput } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as cdk from "aws-cdk-lib";
-import {STAGES} from "@genflowly/cdk-commons";
+import { STAGES } from "@genflowly/cdk-commons";
+import { RESOURCE_NAMES } from "./constants";
 
 export interface KmsStackProps extends cdk.StackProps {
-    serviceName: string;
     stage: STAGES;
 }
 export class KmsStack extends Stack {
@@ -14,9 +14,9 @@ export class KmsStack extends Stack {
     constructor(scope: Construct, id: string, props: KmsStackProps) {
         super(scope, id, props);
 
-        this.kmsKey = new kms.Key(this, `${props.serviceName}-${props.stage}-key`, {
+        this.kmsKey = new kms.Key(this, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-key`, {
             enableKeyRotation: true,
-            alias: `${props.serviceName}-${props.stage}-vendor-api-key-encryption-key`,
+            alias: `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-vendor-api-key-encryption-key`,
             description: 'KMS key for encrypting user API keys stored in DynamoDB',
         });
 
