@@ -24,7 +24,7 @@ export class S3Stack extends cdk.Stack {
             blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         });
 
-        new CfnOutput(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-bucket`, {
+        new CfnOutput(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-bucket-output`, {
             value: this.rawEmailBucket.bucketName,
         });
     }

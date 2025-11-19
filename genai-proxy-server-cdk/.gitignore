@@ -16,3 +16,7 @@
 # js related
 *.js
 !jest.config.js
+
+
+!**/cdk.out/**
+!**/genai-proxy-server-cdk/cdk.out
