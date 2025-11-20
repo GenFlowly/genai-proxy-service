@@ -114,7 +114,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           IMAGE_TAG=${GITHUB_SHA::7}
-          docker buildx build --platform linux/arm64 -f Dockerfile.ingestion -t ingestion-lambda:$IMAGE_TAG --load .
+          docker build -f Dockerfile.ingestion -t ingestion-lambda:$IMAGE_TAG .
           docker tag ingestion-lambda:$IMAGE_TAG $ECR_REGISTRY/$PROCESSING_ECR_REPO:ingestion-$IMAGE_TAG
           echo "INGESTION_IMAGE_URI=$ECR_REGISTRY/$PROCESSING_ECR_REPO:ingestion-$IMAGE_TAG" >> $GITHUB_ENV
 
@@ -131,7 +131,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           IMAGE_TAG=${GITHUB_SHA::7}
-          docker buildx build --platform linux/arm64 -f Dockerfile.processing -t processing-lambda:$IMAGE_TAG --load .
+          docker build -f Dockerfile.processing -t processing-lambda:$IMAGE_TAG .
           docker tag processing-lambda:$IMAGE_TAG $ECR_REGISTRY/$PROCESSING_ECR_REPO:processing-$IMAGE_TAG
           echo "PROCESSING_IMAGE_URI=$ECR_REGISTRY/$PROCESSING_ECR_REPO:processing-$IMAGE_TAG" >> $GITHUB_ENV
 
