@@ -65,27 +65,37 @@ jobs:
         working-directory: ${{ env.CDK_APP_PATH }}
         run: cdk deploy $ECR_STACK_NAME --require-approval never
 
-      - name: Get ECR Repository URI
+      - name: Get ECR Repository URIs
         id: get-ecr-uri
         run: |
+          # Proxy service ECR repo
           ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name $ECR_STACK_NAME \
             --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
             --output text)
           echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
           echo "ECR_REPOSITORY_NAME=$(basename $ECR_URI)" >> $GITHUB_ENV
-          echo "Using ECR URI: $ECR_URI"
+          echo "Using Proxy Service ECR URI: $ECR_URI"
+          
+          # Lambda processing ECR repo
+          PROCESSING_ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name $ECR_STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='ProcessingRepoUri'].OutputValue" \
+            --output text)
+          echo "PROCESSING_ECR_URI=$PROCESSING_ECR_URI" >> $GITHUB_ENV
+          echo "PROCESSING_ECR_REPO=$(basename $PROCESSING_ECR_URI)" >> $GITHUB_ENV
+          echo "Using Processing Lambda ECR URI: $PROCESSING_ECR_URI"
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Docker image
+      - name: Build proxy service Docker image
         working-directory: ${{ env.SERVICE_APP_PATH }}
         run: |
           docker build -t $ECR_REPOSITORY_NAME .
 
-      - name: Tag and push Docker image to ECR
+      - name: Tag and push proxy service Docker image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
@@ -94,6 +104,40 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG" >> $GITHUB_ENV
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Build ingestion Lambda Docker image
+        working-directory: encoding-server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -f Dockerfile.ingestion -t ingestion-lambda:$IMAGE_TAG .
+          docker tag ingestion-lambda:$IMAGE_TAG $ECR_REGISTRY/$PROCESSING_ECR_REPO:ingestion-$IMAGE_TAG
+          echo "INGESTION_IMAGE_URI=$ECR_REGISTRY/$PROCESSING_ECR_REPO:ingestion-$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Push ingestion Lambda Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push $INGESTION_IMAGE_URI
+          echo "Pushed ingestion Lambda: $INGESTION_IMAGE_URI"
+
+      - name: Build processing Lambda Docker image
+        working-directory: encoding-server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -f Dockerfile.processing -t processing-lambda:$IMAGE_TAG .
+          docker tag processing-lambda:$IMAGE_TAG $ECR_REGISTRY/$PROCESSING_ECR_REPO:processing-$IMAGE_TAG
+          echo "PROCESSING_IMAGE_URI=$ECR_REGISTRY/$PROCESSING_ECR_REPO:processing-$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Push processing Lambda Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push $PROCESSING_IMAGE_URI
+          echo "Pushed processing Lambda: $PROCESSING_IMAGE_URI"
 
       - name: Deploy KMS stack
         working-directory: ${{ env.CDK_APP_PATH }}
@@ -129,6 +173,9 @@ jobs:
 
       - name: Deploy Lambda stack
         working-directory: ${{ env.CDK_APP_PATH }}
+        env:
+          INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
+          PROCESSING_IMAGE_URI: ${{ env.PROCESSING_IMAGE_URI }}
         run: cdk deploy LambdaStack --require-approval never
 
       - name: Deploy API Gateway stack

@@ -9,7 +9,7 @@ import { DockerImageCode, DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as path from 'path';
-import {RESOURCE_NAMES} from "./constants";
+import { RESOURCE_NAMES } from "./constants";
 
 export interface LambdaStackProps extends cdk.StackProps {
     stage: STAGES;
@@ -27,12 +27,22 @@ export class LambdaStack extends cdk.Stack {
         super(scope, id, props);
 
         /**
-         * Lamda - Validates payload, pushes to SQS.
+         * Ingestion Lambda - Validates payload, pushes to SQS.
+         * Uses pre-built Docker image from ECR (built in CI/CD pipeline).
          */
-        this.ingestionLambda = new lambda.Function(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`, {
-            runtime: lambda.Runtime.PYTHON_3_11,
-            handler: 'index.handler',
-            code: lambda.Code.fromAsset(path.join(__dirname, '../resources/ingestion')),
+        const ingestionImageUri = process.env.INGESTION_IMAGE_URI;
+
+        if (!ingestionImageUri) {
+            throw new Error('INGESTION_IMAGE_URI environment variable is required');
+        }
+
+        this.ingestionLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`, {
+            code: DockerImageCode.fromEcr(props.processingRepo, {
+                tagOrDigest: ingestionImageUri.split(':').pop() || 'latest',
+            }),
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(30),
+            architecture: lambda.Architecture.ARM_64,
             environment: {
                 QUEUE_URL: props.ingestionQueue.queueUrl,
             },
@@ -41,24 +51,38 @@ export class LambdaStack extends cdk.Stack {
         props.ingestionQueue.grantSendMessages(this.ingestionLambda);
 
         /**
-         * Lamda - Ingests email payload, encode it and stores it in S3.
+         * Processing Lambda - Ingests email payload, encodes it and stores it in Zilliz + S3.
+         * Uses heavy ML model (sentence-transformers) so requires more memory and timeout.
+         * Uses pre-built Docker image from ECR (built in CI/CD pipeline).
          */
         // TODO convert into step functions
 
         /**
-         * Increase quota in AWS
+         * Increase quota in AWS if needed for higher memory:
          * aws service-quotas request-service-quota-increase \
          *     --service-code lambda \
          *     --quota-code L-B99A9384 \
          *     --desired-value 10240
          */
+        const processingImageUri = process.env.PROCESSING_IMAGE_URI;
+
+        if (!processingImageUri) {
+            throw new Error('PROCESSING_IMAGE_URI environment variable is required');
+        }
+
         this.processingLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-lambda`, {
-            code: DockerImageCode.fromImageAsset(path.join(__dirname, '../resources/processing')),
+            code: DockerImageCode.fromEcr(props.processingRepo, {
+                tagOrDigest: processingImageUri.split(':').pop() || 'latest',
+            }),
             memorySize: 3008,
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.ARM_64,
             environment: {
                 BUCKET_NAME: props.rawEmailBucket.bucketName,
+                // Zilliz Cloud configuration - TODO: Move to Secrets Manager
+                ZILLIZ_ENDPOINT: 'https://in03-0e3d96c83ea3190.serverless.aws-eu-central-1.cloud.zilliz.com',
+                ZILLIZ_TOKEN: '27cc6072560645598da1fad99cc23a4f5bb89e916850c099d93a0e8128a5f853d9c586ee85e38147cd5006714234f94cdf247b5d',
+                COLLECTION_NAME: 'test',
             },
         });
 
