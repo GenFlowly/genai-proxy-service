@@ -44,9 +44,17 @@ export class LambdaStack extends cdk.Stack {
          * Lamda - Ingests email payload, encode it and stores it in S3.
          */
         // TODO convert into step functions
+
+        /**
+         * Increase quota in AWS
+         * aws service-quotas request-service-quota-increase \
+         *     --service-code lambda \
+         *     --quota-code L-B99A9384 \
+         *     --desired-value 10240
+         */
         this.processingLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-lambda`, {
             code: DockerImageCode.fromImageAsset(path.join(__dirname, '../resources/processing')),
-            memorySize: 10240,
+            memorySize: 3008,
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.ARM_64,
             environment: {
