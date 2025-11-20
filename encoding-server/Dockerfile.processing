@@ -1,0 +1,12 @@
+FROM public.ecr.aws/lambda/python:3.11-arm64
+
+# Copy application code
+COPY email_model.py ${LAMBDA_TASK_ROOT}/
+COPY processing_lambda.py ${LAMBDA_TASK_ROOT}/
+
+# Copy requirements and install dependencies
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt --target "${LAMBDA_TASK_ROOT}"
+
+# Set the handler
+CMD [ "processing_lambda.handler" ]
