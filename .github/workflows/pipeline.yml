@@ -174,13 +174,9 @@ jobs:
         working-directory: ${{ env.CDK_APP_PATH }}
         run: cdk deploy SqsStack --require-approval never
 
-      - name: Deploy Lambda stack
+      - name: Deploy Lambda and API Gateway stacks
         working-directory: ${{ env.CDK_APP_PATH }}
         env:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
           PROCESSING_IMAGE_URI: ${{ env.PROCESSING_IMAGE_URI }}
-        run: cdk deploy LambdaStack --require-approval never
-
-      - name: Deploy API Gateway stack
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy ApiGatewayStack --require-approval never
+        run: cdk deploy LambdaStack ApiGatewayStack --require-approval never
