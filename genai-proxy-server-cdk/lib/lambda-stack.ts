@@ -45,7 +45,7 @@ export class LambdaStack extends cdk.Stack {
             code: ingestionLambdaCode,
             memorySize: 512,
             timeout: cdk.Duration.seconds(30),
-            architecture: lambda.Architecture.ARM_64,
+            architecture: lambda.Architecture.X86_64,
             environment: {
                 QUEUE_URL: props.ingestionQueue.queueUrl,
             },
@@ -82,7 +82,7 @@ export class LambdaStack extends cdk.Stack {
             code: processingLambdaCode,
             memorySize: 3008,
             timeout: cdk.Duration.seconds(900),
-            architecture: lambda.Architecture.ARM_64,
+            architecture: lambda.Architecture.X86_64,
             environment: {
                 BUCKET_NAME: props.rawEmailBucket.bucketName,
                 // Zilliz Cloud configuration - TODO: Move to Secrets Manager
