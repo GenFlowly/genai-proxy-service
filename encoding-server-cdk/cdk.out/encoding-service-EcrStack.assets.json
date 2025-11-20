@@ -1,0 +1,20 @@
+{
+  "version": "41.0.0",
+  "files": {
+    "e17ad9cd274b613a922de3bd731b63fdcdb7aa77dfad26bcc7cb28dde4cc626d": {
+      "displayName": "encoding-service-EcrStack Template",
+      "source": {
+        "path": "encoding-service-EcrStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "e17ad9cd274b613a922de3bd731b63fdcdb7aa77dfad26bcc7cb28dde4cc626d.json",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

@@ -1,0 +1,483 @@
+{
+  "version": "41.0.0",
+  "artifacts": {
+    "encoding-service-EcrStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "encoding-service-EcrStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "encoding-service-EcrStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "encoding-service-EcrStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/e17ad9cd274b613a922de3bd731b63fdcdb7aa77dfad26bcc7cb28dde4cc626d.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "encoding-service-EcrStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "encoding-service-EcrStack.assets"
+      ],
+      "metadata": {
+        "/encoding-service-EcrStack/ProcessingLambdaRepo/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProcessingLambdaRepo9E47CA56"
+          }
+        ],
+        "/encoding-service-EcrStack/ProcessingRepoUri": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ProcessingRepoUri"
+          }
+        ],
+        "/encoding-service-EcrStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/encoding-service-EcrStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/encoding-service-EcrStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/encoding-service-EcrStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "encoding-service-EcrStack"
+    },
+    "encoding-service-S3Stack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "encoding-service-S3Stack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "encoding-service-S3Stack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "encoding-service-S3Stack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/0b3f1042724efbb2ef5643f84a946c3c265bc8157e243cebe8f75dbef537868b.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "encoding-service-S3Stack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "encoding-service-S3Stack.assets"
+      ],
+      "metadata": {
+        "/encoding-service-S3Stack/encoding-service-development-bucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentbucket058715A4"
+          }
+        ],
+        "/encoding-service-S3Stack/encoding-service-development-bucket-output": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentbucketoutput"
+          }
+        ],
+        "/encoding-service-S3Stack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/encoding-service-S3Stack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/encoding-service-S3Stack/Exports/Output{\"Fn::GetAtt\":[\"encodingservicedevelopmentbucket058715A4\",\"Arn\"]}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputFnGetAttencodingservicedevelopmentbucket058715A4Arn5C7FCCBB"
+          }
+        ],
+        "/encoding-service-S3Stack/Exports/Output{\"Ref\":\"encodingservicedevelopmentbucket058715A4\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefencodingservicedevelopmentbucket058715A4D091B63C"
+          }
+        ],
+        "/encoding-service-S3Stack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/encoding-service-S3Stack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "encoding-service-S3Stack"
+    },
+    "encoding-service-SqsStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "encoding-service-SqsStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "encoding-service-SqsStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "encoding-service-SqsStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/31e9d71a2cab4a349fb0dd66cbb73ee6c051132c1f2217d4e895cd4b2c9ceeea.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "encoding-service-SqsStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "encoding-service-SqsStack.assets"
+      ],
+      "metadata": {
+        "/encoding-service-SqsStack/encoding-service-development-queue/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentqueue16914A7B"
+          }
+        ],
+        "/encoding-service-SqsStack/encoding-service-development-queue-output": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentqueueoutput"
+          }
+        ],
+        "/encoding-service-SqsStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/encoding-service-SqsStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/encoding-service-SqsStack/Exports/Output{\"Fn::GetAtt\":[\"encodingservicedevelopmentqueue16914A7B\",\"Arn\"]}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputFnGetAttencodingservicedevelopmentqueue16914A7BArnC56A1507"
+          }
+        ],
+        "/encoding-service-SqsStack/Exports/Output{\"Ref\":\"encodingservicedevelopmentqueue16914A7B\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefencodingservicedevelopmentqueue16914A7B49C662AE"
+          }
+        ],
+        "/encoding-service-SqsStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/encoding-service-SqsStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "encoding-service-SqsStack"
+    },
+    "encoding-service-LambdaStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "encoding-service-LambdaStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "encoding-service-LambdaStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "encoding-service-LambdaStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/b7322f2901300a3d52699125dc993d71af48b2db679a868c5c44e7f37369cc7e.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "encoding-service-LambdaStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "encoding-service-SqsStack",
+        "encoding-service-S3Stack",
+        "encoding-service-LambdaStack.assets"
+      ],
+      "metadata": {
+        "/encoding-service-LambdaStack/encoding-service-development-ingestion-lambda/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentingestionlambdaServiceRoleB5FE491A"
+          }
+        ],
+        "/encoding-service-LambdaStack/encoding-service-development-ingestion-lambda/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentingestionlambdaServiceRoleDefaultPolicy01260E67"
+          }
+        ],
+        "/encoding-service-LambdaStack/encoding-service-development-ingestion-lambda/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentingestionlambdaBB7EA5F8"
+          }
+        ],
+        "/encoding-service-LambdaStack/encoding-service-development-processing-lambda/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentprocessinglambdaServiceRole8F788A76"
+          }
+        ],
+        "/encoding-service-LambdaStack/encoding-service-development-processing-lambda/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentprocessinglambdaServiceRoleDefaultPolicy07054CE2"
+          }
+        ],
+        "/encoding-service-LambdaStack/encoding-service-development-processing-lambda/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentprocessinglambda1307D1FD"
+          }
+        ],
+        "/encoding-service-LambdaStack/encoding-service-development-processing-lambda/SqsEventSource:encodingserviceSqsStackencodingservicedevelopmentqueue3057995A/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentprocessinglambdaSqsEventSourceencodingserviceSqsStackencodingservicedevelopmentqueue3057995A10027D4F"
+          }
+        ],
+        "/encoding-service-LambdaStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/encoding-service-LambdaStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/encoding-service-LambdaStack/Exports/Output{\"Fn::GetAtt\":[\"encodingservicedevelopmentingestionlambdaBB7EA5F8\",\"Arn\"]}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputFnGetAttencodingservicedevelopmentingestionlambdaBB7EA5F8Arn2A1D5B2A"
+          }
+        ],
+        "/encoding-service-LambdaStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/encoding-service-LambdaStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "encoding-service-LambdaStack"
+    },
+    "encoding-service-ApiGatewayStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "encoding-service-ApiGatewayStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "encoding-service-ApiGatewayStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "encoding-service-ApiGatewayStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/f8a7cdd570eb84fec9c4c651df5ffc998aab04cf26420bfb094eaef8a20fca4f.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "encoding-service-ApiGatewayStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "encoding-service-LambdaStack",
+        "encoding-service-ApiGatewayStack.assets"
+      ],
+      "metadata": {
+        "/encoding-service-ApiGatewayStack/WorkflowApi/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorkflowApiB9CC683F"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/WorkflowApi/DefaultStage/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorkflowApiDefaultStage4837899B"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/WorkflowApi/POST--sync/IngestionIntegration/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorkflowApiPOSTsyncIngestionIntegration3BE27E22"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/WorkflowApi/POST--sync/IngestionIntegration-Permission": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorkflowApiPOSTsyncIngestionIntegrationPermission815EBED4"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/WorkflowApi/POST--sync/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorkflowApiPOSTsync7CEDF252"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/WorkflowApi/Auth0Authorizer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "WorkflowApiAuth0AuthorizerC8C9067A"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/encoding-service-development-apigw-ApiEndpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentapigwApiEndpoint"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/encoding-service-development-apigw-Auth0Domain": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentapigwAuth0Domain"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/encoding-service-development-apigw-Auth0Issuer": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentapigwAuth0Issuer"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/encoding-service-development-apigw-Auth0Audience": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentapigwAuth0Audience"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/encoding-service-ApiGatewayStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "encoding-service-ApiGatewayStack"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  },
+  "minimumCliVersion": "2.1005.0"
+}
