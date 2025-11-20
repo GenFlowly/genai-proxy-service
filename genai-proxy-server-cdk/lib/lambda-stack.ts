@@ -28,18 +28,21 @@ export class LambdaStack extends cdk.Stack {
 
         /**
          * Ingestion Lambda - Validates payload, pushes to SQS.
-         * Uses pre-built Docker image from ECR (built in CI/CD pipeline).
+         * Uses pre-built Docker image from ECR if INGESTION_IMAGE_URI is set (CI/CD).
+         * Falls back to building from local Dockerfile if not set (local dev).
          */
         const ingestionImageUri = process.env.INGESTION_IMAGE_URI;
 
-        if (!ingestionImageUri) {
-            throw new Error('INGESTION_IMAGE_URI environment variable is required');
-        }
+        const ingestionLambdaCode = ingestionImageUri
+            ? DockerImageCode.fromEcr(props.processingRepo, {
+                tagOrDigest: ingestionImageUri.split(':').pop() || 'latest',
+            })
+            : DockerImageCode.fromImageAsset(path.join(__dirname, '../../encoding-server'), {
+                file: 'Dockerfile.ingestion',
+            });
 
         this.ingestionLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`, {
-            code: DockerImageCode.fromEcr(props.processingRepo, {
-                tagOrDigest: ingestionImageUri.split(':').pop() || 'latest',
-            }),
+            code: ingestionLambdaCode,
             memorySize: 512,
             timeout: cdk.Duration.seconds(30),
             architecture: lambda.Architecture.ARM_64,
@@ -53,7 +56,8 @@ export class LambdaStack extends cdk.Stack {
         /**
          * Processing Lambda - Ingests email payload, encodes it and stores it in Zilliz + S3.
          * Uses heavy ML model (sentence-transformers) so requires more memory and timeout.
-         * Uses pre-built Docker image from ECR (built in CI/CD pipeline).
+         * Uses pre-built Docker image from ECR if PROCESSING_IMAGE_URI is set (CI/CD).
+         * Falls back to building from local Dockerfile if not set (local dev).
          */
         // TODO convert into step functions
 
@@ -66,14 +70,16 @@ export class LambdaStack extends cdk.Stack {
          */
         const processingImageUri = process.env.PROCESSING_IMAGE_URI;
 
-        if (!processingImageUri) {
-            throw new Error('PROCESSING_IMAGE_URI environment variable is required');
-        }
+        const processingLambdaCode = processingImageUri
+            ? DockerImageCode.fromEcr(props.processingRepo, {
+                tagOrDigest: processingImageUri.split(':').pop() || 'latest',
+            })
+            : DockerImageCode.fromImageAsset(path.join(__dirname, '../../encoding-server'), {
+                file: 'Dockerfile.processing',
+            });
 
         this.processingLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-lambda`, {
-            code: DockerImageCode.fromEcr(props.processingRepo, {
-                tagOrDigest: processingImageUri.split(':').pop() || 'latest',
-            }),
+            code: processingLambdaCode,
             memorySize: 3008,
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.ARM_64,
