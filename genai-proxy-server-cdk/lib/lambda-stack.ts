@@ -46,8 +46,9 @@ export class LambdaStack extends cdk.Stack {
         // TODO convert into step functions
         this.processingLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-lambda`, {
             code: DockerImageCode.fromImageAsset(path.join(__dirname, '../resources/processing')),
-            memorySize: 4096,
-            timeout: cdk.Duration.seconds(300),
+            memorySize: 10240,
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.ARM_64,
             environment: {
                 BUCKET_NAME: props.rawEmailBucket.bucketName,
             },
