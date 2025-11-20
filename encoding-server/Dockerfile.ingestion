@@ -6,7 +6,7 @@ RUN yum install -y gcc gcc-c++ make cmake
 
 # Copy requirements
 COPY requirements.txt /tmp/
-RUN pip install --no-cache-dir -r /tmp/requirements.txt --target /tmp/python
+RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements.txt --target /tmp/python
 
 # Runtime stage - copy compiled dependencies
 FROM public.ecr.aws/lambda/python:3.11
