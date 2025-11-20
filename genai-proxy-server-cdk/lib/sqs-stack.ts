@@ -18,7 +18,7 @@ export class SqsStack extends cdk.Stack {
 
         this.ingestionQueue = new sqs.Queue(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-queue`, {
             queueName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-queue`,
-            visibilityTimeout: cdk.Duration.seconds(300),
+            visibilityTimeout: cdk.Duration.seconds(5400), // 6x Lambda timeout (900s) = 5400s
         });
 
         new CfnOutput(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-queue-output`, {
