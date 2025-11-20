@@ -7,6 +7,7 @@ on:
 env:
   AWS_REGION: us-east-1
   CDK_APP_PATH: genai-proxy-server-cdk
+  ENCODING_CDK_PATH: encoding-server-cdk
   SERVICE_APP_PATH: genai-proxy-server
   ECR_STACK_NAME: EcrStack
   AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
@@ -18,18 +19,11 @@ permissions:
   id-token: write
 
 jobs:
-  development:
+  proxy-server-development:
+    name: GenAI Proxy Server Deployment
     environment: development
     runs-on: ubuntu-latest
-    outputs:
-      image-uri: ${{ steps.push-image.outputs.image-uri }}
-      aws-region: ${{ steps.stack-outputs.outputs.aws-region }}
-      ecr-repo: ${{ steps.stack-outputs.outputs.ecr-repo }}
-      ecs-cluster: ${{ steps.stack-outputs.outputs.ecs-cluster }}
-      ecs-service: ${{ steps.stack-outputs.outputs.ecs-service }}
-
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -38,7 +32,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -56,8 +50,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: |
-          npm ci
+        run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
 
@@ -68,7 +61,6 @@ jobs:
       - name: Get ECR Repository URIs
         id: get-ecr-uri
         run: |
-          # Proxy service ECR repo
           ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name $ECR_STACK_NAME \
             --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
@@ -76,15 +68,6 @@ jobs:
           echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
           echo "ECR_REPOSITORY_NAME=$(basename $ECR_URI)" >> $GITHUB_ENV
           echo "Using Proxy Service ECR URI: $ECR_URI"
-          
-          # Lambda processing ECR repo
-          PROCESSING_ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name $ECR_STACK_NAME \
-            --query "Stacks[0].Outputs[?OutputKey=='ProcessingRepoUri'].OutputValue" \
-            --output text)
-          echo "PROCESSING_ECR_URI=$PROCESSING_ECR_URI" >> $GITHUB_ENV
-          echo "PROCESSING_ECR_REPO=$(basename $PROCESSING_ECR_URI)" >> $GITHUB_ENV
-          echo "Using Processing Lambda ECR URI: $PROCESSING_ECR_URI"
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -107,6 +90,74 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG" >> $GITHUB_ENV
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy KMS stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy KmsStack --require-approval never
+
+      - name: Deploy DynamoDB stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy DynamoDBStack --require-approval never
+
+      - name: Deploy ECS stack (CDK)
+        working-directory: ${{ env.CDK_APP_PATH }}
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: cdk deploy EcsStack --require-approval never
+
+  encoding-server-development:
+    name: Encoding Server Deployment
+    environment: development
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create .npmrc file
+        working-directory: ${{ env.ENCODING_CDK_PATH }}
+        run: |
+          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}" >> .npmrc
+
+      - name: Install CDK
+        run: npm install -g aws-cdk
+
+      - name: Install dependencies
+        working-directory: ${{ env.ENCODING_CDK_PATH }}
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
+
+      - name: Deploy ECR stack (CDK)
+        working-directory: ${{ env.ENCODING_CDK_PATH }}
+        run: cdk deploy $ECR_STACK_NAME --require-approval never
+
+      - name: Get ECR Repository URIs
+        id: get-ecr-uri
+        run: |
+          PROCESSING_ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name $ECR_STACK_NAME \
+            --query "Stacks[0].Outputs[?OutputKey=='ProcessingRepoUri'].OutputValue" \
+            --output text)
+          echo "PROCESSING_ECR_URI=$PROCESSING_ECR_URI" >> $GITHUB_ENV
+          echo "PROCESSING_ECR_REPO=$(basename $PROCESSING_ECR_URI)" >> $GITHUB_ENV
+          echo "Using Processing Lambda ECR URI: $PROCESSING_ECR_URI"
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build ingestion Lambda Docker image
         working-directory: encoding-server
@@ -142,43 +193,9 @@ jobs:
           docker push $PROCESSING_IMAGE_URI
           echo "Pushed processing Lambda: $PROCESSING_IMAGE_URI"
 
-      - name: Deploy KMS stack
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy KmsStack --require-approval never
-
-      - name: Get KMS Key ARN
-        id: get-kms-arn
-        run: |
-          KMS_KEY_ARN=$(aws cloudformation describe-stacks \
-            --stack-name KmsStack \
-            --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArnOutput'].OutputValue" \
-            --output text)
-          echo "KMS_KEY_ARN=$KMS_KEY_ARN" >> $GITHUB_ENV
-          echo "Using KMS Key ARN: $KMS_KEY_ARN"
-
-      - name: Deploy DynamoDB stack
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy DynamoDBStack --require-approval never
-
-      - name: Deploy ECS stack (CDK)
-        working-directory: ${{ env.CDK_APP_PATH }}
-        env:
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-        run: cdk deploy EcsStack --require-approval never
-
-      - name: Deploy S3 stack
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy S3Stack --require-approval never
-
-      - name: Deploy SQS stack
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy SqsStack --require-approval never
-
-#  CloudFormation can't update an export that's in use by another stack,
-#  so deploy the Lambda and API Gateway stacks together.
-      - name: Deploy Lambda and API Gateway stacks
-        working-directory: ${{ env.CDK_APP_PATH }}
+      - name: Deploy Infrastructure Stacks
+        working-directory: ${{ env.ENCODING_CDK_PATH }}
         env:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
           PROCESSING_IMAGE_URI: ${{ env.PROCESSING_IMAGE_URI }}
-        run: cdk deploy LambdaStack ApiGatewayStack --require-approval never
+        run: cdk deploy S3Stack SqsStack LambdaStack ApiGatewayStack --require-approval never
