@@ -118,3 +118,19 @@ jobs:
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: cdk deploy EcsStack --require-approval never
+
+      - name: Deploy S3 stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy S3Stack --require-approval never
+
+      - name: Deploy SQS stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy SqsStack --require-approval never
+
+      - name: Deploy Lambda stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy LambdaStack --require-approval never
+
+      - name: Deploy API Gateway stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy ApiGatewayStack --require-approval never
