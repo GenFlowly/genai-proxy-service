@@ -1,5 +1,10 @@
-FROM public.ecr.aws/lambda/python:3.11
+FROM public.ecr.aws/lambda/python:3.11-arm64
 
+# Copy your application code
 COPY app.py ${LAMBDA_TASK_ROOT}
+
+# If you have dependencies:
+# COPY requirements.txt .
+# RUN pip install -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
 
 CMD [ "app.handler" ]
