@@ -9,7 +9,6 @@ env:
   CDK_APP_PATH: genai-proxy-server-cdk
   ENCODING_CDK_PATH: encoding-server-cdk
   SERVICE_APP_PATH: genai-proxy-server
-  ECR_STACK_NAME: EcrStack
   AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
   AUTH0_SPA_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
   AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
@@ -56,13 +55,13 @@ jobs:
 
       - name: Deploy ECR stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy $ECR_STACK_NAME --require-approval never
+        run: cdk deploy gen-ai-proxy-service-EcrStack --require-approval never
 
       - name: Get ECR Repository URIs
         id: get-ecr-uri
         run: |
           ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name $ECR_STACK_NAME \
+            --stack-name gen-ai-proxy-service-EcrStack \
             --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
             --output text)
           echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
@@ -93,17 +92,18 @@ jobs:
 
       - name: Deploy KMS stack
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy KmsStack --require-approval never
+        run: cdk deploy gen-ai-proxy-service-KmsStack --require-approval never
 
       - name: Deploy DynamoDB stack
         working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy DynamoDBStack --require-approval never
+        run: cdk deploy gen-ai-proxy-service-DynamoDBStack --require-approval
+          never
 
       - name: Deploy ECS stack (CDK)
         working-directory: ${{ env.CDK_APP_PATH }}
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
-        run: cdk deploy EcsStack --require-approval never
+        run: cdk deploy gen-ai-proxy-service-EcsStack --require-approval never
 
   encoding-server-development:
     name: Encoding Server Deployment
@@ -142,13 +142,13 @@ jobs:
 
       - name: Deploy ECR stack (CDK)
         working-directory: ${{ env.ENCODING_CDK_PATH }}
-        run: cdk deploy $ECR_STACK_NAME --require-approval never
+        run: cdk deploy encoding-service-EcrStack --require-approval never
 
       - name: Get ECR Repository URIs
         id: get-ecr-uri
         run: |
           PROCESSING_ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name $ECR_STACK_NAME \
+            --stack-name encoding-service-EcrStack \
             --query "Stacks[0].Outputs[?OutputKey=='ProcessingRepoUri'].OutputValue" \
             --output text)
           echo "PROCESSING_ECR_URI=$PROCESSING_ECR_URI" >> $GITHUB_ENV
@@ -198,4 +198,4 @@ jobs:
         env:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
           PROCESSING_IMAGE_URI: ${{ env.PROCESSING_IMAGE_URI }}
-        run: cdk deploy S3Stack SqsStack LambdaStack ApiGatewayStack --require-approval never
+        run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-ApiGatewayStack --require-approval never
