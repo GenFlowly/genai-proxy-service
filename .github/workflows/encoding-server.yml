@@ -13,10 +13,11 @@ on:
 env:
   AWS_REGION: us-east-1
   ENCODING_CDK_PATH: encoding-server-cdk
+  AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
 
 jobs:
   deploy:
-    name: Deploy
+    name: Devo
     runs-on: ubuntu-latest
     environment: development
     steps:
