@@ -11,6 +11,7 @@ import { RESOURCE_NAMES } from './constants';
 export interface ApiGatewayStackProps extends cdk.StackProps {
     stage: STAGES;
     ingestionLambda: lambda.IFunction;
+    auth0Domain: string;
 }
 
 export class ApiGatewayStack extends cdk.Stack {
@@ -21,19 +22,15 @@ export class ApiGatewayStack extends cdk.Stack {
         super(scope, id, props);
 
         // Auth0 configuration
-        const auth0Domain = 'dev-abh5z7416lwy3xhv.us.auth0.com';
+        const auth0Domain = props.auth0Domain;
         const auth0Issuer = `https://${auth0Domain}/`;
-        const auth0Audience = process.env.AUTH0_API_AUDIENCE || 'https://genflowly-beta';
-
-        // Create JWT Authorizer for Auth0
-        const authorizer = new HttpJwtAuthorizer('Auth0Authorizer', auth0Issuer, {
-            jwtAudience: [auth0Audience],
-        });
 
         // Create HTTP API (v2) with CORS support
+        // We create the API first to get the endpoint URL for the audience
         this.api = new apigatewayv2.HttpApi(this, 'WorkflowApi', {
             apiName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-apigw`,
             description: 'Email encoding service API with Auth0 JWT authentication',
+            createDefaultStage: false, // We will create a named stage
             corsPreflight: {
                 allowOrigins: ['*'],
                 allowMethods: [
@@ -52,6 +49,23 @@ export class ApiGatewayStack extends cdk.Stack {
             },
         });
 
+        // Create a named stage
+        new apigatewayv2.HttpStage(this, 'Stage', {
+            httpApi: this.api,
+            stageName: props.stage,
+            autoDeploy: true,
+        });
+
+        // Use the API endpoint as the audience
+        // Note: api.apiEndpoint returns the base URL (e.g., https://xyz.execute-api.us-east-1.amazonaws.com)
+        // This matches the user's request.
+        const auth0Audience = this.api.apiEndpoint;
+
+        // Create JWT Authorizer for Auth0
+        const authorizer = new HttpJwtAuthorizer('Auth0Authorizer', auth0Issuer, {
+            jwtAudience: [auth0Audience],
+        });
+
         // Create Lambda integration
         const integration = new HttpLambdaIntegration(
             'IngestionIntegration',
@@ -68,7 +82,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
         // API endpoint output
         new CfnOutput(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-apigw-ApiEndpoint`, {
-            value: this.api.url || '',
+            value: `${this.api.apiEndpoint}/${props.stage}`, // Include stage in the output URL for convenience
             description: 'API Gateway endpoint URL',
         });
 
@@ -84,7 +98,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
         new CfnOutput(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-apigw-Auth0Audience`, {
             value: auth0Audience,
-            description: 'Auth0 API Audience (set AUTH0_API_AUDIENCE env var)',
+            description: 'Auth0 API Audience',
         });
     }
 }
