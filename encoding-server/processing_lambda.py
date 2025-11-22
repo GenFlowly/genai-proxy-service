@@ -3,9 +3,15 @@ import os
 import boto3
 import logging
 from typing import Dict, Any, List
-from sentence_transformers import SentenceTransformer
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient, model
 from email_model import EmailModel
+
+# Set cache directories to /tmp (only writable location in Lambda)
+os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
+os.environ['HF_HOME'] = '/tmp/huggingface'
+os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'
+os.environ['NUMBA_CACHE_DIR'] = '/tmp/numba_cache'
+os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp/joblib_tmp'
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -28,17 +34,25 @@ if not BUCKET_NAME:
     raise ValueError("BUCKET_NAME environment variable is required")
 
 # Initialize encoder model (loaded once per container)
-encoder = None
+# Using pymilvus DefaultEmbeddingFunction (768 dimensions, same as notebook)
+embedding_fn = None
 
 def get_encoder():
-    """Lazy load the sentence transformer model."""
-    global encoder
-    if encoder is None:
-        logger.info("Loading sentence transformer model...")
-        # Using a lightweight model suitable for Lambda (384 dimensions)
-        encoder = SentenceTransformer('all-MiniLM-L6-v2')
-        logger.info("Model loaded successfully")
-    return encoder
+    """Lazy load the embedding function."""
+    global embedding_fn
+    if embedding_fn is None:
+        logger.info("Loading embedding model...")
+        logger.info(f"Cache directory: {os.environ.get('TRANSFORMERS_CACHE')}")
+        
+        # Create cache directories if they don't exist
+        os.makedirs('/tmp/transformers_cache', exist_ok=True)
+        os.makedirs('/tmp/huggingface', exist_ok=True)
+        
+        # Use pymilvus DefaultEmbeddingFunction (same as working notebook)
+        # This uses sentence-transformers/all-MiniLM-L6-v2 with 384 dimensions
+        embedding_fn = model.DefaultEmbeddingFunction()
+        logger.info(f"Model loaded successfully. Dimension: {embedding_fn.dim}")
+    return embedding_fn
 
 def get_milvus_client():
     """Create Milvus client connection."""
@@ -49,9 +63,10 @@ def get_milvus_client():
 
 def encode_text(text: str) -> List[float]:
     """Encode text to vector embedding."""
-    model = get_encoder()
-    embedding = model.encode(text, convert_to_numpy=True)
-    return embedding.tolist()
+    encoder = get_encoder()
+    # DefaultEmbeddingFunction expects a list of documents
+    embeddings = encoder.encode_documents([text])
+    return embeddings[0].tolist() if hasattr(embeddings[0], 'tolist') else list(embeddings[0])
 
 def store_in_zilliz(email: EmailModel, embedding: List[float]) -> str:
     """Store email embedding in Zilliz Cloud."""
@@ -62,13 +77,13 @@ def store_in_zilliz(email: EmailModel, embedding: List[float]) -> str:
         data = [{
             "id": email.message_id,
             "vector": embedding,
-            "subject": email.subject,
-            "from_email": email.from_addr,
-            "to_email": ", ".join(email.to_addrs),  # Join list to string
+            "subject": email.subject[:500],  # Limit field size
+            "from_email": email.from_addr[:200],
+            "to_email": ", ".join(email.to_addrs)[:200],  # Join list to string
             "date": email.date.isoformat() if email.date else "",
-            "folder": email.folder,
-            "thread_id": email.thread_id or "",
-            "in_reply_to": email.in_reply_to or "",
+            "folder": email.folder[:100],
+            "thread_id": (email.thread_id or "")[:200],
+            "in_reply_to": (email.in_reply_to or "")[:200],
             "s3_key": f"emails/{email.folder}/{email.message_id}.json"
         }]
         
@@ -78,7 +93,7 @@ def store_in_zilliz(email: EmailModel, embedding: List[float]) -> str:
             data=data
         )
         
-        logger.info(f"Successfully inserted into Zilliz. Insert count: {result['insert_count']}")
+        logger.info(f"Successfully inserted into Zilliz. Insert count: {result.get('insert_count', 0)}")
         return email.message_id
         
     except Exception as e:
@@ -88,7 +103,9 @@ def store_in_zilliz(email: EmailModel, embedding: List[float]) -> str:
 def store_in_s3(email: EmailModel) -> str:
     """Store raw email data in S3 for backup."""
     try:
-        s3_key = f"emails/{email.folder}/{email.message_id}.json"
+        # Sanitize folder name for S3 key
+        folder_safe = email.folder.replace('/', '_').replace('\\', '_')
+        s3_key = f"emails/{folder_safe}/{email.message_id}.json"
         
         # Convert EmailModel to dict for storage
         email_dict = email.to_dict()
@@ -99,10 +116,10 @@ def store_in_s3(email: EmailModel) -> str:
             Body=json.dumps(email_dict, indent=2),
             ContentType='application/json',
             Metadata={
-                'messageId': email.message_id,
-                'from': email.from_addr,
+                'messageId': email.message_id[:200],
+                'from': email.from_addr[:200],
                 'subject': email.subject[:100],  # Limit metadata size
-                'folder': email.folder
+                'folder': folder_safe[:100]
             }
         )
         
@@ -119,17 +136,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     Processes email data from SQS:
     1. Parses EmailModel from SQS message
-    2. Encodes combined subject + body using sentence transformer
+    2. Encodes combined subject + body using DefaultEmbeddingFunction (768 dims)
     3. Stores embedding in Zilliz Cloud
     4. Backs up raw email to S3
+    
+    Returns batchItemFailures for SQS partial batch failure handling.
     """
     processed_count = 0
     failed_count = 0
+    batch_item_failures = []
     
     try:
         logger.info(f"Processing {len(event['Records'])} messages from SQS")
         
         for record in event['Records']:
+            message_id = record.get('messageId')
             try:
                 # Parse message body into EmailModel
                 email_dict = json.loads(record['body'])
@@ -158,27 +179,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 
             except Exception as e:
                 failed_count += 1
-                logger.error(f"Error processing message: {str(e)}", exc_info=True)
-                # Continue processing other messages
-                continue
+                logger.error(f"Error processing message {message_id}: {str(e)}", exc_info=True)
+                # Add to batch failures so SQS will retry or send to DLQ
+                batch_item_failures.append({"itemIdentifier": message_id})
         
         logger.info(f"Batch processing complete. Processed: {processed_count}, Failed: {failed_count}")
         
+        # Return batch item failures for SQS partial batch failure handling
         return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'processed': processed_count,
-                'failed': failed_count
-            })
+            'batchItemFailures': batch_item_failures
         }
         
     except Exception as e:
         logger.error(f"Fatal error in handler: {str(e)}", exc_info=True)
+        # Return all messages as failures on fatal error
         return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': 'Internal server error',
-                'processed': processed_count,
-                'failed': failed_count
-            })
+            'batchItemFailures': [
+                {"itemIdentifier": record.get('messageId')} 
+                for record in event.get('Records', [])
+            ]
         }
