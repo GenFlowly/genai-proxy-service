@@ -30,7 +30,7 @@ COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 
 # Copy application code
 COPY email_model.py ${LAMBDA_TASK_ROOT}/
-COPY processing_lambda.py ${LAMBDA_TASK_ROOT}/
+COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 
 # Set the handler
-CMD [ "processing_lambda.handler" ]
+CMD [ "handlers.processing_lambda.handler" ]
