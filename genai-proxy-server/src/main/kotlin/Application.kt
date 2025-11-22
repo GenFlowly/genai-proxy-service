@@ -65,15 +65,27 @@ fun Application.module() {
     }
 
     install(CORS) {
+        // Allow all origins for development
+        anyHost()
+        
         allowMethod(HttpMethod.Options)
         allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Post)
+        allowMethod(HttpMethod.Put)
+        allowMethod(HttpMethod.Delete)
+        allowMethod(HttpMethod.Patch)
+        
         allowHeader(HttpHeaders.ContentType)
         allowHeader(HttpHeaders.Authorization)
+        allowHeader(HttpHeaders.AccessControlAllowOrigin)
+        allowHeader(HttpHeaders.AccessControlAllowHeaders)
+        allowHeader(HttpHeaders.AccessControlAllowMethods)
+        
         allowCredentials = true
         allowNonSimpleContentTypes = true
-
-        allowHost("localhost:3000", schemes = listOf("http"))
+        
+        // For production, replace anyHost() with specific hosts:
+        // allowHost("localhost:3000", schemes = listOf("http"))
         // allowHost("your-frontend-domain.com", schemes = listOf("https"))
     }
 
