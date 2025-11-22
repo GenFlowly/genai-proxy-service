@@ -18,8 +18,35 @@ permissions:
   id-token: write
 
 jobs:
+  # Detect which services have changes
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      proxy-server: ${{ steps.filter.outputs.proxy-server }}
+      encoding-server: ${{ steps.filter.outputs.encoding-server }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            proxy-server:
+              - 'genai-proxy-server/**'
+              - 'genai-proxy-server-cdk/**'
+              - '.github/workflows/pipeline.yml'
+            encoding-server:
+              - 'encoding-server/**'
+              - 'encoding-server-cdk/**'
+              - '.github/workflows/pipeline.yml'
+
   proxy-server-development:
     name: GenAI Proxy Server Deployment
+    needs: detect-changes
+    if: needs.detect-changes.outputs.proxy-server == 'true'
     environment: development
     runs-on: ubuntu-latest
     steps:
@@ -107,6 +134,8 @@ jobs:
 
   encoding-server-development:
     name: Encoding Server Deployment
+    needs: detect-changes
+    if: needs.detect-changes.outputs.encoding-server == 'true'
     environment: development
     runs-on: ubuntu-latest
     steps:
