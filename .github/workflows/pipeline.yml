@@ -38,200 +38,32 @@ jobs:
               - 'genai-proxy-server/**'
               - 'genai-proxy-server-cdk/**'
               - '.github/workflows/pipeline.yml'
+              - '.github/workflows/proxy-server.yml'
             encoding-server:
               - 'encoding-server/**'
               - 'encoding-server-cdk/**'
               - '.github/workflows/pipeline.yml'
+              - '.github/workflows/encoding-server.yml'
 
   proxy-server-development:
     name: GenAI Proxy Server Deployment
     needs: detect-changes
     if: needs.detect-changes.outputs.proxy-server == 'true'
-    environment: development
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Create .npmrc file
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: |
-          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}" >> .npmrc
-
-      - name: Install CDK
-        run: npm install -g aws-cdk
-
-      - name: Install dependencies
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
-
-      - name: Deploy ECR stack (CDK)
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy gen-ai-proxy-service-EcrStack --require-approval never
-
-      - name: Get ECR Repository URIs
-        id: get-ecr-uri
-        run: |
-          ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name gen-ai-proxy-service-EcrStack \
-            --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
-            --output text)
-          echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
-          echo "ECR_REPOSITORY_NAME=$(basename $ECR_URI)" >> $GITHUB_ENV
-          echo "Using Proxy Service ECR URI: $ECR_URI"
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build proxy service Docker image
-        working-directory: ${{ env.SERVICE_APP_PATH }}
-        run: |
-          docker build -t $ECR_REPOSITORY_NAME .
-
-      - name: Tag and push proxy service Docker image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          IMAGE_TAG=${GITHUB_SHA::7}
-          docker tag $ECR_REPOSITORY_NAME:latest $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG
-          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG" >> $GITHUB_ENV
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-
-      - name: Deploy KMS stack
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy gen-ai-proxy-service-KmsStack --require-approval never
-
-      - name: Deploy DynamoDB stack
-        working-directory: ${{ env.CDK_APP_PATH }}
-        run: cdk deploy gen-ai-proxy-service-DynamoDBStack --require-approval
-          never
-
-      - name: Deploy ECS stack (CDK)
-        working-directory: ${{ env.CDK_APP_PATH }}
-        env:
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-        run: cdk deploy gen-ai-proxy-service-EcsStack --require-approval never
+    uses: ./.github/workflows/proxy-server.yml
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GH_PAT_TOKEN_FOR_FREE_ACCOUNT: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
+      AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+      AUTH0_SPA_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
+      AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
 
   encoding-server-development:
     name: Encoding Server Deployment
     needs: detect-changes
     if: needs.detect-changes.outputs.encoding-server == 'true'
-    environment: development
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Create .npmrc file
-        working-directory: ${{ env.ENCODING_CDK_PATH }}
-        run: |
-          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}" >> .npmrc
-
-      - name: Install CDK
-        run: npm install -g aws-cdk
-
-      - name: Install dependencies
-        working-directory: ${{ env.ENCODING_CDK_PATH }}
-        run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
-
-      - name: Bootstrap ECR stack if needed (first deployment only)
-        working-directory: ${{ env.ENCODING_CDK_PATH }}
-        run: |
-          # Check if ECR stack exists
-          if ! aws cloudformation describe-stacks --stack-name encoding-service-EcrStack 2>/dev/null; then
-            echo "ECR stack doesn't exist, deploying it first..."
-            cdk deploy encoding-service-EcrStack --require-approval never
-          else
-            echo "ECR stack already exists, will update with all stacks together"
-          fi
-
-      - name: Get ECR Repository URIs
-        id: get-ecr-uri
-        run: |
-          PROCESSING_ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name encoding-service-EcrStack \
-            --query "Stacks[0].Outputs[?OutputKey=='ProcessingRepoUri'].OutputValue" \
-            --output text)
-          echo "PROCESSING_ECR_URI=$PROCESSING_ECR_URI" >> $GITHUB_ENV
-          echo "PROCESSING_ECR_REPO=$(basename $PROCESSING_ECR_URI)" >> $GITHUB_ENV
-          echo "Using Processing Lambda ECR URI: $PROCESSING_ECR_URI"
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build ingestion Lambda Docker image
-        working-directory: encoding-server
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          IMAGE_TAG=${GITHUB_SHA::7}
-          docker build -f Dockerfile.ingestion -t ingestion-lambda:$IMAGE_TAG .
-          docker tag ingestion-lambda:$IMAGE_TAG $ECR_REGISTRY/$PROCESSING_ECR_REPO:ingestion-$IMAGE_TAG
-          echo "INGESTION_IMAGE_URI=$ECR_REGISTRY/$PROCESSING_ECR_REPO:ingestion-$IMAGE_TAG" >> $GITHUB_ENV
-
-      - name: Push ingestion Lambda Docker image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          docker push $INGESTION_IMAGE_URI
-          echo "Pushed ingestion Lambda: $INGESTION_IMAGE_URI"
-
-      - name: Build processing Lambda Docker image
-        working-directory: encoding-server
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          IMAGE_TAG=${GITHUB_SHA::7}
-          docker build -f Dockerfile.processing -t processing-lambda:$IMAGE_TAG .
-          docker tag processing-lambda:$IMAGE_TAG $ECR_REGISTRY/$PROCESSING_ECR_REPO:processing-$IMAGE_TAG
-          echo "PROCESSING_IMAGE_URI=$ECR_REGISTRY/$PROCESSING_ECR_REPO:processing-$IMAGE_TAG" >> $GITHUB_ENV
-
-      - name: Push processing Lambda Docker image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          docker push $PROCESSING_IMAGE_URI
-          echo "Pushed processing Lambda: $PROCESSING_IMAGE_URI"
-
-      - name: Deploy All Infrastructure Stacks Together
-        working-directory: ${{ env.ENCODING_CDK_PATH }}
-        env:
-          INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
-          PROCESSING_IMAGE_URI: ${{ env.PROCESSING_IMAGE_URI }}
-        run: cdk deploy encoding-service-EcrStack encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-ApiGatewayStack --require-approval never
+    uses: ./.github/workflows/encoding-server.yml
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GH_PAT_TOKEN_FOR_FREE_ACCOUNT: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
