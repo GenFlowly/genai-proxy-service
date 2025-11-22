@@ -20,7 +20,7 @@ permissions:
 jobs:
   # Detect which services have changes
   detect-changes:
-    name: Detect Changed Services
+    name: Detect Deployment Targets
     runs-on: ubuntu-latest
     outputs:
       proxy-server: ${{ steps.filter.outputs.proxy-server }}

@@ -32,14 +32,13 @@ export class LambdaStack extends cdk.Stack {
          * Falls back to building from local Dockerfile if not set (local dev).
          */
         const ingestionImageUri = process.env.INGESTION_IMAGE_URI;
+        if (!ingestionImageUri) {
+            throw new Error('INGESTION_IMAGE_URI environment variable is required');
+        }
 
-        const ingestionLambdaCode = ingestionImageUri
-            ? DockerImageCode.fromEcr(props.processingRepo, {
-                tagOrDigest: ingestionImageUri.split(':').pop() || 'latest',
-            })
-            : DockerImageCode.fromImageAsset(path.join(__dirname, '../../encoding-server'), {
-                file: 'Dockerfile.ingestion',
-            });
+        const ingestionLambdaCode = DockerImageCode.fromEcr(props.processingRepo, {
+            tagOrDigest: ingestionImageUri.split(':').pop() || 'latest',
+        });
 
         this.ingestionLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`, {
             code: ingestionLambdaCode,
@@ -57,7 +56,6 @@ export class LambdaStack extends cdk.Stack {
          * Processing Lambda - Ingests email payload, encodes it and stores it in Zilliz + S3.
          * Uses heavy ML model (sentence-transformers) so requires more memory and timeout.
          * Uses pre-built Docker image from ECR if PROCESSING_IMAGE_URI is set (CI/CD).
-         * Falls back to building from local Dockerfile if not set (local dev).
          */
         // TODO convert into step functions
 
@@ -69,14 +67,13 @@ export class LambdaStack extends cdk.Stack {
          *     --desired-value 10240
          */
         const processingImageUri = process.env.PROCESSING_IMAGE_URI;
+        if (!processingImageUri) {
+            throw new Error('PROCESSING_IMAGE_URI environment variable is required');
+        }
 
-        const processingLambdaCode = processingImageUri
-            ? DockerImageCode.fromEcr(props.processingRepo, {
-                tagOrDigest: processingImageUri.split(':').pop() || 'latest',
-            })
-            : DockerImageCode.fromImageAsset(path.join(__dirname, '../../encoding-server'), {
-                file: 'Dockerfile.processing',
-            });
+        const processingLambdaCode = DockerImageCode.fromEcr(props.processingRepo, {
+            tagOrDigest: processingImageUri.split(':').pop() || 'latest',
+        });
 
         this.processingLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-lambda`, {
             code: processingLambdaCode,
