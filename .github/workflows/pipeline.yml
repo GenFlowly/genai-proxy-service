@@ -169,9 +169,16 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
 
-      - name: Deploy ECR stack (CDK)
+      - name: Bootstrap ECR stack if needed (first deployment only)
         working-directory: ${{ env.ENCODING_CDK_PATH }}
-        run: cdk deploy encoding-service-EcrStack --require-approval never
+        run: |
+          # Check if ECR stack exists
+          if ! aws cloudformation describe-stacks --stack-name encoding-service-EcrStack 2>/dev/null; then
+            echo "ECR stack doesn't exist, deploying it first..."
+            cdk deploy encoding-service-EcrStack --require-approval never
+          else
+            echo "ECR stack already exists, will update with all stacks together"
+          fi
 
       - name: Get ECR Repository URIs
         id: get-ecr-uri
@@ -222,9 +229,9 @@ jobs:
           docker push $PROCESSING_IMAGE_URI
           echo "Pushed processing Lambda: $PROCESSING_IMAGE_URI"
 
-      - name: Deploy Infrastructure Stacks
+      - name: Deploy All Infrastructure Stacks Together
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         env:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
           PROCESSING_IMAGE_URI: ${{ env.PROCESSING_IMAGE_URI }}
-        run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-ApiGatewayStack --require-approval never
+        run: cdk deploy encoding-service-EcrStack encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-ApiGatewayStack --require-approval never
