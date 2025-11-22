@@ -48,6 +48,9 @@ out/
 
 
 # cdk
-!**/cdk.out/**
-!**/genai-proxy-server-cdk/cdk.out
-genai-proxy-server-cdk/cdk.out/**!/genai-proxy-server-cdk/cdk.out/
+cdk.out/
+**/cdk.out/
+
+# Python cache
+__pycache__/
+**/__pycache__/
