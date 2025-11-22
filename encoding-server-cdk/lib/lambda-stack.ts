@@ -8,35 +8,40 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { DockerImageCode, DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as path from 'path';
 import { RESOURCE_NAMES } from "./constants";
 
 export interface LambdaStackProps extends cdk.StackProps {
     stage: STAGES;
-    ingestionQueue: sqs.IQueue;
     rawEmailBucket: s3.IBucket;
-    processingRepo: ecr.IRepository;
+    ingestionQueue: sqs.IQueue;
+    ingestionRepo: ecr.IRepository;
+    encodeRepo: ecr.IRepository;
+    storeEmbeddingsRepo: ecr.IRepository;
+    storeS3Repo: ecr.IRepository;
 }
 
 export class LambdaStack extends cdk.Stack {
 
     public readonly ingestionLambda: lambda.Function;
-    public readonly processingLambda: DockerImageFunction;
+    public readonly encodeLambda: DockerImageFunction;
+    public readonly storeEmbeddingsLambda: DockerImageFunction;
+    public readonly storeS3Lambda: DockerImageFunction;
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
 
         /**
          * Ingestion Lambda - Validates payload, pushes to SQS.
-         * Uses pre-built Docker image from ECR if INGESTION_IMAGE_URI is set (CI/CD).
-         * Falls back to building from local Dockerfile if not set (local dev).
          */
         const ingestionImageUri = process.env.INGESTION_IMAGE_URI;
         if (!ingestionImageUri) {
             throw new Error('INGESTION_IMAGE_URI environment variable is required');
         }
 
-        const ingestionLambdaCode = DockerImageCode.fromEcr(props.processingRepo, {
+        const ingestionLambdaCode = DockerImageCode.fromEcr(props.ingestionRepo, {
             tagOrDigest: ingestionImageUri.split(':').pop() || 'latest',
         });
 
@@ -53,35 +58,31 @@ export class LambdaStack extends cdk.Stack {
         props.ingestionQueue.grantSendMessages(this.ingestionLambda);
 
         /**
-         * Processing Lambda - Ingests email payload, encodes it and stores it in Zilliz + S3.
-         * Uses heavy ML model (sentence-transformers) so requires more memory and timeout.
-         * Uses pre-built Docker image from ECR if PROCESSING_IMAGE_URI is set (CI/CD).
+         * Processing Workflow
+         * Split into 3 steps: Encode -> Store Zilliz -> Store S3
          */
-        // TODO convert into step functions
 
-        /**
-         * Increase quota in AWS if needed for higher memory:
-         * aws service-quotas request-service-quota-increase \
-         *     --service-code lambda \
-         *     --quota-code L-B99A9384 \
-         *     --desired-value 10240
-         */
-        const processingImageUri = process.env.PROCESSING_IMAGE_URI;
-        if (!processingImageUri) {
-            throw new Error('PROCESSING_IMAGE_URI environment variable is required');
-        }
-
-        const processingLambdaCode = DockerImageCode.fromEcr(props.processingRepo, {
-            tagOrDigest: processingImageUri.split(':').pop() || 'latest',
+        // 1. Encode Lambda
+        this.encodeLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`, {
+            code: DockerImageCode.fromEcr(props.encodeRepo, {
+                tagOrDigest: 'encode-latest',
+                cmd: ['handlers.encode.handler'],
+            }),
+            memorySize: 3008, // Needs memory for model
+            timeout: cdk.Duration.seconds(300),
+            architecture: lambda.Architecture.X86_64,
         });
 
-        this.processingLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-lambda`, {
-            code: processingLambdaCode,
-            memorySize: 3008,
-            timeout: cdk.Duration.seconds(900),
+        // 2. Store Embeddings Lambda
+        this.storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
+            code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
+                tagOrDigest: 'store-embeddings-latest',
+                cmd: ['handlers.store_embeddings_in_vector_db.handler'],
+            }),
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(60),
             architecture: lambda.Architecture.X86_64,
             environment: {
-                BUCKET_NAME: props.rawEmailBucket.bucketName,
                 // Zilliz Cloud configuration - TODO: Move to Secrets Manager
                 ZILLIZ_ENDPOINT: 'https://in03-0e3d96c83ea3190.serverless.aws-eu-central-1.cloud.zilliz.com',
                 ZILLIZ_TOKEN: '27cc6072560645598da1fad99cc23a4f5bb89e916850c099d93a0e8128a5f853d9c586ee85e38147cd5006714234f94cdf247b5d',
@@ -89,12 +90,20 @@ export class LambdaStack extends cdk.Stack {
             },
         });
 
-        props.ingestionQueue.grantConsumeMessages(this.processingLambda);
+        // 3. Store S3 Lambda
+        this.storeS3Lambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`, {
+            code: DockerImageCode.fromEcr(props.storeS3Repo, {
+                tagOrDigest: 'store-s3-latest',
+                cmd: ['handlers.store_s3.handler'],
+            }),
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(60),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                BUCKET_NAME: props.rawEmailBucket.bucketName,
+            },
+        });
 
-        this.processingLambda.addEventSource(new SqsEventSource(props.ingestionQueue, {
-            reportBatchItemFailures: true,
-        }));
-
-        props.rawEmailBucket.grantPut(this.processingLambda);
+        props.rawEmailBucket.grantPut(this.storeS3Lambda);
     }
 }
