@@ -54,3 +54,7 @@ cdk.out/
 # Python cache
 __pycache__/
 **/__pycache__/
+
+# Milvus
+**/.milvus_demo*
+**/milvus*
