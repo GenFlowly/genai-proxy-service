@@ -76,16 +76,11 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
 
-      - name: Bootstrap ECR stack if needed (first deployment only)
+      - name: Deploy ECR stack first to ensure outputs are available
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         run: |
-          # Check if ECR stack exists
-          if ! aws cloudformation describe-stacks --stack-name encoding-service-EcrStack 2>/dev/null; then
-            echo "ECR stack doesn't exist, deploying it first..."
-            cdk deploy encoding-service-EcrStack --require-approval never
-          else
-            echo "ECR stack already exists, will update with all stacks together"
-          fi
+          echo "Deploying ECR stack to ensure repository outputs are available..."
+          cdk deploy encoding-service-EcrStack --require-approval never
 
       - name: Get ECR Repository URIs
         id: get-ecr-uri
