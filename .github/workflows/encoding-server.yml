@@ -29,10 +29,12 @@ jobs:
         with:
           filters: |
             ingestion:
-              - 'encoding-server/ingestion_lambda.py'
+              - 'encoding-server/handlers/ingestion_lambda.py'
               - 'encoding-server/Dockerfile.ingestion'
+              - 'encoding-server/factory/**'
+              - 'encoding-server/processors/**'
             processing:
-              - 'encoding-server/processing_lambda.py'
+              - 'encoding-server/handlers/processing_lambda.py'
               - 'encoding-server/Dockerfile.processing'
             shared:
               - 'encoding-server/requirements.txt'

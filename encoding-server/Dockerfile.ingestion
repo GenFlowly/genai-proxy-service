@@ -16,7 +16,9 @@ COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 
 # Copy application code
 COPY email_model.py ${LAMBDA_TASK_ROOT}/
-COPY ingestion_lambda.py ${LAMBDA_TASK_ROOT}/
+COPY handlers ${LAMBDA_TASK_ROOT}/handlers
+COPY factory ${LAMBDA_TASK_ROOT}/factory
+COPY processors ${LAMBDA_TASK_ROOT}/processors
 
 # Set the handler
-CMD [ "ingestion_lambda.handler" ]
+CMD [ "handlers.ingestion_lambda.handler" ]

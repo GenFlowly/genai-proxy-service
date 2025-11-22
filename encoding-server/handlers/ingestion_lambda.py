@@ -3,7 +3,7 @@ import os
 import boto3
 import logging
 from typing import Dict, Any
-from email_model import EmailModel
+from factory.processor_factory import ProcessorFactory
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -15,28 +15,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Ingestion Lambda - Receives requests from API Gateway and sends to SQS.
     
-    Supports both single email and batch (array) of emails.
-    
-    Single email format:
-    {
-        "message_id": "unique-message-id",
-        "subject": "Email subject",
-        "body": "Email body text",
-        "from": "sender@email.com",
-        "to": ["recipient@email.com"],
-        "date": "2024-01-01T00:00:00Z",
-        "folder": "inbox",
-        "references": [],
-        "in_reply_to": null,
-        "thread_id": null
-    }
-    
-    Batch format (array of emails):
-    [
-        { email1 },
-        { email2 },
-        ...
-    ]
+    Supports both single object and batch (array) of objects.
+    Uses ProcessorFactory to handle different data types (e.g. Email).
     """
     try:
         logger.info(f"Received event: {json.dumps(event)}")
@@ -52,65 +32,45 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         # Check if body is an array (batch) or single object
         is_batch = isinstance(body, list)
-        emails_to_process = body if is_batch else [body]
+        items_to_process = body if is_batch else [body]
         
-        logger.info(f"Processing {'batch' if is_batch else 'single'} request with {len(emails_to_process)} email(s)")
+        logger.info(f"Processing {'batch' if is_batch else 'single'} request with {len(items_to_process)} item(s)")
         
-        # Process each email
-        required_fields = ['message_id', 'subject', 'body', 'from', 'to', 'date', 'folder']
+        # Process each item
         processed_count = 0
         failed_count = 0
         errors = []
         sqs_message_ids = []
         
-        for idx, email_data in enumerate(emails_to_process):
+        for idx, item_data in enumerate(items_to_process):
             try:
-                # Validate required fields
-                missing_fields = [field for field in required_fields if field not in email_data]
+                # Get appropriate processor for the data
+                processor = ProcessorFactory.get_processor(item_data)
                 
-                if missing_fields:
-                    error_msg = f"Email {idx}: Missing required fields: {missing_fields}"
-                    logger.error(error_msg)
-                    errors.append(error_msg)
-                    failed_count += 1
-                    continue
+                # Validate data
+                processor.validate(item_data)
                 
-                # Validate EmailModel can be created
-                try:
-                    email_model = EmailModel.from_dict(email_data)
-                    logger.info(f"Email {idx}: Validated EmailModel for message_id: {email_model.message_id}")
-                except Exception as e:
-                    error_msg = f"Email {idx}: Invalid EmailModel data: {str(e)}"
-                    logger.error(error_msg)
-                    errors.append(error_msg)
-                    failed_count += 1
-                    continue
-                
-                # Convert to dict for SQS (ensures proper serialization)
-                email_dict = email_model.to_dict()
+                # Convert to SQS message format
+                message_body, message_attributes = processor.to_sqs_message(item_data)
                 
                 # Send to SQS
                 response = sqs.send_message(
                     QueueUrl=QUEUE_URL,
-                    MessageBody=json.dumps(email_dict),
-                    MessageAttributes={
-                        'messageId': {
-                            'StringValue': email_model.message_id,
-                            'DataType': 'String'
-                        },
-                        'folder': {
-                            'StringValue': email_model.folder,
-                            'DataType': 'String'
-                        }
-                    }
+                    MessageBody=message_body,
+                    MessageAttributes=message_attributes
                 )
                 
                 sqs_message_ids.append(response['MessageId'])
                 processed_count += 1
-                logger.info(f"Email {idx}: Successfully sent to SQS. MessageId: {response['MessageId']}")
+                logger.info(f"Item {idx}: Successfully sent to SQS. MessageId: {response['MessageId']}")
                 
+            except ValueError as ve:
+                error_msg = f"Item {idx}: Validation error: {str(ve)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+                failed_count += 1
             except Exception as e:
-                error_msg = f"Email {idx}: Error processing: {str(e)}"
+                error_msg = f"Item {idx}: Error processing: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 errors.append(error_msg)
                 failed_count += 1
@@ -125,7 +85,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'Access-Control-Allow-Origin': '*'
                 },
                 'body': json.dumps({
-                    'error': 'All emails failed validation',
+                    'error': 'All items failed validation/processing',
                     'processed': processed_count,
                     'failed': failed_count,
                     'errors': errors
@@ -140,7 +100,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'Access-Control-Allow-Origin': '*'
             },
             'body': json.dumps({
-                'message': f'Processed {processed_count} email(s) for ingestion',
+                'message': f'Processed {processed_count} item(s) for ingestion',
                 'processed': processed_count,
                 'failed': failed_count,
                 'sqsMessageIds': sqs_message_ids,
