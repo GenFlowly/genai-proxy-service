@@ -1,4 +1,4 @@
-name: Encoding Server Deployment
+name: Encoding Server
 
 on:
   workflow_call:
@@ -16,7 +16,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy Encoding Server
+    name: Deploy
     runs-on: ubuntu-latest
     environment: development
     steps:
@@ -131,7 +131,7 @@ jobs:
           docker push $PROCESSING_IMAGE_URI
           echo "Pushed processing Lambda: $PROCESSING_IMAGE_URI"
 
-      - name: Deploy All Infrastructure Stacks Together
+      - name: Deploy EcrStack, S3Stack, SqsStack, LambdaStack, ApiGatewayStack
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         env:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
