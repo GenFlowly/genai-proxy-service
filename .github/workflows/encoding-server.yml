@@ -76,10 +76,11 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
 
-      - name: Deploy ECR stack first to ensure outputs are available
+
+      - name: Deploy ECR stack first to create repositories
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         run: |
-          echo "Deploying ECR stack to ensure repository outputs are available..."
+          echo "Deploying ECR stack to create repositories..."
           cdk deploy encoding-service-EcrStack --require-approval never
 
       - name: Get ECR Repository URIs
@@ -91,7 +92,7 @@ jobs:
             --output text)
           echo "INGESTION_ECR_URI=$INGESTION_ECR_URI" >> $GITHUB_ENV
           echo "INGESTION_ECR_REPO=$(basename $INGESTION_ECR_URI)" >> $GITHUB_ENV
-          echo "Using Ingestion Lambda ECR URI: $INGESTION_ECR_URI"
+          echo "Using Ingestion Lambda ECR: $INGESTION_ECR_URI"
           
           ENCODE_ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name encoding-service-EcrStack \
@@ -99,7 +100,7 @@ jobs:
             --output text)
           echo "ENCODE_ECR_URI=$ENCODE_ECR_URI" >> $GITHUB_ENV
           echo "ENCODE_ECR_REPO=$(basename $ENCODE_ECR_URI)" >> $GITHUB_ENV
-          echo "Using Encode Lambda ECR URI: $ENCODE_ECR_URI"
+          echo "Using Encode Lambda ECR: $ENCODE_ECR_URI"
           
           STORE_EMBEDDINGS_ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name encoding-service-EcrStack \
@@ -107,7 +108,7 @@ jobs:
             --output text)
           echo "STORE_EMBEDDINGS_ECR_URI=$STORE_EMBEDDINGS_ECR_URI" >> $GITHUB_ENV
           echo "STORE_EMBEDDINGS_ECR_REPO=$(basename $STORE_EMBEDDINGS_ECR_URI)" >> $GITHUB_ENV
-          echo "Using Store Embeddings Lambda ECR URI: $STORE_EMBEDDINGS_ECR_URI"
+          echo "Using Store Embeddings Lambda ECR: $STORE_EMBEDDINGS_ECR_URI"
           
           STORE_S3_ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name encoding-service-EcrStack \
@@ -115,7 +116,7 @@ jobs:
             --output text)
           echo "STORE_S3_ECR_URI=$STORE_S3_ECR_URI" >> $GITHUB_ENV
           echo "STORE_S3_ECR_REPO=$(basename $STORE_S3_ECR_URI)" >> $GITHUB_ENV
-          echo "Using Store S3 Lambda ECR URI: $STORE_S3_ECR_URI"
+          echo "Using Store S3 Lambda ECR: $STORE_S3_ECR_URI"
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -226,8 +227,8 @@ jobs:
             echo "Using default store s3 image: store-s3-latest"
           fi
 
-      - name: Deploy EcrStack, S3Stack, SqsStack, LambdaStack, ApiGatewayStack
+      - name: Deploy S3Stack, SqsStack, LambdaStack, StepFunctionsStack, ApiGatewayStack
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         env:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
-        run: cdk deploy encoding-service-EcrStack encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsStack encoding-service-ApiGatewayStack --require-approval never
+        run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsStack encoding-service-ApiGatewayStack --require-approval never
