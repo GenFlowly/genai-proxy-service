@@ -94,7 +94,9 @@ export class LambdaStack extends cdk.Stack {
 
         props.ingestionQueue.grantConsumeMessages(this.processingLambda);
 
-        this.processingLambda.addEventSource(new SqsEventSource(props.ingestionQueue));
+        this.processingLambda.addEventSource(new SqsEventSource(props.ingestionQueue, {
+            reportBatchItemFailures: true,
+        }));
 
         props.rawEmailBucket.grantPut(this.processingLambda);
     }
