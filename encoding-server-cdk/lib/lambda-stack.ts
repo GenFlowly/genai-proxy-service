@@ -34,15 +34,11 @@ export class LambdaStack extends cdk.Stack {
         super(scope, id, props);
 
         /**
-         * Ingestion Lambda - Validates payload, pushes to SQS.
+         * Ingestion Lambda
+         * Validates payloads and pushes to SQS
          */
-        const ingestionImageUri = process.env.INGESTION_IMAGE_URI;
-        if (!ingestionImageUri) {
-            throw new Error('INGESTION_IMAGE_URI environment variable is required');
-        }
-
         const ingestionLambdaCode = DockerImageCode.fromEcr(props.ingestionRepo, {
-            tagOrDigest: ingestionImageUri.split(':').pop() || 'latest',
+            tagOrDigest: 'ingestion-latest',
         });
 
         this.ingestionLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`, {
