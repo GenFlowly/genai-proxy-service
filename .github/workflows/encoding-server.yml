@@ -134,7 +134,6 @@ jobs:
           df -h
 
       - name: Build ingestion Lambda Docker image
-        if: steps.filter.outputs.ingestion == 'true' || steps.filter.outputs.shared == 'true'
         working-directory: encoding-server
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -146,7 +145,6 @@ jobs:
           echo "INGESTION_IMAGE_URI=$ECR_REGISTRY/$INGESTION_ECR_REPO:ingestion-$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Push ingestion Lambda Docker image to ECR
-        if: steps.filter.outputs.ingestion == 'true' || steps.filter.outputs.shared == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
@@ -155,7 +153,6 @@ jobs:
           echo "Pushed ingestion Lambda: $INGESTION_IMAGE_URI and ingestion-latest"
 
       - name: Build Encode Lambda Docker image
-        if: steps.filter.outputs.processing == 'true' || steps.filter.outputs.shared == 'true'
         working-directory: encoding-server
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -167,7 +164,6 @@ jobs:
           echo "ENCODE_IMAGE_URI=$ECR_REGISTRY/$ENCODE_ECR_REPO:encode-$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Push Encode Lambda Docker image to ECR
-        if: steps.filter.outputs.processing == 'true' || steps.filter.outputs.shared == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
@@ -176,7 +172,6 @@ jobs:
           echo "Pushed Encode Lambda: $ENCODE_IMAGE_URI and encode-latest"
 
       - name: Build Store Embeddings Lambda Docker image
-        if: steps.filter.outputs.processing == 'true' || steps.filter.outputs.shared == 'true'
         working-directory: encoding-server
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -188,7 +183,6 @@ jobs:
           echo "STORE_EMBEDDINGS_IMAGE_URI=$ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Push Store Embeddings Lambda Docker image to ECR
-        if: steps.filter.outputs.processing == 'true' || steps.filter.outputs.shared == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
@@ -197,7 +191,6 @@ jobs:
           echo "Pushed Store Embeddings Lambda: $STORE_EMBEDDINGS_IMAGE_URI and store-embeddings-latest"
 
       - name: Build Store S3 Lambda Docker image
-        if: steps.filter.outputs.processing == 'true' || steps.filter.outputs.shared == 'true'
         working-directory: encoding-server
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -209,7 +202,6 @@ jobs:
           echo "STORE_S3_IMAGE_URI=$ECR_REGISTRY/$STORE_S3_ECR_REPO:store-s3-$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Push Store S3 Lambda Docker image to ECR
-        if: steps.filter.outputs.processing == 'true' || steps.filter.outputs.shared == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
