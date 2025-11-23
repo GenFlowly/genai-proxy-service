@@ -19,4 +19,4 @@ COPY email_model.py ${LAMBDA_TASK_ROOT}/
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 
 # CMD will be overridden by CDK, but setting a default
-CMD [ "handlers.store_s3.handler" ]
+CMD [ "handlers.store_in_s3_lambda.handler" ]

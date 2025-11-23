@@ -13,6 +13,7 @@ QUEUE_URL = os.environ.get('QUEUE_URL')
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
+    First lambda in encoding server
     Ingestion Lambda - Receives requests from API Gateway and sends to SQS.
     
     Supports both single object and batch (array) of objects.
