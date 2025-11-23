@@ -128,6 +128,7 @@ jobs:
           docker tag ingestion-lambda:$IMAGE_TAG $ECR_REGISTRY/$INGESTION_ECR_REPO:ingestion-$IMAGE_TAG
           docker tag ingestion-lambda:$IMAGE_TAG $ECR_REGISTRY/$INGESTION_ECR_REPO:ingestion-latest
           echo "INGESTION_IMAGE_URI=$ECR_REGISTRY/$INGESTION_ECR_REPO:ingestion-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "INGESTION_IMAGE_TAG=ingestion-$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Push ingestion Lambda Docker image to ECR
         env:
@@ -147,6 +148,7 @@ jobs:
           docker tag encode-lambda:$IMAGE_TAG $ECR_REGISTRY/$ENCODE_ECR_REPO:encode-$IMAGE_TAG
           docker tag encode-lambda:$IMAGE_TAG $ECR_REGISTRY/$ENCODE_ECR_REPO:encode-latest
           echo "ENCODE_IMAGE_URI=$ECR_REGISTRY/$ENCODE_ECR_REPO:encode-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "ENCODE_IMAGE_TAG=encode-$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Push Encode Lambda Docker image to ECR
         env:
@@ -166,6 +168,7 @@ jobs:
           docker tag store-embeddings-lambda:$IMAGE_TAG $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-$IMAGE_TAG
           docker tag store-embeddings-lambda:$IMAGE_TAG $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-latest
           echo "STORE_EMBEDDINGS_IMAGE_URI=$ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "STORE_EMBEDDINGS_IMAGE_TAG=store-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Push Store Embeddings Lambda Docker image to ECR
         env:
@@ -185,6 +188,7 @@ jobs:
           docker tag store-s3-lambda:$IMAGE_TAG $ECR_REGISTRY/$STORE_S3_ECR_REPO:store-s3-$IMAGE_TAG
           docker tag store-s3-lambda:$IMAGE_TAG $ECR_REGISTRY/$STORE_S3_ECR_REPO:store-s3-latest
           echo "STORE_S3_IMAGE_URI=$ECR_REGISTRY/$STORE_S3_ECR_REPO:store-s3-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "STORE_S3_IMAGE_TAG=store-s3-$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Push Store S3 Lambda Docker image to ECR
         env:
@@ -198,4 +202,8 @@ jobs:
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         env:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
+          INGESTION_IMAGE_TAG: ${{ env.INGESTION_IMAGE_TAG }}
+          ENCODE_IMAGE_TAG: ${{ env.ENCODE_IMAGE_TAG }}
+          STORE_EMBEDDINGS_IMAGE_TAG: ${{ env.STORE_EMBEDDINGS_IMAGE_TAG }}
+          STORE_S3_IMAGE_TAG: ${{ env.STORE_S3_IMAGE_TAG }}
         run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsStack encoding-service-ApiGatewayStack --require-approval never

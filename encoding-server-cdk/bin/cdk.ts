@@ -26,6 +26,10 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     encodeRepo: ecrStack.encodeRepo,
     storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
     storeS3Repo: ecrStack.storeS3Repo,
+    ingestionImageTag: process.env.INGESTION_IMAGE_TAG,
+    encodeImageTag: process.env.ENCODE_IMAGE_TAG,
+    storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG,
+    storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG,
 });
 
 const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsStack`, {
