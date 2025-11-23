@@ -19,31 +19,34 @@ export class EcrStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props: EcrStackProps) {
         super(scope, id, props);
 
+        // Use DESTROY for development, RETAIN for production
+        const removalPolicy = props.stage === STAGES.BETA ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
+
         // Ingestion Lambda Repository
         this.ingestionRepo = new Repository(this, 'IngestionLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-repo`,
-            removalPolicy: RemovalPolicy.RETAIN,
+            removalPolicy: removalPolicy,
             lifecycleRules: [{ maxImageCount: 5 }],
         });
 
         // Encode Lambda Repository
         this.encodeRepo = new Repository(this, 'EncodeLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-repo`,
-            removalPolicy: RemovalPolicy.RETAIN,
+            removalPolicy: removalPolicy,
             lifecycleRules: [{ maxImageCount: 5 }],
         });
 
         // Store Embeddings Lambda Repository
         this.storeEmbeddingsRepo = new Repository(this, 'StoreEmbeddingsLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-repo`,
-            removalPolicy: RemovalPolicy.RETAIN,
+            removalPolicy: removalPolicy,
             lifecycleRules: [{ maxImageCount: 5 }],
         });
 
         // Store S3 Lambda Repository (shared with trigger)
         this.storeS3Repo = new Repository(this, 'StoreS3LambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-repo`,
-            removalPolicy: RemovalPolicy.RETAIN,
+            removalPolicy: removalPolicy,
             lifecycleRules: [{ maxImageCount: 5 }],
         });
 

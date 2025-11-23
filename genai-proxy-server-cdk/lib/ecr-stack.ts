@@ -20,13 +20,16 @@ export class EcrStack extends cdk.Stack {
 
         const repoName = `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-repo`;
 
+        const removalPolicy = props.stage === STAGES.BETA ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
+
+
         this.repository = new Repository(this, `${repoName}-id`, {
             repositoryName: repoName,
             imageScanOnPush: true,
             lifecycleRules: [
                 {maxImageCount: 5, description: 'Keep last 5 images only'},
             ],
-            removalPolicy: RemovalPolicy.RETAIN,
+            removalPolicy: removalPolicy,
         });
 
         new CfnOutput(this, 'EcrRepositoryUri', {
