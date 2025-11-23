@@ -32,6 +32,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Parse message body
                 body = json.loads(record['body'])
                 
+                # Extract customerId from message attributes
+                message_attributes = record.get('messageAttributes', {})
+                customer_id = message_attributes.get('customerId', {}).get('stringValue')
+                
+                if customer_id:
+                    body['customerId'] = customer_id
+                    logger.info(f"Added customerId {customer_id} to payload for message {message_id}")
+                
                 # Start Synchronous Execution
                 logger.info(f"Starting execution for message {message_id}")
                 response = sfn.start_sync_execution(

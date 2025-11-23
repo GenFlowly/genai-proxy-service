@@ -11,6 +11,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as path from 'path';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { RESOURCE_NAMES } from "./constants";
 
 export interface LambdaStackProps extends cdk.StackProps {
@@ -27,6 +28,7 @@ export interface LambdaStackProps extends cdk.StackProps {
     storeS3ImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
+    customerProfileTableName: string;
 }
 
 export class LambdaStack extends cdk.Stack {
@@ -38,6 +40,9 @@ export class LambdaStack extends cdk.Stack {
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
+
+        // Import CustomerProfile table
+        const customerProfileTable = dynamodb.Table.fromTableName(this, 'CustomerProfileTable', props.customerProfileTableName);
 
         /**
          * Ingestion Lambda
@@ -55,10 +60,12 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
             environment: {
                 QUEUE_URL: props.ingestionQueue.queueUrl,
+                CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
             },
         });
 
         props.ingestionQueue.grantSendMessages(this.ingestionLambda);
+        customerProfileTable.grantReadData(this.ingestionLambda);
 
         /**
          * Processing Workflow

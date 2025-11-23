@@ -16,7 +16,7 @@ class DataProcessor(ABC):
         pass
 
     @abstractmethod
-    def to_sqs_message(self, data: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    def to_sqs_message(self, data: Dict[str, Any], customer_id: str = None) -> Tuple[str, Dict[str, Any]]:
         """
         Convert data to SQS message format.
         Returns a tuple of (MessageBody, MessageAttributes).

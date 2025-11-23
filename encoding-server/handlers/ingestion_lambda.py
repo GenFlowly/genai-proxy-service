@@ -4,6 +4,7 @@ import boto3
 import logging
 from typing import Dict, Any
 from factory.processor_factory import ProcessorFactory
+from services.authorization_service import AuthorizationService
 
 # Trigger build - separated ECR repos
 
@@ -12,6 +13,9 @@ logger.setLevel(logging.INFO)
 
 sqs = boto3.client('sqs')
 QUEUE_URL = os.environ.get('QUEUE_URL')
+
+# Initialize Authorization Service
+auth_service = AuthorizationService()
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
@@ -23,6 +27,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         logger.info(f"Received event: {json.dumps(event)}")
+        
+        # 1. Authorization Check: Verify user exists in DynamoDB and get customerId
+        is_authorized, customer_id, error_response = auth_service.verify_user(event)
+        if not is_authorized:
+            return error_response
+        
+        # 2. Process Data
         
         # Extract body from API Gateway event
         if 'body' in event:
@@ -54,7 +65,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 processor.validate(item_data)
                 
                 # Convert to SQS message format
-                message_body, message_attributes = processor.to_sqs_message(item_data)
+                message_body, message_attributes = processor.to_sqs_message(item_data, customer_id)
                 
                 # Send to SQS
                 response = sqs.send_message(
@@ -81,7 +92,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Return appropriate response
         if failed_count > 0 and processed_count == 0:
             # All failed
-
             return {
                 'statusCode': 400,
                 'headers': {
