@@ -33,4 +33,4 @@ COPY email_model.py ${LAMBDA_TASK_ROOT}/
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 
 # Set the handler
-CMD [ "handlers.encode.handler" ]
+CMD [ "handlers.encode_lambda.handler" ]
