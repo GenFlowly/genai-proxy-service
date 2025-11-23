@@ -39,6 +39,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 )
                 
                 # Check status
+                #
                 if response['status'] != 'SUCCEEDED':
                     logger.error(f"Execution failed for {message_id}: {response.get('error')} - {response.get('cause')}")
                     batch_item_failures.append({"itemIdentifier": message_id})

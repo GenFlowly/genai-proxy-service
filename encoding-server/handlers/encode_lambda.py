@@ -18,6 +18,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Initialize encoder model (loaded once per container)
+#
 embedding_fn = None
 
 def get_encoder():

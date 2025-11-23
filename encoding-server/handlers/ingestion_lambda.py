@@ -79,6 +79,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Return appropriate response
         if failed_count > 0 and processed_count == 0:
             # All failed
+
             return {
                 'statusCode': 400,
                 'headers': {

@@ -18,6 +18,7 @@ def store_in_s3(email: EmailModel) -> str:
     """Store raw email data in S3 for backup."""
     try:
         # Sanitize folder name for S3 key
+        #
         folder_safe = email.folder.replace('/', '_').replace('\\', '_')
         s3_key = f"emails/{folder_safe}/{email.message_id}.json"
         
