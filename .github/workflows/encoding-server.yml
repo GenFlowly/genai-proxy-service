@@ -9,11 +9,19 @@ on:
         required: true
       GH_PAT_TOKEN_FOR_FREE_ACCOUNT:
         required: true
+      AUTH0_SPA_DOMAIN:
+        required: true
+      ZILLIZ_ENDPOINT:
+        required: true
+      ZILLIZ_TOKEN:
+        required: true
 
 env:
   AWS_REGION: us-east-1
   ENCODING_CDK_PATH: encoding-server-cdk
   AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+  ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
+  ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
 
 jobs:
   deploy:
@@ -57,6 +65,12 @@ jobs:
         run: |
           echo "Deploying ECR stack to create repositories..."
           cdk deploy encoding-service-EcrStack --require-approval never
+        env:
+          # Dummy values to satisfy bin/cdk.ts validation during ECR stack deployment
+          INGESTION_IMAGE_TAG: "placeholder"
+          ENCODE_IMAGE_TAG: "placeholder"
+          STORE_EMBEDDINGS_IMAGE_TAG: "placeholder"
+          STORE_S3_IMAGE_TAG: "placeholder"
 
       - name: Get ECR Repository URIs
         id: get-ecr-uri
@@ -207,4 +221,6 @@ jobs:
           STORE_EMBEDDINGS_IMAGE_TAG: ${{ env.STORE_EMBEDDINGS_IMAGE_TAG }}
           STORE_S3_IMAGE_TAG: ${{ env.STORE_S3_IMAGE_TAG }}
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
+          ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
+          ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
         run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsStack encoding-service-ApiGatewayStack --require-approval never

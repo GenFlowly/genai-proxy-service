@@ -30,7 +30,17 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     encodeImageTag: process.env.ENCODE_IMAGE_TAG,
     storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG,
     storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG,
+    zillizEndpoint: process.env.ZILLIZ_ENDPOINT!,
+    zillizToken: process.env.ZILLIZ_TOKEN!,
 });
+
+if (!process.env.INGESTION_IMAGE_TAG || !process.env.ENCODE_IMAGE_TAG || !process.env.STORE_EMBEDDINGS_IMAGE_TAG || !process.env.STORE_S3_IMAGE_TAG) {
+    throw new Error('Image tags (INGESTION_IMAGE_TAG, ENCODE_IMAGE_TAG, STORE_EMBEDDINGS_IMAGE_TAG, STORE_S3_IMAGE_TAG) are required');
+}
+
+if (!process.env.ZILLIZ_ENDPOINT || !process.env.ZILLIZ_TOKEN) {
+    throw new Error('Zilliz configuration (ZILLIZ_ENDPOINT, ZILLIZ_TOKEN) is required');
+}
 
 const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsStack`, {
     stage,

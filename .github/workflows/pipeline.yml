@@ -67,3 +67,6 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       GH_PAT_TOKEN_FOR_FREE_ACCOUNT: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
+      AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+      ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
+      ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}

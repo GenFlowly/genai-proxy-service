@@ -25,6 +25,8 @@ export interface LambdaStackProps extends cdk.StackProps {
     encodeImageTag?: string;
     storeEmbeddingsImageTag?: string;
     storeS3ImageTag?: string;
+    zillizEndpoint: string;
+    zillizToken: string;
 }
 
 export class LambdaStack extends cdk.Stack {
@@ -86,9 +88,8 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(60),
             architecture: lambda.Architecture.X86_64,
             environment: {
-                // Zilliz Cloud configuration - TODO: Move to Secrets Manager
-                ZILLIZ_ENDPOINT: 'https://in03-0e3d96c83ea3190.serverless.aws-eu-central-1.cloud.zilliz.com',
-                ZILLIZ_TOKEN: '27cc6072560645598da1fad99cc23a4f5bb89e916850c099d93a0e8128a5f853d9c586ee85e38147cd5006714234f94cdf247b5d',
+                ZILLIZ_ENDPOINT: props.zillizEndpoint,
+                ZILLIZ_TOKEN: props.zillizToken,
                 COLLECTION_NAME: 'test',
             },
         });
