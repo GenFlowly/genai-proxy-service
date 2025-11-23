@@ -47,9 +47,13 @@ class AuthorizationService:
                 }
                 
             # Check if user exists in CustomerProfile table
-            response = self.table.get_item(Key={'sub': user_sub})
+            # Table has composite key (sub, client), so we must use query instead of get_item
+            from boto3.dynamodb.conditions import Key
+            response = self.table.query(
+                KeyConditionExpression=Key('sub').eq(user_sub)
+            )
             
-            if 'Item' not in response:
+            if not response.get('Items'):
                 logger.warning(f"User {user_sub} not found in CustomerProfile table")
                 return False, None, {
                     'statusCode': 403,
@@ -60,7 +64,9 @@ class AuthorizationService:
                     'body': json.dumps({'error': 'Forbidden: User profile not found'})
                 }
             
-            item = response['Item']
+            # Use the first item found (assuming sub is unique enough for identity, 
+            # or we just take the first client profile associated with this sub)
+            item = response['Items'][0]
             customer_id = item.get('customerId')
             
             if not customer_id:
