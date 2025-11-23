@@ -4,6 +4,8 @@ from typing import Dict, Any, List
 from pymilvus import MilvusClient
 from email_model import EmailModel
 
+# Trigger build - separated ECR repos
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 

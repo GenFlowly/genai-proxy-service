@@ -3,6 +3,8 @@ import os
 import logging
 from typing import Dict, Any
 
+# Trigger build - separated ECR repos
+
 # Trigger rebuild for initial deployment, List
 from pymilvus import model
 from email_model import EmailModel

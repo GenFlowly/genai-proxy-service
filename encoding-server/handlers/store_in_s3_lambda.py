@@ -5,6 +5,8 @@ import logging
 from typing import Dict, Any
 from email_model import EmailModel
 
+# Trigger build - separated ECR repos
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
