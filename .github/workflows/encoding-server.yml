@@ -24,31 +24,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check for changes in Lambdas
-        uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            ingestion:
-              - 'encoding-server/handlers/ingestion_lambda.py'
-              - 'encoding-server/Dockerfile.ingestion'
-              - 'encoding-server/factory/**'
-              - 'encoding-server/processors/**'
-            processing:
-              - 'encoding-server/handlers/encode_lambda.py'
-              - 'encoding-server/handlers/store_embeddings_lambda.py'
-              - 'encoding-server/handlers/store_in_s3_lambda.py'
-              - 'encoding-server/handlers/trigger_lambda.py'
-              - 'encoding-server/Dockerfile.encode'
-              - 'encoding-server/Dockerfile.store_embeddings'
-              - 'encoding-server/Dockerfile.store_s3'
-              - 'encoding-server/requirements-encode.txt'
-              - 'encoding-server/requirements-store-embeddings.txt'
-              - 'encoding-server/requirements-store-s3.txt'
-            shared:
-              - 'encoding-server/requirements.txt'
-              - 'encoding-server/email_model.py'
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -208,27 +183,6 @@ jobs:
           docker push $STORE_S3_IMAGE_URI
           docker push $ECR_REGISTRY/$STORE_S3_ECR_REPO:store-s3-latest
           echo "Pushed Store S3 Lambda: $STORE_S3_IMAGE_URI and store-s3-latest"
-
-      - name: Set Default Image URIs if Skipped
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          if [ -z "$INGESTION_IMAGE_URI" ]; then
-            echo "INGESTION_IMAGE_URI=$ECR_REGISTRY/$INGESTION_ECR_REPO:ingestion-latest" >> $GITHUB_ENV
-            echo "Using default ingestion image: ingestion-latest"
-          fi
-          if [ -z "$ENCODE_IMAGE_URI" ]; then
-            echo "ENCODE_IMAGE_URI=$ECR_REGISTRY/$ENCODE_ECR_REPO:encode-latest" >> $GITHUB_ENV
-            echo "Using default encode image: encode-latest"
-          fi
-          if [ -z "$STORE_EMBEDDINGS_IMAGE_URI" ]; then
-            echo "STORE_EMBEDDINGS_IMAGE_URI=$ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-latest" >> $GITHUB_ENV
-            echo "Using default store embeddings image: store-embeddings-latest"
-          fi
-          if [ -z "$STORE_S3_IMAGE_URI" ]; then
-            echo "STORE_S3_IMAGE_URI=$ECR_REGISTRY/$STORE_S3_ECR_REPO:store-s3-latest" >> $GITHUB_ENV
-            echo "Using default store s3 image: store-s3-latest"
-          fi
 
       - name: Deploy S3Stack, SqsStack, LambdaStack, StepFunctionsStack, ApiGatewayStack
         working-directory: ${{ env.ENCODING_CDK_PATH }}
