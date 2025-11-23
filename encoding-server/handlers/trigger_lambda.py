@@ -4,6 +4,8 @@ import boto3
 import logging
 from typing import Dict, Any
 
+# Trigger build - separated ECR repos
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
