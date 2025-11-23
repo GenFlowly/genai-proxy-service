@@ -6,11 +6,11 @@ AUTH0_CALLBACK_URL = "http://localhost:8080/callback"
 AUTH0_SCOPES = "openid profile email"
 # IMPORTANT: Set this to your API identifier in Auth0 to get JWT access tokens
 # Without this, Auth0 returns opaque tokens that API Gateway cannot validate
-AUTH0_AUDIENCE = "https://avathinrxa.execute-api.us-east-1.amazonaws.com"
+AUTH0_AUDIENCE = "https://9rwqqmvex2.execute-api.us-east-1.amazonaws.com"
 
 # API Configuration
 # Change based on environment (dev, staging, production)
-API_BASE_URL = "https://avathinrxa.execute-api.us-east-1.amazonaws.com/development"
+API_BASE_URL = "https://9rwqqmvex2.execute-api.us-east-1.amazonaws.com/development"
 API_BATCH_ENDPOINT = "/sync"  # Updated to match the backend endpoint
 
 # Optional: You can also use environment variables

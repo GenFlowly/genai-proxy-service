@@ -1,7 +1,7 @@
 import json
 import os
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 # Trigger build - separated ECR repos
 

@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Dict, Any, List
 from pymilvus import MilvusClient
-from email_model import EmailModel
+from factory.processor_factory import ProcessorFactory
 
 # Trigger build - separated ECR repos
 
@@ -26,34 +26,25 @@ def get_milvus_client():
         token=ZILLIZ_TOKEN
     )
 
-def store_in_zilliz(email: EmailModel, embedding: List[float]) -> str:
-    """Store email embedding in Zilliz Cloud."""
+def store_in_zilliz(data: Dict[str, Any], embedding: List[float]) -> str:
+    """Store data embedding in Zilliz Cloud."""
     try:
         client = get_milvus_client()
         
+        # Get appropriate processor
+        processor = ProcessorFactory.get_processor(data)
+        
         # Prepare data for insertion
-        #
-        data = [{
-            "id": email.message_id,
-            "vector": embedding,
-            "subject": email.subject[:500],  # Limit field size
-            "from_email": email.from_addr[:200],
-            "to_email": ", ".join(email.to_addrs)[:200],  # Join list to string
-            "date": email.date.isoformat() if email.date else "",
-            "folder": email.folder[:100],
-            "thread_id": (email.thread_id or "")[:200],
-            "in_reply_to": (email.in_reply_to or "")[:200],
-            "s3_key": f"emails/{email.folder}/{email.message_id}.json"
-        }]
+        record = processor.prepare_for_vector_db(data, embedding)
         
         # Insert into collection
         result = client.insert(
             collection_name=COLLECTION_NAME,
-            data=data
+            data=[record]
         )
         
         logger.info(f"Successfully inserted into Zilliz. Insert count: {result.get('insert_count', 0)}")
-        return email.message_id
+        return record.get('id', 'unknown')
         
     except Exception as e:
         logger.error(f"Error storing in Zilliz: {str(e)}", exc_info=True)
@@ -62,24 +53,23 @@ def store_in_zilliz(email: EmailModel, embedding: List[float]) -> str:
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Store Zilliz Handler - Step 2
-    Receives: Email data + Embedding
-    Returns: Email data (passed through for next step)
+    Receives: Data + Embedding
+    Returns: Data (passed through for next step)
     """
     try:
-        # Parse input
-        email = EmailModel.from_dict(event)
+        # Extract embedding
         embedding = event.get('embedding')
         
         if not embedding:
             raise ValueError("No embedding found in payload")
             
-        logger.info(f"Storing embedding for email: {email.message_id}")
-        store_in_zilliz(email, embedding)
+        logger.info("Storing embedding for data item")
+        store_in_zilliz(event, embedding)
         
         # Return event without embedding to save payload size for next step?
         # Or keep it? S3 step doesn't need embedding.
         # Let's remove it to be safe on payload limits, though 768 floats is small (~3KB).
-        # But we should return the email data for the S3 step.
+        # But we should return the data for the S3 step.
         
         result = event.copy()
         # Optional: remove embedding if not needed downstream

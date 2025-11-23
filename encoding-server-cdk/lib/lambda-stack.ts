@@ -42,6 +42,7 @@ export class LambdaStack extends cdk.Stack {
         });
 
         this.ingestionLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`,
             code: ingestionLambdaCode,
             memorySize: 512,
             timeout: cdk.Duration.seconds(30),
@@ -60,6 +61,7 @@ export class LambdaStack extends cdk.Stack {
 
         // 1. Encode Lambda
         this.encodeLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`,
             code: DockerImageCode.fromEcr(props.encodeRepo, {
                 tagOrDigest: 'encode-latest',
                 cmd: ['handlers.encode_lambda.handler'],
@@ -71,6 +73,7 @@ export class LambdaStack extends cdk.Stack {
 
         // 2. Store Embeddings Lambda
         this.storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`,
             code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
                 tagOrDigest: 'store-embeddings-latest',
                 cmd: ['handlers.store_embeddings_lambda.handler'],
@@ -88,6 +91,7 @@ export class LambdaStack extends cdk.Stack {
 
         // 3. Store S3 Lambda
         this.storeS3Lambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`,
             code: DockerImageCode.fromEcr(props.storeS3Repo, {
                 tagOrDigest: 'store-s3-latest',
                 cmd: ['handlers.store_in_s3_lambda.handler'],

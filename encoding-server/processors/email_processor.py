@@ -59,7 +59,25 @@ class EmailProcessor(DataProcessor):
             'type': {
                 'StringValue': 'email',
                 'DataType': 'String'
-            }
         }
         
         return message_body, message_attributes
+
+    def prepare_for_vector_db(self, data: Dict[str, Any], embedding: list) -> Dict[str, Any]:
+        """
+        Prepare email data for insertion into Zilliz/Milvus.
+        """
+        email_model = EmailModel.from_dict(data)
+        
+        return {
+            "id": email_model.message_id,
+            "vector": embedding,
+            "subject": email_model.subject[:500],  # Limit field size
+            "from_email": email_model.from_addr[:200],
+            "to_email": ", ".join(email_model.to_addrs)[:200],  # Join list to string
+            "date": email_model.date.isoformat() if email_model.date else "",
+            "folder": email_model.folder[:100],
+            "thread_id": (email_model.thread_id or "")[:200],
+            "in_reply_to": (email_model.in_reply_to or "")[:200],
+            "s3_key": f"emails/{email_model.folder}/{email_model.message_id}.json"
+        }

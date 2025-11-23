@@ -22,3 +22,11 @@ class DataProcessor(ABC):
         Returns a tuple of (MessageBody, MessageAttributes).
         """
         pass
+
+    @abstractmethod
+    def prepare_for_vector_db(self, data: Dict[str, Any], embedding: list) -> Dict[str, Any]:
+        """
+        Prepare data for insertion into Vector DB.
+        Returns a dictionary representing the record to be inserted.
+        """
+        pass
