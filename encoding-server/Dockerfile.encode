@@ -16,8 +16,13 @@ RUN pip install --no-cache-dir \
     torch \
     -r /tmp/requirements.txt
 
-# Pre-download the embedding model to avoid runtime downloads
-RUN python3 -c "from pymilvus import model; model.DefaultEmbeddingFunction()" || true
+# Set PYTHONPATH so we can use the installed packages
+ENV PYTHONPATH=/tmp/python
+
+# Remove unnecessary files to save space
+RUN find /tmp/python -type d -name "tests" -exec rm -rf {} + && \
+    find /tmp/python -type d -name "__pycache__" -exec rm -rf {} + && \
+    rm -rf /tmp/python/pip /tmp/python/setuptools /tmp/python/wheel
 
 # Runtime stage - copy compiled dependencies
 FROM public.ecr.aws/lambda/python:3.11
