@@ -62,7 +62,7 @@ export class StepFunctionsStack extends cdk.Stack {
         const triggerLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda`, {
             code: DockerImageCode.fromEcr(props.storeS3Repo, {
                 tagOrDigest: 'store-s3-latest',
-                cmd: ['handlers.trigger.handler'],
+                cmd: ['handlers.trigger_lambda.handler'],
             }),
             memorySize: 256,
             timeout: cdk.Duration.seconds(60), // Needs to wait for SF execution

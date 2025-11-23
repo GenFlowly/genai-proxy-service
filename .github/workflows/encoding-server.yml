@@ -122,6 +122,17 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Free up disk space before building
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          # Remove unused Docker images and build cache
+          docker system prune -af --volumes
+          # Remove unused packages
+          sudo apt-get clean
+          echo "Disk space after cleanup:"
+          df -h
+
       - name: Build ingestion Lambda Docker image
         if: steps.filter.outputs.ingestion == 'true' || steps.filter.outputs.shared == 'true'
         working-directory: encoding-server
