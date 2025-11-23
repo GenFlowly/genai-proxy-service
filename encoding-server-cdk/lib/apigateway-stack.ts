@@ -10,7 +10,7 @@ import { RESOURCE_NAMES } from './constants';
 
 export interface ApiGatewayStackProps extends cdk.StackProps {
     stage: STAGES;
-    ingestionLambda: lambda.IFunction;
+    ingestionLambda?: lambda.IFunction;
     auth0Domain: string;
 }
 
@@ -67,18 +67,20 @@ export class ApiGatewayStack extends cdk.Stack {
         });
 
         // Create Lambda integration
-        const integration = new HttpLambdaIntegration(
-            'IngestionIntegration',
-            props.ingestionLambda
-        );
+        if (props.ingestionLambda) {
+            const integration = new HttpLambdaIntegration(
+                'IngestionIntegration',
+                props.ingestionLambda
+            );
 
-        // Add route with JWT authorization
-        this.api.addRoutes({
-            path: '/sync',
-            methods: [apigatewayv2.HttpMethod.POST],
-            integration: integration,
-            authorizer: authorizer,
-        });
+            // Add route with JWT authorization
+            this.api.addRoutes({
+                path: '/sync',
+                methods: [apigatewayv2.HttpMethod.POST],
+                integration: integration,
+                authorizer: authorizer,
+            });
+        }
 
         // API endpoint output
         new CfnOutput(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-apigw-ApiEndpoint`, {
