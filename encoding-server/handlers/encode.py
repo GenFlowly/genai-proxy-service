@@ -1,7 +1,9 @@
 import json
 import os
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any
+
+# Trigger rebuild for initial deployment, List
 from pymilvus import model
 from email_model import EmailModel
 
