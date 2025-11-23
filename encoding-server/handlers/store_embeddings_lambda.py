@@ -30,6 +30,7 @@ def store_in_zilliz(email: EmailModel, embedding: List[float]) -> str:
         client = get_milvus_client()
         
         # Prepare data for insertion
+        #
         data = [{
             "id": email.message_id,
             "vector": embedding,
