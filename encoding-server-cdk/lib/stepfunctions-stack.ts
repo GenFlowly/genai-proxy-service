@@ -48,10 +48,20 @@ export class StepFunctionsStack extends cdk.Stack {
             .next(storeS3Task);
 
         // Define State Machine (Express Workflow for high throughput/low latency)
+        const logGroup = new cdk.aws_logs.LogGroup(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-sm-logs`, {
+            retention: cdk.aws_logs.RetentionDays.ONE_WEEK,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+        });
+
         this.processingStateMachine = new sfn.StateMachine(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-sm`, {
             definitionBody: sfn.DefinitionBody.fromChainable(definition),
             stateMachineType: sfn.StateMachineType.EXPRESS,
             timeout: cdk.Duration.minutes(5),
+            logs: {
+                destination: logGroup,
+                level: sfn.LogLevel.ALL,
+                includeExecutionData: true,
+            },
         });
 
         /**
@@ -60,6 +70,7 @@ export class StepFunctionsStack extends cdk.Stack {
          */
 
         const triggerLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda`,
             code: DockerImageCode.fromEcr(props.storeS3Repo, {
                 tagOrDigest: 'store-s3-latest',
                 cmd: ['handlers.trigger_lambda.handler'],
