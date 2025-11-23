@@ -101,10 +101,20 @@ jobs:
         run: |
           echo "Disk space before cleanup:"
           df -h
+          
+          # Remove huge unnecessary tools
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          
           # Remove unused Docker images and build cache
           docker system prune -af --volumes
+          
           # Remove unused packages
           sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          
           echo "Disk space after cleanup:"
           df -h
 
