@@ -21,6 +21,10 @@ export interface LambdaStackProps extends cdk.StackProps {
     encodeRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
+    ingestionImageTag?: string;
+    encodeImageTag?: string;
+    storeEmbeddingsImageTag?: string;
+    storeS3ImageTag?: string;
 }
 
 export class LambdaStack extends cdk.Stack {
@@ -38,7 +42,7 @@ export class LambdaStack extends cdk.Stack {
          * Validates payloads and pushes to SQS
          */
         const ingestionLambdaCode = DockerImageCode.fromEcr(props.ingestionRepo, {
-            tagOrDigest: 'ingestion-latest',
+            tagOrDigest: props.ingestionImageTag || 'ingestion-latest',
         });
 
         this.ingestionLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`, {
@@ -63,7 +67,7 @@ export class LambdaStack extends cdk.Stack {
         this.encodeLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`,
             code: DockerImageCode.fromEcr(props.encodeRepo, {
-                tagOrDigest: 'encode-latest',
+                tagOrDigest: props.encodeImageTag || 'encode-latest',
                 cmd: ['handlers.encode_lambda.handler'],
             }),
             memorySize: 3008, // Needs memory for model
@@ -75,7 +79,7 @@ export class LambdaStack extends cdk.Stack {
         this.storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`,
             code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
-                tagOrDigest: 'store-embeddings-latest',
+                tagOrDigest: props.storeEmbeddingsImageTag || 'store-embeddings-latest',
                 cmd: ['handlers.store_embeddings_lambda.handler'],
             }),
             memorySize: 512,
@@ -93,7 +97,7 @@ export class LambdaStack extends cdk.Stack {
         this.storeS3Lambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`,
             code: DockerImageCode.fromEcr(props.storeS3Repo, {
-                tagOrDigest: 'store-s3-latest',
+                tagOrDigest: props.storeS3ImageTag || 'store-s3-latest',
                 cmd: ['handlers.store_in_s3_lambda.handler'],
             }),
             memorySize: 512,
