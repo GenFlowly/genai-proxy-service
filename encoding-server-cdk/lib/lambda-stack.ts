@@ -62,7 +62,7 @@ export class LambdaStack extends cdk.Stack {
         this.encodeLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`, {
             code: DockerImageCode.fromEcr(props.encodeRepo, {
                 tagOrDigest: 'encode-latest',
-                cmd: ['handlers.encode.handler'],
+                cmd: ['handlers.encode_lambda.handler'],
             }),
             memorySize: 3008, // Needs memory for model
             timeout: cdk.Duration.seconds(300),
@@ -73,7 +73,7 @@ export class LambdaStack extends cdk.Stack {
         this.storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
             code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
                 tagOrDigest: 'store-embeddings-latest',
-                cmd: ['handlers.store_embeddings_in_vector_db.handler'],
+                cmd: ['handlers.store_embeddings_lambda.handler'],
             }),
             memorySize: 512,
             timeout: cdk.Duration.seconds(60),
@@ -90,7 +90,7 @@ export class LambdaStack extends cdk.Stack {
         this.storeS3Lambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`, {
             code: DockerImageCode.fromEcr(props.storeS3Repo, {
                 tagOrDigest: 'store-s3-latest',
-                cmd: ['handlers.store_s3.handler'],
+                cmd: ['handlers.store_in_s3_lambda.handler'],
             }),
             memorySize: 512,
             timeout: cdk.Duration.seconds(60),
