@@ -41,8 +41,12 @@ const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODIN
     storeS3Lambda: lambdaStack.storeS3Lambda,
 });
 
+if (!process.env.AUTH0_SPA_DOMAIN) {
+    throw new Error('AUTH0_SPA_DOMAIN environment variable is required');
+}
+
 const apiGatewayStack = new ApiGatewayStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-ApiGatewayStack`, {
     stage,
     ingestionLambda: lambdaStack.ingestionLambda,
-    auth0Domain: 'dev-abh5z7416lwy3xhv.us.auth0.com', // Fallback for local dev if needed
+    auth0Domain: process.env.AUTH0_SPA_DOMAIN,
 });
