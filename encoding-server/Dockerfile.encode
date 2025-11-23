@@ -5,7 +5,15 @@ FROM public.ecr.aws/lambda/python:3.11 AS builder
 RUN yum install -y gcc gcc-c++ make cmake
 
 # Copy requirements
+# Copy requirements
 COPY requirements-encode.txt /tmp/requirements.txt
+
+# Install CPU-only PyTorch first to save space (avoids downloading huge CUDA libraries)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu --target /tmp/python
+
+# Install other requirements
+# We set PYTHONPATH so pip can find the previously installed torch
+ENV PYTHONPATH=/tmp/python
 RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements.txt --target /tmp/python
 
 # Pre-download the embedding model to avoid runtime downloads
