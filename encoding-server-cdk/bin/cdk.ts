@@ -39,6 +39,6 @@ const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODIN
 
 const apiGatewayStack = new ApiGatewayStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-ApiGatewayStack`, {
     stage,
-    // ingestionLambda: lambdaStack.ingestionLambda,
+    ingestionLambda: lambdaStack.ingestionLambda,
     auth0Domain: 'dev-0e3d96c83ea3190.us.auth0.com', // Fallback for local dev if needed
 });
