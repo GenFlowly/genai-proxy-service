@@ -223,4 +223,5 @@ jobs:
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
+          CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
         run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsStack encoding-service-ApiGatewayStack --require-approval never

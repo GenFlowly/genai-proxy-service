@@ -19,6 +19,7 @@ COPY email_model.py ${LAMBDA_TASK_ROOT}/
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 COPY factory ${LAMBDA_TASK_ROOT}/factory
 COPY processors ${LAMBDA_TASK_ROOT}/processors
+COPY services ${LAMBDA_TASK_ROOT}/services
 
 # Set the handler
 CMD [ "handlers.ingestion_lambda.handler" ]

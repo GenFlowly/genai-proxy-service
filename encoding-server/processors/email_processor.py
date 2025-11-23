@@ -39,7 +39,7 @@ class EmailProcessor(DataProcessor):
             
         return True
 
-    def to_sqs_message(self, data: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    def to_sqs_message(self, data: Dict[str, Any], customer_id: str = None) -> Tuple[str, Dict[str, Any]]:
         """
         Convert email data to SQS message format.
         """
@@ -61,6 +61,12 @@ class EmailProcessor(DataProcessor):
                 'DataType': 'String'
             }
         }
+        
+        if customer_id:
+            message_attributes['customerId'] = {
+                'StringValue': customer_id,
+                'DataType': 'String'
+            }
         
         return message_body, message_attributes
 

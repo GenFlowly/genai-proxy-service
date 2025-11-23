@@ -32,6 +32,7 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG,
     zillizEndpoint: process.env.ZILLIZ_ENDPOINT!,
     zillizToken: process.env.ZILLIZ_TOKEN!,
+    customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
 });
 
 if (!process.env.INGESTION_IMAGE_TAG || !process.env.ENCODE_IMAGE_TAG || !process.env.STORE_EMBEDDINGS_IMAGE_TAG || !process.env.STORE_S3_IMAGE_TAG) {
