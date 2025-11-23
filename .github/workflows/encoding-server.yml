@@ -206,4 +206,5 @@ jobs:
           ENCODE_IMAGE_TAG: ${{ env.ENCODE_IMAGE_TAG }}
           STORE_EMBEDDINGS_IMAGE_TAG: ${{ env.STORE_EMBEDDINGS_IMAGE_TAG }}
           STORE_S3_IMAGE_TAG: ${{ env.STORE_S3_IMAGE_TAG }}
+          AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
         run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsStack encoding-service-ApiGatewayStack --require-approval never
