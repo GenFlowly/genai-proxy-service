@@ -59,6 +59,7 @@ class EmailProcessor(DataProcessor):
             'type': {
                 'StringValue': 'email',
                 'DataType': 'String'
+            }
         }
         
         return message_body, message_attributes
