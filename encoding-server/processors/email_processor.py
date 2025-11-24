@@ -6,7 +6,7 @@ from models.payload import Payload
 
 # Assuming email_model is in the python path (root of lambda task)
 try:
-    from email_model import EmailModel
+    from models.encoding.email_model import EmailModel
 except ImportError:
     # Fallback for local development if needed, though usually root is in path
     import sys

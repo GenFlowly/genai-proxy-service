@@ -61,6 +61,7 @@ export class StepFunctionsStack extends cdk.Stack {
         });
 
         this.processingStateMachine = new sfn.StateMachine(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-sm`, {
+            stateMachineName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-state-machine`,
             definitionBody: sfn.DefinitionBody.fromChainable(definition),
             stateMachineType: sfn.StateMachineType.EXPRESS,
             timeout: cdk.Duration.minutes(5),

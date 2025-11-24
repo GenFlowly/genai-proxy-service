@@ -8,7 +8,7 @@ from models.payload import Payload
 
 # Trigger rebuild for initial deployment, List
 from pymilvus import model
-from email_model import EmailModel
+from models.encoding.email_model import EmailModel
 
 # Set cache directories to /tmp (only writable location in Lambda)
 os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'

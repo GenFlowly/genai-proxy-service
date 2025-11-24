@@ -4,7 +4,7 @@ import boto3
 import logging
 from typing import Dict, Any
 from models.payload import Payload
-from email_model import EmailModel
+from models.encoding.email_model import EmailModel
 
 # Trigger build - separated ECR repos
 
