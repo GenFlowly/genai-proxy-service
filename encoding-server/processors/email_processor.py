@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Dict, Any, Tuple
 from .data_processor import DataProcessor
+from models.payload import Payload
 
 # Assuming email_model is in the python path (root of lambda task)
 try:
@@ -39,14 +40,22 @@ class EmailProcessor(DataProcessor):
             
         return True
 
-    def to_sqs_message(self, data: Dict[str, Any], customer_id: str = None) -> Tuple[str, Dict[str, Any]]:
+
+
+    def to_sqs_message(self, payload: Payload) -> Tuple[str, Dict[str, Any]]:
         """
         Convert email data to SQS message format.
+        Payload.data contains the email dictionary.
         """
-        email_model = EmailModel.from_dict(data)
-        email_dict = email_model.to_dict()
+        # Validate/Process email data from payload
+        email_model = EmailModel.from_dict(payload.data)
         
-        message_body = json.dumps(email_dict)
+        # We update payload.data with the processed model dict (standardized)
+        payload.data = email_model.to_dict()
+        
+        # Serialize the entire Payload object
+        message_body = json.dumps(payload.to_dict())
+        
         message_attributes = {
             'messageId': {
                 'StringValue': email_model.message_id,
@@ -59,14 +68,12 @@ class EmailProcessor(DataProcessor):
             'type': {
                 'StringValue': 'email',
                 'DataType': 'String'
-            }
-        }
-        
-        if customer_id:
-            message_attributes['customerId'] = {
-                'StringValue': customer_id,
+            },
+            'customerId': {
+                'StringValue': payload.customer_id,
                 'DataType': 'String'
             }
+        }
         
         return message_body, message_attributes
 

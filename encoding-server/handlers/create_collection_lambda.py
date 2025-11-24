@@ -3,6 +3,7 @@ import logging
 import json
 from typing import Dict, Any
 from pymilvus import MilvusClient, DataType
+from models.payload import Payload
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -21,6 +22,8 @@ except Exception as e:
     logger.error(f"Failed to connect to Zilliz: {str(e)}")
     raise e
 
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Creates a Zilliz collection for the customer if it doesn't exist.
@@ -29,13 +32,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logger.info(f"Received event: {json.dumps(event)}")
     
     try:
-        # Extract customerId (collection name)
-        # Event comes from Step Functions, so it's the payload from the previous step (Encode)
-        # The payload should contain 'customerId' merged by the trigger lambda
-        customer_id = event.get('customerId')
+        # Reconstruct Payload object
+        try:
+            payload = Payload.from_dict(event)
+        except Exception:
+            # Fallback
+            payload = Payload(
+                customer_id=event.get('customerId') or event.get('customer_id'),
+                data=event
+            )
+            
+        customer_id = payload.customer_id
         
         if not customer_id:
-            raise ValueError("customerId is missing from the event payload")
+            raise ValueError("customer_id is missing from the payload")
             
         collection_name = customer_id
         

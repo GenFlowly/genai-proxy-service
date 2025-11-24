@@ -3,6 +3,7 @@ import logging
 from typing import Dict, Any, List
 from pymilvus import MilvusClient
 from factory.processor_factory import ProcessorFactory
+from models.payload import Payload
 
 # Trigger build - separated ECR repos
 
@@ -50,37 +51,47 @@ def store_in_zilliz(data: Dict[str, Any], embedding: List[float], collection_nam
         logger.error(f"Error storing in Zilliz: {str(e)}", exc_info=True)
         raise
 
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Store Zilliz Handler - Step 2
-    Receives: Data + Embedding
-    Returns: Data (passed through for next step)
+    Receives: Payload (with Data + Embedding)
+    Returns: Payload (passed through for next step)
     """
     try:
+        # Reconstruct Payload object
+        try:
+            payload = Payload.from_dict(event)
+        except Exception:
+            # Fallback
+            payload = Payload(
+                customer_id=event.get('customerId') or event.get('customer_id'),
+                data=event
+            )
+
+        customer_id = payload.customer_id
+        if not customer_id:
+            raise ValueError("customer_id is missing from the payload")
+            
+        data = payload.data
+        
         # Extract embedding
-        embedding = event.get('embedding')
+        embedding = data.get('embedding')
         
         if not embedding:
-            raise ValueError("No embedding found in payload")
-            
-        # Extract customerId for collection name
-        customer_id = event.get('customerId')
-        if not customer_id:
-            raise ValueError("customerId is missing from the event payload")
+            raise ValueError("No embedding found in payload data")
             
         logger.info(f"Storing embedding for data item in collection {customer_id}")
-        store_in_zilliz(event, embedding, customer_id)
+        store_in_zilliz(data, embedding, customer_id)
         
-        # Return event without embedding to save payload size for next step?
-        # Or keep it? S3 step doesn't need embedding.
-        # Let's remove it to be safe on payload limits, though 768 floats is small (~3KB).
-        # But we should return the data for the S3 step.
-        
-        result = event.copy()
-        # Optional: remove embedding if not needed downstream
-        del result['embedding']
-        
-        return result
+        # Return payload for next step
+        # Optional: remove embedding from data if not needed downstream to save space
+        if 'embedding' in data:
+            del data['embedding']
+            payload.data = data
+            
+        return payload.to_dict()
 
     except Exception as e:
         logger.error(f"Error in store_zilliz handler: {str(e)}", exc_info=True)

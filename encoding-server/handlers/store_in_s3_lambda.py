@@ -3,6 +3,7 @@ import os
 import boto3
 import logging
 from typing import Dict, Any
+from models.payload import Payload
 from email_model import EmailModel
 
 # Trigger build - separated ECR repos
@@ -47,14 +48,27 @@ def store_in_s3(email: EmailModel) -> str:
         logger.error(f"Error storing in S3: {str(e)}", exc_info=True)
         raise
 
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Store S3 Handler - Step 3
-    Receives: Email data
+    Receives: Payload (with Data)
     Returns: Success status
     """
     try:
-        email = EmailModel.from_dict(event)
+        # Reconstruct Payload object
+        try:
+            payload = Payload.from_dict(event)
+        except Exception:
+            # Fallback
+            payload = Payload(
+                customer_id=event.get('customerId') or event.get('customer_id'),
+                data=event
+            )
+            
+        data = payload.data
+        email = EmailModel.from_dict(data)
         logger.info(f"Backing up email to S3: {email.message_id}")
         
         s3_key = store_in_s3(email)

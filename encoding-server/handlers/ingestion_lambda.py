@@ -5,6 +5,7 @@ import logging
 from typing import Dict, Any
 from factory.processor_factory import ProcessorFactory
 from services.authorization_service import AuthorizationService
+from models.payload import Payload
 
 # Trigger build - separated ECR repos
 
@@ -55,6 +56,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         failed_count = 0
         errors = []
         sqs_message_ids = []
+        entries = [] # For SQS batch sending
         
         for idx, item_data in enumerate(items_to_process):
             try:
@@ -64,8 +66,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Validate data
                 processor.validate(item_data)
                 
+                # Wrap in Payload
+                payload = Payload(
+                    customer_id=customer_id,
+                    data=item_data
+                )
+                
                 # Convert to SQS message format
-                message_body, message_attributes = processor.to_sqs_message(item_data, customer_id)
+                message_body, message_attributes = processor.to_sqs_message(payload)
                 
                 # Send to SQS
                 response = sqs.send_message(
@@ -76,7 +84,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 
                 sqs_message_ids.append(response['MessageId'])
                 processed_count += 1
-                logger.info(f"Item {idx}: Successfully sent to SQS. MessageId: {response['MessageId']}")
                 
             except ValueError as ve:
                 error_msg = f"Item {idx}: Validation error: {str(ve)}"

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple
+from models.payload import Payload
 
 class DataProcessor(ABC):
     """
@@ -16,9 +17,9 @@ class DataProcessor(ABC):
         pass
 
     @abstractmethod
-    def to_sqs_message(self, data: Dict[str, Any], customer_id: str = None) -> Tuple[str, Dict[str, Any]]:
+    def to_sqs_message(self, payload: Payload) -> Tuple[str, Dict[str, Any]]:
         """
-        Convert data to SQS message format.
+        Convert payload to SQS message format.
         Returns a tuple of (MessageBody, MessageAttributes).
         """
         pass

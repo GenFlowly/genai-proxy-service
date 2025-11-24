@@ -2,6 +2,7 @@ import json
 import os
 import logging
 from typing import Dict, Any, List
+from models.payload import Payload
 
 # Trigger build - separated ECR repos
 
@@ -63,40 +64,49 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # However, for Step Functions Map state over SQS messages, the input is usually the body.
         
         # Handling both cases: direct payload or SQS record
-        payload = event
+
+
+    try:
+        # Parse payload
+        # Event should be the Payload dict from Step Functions
+        payload_dict = event
+        
+        # Handle SQS wrapping if present (though Trigger Lambda should have unwrapped it)
         if 'Records' in event:
-            # This looks like an SQS event. We only process the first one if it's a standard lambda trigger?
-            # But for Step Functions, we want a single item.
-            # If we use SQS -> Lambda -> SF, the Lambda should pass the single item.
-            # If we use Pipe -> SF, the input is the body.
-            # Let's assume payload is the email dict.
-            pass
-            
-        # If payload has 'body' (SQS message structure passed through), parse it.
-        if 'body' in payload and isinstance(payload['body'], str):
-             try:
-                 payload = json.loads(payload['body'])
-             except:
-                 pass
+             # This shouldn't happen with current Step Functions flow, but just in case
+             pass
+             
+        # Reconstruct Payload object
+        try:
+            payload = Payload.from_dict(payload_dict)
+        except Exception:
+            # Fallback for legacy events or if structure doesn't match
+            logger.warning("Event does not match Payload structure, attempting legacy handling")
+            # Assume event IS the data
+            payload = Payload(
+                customer_id=event.get('customerId', 'unknown'),
+                data=event
+            )
 
-        logger.info(f"Received payload keys: {payload.keys()}")
-
-        email = EmailModel.from_dict(payload)
+        logger.info(f"Received payload for customer: {payload.customer_id}")
+        
+        # Extract data for encoding
+        data = payload.data
+        
+        # Create EmailModel to get text
+        email = EmailModel.from_dict(data)
         logger.info(f"Encoding email: {email.message_id}")
 
         text_to_encode = f"{email.subject} {email.body}"
         embedding = encode_text(text_to_encode)
         
-        # Return the original payload plus the embedding
-        # We convert EmailModel back to dict to ensure we have all fields
-        result = email.to_dict()
-        result['embedding'] = embedding
+        # Add embedding to data
+        # We update the data in the payload
+        data['embedding'] = embedding
+        payload.data = data
         
-        # Preserve customerId if present in payload
-        if 'customerId' in payload:
-            result['customerId'] = payload['customerId']
-        
-        return result
+        # Return the payload dict
+        return payload.to_dict()
 
     except Exception as e:
         logger.error(f"Error in encode handler: {str(e)}", exc_info=True)

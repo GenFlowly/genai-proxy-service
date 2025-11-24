@@ -32,13 +32,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Parse message body
                 body = json.loads(record['body'])
                 
-                # Extract customerId from message attributes
-                message_attributes = record.get('messageAttributes', {})
-                customer_id = message_attributes.get('customerId', {}).get('stringValue')
+                # Check if body is already a Payload (has customer_id)
+                # Note: Payload uses 'customer_id', but previous logic injected 'customerId'
+                # We should standardize on 'customer_id' but support 'customerId' for compatibility if needed?
+                # The Payload class uses 'customer_id'.
                 
-                if customer_id:
-                    body['customerId'] = customer_id
-                    logger.info(f"Added customerId {customer_id} to payload for message {message_id}")
+                customer_id = body.get('customer_id') or body.get('customerId')
+                
+                if not customer_id:
+                    # Fallback: Extract customerId from message attributes
+                    message_attributes = record.get('messageAttributes', {})
+                    # SQS attributes can be 'StringValue' or 'stringValue' depending on the source/proxy
+                    customer_id_attr = message_attributes.get('customerId', {})
+                    customer_id = customer_id_attr.get('stringValue') or customer_id_attr.get('StringValue')
+                    
+                    if customer_id:
+                        body['customer_id'] = customer_id
+                        logger.info(f"Added customer_id {customer_id} to payload for message {message_id}")
+                else:
+                    logger.info(f"Found customer_id {customer_id} in payload for message {message_id}")
                 
                 # Start Synchronous Execution
                 logger.info(f"Starting execution for message {message_id}")
