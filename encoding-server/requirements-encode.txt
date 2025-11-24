@@ -1,4 +1,7 @@
+# Include base requirements
+-r requirements.txt
+
+# Encode-specific dependencies
 pymilvus[model]>=2.4.0
 sentence-transformers>=2.2.0
 numpy<2.0.0
-pydantic

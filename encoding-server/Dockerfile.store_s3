@@ -1,23 +1,22 @@
-# Build stage - install dependencies with build tools
+# Build stage
 FROM public.ecr.aws/lambda/python:3.11 AS builder
 
 # Install build dependencies
 RUN yum install -y gcc gcc-c++ make cmake
 
-# Copy requirements
+# Copy and install dependencies
 COPY requirements-store-s3.txt /tmp/requirements.txt
 RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements.txt --target /tmp/python
 
-# Runtime stage - copy compiled dependencies
+# Runtime stage
 FROM public.ecr.aws/lambda/python:3.11
 
-# Copy installed dependencies from builder
+# Copy installed dependencies
 COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 
 # Copy application code
-
 COPY models ${LAMBDA_TASK_ROOT}/models
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 
-# CMD will be overridden by CDK, but setting a default
+# Set the handler
 CMD [ "handlers.store_in_s3_lambda.handler" ]

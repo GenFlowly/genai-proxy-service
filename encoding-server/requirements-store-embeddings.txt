@@ -1,2 +1,5 @@
+# Include base requirements
+-r requirements.txt
+
+# Store embeddings specific dependencies
 pymilvus>=2.4.0
-pydantic
