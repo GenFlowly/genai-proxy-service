@@ -1,12 +1,11 @@
+# Simple single-stage for lightweight Lambda
 FROM public.ecr.aws/lambda/python:3.11
 
-# Copy requirements - reusing store_embeddings requirements as it has pymilvus
+# Copy and install dependencies
 COPY requirements-create-collection.txt ${LAMBDA_TASK_ROOT}/requirements.txt
-
-# Install dependencies
 RUN pip install --only-binary=:all: --no-cache-dir -r requirements.txt
 
-# Copy handler code
+# Copy application code
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 COPY models ${LAMBDA_TASK_ROOT}/models
 

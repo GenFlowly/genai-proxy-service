@@ -1,33 +1,31 @@
-# Build stage - install dependencies with build tools
+# Build stage
 FROM public.ecr.aws/lambda/python:3.11 AS builder
 
-# Install build dependencies
+# Install build dependencies  
 RUN yum install -y gcc gcc-c++ make cmake
 
-# Copy requirements
-# Copy requirements
+# Copy and install dependencies with CPU-only PyTorch
 COPY requirements-encode.txt /tmp/requirements.txt
-
-# Install dependencies with CPU-only PyTorch
-# We use --extra-index-url to find cpu versions of torch while still allowing other packages from pypi
 RUN pip install --no-cache-dir \
     --target /tmp/python \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     torch \
     -r /tmp/requirements.txt
 
-# Set PYTHONPATH so we can use the installed packages
-ENV PYTHONPATH=/tmp/python
-
-# Remove unnecessary files to save space
+# Clean up to save space
 RUN find /tmp/python -type d -name "tests" -exec rm -rf {} + && \
     find /tmp/python -type d -name "__pycache__" -exec rm -rf {} + && \
     rm -rf /tmp/python/pip /tmp/python/setuptools /tmp/python/wheel
 
-# Runtime stage - copy compiled dependencies
+# Runtime stage
 FROM public.ecr.aws/lambda/python:3.11
 
-# Set environment variables for Lambda
+# AWS Lambda environment variables (provided by base image):
+# - LAMBDA_TASK_ROOT=/var/task (our code goes here)
+# - LAMBDA_RUNTIME_DIR=/var/runtime
+
+# Custom environment variables for ML libraries
+# Note: Lambda only allows writes to /tmp (512MB limit), so we point all caches there
 ENV TRANSFORMERS_CACHE=/tmp/transformers_cache \
     HF_HOME=/tmp/huggingface \
     MPLCONFIGDIR=/tmp/matplotlib \
@@ -38,11 +36,10 @@ ENV TRANSFORMERS_CACHE=/tmp/transformers_cache \
     OPENBLAS_NUM_THREADS=1 \
     MKL_NUM_THREADS=1
 
-# Copy installed dependencies from builder
+# Copy installed dependencies
 COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 
 # Copy application code
-
 COPY models ${LAMBDA_TASK_ROOT}/models
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 
