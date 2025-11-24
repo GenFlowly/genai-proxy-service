@@ -3,7 +3,7 @@ import os
 import boto3
 import logging
 from typing import Dict, Any
-from factory.processor_factory import ProcessorFactory
+from processors.processor_factory import ProcessorFactory
 from services.authorization_service import AuthorizationService
 from models.payload import Payload
 
