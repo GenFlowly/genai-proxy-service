@@ -53,17 +53,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Receives email data (from SQS via Lambda/Step Function), generates embedding.
     Returns: Email data + Embedding
     """
-    try:
-        # If triggered by SQS directly via Lambda, event might be different.
-        # But assuming Step Functions passes the payload directly.
-        # If this is the first step in SF, and SF is triggered by SQS, the input might be the SQS message body?
-        # Or if we use a "Driver" lambda to read from SQS and start SF, then the input is the email dict.
-        
-        # Let's assume the input IS the email dictionary (parsed from SQS body).
-        # If the input is the raw SQS event, we need to parse it.
-        # However, for Step Functions Map state over SQS messages, the input is usually the body.
-        
-        # Handling both cases: direct payload or SQS record
+
 
 
     try:
