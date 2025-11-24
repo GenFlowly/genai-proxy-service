@@ -3,3 +3,4 @@ py2app
 authlib
 requests
 tenacity
+python-dotenv
