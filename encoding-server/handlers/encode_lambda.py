@@ -92,6 +92,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         result = email.to_dict()
         result['embedding'] = embedding
         
+        # Preserve customerId if present in payload
+        if 'customerId' in payload:
+            result['customerId'] = payload['customerId']
+        
         return result
 
     except Exception as e:
