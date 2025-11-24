@@ -69,6 +69,7 @@ jobs:
           # Dummy values to satisfy bin/cdk.ts validation during ECR stack deployment
           INGESTION_IMAGE_TAG: "placeholder"
           ENCODE_IMAGE_TAG: "placeholder"
+          CREATE_COLLECTION_IMAGE_TAG: "placeholder"
           STORE_EMBEDDINGS_IMAGE_TAG: "placeholder"
           STORE_S3_IMAGE_TAG: "placeholder"
 
@@ -90,6 +91,14 @@ jobs:
           echo "ENCODE_ECR_URI=$ENCODE_ECR_URI" >> $GITHUB_ENV
           echo "ENCODE_ECR_REPO=$(basename $ENCODE_ECR_URI)" >> $GITHUB_ENV
           echo "Using Encode Lambda ECR: $ENCODE_ECR_URI"
+          
+          CREATE_COLLECTION_ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name encoding-service-EcrStack \
+            --query "Stacks[0].Outputs[?OutputKey=='CreateCollectionRepoUri'].OutputValue" \
+            --output text)
+          echo "CREATE_COLLECTION_ECR_URI=$CREATE_COLLECTION_ECR_URI" >> $GITHUB_ENV
+          echo "CREATE_COLLECTION_ECR_REPO=$(basename $CREATE_COLLECTION_ECR_URI)" >> $GITHUB_ENV
+          echo "Using Create Collection Lambda ECR: $CREATE_COLLECTION_ECR_URI"
           
           STORE_EMBEDDINGS_ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name encoding-service-EcrStack \
@@ -172,6 +181,26 @@ jobs:
           docker push $ECR_REGISTRY/$ENCODE_ECR_REPO:encode-latest
           echo "Pushed Encode Lambda: $ENCODE_IMAGE_URI and encode-latest"
 
+      - name: Build Create Collection Lambda Docker image
+        working-directory: encoding-server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -f Dockerfile.create_collection -t create-collection-lambda:$IMAGE_TAG .
+          docker tag create-collection-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_COLLECTION_ECR_REPO:create-collection-$IMAGE_TAG
+          docker tag create-collection-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_COLLECTION_ECR_REPO:create-collection-latest
+          echo "CREATE_COLLECTION_IMAGE_URI=$ECR_REGISTRY/$CREATE_COLLECTION_ECR_REPO:create-collection-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "CREATE_COLLECTION_IMAGE_TAG=create-collection-$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Push Create Collection Lambda Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push $CREATE_COLLECTION_IMAGE_URI
+          docker push $ECR_REGISTRY/$CREATE_COLLECTION_ECR_REPO:create-collection-latest
+          echo "Pushed Create Collection Lambda: $CREATE_COLLECTION_IMAGE_URI and create-collection-latest"
+
       - name: Build Store Embeddings Lambda Docker image
         working-directory: encoding-server
         env:
@@ -218,6 +247,7 @@ jobs:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
           INGESTION_IMAGE_TAG: ${{ env.INGESTION_IMAGE_TAG }}
           ENCODE_IMAGE_TAG: ${{ env.ENCODE_IMAGE_TAG }}
+          CREATE_COLLECTION_IMAGE_TAG: ${{ env.CREATE_COLLECTION_IMAGE_TAG }}
           STORE_EMBEDDINGS_IMAGE_TAG: ${{ env.STORE_EMBEDDINGS_IMAGE_TAG }}
           STORE_S3_IMAGE_TAG: ${{ env.STORE_S3_IMAGE_TAG }}
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
