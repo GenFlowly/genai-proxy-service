@@ -20,6 +20,7 @@ COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 COPY factory ${LAMBDA_TASK_ROOT}/factory
 COPY processors ${LAMBDA_TASK_ROOT}/processors
 COPY services ${LAMBDA_TASK_ROOT}/services
+COPY models ${LAMBDA_TASK_ROOT}/models
 
 # Set the handler
 CMD [ "handlers.ingestion_lambda.handler" ]

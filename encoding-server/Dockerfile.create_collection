@@ -8,6 +8,7 @@ RUN pip install --only-binary=:all: --no-cache-dir -r requirements.txt
 
 # Copy handler code
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
+COPY models ${LAMBDA_TASK_ROOT}/models
 
 # Set the handler
 CMD [ "handlers.create_collection_lambda.handler" ]
