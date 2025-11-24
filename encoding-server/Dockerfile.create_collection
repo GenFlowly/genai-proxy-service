@@ -4,7 +4,7 @@ FROM public.ecr.aws/lambda/python:3.11
 COPY requirements-create-collection.txt ${LAMBDA_TASK_ROOT}/requirements.txt
 
 # Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --only-binary=:all: --no-cache-dir -r requirements.txt
 
 # Copy handler code
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
