@@ -69,5 +69,5 @@ class CustomerProfileService(
 fun generateCustomerId(): String {
     val uuid =
         UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
-    return "CUSTOMER-$uuid"
+    return "CU$uuid"
 }
