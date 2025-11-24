@@ -1,0 +1,13 @@
+FROM public.ecr.aws/lambda/python:3.11
+
+# Copy requirements - reusing store_embeddings requirements as it has pymilvus
+COPY requirements-store-embeddings.txt ${LAMBDA_TASK_ROOT}/requirements.txt
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy handler code
+COPY handlers ${LAMBDA_TASK_ROOT}/handlers
+
+# Set the handler
+CMD [ "handlers.create_collection_lambda.handler" ]

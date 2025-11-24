@@ -24,10 +24,12 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     rawEmailBucket: s3Stack.rawEmailBucket,
     ingestionRepo: ecrStack.ingestionRepo,
     encodeRepo: ecrStack.encodeRepo,
+    createCollectionRepo: ecrStack.createCollectionRepo,
     storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
     storeS3Repo: ecrStack.storeS3Repo,
     ingestionImageTag: process.env.INGESTION_IMAGE_TAG,
     encodeImageTag: process.env.ENCODE_IMAGE_TAG,
+    createCollectionImageTag: process.env.CREATE_COLLECTION_IMAGE_TAG,
     storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG,
     storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG,
     zillizEndpoint: process.env.ZILLIZ_ENDPOINT!,
@@ -35,8 +37,8 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
 });
 
-if (!process.env.INGESTION_IMAGE_TAG || !process.env.ENCODE_IMAGE_TAG || !process.env.STORE_EMBEDDINGS_IMAGE_TAG || !process.env.STORE_S3_IMAGE_TAG) {
-    throw new Error('Image tags (INGESTION_IMAGE_TAG, ENCODE_IMAGE_TAG, STORE_EMBEDDINGS_IMAGE_TAG, STORE_S3_IMAGE_TAG) are required');
+if (!process.env.INGESTION_IMAGE_TAG || !process.env.ENCODE_IMAGE_TAG || !process.env.CREATE_COLLECTION_IMAGE_TAG || !process.env.STORE_EMBEDDINGS_IMAGE_TAG || !process.env.STORE_S3_IMAGE_TAG) {
+    throw new Error('Image tags (INGESTION_IMAGE_TAG, ENCODE_IMAGE_TAG, CREATE_COLLECTION_IMAGE_TAG, STORE_EMBEDDINGS_IMAGE_TAG, STORE_S3_IMAGE_TAG) are required');
 }
 
 if (!process.env.ZILLIZ_ENDPOINT || !process.env.ZILLIZ_TOKEN) {
@@ -48,6 +50,7 @@ const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODIN
     ingestionQueue: sqsStack.ingestionQueue,
     storeS3Repo: ecrStack.storeS3Repo,
     encodeLambda: lambdaStack.encodeLambda,
+    createCollectionLambda: lambdaStack.createCollectionLambda,
     storeEmbeddingsLambda: lambdaStack.storeEmbeddingsLambda,
     storeS3Lambda: lambdaStack.storeS3Lambda,
 });

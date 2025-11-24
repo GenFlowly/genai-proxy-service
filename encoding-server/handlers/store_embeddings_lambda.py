@@ -26,7 +26,7 @@ def get_milvus_client():
         token=ZILLIZ_TOKEN
     )
 
-def store_in_zilliz(data: Dict[str, Any], embedding: List[float]) -> str:
+def store_in_zilliz(data: Dict[str, Any], embedding: List[float], collection_name: str) -> str:
     """Store data embedding in Zilliz Cloud."""
     try:
         client = get_milvus_client()
@@ -39,11 +39,11 @@ def store_in_zilliz(data: Dict[str, Any], embedding: List[float]) -> str:
         
         # Insert into collection
         result = client.insert(
-            collection_name=COLLECTION_NAME,
+            collection_name=collection_name,
             data=[record]
         )
         
-        logger.info(f"Successfully inserted into Zilliz. Insert count: {result.get('insert_count', 0)}")
+        logger.info(f"Successfully inserted into Zilliz collection '{collection_name}'. Insert count: {result.get('insert_count', 0)}")
         return record.get('id', 'unknown')
         
     except Exception as e:
@@ -63,8 +63,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if not embedding:
             raise ValueError("No embedding found in payload")
             
-        logger.info("Storing embedding for data item")
-        store_in_zilliz(event, embedding)
+        # Extract customerId for collection name
+        customer_id = event.get('customerId')
+        if not customer_id:
+            raise ValueError("customerId is missing from the event payload")
+            
+        logger.info(f"Storing embedding for data item in collection {customer_id}")
+        store_in_zilliz(event, embedding, customer_id)
         
         # Return event without embedding to save payload size for next step?
         # Or keep it? S3 step doesn't need embedding.
@@ -73,7 +78,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         result = event.copy()
         # Optional: remove embedding if not needed downstream
-        # del result['embedding'] 
+        del result['embedding']
         
         return result
 

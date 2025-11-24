@@ -15,6 +15,7 @@ export interface StepFunctionsStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     storeS3Repo: ecr.IRepository;
     encodeLambda: lambda.IFunction;
+    createCollectionLambda: lambda.IFunction;
     storeEmbeddingsLambda: lambda.IFunction;
     storeS3Lambda: lambda.IFunction;
 }
@@ -32,6 +33,11 @@ export class StepFunctionsStack extends cdk.Stack {
             payloadResponseOnly: true, // Return only the payload
         });
 
+        const createCollectionTask = new tasks.LambdaInvoke(this, 'Create Collection', {
+            lambdaFunction: props.createCollectionLambda,
+            payloadResponseOnly: true,
+        });
+
         const storeEmbeddingsTask = new tasks.LambdaInvoke(this, 'Store Embeddings', {
             lambdaFunction: props.storeEmbeddingsLambda,
             payloadResponseOnly: true,
@@ -42,8 +48,9 @@ export class StepFunctionsStack extends cdk.Stack {
             payloadResponseOnly: true,
         });
 
-        // Define Chain
+        // Define Chain: Encode -> Create Collection -> Store Embeddings -> Store S3
         const definition = encodeTask
+            .next(createCollectionTask)
             .next(storeEmbeddingsTask)
             .next(storeS3Task);
 
