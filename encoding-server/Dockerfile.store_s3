@@ -5,8 +5,9 @@ FROM public.ecr.aws/lambda/python:3.11 AS builder
 RUN yum install -y gcc gcc-c++ make cmake
 
 # Copy and install dependencies
-COPY requirements-store-s3.txt /tmp/requirements.txt
-RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements.txt --target /tmp/python
+COPY requirements.txt /tmp/requirements.txt
+COPY requirements-store-s3.txt /tmp/requirements-store-s3.txt
+RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements-store-s3.txt --target /tmp/python
 
 # Runtime stage
 FROM public.ecr.aws/lambda/python:3.11
