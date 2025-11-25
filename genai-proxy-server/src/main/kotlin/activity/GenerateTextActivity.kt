@@ -33,8 +33,7 @@ fun Route.registerGenerateTextRoutes(
 
                 // Extract customerId from JWT token
                 val customerId = call.requireAuthenticatedCustomerId(
-                    customerProfileService,
-                    request.client
+                    customerProfileService
                 )
 
                 // Validate aiVendors list

@@ -23,8 +23,7 @@ fun Route.registerStoreApiKeyRoutes(
             
             // Extract customerId from JWT token
             val customerId = call.requireAuthenticatedCustomerId(
-                customerProfileService,
-                request.client
+                customerProfileService
             )
             
             logger.info("Received SaveApiKeyRequest from customerId {}: {}", customerId, request)

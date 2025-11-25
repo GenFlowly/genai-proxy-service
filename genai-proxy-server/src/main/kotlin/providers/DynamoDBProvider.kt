@@ -268,6 +268,25 @@ class DynamoDBProvider(
             return@withContext if (response.hasItem()) response.item() else null
         }
 
+    /**
+     * Query customer profile by sub only (partition key)
+     * Returns the first matching profile if multiple clients exist for the same sub
+     */
+    suspend fun queryCustomerProfileBySub(sub: String): Map<String, AttributeValue>? =
+        withContext(Dispatchers.IO) {
+            val request = software.amazon.awssdk.services.dynamodb.model.QueryRequest.builder()
+                .tableName(CUSTOMER_PROFILE_TABLE)
+                .keyConditionExpression("$SUB_PARTITION_KEY = :sub")
+                .expressionAttributeValues(
+                    mapOf(":sub" to AttributeValue.builder().s(sub).build())
+                )
+                .limit(1)  // Only need the first result
+                .build()
+
+            val response = dynamoDbClient.query(request)
+            return@withContext response.items().firstOrNull()
+        }
+
 
     private fun withTimestamps(base: Map<String, AttributeValue>): Map<String, AttributeValue> {
         val now = Instant.now().toString()

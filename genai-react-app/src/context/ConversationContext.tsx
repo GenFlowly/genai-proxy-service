@@ -65,7 +65,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         const response = await generateText(token, {
             aiConfig: aiConfigs.filter(c => c.aiVendor && c.model),
             prompt,
-            customerId: customerId!,
+            // customerId: customerId!,
             selectedResponseId: selectedResponseId ?? '',
             conversationId: conversationIdRef.current,
             client: 'REACT_APP',
