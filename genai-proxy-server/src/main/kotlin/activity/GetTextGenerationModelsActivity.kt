@@ -31,8 +31,7 @@ fun Route.registerGetTextGenerationModelsRoutes(
             
             // Extract customerId from JWT token
             val customerId = call.requireAuthenticatedCustomerId(
-                customerProfileService,
-                request.client
+                customerProfileService
             )
 
             val startTime = System.currentTimeMillis()

@@ -4,7 +4,6 @@ import {AIConfig} from "../context/AIContext";
 export interface GenerateTextRequest {
     aiConfig: AIConfig[]
     prompt: string
-    customerId: string
     selectedResponseId: string
     conversationId: string
     client: string

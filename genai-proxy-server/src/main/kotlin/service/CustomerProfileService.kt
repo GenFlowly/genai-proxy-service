@@ -66,12 +66,12 @@ class CustomerProfileService(
 
     /**
      * Get customerId from sub claim (for JWT authentication)
+     * Queries by sub only (partition key) - does not require client
      * @param sub Auth0 subject claim from JWT
-     * @param client Client identifier
      * @return customerId if profile exists, null otherwise
      */
-    suspend fun getCustomerIdBySub(sub: String, client: String): String? {
-        val profile = dynamoDBProvider.getCustomerProfile(sub, client)
+    suspend fun getCustomerIdBySub(sub: String): String? {
+        val profile = dynamoDBProvider.queryCustomerProfileBySub(sub)
         return profile?.get("customerId")?.s()
     }
 }

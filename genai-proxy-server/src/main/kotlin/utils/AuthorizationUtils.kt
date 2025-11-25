@@ -9,14 +9,13 @@ import service.CustomerProfileService
 
 /**
  * Extract sub from JWT and fetch customerId from CustomerProfileService
+ * Queries by sub only (partition key) - does not require client
  * 
  * @param customerProfileService Service to fetch customer profile
- * @param client Client identifier (e.g., "web", "mobile")
  * @return customerId if found, null otherwise
  */
 suspend fun ApplicationCall.getAuthenticatedCustomerId(
-    customerProfileService: CustomerProfileService,
-    client: String
+    customerProfileService: CustomerProfileService
 ): String? {
     // Extract JWT principal
     val principal = principal<JWTPrincipal>() ?: return null
@@ -24,22 +23,20 @@ suspend fun ApplicationCall.getAuthenticatedCustomerId(
     // Get sub claim from JWT
     val sub = principal.payload.getClaim("sub").asString() ?: return null
     
-    // Fetch customerId via service
-    return customerProfileService.getCustomerIdBySub(sub, client)
+    // Fetch customerId via service (queries by sub only)
+    return customerProfileService.getCustomerIdBySub(sub)
 }
 
 /**
  * Extract sub from JWT and fetch customerId, responding with 403 if not found
  * 
  * @param customerProfileService Service to fetch customer profile
- * @param client Client identifier
  * @return customerId (throws/responds if not found)
  */
 suspend fun ApplicationCall.requireAuthenticatedCustomerId(
-    customerProfileService: CustomerProfileService,
-    client: String  
+    customerProfileService: CustomerProfileService
 ): String {
-    val customerId = getAuthenticatedCustomerId(customerProfileService, client)
+    val customerId = getAuthenticatedCustomerId(customerProfileService)
     
     if (customerId == null) {
         respond(HttpStatusCode.Forbidden, mapOf("error" to "Customer profile not found"))
