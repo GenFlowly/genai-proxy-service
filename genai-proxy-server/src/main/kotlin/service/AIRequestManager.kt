@@ -36,11 +36,12 @@ class AIRequestManager(
 
 
     suspend fun getConversationId(
-        request: GenerateTextRequest
+        request: GenerateTextRequest,
+        customerId: String
     ): String {
         val activeConversationId = if (request.conversationId.isNullOrBlank()) {
             conversationService.createConversation(
-                request.customerId,
+                customerId,
                 request.client
             )
         } else {

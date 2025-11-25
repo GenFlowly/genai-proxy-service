@@ -56,7 +56,8 @@ fun Route.registerGenerateTextRoutes(
                     request.toString()
                 )
 
-                val conversationId = aiRequestManager.getConversationId(request)
+                val conversationId =
+                    aiRequestManager.getConversationId(request, customerId)
 
                 logger.info("Retrieved conversationId: {}", conversationId)
 
