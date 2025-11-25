@@ -1,6 +1,7 @@
 package com.genflowly.activity
 
 import com.genflowly.Routes
+import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
@@ -17,16 +18,24 @@ import models.GenerateTextResponse
 import models.Message
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
+import service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
 fun Route.registerGenerateTextRoutes(
-    aiRequestManager: AIRequestManager
+    aiRequestManager: AIRequestManager,
+    customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
         post(Routes.GENERATE_TEXT) {
             try {
                 val request = call.receive<GenerateTextRequest>()
+
+                // Extract customerId from JWT token
+                val customerId = call.requireAuthenticatedCustomerId(
+                    customerProfileService,
+                    request.client
+                )
 
                 // Validate aiVendors list
                 if (request.aiConfig.isEmpty()) {
@@ -42,7 +51,8 @@ fun Route.registerGenerateTextRoutes(
                 }
 
                 logger.info(
-                    "Received GenerateText request: {}",
+                    "Received GenerateText request from customerId {} : {}",
+                    customerId,
                     request.toString()
                 )
 
@@ -52,7 +62,7 @@ fun Route.registerGenerateTextRoutes(
 
                 val message = Message(
                     conversationId = conversationId,
-                    customerId = request.customerId,
+                    customerId = customerId,
                     client = request.client,
                     role = "user",
                     text = request.prompt,

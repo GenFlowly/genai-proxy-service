@@ -7,7 +7,6 @@ import kotlinx.serialization.Serializable
 data class GenerateTextRequest(
     val aiConfig: List<AIConfig>,
     val prompt: String,
-    val customerId: String,
     val selectedResponseId: String?,
     val conversationId: String?,
     val client: String

@@ -31,7 +31,7 @@ fun Application.configureRouting(
             call.respondText("Hello World!")
         }
 
-        registerGenerateTextRoutes(aiRequestManager)
+        registerGenerateTextRoutes(aiRequestManager, customerProfileService)
         registerStoreApiKeyRoutes(customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService)
         registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)

@@ -104,6 +104,3 @@ fun Application.module() {
 
     configureRouting(aiRequestService, aiRequestManager, customerProfileService)
 }
-
-
-

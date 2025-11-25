@@ -6,5 +6,5 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class GetTextGenerationModelsRequest(
     val aiVendor: List<AIVendor>,
-    val customerId: String,
+    val client: String
 )

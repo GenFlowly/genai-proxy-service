@@ -9,6 +9,7 @@ import com.genflowly.aicallerlib.models.openai.*
 import com.genflowly.models.*
 import com.genflowly.service.AIRequestService
 import com.genflowly.utils.fetchApiKey
+import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -27,6 +28,12 @@ fun Route.registerGetTextGenerationModelsRoutes(
     authenticate("auth0") {
         post(Routes.GET_TEXT_GENERATION_MODELS) {
             val request = call.receive<GetTextGenerationModelsRequest>()
+            
+            // Extract customerId from JWT token
+            val customerId = call.requireAuthenticatedCustomerId(
+                customerProfileService,
+                request.client
+            )
 
             val startTime = System.currentTimeMillis()
 
@@ -35,7 +42,7 @@ fun Route.registerGetTextGenerationModelsRoutes(
 
                 val apiKey = fetchApiKey(
                     vendor,
-                    request.customerId,
+                    customerId,
                     customerProfileService
                 )
 
