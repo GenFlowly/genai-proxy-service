@@ -1,9 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
-import {Construct} from 'constructs';
+import { Construct } from 'constructs';
 import {
-    InterfaceVpcEndpointAwsService,
+    GatewayVpcEndpointAwsService,
     Vpc
 } from 'aws-cdk-lib/aws-ec2';
 import {
@@ -11,11 +11,11 @@ import {
     createDefaultVpc,
     STAGES
 } from "@genflowly/cdk-commons";
-import {IRepository} from "aws-cdk-lib/aws-ecr";
-import {ITable} from "aws-cdk-lib/aws-dynamodb";
-import {IKey} from "aws-cdk-lib/aws-kms";
+import { IRepository } from "aws-cdk-lib/aws-ecr";
+import { ITable } from "aws-cdk-lib/aws-dynamodb";
+import { IKey } from "aws-cdk-lib/aws-kms";
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
-import {RESOURCE_NAMES} from "./constants";
+import { RESOURCE_NAMES } from "./constants";
 
 export interface EcsStackProps extends cdk.StackProps {
     stage: STAGES;
@@ -46,15 +46,15 @@ export class EcsStack extends cdk.Stack {
         );
 
         vpc.addGatewayEndpoint('S3Endpoint', {
-            service: InterfaceVpcEndpointAwsService.S3,
+            service: GatewayVpcEndpointAwsService.S3,
         });
 
 
         const cluster = new ecs.Cluster(
             this, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-clusterId`, {
-                clusterName,
-                vpc,
-            });
+            clusterName,
+            vpc,
+        });
 
         const requiredEnvVars = ['AUTH0_SPA_DOMAIN', 'AUTH0_SPA_CLIENT_ID', 'AUTH0_API_AUDIENCE'];
         for (const key of requiredEnvVars) {
@@ -87,7 +87,7 @@ export class EcsStack extends cdk.Stack {
                 cpu: 256,
                 memoryLimitMiB: 512,
                 publicLoadBalancer: true,
-                assignPublicIp: true,
+                assignPublicIp: false,
                 certificate,
                 taskImageOptions: {
                     image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, imageTag),
@@ -112,12 +112,28 @@ export class EcsStack extends cdk.Stack {
 
         props.kmsKey.grantEncryptDecrypt(fargateService.taskDefinition.taskRole);
 
+        // Configure auto scaling
+        // Note: AWS ECS auto scaling with ALB metrics doesn't support minCapacity: 0
+        // The service will scale between 1-2 tasks based on load
+        const scaling = fargateService.service.autoScaleTaskCount({
+            minCapacity: 1,  // AWS limitation: cannot scale to 0 with ALB-based scaling
+            maxCapacity: 2,  // Scale up to 2 tasks under load
+        });
+
+        // Scale based on ALB request count
+        scaling.scaleOnRequestCount('RequestScaling', {
+            requestsPerTarget: 100,  // Target 100 requests per task
+            targetGroup: fargateService.targetGroup,
+            scaleInCooldown: cdk.Duration.seconds(300),   // Wait 5 min before scaling down
+            scaleOutCooldown: cdk.Duration.seconds(60),   // Wait 1 min before scaling up
+        });
+
         fargateService.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
         fargateService.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30');
 
-        new cdk.CfnOutput(this, 'EcsClusterName', {value: cluster.clusterName});
-        new cdk.CfnOutput(this, 'EcsServiceName', {value: fargateService.service.serviceName});
-        new cdk.CfnOutput(this, 'LoadBalancerDNS', {value: fargateService.loadBalancer.loadBalancerDnsName});
+        new cdk.CfnOutput(this, 'EcsClusterName', { value: cluster.clusterName });
+        new cdk.CfnOutput(this, 'EcsServiceName', { value: fargateService.service.serviceName });
+        new cdk.CfnOutput(this, 'LoadBalancerDNS', { value: fargateService.loadBalancer.loadBalancerDnsName });
         if (domainNameFull) {
             new cdk.CfnOutput(this, 'CustomDomain', { value: domainNameFull });
         }
