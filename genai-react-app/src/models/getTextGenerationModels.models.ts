@@ -3,7 +3,6 @@ import { AIVendor } from '../constants/vendors'
 
 export interface GetTextGenerationModelsRequest {
     aiVendor: AIVendor[]
-    customerId: string
 }
 
 export interface GetTextGenerationModelsResponse {

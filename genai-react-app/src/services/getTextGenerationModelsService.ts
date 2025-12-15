@@ -18,10 +18,10 @@ function getCacheKey(customerId: string): string {
 
 export async function getTextGenerationModels(
     token: string,
+    customerId: string,
     request: GetTextGenerationModelsRequest,
     bypassCache: boolean = false
 ): Promise<GetTextGenerationModelsResponse> {
-    const { customerId } = request
     const cacheKey = getCacheKey(customerId)
 
     if (!bypassCache) {
