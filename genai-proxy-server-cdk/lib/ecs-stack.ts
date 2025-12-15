@@ -87,7 +87,7 @@ export class EcsStack extends cdk.Stack {
                 cpu: 256,
                 memoryLimitMiB: 512,
                 publicLoadBalancer: true,
-                assignPublicIp: false,
+                assignPublicIp: true,
                 certificate,
                 taskImageOptions: {
                     image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, imageTag),
