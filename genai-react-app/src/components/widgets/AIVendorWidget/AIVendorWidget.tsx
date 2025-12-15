@@ -48,7 +48,8 @@ export default function AIVendorWidget({
                 const response: GetTextGenerationModelsResponse =
                     await getTextGenerationModels(
                         token,
-                        { aiVendor: vendors, customerId },
+                        customerId,
+                        { aiVendor: vendors },
                         bypassCache
                     )
 

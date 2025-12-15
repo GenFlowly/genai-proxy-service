@@ -276,7 +276,10 @@ class DynamoDBProvider(
         withContext(Dispatchers.IO) {
             val request = software.amazon.awssdk.services.dynamodb.model.QueryRequest.builder()
                 .tableName(CUSTOMER_PROFILE_TABLE)
-                .keyConditionExpression("$SUB_PARTITION_KEY = :sub")
+                .keyConditionExpression("#sub = :sub")
+                .expressionAttributeNames(
+                    mapOf("#sub" to SUB_PARTITION_KEY)
+                )
                 .expressionAttributeValues(
                     mapOf(":sub" to AttributeValue.builder().s(sub).build())
                 )
