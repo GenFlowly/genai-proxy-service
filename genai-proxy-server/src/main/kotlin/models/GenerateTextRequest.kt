@@ -8,7 +8,8 @@ data class GenerateTextRequest(
     val aiConfig: List<AIConfig>,
     val prompt: String,
     val selectedResponseId: String?,
-    val conversationId: String?
+    val conversationId: String?,
+    val client: String
 )
 
 @Serializable

@@ -36,7 +36,7 @@ fun Route.registerGenerateTextRoutes(
                     customerProfileService
                 )
 
-                val client = "HARDCODED_FIREFOX" //TODO FIX
+                val client = request.client
 
                 // Validate aiVendors list
                 if (request.aiConfig.isEmpty()) {
