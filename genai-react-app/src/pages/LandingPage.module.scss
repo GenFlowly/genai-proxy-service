@@ -1,7 +1,8 @@
 @import '../styles/variables.scss';
 
 .page {
-  min-height: 100vh;
+  height: 100vh; // Fixed height instead of min-height
+  overflow: hidden; // Prevent page-level scroll
   background-color: $background-gray;
   display: flex;
   flex-direction: column;
