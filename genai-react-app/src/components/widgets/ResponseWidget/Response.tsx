@@ -4,7 +4,7 @@ import { AIVendor } from '../../../constants/vendors'
 import { useLayout } from '../../../context/LayoutContext'
 import { useConversation } from '../../../context/ConversationContext'
 import TextContainer from '../../common/TextContainer/TextContainer'
-import {Message} from "../../../models/conversation.models";
+import { Message } from "../../../models/conversation.models";
 
 interface ResponseProps {
     blockId: string
@@ -30,8 +30,18 @@ export default function Response({ blockId, responseMessages, onFollowUp }: Resp
         onFollowUp?.(messageId)
     }
 
+    // Calculate available width based on sidebar state
+    const leftWidth = isLeftSidebarExpanded ? '16rem' : '5rem'
+    const rightWidth = isRightSidebarExpanded ? '20rem' : '5rem'
+    // Exact calculation to touch sidebars
+    const maxWidth = `calc(100vw - ${leftWidth} - ${rightWidth})`
+
     return (
-        <div className={styles.container}>
+        <div
+            className={styles.container}
+            data-response-block-id={blockId}
+            style={{ maxWidth }}
+        >
             <div
                 className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}
             >
@@ -53,11 +63,11 @@ export default function Response({ blockId, responseMessages, onFollowUp }: Resp
                             {onFollowUp && (
                                 <div className={styles.followUpButtonWrapper}>
                                     <button
-                                        className={styles.followUpButton}
+                                        className={`${styles.followUpButton} ${isSelected ? styles.selectedButton : ''}`}
                                         onClick={() => handleFollowUp(messageId)}
                                         disabled={isSelected}
                                     >
-                                        ➕ Follow up
+                                        {isSelected ? '✓ Selected' : '➕ Follow up'}
                                     </button>
                                 </div>
                             )}

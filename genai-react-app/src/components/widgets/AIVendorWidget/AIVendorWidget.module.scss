@@ -1,3 +1,5 @@
+@import '../../../styles/themes.scss';
+
 .vendorWidget {
   display: flex;
   flex-direction: column;
@@ -14,9 +16,9 @@
   width: 2.6rem;
   height: 2.6rem;
   border-radius: 50%;
-  border: 1px solid #ccc;
-  background: white;
-  color: #333;
+  border: 1px solid $color-border;
+  background: $color-background-secondary;
+  color: $color-text-primary;
   font-weight: 600;
   font-size: 1rem;
   cursor: pointer;
@@ -25,14 +27,23 @@
   align-items: center;
   justify-content: center;
 
-  &:hover {
-    background: #f5f5f5;
+  &:hover:not(.active) {
+    background: $color-primary-light;
+    border-color: $color-primary;
+  }
+
+  &:active:not(.active) {
+    background: $color-background-selected;
   }
 
   &.active {
-    background: #4a90e2;
+    background: $color-primary;
     color: white;
-    border-color: #4a90e2;
+    border-color: $color-primary;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
   }
 }
 
@@ -46,13 +57,13 @@
 .title {
   font-size: 1rem;
   font-weight: 600;
-  color: #1c1c1c;
+  color: $color-text-primary;
 }
 
 .refreshButton {
   padding: 0.4rem 0.8rem;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
+  background: $color-background-tertiary;
+  border: 1px solid $color-border;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.85rem;
@@ -60,8 +71,9 @@
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
-    background: #e8e8e8;
+    background: $color-background-hover;
   }
+
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -75,24 +87,34 @@
 }
 
 .vendorButton {
-  border: 1px solid #ccc;
+  border: 1px solid $color-border;
   padding: 0.4rem 0.8rem;
   border-radius: 20px;
-  background: white;
+  background: $color-background-secondary;
+  color: $color-text-primary;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 
-  &:hover:not(:disabled) {
-    background: #f1f1f1;
+  &:hover:not(:disabled):not(.selected) {
+    background: $color-primary-light;
+    border-color: $color-primary;
+  }
+
+  &:active:not(:disabled):not(.selected) {
+    background: $color-background-selected;
   }
 
   &.selected {
-    background: #4a90e2;
+    background: $color-primary;
     color: white;
-    border-color: #4a90e2;
+    border-color: $color-primary;
+
+    &:hover {
+      background: $color-primary-hover;
+    }
   }
 
   &:disabled {
@@ -102,10 +124,12 @@
 }
 
 .modelSelect {
-  border: 1px solid #ccc;
+  border: 1px solid $color-border;
   border-radius: 8px;
   padding: 0.3rem 0.5rem;
   font-size: 0.9rem;
+  background: $color-background-secondary;
+  color: $color-text-primary;
 }
 
 .errorText {

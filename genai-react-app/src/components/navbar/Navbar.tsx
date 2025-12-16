@@ -1,16 +1,13 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { useLayout } from '../../context/LayoutContext'
 import UserIcon from '../icons/UserIcon'
 import LoginIcon from '../icons/LoginIcon'
 import SettingsIcon from '../icons/SettingsIcon'
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import styles from './Navbar.module.scss'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
-    const { isLeftSidebarExpanded, isRightSidebarExpanded, toggleLeftSidebar, toggleRightSidebar } = useLayout()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
 
@@ -27,28 +24,12 @@ export default function Navbar(): React.ReactElement {
         <nav className={styles.navbar}>
             <div className={styles.container}>
                 <div className={styles.leftControls}>
-                    <button
-                        onClick={toggleLeftSidebar}
-                        className={styles.toggleButton}
-                        title={isLeftSidebarExpanded ? 'Collapse Left Sidebar' : 'Expand Left Sidebar'}
-                    >
-                        {isLeftSidebarExpanded ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-                    </button>
-
                     <Link to="/" className={styles.logo}>
                         MyApp
                     </Link>
                 </div>
 
                 <div className={styles.rightControls}>
-                    <button
-                        onClick={toggleRightSidebar}
-                        className={styles.toggleButton}
-                        title={isRightSidebarExpanded ? 'Collapse Right Sidebar' : 'Expand Right Sidebar'}
-                    >
-                        {isRightSidebarExpanded ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
-                    </button>
-
                     <div className={styles.auth}>
                         {!isAuthenticated ? (
                             <button

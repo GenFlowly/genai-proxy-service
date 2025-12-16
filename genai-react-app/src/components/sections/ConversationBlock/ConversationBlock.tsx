@@ -1,12 +1,12 @@
-import React, {useEffect, useRef} from 'react'
+import React, { useEffect, useRef } from 'react'
 import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import Response from '../../widgets/ResponseWidget/Response'
 import MultiPurposeButton
     from '../../common/MultiPurposeButton/MultiPurposeButton'
-import {useConversation} from '../../../context/ConversationContext'
+import { useConversation } from '../../../context/ConversationContext'
 import styles from './ConversationBlock.module.scss'
 
-export default function ConversationBlock({id}: { id: string }) {
+export default function ConversationBlock({ id }: { id: string }) {
     const {
         conversationBlockList,
         generateResponses,
@@ -31,31 +31,48 @@ export default function ConversationBlock({id}: { id: string }) {
 
     if (!conversationBlock) return null
 
-    // ✅ Follow-up logic restored
+    // ✅ Follow-up logic: reuse last empty block or create new one
     const handleFollowUp = (selectedMessageId: string) => {
-        // Create a new block and inherit the selected response ID
-        const newBlockId = `conv-${Date.now()}`
-        addNewConversationBlockWithId(newBlockId)
+        // Get the last conversation block
+        const lastBlock = conversationBlockList[conversationBlockList.length - 1]
 
-        // Persist the follow-up link
-        setSelectedResponseForBlock(newBlockId, selectedMessageId)
+        // Check if last block is empty (no responses yet)
+        const isLastBlockEmpty = lastBlock.responseMessages.length === 0
 
-        // Optional: scroll to new block
-        setTimeout(() => {
-            const last = document.querySelector(`.${styles.conversationBlock}:last-child`)
-            last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 300)
+        if (isLastBlockEmpty) {
+            // Reuse the existing empty block
+            setSelectedResponseForBlock(lastBlock.conversationBlockId, selectedMessageId)
+
+            // Scroll to the existing block
+            setTimeout(() => {
+                const last = document.querySelector(`.${styles.conversationBlock}:last-child`)
+                last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }, 100)
+        } else {
+            // Create a new block only if the last one has responses
+            const newBlockId = `conv-${Date.now()}`
+            addNewConversationBlockWithId(newBlockId)
+            setSelectedResponseForBlock(newBlockId, selectedMessageId)
+
+            // Scroll to new block
+            setTimeout(() => {
+                const last = document.querySelector(`.${styles.conversationBlock}:last-child`)
+                last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }, 300)
+        }
     }
 
     return (
-        <div className={styles.conversationBlock}>
-            <PromptEditor id={id}/>
+        <div className={styles.conversationBlock} data-block-id={id}>
+            <PromptEditor id={id} />
 
-            <MultiPurposeButton
-                onClick={() => generateResponses(id)}
-                label={conversationBlock.isLoading ? 'Generating...' : 'Send to API'}
-                disabled={conversationBlock.isLoading}
-            />
+            {conversationBlock.responseMessages.length === 0 && (
+                <MultiPurposeButton
+                    onClick={() => generateResponses(id)}
+                    label={conversationBlock.isLoading ? 'Generating...' : 'Send to API'}
+                    disabled={conversationBlock.isLoading}
+                />
+            )}
 
             {conversationBlock.responseMessages.length > 0 && (
                 <div ref={responseRef}>

@@ -1,8 +1,8 @@
-@import '../../styles/variables.scss';
+@import '../../styles/themes.scss';
 
 .navbar {
-  background-color: $primary-color;
-  color: $white;
+  background-color: $color-navbar-background;
+  color: $color-navbar-text;
   box-shadow: $shadow-md;
 }
 
@@ -18,6 +18,7 @@
 .logo {
   font-size: 1.5rem;
   font-weight: bold;
+  color: $color-navbar-text;
 }
 
 .auth {
@@ -28,17 +29,17 @@
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  background-color: $white;
-  color: $primary-color;
+  background-color: $color-primary;
+  color: $white;
   padding: $spacing-sm $spacing-lg;
   border-radius: $radius-md;
   font-weight: 600;
   border: none;
   cursor: pointer;
-  transition: background-color $transition-normal;
+  transition: all $transition-normal;
 
   &:hover {
-    background-color: $primary-light;
+    background-color: $color-primary-hover;
   }
 }
 
@@ -50,16 +51,16 @@
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  background-color: $primary-dark;
+  background-color: $color-primary;
   color: $white;
   padding: $spacing-sm $spacing-lg;
   border-radius: $radius-md;
   border: none;
   cursor: pointer;
-  transition: background-color $transition-normal;
+  transition: all $transition-normal;
 
   &:hover {
-    background-color: $primary-darker;
+    background-color: $color-primary-hover;
   }
 }
 
@@ -68,7 +69,7 @@
   right: 0;
   margin-top: $spacing-sm;
   width: 12rem;
-  background-color: $white;
+  background-color: $color-background-secondary;
   border-radius: $radius-md;
   box-shadow: $shadow-lg;
   padding: $spacing-sm 0;
@@ -77,18 +78,18 @@
 
 .dropdownHeader {
   padding: $spacing-sm $spacing-lg;
-  border-bottom: 1px solid $border-light;
+  border-bottom: 1px solid $color-border;
 }
 
 .dropdownLabel {
   font-size: 0.875rem;
-  color: $text-muted;
+  color: $color-text-muted;
 }
 
 .dropdownEmail {
   font-size: 0.875rem;
   font-weight: 600;
-  color: $text-primary;
+  color: $color-text-primary;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -101,14 +102,14 @@
   width: 100%;
   text-align: left;
   padding: $spacing-sm $spacing-lg;
-  color: $text-secondary;
+  color: $color-text-secondary;
   background: none;
   border: none;
   cursor: pointer;
   transition: background-color $transition-normal;
 
   &:hover {
-    background-color: $background-gray;
+    background-color: $color-background-hover;
   }
 }
 
@@ -122,7 +123,7 @@
 .toggleButton {
   background: transparent;
   border: none;
-  color: $white;
+  color: $color-navbar-text;
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 6px;

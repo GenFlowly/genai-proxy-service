@@ -1,3 +1,5 @@
+@import '../../../styles/themes.scss';
+
 .sidebar {
   height: 100%;
   padding: 1.5rem;
@@ -5,12 +7,13 @@
   flex-direction: column;
   gap: 2rem;
   overflow-y: hidden;
-  background: #fafafa;
+  background: $color-sidebar-background;
   transition: all 0.3s ease;
+  position: relative;
 
   &.collapsed {
-    width: 4rem;
-    padding: 1rem 0.5rem;
+    width: 5rem;
+    padding: 1rem 0.25rem;
     align-items: center;
     overflow: hidden;
     gap: 1rem;
@@ -24,19 +27,48 @@
     /* Optional icon placeholders for sections */
     .section::before {
       font-size: 1.2rem;
-      color: #555;
+      color: $color-text-muted;
     }
 
     /* Example icons (replace with actual icons in React) */
     .section:nth-child(1)::before {
-      content: '📁'; /* Projects */
+      content: '📁';
+      /* Projects */
     }
+
     .section:nth-child(2)::before {
-      content: '⚡'; /* Quick Actions */
+      content: '⚡';
+      /* Quick Actions */
     }
+
     .section:nth-child(3)::before {
-      content: '🕓'; /* History */
+      content: '🕓';
+      /* History */
     }
+  }
+}
+
+.collapseButton {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: transparent;
+  border: none;
+  color: $color-text-primary;
+  cursor: pointer;
+  padding: 0.4rem;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background-color: $color-background-hover;
+  }
+
+  svg {
+    display: block;
   }
 }
 
@@ -48,9 +80,9 @@
 
 .title {
   font-weight: 700;
-  color: #333;
+  color: $color-text-primary;
   font-size: 1rem;
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid $color-border;
   padding-bottom: 0.25rem;
 }
 
@@ -63,7 +95,7 @@
   gap: 0.4rem;
 
   li {
-    color: #555;
+    color: $color-text-secondary;
     font-size: 0.9rem;
     cursor: pointer;
     padding: 0.3rem 0.4rem;
@@ -71,13 +103,13 @@
     transition: background 0.2s;
 
     &:hover {
-      background: #f1f1f1;
+      background: $color-background-hover;
     }
   }
 }
 
 .actionButton {
-  background: #4a90e2;
+  background: $color-sidebar-button;
   color: white;
   border: none;
   padding: 0.5rem 0.8rem;
@@ -87,6 +119,6 @@
   transition: background 0.2s;
 
   &:hover {
-    background: #357ab8;
+    background: $color-sidebar-button-hover;
   }
 }
