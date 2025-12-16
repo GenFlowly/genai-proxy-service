@@ -1,11 +1,15 @@
+@import '../../../styles/themes.scss';
+
 .centerSection {
   flex: 1 1 auto;
+  min-width: 0; // Allow shrinking below content size
   display: flex;
   justify-content: center;
   align-items: flex-start;
   overflow-y: auto;
-  padding: 2rem 3rem;
-  background-color: #ffffff;
+  overflow-x: hidden; // Prevent horizontal scroll on center section
+  padding: 2rem 0; // Remove horizontal padding
+  background-color: $color-background;
   scroll-behavior: smooth;
 }
 
@@ -14,12 +18,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3rem; /* slightly increased for better separation between conversation blocks */
+  gap: 3rem;
+  /* slightly increased for better separation between conversation blocks */
 }
 
 .submitButton {
   align-self: flex-start;
-  background-color: #4a90e2;
+  background-color: $color-primary;
   color: white;
   padding: 0.6rem 1.2rem;
   border-radius: 6px;
@@ -29,11 +34,11 @@
   transition: background-color 0.2s;
 
   &:hover {
-    background-color: #357ab8;
+    background-color: $color-primary-hover;
   }
 
   &:disabled {
-    background-color: #ccc;
+    background-color: $color-disabled;
     cursor: not-allowed;
   }
 }
@@ -41,8 +46,9 @@
 /* 📱 Responsive layout */
 @media (max-width: 768px) {
   .centerSection {
-    padding: 1.5rem;
+    padding: 1.5rem 0;
   }
+
   .contentWrapper {
     gap: 2rem;
   }

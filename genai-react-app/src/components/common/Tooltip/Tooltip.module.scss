@@ -1,0 +1,33 @@
+@import '../../../styles/themes.scss';
+
+.tooltipContainer {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.tooltip {
+    position: fixed;
+    background: $color-navbar-background;
+    color: $color-navbar-text;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    max-width: 300px;
+    box-shadow: $shadow-lg;
+    z-index: 9999;
+    pointer-events: none;
+
+    // Arrow pointing left
+    &::before {
+        content: '';
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 6px solid transparent;
+        border-right-color: $color-navbar-background;
+    }
+}

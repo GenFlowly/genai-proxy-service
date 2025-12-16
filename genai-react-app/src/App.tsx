@@ -1,14 +1,17 @@
 import React from 'react';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import AppContent from './AppContent';
-import {config} from "./config/env";
+import { config } from "./config/env";
 
 export default function App(): React.ReactElement {
-    const { domain, clientId, audience } = config.auth0;
+  const { domain, clientId, audience } = config.auth0;
 
   return (
+    <ThemeProvider>
       <AuthProvider domain={domain} clientId={clientId} audience={audience}>
         <AppContent />
       </AuthProvider>
+    </ThemeProvider>
   );
 }

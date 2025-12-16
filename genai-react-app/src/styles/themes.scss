@@ -1,0 +1,197 @@
+// Theme CSS Variables
+// These will be dynamically set based on light/dark theme
+
+:root {
+    // Primary Colors
+    --color-primary: #006BE8;
+    --color-primary-hover: rgba(0, 107, 232, 0.8);
+    --color-primary-light: #e6f3ff;
+
+    // Success Colors (CTA Green)
+    --color-success: #3c7267;
+    --color-success-hover: rgba(60, 114, 103, 0.8);
+
+    // Background Colors
+    --color-background: #f5f5f5;
+    --color-background-secondary: #ffffff;
+    --color-background-tertiary: #ececec;
+    --color-background-hover: #ececec;
+    --color-background-selected: #e6f3ff;
+    --color-response-container-background: #ffffff;
+
+    // Text Colors
+    --color-text-primary: #2c2c2c;
+    --color-text-secondary: #2c2c2c;
+    --color-text-muted: #6b6b6b;
+    --color-text-light: #6b6b6b;
+
+    // Border Colors
+    --color-border: #cfcfce;
+    --color-border-light: #cfcfce;
+    --color-border-focus: #006BE8;
+
+    // Shadow
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow-focus: 0 0 6px rgba(0, 107, 232, 0.4);
+
+    // Sidebar
+    --color-sidebar-background: #e8e8e7;
+    --color-sidebar-button: #006BE8;
+    --color-sidebar-button-hover: rgba(0, 107, 232, 0.8);
+
+    // Navbar
+    --color-navbar-background: #252526;
+    --color-navbar-text: #ffffff;
+
+    // Disabled
+    --color-disabled: #dedede;
+    --color-disabled-text: #454545;
+
+    // Spacing
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 0.75rem;
+    --spacing-lg: 1rem;
+    --spacing-xl: 1.5rem;
+    --spacing-2xl: 2rem;
+    --spacing-3xl: 3rem;
+
+    // Border Radius
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
+    --radius-xl: 14px;
+
+    // Transitions
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+}
+
+// Dark Theme
+[data-theme="dark"] {
+    // Primary Colors (keeping blue visible in dark mode)
+    --color-primary: #0a84ff;
+    --color-primary-hover: #0070e0;
+    --color-primary-light: #1c2a3a;
+
+    // Success Colors
+    --color-success: #32d74b;
+    --color-success-hover: #30d158;
+
+    // Background Colors
+    --color-background: #1c1c1e;
+    --color-background-secondary: #2c2c2e;
+    --color-background-tertiary: #3a3a3c;
+    --color-background-hover: #48484a;
+    --color-background-selected: #1c2a3a;
+    --color-response-container-background: #3a3a3c;
+
+    // Text Colors
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #e5e5e7;
+    --color-text-muted: #98989d;
+    --color-text-light: #aeaeb2;
+
+    // Border Colors
+    --color-border: #48484a;
+    --color-border-light: #3a3a3c;
+    --color-border-focus: #0a84ff;
+
+    // Shadow (darker shadows for dark mode)
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    --shadow-focus: 0 0 6px rgba(10, 132, 255, 0.6);
+
+    // Sidebar
+    --color-sidebar-background: #2c2c2e;
+    --color-sidebar-button: #0a84ff;
+    --color-sidebar-button-hover: #0070e0;
+
+    // Disabled
+    --color-disabled: #48484a;
+    --color-disabled-text: #636366;
+}
+
+// SCSS Variables for backwards compatibility
+// Color variables reference CSS variables
+$color-primary: var(--color-primary);
+$color-primary-hover: var(--color-primary-hover);
+$color-primary-light: var(--color-primary-light);
+
+$color-success: var(--color-success);
+$color-success-hover: var(--color-success-hover);
+
+$color-background: var(--color-background);
+$color-background-secondary: var(--color-background-secondary);
+$color-background-tertiary: var(--color-background-tertiary);
+$color-background-hover: var(--color-background-hover);
+$color-background-selected: var(--color-background-selected);
+$color-response-container-background: var(--color-response-container-background);
+
+$color-text-primary: var(--color-text-primary);
+$color-text-secondary: var(--color-text-secondary);
+$color-text-muted: var(--color-text-muted);
+$color-text-light: var(--color-text-light);
+
+$color-border: var(--color-border);
+$color-border-light: var(--color-border-light);
+$color-border-focus: var(--color-border-focus);
+
+$shadow-sm: var(--shadow-sm);
+$shadow-md: var(--shadow-md);
+$shadow-lg: var(--shadow-lg);
+$shadow-focus: var(--shadow-focus);
+
+$color-sidebar-background: var(--color-sidebar-background);
+$color-sidebar-button: var(--color-sidebar-button);
+$color-sidebar-button-hover: var(--color-sidebar-button-hover);
+
+$color-navbar-background: var(--color-navbar-background);
+$color-navbar-text: var(--color-navbar-text);
+
+$color-disabled: var(--color-disabled);
+$color-disabled-text: var(--color-disabled-text);
+
+// Spacing
+$spacing-xs: var(--spacing-xs);
+$spacing-sm: var(--spacing-sm);
+$spacing-md: var(--spacing-md);
+$spacing-lg: var(--spacing-lg);
+$spacing-xl: var(--spacing-xl);
+$spacing-2xl: var(--spacing-2xl);
+$spacing-3xl: var(--spacing-3xl);
+
+// Border Radius
+$radius-sm: var(--radius-sm);
+$radius-md: var(--radius-md);
+$radius-lg: var(--radius-lg);
+$radius-xl: var(--radius-xl);
+
+// Transitions
+$transition-fast: var(--transition-fast);
+$transition-normal: var(--transition-normal);
+
+// Legacy variables from variables.scss (kept for backward compatibility)
+// These are static values and don't change with theme
+$primary-color: #2563eb;
+$primary-dark: #1d4ed8;
+$primary-darker: #1e40af;
+$primary-light: #eff6ff;
+
+$background-gray: #f9fafb;
+$text-primary: #1f2937;
+$text-secondary: #374151;
+$text-muted: #6b7280;
+$text-light: #4b5563;
+
+$border-color: #d1d5db;
+$border-light: #e5e7eb;
+
+$success-bg: #d1fae5;
+$success-border: #6ee7b7;
+$success-text: #065f46;
+
+$white: #ffffff;
