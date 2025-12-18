@@ -75,7 +75,7 @@ export default function ConversationBlock({ id }: { id: string }) {
             )}
 
             {conversationBlock.responseMessages.length > 0 && (
-                <div ref={responseRef}>
+                <div ref={responseRef} style={{ width: '100%' }}>
                     <Response
                         blockId={id}
                         responseMessages={conversationBlock.responseMessages}

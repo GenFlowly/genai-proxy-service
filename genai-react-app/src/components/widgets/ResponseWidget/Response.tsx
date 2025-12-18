@@ -20,8 +20,8 @@ export default function Response({ blockId, responseMessages, onFollowUp }: Resp
     console.log("selectedResponseId: ", selectedResponseId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
 
-    // ✅ Memoized just to avoid re-rendering
-    const responseList = useMemo(() => responseMessages, [responseMessages])
+    // Direct usage of props to avoid memoization issues
+    const responseList = responseMessages
 
     if (!responseMessages || responseMessages.length === 0) return null
 

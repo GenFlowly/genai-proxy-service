@@ -38,6 +38,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const [selectedResponseByBlock, setSelectedResponseByBlock] = useState<Record<string, string | null>>({})
 
     const updateConversationBlock = (conversationBlockId: string, updater: Partial<ConversationBlock>) => {
+        console.log('DEBUG updateConversationBlock', conversationBlockId, updater)
         setConversationBlockList(prev =>
             prev.map(block =>
                 block.conversationBlockId === conversationBlockId
@@ -71,6 +72,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             client: 'REACT_APP',
         })
 
+        console.log('DEBUGGING response RECEVIEVED:', response)
+
         // ✅ Extract conversationId from the first result if missing at root
         const newConversationId =
             response.conversationId ??
@@ -85,13 +88,16 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         console.log('DEBUG response:', response)
 
-        return (
-            response.results?.map((r: any) => ({
-                aiVendor: r.aiVendor as AIVendor,
-                text: r.text ?? '',
-                messageId: r.messageId ?? '',
-            })) ?? []
-        )
+        // ✅ Normalize single vs multi-response structure
+        const rawResults = Array.isArray(response.results)
+            ? response.results
+            : (response.text || response.aiVendor ? [response] : [])
+
+        return rawResults.map((r: any) => ({
+            aiVendor: r.aiVendor as AIVendor,
+            text: r.text ?? '',
+            messageId: r.messageId ?? '',
+        }))
     }
 
     // --- Core Actions ---
@@ -130,6 +136,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 conversationBlock.prompt,
                 selectedResponseId
             )
+
+            console.log('DEBUG responses array:', responses)
 
             updateConversationBlock(id, { responseMessages: responses, isLoading: false })
             setSelectedResponseForBlock(id, '')
