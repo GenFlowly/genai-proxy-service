@@ -10,73 +10,72 @@ import { EditorView } from '@codemirror/view'
 
 interface PromptEditorProps {
     id: string
+    value: string
+    onChange: (value: string) => void
 }
 
-export default function PromptEditor({ id }: PromptEditorProps): React.ReactElement {
-    const { conversationBlockList, updateResponseInConversationBlock } = useConversation()
+export default function PromptEditor({ id, value, onChange }: PromptEditorProps): React.ReactElement {
     const { setPrompt } = useAI()
-    const block = conversationBlockList.find(b => b.conversationBlockId === id)
-    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    // Debounce refs
+    const storageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const aiContextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    const STORAGE_KEY = `prompt_editor_content_conv-${block?.conversationBlockId}`
+    const STORAGE_KEY = `prompt_editor_content_conv-${id}`
 
-    // Load markdown from localStorage only on initial mount
+    // Load from localStorage only on mount if empty
     useEffect(() => {
-        if (!block) return
         try {
             const saved = localStorage.getItem(STORAGE_KEY)
-            if (saved && !block.prompt) updateResponseInConversationBlock(id, saved)
+            if (saved && !value) {
+                onChange(saved)
+            }
         } catch (err) {
             console.error('Failed to load from localStorage:', err)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []) // Empty dependency array = runs only once on mount
+    }, [])
 
-    // Debounced save to localStorage (300ms after user stops typing)
-    const handleChange = (value: string) => {
-        // ✅ Update context immediately for token counting
-        setPrompt(value)
+    const handleChange = (newValue: string) => {
+        // Immediate UI update via parent
+        onChange(newValue)
 
-        // ✅ Update conversation block immediately for UI
-        updateResponseInConversationBlock(id, value)
-
-        // ✅ Debounce localStorage to avoid blocking the thread
-        if (debounceTimerRef.current) {
-            clearTimeout(debounceTimerRef.current)
-        }
-
-        debounceTimerRef.current = setTimeout(() => {
+        // Debounce localStorage
+        if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
+        storageTimerRef.current = setTimeout(() => {
             try {
-                localStorage.setItem(STORAGE_KEY, value)
+                localStorage.setItem(STORAGE_KEY, newValue)
             } catch (err) {
-                console.error('Failed to save to localStorage:', err)
+                console.error(err)
             }
-        }, 300) // Adjust delay as needed (300ms is reasonable)
+        }, 500)
+
+        // Debounce AI Context (Token Counting)
+        if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
+        aiContextTimerRef.current = setTimeout(() => {
+            setPrompt(newValue)
+        }, 300)
     }
 
-    // Cleanup timer on unmount
+    // Cleanup timers
     useEffect(() => {
         return () => {
-            if (debounceTimerRef.current) {
-                clearTimeout(debounceTimerRef.current)
-            }
+            if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
+            if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
         }
     }, [])
 
-    // When block changes externally, sync to context
+    // Sync AI context on mount or external prop change?
+    // Not strictly necessary for "typing lag" fix but good for consistency
     useEffect(() => {
-        if (block?.prompt) {
-            setPrompt(block.prompt)
-        }
-    }, [block?.prompt, setPrompt])
-
-    if (!block) return <></>
+        setPrompt(value)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     return (
         <div className={styles.container}>
             <div className={styles.headerSection}>
                 <CopyToClipboard
-                    content={block.prompt}
+                    content={value}
                     label="Copy"
                     successDuration={2000}
                 />
@@ -84,14 +83,14 @@ export default function PromptEditor({ id }: PromptEditorProps): React.ReactElem
             <div className={styles.editorWrapper}>
                 <div className={styles.mdxEditorRoot}>
                     <MarkdownEditor
-                        value={block.prompt}
-                        onChange={(value) => handleChange(value)}
+                        value={value}
+                        onChange={(val) => handleChange(val)}
                         height="600px"
                         visible={false}
                         enablePreview={true}
                         className={styles.markdownEditor}
                         toolbars={[
-                            'bold',
+                            'bold', // kept same toolbar items
                             'italic',
                             'underline',
                             'strike',
