@@ -18,6 +18,16 @@ export default function ConversationBlock({ id }: { id: string }) {
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === id)
     const responseRef = useRef<HTMLDivElement | null>(null)
 
+    // ✅ Local draft state to prevent global re-renders on typing
+    const [draftPrompt, setDraftPrompt] = React.useState(conversationBlock?.prompt || '')
+
+    // Sync draft if global prompt changes (e.g. history load or API success)
+    useEffect(() => {
+        if (conversationBlock?.prompt && conversationBlock.prompt !== draftPrompt) {
+            setDraftPrompt(conversationBlock.prompt)
+        }
+    }, [conversationBlock?.prompt])
+
     useEffect(() => {
         if (conversationBlock?.responseMessages?.length && responseRef.current) {
             if ("scrollIntoView" in responseRef.current) {
@@ -64,11 +74,15 @@ export default function ConversationBlock({ id }: { id: string }) {
 
     return (
         <div className={styles.conversationBlock} data-block-id={id}>
-            <PromptEditor id={id} />
+            <PromptEditor
+                id={id}
+                value={draftPrompt}
+                onChange={setDraftPrompt}
+            />
 
             {conversationBlock.responseMessages.length === 0 && (
                 <MultiPurposeButton
-                    onClick={() => generateResponses(id)}
+                    onClick={() => generateResponses(id, draftPrompt)}
                     label={conversationBlock.isLoading ? 'Generating...' : 'Send to API'}
                     disabled={conversationBlock.isLoading}
                 />
