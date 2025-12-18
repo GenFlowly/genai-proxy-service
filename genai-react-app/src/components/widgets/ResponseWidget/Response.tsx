@@ -30,17 +30,10 @@ export default function Response({ blockId, responseMessages, onFollowUp }: Resp
         onFollowUp?.(messageId)
     }
 
-    // Calculate available width based on sidebar state
-    const leftWidth = isLeftSidebarExpanded ? '16rem' : '5rem'
-    const rightWidth = isRightSidebarExpanded ? '20rem' : '5rem'
-    // Exact calculation to touch sidebars
-    const maxWidth = `calc(100vw - ${leftWidth} - ${rightWidth})`
-
     return (
         <div
             className={styles.container}
             data-response-block-id={blockId}
-            style={{ maxWidth }}
         >
             <div
                 className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}

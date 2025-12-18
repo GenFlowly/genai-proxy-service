@@ -18,6 +18,7 @@
   padding-bottom: 2rem;
   width: 100%;
   overflow-x: auto;
+  justify-content: center; // Center content (single item or filled if space)
 
   // Custom scrollbar styling
   &::-webkit-scrollbar {
@@ -49,7 +50,9 @@
 
   // Fix for single response rendering issue
   &:only-child {
-    flex: 1 0 auto;
+    flex: 0 1 88rem;
+    max-width: 88rem;
+    // Handle alignment via parent justify-content
   }
 }
 
