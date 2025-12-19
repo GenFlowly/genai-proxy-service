@@ -37,7 +37,7 @@ export default function Navbar(): React.ReactElement {
 
                 <div className={styles.centerControls}>
                     <InputTextWithHint
-                        hint="Add Role for AI Assistant"
+                        hint="Tell how AI Assistant should act like "
                         icon={ICONS.USER_ROLE}
                         placeholder="You are a helpful assistant."
                         className={styles.roleInput}
