@@ -10,17 +10,17 @@ export default function LeftSidebar(): React.ReactElement {
 
     return (
         <aside className={`${styles.sidebar} ${!isLeftSidebarExpanded ? styles.collapsed : ''}`}>
-            <button
-                onClick={toggleLeftSidebar}
-                className={styles.collapseButton}
-                title={isLeftSidebarExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
-            >
-                {isLeftSidebarExpanded ? (
-                    <Icon src={ICONS.ALT_ARROW_LEFT} size={20} />
-                ) : (
-                    <Icon src={ICONS.ALT_ARROW_RIGHT} size={20} />
-                )}
-            </button>
+            {/*<button*/}
+            {/*    onClick={toggleLeftSidebar}*/}
+            {/*    className={styles.collapseButton}*/}
+            {/*    title={isLeftSidebarExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}*/}
+            {/*>*/}
+            {/*    {isLeftSidebarExpanded ? (*/}
+            {/*        <Icon src={ICONS.ALT_ARROW_LEFT} size={20} />*/}
+            {/*    ) : (*/}
+            {/*        <Icon src={ICONS.ALT_ARROW_RIGHT} size={20} />*/}
+            {/*    )}*/}
+            {/*</button>*/}
 
             <ThreadWidget />
         </aside>

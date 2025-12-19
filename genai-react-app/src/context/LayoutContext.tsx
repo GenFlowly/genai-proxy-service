@@ -8,7 +8,7 @@ const LayoutContext = createContext<LayoutContextType | undefined>(undefined)
 /* ---------- Provider ---------- */
 
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
-    const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(true)
+    const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(false)
     const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(true)
 
     const toggleLeftSidebar = () => setIsLeftSidebarExpanded(prev => !prev)
