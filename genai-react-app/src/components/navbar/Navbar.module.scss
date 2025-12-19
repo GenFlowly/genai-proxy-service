@@ -7,18 +7,21 @@
 }
 
 .container {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   padding: $spacing-lg;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.logo {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: $color-navbar-text;
+.logoLink {
+  display: flex;
+  align-items: center;
+}
+
+.logoImage {
+  height: 2rem; // Adjust as needed to fit navbar
+  width: auto;
 }
 
 .auth {
@@ -113,11 +116,30 @@
   }
 }
 
-.leftControls,
+.leftControls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 0 0 auto;
+}
+
+.centerControls {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 0 2rem;
+}
+
+.roleInput {
+  width: 100%;
+  max-width: 88rem;
+}
+
 .rightControls {
   display: flex;
   align-items: center;
   gap: 1rem;
+  flex: 0 0 auto;
 }
 
 .toggleButton {

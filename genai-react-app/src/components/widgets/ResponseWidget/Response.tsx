@@ -1,4 +1,6 @@
 import React, { useMemo } from 'react'
+import { Icon } from '../../common/Icon/Icon'
+import { ICONS } from '../../../constants/icons'
 import styles from './Response.module.scss'
 import { AIVendor } from '../../../constants/vendors'
 import { useLayout } from '../../../context/LayoutContext'
@@ -60,7 +62,14 @@ export default function Response({ blockId, responseMessages, onFollowUp }: Resp
                                         onClick={() => handleFollowUp(messageId)}
                                         disabled={isSelected}
                                     >
-                                        {isSelected ? '✓ Selected' : '➕ Follow up'}
+                                        {isSelected ? (
+                                            '✓ Selected'
+                                        ) : (
+                                            <>
+                                                <span>Follow up</span>
+                                                <Icon src={ICONS.SEND} />
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             )}

@@ -15,25 +15,33 @@ $editor-width: 88rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.5rem 3rem; // Added horizontal padding
+  padding: 1.5rem 3rem;
   border-radius: $radius-md;
+  position: relative; // For absolute positioning of copy button
 }
 
-.label {
-  display: block;
-  color: $text-secondary;
-  font-size: 0.875rem;
-  font-weight: 600;
-  align-self: flex-start;
-}
-
-.headerSection {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.innerContainer {
   width: 100%;
-  margin-bottom: $spacing-sm;
-  gap: $spacing-md;
+  max-width: $editor-width; // Outer constraint
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+// Left spacer to balance the right icon for perfect centering
+.spacer {
+  width: 2rem;
+  flex-shrink: 0;
+  display: block; // Visible in layout, invisible visually
+}
+
+.controlsRow {
+  width: 2rem;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start; // Align icon to the immediate right
+  margin-top: 0;
 }
 
 .editorWrapper {

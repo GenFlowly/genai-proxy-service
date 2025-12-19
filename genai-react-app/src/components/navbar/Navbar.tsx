@@ -1,10 +1,14 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import UserIcon from '../icons/UserIcon'
+import { Icon } from '../common/Icon/Icon'
+import { ICONS } from '../../constants/icons'
+import { InputTextWithHint } from '../common/InputTextWithHint/InputTextWithHint'
 import LoginIcon from '../icons/LoginIcon'
 import SettingsIcon from '../icons/SettingsIcon'
 import styles from './Navbar.module.scss'
+
+import logo from '../../assets/icons/logo.png'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
@@ -24,9 +28,18 @@ export default function Navbar(): React.ReactElement {
         <nav className={styles.navbar}>
             <div className={styles.container}>
                 <div className={styles.leftControls}>
-                    <Link to="/" className={styles.logo}>
-                        MyApp
+                    <Link to="/" className={styles.logoLink} title="Home">
+                        <img src={logo} alt="MyApp Logo" className={styles.logoImage} />
                     </Link>
+                </div>
+
+                <div className={styles.centerControls}>
+                    <InputTextWithHint
+                        hint="User Role"
+                        icon={ICONS.USER_ROLE}
+                        placeholder="Type a role..."
+                        className={styles.roleInput}
+                    />
                 </div>
 
                 <div className={styles.rightControls}>
@@ -45,7 +58,7 @@ export default function Navbar(): React.ReactElement {
                                     onClick={() => setShowDropdown(!showDropdown)}
                                     className={styles.accountButton}
                                 >
-                                    <UserIcon />
+                                    <Icon src={ICONS.USER_CIRCLE} size={20} />
                                     <span>Account</span>
                                 </button>
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react'
+import { ICONS } from '../../../constants/icons'
 import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import Response from '../../widgets/ResponseWidget/Response'
 import MultiPurposeButton
@@ -85,6 +86,7 @@ export default function ConversationBlock({ id }: { id: string }) {
                     onClick={() => generateResponses(id, draftPrompt)}
                     label={conversationBlock.isLoading ? 'Generating...' : 'Send to API'}
                     disabled={conversationBlock.isLoading}
+                    icon={ICONS.SEND}
                 />
             )}
 
