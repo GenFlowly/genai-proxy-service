@@ -7,8 +7,10 @@
   align-self: center;
   background-color: $color-primary;
   color: white;
-  padding: 0.6rem 1.2rem;
-  border-radius: 6px;
+  height: 38px;
+  padding: 0 1.5rem; // Horizontal padding, vertical handled by flex center
+  border-radius: 4px; // Matching InputTextWithHint rx=3.5 approx
+  box-shadow: $shadow-sm; // Adding shadow as requested
   border: none;
   cursor: pointer;
   margin-top: 1rem;

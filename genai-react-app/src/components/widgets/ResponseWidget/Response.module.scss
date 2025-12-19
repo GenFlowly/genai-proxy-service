@@ -8,6 +8,7 @@
   margin-top: 2rem;
   background-color: $color-response-container-background;
   padding: 0;
+  padding-bottom: 1rem; // Add breathing room at bottom
 }
 
 .inner {
@@ -15,9 +16,10 @@
   flex-direction: row;
   gap: 0.75rem;
   padding: 1rem 1rem;
-  padding-bottom: 2rem;
+  padding-bottom: 3.5rem; // Increased to preventing button clipping
   width: 100%;
   overflow-x: auto;
+  overflow-y: hidden; // Prevent vertical scrollbar
   justify-content: center; // Center content (single item or filled if space)
 
   // Custom scrollbar styling
@@ -66,41 +68,10 @@
 
 .followUpButtonWrapper {
   margin-top: 0.75rem;
-  text-align: right;
+  display: flex;
+  justify-content: center;
 }
 
-.followUpButton {
-  background: $color-primary;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 0.4rem 0.8rem;
-  cursor: pointer;
-  transition: background 0.3s ease;
-
-  // Layout for icon + text
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.followUpButton:hover {
-  background: $color-primary-hover;
-}
-
-.followUpButton:disabled {
-  background: $color-disabled;
-  cursor: not-allowed;
-}
-
-.selectedButton {
-  background: $color-success !important;
-  cursor: not-allowed;
-}
-
-.selectedButton:hover {
-  background: $color-success !important;
-}
 
 
 

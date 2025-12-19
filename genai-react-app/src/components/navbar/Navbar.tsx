@@ -7,11 +7,13 @@ import { InputTextWithHint } from '../common/InputTextWithHint/InputTextWithHint
 import LoginIcon from '../icons/LoginIcon'
 import SettingsIcon from '../icons/SettingsIcon'
 import styles from './Navbar.module.scss'
+import { useLayout } from '../../context/LayoutContext'
 
 import logo from '../../assets/icons/logo.png'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
+    const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
 
@@ -27,7 +29,7 @@ export default function Navbar(): React.ReactElement {
     return (
         <nav className={styles.navbar}>
             <div className={styles.container}>
-                <div className={styles.leftControls}>
+                <div className={`${styles.leftControls} ${!isLeftSidebarExpanded ? styles.collapsed : ''}`}>
                     <Link to="/" className={styles.logoLink} title="Home">
                         <img src={logo} alt="MyApp Logo" className={styles.logoImage} />
                     </Link>
@@ -42,7 +44,7 @@ export default function Navbar(): React.ReactElement {
                     />
                 </div>
 
-                <div className={styles.rightControls}>
+                <div className={`${styles.rightControls} ${!isRightSidebarExpanded ? styles.collapsed : ''}`}>
                     <div className={styles.auth}>
                         {!isAuthenticated ? (
                             <button

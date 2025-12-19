@@ -35,8 +35,8 @@ function LandingPageContent() {
 export default function LandingPage() {
     return (
         <div className={styles.page}>
-            <Navbar />
             <LayoutProvider>
+                <Navbar />
                 <AIProvider>
                     <ConversationProvider>
                         <LandingPageContent />
