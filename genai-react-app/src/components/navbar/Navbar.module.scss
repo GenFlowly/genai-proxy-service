@@ -121,6 +121,18 @@
   align-items: center;
   gap: 1rem;
   flex: 0 0 auto;
+  width: 15rem; // Match expanded sidebar width
+  transition: width 0.3s ease; // Match sidebar transition
+  // padding-left: 1rem; // Optional overlap fix if needed
+
+  &.collapsed {
+    width: 5rem; // Match collapsed sidebar width
+    justify-content: center; // Center logo when collapsed if desired
+
+    .logoImage {
+      // Optional: adjust logo if it doesn't fit in 5rem
+    }
+  }
 }
 
 .centerControls {
@@ -128,18 +140,27 @@
   display: flex;
   justify-content: center;
   padding: 0 2rem;
+  min-width: 0; // Prevent flex item overflow
 }
 
 .roleInput {
   width: 100%;
-  max-width: 88rem;
+  max-width: 82rem;
 }
 
 .rightControls {
   display: flex;
   align-items: center;
+  justify-content: flex-end; // Align content to right
   gap: 1rem;
   flex: 0 0 auto;
+  width: 15rem; // Match expanded sidebar width
+  transition: width 0.3s ease;
+
+  &.collapsed {
+    width: 5rem;
+    justify-content: center;
+  }
 }
 
 .toggleButton {

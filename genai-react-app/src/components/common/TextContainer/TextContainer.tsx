@@ -5,6 +5,7 @@ import rehypeHighlight from 'rehype-highlight'
 import 'highlight.js/styles/github.css'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import styles from './TextContainer.module.scss'
+import { ICONS } from '../../../constants/icons'
 
 /**
  * Utility to recursively extract text from markdown AST nodes
@@ -39,7 +40,8 @@ const PreBlock = ({ node, children, ...props }: any) => {
             >
                 <CopyToClipboard
                     content={codeString}
-                    label="Copy"
+                    label="Copy Code"
+                    icon={ICONS.COPY}
                     successMessage="✓ Copied"
                     successDuration={2000}
                     size="sm"
@@ -72,11 +74,11 @@ export interface TextContainerProps {
  * - Optional title header
  */
 export default function TextContainer({
-                                          title,
-                                          content,
-                                          showCopyButton = true,
-                                          className,
-                                      }: TextContainerProps) {
+    title,
+    content,
+    showCopyButton = true,
+    className,
+}: TextContainerProps) {
     return (
         <article className={`${styles.article} ${className || ''}`}>
             {(title || showCopyButton) && (
@@ -86,7 +88,8 @@ export default function TextContainer({
                         {showCopyButton && (
                             <CopyToClipboard
                                 content={content}
-                                label="Copy"
+                                label="Copy Response"
+                                icon={ICONS.COPY}
                                 successMessage="✓ Copied"
                                 successDuration={2000}
                                 size="sm"

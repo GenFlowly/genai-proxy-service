@@ -7,6 +7,7 @@ import { useLayout } from '../../../context/LayoutContext'
 import { useConversation } from '../../../context/ConversationContext'
 import TextContainer from '../../common/TextContainer/TextContainer'
 import { Message } from "../../../models/conversation.models";
+import MultiPurposeButton from '../../common/MultiPurposeButton/MultiPurposeButton'
 
 interface ResponseProps {
     blockId: string
@@ -57,20 +58,12 @@ export default function Response({ blockId, responseMessages, onFollowUp }: Resp
 
                             {onFollowUp && (
                                 <div className={styles.followUpButtonWrapper}>
-                                    <button
-                                        className={`${styles.followUpButton} ${isSelected ? styles.selectedButton : ''}`}
+                                    <MultiPurposeButton
+                                        label={isSelected ? 'Selected' : 'Follow up'}
                                         onClick={() => handleFollowUp(messageId)}
                                         disabled={isSelected}
-                                    >
-                                        {isSelected ? (
-                                            '✓ Selected'
-                                        ) : (
-                                            <>
-                                                <span>Follow up</span>
-                                                <Icon src={ICONS.SEND} />
-                                            </>
-                                        )}
-                                    </button>
+                                        icon={isSelected ? undefined : ICONS.SEND}
+                                    />
                                 </div>
                             )}
                         </div>

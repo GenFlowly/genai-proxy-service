@@ -8,7 +8,7 @@
   align-items: flex-start;
   overflow-y: auto;
   overflow-x: hidden; // Prevent horizontal scroll on center section
-  padding: 2rem 0; // Remove horizontal padding
+  padding: 2rem 0 0 0; // Remove horizontal padding and bottom padding
   background-color: $color-background;
   scroll-behavior: smooth;
 }

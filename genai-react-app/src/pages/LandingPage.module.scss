@@ -21,6 +21,7 @@
 .sidebarRight {
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden; // Prevent horizontal scrollbar
   background: #f9f9f9;
   border-right: 1px solid rgba(200, 200, 200, 0.15);
   transition: all 0.3s ease;
