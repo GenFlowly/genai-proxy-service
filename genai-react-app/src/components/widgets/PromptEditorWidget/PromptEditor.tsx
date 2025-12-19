@@ -8,6 +8,7 @@ import { useConversation } from '../../../context/ConversationContext'
 import { useAI } from '../../../context/AIContext'
 import styles from './PromptEditor.module.scss'
 import { EditorView } from '@codemirror/view'
+import { addStepsCommand, addExamplesCommand } from './CustomToolbarCommands'
 
 interface PromptEditorProps {
     id: string
@@ -87,19 +88,15 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
                             enablePreview={true}
                             className={styles.markdownEditor}
                             toolbars={[
-                                'bold', // kept same toolbar items
-                                'italic',
-                                'underline',
-                                'strike',
-                                'header',
-                                'quote',
+
+
+                                addStepsCommand,
+                                addExamplesCommand,
                                 'ulist',
                                 'olist',
-                                'todo',
-                                'link',
-                                'image',
+
                                 'code',
-                                'codeBlock',
+
                             ]}
                             extensions={[EditorView.lineWrapping]}
                         />

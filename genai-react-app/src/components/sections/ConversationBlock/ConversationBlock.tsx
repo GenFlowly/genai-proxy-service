@@ -84,7 +84,7 @@ export default function ConversationBlock({ id }: { id: string }) {
             {conversationBlock.responseMessages.length === 0 && (
                 <MultiPurposeButton
                     onClick={() => generateResponses(id, draftPrompt)}
-                    label={conversationBlock.isLoading ? 'Generating...' : 'Send to API'}
+                    label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
                     disabled={conversationBlock.isLoading}
                     icon={ICONS.SEND}
                 />
