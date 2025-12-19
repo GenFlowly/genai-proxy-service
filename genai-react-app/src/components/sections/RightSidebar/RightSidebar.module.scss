@@ -31,19 +31,15 @@
       display: none;
     }
 
-    /* optionally show small icons only */
-    .section::before {
-      content: '⚙️';
-      font-size: 1.2rem;
-      color: $color-text-muted;
-    }
   }
 }
 
 .collapseButton {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
+  /* Positioned in flow to prevent overlap */
+  align-self: flex-start;
+  /* Align to left when expanded */
+  margin-bottom: 0rem;
+
   background: transparent;
   border: none;
   color: $color-text-primary;
@@ -58,10 +54,11 @@
   &:hover {
     background-color: $color-background-hover;
   }
+}
 
-  svg {
-    display: block;
-  }
+.sidebar.collapsed .collapseButton {
+  align-self: center;
+  margin-bottom: 1rem;
 }
 
 .title {

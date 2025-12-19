@@ -1,0 +1,56 @@
+@import '../../../styles/variables.scss';
+
+.container {
+    display: flex;
+    align-items: center;
+    border: 1px solid #DBDBDA;
+    border-radius: 4px;
+    /* rx="3.5" in SVG ~ 4px */
+    background-color: $white;
+    overflow: hidden;
+    height: 42px;
+    /* From SVG height */
+    transition: border-color $transition-normal;
+
+    &:focus-within {
+        border-color: $color-primary;
+    }
+}
+
+.prefixArea {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #E8E8E7;
+    /* From SVG path fill */
+    padding: 0 1rem;
+    height: 100%;
+    color: $text-secondary;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-right: 1px solid #DBDBDA;
+}
+
+.icon {
+    color: #0064B6;
+    /* From SVG icon fill */
+    // The provided icon SVG is black, we might need to rely on the Icon component's masking 
+    // to set the color if we want it blue, or just let it be if the SVG itself has color.
+    // Since the user provided a black SVG but the Figma showed blue, let's force blue.
+    background-color: #0064B6 !important;
+}
+
+.input {
+    flex: 1;
+    border: none;
+    padding: 0 1rem;
+    height: 100%;
+    outline: none;
+    font-size: 1rem;
+    color: $text-primary;
+    background: transparent;
+
+    &::placeholder {
+        color: $text-muted;
+    }
+}

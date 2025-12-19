@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
+import { ICONS } from '../../../constants/icons'
 import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
@@ -73,39 +74,44 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerSection}>
-                <CopyToClipboard
-                    content={value}
-                    label="Copy"
-                    successDuration={2000}
-                />
-            </div>
             <div className={styles.editorWrapper}>
-                <div className={styles.mdxEditorRoot}>
-                    <MarkdownEditor
-                        value={value}
-                        onChange={(val) => handleChange(val)}
-                        height="600px"
-                        visible={false}
-                        enablePreview={true}
-                        className={styles.markdownEditor}
-                        toolbars={[
-                            'bold', // kept same toolbar items
-                            'italic',
-                            'underline',
-                            'strike',
-                            'header',
-                            'quote',
-                            'ulist',
-                            'olist',
-                            'todo',
-                            'link',
-                            'image',
-                            'code',
-                            'codeBlock',
-                        ]}
-                        extensions={[EditorView.lineWrapping]}
-                    />
+                <div className={styles.innerContainer}>
+                    {/* Ghost spacer for perfect centering */}
+                    <div className={styles.spacer} />
+                    <div className={styles.mdxEditorRoot}>
+                        <MarkdownEditor
+                            value={value}
+                            onChange={(val) => handleChange(val)}
+                            height="600px"
+                            visible={false}
+                            enablePreview={true}
+                            className={styles.markdownEditor}
+                            toolbars={[
+                                'bold', // kept same toolbar items
+                                'italic',
+                                'underline',
+                                'strike',
+                                'header',
+                                'quote',
+                                'ulist',
+                                'olist',
+                                'todo',
+                                'link',
+                                'image',
+                                'code',
+                                'codeBlock',
+                            ]}
+                            extensions={[EditorView.lineWrapping]}
+                        />
+                    </div>
+                    <div className={styles.controlsRow}>
+                        <CopyToClipboard
+                            content={value}
+                            label="Copy Prompt"
+                            icon={ICONS.COPY}
+                            successDuration={2000}
+                        />
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,7 +1,8 @@
 import React from 'react'
 import { useAI } from '../../../context/AIContext'
 import { useLayout } from '../../../context/LayoutContext'
-import { PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { Icon } from '../../common/Icon/Icon'
+import { ICONS } from '../../../constants/icons'
 import AIVendorWidget from '../../widgets/AIVendorWidget/AIVendorWidget'
 import TokenCounter from '../../widgets/TokenCounter/TokenCounter'
 import styles from './RightSidebar.module.scss'
@@ -12,13 +13,17 @@ export default function RightSidebar(): React.ReactElement {
     const collapsed = !isRightSidebarExpanded
 
     return (
-        <div className={styles.sidebar}>
+        <div className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
             <button
                 onClick={toggleRightSidebar}
                 className={styles.collapseButton}
                 title={isRightSidebarExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
             >
-                {isRightSidebarExpanded ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
+                {isRightSidebarExpanded ? (
+                    <Icon src={ICONS.ALT_ARROW_RIGHT} size={20} />
+                ) : (
+                    <Icon src={ICONS.ALT_ARROW_LEFT} size={20} />
+                )}
             </button>
 
             {!collapsed && <h3 className={styles.title}>AI Configuration</h3>}

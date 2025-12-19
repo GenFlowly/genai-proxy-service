@@ -49,9 +49,11 @@
 }
 
 .collapseButton {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
+  /* Positioned in flow to prevent overlap */
+  align-self: flex-end;
+  /* Align to right when expanded */
+  margin-bottom: 0.5rem;
+
   background: transparent;
   border: none;
   color: $color-text-primary;
@@ -66,10 +68,12 @@
   &:hover {
     background-color: $color-background-hover;
   }
+}
 
-  svg {
-    display: block;
-  }
+.sidebar.collapsed .collapseButton {
+  align-self: center;
+  /* Align to center when collapsed */
+  margin-bottom: 1rem;
 }
 
 .section {
