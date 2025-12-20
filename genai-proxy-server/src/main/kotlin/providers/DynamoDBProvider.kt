@@ -83,6 +83,7 @@ class DynamoDBProvider(
         val role = item["role"]?.s() ?: return@withContext null
         val customerId = item["customerId"]?.s() ?: return@withContext null
         val previousMessageId = item["previousMessageId"]?.s() ?: return@withContext null
+        val systemPrompt = item["systemPrompt"]?.s() ?: return@withContext null
 
 
 
@@ -97,7 +98,8 @@ class DynamoDBProvider(
             client = client,
             role = role,
             customerId = customerId,
-            previousMessageId = previousMessageId
+            previousMessageId = previousMessageId,
+            systemPrompt = systemPrompt
         )
     }
 
