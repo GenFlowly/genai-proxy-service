@@ -84,7 +84,8 @@ class AIRequestManager(
             AIVendor.OPENAI -> {
                 val params = aiRequestService.buildOpenAIRequest(
                     promptWithContext,
-                    model
+                    model,
+                    message.systemPrompt
                 )
                 val httpClient = aiRequestService.getOpenAIProvider(apiKey)
                 httpClient.generateResponse(
@@ -97,7 +98,8 @@ class AIRequestManager(
             AIVendor.GEMINI -> {
                 val params = aiRequestService.buildGeminiRequest(
                     promptWithContext,
-                    model
+                    model,
+                    message.systemPrompt
                 )
                 val httpClient = aiRequestService.getGeminiProvider(apiKey)
                 httpClient.generateResponse(
@@ -110,7 +112,8 @@ class AIRequestManager(
             AIVendor.CLAUDE -> {
                 val params = aiRequestService.buildClaudeRequest(
                     promptWithContext,
-                    model
+                    model,
+                    message.systemPrompt
                 )
                 val httpClient = aiRequestService.getClaudeProvider(apiKey)
                 httpClient.generateResponse(
@@ -133,7 +136,9 @@ class AIRequestManager(
                     role = "assistant",
                     text = responseText,
                     previousMessageId = message.messageId,
-                    aiConfig = AIConfig(aiVendor = aiVendor, model = model)
+                    aiConfig = AIConfig(aiVendor = aiVendor, model = model),
+                    systemPrompt = message.systemPrompt
+
                 )
                 responseMessageId = conversationService.addMessageInConversation(responseMessage)
             } else {

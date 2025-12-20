@@ -11,6 +11,7 @@ import com.genflowly.aicallerlib.models.openai.OpenAIModelsListResponse
 import com.genflowly.aicallerlib.models.openai.OpenAIResponse
 import com.genflowly.providers.DynamoDBProvider
 import com.google.genai.types.Content
+import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.GenerateContentParameters
 import com.google.genai.types.Part
 import com.openai.models.responses.ResponseCreateParams
@@ -22,8 +23,14 @@ import org.koin.java.KoinJavaComponent.get
 class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
     KoinComponent {
 
-    fun buildClaudeRequest(prompt: String, model: String): MessageCreateParams {
+    fun buildClaudeRequest(
+        prompt: String,
+        model: String,
+        systemPrompt: String
+    ):
+            MessageCreateParams {
         return MessageCreateParams.builder()
+            .system(systemPrompt)
             .maxTokens(1024L)
             .addUserMessage(prompt)
             .model(model)
@@ -39,9 +46,11 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
 
     fun buildOpenAIRequest(
         prompt: String,
-        model: String
+        model: String,
+        systemPrompt: String
     ): ResponseCreateParams {
         return ResponseCreateParams.builder()
+            .instructions(systemPrompt)
             .input(prompt)
             .model(model)
             .build()
@@ -56,8 +65,18 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
 
     fun buildGeminiRequest(
         prompt: String,
-        model: String
+        model: String,
+        systemPrompt: String
     ): GenerateContentParameters {
+        val systemInstruction = Content.builder()
+            .role("system") // Role is "system" for instructions
+            .parts(
+                Part.builder()
+                    .text("systemPrompt")
+                    .build()
+            )
+            .build()
+
         val content = Content.builder()
             .role("user")
             .parts(
@@ -67,8 +86,13 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
             )
             .build()
 
+        val config = GenerateContentConfig.builder()
+            .systemInstruction(systemInstruction)
+            .build()
+
         return GenerateContentParameters.builder()
             .model(model)
+            .config(config)
             .contents(content)
             .build()
     }
