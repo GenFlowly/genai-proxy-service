@@ -19,6 +19,7 @@ object Routes {
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
+    const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
 }
 
 fun Application.configureRouting(

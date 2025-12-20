@@ -1,9 +1,12 @@
 package service
 
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIConfigPreferences
+import com.genflowly.models.AIMode
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import java.util.*
+import models.AIConfig
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -12,6 +15,22 @@ class CustomerProfileService(
     private val kmsProvider: KMSProvider,
     private val dynamoDBProvider: DynamoDBProvider
 ) {
+
+
+    suspend fun saveAIConfigPreferences(
+        customerId: String,
+        preferredModels: AIConfig?,
+        preferredGenerativeMode: AIMode,
+        otherPreferences: Map<String, String>
+    ) {
+        // todo reshape data
+
+
+
+        // todo dynamoDBProvider.saveAIConfigPreferences(customerId,preferredModels, preferredGenerativeMode, otherPreferences)
+    }
+
+
     suspend fun onboardCustomer(
         sub: String,
         client: String,
