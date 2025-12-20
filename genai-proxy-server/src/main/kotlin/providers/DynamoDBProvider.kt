@@ -6,6 +6,7 @@ import com.genflowly.DynamoDBConstants.CONVERSATION_ID_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_API_KEY_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
+import com.genflowly.DynamoDBConstants.CUSTOMER_PREFERENCES_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_TABLE
 import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
@@ -193,6 +194,29 @@ class DynamoDBProvider(
 
         } catch (e: Exception) {
             logger.error("Failed to Create Message in DynamoDB", e)
+            throw e
+        }
+
+    }
+
+    suspend fun saveAIConfigPreferences(        customerId: String,
+                                                preferredModels: Map<String, String>,
+                                                preferredGenerativeMode: String,
+                                                otherPreferences: Map<String,
+                                                        String>) {
+
+        try {
+            // todo BUILD Item
+
+//        todo val putReq = PutItemRequest.builder()
+//            .tableName(CUSTOMER_PREFERENCES_TABLE)
+//            .item(item)
+//            .build()
+
+            // todo dynamoDbClient.putItem(putReq)
+        } catch (e: Exception) {
+            logger.error("Failed to save Customer Preferences to " +
+                    "DynamoDB", e)
             throw e
         }
 
