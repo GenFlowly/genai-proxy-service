@@ -35,8 +35,8 @@ export interface ConversationContextType {
     conversationId: string
     addNewConversationBlock: () => void
     addNewConversationBlockWithId: (id: string) => void
-    updateResponseInConversationBlock: (id: string, value: string) => void
-    generateResponses: (id: string, overridePrompt?: string) => Promise<void>
+    updateResponseInConversationBlock: (conversationBlockId: string, prompt: string) => void
+    generateResponses: (conversationBlockId: string, prompt?: string, selectedMessageId?: string | null) => void
 
     /** Per-block selected response management */
     selectedResponseByBlock: Record<string, string | null>

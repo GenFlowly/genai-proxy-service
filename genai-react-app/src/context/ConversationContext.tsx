@@ -115,7 +115,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         updateConversationBlock(conversationBlockId, { prompt })
     }
 
-    const generateResponses = async (id: string, overridePrompt?: string) => {
+    const generateResponses = async (id: string, overridePrompt?: string, selectedMessageId?: string | null) => {
         const conversationBlock = conversationBlockList.find(c => c.conversationBlockId === id)
         if (!conversationBlock) return
         if (!isAuthenticated || !customerId) return alert('Please log in first.')
@@ -127,8 +127,16 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             const token = await getAccessTokenSilently()
-            const selectedResponseId = getSelectedResponseForBlock(id)
-            console.log('DEBUG selectedResponseId for block', id, selectedResponseId)
+            // Prefer explicit ID, fallback to context state
+            const contextSelectedId = getSelectedResponseForBlock(id)
+            const finalSelectedResponseId = selectedMessageId !== undefined ? selectedMessageId : contextSelectedId
+
+            console.log('DEBUG generateResponses', {
+                id,
+                explicitId: selectedMessageId,
+                contextId: contextSelectedId,
+                finalId: finalSelectedResponseId
+            })
 
             // Use overridePrompt if provided, otherwise fall back to block.prompt (compatibility)
             const promptToUse = overridePrompt ?? conversationBlock.prompt
@@ -137,7 +145,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 token,
                 aiConfigs,
                 promptToUse,
-                selectedResponseId
+                finalSelectedResponseId
             )
 
             console.log('DEBUG responses array:', responses)

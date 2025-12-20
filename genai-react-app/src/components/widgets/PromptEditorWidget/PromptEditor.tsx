@@ -9,6 +9,7 @@ import { useAI } from '../../../context/AIContext'
 import styles from './PromptEditor.module.scss'
 import { EditorView } from '@codemirror/view'
 import { addStepsCommand, addExamplesCommand } from './CustomToolbarCommands'
+import PromptEditorTooltip from './PromptEditorTooltip'
 
 interface PromptEditorProps {
     id: string
@@ -73,6 +74,56 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    // Tooltip State
+    const [tooltipState, setTooltipState] = useState<{
+        visible: boolean
+        top: number
+        left: number
+        text: string
+    }>({ visible: false, top: 0, left: 0, text: '' })
+
+    const editorViewRef = useRef<any>(null)
+
+    const handleEditorCreate = (editor: any) => {
+        editorViewRef.current = editor?.view
+    }
+
+    const handleEditorUpdate = (viewUpdate: any) => {
+        if (viewUpdate.docChanged || viewUpdate.selectionSet) {
+            const view = viewUpdate.view
+            const { from, to } = view.state.selection.main
+
+            if (from === to) {
+                setTooltipState((prev) => ({ ...prev, visible: false }))
+                return
+            }
+
+            const text = view.state.sliceDoc(from, to)
+            // Get coordinates for the selection end
+            const coords = view.coordsAtPos(to)
+
+            if (coords) {
+                setTooltipState({
+                    visible: true,
+                    top: coords.top,
+                    left: coords.left,
+                    text
+                })
+            }
+        }
+    }
+
+    const handleMarkReusable = async () => {
+        // Dummy API call
+        console.log('Marking as reusable:', tooltipState.text)
+        setTooltipState((prev) => ({ ...prev, visible: false }))
+    }
+
+    const extensions = React.useMemo(() => [
+        EditorView.lineWrapping,
+        EditorView.updateListener.of(handleEditorUpdate)
+    ], [handleEditorUpdate])
+
     return (
         <div className={styles.container}>
             <div className={styles.editorWrapper}>
@@ -98,7 +149,7 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
                                 'code',
 
                             ]}
-                            extensions={[EditorView.lineWrapping]}
+                            extensions={extensions}
                         />
                     </div>
                     <div className={styles.controlsRow}>
@@ -111,6 +162,14 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
                     </div>
                 </div>
             </div>
+
+            {/* Tooltip Portal */}
+            <PromptEditorTooltip
+                visible={tooltipState.visible}
+                top={tooltipState.top}
+                left={tooltipState.left}
+                onMarkReusable={handleMarkReusable}
+            />
         </div>
     )
 }

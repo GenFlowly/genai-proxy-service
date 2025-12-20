@@ -13,7 +13,8 @@ export default function ConversationBlock({ id }: { id: string }) {
         generateResponses,
         addNewConversationBlock,
         addNewConversationBlockWithId,
-        setSelectedResponseForBlock
+        setSelectedResponseForBlock,
+        getSelectedResponseForBlock
     } = useConversation()
 
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === id)
@@ -83,7 +84,10 @@ export default function ConversationBlock({ id }: { id: string }) {
 
             {conversationBlock.responseMessages.length === 0 && (
                 <MultiPurposeButton
-                    onClick={() => generateResponses(id, draftPrompt)}
+                    onClick={() => {
+                        const selectedId = getSelectedResponseForBlock(id)
+                        generateResponses(id, draftPrompt, selectedId)
+                    }}
                     label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
                     disabled={conversationBlock.isLoading}
                     icon={ICONS.SEND}
