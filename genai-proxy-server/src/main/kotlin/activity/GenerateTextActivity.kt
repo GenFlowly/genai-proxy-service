@@ -57,71 +57,26 @@ fun Route.registerGenerateTextRoutes(
                     request.toString()
                 )
 
-                val conversationId =
-                    aiRequestManager.getConversationId(request, customerId, client)
 
-                logger.info("Retrieved conversationId: {}", conversationId)
-
-                val message = Message(
-                    conversationId = conversationId,
-                    customerId = customerId,
-                    client = client,
-                    role = "user",
-                    text = request.prompt,
-                    previousMessageId = request.selectedResponseId,
-                    systemPrompt = request.systemPrompt
-                )
-
-                val results = coroutineScope {
-                    request.aiConfig.map { aiConfig ->
-                        async {
-                            val startTime = System.currentTimeMillis()
-                            try {
-                                val response = aiRequestManager.handleRequest(
-                                    aiVendor = aiConfig.aiVendor,
-                                    model = aiConfig.model,
-                                    message = message
-                                )
-                                val durationMs =
-                                    System.currentTimeMillis() - startTime
-
-                                logger.info(
-                                    "AI response received: vendor={}, model={}, durationMs={}",
-                                    aiConfig.aiVendor,
-                                    aiConfig.model,
-                                    durationMs
-                                )
-
-                                response
-
-                            } catch (e: Exception) {
-                                logger.error(
-                                    "Error generating text: vendor={}, model={}, message={}",
-                                    aiConfig.aiVendor,
-                                    aiConfig.model,
-                                    e.message,
-                                    e
-                                )
-                                GenerateTextResponse(
-                                    text = "[Error: ${e.message}]",
-                                    messageId = null,
-                                    conversationId = null,
-                                    aiVendor = null
-                                )
-                            }
-                        }
-                    }.awaitAll()
-                }
-
-                if (results.size == 1) {
-                    call.respond(results.first())
-                } else {
-                    call.respond(
-                        BatchGenerateTextResponse(
-                            results = results
-                        )
+                val responseMessageList = aiRequestManager
+                    .processTextGenerateRequest(
+                        request.aiConfig,
+                        request.systemPrompt,
+                        request.prompt,
+                        request.conversationId,
+                        request.selectedResponseId,
+                        request.client,
+                        customerId
                     )
+
+                val generateTextResponseList =
+                    mutableListOf<GenerateTextResponse>()
+
+                responseMessageList.forEach { message ->
+                    generateTextResponseList.add(createResponse(message))
                 }
+
+                call.respond(BatchGenerateTextResponse(results = generateTextResponseList))
 
 
             } catch (e: SerializationException) {
@@ -143,4 +98,14 @@ fun Route.registerGenerateTextRoutes(
             }
         }
     }
+}
+
+
+private fun createResponse(message: Message): GenerateTextResponse {
+    return GenerateTextResponse(
+        text = message.text,
+        aiVendor = message.aiConfig.first().aiVendor.name,
+        conversationId = message.conversationId,
+        messageId = message.messageId
+    )
 }

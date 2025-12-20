@@ -12,6 +12,6 @@ data class Message(
     val customerId: String,
     var sequence: Int? = 0,
     val systemPrompt: String,
-    val aiConfig: AIConfig? = null,
+    val aiConfig: List<AIConfig>,
     val previousMessageId: String?
 )

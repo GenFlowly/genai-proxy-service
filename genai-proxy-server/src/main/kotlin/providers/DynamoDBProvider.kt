@@ -59,51 +59,6 @@ class DynamoDBProvider(
 //            }
 //        }
 
-    suspend fun getMessage(conversationId: String, messageId: String): Message? = withContext(Dispatchers.IO) {
-        val key = mapOf(
-            "conversationId" to AttributeValue.builder().s(conversationId).build(),
-            "messageId" to AttributeValue.builder().s(messageId).build()
-        )
-
-        val request = GetItemRequest.builder()
-            .tableName(MESSAGE_TABLE)
-            .key(key)
-            .build()
-
-        val response = dynamoDbClient.getItem(request)
-        val item = response.item() ?: return@withContext null
-
-        val aiConfigJson = item["aiConfig"]?.s()
-        val aiConfig = aiConfigJson?.takeIf { it.isNotBlank() }?.let {
-            runCatching { Json.decodeFromString<AIConfig>(it) }.getOrNull()
-        }
-
-        val text = item["text"]?.s() ?: return@withContext null
-        val sequenceStr = item["sequence"]?.n() ?: return@withContext null
-        val client = item["client"]?.s() ?: return@withContext null
-        val role = item["role"]?.s() ?: return@withContext null
-        val customerId = item["customerId"]?.s() ?: return@withContext null
-        val previousMessageId = item["previousMessageId"]?.s() ?: return@withContext null
-        val systemPrompt = item["systemPrompt"]?.s() ?: return@withContext null
-
-
-
-        val sequence = sequenceStr.toIntOrNull() ?: return@withContext null
-
-        return@withContext Message(
-            messageId = item["messageId"]?.s() ?: return@withContext null,
-            conversationId = item["conversationId"]?.s() ?: return@withContext null,
-            aiConfig = aiConfig,
-            text = text,
-            sequence = sequence,
-            client = client,
-            role = role,
-            customerId = customerId,
-            previousMessageId = previousMessageId,
-            systemPrompt = systemPrompt
-        )
-    }
-
 
 
 
@@ -151,36 +106,109 @@ class DynamoDBProvider(
         }
     }
 
+    suspend fun getMessage(
+        conversationId: String,
+        messageId: String
+    ): Message? = withContext(Dispatchers.IO) {
+
+        val key = mapOf(
+            "conversationId" to AttributeValue.builder().s(conversationId).build(),
+            "messageId" to AttributeValue.builder().s(messageId).build()
+        )
+
+        val request = GetItemRequest.builder()
+            .tableName(MESSAGE_TABLE)
+            .key(key)
+            .build()
+
+        val response = dynamoDbClient.getItem(request)
+        val item = response.item() ?: return@withContext null
+
+        val text = item["text"]?.s() ?: return@withContext null
+        val sequenceStr = item["sequence"]?.n() ?: return@withContext null
+        val client = item["client"]?.s() ?: return@withContext null
+        val role = item["role"]?.s() ?: return@withContext null
+        val customerId = item["customerId"]?.s() ?: return@withContext null
+        val systemPrompt = item["systemPrompt"]?.s() ?: return@withContext null
+
+        val previousMessageId = item["previousMessageId"]?.s()
+
+        val sequence = sequenceStr.toIntOrNull() ?: return@withContext null
+
+        val aiConfigAttr = item["aiConfig"] ?: return@withContext null
+        val aiConfig = attributeValueToAiConfig(aiConfigAttr)
+
+        return@withContext Message(
+            messageId = item["messageId"]?.s() ?: return@withContext null,
+            conversationId = item["conversationId"]?.s() ?: return@withContext null,
+            text = text,
+            client = client,
+            role = role,
+            customerId = customerId,
+            sequence = sequence,
+            systemPrompt = systemPrompt,
+            aiConfig = aiConfig,
+            previousMessageId = previousMessageId
+        )
+    }
+
+    private fun attributeValueToAiConfig(
+        attributeValue: AttributeValue
+    ): List<AIConfig> =
+        attributeValue.l().map { av ->
+            val map = av.m()
+            AIConfig(
+                aiVendor = AIVendor.valueOf(map["aiVendor"]!!.s()),
+                model = map["model"]!!.s()
+            )
+        }
+
+
     suspend fun createMessage(
         message: Message
     ) = withContext(Dispatchers.IO) {
         try {
-            val aiConfigJson = message.aiConfig?.let { Json.encodeToString(it) } ?: ""
-            val item = withTimestamps(mapOf(
-                CONVERSATION_ID_KEY to AttributeValue.builder()
-                    .s(message.conversationId).build(),
-                MESSAGE_ID_SORT_KEY to AttributeValue.builder().s(message.messageId)
-                    .build(),
-                CUSTOMER_ID_KEY to AttributeValue.builder().s
-                    (message.customerId)
-                    .build(),
-                "sequence" to AttributeValue.builder().n
-                    (message.sequence.toString())
-                    .build(),
-                "client" to AttributeValue.builder().s
-                    (message.client)
-                    .build(),
-                "aiConfig" to AttributeValue.builder().s(aiConfigJson).build(),
-                "role" to AttributeValue.builder().s
-                    (message.role)
-                    .build(),
-                "text" to AttributeValue.builder().s
-                    (message.text)
-                    .build(),
-                "previousMessageId" to AttributeValue.builder().s
-                    (message.previousMessageId)
-                    .build(),
-            ))
+            val item = withTimestamps(
+                mutableMapOf(
+                    CONVERSATION_ID_KEY to AttributeValue.builder()
+                        .s(message.conversationId)
+                        .build(),
+
+                    MESSAGE_ID_SORT_KEY to AttributeValue.builder()
+                        .s(message.messageId)
+                        .build(),
+
+                    CUSTOMER_ID_KEY to AttributeValue.builder()
+                        .s(message.customerId)
+                        .build(),
+
+                    "sequence" to AttributeValue.builder()
+                        .n(message.sequence?.toString() ?: "0")
+                        .build(),
+
+                    "client" to AttributeValue.builder()
+                        .s(message.client)
+                        .build(),
+
+                    "aiConfig" to aiConfigToAttributeValue(message.aiConfig),
+
+                    "role" to AttributeValue.builder()
+                        .s(message.role)
+                        .build(),
+
+                    "text" to AttributeValue.builder()
+                        .s(message.text)
+                        .build(),
+
+                    "systemPrompt" to AttributeValue.builder()
+                        .s(message.systemPrompt)
+                        .build(),
+
+                    "previousMessageId" to AttributeValue.builder()
+                        .s(message.previousMessageId ?: "")
+                        .build()
+                )
+            )
 
             val putReq = PutItemRequest.builder()
                 .tableName(MESSAGE_TABLE)
@@ -188,16 +216,38 @@ class DynamoDBProvider(
                 .build()
 
             dynamoDbClient.putItem(putReq)
-            logger.info("Saved message for conversation" +
-                    " ${message.conversationId} to " +
-                    "DynamoDB")
 
+            logger.info(
+                "Saved message for conversation {} to DynamoDB",
+                message.conversationId
+            )
         } catch (e: Exception) {
-            logger.error("Failed to Create Message in DynamoDB", e)
+            logger.error("Failed to create Message in DynamoDB", e)
             throw e
         }
-
     }
+
+    private fun aiConfigToAttributeValue(
+        aiConfig: List<AIConfig>
+    ): AttributeValue =
+        AttributeValue.builder()
+            .l(
+                aiConfig.map { config ->
+                    AttributeValue.builder()
+                        .m(
+                            mapOf(
+                                "aiVendor" to AttributeValue.builder()
+                                    .s(config.aiVendor.name)
+                                    .build(),
+                                "model" to AttributeValue.builder()
+                                    .s(config.model)
+                                    .build()
+                            )
+                        )
+                        .build()
+                }
+            )
+            .build()
 
     suspend fun saveAIConfigPreferences(        customerId: String,
                                                 preferredModels: Map<String, String>,
