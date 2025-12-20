@@ -68,7 +68,8 @@ fun Route.registerGenerateTextRoutes(
                     client = client,
                     role = "user",
                     text = request.prompt,
-                    previousMessageId = request.selectedResponseId
+                    previousMessageId = request.selectedResponseId,
+                    systemPrompt = request.systemPrompt
                 )
 
                 val results = coroutineScope {
