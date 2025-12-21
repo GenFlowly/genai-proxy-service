@@ -252,7 +252,7 @@ class DynamoDBProvider(
 
     suspend fun saveAIConfigPreferences(
         customerId: String,
-        preferredModels: AIConfig?,
+        preferredModels: List<AIConfig>?,
         preferredGenerativeMode: AIMode,
         otherPreferences: Map<String, String>
     ) = withContext(Dispatchers.IO) {
@@ -263,12 +263,7 @@ class DynamoDBProvider(
             )
 
             if (preferredModels != null) {
-                baseItem["preferredModels"] = AttributeValue.builder().m(
-                    mapOf(
-                        "aiVendor" to AttributeValue.builder().s(preferredModels.aiVendor.name).build(),
-                        "model" to AttributeValue.builder().s(preferredModels.model).build()
-                    )
-                ).build()
+                baseItem["preferredModels"] = aiConfigToAttributeValue(preferredModels)
             }
 
             if (otherPreferences.isNotEmpty()) {

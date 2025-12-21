@@ -6,7 +6,7 @@ import models.AIConfig
 
 @Serializable
 data class AIConfigPreferencesRequest(
-    val preferredModels: AIConfig? = null,
+    val preferredModels: List<AIConfig>? = null,
     val preferredGenerativeMode: AIMode = AIMode.FACTUAL,
     val otherPreferences: Map<String, String> = emptyMap()
 )
