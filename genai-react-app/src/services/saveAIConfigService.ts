@@ -3,8 +3,10 @@ import { endpoints } from '../config/endpoints'
 import { AIConfig } from '../context/AIContext'
 
 export interface SaveAIConfigPreferencesRequest {
-    preferredModels: AIConfig[]
-    preferredGenerativeMode?: string
+    aiConfigPreferences: {
+        preferredModels: AIConfig[]
+        preferredGenerativeMode?: string
+    }
     otherPreferences?: Record<string, string>
 }
 
