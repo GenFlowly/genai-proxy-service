@@ -3,3 +3,12 @@ export interface StoreCustomerVendorApiKeyRequest {
     aiVendor: string
     apiKey: string
 }
+
+export interface AIVendorAPIKeyStatus {
+    aiVendor: string
+    isAPIKeyValid: boolean
+}
+
+export interface StoreCustomerVendorApiKeyResponse {
+    apiKeyStatus: AIVendorAPIKeyStatus
+}

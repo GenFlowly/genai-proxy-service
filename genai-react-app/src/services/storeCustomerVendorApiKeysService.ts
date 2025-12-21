@@ -1,7 +1,8 @@
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import {
-    StoreCustomerVendorApiKeyRequest
+    StoreCustomerVendorApiKeyRequest,
+    StoreCustomerVendorApiKeyResponse
 } from "../models/storeCustomerVendorAPIKeys.models";
 
 
@@ -11,7 +12,7 @@ import {
 export async function storeCustomerVendorApiKey(
     token: string,
     payload: StoreCustomerVendorApiKeyRequest
-): Promise<void> {
+): Promise<StoreCustomerVendorApiKeyResponse> {
     const response = await fetch(endpoints.storeCustomerVendorApiKey, {
         method: HttpMethod.POST,
         headers: {
@@ -24,4 +25,6 @@ export async function storeCustomerVendorApiKey(
     if (!response.ok) {
         throw new Error(`Failed to save key for ${payload.aiVendor}: ${response.statusText}`)
     }
+
+    return await response.json()
 }

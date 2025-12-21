@@ -5,11 +5,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class StoreCustomerVendorApiKeyResponse(
-    val apiKeyResponse: AIVendorAPIKeyResponse
+    val apiKeyStatus: AIVendorAPIKeyStatus
 )
 
 @Serializable
-data class AIVendorAPIKeyResponse(
+data class AIVendorAPIKeyStatus(
     val aiVendor: AIVendor,
     val isAPIKeyValid: Boolean
 )

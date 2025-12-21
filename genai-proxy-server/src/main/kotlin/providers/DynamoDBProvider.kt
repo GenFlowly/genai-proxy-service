@@ -320,6 +320,7 @@ class DynamoDBProvider(
                 AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor)
                     .build(),
                 "apiKey" to AttributeValue.builder().s(encryptedKey).build(),
+                "isAPIKeyValid" to AttributeValue.builder().bool(true).build()
             ))
 
             val putReq = PutItemRequest.builder()
@@ -332,6 +333,32 @@ class DynamoDBProvider(
         } catch (e: Exception) {
             logger.error("Failed to save API key to DynamoDB", e)
             throw e
+        }
+    }
+
+    suspend fun initCustomerApiKey(
+        customerId: String,
+        aiVendor: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            // Initial state: Valid = false, no apiKey
+            val item = withTimestamps(mapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build(),
+                "isAPIKeyValid" to AttributeValue.builder().bool(false).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(CUSTOMER_API_KEY_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Initialized API key status for $customerId vendor $aiVendor")
+        } catch (e: Exception) {
+            logger.error("Failed to init API key status", e)
+            // Non-blocking error for onboarding? Or should we throw?
+            // Logging is safer for now.
         }
     }
 
@@ -411,4 +438,63 @@ class DynamoDBProvider(
         )
     }
 
+
+    suspend fun getAIConfigPreferences(customerId: String): com.genflowly.models.AIConfigPreferences? =
+        withContext(Dispatchers.IO) {
+            val key = mapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()
+            )
+
+            val request = GetItemRequest.builder()
+                .tableName(CUSTOMER_PREFERENCES_TABLE)
+                .key(key)
+                .build()
+
+            val response = dynamoDbClient.getItem(request)
+            val item = response.item() ?: return@withContext null
+
+            // Parse result
+            // Note: attributes are stored as 'preferredModels', 'preferredGenerativeMode' etc.
+            // We need to map them back to AIConfigPreferences object
+            
+            val modelsAttr = item["preferredModels"]
+            val preferredModels = modelsAttr?.let { attributeValueToAiConfig(it) }
+            
+            val modeAttr = item["preferredGenerativeMode"]?.s()
+            val preferredGenerativeMode = modeAttr?.let { AIMode.valueOf(it) }
+
+            com.genflowly.models.AIConfigPreferences(
+                preferredModels = preferredModels,
+                preferredGenerativeMode = preferredGenerativeMode
+            )
+        }
+
+    suspend fun getCustomerApiKeys(customerId: String): List<models.AIVendorAPIKeyStatus> =
+        withContext(Dispatchers.IO) {
+            val request = software.amazon.awssdk.services.dynamodb.model.QueryRequest.builder()
+                .tableName(CUSTOMER_API_KEY_TABLE)
+                .keyConditionExpression("#cid = :cid")
+                .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                .build()
+
+            val response = dynamoDbClient.query(request)
+            
+            response.items().mapNotNull { item ->
+                val vendorStr = item[AI_VENDOR_KEY]?.s() ?: return@mapNotNull null
+                val aiVendor = try {
+                    AIVendor.valueOf(vendorStr)
+                } catch (e: Exception) {
+                    return@mapNotNull null
+                }
+                
+                // Check explicitly stored validation status or fallback to apiKey presence
+                val isValid = item["isAPIKeyValid"]?.bool() ?: (item["apiKey"]?.s() != null)
+
+                models.AIVendorAPIKeyStatus(
+                    aiVendor = aiVendor,
+                    isAPIKeyValid = isValid
+                )
+            }
+        }
 }

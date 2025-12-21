@@ -57,6 +57,12 @@ class CustomerProfileService(
             name,
             picture
         )
+        
+        // Initialize API key entries for all vendors as INVALID (false)
+        AIVendor.entries.forEach { vendor ->
+            dynamoDBProvider.initCustomerApiKey(newCustomerId, vendor.name)
+        }
+        
         logger.info { "New user onboarded with customerId=$newCustomerId" }
         return newCustomerId
 
@@ -93,6 +99,14 @@ class CustomerProfileService(
     suspend fun getCustomerIdBySub(sub: String): String? {
         val profile = dynamoDBProvider.queryCustomerProfileBySub(sub)
         return profile?.get("customerId")?.s()
+    }
+
+    suspend fun getAIConfigPreferences(customerId: String): com.genflowly.models.AIConfigPreferences? {
+        return dynamoDBProvider.getAIConfigPreferences(customerId)
+    }
+
+    suspend fun getAIVendorAPIKeyStatusList(customerId: String): List<models.AIVendorAPIKeyStatus> {
+        return dynamoDBProvider.getCustomerApiKeys(customerId)
     }
 }
 
