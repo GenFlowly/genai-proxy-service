@@ -81,7 +81,6 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
         text: string
     }>({ visible: false, top: 0, left: 0, text: '' })
 
-    const editorViewRef = useRef<any>(null)
 
     const handleEditorUpdate = React.useCallback((viewUpdate: any) => {
         if (viewUpdate.docChanged || viewUpdate.selectionSet) {

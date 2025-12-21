@@ -1,5 +1,4 @@
 import React from 'react'
-import { useAI } from '../../../context/AIContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { Icon } from '../../common/Icon/Icon'
 import { ICONS } from '../../../constants/icons'
