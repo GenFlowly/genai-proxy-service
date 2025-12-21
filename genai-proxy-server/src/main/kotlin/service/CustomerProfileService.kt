@@ -18,7 +18,7 @@ class CustomerProfileService(
 
     suspend fun saveAIConfigPreferences(
         customerId: String,
-        preferredModels: AIConfig?,
+        preferredModels: List<AIConfig>?,
         preferredGenerativeMode: AIMode,
         otherPreferences: Map<String, String>
     ) {
