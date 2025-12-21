@@ -28,15 +28,19 @@ fun Route.registerStoreApiKeyRoutes(
             
             logger.info("Received SaveApiKeyRequest from customerId {}: {}", customerId, request)
 
-            customerProfileService.storeApiKey(
+            val aiVendor = com.genflowly.aicallerlib.models.AIVendor.valueOf(request.aiVendor)
+
+            val isValid = customerProfileService.storeApiKey(
                 customerId = customerId,
-                aiVendor = request.aiVendor, //TODO add validation with enum
+                aiVendor = request.aiVendor,
                 apiKey = request.apiKey
             )
 
             val response = StoreCustomerVendorApiKeyResponse(
-                status = "API key saved for customer ${customerId}" +
-                        "vendor ${request.aiVendor}"
+                apiKeyResponse = models.AIVendorAPIKeyResponse(
+                    aiVendor = aiVendor,
+                    isAPIKeyValid = isValid
+                )
             )
             call.respond(response)
         }

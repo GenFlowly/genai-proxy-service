@@ -65,9 +65,10 @@ class CustomerProfileService(
 
     suspend fun storeApiKey(
         customerId: String, aiVendor: String, apiKey: String
-    ) {
+    ): Boolean {
         val encrypted = kmsProvider.encrypt(apiKey)
         dynamoDBProvider.saveCustomerApiKey(customerId, aiVendor, encrypted)
+        return true
     }
 
     suspend fun getCustomerApiKeyForVendor(
