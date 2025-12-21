@@ -37,7 +37,7 @@ fun Route.registerStoreApiKeyRoutes(
             )
 
             val response = StoreCustomerVendorApiKeyResponse(
-                apiKeyResponse = models.AIVendorAPIKeyResponse(
+                apiKeyStatus = models.AIVendorAPIKeyStatus(
                     aiVendor = aiVendor,
                     isAPIKeyValid = isValid
                 )

@@ -1,13 +1,14 @@
 import { User } from '../types/auth.types'
 import { endpoints } from '../config/endpoints'
 import { HttpMethod } from '../constants/http'
+import { OnboardCustomerResponse } from '../models/onboardUser.models'
 
 const CLIENT_IDENTIFIER = 'REACT_APP'
 
 export async function onboardCustomer(
     user: User,
     token: string
-): Promise<{ customerId: string }> {
+): Promise<OnboardCustomerResponse> {
     const response = await fetch(endpoints.onboardCustomer, {
         method: HttpMethod.POST,
         headers: {
