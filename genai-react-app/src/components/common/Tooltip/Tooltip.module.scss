@@ -20,14 +20,55 @@
     z-index: 9999;
     pointer-events: none;
 
-    // Arrow pointing left
+    // Base arrow styles
     &::before {
         content: '';
         position: absolute;
-        right: 100%;
-        top: 50%;
-        transform: translateY(-50%);
         border: 6px solid transparent;
-        border-right-color: $color-navbar-background;
+        pointer-events: none;
+    }
+
+    &.placement-right {
+        transform: translateY(-50%);
+
+        &::before {
+            right: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border-right-color: $color-navbar-background;
+        }
+    }
+
+    &.placement-left {
+        transform: translateY(-50%);
+
+        &::before {
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border-left-color: $color-navbar-background;
+        }
+    }
+
+    &.placement-top {
+        transform: translateX(-50%);
+
+        &::before {
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-top-color: $color-navbar-background;
+        }
+    }
+
+    &.placement-bottom {
+        transform: translateX(-50%);
+
+        &::before {
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-bottom-color: $color-navbar-background;
+        }
     }
 }

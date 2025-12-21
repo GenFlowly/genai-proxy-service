@@ -33,6 +33,8 @@ export interface ConversationBlock {
 export interface ConversationContextType {
     conversationBlockList: ConversationBlock[]
     conversationId: string
+    systemPrompt: string
+    setSystemPrompt: (prompt: string) => void
     addNewConversationBlock: () => void
     addNewConversationBlockWithId: (id: string) => void
     updateResponseInConversationBlock: (conversationBlockId: string, prompt: string) => void

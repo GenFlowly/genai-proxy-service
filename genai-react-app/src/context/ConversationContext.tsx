@@ -19,6 +19,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
 
     const [conversationId, setConversationId] = useState<string>('')
+    const [systemPrompt, setSystemPrompt] = useState<string>('')
 
     // ✅ Ref to always hold the latest conversationId
     const conversationIdRef = useRef(conversationId)
@@ -61,10 +62,12 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         token: string,
         aiConfigs: AIConfig[],
         prompt: string,
-        selectedResponseId: string | null
+        selectedResponseId: string | null,
+        currentSystemPrompt: string
     ): Promise<Message[]> => {
         const response = await generateText(token, {
             aiConfig: aiConfigs.filter(c => c.aiVendor && c.model),
+            systemPrompt: currentSystemPrompt || "You are a helpful assistant",
             prompt,
             // customerId: customerId!,
             selectedResponseId: selectedResponseId ?? '',
@@ -145,7 +148,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 token,
                 aiConfigs,
                 promptToUse,
-                finalSelectedResponseId
+                finalSelectedResponseId,
+                systemPrompt
             )
 
             console.log('DEBUG responses array:', responses)
@@ -189,6 +193,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             value={{
                 conversationBlockList,
                 conversationId,
+                systemPrompt,
+                setSystemPrompt,
                 addNewConversationBlock,
                 addNewConversationBlockWithId,
                 updateResponseInConversationBlock: updatePromptInConversationBlock,

@@ -7,6 +7,8 @@ import userCircle from '../assets/icons/user-circle.svg'
 import sendIcon from '../assets/icons/send-icon.svg'
 import copyIcon from '../assets/icons/copy-icon.svg'
 import userRole from '../assets/icons/user-role.svg'
+import refreshIcon from '../assets/icons/refresh-icon.svg'
+import saveIcon from '../assets/icons/save-icon.svg'
 
 export const ICONS = {
     PROMPT_ICON: promptIcon,
@@ -17,4 +19,6 @@ export const ICONS = {
     SEND: sendIcon,
     COPY: copyIcon,
     USER_ROLE: userRole,
+    REFRESH_ICON: refreshIcon,
+    SAVE_ICON: saveIcon,
 }

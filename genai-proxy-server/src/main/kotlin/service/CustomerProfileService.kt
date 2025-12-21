@@ -19,8 +19,8 @@ class CustomerProfileService(
     suspend fun saveAIConfigPreferences(
         customerId: String,
         preferredModels: List<AIConfig>?,
-        preferredGenerativeMode: AIMode,
-        otherPreferences: Map<String, String>
+        preferredGenerativeMode: AIMode?,
+        otherPreferences: Map<String, String>?
     ) {
         dynamoDBProvider.saveAIConfigPreferences(
             customerId,
