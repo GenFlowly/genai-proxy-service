@@ -250,7 +250,7 @@ class DynamoDBProvider(
             )
             .build()
 
-    suspend fun saveAIConfigPreferences(
+    suspend fun savePreferences(
         customerId: String,
         preferredModels: List<AIConfig>?,
         preferredGenerativeMode: AIMode?,
