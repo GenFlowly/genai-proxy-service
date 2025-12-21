@@ -78,8 +78,8 @@ export default function Tooltip({ content, children }: TooltipProps) {
                     ref={tooltipRef}
                     className={`${styles.tooltip} ${styles[`placement-${placement}`]} `}
                     style={{
-                        top: `${position.top} px`,
-                        left: `${position.left} px`,
+                        top: `${position.top}px`,
+                        left: `${position.left}px`,
                         // transform is now handled by CSS classes based on placement
                     }}
                 >
