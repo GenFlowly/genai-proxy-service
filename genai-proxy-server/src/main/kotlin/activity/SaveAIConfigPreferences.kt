@@ -1,7 +1,7 @@
 package com.genflowly.activity
 
 import com.genflowly.Routes
-import com.genflowly.models.AIConfigPreferencesRequest
+import com.genflowly.models.PreferencesRequest
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -20,17 +20,17 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
     authenticate("auth0") {
         post(Routes.SAVE_AI_CONFIG_PREFERENCES) {
             try {
-                val request = call.receive<AIConfigPreferencesRequest>()
+                val request = call.receive<PreferencesRequest>()
 
                 val customerId = call.requireAuthenticatedCustomerId(
                     customerProfileService
                 )
 
 
-                customerProfileService.saveAIConfigPreferences(
+                customerProfileService.savePreferences(
                     customerId,
-                    request.preferredModels,
-                    request.preferredGenerativeMode,
+                    request.aiConfigPreferences?.preferredModels,
+                    request.aiConfigPreferences?.preferredGenerativeMode,
                     request.otherPreferences
                 )
 

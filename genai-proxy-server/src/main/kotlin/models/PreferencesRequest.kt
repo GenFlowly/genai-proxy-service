@@ -5,10 +5,15 @@ import kotlinx.serialization.Serializable
 import models.AIConfig
 
 @Serializable
-data class AIConfigPreferencesRequest(
+data class PreferencesRequest(
+    val aiConfigPreferences: AIConfigPreferences? = null,
+    val otherPreferences: Map<String, String>? = null
+)
+
+@Serializable
+data class AIConfigPreferences(
     val preferredModels: List<AIConfig>? = null,
     val preferredGenerativeMode: AIMode? = null,
-    val otherPreferences: Map<String, String>? = null
 )
 
 @Serializable

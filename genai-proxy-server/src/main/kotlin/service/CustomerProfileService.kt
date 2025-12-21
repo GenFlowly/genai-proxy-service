@@ -16,13 +16,13 @@ class CustomerProfileService(
 ) {
 
 
-    suspend fun saveAIConfigPreferences(
+    suspend fun savePreferences(
         customerId: String,
         preferredModels: List<AIConfig>?,
         preferredGenerativeMode: AIMode?,
         otherPreferences: Map<String, String>?
     ) {
-        dynamoDBProvider.saveAIConfigPreferences(
+        dynamoDBProvider.savePreferences(
             customerId,
             preferredModels,
             preferredGenerativeMode,
