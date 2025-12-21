@@ -112,7 +112,9 @@ export default function AIVendorWidget({
             const token = await getAccessTokenSilently()
 
             await saveAIConfigPreferences(token, {
-                preferredModels: config.filter(c => c.model && c.model.trim() !== '')
+                aiConfigPreferences: {
+                    preferredModels: config.filter(c => c.model && c.model.trim() !== '')
+                }
             })
             alert('Preferences saved successfully!')
         } catch (err: any) {
