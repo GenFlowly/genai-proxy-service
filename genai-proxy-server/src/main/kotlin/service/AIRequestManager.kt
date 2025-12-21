@@ -200,22 +200,34 @@ class AIRequestManager(
         // Step 6: Null check response and throw exception if null
         val responseText = aiResponse.getText()
 
-        require(!responseText.isNullOrBlank()) {
-            "AI response text is null or blank for conversationId=${message.conversationId}"
+        val responseMessage: Message
+        if (!responseText.isNullOrBlank()) {
+
+            // Step 7: Create response message object
+            responseMessage = Message(
+                conversationId = message.conversationId,
+                customerId = message.customerId,
+                client = message.client,
+                role = "assistant",
+                text = responseText,
+                previousMessageId = message.messageId,
+                aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
+                systemPrompt = message.systemPrompt
+            )
+        } else {
+            responseMessage = Message(
+                conversationId = message.conversationId,
+                customerId = message.customerId,
+                client = message.client,
+                role = "assistant",
+                text = "No response received. Please try again.",
+                previousMessageId = message.messageId,
+                aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
+                systemPrompt = message.systemPrompt
+            )
         }
 
 
-        // Step 7: Create response message object
-        val responseMessage = Message(
-            conversationId = message.conversationId,
-            customerId = message.customerId,
-            client = message.client,
-            role = "assistant",
-            text = responseText,
-            previousMessageId = message.messageId,
-            aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
-            systemPrompt = message.systemPrompt
-        )
 
         // Step 8: Add response message to conversation
         conversationService.addMessageInConversation(responseMessage)
