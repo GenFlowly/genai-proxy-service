@@ -1,8 +1,9 @@
 // models/textGen.models.ts
-import {AIConfig} from "../context/AIContext";
+import { AIConfig } from "../context/AIContext";
 
 export interface GenerateTextRequest {
     aiConfig: AIConfig[]
+    systemPrompt: string
     prompt: string
     selectedResponseId: string
     conversationId: string

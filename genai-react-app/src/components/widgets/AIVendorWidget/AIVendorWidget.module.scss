@@ -60,23 +60,45 @@
   color: $color-text-primary;
 }
 
-.refreshButton {
-  padding: 0.4rem 0.8rem;
-  background: $color-background-tertiary;
-  border: 1px solid $color-border;
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.iconActionButton {
+  padding: 0.4rem;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
+  color: $color-text-secondary;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   &:hover:not(:disabled) {
     background: $color-background-hover;
+    color: $color-text-primary;
   }
 
   &:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }
 

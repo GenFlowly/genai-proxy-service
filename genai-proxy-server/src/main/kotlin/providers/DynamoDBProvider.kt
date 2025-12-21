@@ -253,34 +253,55 @@ class DynamoDBProvider(
     suspend fun saveAIConfigPreferences(
         customerId: String,
         preferredModels: List<AIConfig>?,
-        preferredGenerativeMode: AIMode,
-        otherPreferences: Map<String, String>
+        preferredGenerativeMode: AIMode?,
+        otherPreferences: Map<String, String>?
     ) = withContext(Dispatchers.IO) {
         try {
-            val baseItem = mutableMapOf(
-                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                "preferredGenerativeMode" to AttributeValue.builder().s(preferredGenerativeMode.name).build()
-            )
+            val now = Instant.now().toString()
+            val updateParts = mutableListOf<String>()
+            val attrNames = mutableMapOf<String, String>()
+            val attrValues = mutableMapOf<String, AttributeValue>()
 
-            if (preferredModels != null) {
-                baseItem["preferredModels"] = aiConfigToAttributeValue(preferredModels)
+            // Always update updatedAt
+            updateParts.add("#updatedAt = :updatedAt")
+            attrNames["#updatedAt"] = "updatedAt"
+            attrValues[":updatedAt"] = AttributeValue.builder().s(now).build()
+
+            // set createdAt if not exists
+            updateParts.add("#createdAt = if_not_exists(#createdAt, :createdAt)")
+            attrNames["#createdAt"] = "createdAt"
+            attrValues[":createdAt"] = AttributeValue.builder().s(now).build()
+
+            if (preferredGenerativeMode != null) {
+                updateParts.add("#preferredGenerativeMode = :preferredGenerativeMode")
+                attrNames["#preferredGenerativeMode"] = "preferredGenerativeMode"
+                attrValues[":preferredGenerativeMode"] = AttributeValue.builder().s(preferredGenerativeMode.name).build()
             }
 
-            if (otherPreferences.isNotEmpty()) {
-                baseItem["otherPreferences"] = AttributeValue.builder().m(
+            if (preferredModels != null) {
+                updateParts.add("#preferredModels = :preferredModels")
+                attrNames["#preferredModels"] = "preferredModels"
+                attrValues[":preferredModels"] = aiConfigToAttributeValue(preferredModels)
+            }
+
+            if (!otherPreferences.isNullOrEmpty()) {
+                updateParts.add("#otherPreferences = :otherPreferences")
+                attrNames["#otherPreferences"] = "otherPreferences"
+                attrValues[":otherPreferences"] = AttributeValue.builder().m(
                     otherPreferences.mapValues { AttributeValue.builder().s(it.value).build() }
                 ).build()
             }
 
-            val item = withTimestamps(baseItem)
-
-            val putReq = PutItemRequest.builder()
+            val updateReq = software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest.builder()
                 .tableName(CUSTOMER_PREFERENCES_TABLE)
-                .item(item)
+                .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
+                .updateExpression("SET " + updateParts.joinToString(", "))
+                .expressionAttributeNames(attrNames)
+                .expressionAttributeValues(attrValues)
                 .build()
 
-            dynamoDbClient.putItem(putReq)
-            logger.info("Saved preferences for customer $customerId to DynamoDB")
+            dynamoDbClient.updateItem(updateReq)
+            logger.info("Saved preferences for customer $customerId to DynamoDB (Upsert)")
         } catch (e: Exception) {
             logger.error("Failed to save Customer Preferences to DynamoDB", e)
             throw e

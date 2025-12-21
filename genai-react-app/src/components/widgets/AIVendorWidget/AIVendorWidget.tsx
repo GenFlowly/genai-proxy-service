@@ -11,7 +11,11 @@ import {
     AIVendorModelList,
 } from '../../../models/getTextGenerationModels.models'
 import { CacheManager } from '../../../utils/cache'
+import { saveAIConfigPreferences } from '../../../services/saveAIConfigService'
 import styles from './AIVendorWidget.module.scss'
+import Tooltip from '../../common/Tooltip/Tooltip'
+import { Icon } from '../../common/Icon/Icon'
+import { ICONS } from '../../../constants/icons'
 
 interface AIVendorWidgetProps {
     collapsed?: boolean
@@ -23,14 +27,15 @@ const vendors = Object.values(AIVendor) as AIVendor[]
 const aiConfigCache = new CacheManager({ prefix: 'aiConfigCache_' })
 
 export default function AIVendorWidget({
-                                           collapsed = false,
-                                       }: AIVendorWidgetProps): React.ReactElement {
+    collapsed = false,
+}: AIVendorWidgetProps): React.ReactElement {
     const { config, setSelectedModelForAIVendor, resetConfig } = useAI()
 
     const { getAccessTokenSilently, customerId, isAuthenticated } = useAuth()
 
     const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
     const [isRefreshing, setIsRefreshing] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
 
     const isAIVendorModelsPopulated = (aiVendor: AIVendor) =>
         config.some(c => c.aiVendor === aiVendor && c.model)
@@ -99,6 +104,25 @@ export default function AIVendorWidget({
         }
     }
 
+    const handleSave = async () => {
+        if (!isAuthenticated || !customerId) return
+
+        try {
+            setIsSaving(true)
+            const token = await getAccessTokenSilently()
+
+            await saveAIConfigPreferences(token, {
+                preferredModels: config.filter(c => c.model && c.model.trim() !== '')
+            })
+            alert('Preferences saved successfully!')
+        } catch (err: any) {
+            console.error('Failed to save preferences:', err)
+            alert('Failed to save preferences: ' + err.message)
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
 
     const getModelsForVendor = (vendor: AIVendor): string[] =>
         aiVendorModels.find(v => v.aiVendor === vendor)?.modelsList ?? []
@@ -143,13 +167,33 @@ export default function AIVendorWidget({
         <div className={styles.vendorWidget}>
             <div className={styles.header}>
                 <h3 className={styles.title}>AI Models</h3>
-                <button
-                    className={styles.refreshButton}
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                >
-                    {isRefreshing ? 'Refreshing...' : '↻ Refresh'}
-                </button>
+                <div className={styles.actions}>
+                    <Tooltip content="Refresh Models">
+                        <button
+                            className={styles.iconActionButton}
+                            onClick={handleRefresh}
+                            disabled={isRefreshing}
+                            aria-label="Refresh Models"
+                        >
+                            <Icon
+                                src={ICONS.REFRESH_ICON}
+                                size={20}
+                                className={isRefreshing ? styles.spinning : ''}
+                            />
+                        </button>
+                    </Tooltip>
+
+                    <Tooltip content="Set as default">
+                        <button
+                            className={styles.iconActionButton}
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            aria-label="Set as default"
+                        >
+                            <Icon src={ICONS.SAVE_ICON} size={20} />
+                        </button>
+                    </Tooltip>
+                </div>
             </div>
 
             {vendors.map(vendor => {
@@ -162,9 +206,8 @@ export default function AIVendorWidget({
                     <div key={vendor} className={styles.vendorBlock}>
                         <button
                             type="button"
-                            className={`${styles.vendorButton} ${
-                                isActive ? styles.selected : ''
-                            }`}
+                            className={`${styles.vendorButton} ${isActive ? styles.selected : ''
+                                }`}
                             onClick={() => {
                                 if (disabled) return
                                 if (isActive) {

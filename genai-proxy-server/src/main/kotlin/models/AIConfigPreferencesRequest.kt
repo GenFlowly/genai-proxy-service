@@ -7,14 +7,14 @@ import models.AIConfig
 @Serializable
 data class AIConfigPreferencesRequest(
     val preferredModels: List<AIConfig>? = null,
-    val preferredGenerativeMode: AIMode = AIMode.FACTUAL,
-    val otherPreferences: Map<String, String> = emptyMap()
+    val preferredGenerativeMode: AIMode? = null,
+    val otherPreferences: Map<String, String>? = null
 )
 
 @Serializable
 enum class AIMode {
-    @SerialName("factual")
+    @SerialName("FACTUAL")
     FACTUAL,
-    @SerialName("creative")
+    @SerialName("CREATIVE")
     CREATIVE
 }

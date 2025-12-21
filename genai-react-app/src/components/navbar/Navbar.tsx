@@ -9,11 +9,13 @@ import SettingsIcon from '../icons/SettingsIcon'
 import styles from './Navbar.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 
+import { useConversation } from '../../context/ConversationContext'
 import logo from '../../assets/icons/logo.png'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
+    const { systemPrompt, setSystemPrompt } = useConversation()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
 
@@ -41,6 +43,8 @@ export default function Navbar(): React.ReactElement {
                         icon={ICONS.USER_ROLE}
                         placeholder="You are a helpful assistant."
                         className={styles.roleInput}
+                        value={systemPrompt}
+                        onChange={(e) => setSystemPrompt(e.target.value)}
                     />
                 </div>
 
