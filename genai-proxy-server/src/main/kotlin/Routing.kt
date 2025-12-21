@@ -4,6 +4,7 @@ import activity.registerOnboardCustomerRoutes
 import activity.registerStoreApiKeyRoutes
 import com.genflowly.activity.registerGenerateTextRoutes
 import com.genflowly.activity.registerGetTextGenerationModelsRoutes
+import com.genflowly.activity.registerSaveAIConfigPreferencesRoutes
 import com.genflowly.service.AIRequestService
 import io.ktor.server.application.*
 import io.ktor.server.response.*
@@ -36,5 +37,6 @@ fun Application.configureRouting(
         registerStoreApiKeyRoutes(customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService)
         registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)
+        registerSaveAIConfigPreferencesRoutes(customerProfileService)
     }
 }

@@ -1,7 +1,6 @@
 package service
 
 import com.genflowly.aicallerlib.models.AIVendor
-import com.genflowly.models.AIConfigPreferences
 import com.genflowly.models.AIMode
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
@@ -23,11 +22,12 @@ class CustomerProfileService(
         preferredGenerativeMode: AIMode,
         otherPreferences: Map<String, String>
     ) {
-        // todo reshape data
-
-
-
-        // todo dynamoDBProvider.saveAIConfigPreferences(customerId,preferredModels, preferredGenerativeMode, otherPreferences)
+        dynamoDBProvider.saveAIConfigPreferences(
+            customerId,
+            preferredModels,
+            preferredGenerativeMode,
+            otherPreferences
+        )
     }
 
 

@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 import models.AIConfig
 
 @Serializable
-data class AIConfigPreferences(
+data class AIConfigPreferencesRequest(
     val preferredModels: AIConfig? = null,
     val preferredGenerativeMode: AIMode = AIMode.FACTUAL,
     val otherPreferences: Map<String, String> = emptyMap()

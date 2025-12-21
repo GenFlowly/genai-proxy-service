@@ -12,6 +12,7 @@ import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
 import com.genflowly.DynamoDBConstants.SUB_PARTITION_KEY
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIMode
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -249,27 +250,46 @@ class DynamoDBProvider(
             )
             .build()
 
-    suspend fun saveAIConfigPreferences(        customerId: String,
-                                                preferredModels: Map<String, String>,
-                                                preferredGenerativeMode: String,
-                                                otherPreferences: Map<String,
-                                                        String>) {
-
+    suspend fun saveAIConfigPreferences(
+        customerId: String,
+        preferredModels: AIConfig?,
+        preferredGenerativeMode: AIMode,
+        otherPreferences: Map<String, String>
+    ) = withContext(Dispatchers.IO) {
         try {
-            // todo BUILD Item
+            val baseItem = mutableMapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                "preferredGenerativeMode" to AttributeValue.builder().s(preferredGenerativeMode.name).build()
+            )
 
-//        todo val putReq = PutItemRequest.builder()
-//            .tableName(CUSTOMER_PREFERENCES_TABLE)
-//            .item(item)
-//            .build()
+            if (preferredModels != null) {
+                baseItem["preferredModels"] = AttributeValue.builder().m(
+                    mapOf(
+                        "aiVendor" to AttributeValue.builder().s(preferredModels.aiVendor.name).build(),
+                        "model" to AttributeValue.builder().s(preferredModels.model).build()
+                    )
+                ).build()
+            }
 
-            // todo dynamoDbClient.putItem(putReq)
+            if (otherPreferences.isNotEmpty()) {
+                baseItem["otherPreferences"] = AttributeValue.builder().m(
+                    otherPreferences.mapValues { AttributeValue.builder().s(it.value).build() }
+                ).build()
+            }
+
+            val item = withTimestamps(baseItem)
+
+            val putReq = PutItemRequest.builder()
+                .tableName(CUSTOMER_PREFERENCES_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Saved preferences for customer $customerId to DynamoDB")
         } catch (e: Exception) {
-            logger.error("Failed to save Customer Preferences to " +
-                    "DynamoDB", e)
+            logger.error("Failed to save Customer Preferences to DynamoDB", e)
             throw e
         }
-
     }
 
     suspend fun saveCustomerApiKey(
