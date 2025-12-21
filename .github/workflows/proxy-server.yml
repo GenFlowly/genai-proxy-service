@@ -15,6 +15,10 @@ on:
         required: true
       AUTH0_API_AUDIENCE:
         required: true
+      NETLIFY_AUTH_TOKEN:
+        required: true
+      NETLIFY_SITE_ID:
+        required: true
 
 env:
   AWS_REGION: us-east-1
@@ -110,3 +114,13 @@ jobs:
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: cdk deploy gen-ai-proxy-service-EcsStack --require-approval never
+
+      - name: Deploy React App to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        working-directory: genai-react-app
+        run: |
+          npm ci
+          npm run build
+          npx netlify-cli deploy --prod --dir=build
