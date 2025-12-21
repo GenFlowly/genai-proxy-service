@@ -9,15 +9,16 @@ import { AuthContextType, AuthProviderProps, User } from '../types/auth.types'
 import { parseJwt } from '../utils/parseJwt'
 import { HttpMethod } from '../constants/http'
 import { onboardCustomer } from '../services/onboardUserService'
+import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export const AuthProvider = ({
-                                 children,
-                                 domain,
-                                 clientId,
-                                 audience,
-                             }: AuthProviderProps): React.ReactElement => {
+    children,
+    domain,
+    clientId,
+    audience,
+}: AuthProviderProps): React.ReactElement => {
     const [user, setUser] = useState<User | null>(null)
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
@@ -25,6 +26,8 @@ export const AuthProvider = ({
     const [customerId, setCustomerId] = useState<string | null>(() =>
         localStorage.getItem('customerId')
     )
+    const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
+    const [aiConfigPreferences, setAiConfigPreferences] = useState<AuthContextType['aiConfigPreferences']>(null)
 
     const exchangeCodeForToken = useCallback(
         async (code: string) => {
@@ -87,6 +90,12 @@ export const AuthProvider = ({
                         if (onboardData.customerId) {
                             setCustomerId(onboardData.customerId)
                         }
+                        if (onboardData.aiVendorAPIKeyStatusList) {
+                            setAiVendorAPIKeyStatusList(onboardData.aiVendorAPIKeyStatusList)
+                        }
+                        if (onboardData.aiConfigPreferences) {
+                            setAiConfigPreferences(onboardData.aiConfigPreferences)
+                        }
                     } catch (error) {
                         console.error('Failed to onboard user:', error)
                     }
@@ -120,6 +129,8 @@ export const AuthProvider = ({
         setIsAuthenticated(false)
         setAccessToken(null)
         setCustomerId(null)
+        setAiVendorAPIKeyStatusList([])
+        setAiConfigPreferences(null)
         localStorage.removeItem('customerId')
 
         const logoutUrl =
@@ -144,6 +155,8 @@ export const AuthProvider = ({
         loginWithRedirect,
         logout,
         getAccessTokenSilently,
+        aiVendorAPIKeyStatusList,
+        aiConfigPreferences,
     }
 
     return (

@@ -6,14 +6,16 @@ import { useConversation } from '../../../context/ConversationContext'
 import TextContainer from '../../common/TextContainer/TextContainer'
 import { Message } from "../../../models/conversation.models";
 import MultiPurposeButton from '../../common/MultiPurposeButton/MultiPurposeButton'
+import Tooltip from '../../common/Tooltip/Tooltip'
 
 interface ResponseProps {
     blockId: string
     responseMessages: Message[]
     onFollowUp?: (selectedMessageId: string) => void
+    disabled?: boolean
 }
 
-export default function Response({ blockId, responseMessages, onFollowUp }: ResponseProps) {
+export default function Response({ blockId, responseMessages, onFollowUp, disabled = false }: ResponseProps) {
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
     const { setSelectedResponseForBlock, getSelectedResponseForBlock } = useConversation()
 
@@ -27,6 +29,7 @@ export default function Response({ blockId, responseMessages, onFollowUp }: Resp
     if (!responseMessages || responseMessages.length === 0) return null
 
     const handleFollowUp = (messageId: string) => {
+        if (disabled) return
         setSelectedResponseForBlock(blockId, messageId)
         onFollowUp?.(messageId)
     }
@@ -56,12 +59,16 @@ export default function Response({ blockId, responseMessages, onFollowUp }: Resp
 
                             {onFollowUp && (
                                 <div className={styles.followUpButtonWrapper}>
-                                    <MultiPurposeButton
-                                        label={isSelected ? 'Selected' : 'Follow up'}
-                                        onClick={() => handleFollowUp(messageId)}
-                                        disabled={isSelected}
-                                        icon={isSelected ? undefined : ICONS.SEND}
-                                    />
+                                    <Tooltip content={disabled ? "No API keys set" : ""}>
+                                        <div style={disabled ? { cursor: 'not-allowed' } : {}}>
+                                            <MultiPurposeButton
+                                                label={isSelected ? 'Selected' : 'Follow up'}
+                                                onClick={() => handleFollowUp(messageId)}
+                                                disabled={isSelected || disabled}
+                                                icon={isSelected ? undefined : ICONS.SEND}
+                                            />
+                                        </div>
+                                    </Tooltip>
                                 </div>
                             )}
                         </div>

@@ -10,7 +10,7 @@ import {
     GetTextGenerationModelsResponse,
     AIVendorModelList,
 } from '../../../models/getTextGenerationModels.models'
-import { CacheManager } from '../../../utils/cache'
+
 import { saveAIConfigPreferences } from '../../../services/saveAIConfigService'
 import styles from './AIVendorWidget.module.scss'
 import Tooltip from '../../common/Tooltip/Tooltip'
@@ -23,25 +23,42 @@ interface AIVendorWidgetProps {
 
 const vendors = Object.values(AIVendor) as AIVendor[]
 
-// 🧠 Cache 1: for selected model states (UI-level)
-const aiConfigCache = new CacheManager({ prefix: 'aiConfigCache_' })
+
 
 export default function AIVendorWidget({
     collapsed = false,
 }: AIVendorWidgetProps): React.ReactElement {
     const { config, setSelectedModelForAIVendor, resetConfig } = useAI()
 
-    const { getAccessTokenSilently, customerId, isAuthenticated } = useAuth()
+    const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList, aiConfigPreferences } = useAuth()
 
     const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+    const [isPrefsLoaded, setIsPrefsLoaded] = useState(false)
 
     const isAIVendorModelsPopulated = (aiVendor: AIVendor) =>
         config.some(c => c.aiVendor === aiVendor && c.model)
 
     const getSelectedModel = (aiVendor: AIVendor) =>
         config.find(c => c.aiVendor === aiVendor)?.model ?? ''
+
+    const isVendorEnabled = (vendor: AIVendor) => {
+        const status = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
+        return status?.isAPIKeyValid ?? false
+    }
+
+    // --- Sync Backend Preferences to AI Context ---
+    useEffect(() => {
+        if (aiConfigPreferences?.preferredModels && !isPrefsLoaded) {
+            aiConfigPreferences.preferredModels.forEach(pref => {
+                if (pref.aiVendor && pref.model) {
+                    setSelectedModelForAIVendor(pref.aiVendor, pref.model)
+                }
+            })
+            setIsPrefsLoaded(true)
+        }
+    }, [aiConfigPreferences, isPrefsLoaded, setSelectedModelForAIVendor])
 
     // --- Fetch models (with bypass option for refresh) ---
     const fetchModels = useCallback(
@@ -61,8 +78,7 @@ export default function AIVendorWidget({
                 const data = response.aiVendorModelList || []
                 setAiVendorModels(data)
 
-                // ✅ Update UI cache
-                aiConfigCache.set('aiVendorModels', data)
+                // Note: We removed local storage cache here as requested previously
             } catch (err) {
                 console.error('Failed to fetch AI models:', err)
                 setAiVendorModels([])
@@ -71,16 +87,11 @@ export default function AIVendorWidget({
         [isAuthenticated, customerId, getAccessTokenSilently]
     )
 
-    // --- Initial load: use cache or fetch ---
+
+    // --- Initial load: fetch models ---
     useEffect(() => {
         if (!isAuthenticated || !customerId) return
-
-        const cached = aiConfigCache.get<AIVendorModelList[]>('aiVendorModels')
-        if (cached && cached.length > 0) {
-            setAiVendorModels(cached)
-        } else {
-            fetchModels()
-        }
+        fetchModels()
     }, [isAuthenticated, customerId, fetchModels])
 
     // --- Refresh handler ---
@@ -89,15 +100,8 @@ export default function AIVendorWidget({
 
         try {
             setIsRefreshing(true)
-
-            // ✅ 1. Clear both caches
-            aiConfigCache.clear()
-            clearAllModelCache()
-
-            // ✅ 2. Reset selected models in AI context
             resetConfig()
-
-            // ✅ 3. Fetch from API again (bypass cache)
+            clearAllModelCache()
             await fetchModels(true)
         } finally {
             setIsRefreshing(false)
@@ -135,34 +139,43 @@ export default function AIVendorWidget({
             <div className={`${styles.vendorWidget} ${styles.collapsed}`}>
                 {vendors.map(vendor => {
                     const isActive = isAIVendorModelsPopulated(vendor)
+                    const isEnabled = isVendorEnabled(vendor)
                     const models = getModelsForVendor(vendor)
-                    const disabled = models.length === 0
+                    // If enabled but no models, still technically clickable but might show empty list. 
+                    // But if disabled (no API key), it shouldn't be clickable.
+                    // Prioritize API key check.
+
+                    const tooltipContent = !isEnabled ? 'API key not set' : vendor
 
                     return (
-                        <button
-                            key={vendor}
-                            type="button"
-                            className={`${styles.iconButton} ${isActive ? styles.active : ''}`}
-                            onClick={() => {
-                                if (disabled) return
-                                if (isActive) {
-                                    setSelectedModelForAIVendor(vendor, '')
-                                } else {
-                                    const firstModel = models[0]
-                                    if (firstModel)
-                                        setSelectedModelForAIVendor(vendor, firstModel)
-                                }
-                            }}
-                            title={vendor}
-                            disabled={disabled}
-                        >
-                            {vendor[0]}
-                        </button>
+                        <Tooltip key={vendor} content={tooltipContent}>
+                            <div className={styles.buttonWrapper}> {/* Wrapper for tooltip on disabled button */}
+                                <button
+                                    type="button"
+                                    className={`${styles.iconButton} ${isActive ? styles.active : ''}`}
+                                    onClick={() => {
+                                        if (!isEnabled) return
+                                        if (isActive) {
+                                            setSelectedModelForAIVendor(vendor, '')
+                                        } else {
+                                            const firstModel = models[0]
+                                            if (firstModel)
+                                                setSelectedModelForAIVendor(vendor, firstModel)
+                                        }
+                                    }}
+                                    disabled={!isEnabled}
+                                >
+                                    {vendor[0]}
+                                </button>
+                            </div>
+                        </Tooltip>
                     )
                 })}
             </div>
         )
     }
+
+    const hasAnyValidApiKey = vendors.some(isVendorEnabled)
 
     // --- Expanded view ---
     return (
@@ -170,11 +183,11 @@ export default function AIVendorWidget({
             <div className={styles.header}>
                 <h3 className={styles.title}>AI Models</h3>
                 <div className={styles.actions}>
-                    <Tooltip content="Refresh Models">
+                    <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Refresh Models"}>
                         <button
                             className={styles.iconActionButton}
                             onClick={handleRefresh}
-                            disabled={isRefreshing}
+                            disabled={isRefreshing || !hasAnyValidApiKey}
                             aria-label="Refresh Models"
                         >
                             <Icon
@@ -185,11 +198,11 @@ export default function AIVendorWidget({
                         </button>
                     </Tooltip>
 
-                    <Tooltip content="Set as default">
+                    <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Set as default"}>
                         <button
                             className={styles.iconActionButton}
                             onClick={handleSave}
-                            disabled={isSaving}
+                            disabled={isSaving || !hasAnyValidApiKey}
                             aria-label="Set as default"
                         >
                             <Icon src={ICONS.SAVE_ICON} size={20} />
@@ -202,16 +215,15 @@ export default function AIVendorWidget({
                 const isActive = isAIVendorModelsPopulated(vendor)
                 const selectedModel = getSelectedModel(vendor)
                 const models = getModelsForVendor(vendor)
-                const disabled = models.length === 0
+                const isEnabled = isVendorEnabled(vendor)
 
                 return (
                     <div key={vendor} className={styles.vendorBlock}>
                         <button
                             type="button"
-                            className={`${styles.vendorButton} ${isActive ? styles.selected : ''
-                                }`}
+                            className={`${styles.vendorButton} ${isActive ? styles.selected : ''}`}
                             onClick={() => {
-                                if (disabled) return
+                                if (!isEnabled) return
                                 if (isActive) {
                                     setSelectedModelForAIVendor(vendor, '')
                                 } else {
@@ -220,12 +232,16 @@ export default function AIVendorWidget({
                                         setSelectedModelForAIVendor(vendor, firstModel)
                                 }
                             }}
-                            disabled={disabled}
+                            disabled={!isEnabled}
                         >
                             {vendor}
                         </button>
 
-                        {isActive && models.length > 0 && (
+                        {!isEnabled && (
+                            <span className={styles.errorText}>API key not set</span>
+                        )}
+
+                        {isActive && isEnabled && models.length > 0 && (
                             <select
                                 value={selectedModel}
                                 onChange={e =>
@@ -241,7 +257,7 @@ export default function AIVendorWidget({
                             </select>
                         )}
 
-                        {!isActive && models.length === 0 && (
+                        {isActive && isEnabled && models.length === 0 && (
                             <span className={styles.errorText}>No models available</span>
                         )}
                     </div>
