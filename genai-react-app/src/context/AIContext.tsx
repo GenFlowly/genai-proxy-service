@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { AIVendor } from '../constants/vendors'
-import { CacheManager } from '../utils/cache'
 import { countTokens } from '../utils/tokenizer'
 
 export interface AIConfig {
@@ -21,51 +20,12 @@ interface AIContextType {
 
 const AIContext = createContext<AIContextType | undefined>(undefined)
 
-const aiConfigCache = new CacheManager({
-    ttlMs: 30 * 24 * 60 * 60 * 1000, // 30 days
-    prefix: 'ai_config_',
-})
-
-const CONFIG_CACHE_KEY = 'current_config'
-
 export const AIProvider = ({ children }: { children: ReactNode }) => {
+    // 🔹 Initialize state (empty by default, to be filled by backend)
     const [config, setConfig] = useState<AIConfig[]>([])
     const [prompt, setPrompt] = useState<string>('')
     const [tokenCount, setTokenCount] = useState<number>(0)
     const [isTokenLoading, setIsTokenLoading] = useState(false)
-    const [isHydrated, setIsHydrated] = useState(false)
-
-    // 🔹 Load cached config safely
-    useEffect(() => {
-        try {
-            const cached = aiConfigCache.get<AIConfig[]>(CONFIG_CACHE_KEY)
-            if (cached && Array.isArray(cached)) {
-                // Normalize and remove invalid entries
-                const normalized = cached
-                    .filter(c => c?.aiVendor && typeof c.model === 'string')
-                    .map(c => ({
-                        ...c,
-                        aiVendor: c.aiVendor as AIVendor,
-                        model: c.model.trim(),
-                    }))
-                setConfig(normalized)
-            }
-        } catch (e) {
-            console.error('Failed to load config:', e)
-        } finally {
-            setIsHydrated(true)
-        }
-    }, [])
-
-    // 🔹 Persist config to cache safely
-    useEffect(() => {
-        if (!isHydrated) return
-        try {
-            aiConfigCache.set(CONFIG_CACHE_KEY, config)
-        } catch (e) {
-            console.error('Failed to save config:', e)
-        }
-    }, [config, isHydrated])
 
     // 🔹 Always return OPENAI model (gracefully handles missing)
     const getOpenAIActiveModel = React.useCallback((): string => {
@@ -83,8 +43,6 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
 
     // 🔹 Token count auto-update (debounced, safe for missing model)
     useEffect(() => {
-        if (!isHydrated) return
-
         if (!prompt?.trim()) {
             setTokenCount(0)
             return
@@ -111,7 +69,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         }, 400)
 
         return () => clearTimeout(timeout)
-    }, [prompt, config, isHydrated, getOpenAIActiveModel])
+    }, [prompt, config, getOpenAIActiveModel])
 
     // 🔹 Update or insert vendor+model config safely
     const setSelectedModelForAIVendor = (aiVendor: AIVendor, model: string) => {
@@ -145,7 +103,6 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     const resetConfig = () => {
         try {
             setConfig([])
-            aiConfigCache.delete(CONFIG_CACHE_KEY)
         } catch (e) {
             console.error('Failed to reset config:', e)
         }

@@ -4,8 +4,11 @@ import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import Response from '../../widgets/ResponseWidget/Response'
 import MultiPurposeButton
     from '../../common/MultiPurposeButton/MultiPurposeButton'
+import Tooltip from '../../common/Tooltip/Tooltip'
 import { useConversation } from '../../../context/ConversationContext'
 import styles from './ConversationBlock.module.scss'
+
+import { useAuth } from '../../../context/AuthContext'
 
 export default function ConversationBlock({ id }: { id: string }) {
     const {
@@ -15,6 +18,10 @@ export default function ConversationBlock({ id }: { id: string }) {
         setSelectedResponseForBlock,
         getSelectedResponseForBlock
     } = useConversation()
+
+    // ✅ Check API key status
+    const { aiVendorAPIKeyStatusList } = useAuth()
+    const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
 
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === id)
     const responseRef = useRef<HTMLDivElement | null>(null)
@@ -45,6 +52,8 @@ export default function ConversationBlock({ id }: { id: string }) {
 
     // ✅ Follow-up logic: reuse last empty block or create new one
     const handleFollowUp = (selectedMessageId: string) => {
+        if (!hasAnyValidApiKey) return
+
         // Get the last conversation block
         const lastBlock = conversationBlockList[conversationBlockList.length - 1]
 
@@ -83,15 +92,20 @@ export default function ConversationBlock({ id }: { id: string }) {
             />
 
             {conversationBlock.responseMessages.length === 0 && (
-                <MultiPurposeButton
-                    onClick={() => {
-                        const selectedId = getSelectedResponseForBlock(id)
-                        generateResponses(id, draftPrompt, selectedId)
-                    }}
-                    label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
-                    disabled={conversationBlock.isLoading}
-                    icon={ICONS.SEND}
-                />
+                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
+                    <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
+                        <MultiPurposeButton
+                            onClick={() => {
+                                if (!hasAnyValidApiKey) return
+                                const selectedId = getSelectedResponseForBlock(id)
+                                generateResponses(id, draftPrompt, selectedId)
+                            }}
+                            label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
+                            disabled={conversationBlock.isLoading || !hasAnyValidApiKey}
+                            icon={ICONS.SEND}
+                        />
+                    </div>
+                </Tooltip>
             )}
 
             {conversationBlock.responseMessages.length > 0 && (
@@ -100,6 +114,7 @@ export default function ConversationBlock({ id }: { id: string }) {
                         blockId={id}
                         responseMessages={conversationBlock.responseMessages}
                         onFollowUp={handleFollowUp}
+                        disabled={!hasAnyValidApiKey}
                     />
                 </div>
             )}

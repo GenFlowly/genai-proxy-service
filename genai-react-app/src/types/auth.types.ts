@@ -1,3 +1,6 @@
+import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
+import { OnboardCustomerResponse } from '../models/onboardUser.models'
+
 export interface User {
     sub: string;
     email?: string;
@@ -13,7 +16,9 @@ export interface AuthContextType {
     logout: (options: { returnTo: string }) => void;
     getAccessTokenSilently: () => Promise<string>;
     customerId: string | null;
-    setCustomerId: (id: string | null) => void
+    setCustomerId: (id: string | null) => void;
+    aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[];
+    aiConfigPreferences: OnboardCustomerResponse['aiConfigPreferences'] | null;
 }
 
 export interface AuthProviderProps {
