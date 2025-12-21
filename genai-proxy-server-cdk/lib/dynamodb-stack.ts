@@ -64,12 +64,21 @@ export class DynamoDBStack extends cdk.Stack {
             sortKey: {name: 'messageId', type: dynamodb.AttributeType.STRING},
         };
 
+        const customerPreferencesTableProps: CreateTableProps = {
+            tableName: 'CustomerPreferences',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING
+            },
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
         const conversationTable = createDefaultDynamoDbTable(this, conversationTableProps);
         const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
+        const customerPreferencesTable = createDefaultDynamoDbTable(this, customerPreferencesTableProps);
 
-        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable)
+        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable)
     }
 }
