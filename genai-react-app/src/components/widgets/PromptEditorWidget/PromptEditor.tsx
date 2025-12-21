@@ -4,7 +4,6 @@ import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
-import { useConversation } from '../../../context/ConversationContext'
 import { useAI } from '../../../context/AIContext'
 import styles from './PromptEditor.module.scss'
 import { EditorView } from '@codemirror/view'
@@ -84,11 +83,7 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
 
     const editorViewRef = useRef<any>(null)
 
-    const handleEditorCreate = (editor: any) => {
-        editorViewRef.current = editor?.view
-    }
-
-    const handleEditorUpdate = (viewUpdate: any) => {
+    const handleEditorUpdate = React.useCallback((viewUpdate: any) => {
         if (viewUpdate.docChanged || viewUpdate.selectionSet) {
             const view = viewUpdate.view
             const { from, to } = view.state.selection.main
@@ -111,7 +106,7 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
                 })
             }
         }
-    }
+    }, [])
 
     const handleMarkReusable = async () => {
         // Dummy API call
