@@ -1,6 +1,5 @@
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
-import { AIVendor } from '../constants/vendors'
 import { CacheManager } from '../utils/cache'
 import {
     GetTextGenerationModelsRequest,

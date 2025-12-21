@@ -8,7 +8,6 @@ import TokenCounter from '../../widgets/TokenCounter/TokenCounter'
 import styles from './RightSidebar.module.scss'
 
 export default function RightSidebar(): React.ReactElement {
-    const { config } = useAI()
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()
     const collapsed = !isRightSidebarExpanded
 

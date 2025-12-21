@@ -67,6 +67,20 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [config, isHydrated])
 
+    // 🔹 Always return OPENAI model (gracefully handles missing)
+    const getOpenAIActiveModel = React.useCallback((): string => {
+        const openaiConfig = config.find(
+            c => c.aiVendor === AIVendor.OPENAI && !!c.model?.trim()
+        )
+
+        if (!openaiConfig) {
+            // Don't throw — just return empty
+            return ''
+        }
+
+        return openaiConfig.model
+    }, [config])
+
     // 🔹 Token count auto-update (debounced, safe for missing model)
     useEffect(() => {
         if (!isHydrated) return
@@ -97,7 +111,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         }, 400)
 
         return () => clearTimeout(timeout)
-    }, [prompt, config, isHydrated])
+    }, [prompt, config, isHydrated, getOpenAIActiveModel])
 
     // 🔹 Update or insert vendor+model config safely
     const setSelectedModelForAIVendor = (aiVendor: AIVendor, model: string) => {
@@ -126,19 +140,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         })
     }
 
-    // 🔹 Always return OPENAI model (gracefully handles missing)
-    const getOpenAIActiveModel = (): string => {
-        const openaiConfig = config.find(
-            c => c.aiVendor === AIVendor.OPENAI && !!c.model?.trim()
-        )
 
-        if (!openaiConfig) {
-            // Don't throw — just return empty
-            return ''
-        }
-
-        return openaiConfig.model
-    }
 
     const resetConfig = () => {
         try {
@@ -177,10 +179,10 @@ export const useAI = (): AIContextType => {
             activeText: '',
             tokenCount: 0,
             isTokenLoading: false,
-            setPrompt: () => {},
-            setSelectedModelForAIVendor: () => {},
+            setPrompt: () => { },
+            setSelectedModelForAIVendor: () => { },
             getOpenAIActiveModel: () => '',
-            resetConfig: () => {},
+            resetConfig: () => { },
         }
     }
     return ctx

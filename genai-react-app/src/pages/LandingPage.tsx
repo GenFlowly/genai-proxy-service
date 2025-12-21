@@ -3,9 +3,7 @@ import Navbar from '../components/navbar/Navbar'
 import LeftSidebar from '../components/sections/LeftSidebar/LeftSidebar'
 import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
 import CenterSection from '../components/sections/CenterSection/CenterSection'
-import { AIProvider } from '../context/AIContext'
-import { ConversationProvider } from '../context/ConversationContext'
-import { LayoutProvider, useLayout } from '../context/LayoutContext'
+import { useLayout } from '../context/LayoutContext'
 import styles from './LandingPage.module.scss'
 
 function LandingPageContent() {

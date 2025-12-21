@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, ReactNode } from 'react'
+import React, { useState, useRef, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './Tooltip.module.scss'
 
@@ -76,10 +76,10 @@ export default function Tooltip({ content, children }: TooltipProps) {
             {isVisible && content && createPortal(
                 <div
                     ref={tooltipRef}
-                    className={`${styles.tooltip} ${styles[`placement-${placement}`]}`}
+                    className={`${styles.tooltip} ${styles[`placement-${placement}`]} `}
                     style={{
-                        top: `${position.top}px`,
-                        left: `${position.left}px`,
+                        top: `${position.top} px`,
+                        left: `${position.left} px`,
                         // transform is now handled by CSS classes based on placement
                     }}
                 >

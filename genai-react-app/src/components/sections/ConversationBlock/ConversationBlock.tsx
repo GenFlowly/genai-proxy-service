@@ -11,7 +11,6 @@ export default function ConversationBlock({ id }: { id: string }) {
     const {
         conversationBlockList,
         generateResponses,
-        addNewConversationBlock,
         addNewConversationBlockWithId,
         setSelectedResponseForBlock,
         getSelectedResponseForBlock
@@ -28,6 +27,7 @@ export default function ConversationBlock({ id }: { id: string }) {
         if (conversationBlock?.prompt && conversationBlock.prompt !== draftPrompt) {
             setDraftPrompt(conversationBlock.prompt)
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [conversationBlock?.prompt])
 
     useEffect(() => {
