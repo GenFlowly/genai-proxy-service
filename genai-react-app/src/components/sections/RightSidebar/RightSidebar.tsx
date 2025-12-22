@@ -18,17 +18,13 @@ export default function RightSidebar(): React.ReactElement {
                 title={isRightSidebarExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
             >
                 {isRightSidebarExpanded ? (
-                    <Icon src={ICONS.ALT_ARROW_RIGHT} size={20} />
+                    <Icon src={ICONS.ALT_ARROW_RIGHT} size={15} />
                 ) : (
-                    <Icon src={ICONS.ALT_ARROW_LEFT} size={20} />
+                    <Icon src={ICONS.ALT_ARROW_LEFT} size={15} />
                 )}
             </button>
-
-            {!collapsed && <h3 className={styles.title}>AI Configuration</h3>}
-
             {/* Vendor selection area */}
             <div className={styles.section}>
-                {!collapsed && <h4 className={styles.sectionTitle}>Vendors</h4>}
                 <AIVendorWidget collapsed={collapsed} />
             </div>
 
