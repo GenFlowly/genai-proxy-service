@@ -35,30 +35,35 @@
 }
 
 .collapseButton {
-  /* Positioned in flow to prevent overlap */
-  align-self: flex-start;
-  /* Align to left when expanded */
-  margin-bottom: 0rem;
+  position: absolute;
+  left: 0;
+  top: 0rem;
+  /* Align with top padding */
+  z-index: 10;
 
-  background: transparent;
-  border: none;
-  color: $color-text-primary;
+  /* Visual styling */
+  background: $color-background-secondary;
+  border: 1px solid $color-border;
+  border-left: none;
+  /* Attach to edge */
+  border-radius: 0 6px 6px 0;
+  /* Rounded on right only */
+  color: $color-text-secondary;
   cursor: pointer;
-  padding: 0.4rem;
-  border-radius: 6px;
-  transition: background-color 0.2s ease;
+  padding: 0.5rem 0.2rem;
+  /* Slimmer */
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: $shadow-sm;
 
   &:hover {
     background-color: $color-background-hover;
+    color: $color-text-primary;
+    padding-right: 0.5rem;
+    /* Slide out effect */
   }
-}
-
-.sidebar.collapsed .collapseButton {
-  align-self: center;
-  margin-bottom: 1rem;
 }
 
 .title {
