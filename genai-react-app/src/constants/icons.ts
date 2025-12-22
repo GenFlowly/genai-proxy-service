@@ -11,6 +11,9 @@ import refreshIcon from '../assets/icons/refresh-icon.svg'
 import saveIcon from '../assets/icons/save-icon.svg'
 
 import addIcon from '../assets/icons/add-icon.svg'
+import openAIIcon from '../assets/icons/OpenAI.svg'
+import claudeIcon from '../assets/icons/Claude.svg'
+import geminiIcon from '../assets/icons/Gemini.svg'
 
 export const ICONS = {
     PROMPT_ICON: promptIcon,
@@ -24,4 +27,7 @@ export const ICONS = {
     REFRESH_ICON: refreshIcon,
     SAVE_ICON: saveIcon,
     PLUS: addIcon,
+    OPENAI: openAIIcon,
+    CLAUDE: claudeIcon,
+    GEMINI: geminiIcon,
 }

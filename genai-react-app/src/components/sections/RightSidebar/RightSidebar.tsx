@@ -5,16 +5,14 @@ import { ICONS } from '../../../constants/icons'
 import AIVendorWidget from '../../widgets/AIVendorWidget/AIVendorWidget'
 import TokenCounter from '../../widgets/TokenCounter/TokenCounter'
 import styles from './RightSidebar.module.scss'
-import { useConversation } from '../../../context/ConversationContext'
-import MultiPurposeButton from '../../common/MultiPurposeButton/MultiPurposeButton'
+import NewChatWidget from '../../widgets/NewChatWidget/NewChatWidget'
 
 export default function RightSidebar(): React.ReactElement {
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()
-    const { resetConversation } = useConversation()
     const collapsed = !isRightSidebarExpanded
 
     return (
-        <div className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
+        <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`}>
             <button
                 onClick={toggleRightSidebar}
                 className={styles.collapseButton}
@@ -27,30 +25,26 @@ export default function RightSidebar(): React.ReactElement {
                 )}
             </button>
 
-            {/* New Chat Button */}
-            {!collapsed && (
-                <div style={{ alignSelf: 'stretch' }}>
-                    <MultiPurposeButton
-                        label="New Chat"
-                        onClick={resetConversation}
-                        icon={ICONS.PLUS}
-                    />
-                </div>
-            )}
+            <div className={styles.sidebarContent}>
+                {/* New Chat Widget */}
+                {!collapsed && (
+                    <div className={styles.section}>
+                        <NewChatWidget />
+                    </div>
+                )}
 
-            {/* Vendor selection area */}
-            <div className={styles.section}>
-                <AIVendorWidget collapsed={collapsed} />
-            </div>
-
-
-            {!collapsed && (
+                {/* Vendor selection area */}
                 <div className={styles.section}>
-                    <h4 className={styles.sectionTitle}>Token Usage</h4>
-                    <TokenCounter />
+                    <AIVendorWidget collapsed={collapsed} />
                 </div>
-            )}
 
+
+                {!collapsed && (
+                    <div className={styles.section}>
+                        <TokenCounter />
+                    </div>
+                )}
+            </div>
         </div>
     )
 }

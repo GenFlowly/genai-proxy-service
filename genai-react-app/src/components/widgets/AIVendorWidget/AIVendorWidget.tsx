@@ -16,6 +16,12 @@ import styles from './AIVendorWidget.module.scss'
 import Tooltip from '../../common/Tooltip/Tooltip'
 import { Icon } from '../../common/Icon/Icon'
 import { ICONS } from '../../../constants/icons'
+import PillButton from '../../common/PillButton/PillButton'
+import {
+    OpenAIBrandName,
+    ClaudeBrandName,
+    GeminiBrandName
+} from '../../common/BrandName/BrandName'
 
 interface AIVendorWidgetProps {
     collapsed?: boolean
@@ -257,11 +263,15 @@ export default function AIVendorWidget({
                 const models = getModelsForVendor(vendor)
                 const isEnabled = isVendorEnabled(vendor)
 
+                let BrandComponent: React.ReactNode = vendor
+                if (vendor === AIVendor.OPENAI) BrandComponent = <OpenAIBrandName as="span" />
+                if (vendor === AIVendor.CLAUDE) BrandComponent = <ClaudeBrandName as="span" />
+                if (vendor === AIVendor.GEMINI) BrandComponent = <GeminiBrandName as="span" />
+
                 return (
                     <div key={vendor} className={styles.vendorBlock}>
-                        <button
-                            type="button"
-                            className={`${styles.vendorButton} ${isActive ? styles.selected : ''}`}
+                        <PillButton
+                            label={BrandComponent}
                             onClick={() => {
                                 if (!isEnabled) return
                                 if (isActive) {
@@ -273,9 +283,8 @@ export default function AIVendorWidget({
                                 }
                             }}
                             disabled={!isEnabled}
-                        >
-                            {vendor}
-                        </button>
+                            variant={isActive ? 'primary' : 'secondary'}
+                        />
 
                         {!isEnabled && (
                             <span className={styles.errorText}>API key not set</span>

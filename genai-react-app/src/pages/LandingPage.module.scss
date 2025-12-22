@@ -41,12 +41,15 @@
 
 /* RIGHT SIDEBAR */
 .sidebarRight {
-  background: #fafafa;
-  border-left: 1px solid rgba(200, 200, 200, 0.15);
-  width: 15rem;
+  /* Delegated styling to the component */
+  background: transparent;
+  border: none;
+  width: auto; // Let the inner RightSidebar component determine width
+  overflow: visible; // Allow the collapse button to hang outside
+  z-index: 20; // Ensure button sits above center content
 
   &.collapsed {
-    width: 5rem;
+    width: auto; // Let inner component handle collapsed width
   }
 }
 
