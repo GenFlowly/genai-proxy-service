@@ -128,6 +128,27 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         }
     }
 
+    const resetConversation = () => {
+        // Clear all prompt editor content from localStorage
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('prompt_editor_content_')) {
+                localStorage.removeItem(key)
+            }
+        })
+
+        setConversationId('')
+        setConversationBlockList([
+            {
+                conversationBlockId: `conv-default`,
+                prompt: '',
+                responseMessages: [],
+                isLoading: false,
+            },
+        ])
+        setSelectedResponseByBlock({})
+        navigate('/chat')
+    }
+
     // --- Core Actions ---
     const addNewConversationBlock = () => {
         const newConversation: ConversationBlock = {
@@ -228,6 +249,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 setSelectedResponseForBlock,
                 getSelectedResponseForBlock,
                 loadConversation, // Expose this
+                resetConversation,
             }}
         >
             {children}

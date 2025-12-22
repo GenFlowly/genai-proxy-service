@@ -34,7 +34,7 @@ export default function Navbar(): React.ReactElement {
             <div className={styles.container}>
                 <div className={`${styles.leftControls} ${!isLeftSidebarExpanded ? styles.collapsed : ''}`}>
                     <Link to="/" className={styles.logoLink} title="Home">
-                        <img src={logo} alt="MyApp Logo" className={styles.logoImage} />
+                        <img src={logo} alt="Create a new prompt" className={styles.logoImage} />
                     </Link>
                 </div>
 
