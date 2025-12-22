@@ -1,10 +1,12 @@
 // src/context/ConversationContext.tsx
 import React, { createContext, useContext, useState, ReactNode, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AIVendor } from '../constants/vendors'
 import { useAuth } from './AuthContext'
 import { AIConfig, useAI } from './AIContext'
 import { useLayout } from './LayoutContext'
 import { generateText } from '../services/generateTextService'
+import { getConversation } from '../services/conversationService'
 import {
     ConversationBlock,
     ConversationContextType,
@@ -17,6 +19,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
     const { config } = useAI() // now an array of AIConfig[]
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
+    const navigate = useNavigate()
 
     const [conversationId, setConversationId] = useState<string>('')
     const [systemPrompt, setSystemPrompt] = useState<string>('')
@@ -39,7 +42,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const [selectedResponseByBlock, setSelectedResponseByBlock] = useState<Record<string, string | null>>({})
 
     const updateConversationBlock = (conversationBlockId: string, updater: Partial<ConversationBlock>) => {
-        console.log('DEBUG updateConversationBlock', conversationBlockId, updater)
+        // console.log('DEBUG updateConversationBlock', conversationBlockId, updater)
         setConversationBlockList(prev =>
             prev.map(block =>
                 block.conversationBlockId === conversationBlockId
@@ -83,10 +86,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             response.results?.[0]?.conversationId ??
             ''
 
+        // Update conversation ID and navigate if changed
         if (newConversationId && newConversationId !== conversationIdRef.current) {
             setConversationId(newConversationId)
             conversationIdRef.current = newConversationId
             console.log('SET Conversation ID', newConversationId)
+
+            // Sync URL
+            navigate(`/chat/${newConversationId}`)
         }
 
         console.log('DEBUG response:', response)
@@ -101,6 +108,24 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             text: r.text ?? '',
             messageId: r.messageId ?? '',
         }))
+    }
+
+    const loadConversation = async (id: string) => {
+        if (!isAuthenticated || !customerId) return
+
+        try {
+            const token = await getAccessTokenSilently()
+            const data = await getConversation(token, id)
+
+            if (data && data.blocks) {
+                setConversationId(data.conversationId)
+                setConversationBlockList(data.blocks)
+                // If system prompt is stored, set it too
+            }
+        } catch (err) {
+            console.error("Failed to load conversation", err)
+            // Handle error (maybe redirect to new chat?)
+        }
     }
 
     // --- Core Actions ---
@@ -202,6 +227,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 selectedResponseByBlock,
                 setSelectedResponseForBlock,
                 getSelectedResponseForBlock,
+                loadConversation, // Expose this
             }}
         >
             {children}

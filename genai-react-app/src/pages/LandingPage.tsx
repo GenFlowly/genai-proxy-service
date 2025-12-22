@@ -1,9 +1,11 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 import Navbar from '../components/navbar/Navbar'
 import LeftSidebar from '../components/sections/LeftSidebar/LeftSidebar'
 import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
 import CenterSection from '../components/sections/CenterSection/CenterSection'
 import { useLayout } from '../context/LayoutContext'
+import { useConversation } from '../context/ConversationContext'
 import styles from './LandingPage.module.scss'
 
 function LandingPageContent() {
@@ -31,6 +33,15 @@ function LandingPageContent() {
 }
 
 export default function LandingPage() {
+    const { conversationId } = useParams<{ conversationId: string }>()
+    const { loadConversation } = useConversation()
+
+    useEffect(() => {
+        if (conversationId) {
+            loadConversation(conversationId)
+        }
+    }, [conversationId, loadConversation])
+
     return (
         <div className={styles.page}>
             <Navbar />
