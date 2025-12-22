@@ -11,6 +11,8 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import service.AIRequestManager
 import service.CustomerProfileService
+import com.genflowly.activity.registerGetConversationRoutes
+import com.genflowly.service.ConversationService
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -24,8 +26,7 @@ object Routes {
     const val GET_CONVERSATION = "$API_V1/chat"
 }
 
-import com.genflowly.activity.registerGetConversationRoutes
-import com.genflowly.service.ConversationService
+
 
 fun Application.configureRouting(
     aiRequestService: AIRequestService,
