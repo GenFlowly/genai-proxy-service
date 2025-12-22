@@ -60,7 +60,7 @@
 }
 
 .header {
-  border-bottom: 1px solid $color-border-light;
+  //border-bottom: 1px solid $color-border-light;
   margin-bottom: 1.25rem;
 
   h2 {
@@ -73,10 +73,17 @@
 
 .headerContent {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  gap: $spacing-md;
+  position: relative;
   width: 100%;
+}
+
+.copyButtonPositioner {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 @media (max-width: 768px) {
