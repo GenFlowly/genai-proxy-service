@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Icon } from '../common/Icon/Icon'
 import { ICONS } from '../../constants/icons'
@@ -18,6 +18,7 @@ export default function Navbar(): React.ReactElement {
     const { systemPrompt, setSystemPrompt } = useConversation()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
+    const location = useLocation()
 
     const handleSettingsClick = () => {
         navigate('/settings')
@@ -38,14 +39,16 @@ export default function Navbar(): React.ReactElement {
                 </div>
 
                 <div className={styles.centerControls}>
-                    <InputTextWithHint
-                        hint="Tell how AI Assistant should act like "
-                        icon={ICONS.USER_ROLE}
-                        placeholder="You are a helpful assistant."
-                        className={styles.roleInput}
-                        value={systemPrompt}
-                        onChange={(e) => setSystemPrompt(e.target.value)}
-                    />
+                    {location.pathname.startsWith('/chat') && (
+                        <InputTextWithHint
+                            hint="Tell how AI Assistant should act like "
+                            icon={ICONS.USER_ROLE}
+                            placeholder="You are a helpful assistant."
+                            className={styles.roleInput}
+                            value={systemPrompt}
+                            onChange={(e) => setSystemPrompt(e.target.value)}
+                        />
+                    )}
                 </div>
 
                 <div className={`${styles.rightControls} ${!isRightSidebarExpanded ? styles.collapsed : ''}`}>

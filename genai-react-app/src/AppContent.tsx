@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
@@ -18,7 +18,9 @@ export default function AppContent(): React.ReactElement {
             <AIProvider>
                 <ConversationProvider>
                     <Routes>
-                        <Route path="/" element={<LandingPage />} />
+                        <Route path="/" element={<Navigate to="/chat" replace />} />
+                        <Route path="/chat" element={<LandingPage />} />
+                        <Route path="/chat/:conversationId" element={<LandingPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                     </Routes>
                 </ConversationProvider>
