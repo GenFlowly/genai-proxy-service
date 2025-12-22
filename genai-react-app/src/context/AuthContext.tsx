@@ -48,12 +48,23 @@ export const AuthProvider = ({
         [domain, clientId]
     )
 
-    // 👇 Persist customerId in localStorage
+    // 👇 Persist customerId in localStorage & Load cached AI preferences
     useEffect(() => {
         if (customerId) {
             localStorage.setItem('customerId', customerId)
+
+            // Try loading cached preferences
+            const cachedPrefs = localStorage.getItem(`${customerId}_ai_preferences`)
+            if (cachedPrefs) {
+                try {
+                    setAiConfigPreferences(JSON.parse(cachedPrefs))
+                } catch (e) {
+                    console.error('Failed to parse cached ai preferences', e)
+                }
+            }
         } else {
             localStorage.removeItem('customerId')
+            setAiConfigPreferences(null)
         }
     }, [customerId])
 
@@ -95,6 +106,13 @@ export const AuthProvider = ({
                         }
                         if (onboardData.aiConfigPreferences) {
                             setAiConfigPreferences(onboardData.aiConfigPreferences)
+                            // Cache preferences
+                            if (onboardData.customerId) {
+                                localStorage.setItem(
+                                    `${onboardData.customerId}_ai_preferences`,
+                                    JSON.stringify(onboardData.aiConfigPreferences)
+                                )
+                            }
                         }
                     } catch (error) {
                         console.error('Failed to onboard user:', error)

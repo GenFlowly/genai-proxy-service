@@ -35,7 +35,7 @@ export default function AIVendorWidget({
     const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
-    const [isPrefsLoaded, setIsPrefsLoaded] = useState(false)
+    const [loadedPreferencesSignature, setLoadedPreferencesSignature] = useState<string>('')
 
     const isAIVendorModelsPopulated = (aiVendor: AIVendor) =>
         config.some(c => c.aiVendor === aiVendor && c.model)
@@ -50,15 +50,20 @@ export default function AIVendorWidget({
 
     // --- Sync Backend Preferences to AI Context ---
     useEffect(() => {
-        if (aiConfigPreferences?.preferredModels && !isPrefsLoaded) {
+        if (!aiConfigPreferences?.preferredModels) return
+
+        const currentSignature = JSON.stringify(aiConfigPreferences.preferredModels)
+
+        if (currentSignature !== loadedPreferencesSignature) {
+            console.log('Syncing AI Vendor Preferences', aiConfigPreferences.preferredModels)
             aiConfigPreferences.preferredModels.forEach(pref => {
                 if (pref.aiVendor && pref.model) {
                     setSelectedModelForAIVendor(pref.aiVendor, pref.model)
                 }
             })
-            setIsPrefsLoaded(true)
+            setLoadedPreferencesSignature(currentSignature)
         }
-    }, [aiConfigPreferences, isPrefsLoaded, setSelectedModelForAIVendor])
+    }, [aiConfigPreferences, loadedPreferencesSignature, setSelectedModelForAIVendor])
 
     // --- Fetch models (with bypass option for refresh) ---
     const fetchModels = useCallback(

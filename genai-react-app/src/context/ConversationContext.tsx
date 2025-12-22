@@ -23,16 +23,20 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const [conversationId, setConversationId] = useState<string>('')
     const [systemPrompt, setSystemPrompt] = useState<string>('')
+    const [isSystemPromptLoaded, setIsSystemPromptLoaded] = useState<boolean>(false)
 
     useEffect(() => {
         if (customerId) {
             const saved = localStorage.getItem(`${customerId}_system_prompt`)
             setSystemPrompt(saved || '')
+            setIsSystemPromptLoaded(true)
+        } else {
+            setIsSystemPromptLoaded(false)
         }
     }, [customerId])
 
     useEffect(() => {
-        if (customerId) {
+        if (customerId && isSystemPromptLoaded) {
             const key = `${customerId}_system_prompt`
             if (systemPrompt.trim()) {
                 localStorage.setItem(key, systemPrompt)
@@ -40,7 +44,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 localStorage.removeItem(key)
             }
         }
-    }, [systemPrompt, customerId])
+    }, [systemPrompt, customerId, isSystemPromptLoaded])
 
     // ✅ Ref to always hold the latest conversationId
     const conversationIdRef = useRef(conversationId)
