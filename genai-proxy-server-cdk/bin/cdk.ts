@@ -28,6 +28,6 @@ new EcsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcsStack`, {
     kmsKey: kmsStack.kmsKey,
     domainName: rootDomain,
     subdomain: 'api',
-    certificateArn: 'arn:aws:acm:us-east-1:571600870493:certificate/194b5a31-3d3a-4436-bb19-045294e9c25a',
+    certificateArn: 'arn:aws:acm:us-east-1:571600870493:certificate/15f64c01-0ec6-49f9-9ab9-b2e338e17d44',
 });
 
