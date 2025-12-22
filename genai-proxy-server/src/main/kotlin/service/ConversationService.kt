@@ -5,13 +5,58 @@ import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.genflowly.models.GetConversationResponse
+import com.genflowly.models.PromptAndResponse
 import models.Conversation
+import models.GenerateTextResponse
 import models.Message
+import models.Prompt
 
 class ConversationService(
     private val kmsProvider: KMSProvider,
     private val dynamoDBProvider: DynamoDBProvider
 ) {
+
+    suspend fun getConversationHistory(conversationId: String): GetConversationResponse {
+        val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
+            .sortedBy { it.sequence }
+
+        val pairs = mutableListOf<PromptAndResponse>()
+        var i = 0
+        while (i < messages.size) {
+            val msg = messages[i]
+            if (msg.role == "user") {
+                val prompt = Prompt(systemPrompt = msg.systemPrompt, prompt = msg.text)
+                
+                // Default empty response
+                var responseObj = GenerateTextResponse(
+                    text = null, 
+                    aiVendor = null, 
+                    conversationId = conversationId, 
+                    messageId = null
+                )
+
+                // Check next for assistant response
+                if (i + 1 < messages.size) {
+                    val nextMsg = messages[i+1]
+                    if (nextMsg.role == "assistant") {
+                        val vendor = nextMsg.aiConfig.firstOrNull()?.aiVendor?.name
+                        responseObj = GenerateTextResponse(
+                            text = nextMsg.text,
+                            aiVendor = vendor,
+                            conversationId = conversationId,
+                            messageId = nextMsg.messageId
+                        )
+                        i++ // consume next message
+                    }
+                }
+                pairs.add(PromptAndResponse(prompt, responseObj))
+            }
+            i++
+        }
+
+        return GetConversationResponse(pairs)
+    }
 
     suspend fun createConversation(
         customerId: String,
