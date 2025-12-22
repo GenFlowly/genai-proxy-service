@@ -45,4 +45,5 @@ export interface ConversationContextType {
     setSelectedResponseForBlock: (blockId: string, responseId: string) => void
     getSelectedResponseForBlock: (blockId: string) => string | null
     loadConversation: (id: string) => Promise<void>
+    resetConversation: () => void
 }

@@ -33,14 +33,14 @@ function LandingPageContent() {
 }
 
 export default function LandingPage() {
-    const { conversationId } = useParams<{ conversationId: string }>()
-    const { loadConversation } = useConversation()
+    const { conversationId: routeId } = useParams<{ conversationId: string }>()
+    const { loadConversation, conversationId: contextId } = useConversation()
 
     useEffect(() => {
-        if (conversationId) {
-            loadConversation(conversationId)
+        if (routeId && routeId !== contextId) {
+            loadConversation(routeId)
         }
-    }, [conversationId, loadConversation])
+    }, [routeId, contextId, loadConversation])
 
     return (
         <div className={styles.page}>

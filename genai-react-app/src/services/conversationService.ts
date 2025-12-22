@@ -22,7 +22,7 @@ export async function getConversation(
         blocks: [
             {
                 conversationBlockId: 'stub-block-1',
-                prompt: 'This is a stubbed conversation.',
+                prompt: '',
                 responseMessages: [],
                 isLoading: false
             }

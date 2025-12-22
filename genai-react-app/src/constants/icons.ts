@@ -10,6 +10,8 @@ import userRole from '../assets/icons/user-role.svg'
 import refreshIcon from '../assets/icons/refresh-icon.svg'
 import saveIcon from '../assets/icons/save-icon.svg'
 
+import addIcon from '../assets/icons/add-icon.svg'
+
 export const ICONS = {
     PROMPT_ICON: promptIcon,
     RESPONSE_ICON: responseIcon,
@@ -21,4 +23,5 @@ export const ICONS = {
     USER_ROLE: userRole,
     REFRESH_ICON: refreshIcon,
     SAVE_ICON: saveIcon,
+    PLUS: addIcon,
 }
