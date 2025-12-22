@@ -2,26 +2,57 @@
 
 .submitButton {
   display: flex;
+  flex-direction: row;
+  justify-content: center;
   align-items: center;
-  gap: 0.5rem;
-  align-self: center;
-  background-color: $color-primary;
-  color: white;
-  height: 38px;
-  padding: 0 1.5rem; // Horizontal padding, vertical handled by flex center
-  border-radius: 4px; // Matching InputTextWithHint rx=3.5 approx
-  box-shadow: $shadow-sm; // Adding shadow as requested
-  border: none;
-  cursor: pointer;
-  margin-top: 1rem;
-  transition: background-color 0.2s;
+  padding: 10px 24px 10px 16px;
+  gap: 8px;
 
+  height: 38px;
+  // min-width: 119px; // Optional based on specs "width: 119px" but often buttons should grow. I'll stick to contents or min-width.
+
+  background-color: $color-primary;
+  color: white; // Assuming white text on primary
+  border-radius: 4px;
+  border: 1px solid transparent; // Transparent border to prevent layout shift on focus
+
+  cursor: pointer;
+
+  // Transition
+  transition: all 0.2s ease;
+
+  /* Hover State */
   &:hover {
-    background-color: $color-primary-hover;
+    background-color: $color-primary-hover-alt;
+    box-shadow: 0px 1px 4px rgba(0, 0, 0, 0.2);
   }
 
-  &:disabled {
+  /* Focused State */
+  &:focus-visible {
+    // The user labeled the base state as "Focus" block, so we keep the base matching.
+    // Real focus should have an outline.
+    outline: 2px solid $color-primary; // Using primary color for outline
+    outline-offset: 2px;
+  }
+
+  &:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Clicked / Active State */
+  &:active,
+  &.active {
+    background-color: $color-primary-pressed; // Fallback/standard active
+    box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Disabled State */
+  &:disabled,
+  &.disabled {
     background-color: $color-disabled;
+    opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none;
+    pointer-events: none;
   }
 }
