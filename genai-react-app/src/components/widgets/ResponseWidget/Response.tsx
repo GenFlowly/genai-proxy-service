@@ -52,7 +52,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}
                         >
                             <TextContainer
-                                title={aiVendor}
+                                aiVendor={aiVendor}
                                 content={text}
                                 className={isSelected ? styles.selected : ''}
                             />

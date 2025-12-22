@@ -6,6 +6,12 @@ import 'highlight.js/styles/github.css'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import styles from './TextContainer.module.scss'
 import { ICONS } from '../../../constants/icons'
+import {
+    OpenAIBrandName,
+    ClaudeBrandName,
+    GeminiBrandName
+} from '../../common/BrandName/BrandName'
+import { AIVendor } from '../../../constants/vendors'
 
 /**
  * Utility to recursively extract text from markdown AST nodes
@@ -54,8 +60,11 @@ const PreBlock = ({ node, children, ...props }: any) => {
 }
 
 export interface TextContainerProps {
-    /** Optional header title */
+    /** Optional header title, ignored if aiVendor is set */
     title?: string
+
+    /** Optional AI Vendor to render specific brand header */
+    aiVendor?: string
 
     /** Markdown or plain text content */
     content: string
@@ -71,30 +80,44 @@ export interface TextContainerProps {
  * Generic Markdown-rendering container card
  * - Supports code syntax highlighting
  * - Inline and block-level copy buttons
- * - Optional title header
+ * - Optional title header or AI Brand header
  */
 export default function TextContainer({
     title,
+    aiVendor,
     content,
     showCopyButton = true,
     className,
 }: TextContainerProps) {
+
+    let HeaderComponent: React.ReactNode = null
+    if (aiVendor) {
+        if (aiVendor === AIVendor.OPENAI) HeaderComponent = <OpenAIBrandName as="span" />
+        else if (aiVendor === AIVendor.CLAUDE) HeaderComponent = <ClaudeBrandName as="span" />
+        else if (aiVendor === AIVendor.GEMINI) HeaderComponent = <GeminiBrandName as="span" />
+        else HeaderComponent = <h2>{aiVendor}</h2> // Fallback if unknown vendor string
+    } else if (title) {
+        HeaderComponent = <h2>{title}</h2>
+    }
+
     return (
         <article className={`${styles.article} ${className || ''}`}>
-            {(title || showCopyButton) && (
+            {(HeaderComponent || showCopyButton) && (
                 <header className={styles.header}>
                     <div className={styles.headerContent}>
-                        {title && <h2>{title}</h2>}
+                        {HeaderComponent}
                         {showCopyButton && (
-                            <CopyToClipboard
-                                content={content}
-                                label="Copy Response"
-                                icon={ICONS.COPY}
-                                successMessage="✓ Copied"
-                                successDuration={2000}
-                                size="sm"
-                                variant="secondary"
-                            />
+                            <div className={styles.copyButtonPositioner}>
+                                <CopyToClipboard
+                                    content={content}
+                                    label="Copy Response"
+                                    icon={ICONS.COPY}
+                                    successMessage="✓ Copied"
+                                    successDuration={2000}
+                                    size="sm"
+                                    variant="secondary"
+                                />
+                            </div>
                         )}
                     </div>
                 </header>
