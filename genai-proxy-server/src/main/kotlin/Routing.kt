@@ -21,12 +21,17 @@ object Routes {
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
     const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
+    const val GET_CONVERSATION = "$API_V1/chat"
 }
+
+import com.genflowly.activity.registerGetConversationRoutes
+import com.genflowly.service.ConversationService
 
 fun Application.configureRouting(
     aiRequestService: AIRequestService,
     aiRequestManager: AIRequestManager,
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    conversationService: ConversationService
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -38,5 +43,6 @@ fun Application.configureRouting(
         registerOnboardCustomerRoutes(customerProfileService)
         registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
+        registerGetConversationRoutes(customerProfileService, conversationService)
     }
 }

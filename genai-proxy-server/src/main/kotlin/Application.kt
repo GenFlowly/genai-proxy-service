@@ -5,6 +5,7 @@ import com.auth0.jwk.JwkProviderBuilder
 import com.genflowly.aicallerlib.di.commonModule
 import com.genflowly.di.appModule
 import com.genflowly.service.AIRequestService
+import com.genflowly.service.ConversationService
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.serialization.kotlinx.json.*
@@ -101,6 +102,7 @@ fun Application.module() {
     val aiRequestService = get<AIRequestService>()
     val aiRequestManager = get<AIRequestManager>()
     val customerProfileService = get<CustomerProfileService>()
+    val conversationService = get<ConversationService>()
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService)
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService)
 }

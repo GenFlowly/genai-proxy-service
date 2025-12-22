@@ -124,24 +124,42 @@ class DynamoDBProvider(
 
         val response = dynamoDbClient.getItem(request)
         val item = response.item() ?: return@withContext null
+        return@withContext itemToMessage(item)
+    }
 
-        val text = item["text"]?.s() ?: return@withContext null
-        val sequenceStr = item["sequence"]?.n() ?: return@withContext null
-        val client = item["client"]?.s() ?: return@withContext null
-        val role = item["role"]?.s() ?: return@withContext null
-        val customerId = item["customerId"]?.s() ?: return@withContext null
-        val systemPrompt = item["systemPrompt"]?.s() ?: return@withContext null
+    suspend fun getMessagesForConversation(
+        conversationId: String
+    ): List<Message> = withContext(Dispatchers.IO) {
+        val request = software.amazon.awssdk.services.dynamodb.model.QueryRequest.builder()
+            .tableName(MESSAGE_TABLE)
+            .keyConditionExpression("conversationId = :cid")
+            .expressionAttributeValues(mapOf(
+                ":cid" to AttributeValue.builder().s(conversationId).build()
+            ))
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        response.items().mapNotNull { itemToMessage(it) }
+    }
+
+    private fun itemToMessage(item: Map<String, AttributeValue>): Message? {
+        val text = item["text"]?.s() ?: return null
+        val sequenceStr = item["sequence"]?.n() ?: return null
+        val client = item["client"]?.s() ?: return null
+        val role = item["role"]?.s() ?: return null
+        val customerId = item["customerId"]?.s() ?: return null
+        val systemPrompt = item["systemPrompt"]?.s() ?: return null
 
         val previousMessageId = item["previousMessageId"]?.s()
 
-        val sequence = sequenceStr.toIntOrNull() ?: return@withContext null
+        val sequence = sequenceStr.toIntOrNull() ?: return null
 
-        val aiConfigAttr = item["aiConfig"] ?: return@withContext null
+        val aiConfigAttr = item["aiConfig"] ?: return null
         val aiConfig = attributeValueToAiConfig(aiConfigAttr)
 
-        return@withContext Message(
-            messageId = item["messageId"]?.s() ?: return@withContext null,
-            conversationId = item["conversationId"]?.s() ?: return@withContext null,
+        return Message(
+            messageId = item["messageId"]?.s() ?: return null,
+            conversationId = item["conversationId"]?.s() ?: return null,
             text = text,
             client = client,
             role = role,
