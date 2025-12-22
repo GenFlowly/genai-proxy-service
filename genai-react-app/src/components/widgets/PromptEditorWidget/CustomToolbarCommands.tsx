@@ -1,5 +1,4 @@
 import { Icon } from '../../common/Icon/Icon'
-import Tooltip from '../../common/Tooltip/Tooltip'
 import stepsIcon from '../../../assets/icons/steps.svg'
 import addExamplesIcon from '../../../assets/icons/add-examples.svg'
 
