@@ -5,6 +5,7 @@ import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import { useAI } from '../../../context/AIContext'
+import { useAuth } from '../../../context/AuthContext'
 import styles from './PromptEditor.module.scss'
 import { EditorView } from '@codemirror/view'
 import { addStepsCommand, addExamplesCommand } from './CustomToolbarCommands'
@@ -18,14 +19,17 @@ interface PromptEditorProps {
 
 export default function PromptEditor({ id, value, onChange }: PromptEditorProps): React.ReactElement {
     const { setPrompt } = useAI()
+    const { customerId } = useAuth()
     // Debounce refs
     const storageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const aiContextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    const STORAGE_KEY = `prompt_editor_content_conv-${id}`
+    const STORAGE_KEY = customerId ? `${customerId}_prompt_editor_content_conv-${id}` : ''
 
     // Load from localStorage only on mount if empty
     useEffect(() => {
+        if (!STORAGE_KEY) return
+
         try {
             const saved = localStorage.getItem(STORAGE_KEY)
             if (saved && !value) {

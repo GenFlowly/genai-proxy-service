@@ -24,6 +24,24 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const [conversationId, setConversationId] = useState<string>('')
     const [systemPrompt, setSystemPrompt] = useState<string>('')
 
+    useEffect(() => {
+        if (customerId) {
+            const saved = localStorage.getItem(`${customerId}_system_prompt`)
+            setSystemPrompt(saved || '')
+        }
+    }, [customerId])
+
+    useEffect(() => {
+        if (customerId) {
+            const key = `${customerId}_system_prompt`
+            if (systemPrompt.trim()) {
+                localStorage.setItem(key, systemPrompt)
+            } else {
+                localStorage.removeItem(key)
+            }
+        }
+    }, [systemPrompt, customerId])
+
     // ✅ Ref to always hold the latest conversationId
     const conversationIdRef = useRef(conversationId)
     useEffect(() => {
@@ -131,12 +149,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const resetConversation = () => {
-        // Clear all prompt editor content from localStorage
-        Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('prompt_editor_content_')) {
-                localStorage.removeItem(key)
-            }
-        })
+        if (customerId) {
+            // Clear all prompt editor content for this user from localStorage
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith(`${customerId}_prompt_editor_content_`)) {
+                    localStorage.removeItem(key)
+                }
+            })
+        }
 
         setConversationId('')
         setConversationBlockList([

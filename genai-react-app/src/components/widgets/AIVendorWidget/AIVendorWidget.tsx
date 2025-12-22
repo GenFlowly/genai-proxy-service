@@ -62,7 +62,7 @@ export default function AIVendorWidget({
 
     // --- Fetch models (with bypass option for refresh) ---
     const fetchModels = useCallback(
-        async (bypassCache = false) => {
+        async () => {
             if (!isAuthenticated || !customerId) return
 
             try {
@@ -71,8 +71,7 @@ export default function AIVendorWidget({
                     await getTextGenerationModels(
                         token,
                         customerId,
-                        { aiVendor: vendors },
-                        bypassCache
+                        { aiVendor: vendors }
                     )
 
                 const data = response.aiVendorModelList || []
@@ -102,7 +101,7 @@ export default function AIVendorWidget({
             setIsRefreshing(true)
             resetConfig()
             clearAllModelCache()
-            await fetchModels(true)
+            await fetchModels()
         } finally {
             setIsRefreshing(false)
         }
