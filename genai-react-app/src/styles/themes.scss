@@ -5,6 +5,8 @@
     // Primary Colors
     --color-primary: #006BE8;
     --color-primary-hover: rgba(0, 107, 232, 0.8);
+    --color-primary-hover-alt: #1674E1; // New hover color
+    --color-primary-pressed: #005BC5; // New pressed color
     --color-primary-light: #e6f3ff;
 
     // Success Colors (CTA Green)
@@ -110,6 +112,10 @@
     --color-sidebar-button: #0a84ff;
     --color-sidebar-button-hover: #0070e0;
 
+    // Primary - Dark Theme Overrides
+    --color-primary-hover-alt: #0070e0; // Adjusted for dark mode
+    --color-primary-pressed: #005a9e; // Adjusted for dark mode
+
     // Disabled
     --color-disabled: #48484a;
     --color-disabled-text: #636366;
@@ -119,6 +125,8 @@
 // Color variables reference CSS variables
 $color-primary: var(--color-primary);
 $color-primary-hover: var(--color-primary-hover);
+$color-primary-hover-alt: var(--color-primary-hover-alt);
+$color-primary-pressed: var(--color-primary-pressed);
 $color-primary-light: var(--color-primary-light);
 
 $color-success: var(--color-success);
