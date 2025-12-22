@@ -89,17 +89,65 @@ $editor-width: 88rem;
     color: $text-primary !important;
   }
 
-  :global(.w-md-editor-toolbar) {
-    background-color: $white !important;
-    border-bottom: 1px solid $border-color !important;
+  :global(.md-editor-toolbar) {
+    //background-color: $white !important;
+    //border-bottom: 1px solid $border-color !important;
     border-radius: 0;
+    min-height: 2rem;
+    /* Increase overall height per user request */
+    display: flex;
+    align-items: center;
   }
 
-  :global(.w-md-editor-toolbar button) {
-    color: $text-primary !important;
+  /* User suggested targeting this wrapper specifically for height */
+  :global(.md-editor-toolbar-warp) {
+    min-height: 2rem !important;
+  }
+
+  :global(.md-editor-toolbar ul) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  :global(.md-editor-toolbar button) {
+    // color: $color-text-primary !important; // Dynamic variables (commented out in file currently but intended by prev logic)
+    // Actually, looking at the file content, it has no color vars yet? wait, I saw them earlier.
+    // The previous view_file confirmed the file content. It has static content commented out?
+    // Wait, the view_file shows line 113: :global(.md-editor-toolbar button) { font-size: 1rem !important; ... }
+    // It seems the color replacement didn't stick or was reverted?
+    // Ah, lines 93-94 are commented out.
+    // I will apply the dynamic width changes based on CURRENT content.
+
+    font-size: 1rem !important;
+    min-height: 1.5rem !important;
+    height: auto !important;
+    min-width: 1.5rem !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0.25rem 0.5rem !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
 
     &:hover {
       background-color: $background-gray !important;
+      border-radius: $radius-sm;
+    }
+
+    /* Target SVGs directly */
+    svg {
+      width: 1.4rem !important;
+      height: 1.4rem !important;
+    }
+
+    /* Target custom icons: button > span > img (or button > span > span > img) */
+    span,
+    img {
+      // Allow flexible size for text
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
   }
 

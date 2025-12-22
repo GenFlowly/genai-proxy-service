@@ -41,7 +41,7 @@ export default function Navbar(): React.ReactElement {
                 <div className={styles.centerControls}>
                     {location.pathname.startsWith('/chat') && (
                         <InputTextWithHint
-                            hint="Tell how AI Assistant should act like "
+                            hint="Describe persona for AI "
                             icon={ICONS.USER_ROLE}
                             placeholder="You are a helpful assistant."
                             className={styles.roleInput}

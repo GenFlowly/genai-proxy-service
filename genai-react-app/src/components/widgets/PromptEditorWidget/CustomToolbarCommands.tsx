@@ -1,3 +1,4 @@
+import { Icon } from '../../common/Icon/Icon'
 import Tooltip from '../../common/Tooltip/Tooltip'
 import stepsIcon from '../../../assets/icons/steps.svg'
 import addExamplesIcon from '../../../assets/icons/add-examples.svg'
@@ -5,13 +6,14 @@ import addExamplesIcon from '../../../assets/icons/add-examples.svg'
 export const addStepsCommand = {
     name: 'addSteps',
     keyCommand: 'addSteps',
-    buttonProps: { 'aria-label': 'Add Steps' },
+    buttonProps: { 'aria-label': 'Add Step' },
     icon: (
-        <Tooltip content="Add Steps">
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <img src={stepsIcon} style={{ width: '1em', height: '1em' }} alt="Steps" />
+        // <Tooltip content="Add Steps">
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0 0.5rem' }}>
+                <Icon src={stepsIcon} size="1em" alt="Steps" />
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Add Step</span>
             </span>
-        </Tooltip>
+        // </Tooltip>
     ),
     execute: (editor: any) => {
         const view = editor?.view
@@ -48,13 +50,14 @@ export const addStepsCommand = {
 export const addExamplesCommand = {
     name: 'addExamples',
     keyCommand: 'addExamples',
-    buttonProps: { 'aria-label': 'Add Examples' },
+    buttonProps: { 'aria-label': 'Add Example' },
     icon: (
-        <Tooltip content="Add Examples">
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <img src={addExamplesIcon} style={{ width: '1em', height: '1em' }} alt="Examples" />
+        // <Tooltip content="Add Examples">
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0 0.5rem' }}>
+                <Icon src={addExamplesIcon} size="1em" alt="Examples" />
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Add Example</span>
             </span>
-        </Tooltip>
+        // </Tooltip>
     ),
     execute: (editor: any) => {
         const view = editor?.view

@@ -65,6 +65,23 @@ export default function AIVendorWidget({
         }
     }, [aiConfigPreferences, loadedPreferencesSignature, setSelectedModelForAIVendor])
 
+    // --- Load cached models immediately ---
+    useEffect(() => {
+        if (customerId) {
+            const cachedModels = localStorage.getItem(`${customerId}_ai_vendor_models`)
+            if (cachedModels) {
+                try {
+                    const parsed = JSON.parse(cachedModels)
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setAiVendorModels(parsed)
+                    }
+                } catch (e) {
+                    console.error('Failed to parse cached ai vendor models', e)
+                }
+            }
+        }
+    }, [customerId])
+
     // --- Fetch models (with bypass option for refresh) ---
     const fetchModels = useCallback(
         async () => {
@@ -82,10 +99,29 @@ export default function AIVendorWidget({
                 const data = response.aiVendorModelList || []
                 setAiVendorModels(data)
 
-                // Note: We removed local storage cache here as requested previously
+                // Cache the fresh models
+                if (customerId && data.length > 0) {
+                    localStorage.setItem(`${customerId}_ai_vendor_models`, JSON.stringify(data))
+                }
             } catch (err) {
                 console.error('Failed to fetch AI models:', err)
-                setAiVendorModels([])
+                // Do not clear models on error if we have cache, unless specifically desired?
+                // Better to keep stale cache than empty list on transient error, 
+                // but if error is auth/perm, maybe clear?
+                // For now, let's leave existing models if fetch fails, 
+                // but the original code set it to empty array.
+                // modify: if we have cached data, maybe don't wipe it?
+                // Sticking to original behavior for error handling for safety, 
+                // but user wants instant load.
+                // If I wipe it here, it defeats the purpose if the API fails.
+                // But if I don't wipe it, invalid state might persist.
+                // Let's stick to safe behavior: if fetch fails, maybe alert/log, but don't wipe potentially good cache immediately?
+                // actually original code was setAiVendorModels([]).
+                // I will Comment that out or keep it?
+                // If I keep setAiVendorModels([]), then a failed fetch (e.g. network) wipes the UI.
+                // "Optimistic UI" suggests keeping it. 
+                // I'll keep the cache for now.
+                // setAiVendorModels([]) // <-- Removed to preserve cache on error
             }
         },
         [isAuthenticated, customerId, getAccessTokenSilently]
