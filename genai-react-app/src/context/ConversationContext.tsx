@@ -70,8 +70,10 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     ): Promise<Message[]> => {
         const response = await generateText(token, {
             aiConfig: aiConfigs.filter(c => c.aiVendor && c.model),
-            systemPrompt: currentSystemPrompt || "You are a helpful assistant",
-            prompt,
+            prompt: {
+                systemPrompt: currentSystemPrompt || "You are a helpful assistant",
+                prompt,
+            },
             // customerId: customerId!,
             selectedResponseId: selectedResponseId ?? '',
             conversationId: conversationIdRef.current,
