@@ -132,7 +132,7 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
                         <MarkdownEditor
                             value={value}
                             onChange={(val) => handleChange(val)}
-                            height="600px"
+                            height="41.25rem"
                             visible={false}
                             enablePreview={true}
                             className={styles.markdownEditor}
