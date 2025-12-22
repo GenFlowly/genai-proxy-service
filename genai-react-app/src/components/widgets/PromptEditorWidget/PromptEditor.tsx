@@ -141,10 +141,6 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
 
                                 addStepsCommand,
                                 addExamplesCommand,
-                                'ulist',
-                                'olist',
-
-                                'code',
 
                             ]}
                             extensions={extensions}
