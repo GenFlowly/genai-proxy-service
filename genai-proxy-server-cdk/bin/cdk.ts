@@ -9,9 +9,9 @@ import {
     OneTimeDeploymentPerStageStack
 } from "../lib/oneTimeDeploymentPerStage-stack";
 import { KmsStack } from "../lib/kms-stack";
-import {RESOURCE_NAMES} from "../lib/constants";
+import { RESOURCE_NAMES } from "../lib/constants";
 
-const stage: STAGES = STAGES.BETA;
+const stage: STAGES = STAGES.BETA; // TODO pass this via CLI
 const rootDomain: string = 'genflowly.com';
 
 const app = new cdk.App();
@@ -21,13 +21,13 @@ new OneTimeDeploymentPerStageStack(app, 'BootstrapStack', { stage })
 const dynamoDBStack = new DynamoDBStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-DynamoDBStack`, {});
 const ecrStack = new EcrStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcrStack`, { stage });
 const kmsStack = new KmsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-KmsStack`, { stage })
-new EcsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcsStack`, {
-    stage,
-    ecrRepo: ecrStack.repository,
-    dynamoDbTableList: dynamoDBStack.dynamoDbTableList,
-    kmsKey: kmsStack.kmsKey,
-    domainName: rootDomain,
-    subdomain: 'api',
-    certificateArn: 'arn:aws:acm:us-east-1:571600870493:certificate/15f64c01-0ec6-49f9-9ab9-b2e338e17d44',
-});
+// new EcsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcsStack`, {
+//     stage,
+//     ecrRepo: ecrStack.repository,
+//     dynamoDbTableList: dynamoDBStack.dynamoDbTableList,
+//     kmsKey: kmsStack.kmsKey,
+//     domainName: rootDomain,
+//     subdomain: 'api',
+//     certificateArn: cdk.Fn.importValue(`GenAIProxy-CertificateArn-${stage}`),
+// });
 
