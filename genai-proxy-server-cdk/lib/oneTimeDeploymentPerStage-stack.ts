@@ -23,7 +23,17 @@ export class OneTimeDeploymentPerStageStack extends cdk.Stack {
 
     console.log("Add the above secrets to repository settings > Security > Actions");
 
+    const domainName = `api-${props.stage}.genflowly.com`;
 
+    const certificate = new cdk.aws_certificatemanager.Certificate(this, 'ApiCertificate', {
+      domainName: domainName,
+      validation: cdk.aws_certificatemanager.CertificateValidation.fromDns(),
+    });
+
+    new cdk.CfnOutput(this, 'CertificateArn', {
+      value: certificate.certificateArn,
+      exportName: `GenAIProxy-CertificateArn-${props.stage}`,
+    });
   }
 
 }
