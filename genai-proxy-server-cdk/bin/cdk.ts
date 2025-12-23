@@ -21,13 +21,13 @@ new OneTimeDeploymentPerStageStack(app, 'BootstrapStack', { stage })
 const dynamoDBStack = new DynamoDBStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-DynamoDBStack`, {});
 const ecrStack = new EcrStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcrStack`, { stage });
 const kmsStack = new KmsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-KmsStack`, { stage })
-// new EcsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcsStack`, {
-//     stage,
-//     ecrRepo: ecrStack.repository,
-//     dynamoDbTableList: dynamoDBStack.dynamoDbTableList,
-//     kmsKey: kmsStack.kmsKey,
-//     domainName: rootDomain,
-//     subdomain: 'api',
-//     certificateArn: cdk.Fn.importValue(`GenAIProxy-CertificateArn-${stage}`),
-// });
+new EcsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcsStack`, {
+    stage,
+    ecrRepo: ecrStack.repository,
+    dynamoDbTableList: dynamoDBStack.dynamoDbTableList,
+    kmsKey: kmsStack.kmsKey,
+    domainName: rootDomain,
+    subdomain: 'api',
+    certificateArn: cdk.Fn.importValue(`GenAIProxy-CertificateArn-${stage}`),
+});
 
