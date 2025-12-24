@@ -1,59 +1,37 @@
 import React, {
     createContext,
-    useCallback,
     useContext,
     useEffect,
     useState,
 } from 'react'
-import { AuthContextType, AuthProviderProps, User } from '../types/auth.types'
-import { parseJwt } from '../utils/parseJwt'
-import { HttpMethod } from '../constants/http'
+import { useAuth0 } from '@auth0/auth0-react'
+import { AuthContextType, User } from '../types/auth.types'
 import { onboardCustomer } from '../services/onboardUserService'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-export const AuthProvider = ({
-    children,
-    domain,
-    clientId,
-    audience,
-}: AuthProviderProps): React.ReactElement => {
-    const [user, setUser] = useState<User | null>(null)
-    const [isAuthenticated, setIsAuthenticated] = useState(false)
-    const [isLoading, setIsLoading] = useState(true)
-    const [accessToken, setAccessToken] = useState<string | null>(null)
+export const AuthProvider = ({ children }: { children: React.ReactNode }): React.ReactElement => {
+    const {
+        user: auth0User,
+        isAuthenticated,
+        isLoading: auth0Loading,
+        loginWithRedirect,
+        logout: auth0Logout,
+        getAccessTokenSilently,
+    } = useAuth0()
+
     const [customerId, setCustomerId] = useState<string | null>(() =>
         localStorage.getItem('customerId')
     )
     const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
     const [aiConfigPreferences, setAiConfigPreferences] = useState<AuthContextType['aiConfigPreferences']>(null)
+    const [isInternalLoading, setIsInternalLoading] = useState(false)
 
-    const exchangeCodeForToken = useCallback(
-        async (code: string) => {
-            const response = await fetch(`https://${domain}/oauth/token`, {
-                method: HttpMethod.POST,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    grant_type: 'authorization_code',
-                    client_id: clientId,
-                    code,
-                    redirect_uri: window.location.origin,
-                }),
-            })
-
-            if (!response.ok) throw new Error('Token exchange failed')
-            return response.json()
-        },
-        [domain, clientId]
-    )
-
-    // 👇 Persist customerId in localStorage & Load cached AI preferences
+    // Persist customerId & Load cached prefs
     useEffect(() => {
         if (customerId) {
             localStorage.setItem('customerId', customerId)
-
-            // Try loading cached preferences
             const cachedPrefs = localStorage.getItem(`${customerId}_ai_preferences`)
             if (cachedPrefs) {
                 try {
@@ -68,106 +46,74 @@ export const AuthProvider = ({
         }
     }, [customerId])
 
-    // 👇 Handle Auth0 redirect and onboarding
+    // Onboard user when authenticated
     useEffect(() => {
-        const handleAuthRedirect = async () => {
-            const urlParams = new URLSearchParams(window.location.search)
-            const code = urlParams.get('code')
+        const onboard = async () => {
+            if (isAuthenticated && auth0User && !customerId) {
+                setIsInternalLoading(true)
+                try {
+                    const token = await getAccessTokenSilently()
 
-            if (!code) {
-                setIsLoading(false)
-                return
-            }
-
-            try {
-                const tokenData = await exchangeCodeForToken(code)
-
-                if (tokenData.id_token) {
-                    const decoded = parseJwt(tokenData.id_token)
                     const userInfo: User = {
-                        sub: decoded.sub,
-                        email: decoded.email,
-                        name: decoded.name,
-                        picture: decoded.picture,
+                        sub: auth0User.sub || '',
+                        email: auth0User.email || '',
+                        name: auth0User.name || '',
+                        picture: auth0User.picture,
                     }
 
-                    setUser(userInfo)
-                    setIsAuthenticated(true)
-                    setAccessToken(tokenData.access_token || null)
-
-                    // ✅ Onboard user and persist customerId
-                    try {
-                        const onboardData = await onboardCustomer(userInfo, tokenData.access_token)
+                    const onboardData = await onboardCustomer(userInfo, token)
+                    if (onboardData.customerId) {
+                        setCustomerId(onboardData.customerId)
+                    }
+                    if (onboardData.aiVendorAPIKeyStatusList) {
+                        setAiVendorAPIKeyStatusList(onboardData.aiVendorAPIKeyStatusList)
+                    }
+                    if (onboardData.aiConfigPreferences) {
+                        setAiConfigPreferences(onboardData.aiConfigPreferences)
                         if (onboardData.customerId) {
-                            setCustomerId(onboardData.customerId)
+                            localStorage.setItem(
+                                `${onboardData.customerId}_ai_preferences`,
+                                JSON.stringify(onboardData.aiConfigPreferences)
+                            )
                         }
-                        if (onboardData.aiVendorAPIKeyStatusList) {
-                            setAiVendorAPIKeyStatusList(onboardData.aiVendorAPIKeyStatusList)
-                        }
-                        if (onboardData.aiConfigPreferences) {
-                            setAiConfigPreferences(onboardData.aiConfigPreferences)
-                            // Cache preferences
-                            if (onboardData.customerId) {
-                                localStorage.setItem(
-                                    `${onboardData.customerId}_ai_preferences`,
-                                    JSON.stringify(onboardData.aiConfigPreferences)
-                                )
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Failed to onboard user:', error)
                     }
-
-                    // Clean up URL query params
-                    window.history.replaceState({}, document.title, window.location.pathname)
+                } catch (error) {
+                    console.error('Failed to onboard user:', error)
+                } finally {
+                    setIsInternalLoading(false)
                 }
-            } catch (error) {
-                console.error('Auth redirect handling failed:', error)
-            } finally {
-                setIsLoading(false)
             }
         }
 
-        handleAuthRedirect()
-    }, [exchangeCodeForToken])
-
-    const loginWithRedirect = (): void => {
-        const redirectUri = encodeURIComponent(window.location.origin)
-        window.location.href =
-            `https://${domain}/authorize?` +
-            `client_id=${clientId}&` +
-            `response_type=code&` +
-            `redirect_uri=${redirectUri}&` +
-            `scope=openid%20profile%20email&` +
-            `audience=${audience}`
-    }
+        // Ensure we don't run this excessively; depends on auth0User state
+        if (isAuthenticated && auth0User) {
+            onboard()
+        }
+    }, [isAuthenticated, auth0User, customerId, getAccessTokenSilently])
 
     const logout = ({ returnTo }: { returnTo: string }): void => {
-        setUser(null)
-        setIsAuthenticated(false)
-        setAccessToken(null)
         setCustomerId(null)
         setAiVendorAPIKeyStatusList([])
         setAiConfigPreferences(null)
         localStorage.removeItem('customerId')
 
-        const logoutUrl =
-            `https://${domain}/v2/logout?` +
-            `client_id=${clientId}&` +
-            `returnTo=${encodeURIComponent(returnTo)}`
-
-        window.location.href = logoutUrl
+        auth0Logout({
+            logoutParams: { returnTo }
+        })
     }
 
-    const getAccessTokenSilently = async (): Promise<string> => {
-        if (!accessToken) throw new Error('No access token available')
-        return accessToken
-    }
+    // Map Auth0 User to our User type
+    const user: User | null = auth0User ? {
+        sub: auth0User.sub || '',
+        email: auth0User.email || '',
+        name: auth0User.name || '',
+        picture: auth0User.picture,
+    } : null
 
     const contextValue: AuthContextType = {
         user,
         isAuthenticated,
-        isLoading,
+        isLoading: auth0Loading || isInternalLoading,
         customerId,
         setCustomerId,
         loginWithRedirect,

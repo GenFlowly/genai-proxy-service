@@ -1,4 +1,5 @@
 import React from 'react';
+import { Auth0Provider } from '@auth0/auth0-react';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import AppContent from './AppContent';
@@ -8,10 +9,22 @@ export default function App(): React.ReactElement {
   const { domain, clientId, audience } = config.auth0;
 
   return (
-    <ThemeProvider>
-      <AuthProvider domain={domain} clientId={clientId} audience={audience}>
-        <AppContent />
-      </AuthProvider>
-    </ThemeProvider>
+    <Auth0Provider
+      domain={domain}
+      clientId={clientId}
+      authorizationParams={{
+        audience: audience,
+        redirect_uri: window.location.origin,
+        scope: "openid profile email offline_access"
+      }}
+      cacheLocation="localstorage"
+      useRefreshTokens={true}
+    >
+      <ThemeProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ThemeProvider>
+    </Auth0Provider>
   );
 }
