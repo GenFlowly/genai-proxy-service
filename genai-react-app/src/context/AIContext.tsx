@@ -16,6 +16,10 @@ interface AIContextType {
     setSelectedModelForAIVendor: (aiVendor: AIVendor, model: string) => void
     getOpenAIActiveModel: () => string
     resetConfig: () => void
+    activeBlockId: string
+    setActiveBlockId: (id: string) => void
+    supplementalText: string
+    setSupplementalText: (text: string) => void
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined)
@@ -26,6 +30,8 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     const [prompt, setPrompt] = useState<string>('')
     const [tokenCount, setTokenCount] = useState<number>(0)
     const [isTokenLoading, setIsTokenLoading] = useState(false)
+    const [activeBlockId, setActiveBlockId] = useState<string>('')
+    const [supplementalText, setSupplementalText] = useState<string>('')
 
     // 🔹 Always return OPENAI model (gracefully handles missing)
     const getOpenAIActiveModel = React.useCallback((): string => {
@@ -43,7 +49,8 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
 
     // 🔹 Token count auto-update (debounced, safe for missing model)
     useEffect(() => {
-        if (!prompt?.trim()) {
+        const fullText = (prompt || '') + (supplementalText || '')
+        if (!fullText.trim()) {
             setTokenCount(0)
             return
         }
@@ -58,7 +65,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
 
             setIsTokenLoading(true)
             try {
-                const count = await countTokens(prompt, model)
+                const count = await countTokens(fullText, model)
                 setTokenCount(count)
             } catch (err) {
                 console.error('Token counting failed:', err)
@@ -69,7 +76,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         }, 400)
 
         return () => clearTimeout(timeout)
-    }, [prompt, config, getOpenAIActiveModel])
+    }, [prompt, supplementalText, config, getOpenAIActiveModel])
 
     // 🔹 Update or insert vendor+model config safely
     const setSelectedModelForAIVendor = (aiVendor: AIVendor, model: string) => {
@@ -119,6 +126,10 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
                 setSelectedModelForAIVendor,
                 getOpenAIActiveModel,
                 resetConfig,
+                activeBlockId,
+                setActiveBlockId,
+                supplementalText,
+                setSupplementalText,
             }}
         >
             {children}
@@ -140,6 +151,10 @@ export const useAI = (): AIContextType => {
             setSelectedModelForAIVendor: () => { },
             getOpenAIActiveModel: () => '',
             resetConfig: () => { },
+            activeBlockId: '',
+            setActiveBlockId: () => { },
+            supplementalText: '',
+            setSupplementalText: () => { },
         }
     }
     return ctx

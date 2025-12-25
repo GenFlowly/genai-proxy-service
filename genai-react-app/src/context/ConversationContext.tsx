@@ -17,7 +17,7 @@ const ConversationContext = createContext<ConversationContextType | undefined>(u
 
 export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
-    const { config } = useAI() // now an array of AIConfig[]
+    const { config, activeBlockId, setSupplementalText } = useAI() // now an array of AIConfig[]
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const navigate = useNavigate()
 
@@ -63,6 +63,38 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const [selectedResponseByBlock, setSelectedResponseByBlock] = useState<Record<string, string | null>>({})
 
+    const getSelectedResponseForBlock = (blockId: string) => {
+        return selectedResponseByBlock[blockId] ?? null
+    }
+
+    // Sync Supplemental Text (Last Response) for Token Counting
+    useEffect(() => {
+        if (!activeBlockId) {
+            setSupplementalText('')
+            return
+        }
+
+        const index = conversationBlockList.findIndex(b => b.conversationBlockId === activeBlockId)
+        if (index <= 0) {
+            // No previous block
+            setSupplementalText('')
+            return
+        }
+
+        const prevBlock = conversationBlockList[index - 1]
+        if (!prevBlock || prevBlock.responseMessages.length === 0) {
+            setSupplementalText('')
+            return
+        }
+
+        const selectedId = getSelectedResponseForBlock(prevBlock.conversationBlockId)
+        const selectedMsg = prevBlock.responseMessages.find(m => m.messageId === selectedId)
+        // Fallback to first message if selection invalid or not set
+        const finalMsg = selectedMsg || prevBlock.responseMessages[0]
+
+        setSupplementalText(finalMsg?.text || '')
+    }, [activeBlockId, conversationBlockList, selectedResponseByBlock, setSupplementalText])
+
     const updateConversationBlock = (conversationBlockId: string, updater: Partial<ConversationBlock>) => {
         // console.log('DEBUG updateConversationBlock', conversationBlockId, updater)
         setConversationBlockList(prev =>
@@ -76,10 +108,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const setSelectedResponseForBlock = (blockId: string, responseId: string) => {
         setSelectedResponseByBlock(prev => ({ ...prev, [blockId]: responseId }))
-    }
-
-    const getSelectedResponseForBlock = (blockId: string) => {
-        return selectedResponseByBlock[blockId] ?? null
     }
 
     // --- API Calls ---

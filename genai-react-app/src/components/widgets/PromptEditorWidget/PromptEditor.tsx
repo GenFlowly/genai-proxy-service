@@ -18,7 +18,7 @@ interface PromptEditorProps {
 }
 
 export default function PromptEditor({ id, value, onChange }: PromptEditorProps): React.ReactElement {
-    const { setPrompt } = useAI()
+    const { setPrompt, setActiveBlockId } = useAI()
     const { customerId } = useAuth()
     // Debounce refs
     const storageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -42,6 +42,9 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
     }, [])
 
     const handleChange = (newValue: string) => {
+        // Ensure we are the active block
+        setActiveBlockId(id)
+
         // Immediate UI update via parent
         onChange(newValue)
 
@@ -74,6 +77,7 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
     // Not strictly necessary for "typing lag" fix but good for consistency
     useEffect(() => {
         setPrompt(value)
+        setActiveBlockId(id)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
