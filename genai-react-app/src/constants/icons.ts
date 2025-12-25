@@ -14,6 +14,8 @@ import addIcon from '../assets/icons/add-icon.svg'
 import openAIIcon from '../assets/icons/OpenAI.svg'
 import claudeIcon from '../assets/icons/Claude.svg'
 import geminiIcon from '../assets/icons/Gemini.svg'
+import modelsIcon from '../assets/icons/models.svg'
+import tokensIcon from '../assets/icons/tokens.svg'
 
 export const ICONS = {
     PROMPT_ICON: promptIcon,
@@ -30,4 +32,6 @@ export const ICONS = {
     OPENAI: openAIIcon,
     CLAUDE: claudeIcon,
     GEMINI: geminiIcon,
+    MODELS: modelsIcon,
+    TOKENS: tokensIcon,
 }

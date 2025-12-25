@@ -5,12 +5,13 @@ import styles from './Tooltip.module.scss'
 interface TooltipProps {
     content: string
     children: ReactNode
+    position?: 'top' | 'bottom' | 'left' | 'right'
 }
 
-export default function Tooltip({ content, children }: TooltipProps) {
+export default function Tooltip({ content, children, position = 'right' }: TooltipProps) {
     const [isVisible, setIsVisible] = useState(false)
-    const [position, setPosition] = useState({ top: 0, left: 0 })
-    const [placement, setPlacement] = useState<'right' | 'left' | 'top' | 'bottom'>('right')
+    const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
+    const [placement, setPlacement] = useState<'right' | 'left' | 'top' | 'bottom'>(position)
     const containerRef = useRef<HTMLDivElement>(null)
     const tooltipRef = useRef<HTMLDivElement>(null)
 
@@ -58,7 +59,7 @@ export default function Tooltip({ content, children }: TooltipProps) {
                 }
             }
 
-            setPosition({ top: newTop, left: newLeft })
+            setTooltipPosition({ top: newTop, left: newLeft })
             setPlacement(newPlacement)
         }
     }, [isVisible])
@@ -78,8 +79,8 @@ export default function Tooltip({ content, children }: TooltipProps) {
                     ref={tooltipRef}
                     className={`${styles.tooltip} ${styles[`placement-${placement}`]} `}
                     style={{
-                        top: `${position.top}px`,
-                        left: `${position.left}px`,
+                        top: `${tooltipPosition.top}px`,
+                        left: `${tooltipPosition.left}px`,
                         // transform is now handled by CSS classes based on placement
                     }}
                 >

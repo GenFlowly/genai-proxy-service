@@ -2,10 +2,29 @@
 
 .container {
     width: 100%;
-    display: flex;
-    flex-direction: column;
 }
 
 .fullWidthButton {
-    width: 100% !important;
+    width: 100%;
+    justify-content: center;
+}
+
+.collapsedButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    border: 1px solid $color-border;
+    background: $color-background;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+        background-color: $color-background-hover;
+        color: $color-primary;
+        border-color: $color-primary;
+    }
 }
