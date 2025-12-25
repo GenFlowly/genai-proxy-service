@@ -31,7 +31,7 @@ fun Route.registerOnboardCustomerRoutes(
                 request.picture ?: "not provided",
             )
 
-            val customerId: String = customerProfileService.onboardCustomer(
+            val customerProfile = customerProfileService.onboardCustomer(
                 sub = request.sub,
                 client = request.client,
                 email = request.email,
@@ -40,15 +40,17 @@ fun Route.registerOnboardCustomerRoutes(
             )
 
             // Fetch additional details
-            val aiConfigPreferences = customerProfileService.getAIConfigPreferences(customerId)
+            val aiConfigPreferences = customerProfileService.getAIConfigPreferences(customerProfile.customerId)
                 ?: com.genflowly.models.AIConfigPreferences()
             
-            val aiVendorAPIKeyStatusList = customerProfileService.getAIVendorAPIKeyStatusList(customerId)
+            val aiVendorAPIKeyStatusList = customerProfileService.getAIVendorAPIKeyStatusList(customerProfile.customerId)
 
             val response = OnboardCustomerResponse(
-                customerId = customerId,
+                customerId = customerProfile.customerId,
                 aiConfigPreferences = aiConfigPreferences,
-                aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList
+                aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList,
+                customerName = customerProfile.name ?: "User",
+                customerPicture = customerProfile.picture
             )
 
             call.respond(response)

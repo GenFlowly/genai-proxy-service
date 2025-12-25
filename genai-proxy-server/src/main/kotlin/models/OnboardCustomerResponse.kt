@@ -7,6 +7,8 @@ import models.AIVendorAPIKeyStatus
 data class OnboardCustomerResponse(
     val customerId: String,
     val aiConfigPreferences: AIConfigPreferences,
-    val aiVendorAPIKeyStatusList: List<AIVendorAPIKeyStatus>
+    val aiVendorAPIKeyStatusList: List<AIVendorAPIKeyStatus>,
+    val customerName: String?,
+    val customerPicture: String?
 )
 
