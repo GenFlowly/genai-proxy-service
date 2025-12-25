@@ -37,14 +37,23 @@ class CustomerProfileService(
         email: String?,
         name: String?,
         picture: String?
-    ): String {
+    ): models.CustomerProfile {
         // Check if customer exists
         val existingCustomer = dynamoDBProvider.getCustomerProfile(sub, client)
         if (existingCustomer != null) {
             val existingCustomerId = existingCustomer["customerId"]?.s()
-            logger.info { "User already onboarded with customerId=$existingCustomerId" }
-            return existingCustomerId
                 ?: error("Customer profile exists but missing customerId field")
+            
+            logger.info { "User already onboarded with customerId=$existingCustomerId" }
+            
+            return models.CustomerProfile(
+                customerId = existingCustomerId,
+                sub = sub,
+                client = client,
+                email = existingCustomer["email"]?.s(),
+                name = existingCustomer["name"]?.s(),
+                picture = existingCustomer["picture"]?.s()
+            )
         }
 
         // New user path
@@ -64,9 +73,14 @@ class CustomerProfileService(
         }
         
         logger.info { "New user onboarded with customerId=$newCustomerId" }
-        return newCustomerId
-
-
+        return models.CustomerProfile(
+            customerId = newCustomerId,
+            sub = sub,
+            client = client,
+            email = email,
+            name = name,
+            picture = picture
+        )
     }
 
     suspend fun storeApiKey(
