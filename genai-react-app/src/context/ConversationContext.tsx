@@ -153,6 +153,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const resetConversation = () => {
+        navigate('/chat')
         if (customerId) {
             // Clear all prompt editor content for this user from localStorage
             Object.keys(localStorage).forEach(key => {
@@ -172,7 +173,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             },
         ])
         setSelectedResponseByBlock({})
-        navigate('/chat')
     }
 
     // --- Core Actions ---

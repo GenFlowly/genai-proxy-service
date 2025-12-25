@@ -38,6 +38,11 @@ export default function LandingPage() {
 
     useEffect(() => {
         if (routeId && routeId !== contextId) {
+            // Prevent race condition: verify routeId matches current URL
+            // because useParams might be stale during context updates.
+            // This prevents reloading the previous chat when navigating to /chat (New Chat)
+            if (!window.location.pathname.includes(routeId)) return
+
             loadConversation(routeId)
         }
     }, [routeId, contextId, loadConversation])
