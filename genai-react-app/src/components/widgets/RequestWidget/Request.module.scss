@@ -1,0 +1,9 @@
+@import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
+
+.requestWrapper {
+    @include message-card-base;
+
+    // In column layout, flex-basis affects height. Use width for width.
+    width: 100%;
+}

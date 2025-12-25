@@ -6,6 +6,7 @@ import Tooltip from '../../common/Tooltip/Tooltip'
 import { useConversation } from '../../../context/ConversationContext'
 import { useAuth } from '../../../context/AuthContext'
 import TextContainer from '../../common/TextContainer/TextContainer'
+import styles from './Request.module.scss'
 
 interface RequestProps {
     blockId: string
@@ -39,11 +40,13 @@ export default function Request({ blockId }: RequestProps) {
     // If we have responses, this block is "resolved" -> Show static text
     if (conversationBlock.responseMessages.length > 0) {
         return (
-            <TextContainer
-                content={conversationBlock.prompt}
-                // No title or aiVendor, just the user prompt
-                showCopyButton={true}
-            />
+            <div className={styles.requestWrapper}>
+                <TextContainer
+                    content={conversationBlock.prompt}
+                    // No title or aiVendor, just the user prompt
+                    showCopyButton={true}
+                />
+            </div>
         )
     }
 

@@ -1,0 +1,16 @@
+@import './themes.scss';
+
+// Common visual and layout properties for chat message blocks (Request and Response)
+@mixin message-card-base {
+    position: relative;
+    border-radius: 8px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+    min-width: 30rem;
+
+    // Default max-width for "full" view items
+    max-width: 88rem;
+}
+
+// Mixin for specific flex behaviors if needed, 
+// though layout context (row vs column) often dictates this.
