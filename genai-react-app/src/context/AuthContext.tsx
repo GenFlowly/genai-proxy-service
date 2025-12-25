@@ -46,10 +46,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         }
     }, [customerId])
 
-    // Onboard user when authenticated
+    // Onboard/Sync user when authenticated
     useEffect(() => {
         const onboard = async () => {
-            if (isAuthenticated && auth0User && !customerId) {
+            if (isAuthenticated && auth0User) {
                 setIsInternalLoading(true)
                 try {
                     const token = await getAccessTokenSilently()
@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         if (isAuthenticated && auth0User) {
             onboard()
         }
-    }, [isAuthenticated, auth0User, customerId, getAccessTokenSilently])
+    }, [isAuthenticated, auth0User, getAccessTokenSilently])
 
     const logout = ({ returnTo }: { returnTo: string }): void => {
         setCustomerId(null)

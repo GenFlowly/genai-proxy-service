@@ -1,22 +1,15 @@
 import React, { useEffect, useRef } from 'react'
-import { ICONS } from '../../../constants/icons'
-import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import Response from '../../widgets/ResponseWidget/Response'
-import MultiPurposeButton
-    from '../../common/MultiPurposeButton/MultiPurposeButton'
-import Tooltip from '../../common/Tooltip/Tooltip'
+import Request from '../../widgets/RequestWidget/Request'
 import { useConversation } from '../../../context/ConversationContext'
 import styles from './ConversationBlock.module.scss'
-
 import { useAuth } from '../../../context/AuthContext'
 
 export default function ConversationBlock({ id }: { id: string }) {
     const {
         conversationBlockList,
-        generateResponses,
         addNewConversationBlockWithId,
-        setSelectedResponseForBlock,
-        getSelectedResponseForBlock
+        setSelectedResponseForBlock
     } = useConversation()
 
     // ✅ Check API key status
@@ -25,17 +18,6 @@ export default function ConversationBlock({ id }: { id: string }) {
 
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === id)
     const responseRef = useRef<HTMLDivElement | null>(null)
-
-    // ✅ Local draft state to prevent global re-renders on typing
-    const [draftPrompt, setDraftPrompt] = React.useState(conversationBlock?.prompt || '')
-
-    // Sync draft if global prompt changes (e.g. history load or API success)
-    useEffect(() => {
-        if (conversationBlock?.prompt && conversationBlock.prompt !== draftPrompt) {
-            setDraftPrompt(conversationBlock.prompt)
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [conversationBlock?.prompt])
 
     useEffect(() => {
         if (conversationBlock?.responseMessages?.length && responseRef.current) {
@@ -85,28 +67,7 @@ export default function ConversationBlock({ id }: { id: string }) {
 
     return (
         <div className={styles.conversationBlock} data-block-id={id}>
-            <PromptEditor
-                id={id}
-                value={draftPrompt}
-                onChange={setDraftPrompt}
-            />
-
-            {conversationBlock.responseMessages.length === 0 && (
-                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
-                    <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
-                        <MultiPurposeButton
-                            onClick={() => {
-                                if (!hasAnyValidApiKey) return
-                                const selectedId = getSelectedResponseForBlock(id)
-                                generateResponses(id, draftPrompt, selectedId)
-                            }}
-                            label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
-                            disabled={conversationBlock.isLoading || !hasAnyValidApiKey}
-                            icon={ICONS.SEND}
-                        />
-                    </div>
-                </Tooltip>
-            )}
+            <Request blockId={id} />
 
             {conversationBlock.responseMessages.length > 0 && (
                 <div ref={responseRef} style={{ width: '100%' }}>

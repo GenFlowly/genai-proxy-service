@@ -4,6 +4,8 @@
   background-color: $color-navbar-background;
   color: $color-navbar-text;
   box-shadow: $shadow-md;
+  z-index: 30; // Above sidebar (20)
+  position: relative;
 }
 
 .container {
