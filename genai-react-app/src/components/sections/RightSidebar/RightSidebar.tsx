@@ -26,24 +26,9 @@ export default function RightSidebar(): React.ReactElement {
             </button>
 
             <div className={styles.sidebarContent}>
-                {/* New Chat Widget */}
-                {!collapsed && (
-                    <div className={styles.section}>
-                        <NewChatWidget />
-                    </div>
-                )}
-
-                {/* Vendor selection area */}
-                <div className={styles.section}>
-                    <AIVendorWidget collapsed={collapsed} />
-                </div>
-
-
-                {!collapsed && (
-                    <div className={styles.section}>
-                        <TokenCounter />
-                    </div>
-                )}
+                <NewChatWidget />
+                <AIVendorWidget />
+                <TokenCounter />
             </div>
         </div>
     )

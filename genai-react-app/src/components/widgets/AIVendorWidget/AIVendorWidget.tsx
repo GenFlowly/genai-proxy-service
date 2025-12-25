@@ -1,6 +1,4 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useAI } from '../../../context/AIContext'
-import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
 import {
     getTextGenerationModels,
@@ -20,23 +18,20 @@ import PillButton from '../../common/PillButton/PillButton'
 import {
     OpenAIBrandName,
     ClaudeBrandName,
-    GeminiBrandName
+    GeminiBrandName,
+    CollapsedOpenAIBrandName,
+    CollapsedClaudeBrandName,
+    CollapsedGeminiBrandName
 } from '../../common/BrandName/BrandName'
-
-interface AIVendorWidgetProps {
-    collapsed?: boolean
-}
+import { useSidebarWidget } from '../../../hooks/useSidebarWidget'
+import SidebarWidgetContainer from '../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 
 const vendors = Object.values(AIVendor) as AIVendor[]
 
-
-
-export default function AIVendorWidget({
-    collapsed = false,
-}: AIVendorWidgetProps): React.ReactElement {
-    const { config, setSelectedModelForAIVendor, resetConfig } = useAI()
-
-    const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList, aiConfigPreferences } = useAuth()
+export default function AIVendorWidget(): React.ReactElement {
+    const { ai, auth } = useSidebarWidget()
+    const { config, setSelectedModelForAIVendor, resetConfig } = ai
+    const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList, aiConfigPreferences } = auth
 
     const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
     const [isRefreshing, setIsRefreshing] = useState(false)
@@ -163,139 +158,160 @@ export default function AIVendorWidget({
     const getModelsForVendor = (vendor: AIVendor): string[] =>
         aiVendorModels.find(v => v.aiVendor === vendor)?.modelsList ?? []
 
-    // --- Collapsed view ---
-    if (collapsed) {
-        return (
-            <div className={`${styles.vendorWidget} ${styles.collapsed}`}>
+    const hasAnyValidApiKey = vendors.some(isVendorEnabled)
+
+    // Collapsed Content
+    const headerCollapsed = (
+        <Tooltip content="AI Models" position="left">
+            <div className={styles.buttonWrapper}>
+                <div className={styles.iconButton} style={{ border: 'none', background: 'transparent', cursor: 'default' }}>
+                    <Icon src={ICONS.MODELS} size={24} />
+                </div>
+            </div>
+        </Tooltip>
+    )
+
+    const collapsedContent = (
+        <>
+            {vendors.map(vendor => {
+                const isActive = isAIVendorModelsPopulated(vendor)
+                const isEnabled = isVendorEnabled(vendor)
+                const models = getModelsForVendor(vendor)
+
+                const tooltipContent = !isEnabled ? 'API key not set' : vendor
+
+                let CollapsedBrandComponent = ({ size }: { size?: number }) => <Icon src={ICONS.MODELS} size={size} />
+                if (vendor === AIVendor.OPENAI) CollapsedBrandComponent = CollapsedOpenAIBrandName
+                if (vendor === AIVendor.CLAUDE) CollapsedBrandComponent = CollapsedClaudeBrandName
+                if (vendor === AIVendor.GEMINI) CollapsedBrandComponent = CollapsedGeminiBrandName
+
+                return (
+                    <Tooltip key={vendor} content={tooltipContent} position="left">
+                        <div className={styles.buttonWrapper}>
+                            <button
+                                type="button"
+                                className={`${styles.iconButton} ${isActive ? styles.active : ''}`}
+                                onClick={() => {
+                                    if (!isEnabled) return
+                                    if (isActive) {
+                                        setSelectedModelForAIVendor(vendor, '')
+                                    } else {
+                                        const firstModel = models[0]
+                                        if (firstModel)
+                                            setSelectedModelForAIVendor(vendor, firstModel)
+                                    }
+                                }}
+                                disabled={!isEnabled}
+                            >
+                                <CollapsedBrandComponent size={20} />
+                            </button>
+                        </div>
+                    </Tooltip>
+                )
+            })}
+        </>
+    )
+
+    // Expanded Header
+    const header = (
+        <div className={styles.header}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                <Icon src={ICONS.MODELS} size={20} />
+                <h3 className={styles.title}>AI Models</h3>
+            </div>
+            <div className={styles.actions}>
+                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Refresh Models"}>
+                    <button
+                        className={styles.iconActionButton}
+                        onClick={handleRefresh}
+                        disabled={isRefreshing || !hasAnyValidApiKey}
+                        aria-label="Refresh Models"
+                    >
+                        <Icon
+                            src={ICONS.REFRESH_ICON}
+                            size={20}
+                            className={isRefreshing ? styles.spinning : ''}
+                        />
+                    </button>
+                </Tooltip>
+
+                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Set as default"}>
+                    <button
+                        className={styles.iconActionButton}
+                        onClick={handleSave}
+                        disabled={isSaving || !hasAnyValidApiKey}
+                        aria-label="Set as default"
+                    >
+                        <Icon src={ICONS.SAVE_ICON} size={20} />
+                    </button>
+                </Tooltip>
+            </div>
+        </div>
+    )
+
+    return (
+        <SidebarWidgetContainer
+            header={header}
+            headerCollapsed={headerCollapsed}
+            collapsedContent={collapsedContent}
+        >
+            <div className={styles.vendorWidget}>
                 {vendors.map(vendor => {
                     const isActive = isAIVendorModelsPopulated(vendor)
-                    const isEnabled = isVendorEnabled(vendor)
+                    const selectedModel = getSelectedModel(vendor)
                     const models = getModelsForVendor(vendor)
-                    // If enabled but no models, still technically clickable but might show empty list. 
-                    // But if disabled (no API key), it shouldn't be clickable.
-                    // Prioritize API key check.
+                    const isEnabled = isVendorEnabled(vendor)
 
-                    const tooltipContent = !isEnabled ? 'API key not set' : vendor
+                    let BrandComponent: React.ReactNode = vendor
+                    if (vendor === AIVendor.OPENAI) BrandComponent = <OpenAIBrandName as="span" />
+                    if (vendor === AIVendor.CLAUDE) BrandComponent = <ClaudeBrandName as="span" />
+                    if (vendor === AIVendor.GEMINI) BrandComponent = <GeminiBrandName as="span" />
 
                     return (
-                        <Tooltip key={vendor} content={tooltipContent}>
-                            <div className={styles.buttonWrapper}> {/* Wrapper for tooltip on disabled button */}
-                                <button
-                                    type="button"
-                                    className={`${styles.iconButton} ${isActive ? styles.active : ''}`}
-                                    onClick={() => {
-                                        if (!isEnabled) return
-                                        if (isActive) {
-                                            setSelectedModelForAIVendor(vendor, '')
-                                        } else {
-                                            const firstModel = models[0]
-                                            if (firstModel)
-                                                setSelectedModelForAIVendor(vendor, firstModel)
-                                        }
-                                    }}
-                                    disabled={!isEnabled}
+                        <div key={vendor} className={styles.vendorBlock}>
+                            <PillButton
+                                label={BrandComponent}
+                                onClick={() => {
+                                    if (!isEnabled) return
+                                    if (isActive) {
+                                        setSelectedModelForAIVendor(vendor, '')
+                                    } else {
+                                        const firstModel = models[0]
+                                        if (firstModel)
+                                            setSelectedModelForAIVendor(vendor, firstModel)
+                                    }
+                                }}
+                                disabled={!isEnabled}
+                                variant={isActive ? 'primary' : 'secondary'}
+                            />
+
+                            {!isEnabled && (
+                                <span className={styles.errorText}>API key not set</span>
+                            )}
+
+                            {isActive && isEnabled && models.length > 0 && (
+                                <select
+                                    value={selectedModel}
+                                    onChange={e =>
+                                        setSelectedModelForAIVendor(vendor, e.target.value)
+                                    }
+                                    className={styles.modelSelect}
                                 >
-                                    {vendor[0]}
-                                </button>
-                            </div>
-                        </Tooltip>
+                                    {models.map(model => (
+                                        <option key={model} value={model}>
+                                            {model}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
+                            {isActive && isEnabled && models.length === 0 && (
+                                <span className={styles.errorText}>No models available</span>
+                            )}
+                        </div>
                     )
                 })}
             </div>
-        )
-    }
-
-    const hasAnyValidApiKey = vendors.some(isVendorEnabled)
-
-    // --- Expanded view ---
-    return (
-        <div className={styles.vendorWidget}>
-            <div className={styles.header}>
-                <h3 className={styles.title}>AI Models</h3>
-                <div className={styles.actions}>
-                    <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Refresh Models"}>
-                        <button
-                            className={styles.iconActionButton}
-                            onClick={handleRefresh}
-                            disabled={isRefreshing || !hasAnyValidApiKey}
-                            aria-label="Refresh Models"
-                        >
-                            <Icon
-                                src={ICONS.REFRESH_ICON}
-                                size={20}
-                                className={isRefreshing ? styles.spinning : ''}
-                            />
-                        </button>
-                    </Tooltip>
-
-                    <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Set as default"}>
-                        <button
-                            className={styles.iconActionButton}
-                            onClick={handleSave}
-                            disabled={isSaving || !hasAnyValidApiKey}
-                            aria-label="Set as default"
-                        >
-                            <Icon src={ICONS.SAVE_ICON} size={20} />
-                        </button>
-                    </Tooltip>
-                </div>
-            </div>
-
-            {vendors.map(vendor => {
-                const isActive = isAIVendorModelsPopulated(vendor)
-                const selectedModel = getSelectedModel(vendor)
-                const models = getModelsForVendor(vendor)
-                const isEnabled = isVendorEnabled(vendor)
-
-                let BrandComponent: React.ReactNode = vendor
-                if (vendor === AIVendor.OPENAI) BrandComponent = <OpenAIBrandName as="span" />
-                if (vendor === AIVendor.CLAUDE) BrandComponent = <ClaudeBrandName as="span" />
-                if (vendor === AIVendor.GEMINI) BrandComponent = <GeminiBrandName as="span" />
-
-                return (
-                    <div key={vendor} className={styles.vendorBlock}>
-                        <PillButton
-                            label={BrandComponent}
-                            onClick={() => {
-                                if (!isEnabled) return
-                                if (isActive) {
-                                    setSelectedModelForAIVendor(vendor, '')
-                                } else {
-                                    const firstModel = models[0]
-                                    if (firstModel)
-                                        setSelectedModelForAIVendor(vendor, firstModel)
-                                }
-                            }}
-                            disabled={!isEnabled}
-                            variant={isActive ? 'primary' : 'secondary'}
-                        />
-
-                        {!isEnabled && (
-                            <span className={styles.errorText}>API key not set</span>
-                        )}
-
-                        {isActive && isEnabled && models.length > 0 && (
-                            <select
-                                value={selectedModel}
-                                onChange={e =>
-                                    setSelectedModelForAIVendor(vendor, e.target.value)
-                                }
-                                className={styles.modelSelect}
-                            >
-                                {models.map(model => (
-                                    <option key={model} value={model}>
-                                        {model}
-                                    </option>
-                                ))}
-                            </select>
-                        )}
-
-                        {isActive && isEnabled && models.length === 0 && (
-                            <span className={styles.errorText}>No models available</span>
-                        )}
-                    </div>
-                )
-            })}
-        </div>
+        </SidebarWidgetContainer>
     )
 }

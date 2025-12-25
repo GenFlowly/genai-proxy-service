@@ -42,3 +42,15 @@ export function ClaudeBrandName<T extends ElementType = 'div'>(props: Omit<Brand
 export function GeminiBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'icon' | 'name'> & React.ComponentPropsWithoutRef<T>) {
     return <BrandName icon={ICONS.GEMINI} name="Gemini" iconSize={20} {...props} />
 }
+
+export function CollapsedOpenAIBrandName({ size = 30, className }: { size?: number, className?: string }) {
+    return <Icon src={ICONS.OPENAI} size={30} className={className} />
+}
+
+export function CollapsedClaudeBrandName({ size = 20, className }: { size?: number, className?: string }) {
+    return <Icon src={ICONS.CLAUDE} size={size} className={className} />
+}
+
+export function CollapsedGeminiBrandName({ size = 20, className }: { size?: number, className?: string }) {
+    return <Icon src={ICONS.GEMINI} size={size} className={className} />
+}
