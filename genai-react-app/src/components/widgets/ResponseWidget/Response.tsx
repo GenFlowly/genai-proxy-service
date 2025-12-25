@@ -7,6 +7,12 @@ import TextContainer from '../../common/TextContainer/TextContainer'
 import { Message } from "../../../models/conversation.models";
 import MultiPurposeButton from '../../common/MultiPurposeButton/MultiPurposeButton'
 import Tooltip from '../../common/Tooltip/Tooltip'
+import {
+    OpenAIBrandName,
+    ClaudeBrandName,
+    GeminiBrandName
+} from '../../common/BrandName/BrandName'
+import { AIVendor } from '../../../constants/vendors'
 
 interface ResponseProps {
     blockId: string
@@ -20,10 +26,8 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
     const { setSelectedResponseForBlock, getSelectedResponseForBlock } = useConversation()
 
     const selectedResponseId = getSelectedResponseForBlock(blockId)
-    console.log("selectedResponseId: ", selectedResponseId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
 
-    // Direct usage of props to avoid memoization issues
     const responseList = responseMessages
 
     if (!responseMessages || responseMessages.length === 0) return null
@@ -45,6 +49,13 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                 {responseList.map(({ aiVendor, text, messageId }) => {
                     const isSelected = selectedResponseId === messageId
 
+                    let HeaderComponent: React.ReactNode = null
+                    if (aiVendor) {
+                        if (aiVendor === AIVendor.OPENAI) HeaderComponent = <OpenAIBrandName as="span" />
+                        else if (aiVendor === AIVendor.CLAUDE) HeaderComponent = <ClaudeBrandName as="span" />
+                        else if (aiVendor === AIVendor.GEMINI) HeaderComponent = <GeminiBrandName as="span" />
+                        else HeaderComponent = <h2>{aiVendor}</h2>
+                    }
 
                     return (
                         <div
@@ -52,7 +63,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}
                         >
                             <TextContainer
-                                aiVendor={aiVendor}
+                                title={HeaderComponent}
                                 content={text}
                                 className={isSelected ? styles.selected : ''}
                             />
