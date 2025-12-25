@@ -1,5 +1,5 @@
 // src/context/ConversationContext.tsx
-import React, { createContext, useContext, useState, ReactNode, useRef, useEffect } from 'react'
+import React, { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AIVendor } from '../constants/vendors'
 import { useAuth } from './AuthContext'
@@ -63,9 +63,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const [selectedResponseByBlock, setSelectedResponseByBlock] = useState<Record<string, string | null>>({})
 
-    const getSelectedResponseForBlock = (blockId: string) => {
+    const getSelectedResponseForBlock = useCallback((blockId: string) => {
         return selectedResponseByBlock[blockId] ?? null
-    }
+    }, [selectedResponseByBlock])
 
     // Sync Supplemental Text (Last Response) for Token Counting
     useEffect(() => {
@@ -93,7 +93,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         const finalMsg = selectedMsg || prevBlock.responseMessages[0]
 
         setSupplementalText(finalMsg?.text || '')
-    }, [activeBlockId, conversationBlockList, selectedResponseByBlock, setSupplementalText])
+    }, [activeBlockId, conversationBlockList, getSelectedResponseForBlock, setSupplementalText])
 
     const updateConversationBlock = (conversationBlockId: string, updater: Partial<ConversationBlock>) => {
         // console.log('DEBUG updateConversationBlock', conversationBlockId, updater)
