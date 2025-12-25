@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Icon } from '../common/Icon/Icon'
@@ -19,6 +19,7 @@ export default function Navbar(): React.ReactElement {
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
     const location = useLocation()
+    const menuRef = useRef<HTMLDivElement>(null)
 
     const handleSettingsClick = () => {
         navigate('/settings')
@@ -28,6 +29,22 @@ export default function Navbar(): React.ReactElement {
     const handleLogout = () => {
         logout({ returnTo: window.location.origin })
     }
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setShowDropdown(false)
+            }
+        }
+
+        if (showDropdown) {
+            document.addEventListener('mousedown', handleClickOutside)
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+        }
+    }, [showDropdown])
 
     return (
         <nav className={styles.navbar}>
@@ -62,7 +79,7 @@ export default function Navbar(): React.ReactElement {
                                 <span>Login</span>
                             </button>
                         ) : (
-                            <div className={styles.accountMenu}>
+                            <div className={styles.accountMenu} ref={menuRef}>
                                 <button
                                     onClick={() => setShowDropdown(!showDropdown)}
                                     className={styles.accountButton}

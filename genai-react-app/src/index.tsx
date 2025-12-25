@@ -10,14 +10,11 @@ const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement
 );
 root.render(
-    <React.StrictMode>
-        <BrowserRouter>
-            <LayoutProvider>
-                <App />
-            </LayoutProvider>
-
-        </BrowserRouter>
-    </React.StrictMode>
+    <BrowserRouter>
+        <LayoutProvider>
+            <App />
+        </LayoutProvider>
+    </BrowserRouter>
 );
 
 reportWebVitals();
