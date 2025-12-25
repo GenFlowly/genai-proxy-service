@@ -1,4 +1,5 @@
 @import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
 
 .container {
   width: 100%;
@@ -43,17 +44,13 @@
 }
 
 .responseWrapper {
-  position: relative;
-  border-radius: 8px;
-  padding: 1rem;
-  transition: all 0.3s ease;
-  min-width: 30rem;
+  @include message-card-base;
   flex: 1 0 30rem; // Grow but don't shrink - triggers horizontal scroll when space limited
 
   // Fix for single response rendering issue
   &:only-child {
     flex: 0 1 88rem;
-    max-width: 88rem;
+    // max-width provided by mixin
     // Handle alignment via parent justify-content
   }
 }
