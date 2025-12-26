@@ -1,26 +1,19 @@
 import React from 'react'
 import { useLayout } from '../../../context/LayoutContext'
-import ThreadWidget from '../../widgets/ThreadWidget/ThreadWidget'
+import ThreadWidget from '../../widgets/SidebarWidgets/ThreadWidget/ThreadWidget'
 import styles from './LeftSidebar.module.scss'
 
 export default function LeftSidebar(): React.ReactElement {
-    const { isLeftSidebarExpanded } = useLayout()
+    const { isLeftSidebarExpanded, toggleLeftSidebar } = useLayout()
+    const collapsed = !isLeftSidebarExpanded
 
     return (
-        <aside className={`${styles.sidebar} ${!isLeftSidebarExpanded ? styles.collapsed : ''}`}>
-            {/*<button*/}
-            {/*    onClick={toggleLeftSidebar}*/}
-            {/*    className={styles.collapseButton}*/}
-            {/*    title={isLeftSidebarExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}*/}
-            {/*>*/}
-            {/*    {isLeftSidebarExpanded ? (*/}
-            {/*        <Icon src={ICONS.ALT_ARROW_LEFT} size={20} />*/}
-            {/*    ) : (*/}
-            {/*        <Icon src={ICONS.ALT_ARROW_RIGHT} size={20} />*/}
-            {/*    )}*/}
-            {/*</button>*/}
+        <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
 
-            <ThreadWidget />
+
+            <div className={styles.sidebarContent}>
+                <ThreadWidget />
+            </div>
         </aside>
     )
 }

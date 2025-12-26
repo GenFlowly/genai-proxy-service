@@ -1,9 +1,9 @@
 import React from 'react'
-import { useSidebarWidget } from '../../../hooks/useSidebarWidget'
-import SidebarWidgetContainer from '../../common/SidebarWidgetContainer/SidebarWidgetContainer'
-import { Icon } from '../../common/Icon/Icon'
-import { ICONS } from '../../../constants/icons'
-import Tooltip from '../../common/Tooltip/Tooltip'
+import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
+import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
+import { Icon } from '../../../common/Icon/Icon'
+import { ICONS } from '../../../../constants/icons'
+import Tooltip from '../../../common/Tooltip/Tooltip'
 
 export default function TokenCounter() {
     const { ai } = useSidebarWidget()

@@ -11,6 +11,8 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
     const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(false)
     const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(true)
 
+    const [isInstructionWidgetExpanded, setInstructionWidgetExpanded] = useState(false)
+
     const toggleLeftSidebar = () => setIsLeftSidebarExpanded(prev => !prev)
     const toggleRightSidebar = () => setIsRightSidebarExpanded(prev => !prev)
 
@@ -26,6 +28,8 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
                 toggleRightSidebar,
                 setLeftSidebarExpanded,
                 setRightSidebarExpanded,
+                isInstructionWidgetExpanded,
+                setInstructionWidgetExpanded,
             }}
         >
             {children}

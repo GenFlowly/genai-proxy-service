@@ -1,11 +1,11 @@
 import React from 'react'
-import { useSidebarWidget } from '../../../hooks/useSidebarWidget'
-import SidebarWidgetContainer from '../../common/SidebarWidgetContainer/SidebarWidgetContainer'
-import PillButton from '../../common/PillButton/PillButton'
-import { ICONS } from '../../../constants/icons'
+import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
+import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
+import PillButton from '../../../common/PillButton/PillButton'
+import { ICONS } from '../../../../constants/icons'
 import styles from './NewChatWidget.module.scss'
-import Tooltip from '../../common/Tooltip/Tooltip'
-import { Icon } from '../../common/Icon/Icon'
+import Tooltip from '../../../common/Tooltip/Tooltip'
+import { Icon } from '../../../common/Icon/Icon'
 
 export default function NewChatWidget(): React.ReactElement {
     const { conversation } = useSidebarWidget()

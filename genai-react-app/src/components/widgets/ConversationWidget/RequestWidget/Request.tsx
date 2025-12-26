@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react'
-import { ICONS } from '../../../constants/icons'
-import PromptEditor from '../PromptEditorWidget/PromptEditor'
-import MultiPurposeButton from '../../common/MultiPurposeButton/MultiPurposeButton'
-import Tooltip from '../../common/Tooltip/Tooltip'
-import { useConversation } from '../../../context/ConversationContext'
-import { useAuth } from '../../../context/AuthContext'
-import TextContainer from '../../common/TextContainer/TextContainer'
+import { ICONS } from '../../../../constants/icons'
+import PromptEditor from '../../PromptEditorWidget/PromptEditor'
+import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
+import Tooltip from '../../../common/Tooltip/Tooltip'
+import { useConversation } from '../../../../context/ConversationContext'
+import { useAuth } from '../../../../context/AuthContext'
+import TextContainer from '../../../common/TextContainer/TextContainer'
 import styles from './Request.module.scss'
 
 interface RequestProps {

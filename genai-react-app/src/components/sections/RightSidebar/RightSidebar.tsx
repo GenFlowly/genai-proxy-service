@@ -2,10 +2,10 @@ import React from 'react'
 import { useLayout } from '../../../context/LayoutContext'
 import { Icon } from '../../common/Icon/Icon'
 import { ICONS } from '../../../constants/icons'
-import AIVendorWidget from '../../widgets/AIVendorWidget/AIVendorWidget'
-import TokenCounter from '../../widgets/TokenCounter/TokenCounter'
+import AIVendorWidget from '../../widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget'
+import TokenCounter from '../../widgets/SidebarWidgets/TokenCounter/TokenCounter'
 import styles from './RightSidebar.module.scss'
-import NewChatWidget from '../../widgets/NewChatWidget/NewChatWidget'
+import NewChatWidget from '../../widgets/SidebarWidgets/NewChatWidget/NewChatWidget'
 
 export default function RightSidebar(): React.ReactElement {
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()

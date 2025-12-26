@@ -1,8 +1,8 @@
 import React from 'react'
-import Tooltip from '../../common/Tooltip/Tooltip'
+import Tooltip from '../../../common/Tooltip/Tooltip'
 import styles from './ThreadPromptItem.module.scss'
-import { Icon } from '../../common/Icon/Icon'
-import { ICONS } from '../../../constants/icons'
+import { Icon } from '../../../common/Icon/Icon'
+import { ICONS } from '../../../../constants/icons'
 
 interface ThreadPromptItemProps {
     conversationBlockId: string

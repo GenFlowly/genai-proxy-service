@@ -4,6 +4,7 @@ import styles from './SettingsPage.module.scss'
 import { useAuth } from '../context/AuthContext'
 import { AIVendor } from '../constants/vendors'
 import { storeCustomerVendorApiKey } from '../services/storeCustomerVendorApiKeysService'
+import MultiPurposeButton from '../components/common/MultiPurposeButton/MultiPurposeButton'
 
 export default function SettingsPage(): React.ReactElement {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
@@ -100,13 +101,11 @@ export default function SettingsPage(): React.ReactElement {
                                     )}
                                 </div>
 
-                                <button
+                                <MultiPurposeButton
                                     onClick={() => handleSave(vendor)}
-                                    className={styles.submitButton}
+                                    label={loading[vendor] ? 'Saving...' : 'Save'}
                                     disabled={loading[vendor]}
-                                >
-                                    {loading[vendor] ? 'Saving...' : 'Save'}
-                                </button>
+                                />
                             </div>
                         ))}
 

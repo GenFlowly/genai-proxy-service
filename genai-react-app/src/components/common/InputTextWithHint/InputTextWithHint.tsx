@@ -27,7 +27,7 @@ export const InputTextWithHint: React.FC<InputTextWithHintProps> = ({
             </div>
             <input
                 type="text"
-                className={styles.input}
+                className={styles.inputElement}
                 placeholder={placeholder}
                 value={value}
                 onChange={onChange}

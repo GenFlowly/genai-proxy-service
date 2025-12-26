@@ -1,0 +1,80 @@
+@import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
+
+.container {
+    // Mimic the width constraints of conversation blocks
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 2rem;
+    background-color: $color-sidebar-background;
+    border-bottom: 1px solid $color-border;
+    padding-top: 0; // Add top padding to balance visuals since background is colored
+    align-items: center;
+
+    // Dynamic screen height (minus navbar)
+    min-height: calc(100vh - 64px);
+    justify-content: center; // Center content vertically
+}
+
+// Collapsed State
+.collapsedContainer {
+    width: 100%;
+    height: 3.5rem; // Approximate sub navbar height
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: $color-sidebar-background;
+    border-bottom: 1px solid $color-border;
+}
+
+.editButton {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+
+    // Focus State matching MultiPurposeButton
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: 2px;
+        background-color: transparent; // Ensure no background shift
+    }
+
+    &:hover {
+        background-color: transparent; // No background change
+
+        // Change text and icon color to primary
+        .collapsedText,
+        .editIcon {
+            color: $color-primary;
+        }
+    }
+
+    &:active {
+        // Use filter to darken regardless of variable type
+        filter: brightness(0.9);
+        transform: translateY(1px);
+    }
+}
+
+.collapsedText {
+    font-size: 0.9rem;
+    color: $color-text-secondary; // Default color
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.editIcon {
+    font-size: 1rem; // Icon component uses 1em by default, font-size sets it
+    color: $color-text-secondary; // Default color
+    transition: color 0.2s ease;
+    // Opacity is not needed if we control color directly
+}

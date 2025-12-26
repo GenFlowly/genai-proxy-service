@@ -1,6 +1,6 @@
 import React from 'react'
-import { useConversation } from '../../../context/ConversationContext'
-import { useLayout } from '../../../context/LayoutContext'
+import { useConversation } from '../../../../context/ConversationContext'
+import { useLayout } from '../../../../context/LayoutContext'
 import ThreadPromptItem from './ThreadPromptItem'
 import ThreadResponseItem from './ThreadResponseItem'
 import styles from './ThreadWidget.module.scss'
