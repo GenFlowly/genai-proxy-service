@@ -1,3 +1,12 @@
-package com.genflowly.models
+package com.genflowly.models.api
 
-data class CreateInstructionRequest()
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class CreateInstructionRequest(
+    val instruction: String,
+    val instructionName: String,
+    val existingInstructionId: String? = null
+)
+
+

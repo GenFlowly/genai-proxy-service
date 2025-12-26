@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory
 import service.AIRequestManager
 import service.CustomerProfileService
 
+
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
 }
@@ -99,10 +100,12 @@ fun Application.module() {
     }
 
 
+
     val aiRequestService = get<AIRequestService>()
     val aiRequestManager = get<AIRequestManager>()
     val customerProfileService = get<CustomerProfileService>()
     val conversationService = get<ConversationService>()
+
 
     configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService)
 }

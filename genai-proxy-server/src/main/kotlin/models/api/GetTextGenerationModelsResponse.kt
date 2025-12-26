@@ -1,4 +1,4 @@
-package com.genflowly.models
+package com.genflowly.models.api
 
 import com.genflowly.aicallerlib.models.AIVendor
 import kotlinx.serialization.Serializable

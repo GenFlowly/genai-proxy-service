@@ -1,7 +1,9 @@
 package service
 
 import com.genflowly.aicallerlib.models.AIVendor
-import com.genflowly.models.AIMode
+import com.genflowly.models.api.AIConfigPreferences
+import com.genflowly.models.api.AIMode
+import com.genflowly.models.api.CreateInstructionRequest
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import java.util.*
@@ -115,12 +117,45 @@ class CustomerProfileService(
         return profile?.get("customerId")?.s()
     }
 
-    suspend fun getAIConfigPreferences(customerId: String): com.genflowly.models.AIConfigPreferences? {
+    suspend fun getAIConfigPreferences(customerId: String): AIConfigPreferences? {
         return dynamoDBProvider.getAIConfigPreferences(customerId)
     }
 
     suspend fun getAIVendorAPIKeyStatusList(customerId: String): List<models.AIVendorAPIKeyStatus> {
         return dynamoDBProvider.getCustomerApiKeys(customerId)
+    }
+
+    suspend fun createInstruction(
+        customerId: String,
+        instructionName: String,
+        instruction: String,
+        existingInstructionId: String?,
+    ): Map<String, Any> {
+        var instructionId = existingInstructionId
+        var version = 1
+
+        if (instructionId != null) {
+            val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId) ?: 0
+            version = latestVersion + 1
+        } else {
+            instructionId = "INS-${UUID.randomUUID()}"
+            version = 1
+        }
+
+        val newInstruction = models.Instruction(
+            id = instructionId,
+            creator = customerId,
+            name = instructionName,
+            instructions = instruction,
+            version = version
+        )
+
+        dynamoDBProvider.saveInstruction(newInstruction)
+
+        return mapOf(
+            "id" to instructionId,
+            "version" to version
+        )
     }
 }
 

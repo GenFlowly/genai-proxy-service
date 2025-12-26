@@ -72,13 +72,37 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        const instructionsTableProps: CreateTableProps = {
+            tableName: 'Instructions',
+            partitionKey: {
+                name: 'instructionId',
+                type: dynamodb.AttributeType.STRING
+            },
+            sortKey: {name: 'version', type: dynamodb.AttributeType.NUMBER},
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'creatorIndex',
+                    partitionKey: {
+                        name: 'creator',
+                        type: dynamodb.AttributeType.STRING
+                    },
+                    sortKey: {
+                        name: 'version',
+                        type: dynamodb.AttributeType.NUMBER
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                }
+            ],
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
         const conversationTable = createDefaultDynamoDbTable(this, conversationTableProps);
         const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
         const customerPreferencesTable = createDefaultDynamoDbTable(this, customerPreferencesTableProps);
+        const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
 
-        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable)
+        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable, instructionsTable)
     }
 }

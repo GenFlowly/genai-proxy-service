@@ -2,6 +2,7 @@ package com.genflowly
 
 import activity.registerOnboardCustomerRoutes
 import activity.registerStoreApiKeyRoutes
+import com.genflowly.activity.registerCreateInstructionRoutes
 import com.genflowly.activity.registerGenerateTextRoutes
 import com.genflowly.activity.registerGetTextGenerationModelsRoutes
 import com.genflowly.activity.registerSaveAIConfigPreferencesRoutes
@@ -24,7 +25,9 @@ object Routes {
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
     const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
     const val GET_CONVERSATION = "$API_V1/chat"
+    const val CREATE_INSTRUCTION = "$API_V1/instruction"
 }
+
 
 
 
@@ -45,5 +48,6 @@ fun Application.configureRouting(
         registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
+        registerCreateInstructionRoutes(customerProfileService)
     }
 }

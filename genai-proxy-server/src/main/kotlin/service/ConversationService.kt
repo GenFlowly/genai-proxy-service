@@ -1,12 +1,9 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import com.genflowly.models.GetConversationResponse
-import com.genflowly.models.PromptAndResponse
+import com.genflowly.models.api.GetConversationResponse
+import com.genflowly.models.api.PromptAndResponse
 import models.Conversation
 import models.GenerateTextResponse
 import models.Message

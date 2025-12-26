@@ -1,7 +1,7 @@
 package com.genflowly.activity
 
 import com.genflowly.Routes
-import com.genflowly.models.PreferencesRequest
+import com.genflowly.models.api.PreferencesRequest
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate

@@ -1,16 +1,13 @@
 package activity
 
 import com.genflowly.Routes
-import com.genflowly.models.OnboardCustomerResponse
-import io.ktor.http.HttpStatusCode
+import com.genflowly.models.api.OnboardCustomerResponse
+import com.genflowly.models.api.AIConfigPreferences
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
-import java.util.UUID
 import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
 import service.CustomerProfileService
@@ -41,7 +38,7 @@ fun Route.registerOnboardCustomerRoutes(
 
             // Fetch additional details
             val aiConfigPreferences = customerProfileService.getAIConfigPreferences(customerProfile.customerId)
-                ?: com.genflowly.models.AIConfigPreferences()
+                ?: AIConfigPreferences()
             
             val aiVendorAPIKeyStatusList = customerProfileService.getAIVendorAPIKeyStatusList(customerProfile.customerId)
 
