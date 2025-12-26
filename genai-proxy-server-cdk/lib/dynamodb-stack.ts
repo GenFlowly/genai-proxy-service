@@ -86,10 +86,6 @@ export class DynamoDBStack extends cdk.Stack {
                         name: 'creator',
                         type: dynamodb.AttributeType.STRING
                     },
-                    sortKey: {
-                        name: 'version',
-                        type: dynamodb.AttributeType.NUMBER
-                    },
                     projectionType: dynamodb.ProjectionType.ALL,
                 }
             ],
