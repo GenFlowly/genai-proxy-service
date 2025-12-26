@@ -20,4 +20,12 @@ object DynamoDBConstants {
 
     const val CUSTOMER_PREFERENCES_TABLE = "CustomerPreferences"
 
+    const val INSTRUCTION_TABLE = "Instructions"
+    const val INSTRUCTION_ID_KEY = "instructionId"
+    const val INSTRUCTION_CREATOR_KEY = "creator"
+    const val INSTRUCTION_NAME_KEY = "name"
+    const val INSTRUCTION_CONTENT_KEY = "instructions"
+    const val INSTRUCTION_VERSION_KEY = "version"
+    const val INSTRUCTION_CREATOR_GSI_KEY = "creatorIndex"
+
 }

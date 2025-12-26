@@ -8,16 +8,22 @@ import com.genflowly.DynamoDBConstants.CUSTOMER_API_KEY_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_PREFERENCES_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_TABLE
+import com.genflowly.DynamoDBConstants.INSTRUCTION_CONTENT_KEY
+import com.genflowly.DynamoDBConstants.INSTRUCTION_CREATOR_GSI_KEY
+import com.genflowly.DynamoDBConstants.INSTRUCTION_CREATOR_KEY
+import com.genflowly.DynamoDBConstants.INSTRUCTION_ID_KEY
+import com.genflowly.DynamoDBConstants.INSTRUCTION_NAME_KEY
+import com.genflowly.DynamoDBConstants.INSTRUCTION_TABLE
+import com.genflowly.DynamoDBConstants.INSTRUCTION_VERSION_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
 import com.genflowly.DynamoDBConstants.SUB_PARTITION_KEY
 import com.genflowly.aicallerlib.models.AIVendor
-import com.genflowly.models.AIMode
+import com.genflowly.models.api.AIConfigPreferences
+import com.genflowly.models.api.AIMode
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import models.AIConfig
 import models.Conversation
 import models.Message
@@ -26,6 +32,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
+import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 
 class DynamoDBProvider(
     private val dynamoDbClient: DynamoDbClient,
@@ -431,7 +438,7 @@ class DynamoDBProvider(
      */
     suspend fun queryCustomerProfileBySub(sub: String): Map<String, AttributeValue>? =
         withContext(Dispatchers.IO) {
-            val request = software.amazon.awssdk.services.dynamodb.model.QueryRequest.builder()
+            val request = QueryRequest.builder()
                 .tableName(CUSTOMER_PROFILE_TABLE)
                 .keyConditionExpression("#sub = :sub")
                 .expressionAttributeNames(
@@ -457,7 +464,7 @@ class DynamoDBProvider(
     }
 
 
-    suspend fun getAIConfigPreferences(customerId: String): com.genflowly.models.AIConfigPreferences? =
+    suspend fun getAIConfigPreferences(customerId: String): AIConfigPreferences? =
         withContext(Dispatchers.IO) {
             val key = mapOf(
                 CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()
@@ -481,7 +488,7 @@ class DynamoDBProvider(
             val modeAttr = item["preferredGenerativeMode"]?.s()
             val preferredGenerativeMode = modeAttr?.let { AIMode.valueOf(it) }
 
-            com.genflowly.models.AIConfigPreferences(
+            AIConfigPreferences(
                 preferredModels = preferredModels,
                 preferredGenerativeMode = preferredGenerativeMode
             )
@@ -515,4 +522,45 @@ class DynamoDBProvider(
                 )
             }
         }
+        
+    suspend fun getLatestInstructionVersion(id: String): Int? =
+        withContext(Dispatchers.IO) {
+            // Since version is Sort Key, we can Query by PK (id) with Limit 1 and ScanIndexForward false to get highest version
+            val request = QueryRequest.builder()
+                .tableName(INSTRUCTION_TABLE)
+                .keyConditionExpression("$INSTRUCTION_ID_KEY = :id")
+                .expressionAttributeValues(
+                    mapOf(":id" to AttributeValue.builder().s(id).build())
+                )
+                .scanIndexForward(false) // Reverse order (descending version)
+                .limit(1)
+                .build()
+
+            val response = dynamoDbClient.query(request)
+            val item = response.items().firstOrNull() ?: return@withContext null
+            item[INSTRUCTION_VERSION_KEY]?.n()?.toInt()
+        }
+
+    suspend fun saveInstruction(instruction: models.Instruction) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                INSTRUCTION_ID_KEY to AttributeValue.builder().s(instruction.id).build(),
+                INSTRUCTION_CREATOR_KEY to AttributeValue.builder().s(instruction.creator).build(),
+                INSTRUCTION_NAME_KEY to AttributeValue.builder().s(instruction.name).build(),
+                INSTRUCTION_CONTENT_KEY to AttributeValue.builder().s(instruction.instructions).build(),
+                INSTRUCTION_VERSION_KEY to AttributeValue.builder().n(instruction.version.toString()).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(INSTRUCTION_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Saved instruction ${instruction.id} v${instruction.version} for ${instruction.creator}")
+        } catch (e: Exception) {
+            logger.error("Failed to save instruction", e)
+            throw e
+        }
+    }
 }

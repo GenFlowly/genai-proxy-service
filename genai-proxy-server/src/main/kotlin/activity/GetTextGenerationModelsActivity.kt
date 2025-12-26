@@ -6,7 +6,9 @@ import com.genflowly.aicallerlib.models.*
 import com.genflowly.aicallerlib.models.claude.*
 import com.genflowly.aicallerlib.models.gemini.*
 import com.genflowly.aicallerlib.models.openai.*
-import com.genflowly.models.*
+import com.genflowly.models.api.AIVendorModelList
+import com.genflowly.models.api.GetTextGenerationModelsRequest
+import com.genflowly.models.api.GetTextGenerationModelsResponse
 import com.genflowly.service.AIRequestService
 import com.genflowly.utils.fetchApiKey
 import com.genflowly.utils.requireAuthenticatedCustomerId
