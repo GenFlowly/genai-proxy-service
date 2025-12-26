@@ -13,21 +13,9 @@ function LandingPageContent() {
 
     return (
         <div className={styles.layout}>
-            <div
-                className={`${styles.sidebarLeft} ${!isLeftSidebarExpanded ? styles.collapsed : ''
-                    }`}
-            >
-                <LeftSidebar />
-            </div>
-
+            <LeftSidebar />
             <CenterSection />
-
-            <div
-                className={`${styles.sidebarRight} ${!isRightSidebarExpanded ? styles.collapsed : ''
-                    }`}
-            >
-                <RightSidebar />
-            </div>
+            <RightSidebar />
         </div>
     )
 }

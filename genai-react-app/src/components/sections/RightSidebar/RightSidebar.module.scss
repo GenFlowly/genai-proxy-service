@@ -1,67 +1,6 @@
 @import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
 
 .sidebarWrapper {
-  flex-shrink: 0;
-  border-left: 1px solid $color-border;
-  background-color: $color-sidebar-background;
-  height: 100%;
-  transition: all 0.3s ease;
-  position: relative;
-  z-index: 5; // Ensure it sits above main content if needed
-
-  // Default width
-  width: 15rem;
-
-  /* collapsed modifier */
-  &.collapsed {
-    width: 5rem;
-
-    .sidebarContent {
-      padding: 1rem 0.5rem;
-      align-items: center;
-
-      overflow: hidden;
-      // Removed hiding of specific classes since content handles itself now
-    }
-  }
-}
-
-.sidebarContent {
-  width: 100%;
-  height: 100%;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto; // Enable vertical scrolling
-  overflow-x: hidden;
-}
-
-.collapseButton {
-  position: absolute;
-  right: 100%; // Move outside to the left
-  top: 0rem;
-  z-index: 10;
-
-  /* Visual styling */
-  background: $color-background-secondary;
-  border: 1px solid $color-border;
-  border-right: none; // Attach to left edge of sidebar
-  border-top: none; // Remove top border as requested
-  border-radius: 0 0 0 6px; // Rounded on bottom-left only
-
-  color: $color-text-secondary;
-  cursor: pointer;
-  padding: 0.5rem 0.2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  box-shadow: -1px 1px 3px rgba(0, 0, 0, 0.05); // Shadow on left
-
-  &:hover {
-    background-color: $color-background-hover;
-    color: $color-text-primary;
-    padding-right: 0.2rem; // Reset padding
-    padding-left: 0.5rem; // Slide out effect to the left
-  }
+  @include sidebar-base(left);
 }

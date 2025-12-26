@@ -1,7 +1,7 @@
 import React from 'react'
 import styles from './ThreadResponseItem.module.scss'
-import { Icon } from '../../common/Icon/Icon'
-import { ICONS } from '../../../constants/icons'
+import { Icon } from '../../../common/Icon/Icon'
+import { ICONS } from '../../../../constants/icons'
 
 interface ThreadResponseItemProps {
     conversationBlockId: string

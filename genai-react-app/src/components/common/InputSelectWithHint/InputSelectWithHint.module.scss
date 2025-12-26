@@ -1,0 +1,11 @@
+@import '../../../styles/variables.scss';
+@import '../../../styles/mixins.scss';
+
+.container {
+    @include inputWithHint;
+}
+
+.icon {
+    color: #0064B6;
+    background-color: #0064B6 !important;
+}

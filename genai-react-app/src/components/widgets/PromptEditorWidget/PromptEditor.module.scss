@@ -7,7 +7,7 @@ $editor-width: 88rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 0 3rem; // Add horizontal padding for spacing
+  padding: 0 0 3rem 0; // Add horizontal padding for spacing
 }
 
 .container {
@@ -15,7 +15,7 @@ $editor-width: 88rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.5rem 3rem;
+  padding: 0 3rem 1.5rem 3rem;
   border-radius: $radius-md;
   position: relative; // For absolute positioning of copy button
 }

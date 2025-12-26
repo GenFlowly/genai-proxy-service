@@ -1,20 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { AIVendor } from '../../../constants/vendors'
+import { AIVendor } from '../../../../constants/vendors'
 import {
     getTextGenerationModels,
     clearAllModelCache,
-} from '../../../services/getTextGenerationModelsService'
+} from '../../../../services/getTextGenerationModelsService'
 import {
     GetTextGenerationModelsResponse,
     AIVendorModelList,
-} from '../../../models/getTextGenerationModels.models'
+} from '../../../../models/getTextGenerationModels.models'
 
-import { saveAIConfigPreferences } from '../../../services/saveAIConfigService'
+import { saveAIConfigPreferences } from '../../../../services/saveAIConfigService'
 import styles from './AIVendorWidget.module.scss'
-import Tooltip from '../../common/Tooltip/Tooltip'
-import { Icon } from '../../common/Icon/Icon'
-import { ICONS } from '../../../constants/icons'
-import PillButton from '../../common/PillButton/PillButton'
+import Tooltip from '../../../common/Tooltip/Tooltip'
+import { Icon } from '../../../common/Icon/Icon'
+import { ICONS } from '../../../../constants/icons'
+import PillButton from '../../../common/PillButton/PillButton'
 import {
     OpenAIBrandName,
     ClaudeBrandName,
@@ -22,9 +22,9 @@ import {
     CollapsedOpenAIBrandName,
     CollapsedClaudeBrandName,
     CollapsedGeminiBrandName
-} from '../../common/BrandName/BrandName'
-import { useSidebarWidget } from '../../../hooks/useSidebarWidget'
-import SidebarWidgetContainer from '../../common/SidebarWidgetContainer/SidebarWidgetContainer'
+} from '../../../common/BrandName/BrandName'
+import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
+import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 
 const vendors = Object.values(AIVendor) as AIVendor[]
 

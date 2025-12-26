@@ -1,128 +1,17 @@
 @import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
 
 .sidebar {
-  height: 100%;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  overflow-y: hidden;
-  background: $color-sidebar-background;
-  transition: all 0.3s ease;
-  position: relative;
+  @include sidebar-base(right);
+
+  // Specific content overrides if needed
+  .sidebarContent {
+    gap: 2rem;
+  }
 
   &.collapsed {
-    width: 5rem;
-    padding: 1rem 0.25rem;
-    align-items: center;
-    overflow: hidden;
-    gap: 1rem;
-
-    .title,
-    .list,
-    .actionButton {
-      display: none;
+    .sidebarContent {
+      gap: 1rem;
     }
-
-    /* Optional icon placeholders for sections */
-    .section::before {
-      font-size: 1.2rem;
-      color: $color-text-muted;
-    }
-
-    /* Example icons (replace with actual icons in React) */
-    .section:nth-child(1)::before {
-      content: '📁';
-      /* Projects */
-    }
-
-    .section:nth-child(2)::before {
-      content: '⚡';
-      /* Quick Actions */
-    }
-
-    .section:nth-child(3)::before {
-      content: '🕓';
-      /* History */
-    }
-  }
-}
-
-.collapseButton {
-  /* Positioned in flow to prevent overlap */
-  align-self: flex-end;
-  /* Align to right when expanded */
-  margin-bottom: 0.5rem;
-
-  background: transparent;
-  border: none;
-  color: $color-text-primary;
-  cursor: pointer;
-  padding: 0.4rem;
-  border-radius: 6px;
-  transition: background-color 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    background-color: $color-background-hover;
-  }
-}
-
-.sidebar.collapsed .collapseButton {
-  align-self: center;
-  /* Align to center when collapsed */
-  margin-bottom: 1rem;
-}
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.title {
-  font-weight: 700;
-  color: $color-text-primary;
-  font-size: 1rem;
-  border-bottom: 1px solid $color-border;
-  padding-bottom: 0.25rem;
-}
-
-.list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-
-  li {
-    color: $color-text-secondary;
-    font-size: 0.9rem;
-    cursor: pointer;
-    padding: 0.3rem 0.4rem;
-    border-radius: 4px;
-    transition: background 0.2s;
-
-    &:hover {
-      background: $color-background-hover;
-    }
-  }
-}
-
-.actionButton {
-  background: $color-sidebar-button;
-  color: white;
-  border: none;
-  padding: 0.5rem 0.8rem;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  &:hover {
-    background: $color-sidebar-button-hover;
   }
 }

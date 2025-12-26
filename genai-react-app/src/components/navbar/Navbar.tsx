@@ -3,7 +3,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Icon } from '../common/Icon/Icon'
 import { ICONS } from '../../constants/icons'
-import { InputTextWithHint } from '../common/InputTextWithHint/InputTextWithHint'
+import { InputSelectWithHint } from '../common/InputSelectWithHint/InputSelectWithHint'
 import LoginIcon from '../icons/LoginIcon'
 import SettingsIcon from '../icons/SettingsIcon'
 import styles from './Navbar.module.scss'
@@ -14,7 +14,7 @@ import logo from '../../assets/icons/logo.png'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
-    const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
+    const { isLeftSidebarExpanded, isRightSidebarExpanded, isInstructionWidgetExpanded, setInstructionWidgetExpanded } = useLayout()
     const { systemPrompt, setSystemPrompt } = useConversation()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
@@ -57,13 +57,43 @@ export default function Navbar(): React.ReactElement {
 
                 <div className={styles.centerControls}>
                     {location.pathname.startsWith('/chat') && (
-                        <InputTextWithHint
-                            hint="Describe persona for AI "
+                        <InputSelectWithHint
+                            hint="Instructions for AI"
                             icon={ICONS.USER_ROLE}
-                            placeholder="You are a helpful assistant."
+                            placeholder="Select a persona"
                             className={styles.roleInput}
-                            value={systemPrompt}
-                            onChange={(e) => setSystemPrompt(e.target.value)}
+                            value={isInstructionWidgetExpanded ? 'CTA_ACTION' : systemPrompt}
+                            onChange={(val) => {
+                                setSystemPrompt(val)
+                                setInstructionWidgetExpanded(false)
+                            }}
+                            options={(() => {
+                                const predefinedOptions = [
+                                    {
+                                        label: 'You are a helpful assistant.',
+                                        value: 'You are a helpful assistant.',
+                                        isCta: false,
+                                    }
+                                ]
+
+                                const ctaOption = {
+                                    label: 'Create Instructions',
+                                    value: 'CTA_ACTION',
+                                    isCta: true,
+                                    ctaAction: () => setInstructionWidgetExpanded(true)
+                                }
+
+                                const showDynamicOption = systemPrompt && !predefinedOptions.some(opt => opt.value === systemPrompt)
+
+                                return [
+                                    ...(showDynamicOption ? [{
+                                        label: systemPrompt.length > 50 ? `${systemPrompt.substring(0, 50)}...` : systemPrompt,
+                                        value: systemPrompt
+                                    }] : []),
+                                    ...predefinedOptions,
+                                    ctaOption
+                                ]
+                            })()}
                         />
                     )}
                 </div>

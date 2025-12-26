@@ -16,8 +16,10 @@ import claudeIcon from '../assets/icons/Claude.svg'
 import geminiIcon from '../assets/icons/Gemini.svg'
 import modelsIcon from '../assets/icons/models.svg'
 import tokensIcon from '../assets/icons/tokens.svg'
+import editIcon from '../assets/icons/edit.svg'
 
 export const ICONS = {
+    EDIT: editIcon,
     PROMPT_ICON: promptIcon,
     RESPONSE_ICON: responseIcon,
     ALT_ARROW_LEFT: altArrowLeft,

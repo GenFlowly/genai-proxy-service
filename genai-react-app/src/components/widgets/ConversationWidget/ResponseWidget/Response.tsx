@@ -1,18 +1,18 @@
 import React from 'react'
-import { ICONS } from '../../../constants/icons'
+import { ICONS } from '../../../../constants/icons'
 import styles from './Response.module.scss'
-import { useLayout } from '../../../context/LayoutContext'
-import { useConversation } from '../../../context/ConversationContext'
-import TextContainer from '../../common/TextContainer/TextContainer'
-import { Message } from "../../../models/conversation.models";
-import MultiPurposeButton from '../../common/MultiPurposeButton/MultiPurposeButton'
-import Tooltip from '../../common/Tooltip/Tooltip'
+import { useLayout } from '../../../../context/LayoutContext'
+import { useConversation } from '../../../../context/ConversationContext'
+import TextContainer from '../../../common/TextContainer/TextContainer'
+import { Message } from "../../../../models/conversation.models";
+import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
+import Tooltip from '../../../common/Tooltip/Tooltip'
 import {
     OpenAIBrandName,
     ClaudeBrandName,
     GeminiBrandName
-} from '../../common/BrandName/BrandName'
-import { AIVendor } from '../../../constants/vendors'
+} from '../../../common/BrandName/BrandName'
+import { AIVendor } from '../../../../constants/vendors'
 
 interface ResponseProps {
     blockId: string

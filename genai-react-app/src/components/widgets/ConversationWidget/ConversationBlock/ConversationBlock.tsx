@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react'
-import Response from '../../widgets/ResponseWidget/Response'
-import Request from '../../widgets/RequestWidget/Request'
-import { useConversation } from '../../../context/ConversationContext'
+import Response from '../ResponseWidget/Response'
+import Request from '../RequestWidget/Request'
+import { useConversation } from '../../../../context/ConversationContext'
 import styles from './ConversationBlock.module.scss'
-import { useAuth } from '../../../context/AuthContext'
+import { useAuth } from '../../../../context/AuthContext'
 
 export default function ConversationBlock({ id }: { id: string }) {
     const {

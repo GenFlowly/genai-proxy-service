@@ -8,4 +8,6 @@ export interface LayoutContextType {
     toggleRightSidebar: () => void
     setLeftSidebarExpanded: (visible: boolean) => void
     setRightSidebarExpanded: (visible: boolean) => void
+    isInstructionWidgetExpanded: boolean
+    setInstructionWidgetExpanded: (expanded: boolean) => void
 }
