@@ -5,7 +5,7 @@ import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.http.*
 import io.ktor.server.response.*
-import service.CustomerProfileService
+import com.genflowly.service.CustomerProfileService
 
 /**
  * Extract sub from JWT and fetch customerId from CustomerProfileService
