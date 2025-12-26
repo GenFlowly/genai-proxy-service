@@ -1,7 +1,7 @@
 package com.genflowly.utils
 
 import com.genflowly.aicallerlib.models.AIVendor
-import service.CustomerProfileService
+import com.genflowly.service.CustomerProfileService
 
 suspend fun fetchApiKey(
     aiVendor: AIVendor,

@@ -10,7 +10,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import org.slf4j.LoggerFactory
-import service.CustomerProfileService
+import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("SaveAIConfigPreferences")
 

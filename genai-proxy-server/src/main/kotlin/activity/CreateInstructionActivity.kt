@@ -3,7 +3,6 @@ package com.genflowly.activity
 import com.genflowly.Routes
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.CreateInstructionRequest
-import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -13,7 +12,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
-import service.CustomerProfileService
+import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("CreateInstructionRoute")
 

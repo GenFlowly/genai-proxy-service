@@ -15,7 +15,7 @@ import models.GenerateTextResponse
 import models.Message
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
-import service.CustomerProfileService
+import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
