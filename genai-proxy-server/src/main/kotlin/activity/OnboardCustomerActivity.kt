@@ -3,6 +3,7 @@ package activity
 import com.genflowly.Routes
 import com.genflowly.models.api.OnboardCustomerResponse
 import com.genflowly.models.api.AIConfigPreferences
+import com.genflowly.service.CustomerProfileService
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -10,7 +11,6 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
-import service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("OnboardCustomerRoute")
 
@@ -47,7 +47,8 @@ fun Route.registerOnboardCustomerRoutes(
                 aiConfigPreferences = aiConfigPreferences,
                 aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList,
                 customerName = customerProfile.name ?: "User",
-                customerPicture = customerProfile.picture
+                customerPicture = customerProfile.picture,
+                customerInstructions = customerProfileService.getLatestCustomerInstructions(customerProfile.customerId)
             )
 
             call.respond(response)

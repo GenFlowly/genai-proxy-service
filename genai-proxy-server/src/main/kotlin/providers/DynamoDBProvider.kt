@@ -563,4 +563,28 @@ class DynamoDBProvider(
             throw e
         }
     }
+    suspend fun getInstructionsByCreator(creatorId: String): List<models.Instruction> =
+        withContext(Dispatchers.IO) {
+            val request = QueryRequest.builder()
+                .tableName(INSTRUCTION_TABLE)
+                .indexName(INSTRUCTION_CREATOR_GSI_KEY)
+                .keyConditionExpression("$INSTRUCTION_CREATOR_KEY = :creator")
+                .expressionAttributeValues(
+                    mapOf(":creator" to AttributeValue.builder().s(creatorId).build())
+                )
+                .build()
+
+            val response = dynamoDbClient.query(request)
+            response.items().mapNotNull { itemToInstruction(it) }
+        }
+
+    private fun itemToInstruction(item: Map<String, AttributeValue>): models.Instruction? {
+        return models.Instruction(
+            id = item[INSTRUCTION_ID_KEY]?.s() ?: return null,
+            creator = item[INSTRUCTION_CREATOR_KEY]?.s() ?: return null,
+            name = item[INSTRUCTION_NAME_KEY]?.s() ?: "",
+            instructions = item[INSTRUCTION_CONTENT_KEY]?.s() ?: "",
+            version = item[INSTRUCTION_VERSION_KEY]?.n()?.toInt() ?: 1
+        )
+    }
 }

@@ -1,5 +1,6 @@
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { OnboardCustomerResponse } from '../models/onboardUser.models'
+import { InstructionResponseItem } from '../models/instruction.models'
 
 export interface User {
     sub: string;
@@ -19,6 +20,7 @@ export interface AuthContextType {
     setCustomerId: (id: string | null) => void;
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[];
     aiConfigPreferences: OnboardCustomerResponse['aiConfigPreferences'] | null;
+    customerInstructions: InstructionResponseItem[];
 }
 
 export interface AuthProviderProps {

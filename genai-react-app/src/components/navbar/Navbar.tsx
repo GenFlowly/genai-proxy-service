@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useAI } from '../../context/AIContext'
 import { Icon } from '../common/Icon/Icon'
 import { ICONS } from '../../constants/icons'
 import { InputSelectWithHint } from '../common/InputSelectWithHint/InputSelectWithHint'
@@ -14,6 +15,7 @@ import logo from '../../assets/icons/logo.png'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
+    const { customerInstructions } = useAI()
     const { isLeftSidebarExpanded, isRightSidebarExpanded, isInstructionWidgetExpanded, setInstructionWidgetExpanded } = useLayout()
     const { systemPrompt, setSystemPrompt } = useConversation()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
@@ -68,13 +70,13 @@ export default function Navbar(): React.ReactElement {
                                 setInstructionWidgetExpanded(false)
                             }}
                             options={(() => {
-                                const predefinedOptions = [
-                                    {
-                                        label: 'You are a helpful assistant.',
-                                        value: 'You are a helpful assistant.',
-                                        isCta: false,
-                                    }
-                                ]
+
+
+                                const customerOptions = (customerInstructions || []).map(item => ({
+                                    label: item.name,
+                                    value: item.instruction,
+                                    isCta: false
+                                }))
 
                                 const ctaOption = {
                                     label: 'Create Instructions',
@@ -83,14 +85,16 @@ export default function Navbar(): React.ReactElement {
                                     ctaAction: () => setInstructionWidgetExpanded(true)
                                 }
 
-                                const showDynamicOption = systemPrompt && !predefinedOptions.some(opt => opt.value === systemPrompt)
+                                const showDynamicOption = systemPrompt &&
+                                    !customerOptions.some(opt => opt.value === systemPrompt) &&
+                                    systemPrompt !== 'CTA_ACTION'
 
                                 return [
                                     ...(showDynamicOption ? [{
                                         label: systemPrompt.length > 50 ? `${systemPrompt.substring(0, 50)}...` : systemPrompt,
                                         value: systemPrompt
                                     }] : []),
-                                    ...predefinedOptions,
+                                    ...customerOptions,
                                     ctaOption
                                 ]
                             })()}

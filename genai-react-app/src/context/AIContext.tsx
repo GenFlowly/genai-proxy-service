@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { AIVendor } from '../constants/vendors'
 import { countTokens } from '../utils/tokenizer'
+import { InstructionResponseItem } from '../models/instruction.models'
+import { useAuth } from './AuthContext'
 
 export interface AIConfig {
     aiVendor: AIVendor
@@ -20,6 +22,7 @@ interface AIContextType {
     setActiveBlockId: (id: string) => void
     supplementalText: string
     setSupplementalText: (text: string) => void
+    customerInstructions: InstructionResponseItem[]
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined)
@@ -32,6 +35,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     const [isTokenLoading, setIsTokenLoading] = useState(false)
     const [activeBlockId, setActiveBlockId] = useState<string>('')
     const [supplementalText, setSupplementalText] = useState<string>('')
+    const { customerInstructions } = useAuth()
 
     // 🔹 Always return OPENAI model (gracefully handles missing)
     const getOpenAIActiveModel = React.useCallback((): string => {
@@ -130,6 +134,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
                 setActiveBlockId,
                 supplementalText,
                 setSupplementalText,
+                customerInstructions,
             }}
         >
             {children}
@@ -155,6 +160,7 @@ export const useAI = (): AIContextType => {
             setActiveBlockId: () => { },
             supplementalText: '',
             setSupplementalText: () => { },
+            customerInstructions: [],
         }
     }
     return ctx
