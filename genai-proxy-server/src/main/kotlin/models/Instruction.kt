@@ -8,8 +8,13 @@ data class Instruction(
     val id: String,
     val creator: String,
     val name: String,
-    val instructions: String,
-    val version: Int? = null,
+    val instructionVersionList: List<InstructionVersion>,
     val createdAt: String? = null,
     val updatedAt: String? = null
+)
+
+@Serializable
+data class InstructionVersion(
+    val instructions: String,
+    val version: Int? = null,
 )

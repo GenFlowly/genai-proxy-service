@@ -12,6 +12,7 @@ import com.genflowly.DynamoDBConstants.INSTRUCTION_CONTENT_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_CREATOR_GSI_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_CREATOR_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_ID_KEY
+import com.genflowly.DynamoDBConstants.INSTRUCTION_VERSIONS_LIST_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_NAME_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_TABLE
 import com.genflowly.DynamoDBConstants.INSTRUCTION_VERSION_KEY
@@ -523,32 +524,36 @@ class DynamoDBProvider(
             }
         }
         
-    suspend fun getLatestInstructionVersion(id: String): Int? =
+    suspend fun getInstructionById(id: String): models.Instruction? =
         withContext(Dispatchers.IO) {
-            // Since version is Sort Key, we can Query by PK (id) with Limit 1 and ScanIndexForward false to get highest version
-            val request = QueryRequest.builder()
+            val request = GetItemRequest.builder()
                 .tableName(INSTRUCTION_TABLE)
-                .keyConditionExpression("$INSTRUCTION_ID_KEY = :id")
-                .expressionAttributeValues(
-                    mapOf(":id" to AttributeValue.builder().s(id).build())
-                )
-                .scanIndexForward(false) // Reverse order (descending version)
-                .limit(1)
+                .key(mapOf(INSTRUCTION_ID_KEY to AttributeValue.builder().s(id).build()))
                 .build()
 
-            val response = dynamoDbClient.query(request)
-            val item = response.items().firstOrNull() ?: return@withContext null
-            item[INSTRUCTION_VERSION_KEY]?.n()?.toInt()
+            val response = dynamoDbClient.getItem(request)
+            val item = response.item() ?: return@withContext null
+            itemToInstruction(item)
         }
 
     suspend fun saveInstruction(instruction: models.Instruction) = withContext(Dispatchers.IO) {
         try {
+            val versionsAttribute = AttributeValue.builder().l(
+                instruction.instructionVersionList.map { v ->
+                    AttributeValue.builder().m(
+                        mapOf(
+                            "instructions" to AttributeValue.builder().s(v.instructions).build(),
+                            "version" to AttributeValue.builder().n(v.version.toString()).build()
+                        )
+                    ).build()
+                }
+            ).build()
+
             val item = withTimestamps(mapOf(
                 INSTRUCTION_ID_KEY to AttributeValue.builder().s(instruction.id).build(),
                 INSTRUCTION_CREATOR_KEY to AttributeValue.builder().s(instruction.creator).build(),
                 INSTRUCTION_NAME_KEY to AttributeValue.builder().s(instruction.name).build(),
-                INSTRUCTION_CONTENT_KEY to AttributeValue.builder().s(instruction.instructions).build(),
-                INSTRUCTION_VERSION_KEY to AttributeValue.builder().n(instruction.version.toString()).build()
+                INSTRUCTION_VERSIONS_LIST_KEY to versionsAttribute
             ))
 
             val putReq = PutItemRequest.builder()
@@ -557,7 +562,7 @@ class DynamoDBProvider(
                 .build()
 
             dynamoDbClient.putItem(putReq)
-            logger.info("Saved instruction ${instruction.id} v${instruction.version} for ${instruction.creator}")
+            logger.info("Saved instruction ${instruction.id} with ${instruction.instructionVersionList.size} versions for ${instruction.creator}")
         } catch (e: Exception) {
             logger.error("Failed to save instruction", e)
             throw e
@@ -579,12 +584,18 @@ class DynamoDBProvider(
         }
 
     private fun itemToInstruction(item: Map<String, AttributeValue>): models.Instruction? {
+        val versionsList = item[INSTRUCTION_VERSIONS_LIST_KEY]?.l()?.mapNotNull { av ->
+            val m = av.m()
+            val instr = m["instructions"]?.s() ?: return@mapNotNull null
+            val ver = m["version"]?.n()?.toInt() ?: 1
+            models.InstructionVersion(instr, ver)
+        } ?: emptyList()
+
         return models.Instruction(
             id = item[INSTRUCTION_ID_KEY]?.s() ?: return null,
             creator = item[INSTRUCTION_CREATOR_KEY]?.s() ?: return null,
             name = item[INSTRUCTION_NAME_KEY]?.s() ?: "",
-            instructions = item[INSTRUCTION_CONTENT_KEY]?.s() ?: "",
-            version = item[INSTRUCTION_VERSION_KEY]?.n()?.toInt() ?: 1
+            instructionVersionList = versionsList
         )
     }
 }
