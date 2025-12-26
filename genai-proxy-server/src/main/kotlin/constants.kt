@@ -27,6 +27,6 @@ object DynamoDBConstants {
     const val INSTRUCTION_CONTENT_KEY = "instructions"
     const val INSTRUCTION_VERSION_KEY = "version"
     const val INSTRUCTION_CREATOR_GSI_KEY = "creatorIndex"
-    const val INSTRUCTION_VERSIONS_LIST_KEY = "instructionVersions"
+    const val INSTRUCTION_CREATOR_GSI_KEY = "creatorIndex"
 
 }

@@ -151,30 +151,21 @@ class CustomerProfileService(
     ): CreateInstructionResponse {
         var instructionId = existingInstructionId
         var version = 1
-        var versionList = mutableListOf<models.InstructionVersion>()
 
         if (instructionId != null) {
-            val existingInstruction = dynamoDBProvider.getInstructionById(instructionId)
-            if (existingInstruction != null) {
-                versionList = existingInstruction.instructionVersionList.toMutableList()
-                val latestVersion = versionList.maxOfOrNull { it.version ?: 0 } ?: 0
-                version = latestVersion + 1
-            } else {
-                 // Fallback if ID passed but not found (shouldn't happen usually)
-                 // treat as new? or error? treating as new with passed ID seems ok
-            }
+            val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId) ?: 0
+            version = latestVersion + 1
         } else {
             instructionId = "INS-${UUID.randomUUID()}"
             version = 1
         }
-        
-        versionList.add(models.InstructionVersion(instruction, version))
 
         val newInstruction = models.Instruction(
             id = instructionId!!,
             creator = customerId,
             name = instructionName,
-            instructionVersionList = versionList
+            instructions = instruction,
+            version = version
         )
 
         dynamoDBProvider.saveInstruction(newInstruction)
@@ -189,15 +180,13 @@ class CustomerProfileService(
     suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse {
         val instructions = dynamoDBProvider.getInstructionsByCreator(customerId)
         
-        val responseItems = instructions.flatMap { instruction ->
-            instruction.instructionVersionList.map { v ->
-                InstructionResponseItem(
-                    id = instruction.id,
-                    name = instruction.name,
-                    version = v.version ?: 1,
-                    instruction = v.instructions
-                )
-            }
+        val responseItems = instructions.map { instruction ->
+            InstructionResponseItem(
+                id = instruction.id,
+                name = instruction.name,
+                version = instruction.version ?: 1,
+                instruction = instruction.instructions
+            )
         }
         
         return GetCustomerInstructionListResponse(
@@ -206,19 +195,17 @@ class CustomerProfileService(
     }
 
     suspend fun getLatestCustomerInstructions(customerId: String): List<InstructionResponseItem> {
-        val instructions = dynamoDBProvider.getInstructionsByCreator(customerId)
+        val response = getCustomerInstructions(customerId)
         
-        return instructions.mapNotNull { instruction ->
-            val latestVersion = instruction.instructionVersionList.maxByOrNull { it.version ?: 0 }
-            latestVersion?.let { v ->
-                InstructionResponseItem(
-                    id = instruction.id,
-                    name = instruction.name,
-                    version = v.version ?: 1,
-                    instruction = v.instructions
-                )
+        // Group by ID and find max version for each
+        return response.instructions
+            .groupBy { it.id }
+            .mapValues { (_, versions) -> 
+                versions.maxByOrNull { it.version } 
             }
-        }.sortedByDescending { it.version }
+            .values
+            .filterNotNull()
+            .sortedByDescending { it.version }
     }
 }
 
@@ -226,4 +213,10 @@ fun generateCustomerId(): String {
     val uuid =
         UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
     return "CU$uuid"
+}
+
+fun generateInstructionId(): String {
+    val uuid =
+        UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
+    return "INS$uuid"
 }
