@@ -21,7 +21,7 @@ import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
-import service.CustomerProfileService
+import com.genflowly.service.CustomerProfileService
 
 
 fun main(args: Array<String>) {

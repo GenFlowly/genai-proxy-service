@@ -9,6 +9,7 @@ data class OnboardCustomerResponse(
     val aiConfigPreferences: AIConfigPreferences,
     val aiVendorAPIKeyStatusList: List<AIVendorAPIKeyStatus>,
     val customerName: String?,
-    val customerPicture: String?
+    val customerPicture: String?,
+    val customerInstructions: List<InstructionResponseItem>?
 )
 

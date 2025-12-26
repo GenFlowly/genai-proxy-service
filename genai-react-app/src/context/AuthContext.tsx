@@ -8,6 +8,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { AuthContextType, User } from '../types/auth.types'
 import { onboardCustomer } from '../services/onboardUserService'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
+import { InstructionResponseItem } from '../models/instruction.models'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
@@ -26,6 +27,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     )
     const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
     const [aiConfigPreferences, setAiConfigPreferences] = useState<AuthContextType['aiConfigPreferences']>(null)
+    const [customerInstructions, setCustomerInstructions] = useState<InstructionResponseItem[]>([])
     const [isInternalLoading, setIsInternalLoading] = useState(false)
 
     // Persist customerId & Load cached prefs
@@ -43,6 +45,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         } else {
             localStorage.removeItem('customerId')
             setAiConfigPreferences(null)
+            setCustomerInstructions([])
         }
     }, [customerId])
 
@@ -68,6 +71,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                     if (onboardData.aiVendorAPIKeyStatusList) {
                         setAiVendorAPIKeyStatusList(onboardData.aiVendorAPIKeyStatusList)
                     }
+                    if (onboardData.customerInstructions) {
+                        setCustomerInstructions(onboardData.customerInstructions)
+                    }
+
                     if (onboardData.aiConfigPreferences) {
                         setAiConfigPreferences(onboardData.aiConfigPreferences)
                         if (onboardData.customerId) {
@@ -95,6 +102,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         setCustomerId(null)
         setAiVendorAPIKeyStatusList([])
         setAiConfigPreferences(null)
+        setCustomerInstructions([])
         localStorage.removeItem('customerId')
 
         auth0Logout({
@@ -121,6 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         getAccessTokenSilently,
         aiVendorAPIKeyStatusList,
         aiConfigPreferences,
+        customerInstructions,
     }
 
     return (

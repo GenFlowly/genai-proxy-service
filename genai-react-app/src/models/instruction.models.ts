@@ -9,3 +9,10 @@ export interface CreateInstructionResponse {
     version: number;
     name: string;
 }
+
+export interface InstructionResponseItem {
+    id: string;
+    name: string;
+    version: number;
+    instruction: string;
+}

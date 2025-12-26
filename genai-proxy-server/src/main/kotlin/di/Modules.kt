@@ -10,7 +10,7 @@ import mu.KotlinLogging.logger
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import service.AIRequestManager
-import service.CustomerProfileService
+import com.genflowly.service.CustomerProfileService
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient

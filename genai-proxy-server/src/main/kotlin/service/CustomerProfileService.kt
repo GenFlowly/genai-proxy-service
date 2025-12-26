@@ -1,6 +1,8 @@
-package service
+package com.genflowly.service
 
 import com.genflowly.models.api.CreateInstructionResponse
+import com.genflowly.models.api.GetCustomerInstructionListResponse
+import com.genflowly.models.api.InstructionResponseItem
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.AIMode
@@ -57,6 +59,16 @@ class CustomerProfileService(
         }
 
         // New user path
+        return handleNewUserOnboarding(sub, client, email, name, picture)
+    }
+
+    private suspend fun handleNewUserOnboarding(
+        sub: String,
+        client: String,
+        email: String?,
+        name: String?,
+        picture: String?
+    ): models.CustomerProfile {
         val newCustomerId = generateCustomerId()
         dynamoDBProvider.onboardCustomer(
             sub,
@@ -71,6 +83,14 @@ class CustomerProfileService(
         AIVendor.entries.forEach { vendor ->
             dynamoDBProvider.initCustomerApiKey(newCustomerId, vendor.name)
         }
+
+        // Create default instruction
+        createInstruction(
+            customerId = newCustomerId,
+            instructionName = "You are a helpful assistant",
+            instruction = "You are a helpful assistant",
+            existingInstructionId = null
+        )
         
         logger.info { "New user onboarded with customerId=$newCustomerId" }
         return models.CustomerProfile(
@@ -155,6 +175,37 @@ class CustomerProfileService(
             version = version,
             instructionName = instructionName
         )
+    }
+
+    suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse {
+        val instructions = dynamoDBProvider.getInstructionsByCreator(customerId)
+        
+        val responseItems = instructions.map { instruction ->
+            InstructionResponseItem(
+                id = instruction.id,
+                name = instruction.name,
+                version = instruction.version ?: 1,
+                instruction = instruction.instructions
+            )
+        }
+        
+        return GetCustomerInstructionListResponse(
+            instructions = responseItems
+        )
+    }
+
+    suspend fun getLatestCustomerInstructions(customerId: String): List<InstructionResponseItem> {
+        val response = getCustomerInstructions(customerId)
+        
+        // Group by ID and find max version for each
+        return response.instructions
+            .groupBy { it.id }
+            .mapValues { (_, versions) -> 
+                versions.maxByOrNull { it.version } 
+            }
+            .values
+            .filterNotNull()
+            .sortedByDescending { it.version }
     }
 }
 

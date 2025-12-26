@@ -13,6 +13,7 @@ import io.ktor.server.routing.*
 import service.AIRequestManager
 import service.CustomerProfileService
 import com.genflowly.activity.registerGetConversationRoutes
+import com.genflowly.activity.registerGetCustomerInstructionListRoutes
 import com.genflowly.service.ConversationService
 
 object Routes {
@@ -26,6 +27,7 @@ object Routes {
     const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
     const val GET_CONVERSATION = "$API_V1/chat"
     const val CREATE_INSTRUCTION = "$API_V1/instruction"
+    const val GET_CUSTOMER_INSTRUCTIONS = "$API_V1/instructions"
 }
 
 
@@ -50,5 +52,6 @@ fun Application.configureRouting(
         registerGetConversationRoutes(customerProfileService, conversationService)
         registerCreateInstructionRoutes(aiRequestManager,
             customerProfileService)
+        registerGetCustomerInstructionListRoutes(customerProfileService)
     }
 }
