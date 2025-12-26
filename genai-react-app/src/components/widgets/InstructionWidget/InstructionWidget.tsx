@@ -9,15 +9,17 @@ import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
 import styles from './InstructionWidget.module.scss'
 
+import { useAuth0 } from '@auth0/auth0-react'
+import { createInstruction } from '../../../services/instructionService'
+import { CreateInstructionResponse } from '../../../models/instruction.models'
+
 export default function InstructionWidget() {
     const {
         systemPrompt,
         setSystemPrompt,
-        addNewConversationBlockWithId,
-        updateResponseInConversationBlock,
-        generateResponses
     } = useConversation()
 
+    const { getAccessTokenSilently } = useAuth0()
     // Use LayoutContext for expansion state
     const { isInstructionWidgetExpanded, setInstructionWidgetExpanded } = useLayout()
 
@@ -32,20 +34,25 @@ export default function InstructionWidget() {
         setPrompt(systemPrompt)
     }, [systemPrompt])
 
-    const handleGenerate = async () => {
-        if (!prompt.trim() || !hasAnyValidApiKey) return
+    const handleCreateInstruction = async () => {
+        if (!prompt.trim()) return
 
         setIsLoading(true)
-        setSystemPrompt(prompt)
+        try {
+            const token = await getAccessTokenSilently()
+            const response: CreateInstructionResponse = await createInstruction(token, {
+                instruction: prompt,
+                instructionName: "test"
+            })
 
-        const newBlockId = `conv-${Date.now()}`
-        addNewConversationBlockWithId(newBlockId)
-        updateResponseInConversationBlock(newBlockId, prompt)
-
-        await generateResponses(newBlockId, prompt)
-
-        setIsLoading(false)
-        setInstructionWidgetExpanded(false) // Collapse after generation
+            setSystemPrompt(prompt)
+            setInstructionWidgetExpanded(false) // Collapse after generation
+        } catch (error) {
+            console.error("Failed to save instruction", error)
+            // Optionally add user notify here
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     if (!isInstructionWidgetExpanded) {
@@ -74,10 +81,10 @@ export default function InstructionWidget() {
             <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
                 <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
                     <MultiPurposeButton
-                        onClick={handleGenerate}
+                        onClick={handleCreateInstruction}
                         label={isLoading ? 'Processing...' : 'Save' +
                             ' Instructions'}
-                        disabled={isLoading || !hasAnyValidApiKey || !prompt.trim()}
+                        disabled={isLoading || !prompt.trim()}
                         icon={ICONS.SAVE_ICON}
                     />
                 </div>

@@ -11,4 +11,5 @@ export const endpoints = {
     batchGenerateText: `${BASE}${API_PREFIX}/batch-generate-text`,
     getTextGenerationModels: `${BASE}${API_PREFIX}/models`,
     saveAIConfig: `${BASE}${API_PREFIX}/save-ai-config`,
+    createInstruction: `${BASE}${API_PREFIX}/instruction`,
 };
