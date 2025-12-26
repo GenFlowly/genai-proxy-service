@@ -132,14 +132,7 @@ class AIRequestManager(
 
         var responseText: String?
 
-        // Step 1: Fetch API key for 3rd party AI vendor
-        val apiKey = fetchApiKey(
-            aiVendor,
-            message.customerId,
-            customerProfileService
-        )
-
-        // Step 2: Build conversation history for prompt
+        // Step 1: Build conversation history for prompt
         val promptWithContext = includeThreadContextInPrompt(
             message.conversationId,
             message.messageId,
@@ -148,76 +141,14 @@ class AIRequestManager(
 
 
         logger.info("Sending prompt with context = {}", promptWithContext)
-
-        // Step 3: Call respective 3rd party AI vendor API
-        try {
-            // Step 4: Start timer for 3rd party API call
-            val startTime = System.currentTimeMillis()
-
-            val aiResponse = when (aiVendor) {
-                AIVendor.OPENAI -> {
-                    val params = aiRequestService.buildOpenAIRequest(
-                        promptWithContext,
-                        model,
-                        message.systemPrompt
-                    )
-                    val httpClient = aiRequestService.getOpenAIProvider(apiKey)
-                    httpClient.generateResponse(
-                        com.genflowly.aicallerlib.models.openai.OpenAIRequest(
-                            params
-                        )
-                    )
-                }
-
-                AIVendor.GEMINI -> {
-                    val params = aiRequestService.buildGeminiRequest(
-                        promptWithContext,
-                        model,
-                        message.systemPrompt
-                    )
-                    val httpClient = aiRequestService.getGeminiProvider(apiKey)
-                    httpClient.generateResponse(
-                        com.genflowly.aicallerlib.models.gemini.GeminiRequest(
-                            params
-                        )
-                    )
-                }
-
-                AIVendor.CLAUDE -> {
-                    val params = aiRequestService.buildClaudeRequest(
-                        promptWithContext,
-                        model,
-                        message.systemPrompt
-                    )
-                    val httpClient = aiRequestService.getClaudeProvider(apiKey)
-                    httpClient.generateResponse(
-                        com.genflowly.aicallerlib.models.claude.ClaudeRequest(
-                            params
-                        )
-                    )
-                }
-            }
-
-
-            // Step 5: Stop timer for 3rd party API call
-            val durationMs = System.currentTimeMillis() - startTime
-
-            // Step 6: Null check response and throw exception if null
-            responseText = aiResponse.getText()
-
-            logger.info(
-                "AI response received: vendor={}, model={}, " +
-                        "responseText={}, durationMs={}",
-                aiVendor,
-                model,
-                responseText,
-                durationMs
-            )
-
-        } catch (e: Exception) {
-            responseText = "Error occurred while generating response from " +
-                    "$aiVendor - ${e.message}"
-        }
+        
+        responseText = generateText(
+            aiVendor, 
+            model, 
+            promptWithContext, 
+            message.systemPrompt, 
+            message.customerId
+        )
 
         val responseMessage: Message
         if (!responseText.isNullOrBlank()) {
@@ -254,5 +185,90 @@ class AIRequestManager(
 
         // Step 5 - Return response message from the respective AI vendor
         return responseMessage
+    }
+    
+    suspend fun generateText(
+        aiVendor: AIVendor,
+        model: String,
+        prompt: String,
+        systemPrompt: String?,
+        customerId: String
+    ): String {
+        try {
+            // Step 1: Fetch API key for 3rd party AI vendor
+            val apiKey = fetchApiKey(
+                aiVendor,
+                customerId,
+                customerProfileService
+            )
+
+            // Step 2: Start timer for 3rd party API call
+            val startTime = System.currentTimeMillis()
+
+            val aiResponse = when (aiVendor) {
+                AIVendor.OPENAI -> {
+                    val params = aiRequestService.buildOpenAIRequest(
+                        prompt,
+                        model,
+                        systemPrompt ?: ""
+                    )
+                    val httpClient = aiRequestService.getOpenAIProvider(apiKey)
+                    httpClient.generateResponse(
+                        com.genflowly.aicallerlib.models.openai.OpenAIRequest(
+                            params
+                        )
+                    )
+                }
+
+                AIVendor.GEMINI -> {
+                    val params = aiRequestService.buildGeminiRequest(
+                        prompt,
+                        model,
+                        systemPrompt ?: ""
+                    )
+                    val httpClient = aiRequestService.getGeminiProvider(apiKey)
+                    httpClient.generateResponse(
+                        com.genflowly.aicallerlib.models.gemini.GeminiRequest(
+                            params
+                        )
+                    )
+                }
+
+                AIVendor.CLAUDE -> {
+                    val params = aiRequestService.buildClaudeRequest(
+                        prompt,
+                        model,
+                        systemPrompt ?: ""
+                    )
+                    val httpClient = aiRequestService.getClaudeProvider(apiKey)
+                    httpClient.generateResponse(
+                        com.genflowly.aicallerlib.models.claude.ClaudeRequest(
+                            params
+                        )
+                    )
+                }
+            }
+
+
+            // Step 3: Stop timer for 3rd party API call
+            val durationMs = System.currentTimeMillis() - startTime
+
+            // Step 4: Null check response and throw exception if null
+            val responseText = aiResponse.getText() ?: ""
+
+            logger.info(
+                "AI response received: vendor={}, model={}, " +
+                        "responseText={}, durationMs={}",
+                aiVendor,
+                model,
+                responseText,
+                durationMs
+            )
+            return responseText
+
+        } catch (e: Exception) {
+            return "Error occurred while generating response from " +
+                    "$aiVendor - ${e.message}"
+        }
     }
 }

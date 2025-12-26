@@ -48,6 +48,7 @@ fun Application.configureRouting(
         registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
-        registerCreateInstructionRoutes(customerProfileService)
+        registerCreateInstructionRoutes(aiRequestManager,
+            customerProfileService)
     }
 }

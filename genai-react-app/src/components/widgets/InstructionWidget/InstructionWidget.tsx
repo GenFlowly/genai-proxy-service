@@ -41,8 +41,7 @@ export default function InstructionWidget() {
         try {
             const token = await getAccessTokenSilently()
             const response: CreateInstructionResponse = await createInstruction(token, {
-                instruction: prompt,
-                instructionName: "test"
+                instruction: prompt
             })
 
             setSystemPrompt(prompt)
