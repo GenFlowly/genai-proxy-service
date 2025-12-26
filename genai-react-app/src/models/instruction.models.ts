@@ -1,6 +1,6 @@
 export interface CreateInstructionRequest {
     instruction: string;
-    instructionName: string;
+    instructionName?: string | null;
     existingInstructionId?: string | null;
 }
 
