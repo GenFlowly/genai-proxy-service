@@ -2,8 +2,25 @@ import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import {
     CreateInstructionRequest,
-    CreateInstructionResponse
+    CreateInstructionResponse,
+    GetCustomerInstructionListResponse
 } from "../models/instruction.models";
+
+export async function getCustomerInstructions(token: string): Promise<GetCustomerInstructionListResponse> {
+    const response = await fetch(endpoints.getCustomerInstructions, {
+        method: HttpMethod.GET,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Get Instructions failed: ${response.status} ${response.statusText}`)
+    }
+
+    return (await response.json()) as GetCustomerInstructionListResponse
+}
 
 export async function createInstruction(
     token: string,

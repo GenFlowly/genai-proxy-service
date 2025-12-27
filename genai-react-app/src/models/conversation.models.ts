@@ -30,7 +30,7 @@ export interface ConversationBlock {
  * - generation workflow
  * - selected response per block
  */
-export interface ConversationContextType {
+export interface IConversationContext {
     conversationBlockList: ConversationBlock[]
     conversationId: string
     systemPrompt: string
@@ -46,4 +46,8 @@ export interface ConversationContextType {
     getSelectedResponseForBlock: (blockId: string) => string | null
     loadConversation: (id: string) => Promise<void>
     resetConversation: () => void
+
+    /** Active Instruction Management */
+    selectedInstructionId: string | null
+    setSelectedInstructionId: (id: string | null) => void
 }

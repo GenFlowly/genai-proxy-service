@@ -26,8 +26,10 @@ fun Route.registerCreateInstructionRoutes(
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val request = call.receive<CreateInstructionRequest>()
 
-                val instructionName = aiRequestManager
-                    .generateText(
+                val instructionName = if (!request.instructionName.isNullOrBlank()) {
+                    request.instructionName
+                } else {
+                    aiRequestManager.generateText(
                         AIVendor.OPENAI,
                         "gpt-3.5-turbo",
                         request.instruction,
@@ -39,6 +41,7 @@ fun Route.registerCreateInstructionRoutes(
                                 "Return only the name of Role, nothing else",
                         customerId
                     )
+                }
                 val response = customerProfileService.createInstruction(
                     customerId, instructionName, request.instruction,
                     request.existingInstructionId)

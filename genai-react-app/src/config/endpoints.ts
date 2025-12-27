@@ -12,4 +12,5 @@ export const endpoints = {
     getTextGenerationModels: `${BASE}${API_PREFIX}/models`,
     saveAIConfig: `${BASE}${API_PREFIX}/save-ai-config`,
     createInstruction: `${BASE}${API_PREFIX}/instruction`,
+    getCustomerInstructions: `${BASE}${API_PREFIX}/instructions`,
 };
