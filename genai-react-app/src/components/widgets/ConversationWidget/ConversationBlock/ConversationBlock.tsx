@@ -48,7 +48,7 @@ export default function ConversationBlock({ id }: { id: string }) {
 
             // Scroll to the existing block
             setTimeout(() => {
-                const last = document.querySelector(`.${styles.conversationBlock}:last-child`)
+                const last = document.querySelector(`.conversation-block-item:last-child`)
                 last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }, 100)
         } else {
@@ -59,14 +59,14 @@ export default function ConversationBlock({ id }: { id: string }) {
 
             // Scroll to new block
             setTimeout(() => {
-                const last = document.querySelector(`.${styles.conversationBlock}:last-child`)
+                const last = document.querySelector(`.conversation-block-item:last-child`)
                 last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }, 300)
         }
     }
 
     return (
-        <div className={styles.conversationBlock} data-block-id={id}>
+        <div className={`${styles.conversationBlock} conversation-block-item`} data-block-id={id}>
             <Request blockId={id} />
 
             {conversationBlock.responseMessages.length > 0 && (
