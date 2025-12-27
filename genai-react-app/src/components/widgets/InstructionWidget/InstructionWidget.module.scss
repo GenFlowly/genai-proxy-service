@@ -78,3 +78,34 @@
     transition: color 0.2s ease;
     // Opacity is not needed if we control color directly
 }
+
+.metadataHeader {
+    font-size: 0.875rem; // 14px
+    color: $color-text-primary;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.titleGroup {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.instructionName {
+    font-weight: 600;
+    color: $color-text-primary;
+}
+
+.cancelButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: $color-text-secondary;
+    font-size: 0.75rem; // 12px
+
+    &:hover {
+        color: $color-text-primary;
+    }
+}

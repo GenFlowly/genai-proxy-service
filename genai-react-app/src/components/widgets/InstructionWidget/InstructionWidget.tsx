@@ -5,6 +5,7 @@ import MultiPurposeButton from '../../common/MultiPurposeButton/MultiPurposeButt
 import Tooltip from '../../common/Tooltip/Tooltip'
 import { Icon } from '../../common/Icon/Icon'
 import { InputTextWithHint } from '../../common/InputTextWithHint/InputTextWithHint'
+import { InputSelectWithHint, SelectOption } from '../../common/InputSelectWithHint/InputSelectWithHint'
 import { useConversation } from '../../../context/ConversationContext'
 import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
@@ -33,21 +34,35 @@ export default function InstructionWidget() {
     const [isLoading, setIsLoading] = useState(false)
     const [instructionName, setInstructionName] = useState('')
     const [isEditingName, setIsEditingName] = useState(false)
+    const [selectedVersion, setSelectedVersion] = useState<number | null>(null)
 
-    // Sync local prompt and name with global system when expanded or changed
+    // Reset/Init version when ID changes (default to latest)
     useEffect(() => {
-        setPrompt(systemPrompt)
         if (selectedInstructionId) {
-            // Find latest version of current selection to populate name
             const matching = customerInstructions.filter(i => i.id === selectedInstructionId)
             const latest = matching.sort((a, b) => b.version - a.version)[0]
             if (latest) {
-                setInstructionName(latest.name)
+                setSelectedVersion(latest.version)
             }
         } else {
+            setSelectedVersion(null)
+        }
+    }, [selectedInstructionId, customerInstructions])
+
+    // Sync content when ID OR Version changes
+    useEffect(() => {
+        if (selectedInstructionId && selectedVersion !== null) {
+            const matching = customerInstructions.find(i => i.id === selectedInstructionId && i.version === selectedVersion)
+            if (matching) {
+                setPrompt(matching.instruction)
+                setInstructionName(matching.name)
+            }
+        } else if (!selectedInstructionId) {
+            // Fallback for new creation or empty state
+            setPrompt(systemPrompt)
             setInstructionName('')
         }
-    }, [systemPrompt, selectedInstructionId, customerInstructions])
+    }, [systemPrompt, selectedInstructionId, selectedVersion, customerInstructions])
 
     const handleCreateInstruction = async () => {
         if (!prompt.trim()) return
@@ -106,43 +121,83 @@ export default function InstructionWidget() {
             {selectedInstructionId && (() => {
                 // Find all versions of this instruction
                 const versions = customerInstructions.filter(i => i.id === selectedInstructionId)
-                // Sort by version desc and take first (latest)
-                const selected = versions.sort((a, b) => b.version - a.version)[0]
+                const sortedVersions = versions.sort((a, b) => b.version - a.version)
 
+                // Ensure we have a valid selection to display
+                const currentDisplayFunc = () => {
+                    if (selectedVersion) {
+                        return sortedVersions.find(v => v.version === selectedVersion)
+                    }
+                    return sortedVersions[0]
+                }
+                const selected = currentDisplayFunc()
                 if (!selected) return null
 
+                const versionOptions: SelectOption[] = sortedVersions.map(v => ({
+                    label: v.version.toString(),
+                    value: v.version.toString()
+                }))
+
                 return (
-                    <div className={styles.metadataContainer} style={{ marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {isEditingName ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <InputTextWithHint
-                                    hint="Name"
-                                    value={instructionName}
-                                    onChange={(e) => setInstructionName(e.target.value)}
-                                    placeholder="Instruction Name"
-                                    className={styles.nameInput}
-                                />
-                                <button onClick={() => setIsEditingName(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666', fontSize: '12px' }}>
-                                    Cancel
-                                </button>
+                    // Match PromptEditor structure:
+                    // 1. Outer Container Padding (0 3rem)
+                    // 2. Inner Container Max Width (88rem) + Gap (1rem)
+                    // 3. Spacers (2rem)
+                    <div style={{ width: '100%', padding: '0 3rem', display: 'flex', justifyContent: 'center' }}>
+                        <div style={{ width: '100%', maxWidth: '88rem', display: 'flex', gap: '1rem' }}>
+                            {/* Left Spacer to match Editor Spacer */}
+                            <div style={{ width: '2rem', flexShrink: 0 }} />
+
+                            {/* Main Content Area - Aligning with Editor Box */}
+                            <div className={styles.metadataContainer} style={{ flex: 1, marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {isEditingName ? (
+                                    <div className={styles.titleGroup}>
+                                        <InputTextWithHint
+                                            hint="Name"
+                                            value={instructionName}
+                                            onChange={(e) => setInstructionName(e.target.value)}
+                                            placeholder="Instruction Name"
+                                            className={styles.nameInput}
+                                        />
+                                        <button onClick={() => setIsEditingName(false)} className={styles.cancelButton}>
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className={styles.metadataHeader}>
+                                        <div className={styles.titleGroup}>
+                                            <span className={styles.instructionName}>{selected.name}</span>
+                                            <button
+                                                onClick={() => {
+                                                    setInstructionName(selected.name)
+                                                    setIsEditingName(true)
+                                                }}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                                            >
+                                                <Icon src={ICONS.EDIT} size={14} className={styles.editIcon} />
+                                            </button>
+                                        </div>
+                                        <div style={{ width: '140px' }}>
+                                            <InputSelectWithHint
+                                                hint="Version"
+                                                value={selected.version.toString()}
+                                                onChange={(val) => {
+                                                    const newVersion = parseInt(val, 10)
+                                                    if (!isNaN(newVersion)) {
+                                                        setSelectedVersion(newVersion)
+                                                    }
+                                                }}
+                                                options={versionOptions}
+                                                className={styles.versionSelect}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        ) : (
-                            <div style={{ fontSize: '14px', color: '#333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontWeight: 600 }}>{selected.name}</span>
-                                    <button
-                                        onClick={() => {
-                                            setInstructionName(selected.name)
-                                            setIsEditingName(true)
-                                        }}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                                    >
-                                        <Icon src={ICONS.EDIT} size={14} className={styles.editIcon} />
-                                    </button>
-                                </div>
-                                <span style={{ fontSize: '12px', color: '#666' }}>v{selected.version}</span>
-                            </div>
-                        )}
+
+                            {/* Right Spacer to match Editor ControlsRow */}
+                            <div style={{ width: '2rem', flexShrink: 0 }} />
+                        </div>
                     </div>
                 )
             })()}
