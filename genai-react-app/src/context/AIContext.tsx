@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { AIVendor } from '../constants/vendors'
 import { countTokens } from '../utils/tokenizer'
-import { InstructionResponseItem } from '../models/instruction.models'
+import { InstructionResponse } from '../models/instruction.models'
 import { useAuth } from './AuthContext'
 
 export interface AIConfig {
@@ -22,7 +22,7 @@ interface AIContextType {
     setActiveBlockId: (id: string) => void
     supplementalText: string
     setSupplementalText: (text: string) => void
-    customerInstructions: InstructionResponseItem[]
+    customerInstructions: InstructionResponse[]
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined)

@@ -4,19 +4,13 @@ export interface CreateInstructionRequest {
     existingInstructionId?: string | null;
 }
 
-export interface CreateInstructionResponse {
+export interface InstructionResponse {
     id: string;
     version: number;
     name: string;
-}
-
-export interface InstructionResponseItem {
-    id: string;
-    name: string;
-    version: number;
     instruction: string;
 }
 
 export interface GetCustomerInstructionListResponse {
-    instructions: InstructionResponseItem[];
+    instructions: InstructionResponse[];
 }

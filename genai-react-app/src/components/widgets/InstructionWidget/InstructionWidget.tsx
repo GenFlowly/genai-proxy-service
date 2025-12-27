@@ -13,7 +13,7 @@ import styles from './InstructionWidget.module.scss'
 
 import { useAuth0 } from '@auth0/auth0-react'
 import { createInstruction, getInstructionVersion } from '../../../services/instructionService'
-import { CreateInstructionResponse } from '../../../models/instruction.models'
+import { InstructionResponse } from '../../../models/instruction.models'
 
 export default function InstructionWidget() {
     const {
@@ -51,6 +51,8 @@ export default function InstructionWidget() {
 
     // Sync content when ID OR Version changes
     // Sync content when ID changes (initial load of latest)
+    // Sync content when ID OR Version changes
+    // Sync content when ID changes (initial load of latest)
     useEffect(() => {
         if (selectedInstructionId && selectedVersion !== null) {
             // Only sync if we suspect we are viewing the latest (which is loaded in customerInstructions)
@@ -70,15 +72,16 @@ export default function InstructionWidget() {
             setPrompt(systemPrompt)
             setInstructionName('')
         }
-    }, [selectedInstructionId, customerInstructions])
+    }, [selectedInstructionId, customerInstructions, selectedVersion])
 
+    // ... (existing handlers)
     const handleCreateInstruction = async () => {
         if (!prompt.trim()) return
 
         setIsLoading(true)
         try {
             const token = await getAccessTokenSilently()
-            const response: CreateInstructionResponse = await createInstruction(token, {
+            const response: InstructionResponse = await createInstruction(token, {
                 instruction: prompt,
                 instructionName: instructionName || undefined,
                 existingInstructionId: selectedInstructionId || undefined
@@ -127,24 +130,13 @@ export default function InstructionWidget() {
         <div className={styles.container}>
             {/* Metadata Display / Edit */}
             {selectedInstructionId && (() => {
-                // Find all versions of this instruction
-                const versions = customerInstructions.filter(i => i.id === selectedInstructionId)
-                const sortedVersions = versions.sort((a, b) => b.version - a.version)
+                // Find latest version of this instruction to establish baseline
+                const latest = customerInstructions.find(i => i.id === selectedInstructionId)
 
-                // Ensure we have a valid selection to display
-                const currentDisplayFunc = () => {
-                    if (selectedVersion) {
-                        return sortedVersions.find(v => v.version === selectedVersion)
-                    }
-                    return sortedVersions[0]
-                }
-                const selected = currentDisplayFunc()
-                if (!selected) return null
+                if (!latest) return null
 
-                const versionOptions: SelectOption[] = sortedVersions.map(v => ({
-                    label: v.version.toString(),
-                    value: v.version.toString()
-                }))
+                // Determine max version from the latest record
+                const latestVersion = latest.version
 
                 return (
                     // Match PromptEditor structure:
@@ -174,10 +166,10 @@ export default function InstructionWidget() {
                                 ) : (
                                     <div className={styles.metadataHeader}>
                                         <div className={styles.titleGroup}>
-                                            <span className={styles.instructionName}>{instructionName || sortedVersions[0].name}</span>
+                                            <span className={styles.instructionName}>{instructionName || latest.name}</span>
                                             <button
                                                 onClick={() => {
-                                                    setInstructionName(sortedVersions[0].name)
+                                                    setInstructionName(instructionName || latest.name)
                                                     setIsEditingName(true)
                                                 }}
                                                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
@@ -208,9 +200,8 @@ export default function InstructionWidget() {
                                                 }}
                                                 options={(() => {
                                                     // Generate options 1..latestVersion
-                                                    const latestFn = sortedVersions[0].version
                                                     // ensure we at least have 1
-                                                    const maxVer = Math.max(latestFn, 1)
+                                                    const maxVer = Math.max(latestVersion, 1)
                                                     const opts = []
                                                     for (let i = maxVer; i >= 1; i--) {
                                                         opts.push({

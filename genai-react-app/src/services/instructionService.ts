@@ -2,9 +2,8 @@ import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import {
     CreateInstructionRequest,
-    CreateInstructionResponse,
     GetCustomerInstructionListResponse,
-    InstructionResponseItem
+    InstructionResponse
 } from "../models/instruction.models";
 
 export async function getCustomerInstructions(token: string): Promise<GetCustomerInstructionListResponse> {
@@ -26,7 +25,7 @@ export async function getCustomerInstructions(token: string): Promise<GetCustome
 export async function createInstruction(
     token: string,
     request: CreateInstructionRequest
-): Promise<CreateInstructionResponse> {
+): Promise<InstructionResponse> {
     const response = await fetch(endpoints.createInstruction, {
         method: HttpMethod.POST,
         headers: {
@@ -40,7 +39,7 @@ export async function createInstruction(
         throw new Error(`Create Instruction failed: ${response.status} ${response.statusText}`)
     }
 
-    return (await response.json()) as CreateInstructionResponse
+    return (await response.json()) as InstructionResponse
 }
 
 
@@ -51,7 +50,7 @@ export async function getInstructionVersion(
     token: string,
     instructionId: string,
     version: number
-): Promise<InstructionResponseItem> {
+): Promise<InstructionResponse> {
     // Use the same endpoint base as createInstruction, but GET with params
     // Route: /api/v1/instruction/{instructionId}/{version}
     const url = `${endpoints.createInstruction}/${instructionId}/${version}`
@@ -68,5 +67,5 @@ export async function getInstructionVersion(
         throw new Error(`Get Instruction Version failed: ${response.status} ${response.statusText}`)
     }
 
-    return (await response.json()) as InstructionResponseItem
+    return (await response.json()) as InstructionResponse
 }

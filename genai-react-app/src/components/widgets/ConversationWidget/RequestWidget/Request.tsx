@@ -72,7 +72,7 @@ export default function Request({ blockId }: RequestProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [blockId]) // Run on mount/id change
 
-    const handleEditorChange = (newValue: string) => {
+    const handleEditorChange = React.useCallback((newValue: string) => {
         // Ensure we are the active block
         setActiveBlockId(blockId)
 
@@ -96,7 +96,7 @@ export default function Request({ blockId }: RequestProps) {
         aiContextTimerRef.current = setTimeout(() => {
             setPrompt(newValue)
         }, 500)
-    }
+    }, [blockId, setActiveBlockId, setPrompt, STORAGE_KEY])
 
     // Cleanup timers
     useEffect(() => {
