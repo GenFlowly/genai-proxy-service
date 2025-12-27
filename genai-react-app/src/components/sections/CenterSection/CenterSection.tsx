@@ -12,7 +12,9 @@ export default function CenterSection() {
     return (
         <div className={styles.centerSection}>
             <div className={styles.contentWrapper}>
-                <InstructionWidget />
+                <div id="instruction-widget-scroll-anchor" style={{ width: '100%' }}>
+                    <InstructionWidget />
+                </div>
                 {conversationBlockList.map(block => (
                     <ConversationBlock key={block.conversationBlockId} id={block.conversationBlockId} />
                 ))}
