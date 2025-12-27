@@ -8,7 +8,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { AuthContextType, User } from '../types/auth.types'
 import { onboardCustomer } from '../services/onboardUserService'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
-import { InstructionResponseItem } from '../models/instruction.models'
+import { InstructionResponse } from '../models/instruction.models'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     )
     const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
     const [aiConfigPreferences, setAiConfigPreferences] = useState<AuthContextType['aiConfigPreferences']>(null)
-    const [customerInstructions, setCustomerInstructions] = useState<InstructionResponseItem[]>([])
+    const [customerInstructions, setCustomerInstructions] = useState<InstructionResponse[]>([])
     const [isInternalLoading, setIsInternalLoading] = useState(false)
 
     // Persist customerId & Load cached prefs
@@ -130,7 +130,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         }
     }
 
-    const updateInstruction = (instruction: InstructionResponseItem) => {
+    const updateInstruction = (instruction: InstructionResponse) => {
         setCustomerInstructions(prev => {
             // Check if this specific version already exists
             const index = prev.findIndex(item => item.id === instruction.id && item.version === instruction.version)
