@@ -30,6 +30,7 @@ export default function NewChatWidget(): React.ReactElement {
                     onClick={resetConversation}
                     icon={ICONS.PLUS}
                     className={styles.fullWidthButton}
+                    variant={"secondary"}
                 />
             </div>
         </SidebarWidgetContainer>

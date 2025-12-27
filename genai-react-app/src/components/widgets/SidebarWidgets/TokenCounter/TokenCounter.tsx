@@ -1,13 +1,64 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 import { Icon } from '../../../common/Icon/Icon'
 import { ICONS } from '../../../../constants/icons'
 import Tooltip from '../../../common/Tooltip/Tooltip'
+import { countTokens } from '../../../../utils/tokenizer'
+import { AIVendor } from '../../../../constants/vendors'
 
 export default function TokenCounter() {
-    const { ai } = useSidebarWidget()
-    const { tokenCount, isTokenLoading } = ai
+    const { conversation, ai } = useSidebarWidget()
+    const { editorPrompt } = conversation
+    const { supplementalText, config } = ai
+
+    const [tokenCount, setTokenCount] = useState(0)
+    const [isTokenLoading, setIsTokenLoading] = useState(false)
+
+    useEffect(() => {
+        const calculateTokens = async () => {
+            const fullText = (editorPrompt || '') + (supplementalText || '')
+            if (!fullText.trim()) {
+                setTokenCount(0)
+                return
+            }
+
+            // 3. Get Model (Assumes OpenAI for counting)
+            // 3. Get Model (Assumes OpenAI for counting)
+            const openaiConfig = config.find(c => c.aiVendor === AIVendor.OPENAI && !!c.model?.trim())
+            // Fallback to gpt-4o if no config found (for debugging/robustness)
+            const model = openaiConfig?.model || 'gpt-4o'
+
+            console.log('[TokenCounter] Debug:', {
+                editorPromptLength: editorPrompt?.length,
+                supplementalTextLength: supplementalText?.length,
+                configLength: config?.length,
+                foundModel: model,
+                fullTextLength: fullText.length,
+                usingFallback: !openaiConfig?.model
+            })
+
+            if (!model) {
+                // Should be unreachable now with fallback
+                setTokenCount(0)
+                return
+            }
+
+            setIsTokenLoading(true)
+            try {
+                const count = await countTokens(fullText, model)
+                setTokenCount(count)
+            } catch (err) {
+                console.error('Token counting failed:', err)
+                setTokenCount(0)
+            } finally {
+                setIsTokenLoading(false)
+            }
+        }
+
+        const timeout = setTimeout(calculateTokens, 500)
+        return () => clearTimeout(timeout)
+    }, [editorPrompt, supplementalText, config])
 
     // Collapsed Content
     const headerCollapsed = (

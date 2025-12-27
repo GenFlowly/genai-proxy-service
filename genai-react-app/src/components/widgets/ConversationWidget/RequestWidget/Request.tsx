@@ -4,7 +4,6 @@ import PromptEditor from '../../PromptEditorWidget/PromptEditor'
 import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
 import Tooltip from '../../../common/Tooltip/Tooltip'
 import { useConversation } from '../../../../context/ConversationContext'
-import { useAI } from '../../../../context/AIContext'
 import { useAuth } from '../../../../context/AuthContext'
 import TextContainer from '../../../common/TextContainer/TextContainer'
 import styles from './Request.module.scss'
@@ -17,7 +16,9 @@ export default function Request({ blockId }: RequestProps) {
     const {
         conversationBlockList,
         generateResponses,
-        getSelectedResponseForBlock
+        getSelectedResponseForBlock,
+        setEditorPrompt,
+        setActiveBlockId
     } = useConversation()
 
     const { aiVendorAPIKeyStatusList } = useAuth()
@@ -29,10 +30,9 @@ export default function Request({ blockId }: RequestProps) {
     const [draftPrompt, setDraftPrompt] = React.useState(conversationBlock?.prompt || '')
 
     // Dependencies moved from PromptEditor
-    const { setPrompt, setActiveBlockId } = useAI()
     const { customerId } = useAuth()
     const storageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-    const aiContextTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+    const contextTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
     const STORAGE_KEY = customerId ? `${customerId}_prompt_editor_content_conv-${blockId}` : ''
 
     // Load from localStorage only on mount if empty
@@ -67,7 +67,7 @@ export default function Request({ blockId }: RequestProps) {
         // Only sync if we are the "active" editing block (no responses yet)
         if (conversationBlock?.responseMessages.length === 0) {
             setActiveBlockId(blockId)
-            setPrompt(draftPrompt)
+            setEditorPrompt(draftPrompt)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [blockId]) // Run on mount/id change
@@ -91,18 +91,18 @@ export default function Request({ blockId }: RequestProps) {
             }
         }, 500)
 
-        // Debounce AI Context (Token Counting)
-        if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
-        aiContextTimerRef.current = setTimeout(() => {
-            setPrompt(newValue)
+        // Debounce Context (Token Counting)
+        if (contextTimerRef.current) clearTimeout(contextTimerRef.current)
+        contextTimerRef.current = setTimeout(() => {
+            setEditorPrompt(newValue)
         }, 500)
-    }, [blockId, setActiveBlockId, setPrompt, STORAGE_KEY])
+    }, [blockId, setActiveBlockId, setEditorPrompt, STORAGE_KEY])
 
     // Cleanup timers
     useEffect(() => {
         return () => {
             if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
-            if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
+            if (contextTimerRef.current) clearTimeout(contextTimerRef.current)
         }
     }, [])
 
