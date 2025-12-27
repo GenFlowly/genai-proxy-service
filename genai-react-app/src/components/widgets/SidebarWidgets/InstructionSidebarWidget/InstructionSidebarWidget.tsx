@@ -1,0 +1,51 @@
+import React from 'react'
+import { useAI } from '../../../../context/AIContext'
+import { useLayout } from '../../../../context/LayoutContext'
+import { Icon } from '../../../common/Icon/Icon'
+import { ICONS } from '../../../../constants/icons'
+import Tooltip from '../../../common/Tooltip/Tooltip'
+import styles from './InstructionSidebarWidget.module.scss'
+
+export default function InstructionSidebarWidget() {
+    const { systemPrompt } = useAI()
+    const { isLeftSidebarExpanded, setInstructionWidgetExpanded } = useLayout()
+    const collapsed = !isLeftSidebarExpanded
+
+    const handleClick = () => {
+        setInstructionWidgetExpanded(true)
+        // Scroll to instruction widget
+        setTimeout(() => {
+            const element = document.getElementById('instruction-widget-scroll-anchor')
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+        }, 100)
+    }
+
+    const content = (
+        <button
+            className={`${styles.instructionItem} ${collapsed ? styles.collapsed : ''}`}
+            onClick={handleClick}
+        >
+            <span className={styles.icon}>
+                <Icon src={ICONS.USER_ROLE} />
+            </span>
+            {!collapsed && <span className={styles.text}>Instructions</span>}
+        </button>
+    )
+
+    // Show tooltip on hover with system prompt text
+    // If empty, show "Instructions"
+    const tooltipContent = systemPrompt || 'Instructions'
+
+    // If collapsed, we might want to also show "Instructions" label or just the prompt
+    // User requirement: "when i hover, it will show instructions in tooltip"
+
+    return (
+        <div className={styles.widgetContainer}>
+            <Tooltip content={tooltipContent} position="right">
+                {content}
+            </Tooltip>
+        </div>
+    )
+}

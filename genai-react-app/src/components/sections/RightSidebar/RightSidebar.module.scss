@@ -3,4 +3,8 @@
 
 .sidebarWrapper {
   @include sidebar-base(left);
+
+  .collapseButton {
+    background-color: $color-sidebar-background;
+  }
 }
