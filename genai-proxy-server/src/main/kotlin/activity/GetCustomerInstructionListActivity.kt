@@ -19,11 +19,6 @@ fun Route.registerGetCustomerInstructionListRoutes(
         get(Routes.GET_CUSTOMER_INSTRUCTIONS) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
-                
-                if (customerId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, "User not authorized")
-                    return@get
-                }
 
                 val response = customerProfileService.getCustomerInstructions(customerId)
                 call.respond(response)

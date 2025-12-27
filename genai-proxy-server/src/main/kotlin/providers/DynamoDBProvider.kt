@@ -541,6 +541,27 @@ class DynamoDBProvider(
             item[INSTRUCTION_VERSION_KEY]?.n()?.toInt()
         }
 
+    suspend fun getInstruction(instructionId: String, version: Int): models.Instruction? =
+        withContext(Dispatchers.IO) {
+            val key = mapOf(
+                INSTRUCTION_ID_KEY to AttributeValue.builder().s(instructionId).build(),
+                INSTRUCTION_VERSION_KEY to AttributeValue.builder().n(version.toString()).build()
+            )
+
+            val request = GetItemRequest.builder()
+                .tableName(INSTRUCTION_TABLE)
+                .key(key)
+                .build()
+
+            val response = dynamoDbClient.getItem(request)
+            val item = response.item() ?: return@withContext null
+            
+            // Check if Item is empty (getItem returns empty map if not found sometimes? No, usually null or empty map)
+             if (item.isEmpty()) return@withContext null
+
+            itemToInstruction(item)
+        }
+
     suspend fun saveInstruction(instruction: models.Instruction) = withContext(Dispatchers.IO) {
         try {
             val item = withTimestamps(mapOf(

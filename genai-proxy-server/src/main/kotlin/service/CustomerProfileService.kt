@@ -1,8 +1,7 @@
 package com.genflowly.service
 
-import com.genflowly.models.api.CreateInstructionResponse
 import com.genflowly.models.api.GetCustomerInstructionListResponse
-import com.genflowly.models.api.InstructionResponseItem
+import com.genflowly.models.api.InstructionResponse
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.AIMode
@@ -148,7 +147,7 @@ class CustomerProfileService(
         instructionName: String,
         instruction: String,
         existingInstructionId: String?,
-    ): CreateInstructionResponse {
+    ): InstructionResponse {
         var instructionId = existingInstructionId
         var version = 1
 
@@ -170,10 +169,11 @@ class CustomerProfileService(
 
         dynamoDBProvider.saveInstruction(newInstruction)
 
-        return CreateInstructionResponse(
+        return InstructionResponse(
             id = instructionId,
             version = version,
-            instructionName = instructionName
+            name = instructionName,
+            instruction = instruction
         )
     }
 
@@ -184,7 +184,7 @@ class CustomerProfileService(
         val responseItems = instructions.sortedWith(
             compareBy<models.Instruction> { it.id }.thenByDescending { it.version }
         ).map { instruction ->
-            InstructionResponseItem(
+            InstructionResponse(
                 id = instruction.id,
                 name = instruction.name,
                 version = instruction.version ?: 1,
@@ -197,7 +197,7 @@ class CustomerProfileService(
         )
     }
 
-    suspend fun getLatestCustomerInstructions(customerId: String): List<InstructionResponseItem> {
+    suspend fun getLatestCustomerInstructions(customerId: String): List<InstructionResponse> {
         val response = getCustomerInstructions(customerId)
         
         // Group by ID and find max version for each
@@ -209,6 +209,26 @@ class CustomerProfileService(
             .values
             .filterNotNull()
             .sortedByDescending { it.version }
+    }
+
+    suspend fun getInstructionVersion(
+        customerId: String,
+        instructionId: String,
+        version: Int
+    ): InstructionResponse? {
+        val instruction = dynamoDBProvider.getInstruction(instructionId, version)
+        
+        // Ensure the instruction belongs to the customer
+        if (instruction == null || instruction.creator != customerId) {
+            return null
+        }
+
+        return InstructionResponse(
+            id = instruction.id,
+            version = instruction.version ?: 1,
+            name = instruction.name,
+            instruction = instruction.instructions // Add this locally to models
+        )
     }
 }
 

@@ -9,11 +9,6 @@ data class CreateInstructionRequest(
     val existingInstructionId: String? = null
 )
 
-@Serializable
-data class CreateInstructionResponse(
-    val id: String,
-    val version: Int,
-    val instructionName: String
-)
+
 
 
