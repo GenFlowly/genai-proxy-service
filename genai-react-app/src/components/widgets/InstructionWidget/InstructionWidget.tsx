@@ -12,7 +12,7 @@ import { useLayout } from '../../../context/LayoutContext'
 import styles from './InstructionWidget.module.scss'
 
 import { useAuth0 } from '@auth0/auth0-react'
-import { createInstruction } from '../../../services/instructionService'
+import { createInstruction, getInstructionVersion } from '../../../services/instructionService'
 import { CreateInstructionResponse } from '../../../models/instruction.models'
 
 export default function InstructionWidget() {
@@ -50,10 +50,18 @@ export default function InstructionWidget() {
     }, [selectedInstructionId, customerInstructions])
 
     // Sync content when ID OR Version changes
+    // Sync content when ID changes (initial load of latest)
     useEffect(() => {
         if (selectedInstructionId && selectedVersion !== null) {
-            const matching = customerInstructions.find(i => i.id === selectedInstructionId && i.version === selectedVersion)
-            if (matching) {
+            // Only sync if we suspect we are viewing the latest (which is loaded in customerInstructions)
+            // or if we just switched IDs.
+            // Actually, if we are fetching versions dynamically, relying on `customerInstructions` (which only has latest)
+            // might overwrite our fetched version if we are not careful.
+
+            // For now, let's only sync if the version matches the latest one we have in store
+            const matching = customerInstructions.find(i => i.id === selectedInstructionId)
+
+            if (matching && matching.version === selectedVersion) {
                 setPrompt(matching.instruction)
                 setInstructionName(matching.name)
             }
@@ -62,7 +70,7 @@ export default function InstructionWidget() {
             setPrompt(systemPrompt)
             setInstructionName('')
         }
-    }, [systemPrompt, selectedInstructionId, selectedVersion, customerInstructions])
+    }, [selectedInstructionId, customerInstructions])
 
     const handleCreateInstruction = async () => {
         if (!prompt.trim()) return
@@ -166,10 +174,10 @@ export default function InstructionWidget() {
                                 ) : (
                                     <div className={styles.metadataHeader}>
                                         <div className={styles.titleGroup}>
-                                            <span className={styles.instructionName}>{selected.name}</span>
+                                            <span className={styles.instructionName}>{instructionName || sortedVersions[0].name}</span>
                                             <button
                                                 onClick={() => {
-                                                    setInstructionName(selected.name)
+                                                    setInstructionName(sortedVersions[0].name)
                                                     setIsEditingName(true)
                                                 }}
                                                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
@@ -180,14 +188,38 @@ export default function InstructionWidget() {
                                         <div style={{ width: '140px' }}>
                                             <InputSelectWithHint
                                                 hint="Version"
-                                                value={selected.version.toString()}
-                                                onChange={(val) => {
+                                                value={selectedVersion?.toString() || ''}
+                                                onChange={async (val) => {
                                                     const newVersion = parseInt(val, 10)
                                                     if (!isNaN(newVersion)) {
                                                         setSelectedVersion(newVersion)
+                                                        setIsLoading(true)
+                                                        try {
+                                                            const token = await getAccessTokenSilently()
+                                                            const data = await getInstructionVersion(token, selectedInstructionId, newVersion)
+                                                            setPrompt(data.instruction || '')
+                                                            setInstructionName(data.name || '')
+                                                        } catch (e) {
+                                                            console.error("Failed to fetch version", e)
+                                                        } finally {
+                                                            setIsLoading(false)
+                                                        }
                                                     }
                                                 }}
-                                                options={versionOptions}
+                                                options={(() => {
+                                                    // Generate options 1..latestVersion
+                                                    const latestFn = sortedVersions[0].version
+                                                    // ensure we at least have 1
+                                                    const maxVer = Math.max(latestFn, 1)
+                                                    const opts = []
+                                                    for (let i = maxVer; i >= 1; i--) {
+                                                        opts.push({
+                                                            label: i.toString(),
+                                                            value: i.toString()
+                                                        })
+                                                    }
+                                                    return opts
+                                                })()}
                                                 className={styles.versionSelect}
                                             />
                                         </div>

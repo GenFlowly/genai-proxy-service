@@ -3,7 +3,8 @@ import { endpoints } from "../config/endpoints";
 import {
     CreateInstructionRequest,
     CreateInstructionResponse,
-    GetCustomerInstructionListResponse
+    GetCustomerInstructionListResponse,
+    InstructionResponseItem
 } from "../models/instruction.models";
 
 export async function getCustomerInstructions(token: string): Promise<GetCustomerInstructionListResponse> {
@@ -40,4 +41,32 @@ export async function createInstruction(
     }
 
     return (await response.json()) as CreateInstructionResponse
+}
+
+
+
+// ... (existing code)
+
+export async function getInstructionVersion(
+    token: string,
+    instructionId: string,
+    version: number
+): Promise<InstructionResponseItem> {
+    // Use the same endpoint base as createInstruction, but GET with params
+    // Route: /api/v1/instruction/{instructionId}/{version}
+    const url = `${endpoints.createInstruction}/${instructionId}/${version}`
+
+    const response = await fetch(url, {
+        method: HttpMethod.GET,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Get Instruction Version failed: ${response.status} ${response.statusText}`)
+    }
+
+    return (await response.json()) as InstructionResponseItem
 }

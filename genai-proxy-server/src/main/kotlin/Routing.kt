@@ -14,6 +14,7 @@ import service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.activity.registerGetConversationRoutes
 import com.genflowly.activity.registerGetCustomerInstructionListRoutes
+import com.genflowly.activity.registerGetInstructionVersionRoutes
 import com.genflowly.service.ConversationService
 
 object Routes {
@@ -28,6 +29,7 @@ object Routes {
     const val GET_CONVERSATION = "$API_V1/chat"
     const val CREATE_INSTRUCTION = "$API_V1/instruction"
     const val GET_CUSTOMER_INSTRUCTIONS = "$API_V1/instructions"
+    const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction"
 }
 
 
@@ -53,5 +55,6 @@ fun Application.configureRouting(
         registerCreateInstructionRoutes(aiRequestManager,
             customerProfileService)
         registerGetCustomerInstructionListRoutes(customerProfileService)
+        registerGetInstructionVersionRoutes(customerProfileService)
     }
 }
