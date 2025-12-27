@@ -4,6 +4,7 @@ import PromptEditor from '../../PromptEditorWidget/PromptEditor'
 import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
 import Tooltip from '../../../common/Tooltip/Tooltip'
 import { useConversation } from '../../../../context/ConversationContext'
+import { useAI } from '../../../../context/AIContext'
 import { useAuth } from '../../../../context/AuthContext'
 import TextContainer from '../../../common/TextContainer/TextContainer'
 import styles from './Request.module.scss'
@@ -27,6 +28,30 @@ export default function Request({ blockId }: RequestProps) {
     // ✅ Local draft state to prevent global re-renders on typing
     const [draftPrompt, setDraftPrompt] = React.useState(conversationBlock?.prompt || '')
 
+    // Dependencies moved from PromptEditor
+    const { setPrompt, setActiveBlockId } = useAI()
+    const { customerId } = useAuth()
+    const storageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+    const aiContextTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+    const STORAGE_KEY = customerId ? `${customerId}_prompt_editor_content_conv-${blockId}` : ''
+
+    // Load from localStorage only on mount if empty
+    useEffect(() => {
+        if (!STORAGE_KEY) return
+
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY)
+            if (saved && !draftPrompt) {
+                setDraftPrompt(saved)
+                // Also sync to parent/global if needed, but usually we wait for user action
+                // actually, if we load from storage, we should probably update the draft
+            }
+        } catch (err) {
+            console.error('Failed to load from localStorage:', err)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     // Sync draft if global prompt changes (e.g. history load or API success)
     useEffect(() => {
         if (conversationBlock?.prompt && conversationBlock.prompt !== draftPrompt) {
@@ -34,6 +59,52 @@ export default function Request({ blockId }: RequestProps) {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [conversationBlock?.prompt])
+
+    // ✅ Sync AI Context on mount (or when blockId changes)
+    // This restores the logic previously in PromptEditor that ensures
+    // the Token Counter knows about this block immediately.
+    useEffect(() => {
+        // Only sync if we are the "active" editing block (no responses yet)
+        if (conversationBlock?.responseMessages.length === 0) {
+            setActiveBlockId(blockId)
+            setPrompt(draftPrompt)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [blockId]) // Run on mount/id change
+
+    const handleEditorChange = (newValue: string) => {
+        // Ensure we are the active block
+        setActiveBlockId(blockId)
+
+        // Immediate UI update via local state
+        setDraftPrompt(newValue)
+
+        // Debounce localStorage
+        if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
+        storageTimerRef.current = setTimeout(() => {
+            try {
+                if (STORAGE_KEY) {
+                    localStorage.setItem(STORAGE_KEY, newValue)
+                }
+            } catch (err) {
+                console.error(err)
+            }
+        }, 500)
+
+        // Debounce AI Context (Token Counting)
+        if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
+        aiContextTimerRef.current = setTimeout(() => {
+            setPrompt(newValue)
+        }, 500)
+    }
+
+    // Cleanup timers
+    useEffect(() => {
+        return () => {
+            if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
+            if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
+        }
+    }, [])
 
     if (!conversationBlock) return null
 
@@ -56,7 +127,7 @@ export default function Request({ blockId }: RequestProps) {
             <PromptEditor
                 id={blockId}
                 value={draftPrompt}
-                onChange={setDraftPrompt}
+                onChange={handleEditorChange}
             />
 
             <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>

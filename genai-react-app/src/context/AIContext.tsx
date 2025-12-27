@@ -61,6 +61,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
 
         const timeout = setTimeout(async () => {
             const model = getOpenAIActiveModel()
+            // console.log('[AIContext] Counting tokens for model:', model)
             if (!model) {
                 // Graceful fallback — no model selected yet
                 setTokenCount(0)
