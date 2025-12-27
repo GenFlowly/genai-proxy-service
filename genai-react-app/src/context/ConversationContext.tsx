@@ -17,47 +17,26 @@ const ConversationContext = createContext<IConversationContext | undefined>(unde
 
 export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
-    const { config, activeBlockId, setSupplementalText } = useAI() // now an array of AIConfig[]
+
+    const {
+        config,
+        setSupplementalText,
+        // Consumed from AIContext
+        systemPrompt,
+        setSystemPrompt,
+        selectedInstructionId,
+        setSelectedInstructionId,
+    } = useAI()
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const navigate = useNavigate()
 
+    // State previously handled here is now in AIContext
+
+    // State previously handled here is now in AIContext
+
+    // ✅ Conversation Identity (Owned by ConversationContext)
     const [conversationId, setConversationId] = useState<string>('')
-    const [systemPrompt, setSystemPrompt] = useState<string>('')
-    const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null)
-    const [isSystemPromptLoaded, setIsSystemPromptLoaded] = useState<boolean>(false)
-
-    useEffect(() => {
-        if (customerId) {
-            const savedPrompt = localStorage.getItem(`${customerId}_system_prompt`)
-            const savedInstructionId = localStorage.getItem(`${customerId}_selected_instruction_id`)
-            console.log('[ConversationContext] Restoring state:', { customerId, savedPrompt, savedInstructionId })
-            setSystemPrompt(savedPrompt || '')
-            setSelectedInstructionId(savedInstructionId || null)
-            setIsSystemPromptLoaded(true)
-        } else {
-            console.log('[ConversationContext] No customerId, skip restore')
-            setIsSystemPromptLoaded(false)
-        }
-    }, [customerId])
-
-    useEffect(() => {
-        if (customerId && isSystemPromptLoaded) {
-            const promptKey = `${customerId}_system_prompt`
-            const idKey = `${customerId}_selected_instruction_id`
-
-            if (systemPrompt.trim()) {
-                localStorage.setItem(promptKey, systemPrompt)
-            } else {
-                localStorage.removeItem(promptKey)
-            }
-
-            if (selectedInstructionId) {
-                localStorage.setItem(idKey, selectedInstructionId)
-            } else {
-                localStorage.removeItem(idKey)
-            }
-        }
-    }, [systemPrompt, selectedInstructionId, customerId, isSystemPromptLoaded])
+    const [activeBlockId, setActiveBlockId] = useState<string>('')
 
     // ✅ Ref to always hold the latest conversationId
     const conversationIdRef = useRef(conversationId)
@@ -80,32 +59,37 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         return selectedResponseByBlock[blockId] ?? null
     }, [selectedResponseByBlock])
 
-    // Sync Supplemental Text (Last Response) for Token Counting
+    // Editor State
+    const [editorPrompt, setEditorPromptInternal] = useState<string>('') // Active text being edited
+
+    const setEditorPrompt = useCallback((prompt: string) => {
+        // console.log('[ConversationContext] setEditorPrompt:', prompt.length)
+        setEditorPromptInternal(prompt)
+    }, [])
+
+    // Sync Supplemental Text Effect
     useEffect(() => {
         if (!activeBlockId) {
             setSupplementalText('')
             return
         }
 
+        // 1. Get Supplemental Text (Previous Response)
+        let currentSupplementalText = ''
         const index = conversationBlockList.findIndex(b => b.conversationBlockId === activeBlockId)
-        if (index <= 0) {
-            // No previous block
-            setSupplementalText('')
-            return
+        if (index > 0) {
+            const prevBlock = conversationBlockList[index - 1]
+            if (prevBlock && prevBlock.responseMessages.length > 0) {
+                const selectedId = getSelectedResponseForBlock(prevBlock.conversationBlockId)
+                const selectedMsg = prevBlock.responseMessages.find(m => m.messageId === selectedId)
+                const finalMsg = selectedMsg || prevBlock.responseMessages[0]
+                currentSupplementalText = finalMsg?.text || ''
+            }
         }
 
-        const prevBlock = conversationBlockList[index - 1]
-        if (!prevBlock || prevBlock.responseMessages.length === 0) {
-            setSupplementalText('')
-            return
-        }
+        // Sync to AIContext
+        setSupplementalText(currentSupplementalText)
 
-        const selectedId = getSelectedResponseForBlock(prevBlock.conversationBlockId)
-        const selectedMsg = prevBlock.responseMessages.find(m => m.messageId === selectedId)
-        // Fallback to first message if selection invalid or not set
-        const finalMsg = selectedMsg || prevBlock.responseMessages[0]
-
-        setSupplementalText(finalMsg?.text || '')
     }, [activeBlockId, conversationBlockList, getSelectedResponseForBlock, setSupplementalText])
 
     const updateConversationBlock = (conversationBlockId: string, updater: Partial<ConversationBlock>) => {
@@ -306,8 +290,13 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             value={{
                 conversationBlockList,
                 conversationId,
+                activeBlockId,
+                setActiveBlockId,
+                // Pass-through from AIContext
                 systemPrompt,
                 setSystemPrompt,
+                selectedInstructionId,
+                setSelectedInstructionId,
                 addNewConversationBlock,
                 addNewConversationBlockWithId,
                 updateResponseInConversationBlock: updatePromptInConversationBlock,
@@ -317,8 +306,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 getSelectedResponseForBlock,
                 loadConversation, // Expose this
                 resetConversation,
-                selectedInstructionId,
-                setSelectedInstructionId,
+                editorPrompt,
+                setEditorPrompt,
+
             }}
         >
             {children}

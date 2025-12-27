@@ -33,6 +33,8 @@ export interface ConversationBlock {
 export interface IConversationContext {
     conversationBlockList: ConversationBlock[]
     conversationId: string
+    activeBlockId: string
+    setActiveBlockId: (id: string) => void
     systemPrompt: string
     setSystemPrompt: (prompt: string) => void
     addNewConversationBlock: () => void
@@ -50,4 +52,7 @@ export interface IConversationContext {
     /** Active Instruction Management */
     selectedInstructionId: string | null
     setSelectedInstructionId: (id: string | null) => void
+
+    editorPrompt: string
+    setEditorPrompt: (prompt: string) => void
 }

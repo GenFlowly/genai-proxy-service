@@ -11,77 +11,64 @@ export interface AIConfig {
 
 interface AIContextType {
     config: AIConfig[]
-    activeText: string
-    tokenCount: number
-    isTokenLoading: boolean
-    setPrompt: (prompt: string) => void
     setSelectedModelForAIVendor: (aiVendor: AIVendor, model: string) => void
-    getOpenAIActiveModel: () => string
     resetConfig: () => void
     activeBlockId: string
     setActiveBlockId: (id: string) => void
     supplementalText: string
     setSupplementalText: (text: string) => void
     customerInstructions: InstructionResponse[]
+    systemPrompt: string
+    setSystemPrompt: (prompt: string) => void
+    selectedInstructionId: string | null
+    setSelectedInstructionId: (id: string | null) => void
+    isSystemPromptLoaded: boolean
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined)
 
 export const AIProvider = ({ children }: { children: ReactNode }) => {
-    // 🔹 Initialize state (empty by default, to be filled by backend)
     const [config, setConfig] = useState<AIConfig[]>([])
-    const [prompt, setPrompt] = useState<string>('')
-    const [tokenCount, setTokenCount] = useState<number>(0)
-    const [isTokenLoading, setIsTokenLoading] = useState(false)
     const [activeBlockId, setActiveBlockId] = useState<string>('')
     const [supplementalText, setSupplementalText] = useState<string>('')
-    const { customerInstructions } = useAuth()
+    const { customerInstructions, customerId } = useAuth()
+    const [systemPrompt, setSystemPrompt] = useState<string>('')
+    const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null)
+    const [isSystemPromptLoaded, setIsSystemPromptLoaded] = useState<boolean>(false)
 
-    // 🔹 Always return OPENAI model (gracefully handles missing)
-    const getOpenAIActiveModel = React.useCallback((): string => {
-        const openaiConfig = config.find(
-            c => c.aiVendor === AIVendor.OPENAI && !!c.model?.trim()
-        )
-
-        if (!openaiConfig) {
-            // Don't throw — just return empty
-            return ''
-        }
-
-        return openaiConfig.model
-    }, [config])
-
-    // 🔹 Token count auto-update (debounced, safe for missing model)
+    // 🔹 Restore from localStorage
     useEffect(() => {
-        const fullText = (prompt || '') + (supplementalText || '')
-        if (!fullText.trim()) {
-            setTokenCount(0)
-            return
+        if (customerId) {
+            const savedPrompt = localStorage.getItem(`${customerId}_system_prompt`)
+            const savedInstructionId = localStorage.getItem(`${customerId}_selected_instruction_id`)
+
+            setSystemPrompt(savedPrompt || '')
+            setSelectedInstructionId(savedInstructionId || null)
+            setIsSystemPromptLoaded(true)
+        } else {
+            setIsSystemPromptLoaded(false)
         }
+    }, [customerId])
 
-        const timeout = setTimeout(async () => {
-            const model = getOpenAIActiveModel()
-            // console.log('[AIContext] Counting tokens for model:', model)
-            if (!model) {
-                // Graceful fallback — no model selected yet
-                setTokenCount(0)
-                return
+    // 🔹 Persist to localStorage
+    useEffect(() => {
+        if (customerId && isSystemPromptLoaded) {
+            const promptKey = `${customerId}_system_prompt`
+            const idKey = `${customerId}_selected_instruction_id`
+
+            if (systemPrompt.trim()) {
+                localStorage.setItem(promptKey, systemPrompt)
+            } else {
+                localStorage.removeItem(promptKey)
             }
 
-            setIsTokenLoading(true)
-            try {
-                const count = await countTokens(fullText, model)
-                setTokenCount(count)
-            } catch (err) {
-                console.error('Token counting failed:', err)
-                setTokenCount(0)
-            } finally {
-                setIsTokenLoading(false)
+            if (selectedInstructionId) {
+                localStorage.setItem(idKey, selectedInstructionId)
+            } else {
+                localStorage.removeItem(idKey)
             }
-        }, 400)
-
-        return () => clearTimeout(timeout)
-    }, [prompt, supplementalText, config, getOpenAIActiveModel])
+        }
+    }, [systemPrompt, selectedInstructionId, customerId, isSystemPromptLoaded])
 
     // 🔹 Update or insert vendor+model config safely
     const setSelectedModelForAIVendor = (aiVendor: AIVendor, model: string) => {
@@ -124,18 +111,18 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         <AIContext.Provider
             value={{
                 config,
-                activeText: prompt,
-                tokenCount,
-                isTokenLoading,
-                setPrompt,
                 setSelectedModelForAIVendor,
-                getOpenAIActiveModel,
                 resetConfig,
                 activeBlockId,
                 setActiveBlockId,
                 supplementalText,
                 setSupplementalText,
                 customerInstructions,
+                systemPrompt,
+                setSystemPrompt,
+                selectedInstructionId,
+                setSelectedInstructionId,
+                isSystemPromptLoaded,
             }}
         >
             {children}
@@ -150,18 +137,18 @@ export const useAI = (): AIContextType => {
         console.warn('useAI must be used within AIProvider — returning fallback.')
         return {
             config: [],
-            activeText: '',
-            tokenCount: 0,
-            isTokenLoading: false,
-            setPrompt: () => { },
             setSelectedModelForAIVendor: () => { },
-            getOpenAIActiveModel: () => '',
             resetConfig: () => { },
             activeBlockId: '',
             setActiveBlockId: () => { },
             supplementalText: '',
             setSupplementalText: () => { },
             customerInstructions: [],
+            systemPrompt: '',
+            setSystemPrompt: () => { },
+            selectedInstructionId: null,
+            setSelectedInstructionId: () => { },
+            isSystemPromptLoaded: false,
         }
     }
     return ctx

@@ -7,7 +7,6 @@ import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import styles from './PromptEditor.module.scss'
 import { EditorView } from '@codemirror/view'
 import { addStepsCommand, addExamplesCommand } from './CustomToolbarCommands'
-import PromptEditorTooltip from './PromptEditorTooltip'
 
 interface PromptEditorProps {
     id: string

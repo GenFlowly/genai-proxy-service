@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { ICONS } from '../../../constants/icons'
 import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
-import MultiPurposeButton from '../../common/MultiPurposeButton/MultiPurposeButton'
+import PillButton from '../../common/PillButton/PillButton'
 import Tooltip from '../../common/Tooltip/Tooltip'
 import { Icon } from '../../common/Icon/Icon'
 import { InputTextWithHint } from '../../common/InputTextWithHint/InputTextWithHint'
-import { InputSelectWithHint, SelectOption } from '../../common/InputSelectWithHint/InputSelectWithHint'
-import { useConversation } from '../../../context/ConversationContext'
+import { InputSelectWithHint } from '../../common/InputSelectWithHint/InputSelectWithHint'
+import { useAI } from '../../../context/AIContext'
 import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
 import styles from './InstructionWidget.module.scss'
@@ -21,7 +21,7 @@ export default function InstructionWidget() {
         setSystemPrompt,
         selectedInstructionId,
         setSelectedInstructionId,
-    } = useConversation()
+    } = useAI()
 
     const { getAccessTokenSilently } = useAuth0()
     // Use LayoutContext for expansion state
@@ -30,7 +30,6 @@ export default function InstructionWidget() {
     const { aiVendorAPIKeyStatusList, refreshInstructions, updateInstruction, customerInstructions } = useAuth()
     const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
 
-    const [prompt, setPrompt] = useState(systemPrompt)
     const [isLoading, setIsLoading] = useState(false)
     const [instructionName, setInstructionName] = useState('')
     const [isEditingName, setIsEditingName] = useState(false)
@@ -50,44 +49,38 @@ export default function InstructionWidget() {
     }, [selectedInstructionId, customerInstructions])
 
     // Sync content when ID OR Version changes
-    // Sync content when ID changes (initial load of latest)
-    // Sync content when ID OR Version changes
-    // Sync content when ID changes (initial load of latest)
     useEffect(() => {
         if (selectedInstructionId && selectedVersion !== null) {
-            // Only sync if we suspect we are viewing the latest (which is loaded in customerInstructions)
-            // or if we just switched IDs.
-            // Actually, if we are fetching versions dynamically, relying on `customerInstructions` (which only has latest)
-            // might overwrite our fetched version if we are not careful.
-
-            // For now, let's only sync if the version matches the latest one we have in store
             const matching = customerInstructions.find(i => i.id === selectedInstructionId)
 
             if (matching && matching.version === selectedVersion) {
-                setPrompt(matching.instruction)
+                setSystemPrompt(matching.instruction)
                 setInstructionName(matching.name)
             }
         } else if (!selectedInstructionId) {
             // Fallback for new creation or empty state
-            setPrompt(systemPrompt)
+            // If no instruction selected, we just keep the current systemPrompt or clear it?
+            // Usually we keep what's there if it was being edited, but the original logic
+            // reset it to `systemPrompt` (itself).
+            // Let's just ensure name is cleared.
             setInstructionName('')
         }
-    }, [selectedInstructionId, customerInstructions, selectedVersion])
+    }, [selectedInstructionId, customerInstructions, selectedVersion, setSystemPrompt])
 
     // ... (existing handlers)
     const handleCreateInstruction = async () => {
-        if (!prompt.trim()) return
+        if (!systemPrompt.trim()) return
 
         setIsLoading(true)
         try {
             const token = await getAccessTokenSilently()
             const response: InstructionResponse = await createInstruction(token, {
-                instruction: prompt,
+                instruction: systemPrompt,
                 instructionName: instructionName || undefined,
                 existingInstructionId: selectedInstructionId || undefined
             })
 
-            setSystemPrompt(prompt)
+            setSystemPrompt(systemPrompt)
             // Update the selected ID immediately so UI reflects it's an existing instruction now
             if (response.id) {
                 setSelectedInstructionId(response.id)
@@ -96,7 +89,7 @@ export default function InstructionWidget() {
                     id: response.id,
                     name: response.name,
                     version: response.version,
-                    instruction: prompt
+                    instruction: systemPrompt
                 })
             }
             // Still refresh in background to be safe
@@ -189,7 +182,7 @@ export default function InstructionWidget() {
                                                         try {
                                                             const token = await getAccessTokenSilently()
                                                             const data = await getInstructionVersion(token, selectedInstructionId, newVersion)
-                                                            setPrompt(data.instruction || '')
+                                                            setSystemPrompt(data.instruction || '')
                                                             setInstructionName(data.name || '')
                                                         } catch (e) {
                                                             console.error("Failed to fetch version", e)
@@ -227,22 +220,42 @@ export default function InstructionWidget() {
 
             <PromptEditor
                 id="instruction-input"
-                value={prompt}
-                onChange={setPrompt}
+                value={systemPrompt}
+                onChange={setSystemPrompt}
                 disableCache={true}
             />
 
-            <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
-                <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
-                    <MultiPurposeButton
-                        onClick={handleCreateInstruction}
-                        label={isLoading ? 'Processing...' : 'Save' +
-                            ' Instructions'}
-                        disabled={isLoading || !prompt.trim()}
-                        icon={ICONS.SAVE_ICON}
-                    />
+            {/* Button Row - Aligning with Editor Box */}
+            <div style={{ width: '100%', padding: '0 3rem', display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+                <div style={{ width: '100%', maxWidth: '88rem', display: 'flex', gap: '1rem' }}>
+                    {/* Left Spacer */}
+                    <div style={{ width: '2rem', flexShrink: 0 }} />
+
+                    {/* Main Content Area */}
+                    <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <PillButton
+                            label="Looks good"
+                            variant="secondary"
+                            onClick={() => setInstructionWidgetExpanded(false)}
+                        />
+
+                        <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
+                            <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
+                                <PillButton
+                                    onClick={handleCreateInstruction}
+                                    label={isLoading ? 'Processing...' : 'Save Instructions'}
+                                    disabled={isLoading || !systemPrompt.trim()}
+                                    icon={ICONS.SAVE_ICON}
+                                    variant="primary"
+                                />
+                            </div>
+                        </Tooltip>
+                    </div>
+
+                    {/* Right Spacer */}
+                    <div style={{ width: '2rem', flexShrink: 0 }} />
                 </div>
-            </Tooltip>
+            </div>
         </div>
     )
 }
