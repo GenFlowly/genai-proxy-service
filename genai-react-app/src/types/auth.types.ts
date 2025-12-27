@@ -21,6 +21,8 @@ export interface AuthContextType {
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[];
     aiConfigPreferences: OnboardCustomerResponse['aiConfigPreferences'] | null;
     customerInstructions: InstructionResponseItem[];
+    refreshInstructions: () => Promise<void>;
+    updateInstruction: (instruction: InstructionResponseItem) => void;
 }
 
 export interface AuthProviderProps {

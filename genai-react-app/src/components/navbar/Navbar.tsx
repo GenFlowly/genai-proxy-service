@@ -17,7 +17,7 @@ export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
     const { customerInstructions } = useAI()
     const { isLeftSidebarExpanded, isRightSidebarExpanded, isInstructionWidgetExpanded, setInstructionWidgetExpanded } = useLayout()
-    const { systemPrompt, setSystemPrompt } = useConversation()
+    const { systemPrompt, setSystemPrompt, selectedInstructionId, setSelectedInstructionId } = useConversation()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
     const location = useLocation()
@@ -48,6 +48,19 @@ export default function Navbar(): React.ReactElement {
         }
     }, [showDropdown])
 
+    // Filter instructions to show only the latest version for each ID
+    const uniqueInstructions = React.useMemo(() => {
+        if (!customerInstructions) return []
+        const map = new Map<string, typeof customerInstructions[0]>()
+        customerInstructions.forEach(inst => {
+            const existing = map.get(inst.id)
+            if (!existing || inst.version > existing.version) {
+                map.set(inst.id, inst)
+            }
+        })
+        return Array.from(map.values())
+    }, [customerInstructions])
+
     return (
         <nav className={styles.navbar}>
             <div className={styles.container}>
@@ -64,39 +77,49 @@ export default function Navbar(): React.ReactElement {
                             icon={ICONS.USER_ROLE}
                             placeholder="Select a persona"
                             className={styles.roleInput}
-                            value={isInstructionWidgetExpanded ? 'CTA_ACTION' : systemPrompt}
+                            value={(() => {
+                                // If we have a selected ID, show it.
+                                if (selectedInstructionId) {
+                                    return selectedInstructionId
+                                }
+                                // If no ID but expanded (and implies creating), show CTA value.
+                                return (isInstructionWidgetExpanded) ? 'CTA_ACTION' : ''
+                            })()}
                             onChange={(val) => {
-                                setSystemPrompt(val)
-                                setInstructionWidgetExpanded(false)
+                                // Find by ID in the UNIQUE list to ensure we get the latest version
+                                const selectedInstruction = uniqueInstructions.find(i => i.id === val)
+                                if (selectedInstruction) {
+                                    setSelectedInstructionId(selectedInstruction.id)
+                                    setSystemPrompt(selectedInstruction.instruction)
+                                } else {
+                                    setSelectedInstructionId(null)
+                                }
                             }}
                             options={(() => {
-
-
-                                const customerOptions = (customerInstructions || []).map(item => ({
-                                    label: item.name,
-                                    value: item.instruction,
-                                    isCta: false
-                                }))
+                                const filteredOptions = uniqueInstructions.map(item => ({
+                                    label: item.name || item.instruction.substring(0, 50),
+                                    value: item.id, // Use ID as value!
+                                }));
 
                                 const ctaOption = {
                                     label: 'Create Instructions',
                                     value: 'CTA_ACTION',
                                     isCta: true,
-                                    ctaAction: () => setInstructionWidgetExpanded(true)
+                                    ctaAction: () => {
+                                        setSelectedInstructionId(null)
+                                        setSystemPrompt('')
+                                        setInstructionWidgetExpanded(true)
+                                    },
+                                    style: {
+                                        borderTop: '1px solid #e5e7eb',
+                                        marginTop: '4px',
+                                        paddingTop: '8px',
+                                        color: '#2563eb',
+                                        fontWeight: 500
+                                    }
                                 }
 
-                                const showDynamicOption = systemPrompt &&
-                                    !customerOptions.some(opt => opt.value === systemPrompt) &&
-                                    systemPrompt !== 'CTA_ACTION'
-
-                                return [
-                                    ...(showDynamicOption ? [{
-                                        label: systemPrompt.length > 50 ? `${systemPrompt.substring(0, 50)}...` : systemPrompt,
-                                        value: systemPrompt
-                                    }] : []),
-                                    ...customerOptions,
-                                    ctaOption
-                                ]
+                                return [...filteredOptions, ctaOption]
                             })()}
                         />
                     )}

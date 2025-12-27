@@ -9,11 +9,11 @@ import { generateText } from '../services/generateTextService'
 import { getConversation } from '../services/conversationService'
 import {
     ConversationBlock,
-    ConversationContextType,
+    IConversationContext,
     Message,
 } from '../models/conversation.models'
 
-const ConversationContext = createContext<ConversationContextType | undefined>(undefined)
+const ConversationContext = createContext<IConversationContext | undefined>(undefined)
 
 export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
@@ -23,28 +23,41 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const [conversationId, setConversationId] = useState<string>('')
     const [systemPrompt, setSystemPrompt] = useState<string>('')
+    const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null)
     const [isSystemPromptLoaded, setIsSystemPromptLoaded] = useState<boolean>(false)
 
     useEffect(() => {
         if (customerId) {
-            const saved = localStorage.getItem(`${customerId}_system_prompt`)
-            setSystemPrompt(saved || '')
+            const savedPrompt = localStorage.getItem(`${customerId}_system_prompt`)
+            const savedInstructionId = localStorage.getItem(`${customerId}_selected_instruction_id`)
+            console.log('[ConversationContext] Restoring state:', { customerId, savedPrompt, savedInstructionId })
+            setSystemPrompt(savedPrompt || '')
+            setSelectedInstructionId(savedInstructionId || null)
             setIsSystemPromptLoaded(true)
         } else {
+            console.log('[ConversationContext] No customerId, skip restore')
             setIsSystemPromptLoaded(false)
         }
     }, [customerId])
 
     useEffect(() => {
         if (customerId && isSystemPromptLoaded) {
-            const key = `${customerId}_system_prompt`
+            const promptKey = `${customerId}_system_prompt`
+            const idKey = `${customerId}_selected_instruction_id`
+
             if (systemPrompt.trim()) {
-                localStorage.setItem(key, systemPrompt)
+                localStorage.setItem(promptKey, systemPrompt)
             } else {
-                localStorage.removeItem(key)
+                localStorage.removeItem(promptKey)
+            }
+
+            if (selectedInstructionId) {
+                localStorage.setItem(idKey, selectedInstructionId)
+            } else {
+                localStorage.removeItem(idKey)
             }
         }
-    }, [systemPrompt, customerId, isSystemPromptLoaded])
+    }, [systemPrompt, selectedInstructionId, customerId, isSystemPromptLoaded])
 
     // ✅ Ref to always hold the latest conversationId
     const conversationIdRef = useRef(conversationId)
@@ -304,6 +317,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 getSelectedResponseForBlock,
                 loadConversation, // Expose this
                 resetConversation,
+                selectedInstructionId,
+                setSelectedInstructionId,
             }}
         >
             {children}

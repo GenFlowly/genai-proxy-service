@@ -15,9 +15,10 @@ interface PromptEditorProps {
     id: string
     value: string
     onChange: (value: string) => void
+    disableCache?: boolean
 }
 
-export default function PromptEditor({ id, value, onChange }: PromptEditorProps): React.ReactElement {
+export default function PromptEditor({ id, value, onChange, disableCache = false }: PromptEditorProps): React.ReactElement {
     const { setPrompt, setActiveBlockId } = useAI()
     const { customerId } = useAuth()
     // Debounce refs
@@ -28,7 +29,7 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
 
     // Load from localStorage only on mount if empty
     useEffect(() => {
-        if (!STORAGE_KEY) return
+        if (!STORAGE_KEY || disableCache) return
 
         try {
             const saved = localStorage.getItem(STORAGE_KEY)
@@ -50,19 +51,21 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
 
         // Debounce localStorage
         if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
-        storageTimerRef.current = setTimeout(() => {
-            try {
-                localStorage.setItem(STORAGE_KEY, newValue)
-            } catch (err) {
-                console.error(err)
-            }
-        }, 500)
+        if (!disableCache) {
+            storageTimerRef.current = setTimeout(() => {
+                try {
+                    localStorage.setItem(STORAGE_KEY, newValue)
+                } catch (err) {
+                    console.error(err)
+                }
+            }, 500)
+        }
 
         // Debounce AI Context (Token Counting)
         if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
         aiContextTimerRef.current = setTimeout(() => {
             setPrompt(newValue)
-        }, 300)
+        }, 500)
     }
 
     // Cleanup timers
@@ -162,12 +165,12 @@ export default function PromptEditor({ id, value, onChange }: PromptEditorProps)
             </div>
 
             {/* Tooltip Portal */}
-            <PromptEditorTooltip
-                visible={tooltipState.visible}
-                top={tooltipState.top}
-                left={tooltipState.left}
-                onMarkReusable={handleMarkReusable}
-            />
+            {/*<PromptEditorTooltip*/}
+            {/*    visible={tooltipState.visible}*/}
+            {/*    top={tooltipState.top}*/}
+            {/*    left={tooltipState.left}*/}
+            {/*    onMarkReusable={handleMarkReusable}*/}
+            {/*/>*/}
         </div>
     )
 }

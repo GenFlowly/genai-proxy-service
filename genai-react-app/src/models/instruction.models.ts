@@ -16,3 +16,7 @@ export interface InstructionResponseItem {
     version: number;
     instruction: string;
 }
+
+export interface GetCustomerInstructionListResponse {
+    instructions: InstructionResponseItem[];
+}

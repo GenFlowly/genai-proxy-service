@@ -118,6 +118,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         picture: auth0User.picture,
     } : null
 
+    const refreshInstructions = async () => {
+        if (!isAuthenticated || !auth0User) return
+        try {
+            const token = await getAccessTokenSilently()
+            const { getCustomerInstructions } = await import('../services/instructionService')
+            const response = await getCustomerInstructions(token)
+            setCustomerInstructions(response.instructions)
+        } catch (error) {
+            console.error('Failed to refresh instructions', error)
+        }
+    }
+
+    const updateInstruction = (instruction: InstructionResponseItem) => {
+        setCustomerInstructions(prev => {
+            const index = prev.findIndex(item => item.id === instruction.id)
+            if (index !== -1) {
+                // Replace existing
+                const newList = [...prev]
+                newList[index] = instruction
+                return newList
+            } else {
+                // Append new (prepend to be visible at top if sorting by newest)
+                return [instruction, ...prev]
+            }
+        })
+    }
+
     const contextValue: AuthContextType = {
         user,
         isAuthenticated,
@@ -130,6 +157,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         aiVendorAPIKeyStatusList,
         aiConfigPreferences,
         customerInstructions,
+        refreshInstructions,
+        updateInstruction,
     }
 
     return (
