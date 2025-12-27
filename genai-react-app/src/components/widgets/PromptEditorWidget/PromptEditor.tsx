@@ -4,8 +4,6 @@ import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
-import { useAI } from '../../../context/AIContext'
-import { useAuth } from '../../../context/AuthContext'
 import styles from './PromptEditor.module.scss'
 import { EditorView } from '@codemirror/view'
 import { addStepsCommand, addExamplesCommand } from './CustomToolbarCommands'
@@ -19,71 +17,6 @@ interface PromptEditorProps {
 }
 
 export default function PromptEditor({ id, value, onChange, disableCache = false }: PromptEditorProps): React.ReactElement {
-    const { setPrompt, setActiveBlockId } = useAI()
-    const { customerId } = useAuth()
-    // Debounce refs
-    const storageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const aiContextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-    const STORAGE_KEY = customerId ? `${customerId}_prompt_editor_content_conv-${id}` : ''
-
-    // Load from localStorage only on mount if empty
-    useEffect(() => {
-        if (!STORAGE_KEY || disableCache) return
-
-        try {
-            const saved = localStorage.getItem(STORAGE_KEY)
-            if (saved && !value) {
-                onChange(saved)
-            }
-        } catch (err) {
-            console.error('Failed to load from localStorage:', err)
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
-    const handleChange = (newValue: string) => {
-        // Ensure we are the active block
-        setActiveBlockId(id)
-
-        // Immediate UI update via parent
-        onChange(newValue)
-
-        // Debounce localStorage
-        if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
-        if (!disableCache) {
-            storageTimerRef.current = setTimeout(() => {
-                try {
-                    localStorage.setItem(STORAGE_KEY, newValue)
-                } catch (err) {
-                    console.error(err)
-                }
-            }, 500)
-        }
-
-        // Debounce AI Context (Token Counting)
-        if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
-        aiContextTimerRef.current = setTimeout(() => {
-            setPrompt(newValue)
-        }, 500)
-    }
-
-    // Cleanup timers
-    useEffect(() => {
-        return () => {
-            if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
-            if (aiContextTimerRef.current) clearTimeout(aiContextTimerRef.current)
-        }
-    }, [])
-
-    // Sync AI context on mount or external prop change?
-    // Not strictly necessary for "typing lag" fix but good for consistency
-    useEffect(() => {
-        setPrompt(value)
-        setActiveBlockId(id)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
     // Tooltip State
     const [tooltipState, setTooltipState] = useState<{
         visible: boolean
@@ -138,7 +71,7 @@ export default function PromptEditor({ id, value, onChange, disableCache = false
                     <div className={styles.mdxEditorRoot}>
                         <MarkdownEditor
                             value={value}
-                            onChange={(val) => handleChange(val)}
+                            onChange={onChange}
                             height="40.25rem"
                             visible={false}
                             enablePreview={true}

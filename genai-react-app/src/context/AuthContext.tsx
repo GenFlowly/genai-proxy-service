@@ -132,14 +132,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
 
     const updateInstruction = (instruction: InstructionResponseItem) => {
         setCustomerInstructions(prev => {
-            const index = prev.findIndex(item => item.id === instruction.id)
+            // Check if this specific version already exists
+            const index = prev.findIndex(item => item.id === instruction.id && item.version === instruction.version)
+
             if (index !== -1) {
-                // Replace existing
+                // Update existing version entry
                 const newList = [...prev]
                 newList[index] = instruction
                 return newList
             } else {
-                // Append new (prepend to be visible at top if sorting by newest)
+                // Add new version (prepend)
                 return [instruction, ...prev]
             }
         })

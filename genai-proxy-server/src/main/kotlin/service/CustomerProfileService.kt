@@ -180,17 +180,10 @@ class CustomerProfileService(
     suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse {
         val instructions = dynamoDBProvider.getInstructionsByCreator(customerId)
         
-        // Group by ID and find max version for each
-        val latestInstructions = instructions
-            .groupBy { it.id }
-            .mapValues { (_, versions) -> 
-                versions.maxByOrNull { it.version ?: 1 } 
-            }
-            .values
-            .filterNotNull()
-            .sortedByDescending { it.version }
-
-        val responseItems = latestInstructions.map { instruction ->
+        // Return all versions, sorted by ID and version desc
+        val responseItems = instructions.sortedWith(
+            compareBy<models.Instruction> { it.id }.thenByDescending { it.version }
+        ).map { instruction ->
             InstructionResponseItem(
                 id = instruction.id,
                 name = instruction.name,
