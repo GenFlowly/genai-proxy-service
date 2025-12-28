@@ -1,11 +1,10 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { ICONS } from '../../../constants/icons'
 import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import styles from './PromptEditor.module.scss'
-import { EditorView } from '@codemirror/view'
 import { addStepsCommand, addExamplesCommand } from './CustomToolbarCommands'
 
 interface PromptEditorProps {
