@@ -159,7 +159,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         }))
     }
 
-    const loadConversation = async (id: string) => {
+    const loadConversation = useCallback(async (id: string) => {
         if (!isAuthenticated || !customerId) return
 
         try {
@@ -175,9 +175,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             console.error("Failed to load conversation", err)
             // Handle error (maybe redirect to new chat?)
         }
-    }
+    }, [isAuthenticated, customerId, getAccessTokenSilently])
 
-    const resetConversation = () => {
+    const resetConversation = useCallback(() => {
         navigate('/chat')
         if (customerId) {
             // Clear all prompt editor content for this user from localStorage
@@ -198,7 +198,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             },
         ])
         setSelectedResponseByBlock({})
-    }
+    }, [navigate, customerId])
 
     // --- Core Actions ---
     const addNewConversationBlock = () => {

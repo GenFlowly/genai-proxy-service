@@ -17,6 +17,7 @@ import geminiIcon from '../assets/icons/Gemini.svg'
 import modelsIcon from '../assets/icons/models.svg'
 import tokensIcon from '../assets/icons/tokens.svg'
 import editIcon from '../assets/icons/edit.svg'
+import validIcon from '../assets/icons/valid.svg'
 
 export const ICONS = {
     EDIT: editIcon,
@@ -36,4 +37,5 @@ export const ICONS = {
     GEMINI: geminiIcon,
     MODELS: modelsIcon,
     TOKENS: tokensIcon,
+    VALID: validIcon,
 }

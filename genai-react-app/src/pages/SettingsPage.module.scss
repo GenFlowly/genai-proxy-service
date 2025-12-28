@@ -1,91 +1,85 @@
-@import '../styles/variables.scss';
+@import '../styles/mixins.scss';
 
 .page {
-  min-height: 100vh;
-  background-color: $background-gray;
+  @include page-base;
 }
 
 .content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: $spacing-3xl $spacing-lg;
+  @include content-container;
 }
 
 .card {
-  max-width: 42rem;
-  margin: 0 auto;
-  background-color: $white;
-  border-radius: $radius-md;
-  box-shadow: $shadow-md;
-  padding: $spacing-2xl;
+  @include card-base;
 }
 
 .title {
-  font-size: 1.875rem;
-  font-weight: bold;
-  color: $text-primary;
-  margin-bottom: $spacing-xl;
+  @include title-base;
 }
 
 .form {
   display: flex;
   flex-direction: column;
-  gap: $spacing-xl;
+  gap: 2.5rem;
 }
 
 .vendorSection {
-  border: 1px solid $border-color;
-  border-radius: $radius-md;
-  padding: $spacing-lg;
-  background-color: $background-gray;
+  background: $color-background;
+  padding: 1.5rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .vendorName {
+  // Basic fallback or text style
   font-size: 1.125rem;
   font-weight: 600;
-  color: $text-primary;
-  margin-bottom: $spacing-md;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+.vendorBrand {
+  // Style override for BrandName component to look like a header
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+
+  // BrandName usually imports flex container styles, we might not need much unless we want to override spacing
+  span {
+    font-weight: 600 !important;
+  }
 }
 
 .formGroup {
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
 }
 
 .formLabel {
-  display: block;
-  color: $text-secondary;
   font-size: 0.875rem;
-  font-weight: 600;
-  margin-bottom: $spacing-sm;
+  font-weight: 500;
+  color: $color-text-secondary;
 }
 
 .formInput {
-  width: 100%;
-  padding: $spacing-md $spacing-lg;
-  border: 2px solid $border-color;
-  border-radius: $radius-md;
-  font-size: 1rem;
-  transition: border-color $transition-normal;
-
-  &:focus {
-    outline: none;
-    border-color: $primary-color;
-  }
+  @include input-field;
 }
 
 .keyStatus {
-  color: $success-text;
   font-size: 0.875rem;
-  margin-top: $spacing-xs;
+  color: $color-success;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-
-
 .successMessage {
-  background-color: $success-bg;
-  border: 1px solid $success-border;
-  color: $success-text;
-  padding: $spacing-md $spacing-lg;
-  border-radius: $radius-sm;
+  background: rgba($color-success, 0.1);
+  color: $color-success;
+  padding: 0.75rem 1rem;
+  border-radius: $radius-md;
+  text-align: center;
+  font-weight: 500;
 }

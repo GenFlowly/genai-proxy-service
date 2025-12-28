@@ -1,5 +1,6 @@
 import React, {
     createContext,
+    useCallback,
     useContext,
     useEffect,
     useState,
@@ -28,7 +29,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
     const [aiConfigPreferences, setAiConfigPreferences] = useState<AuthContextType['aiConfigPreferences']>(null)
     const [customerInstructions, setCustomerInstructions] = useState<InstructionResponse[]>([])
-    const [isInternalLoading, setIsInternalLoading] = useState(false)
+    const [isInternalLoading, setIsInternalLoading] = useState(true)
+
+    // ✅ Effect 0: Handle Unauthenticated State to clear loading
+    useEffect(() => {
+        if (!auth0Loading && !isAuthenticated) {
+            setIsInternalLoading(false)
+        }
+    }, [auth0Loading, isAuthenticated])
 
     // Persist customerId & Load cached prefs
     useEffect(() => {
@@ -49,10 +57,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         }
     }, [customerId])
 
+    const logout = useCallback(({ returnTo }: { returnTo: string }): void => {
+        setCustomerId(null)
+        setAiVendorAPIKeyStatusList([])
+        setAiConfigPreferences(null)
+        setCustomerInstructions([])
+        localStorage.removeItem('customerId')
+
+        auth0Logout({
+            logoutParams: { returnTo }
+        })
+    }, [auth0Logout])
+
     // Onboard/Sync user when authenticated
     useEffect(() => {
         const onboard = async () => {
             if (isAuthenticated && auth0User) {
+                // Ensure we are loading (matches initial state, but safe to set)
                 setIsInternalLoading(true)
                 try {
                     const token = await getAccessTokenSilently()
@@ -84,8 +105,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             )
                         }
                     }
-                } catch (error) {
+                } catch (error: any) {
                     console.error('Failed to onboard user:', error)
+                    // If we fail to get a token, it likely means the session is invalid
+                    // despite isAuthenticated being true (stale cache).
+                    if (error?.error === 'login_required' || error?.error === 'consent_required' || error?.message?.includes('Login required')) {
+                        console.log('Session invalid, logging out...')
+                        logout({ returnTo: window.location.origin })
+                    }
                 } finally {
                     setIsInternalLoading(false)
                 }
@@ -96,19 +123,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         if (isAuthenticated && auth0User) {
             onboard()
         }
-    }, [isAuthenticated, auth0User, getAccessTokenSilently])
+    }, [isAuthenticated, auth0User, getAccessTokenSilently, logout])
 
-    const logout = ({ returnTo }: { returnTo: string }): void => {
-        setCustomerId(null)
-        setAiVendorAPIKeyStatusList([])
-        setAiConfigPreferences(null)
-        setCustomerInstructions([])
-        localStorage.removeItem('customerId')
 
-        auth0Logout({
-            logoutParams: { returnTo }
-        })
-    }
 
     // Map Auth0 User to our User type
     const user: User | null = auth0User ? {
