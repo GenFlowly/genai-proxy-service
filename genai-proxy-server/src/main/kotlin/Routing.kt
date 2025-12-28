@@ -4,6 +4,7 @@ import activity.registerOnboardCustomerRoutes
 import activity.registerStoreApiKeyRoutes
 import com.genflowly.activity.registerCreateInstructionRoutes
 import com.genflowly.activity.registerGenerateTextRoutes
+import com.genflowly.activity.registerGenerateTextStreamRoutes
 import com.genflowly.activity.registerGetTextGenerationModelsRoutes
 import com.genflowly.activity.registerSaveAIConfigPreferencesRoutes
 import com.genflowly.service.AIRequestService
@@ -22,6 +23,7 @@ object Routes {
     const val API_ROOT = "/"
 
     const val GENERATE_TEXT = "$API_V1/generate-text"
+    const val GENERATE_TEXT_STREAM = "$API_V1/generate-text-stream"
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
@@ -47,6 +49,7 @@ fun Application.configureRouting(
         }
 
         registerGenerateTextRoutes(aiRequestManager, customerProfileService)
+        registerGenerateTextStreamRoutes(aiRequestManager, customerProfileService)
         registerStoreApiKeyRoutes(customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService)
         registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)
