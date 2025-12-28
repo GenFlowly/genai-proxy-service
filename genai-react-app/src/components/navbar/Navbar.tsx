@@ -17,7 +17,7 @@ export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
     const { customerInstructions } = useAI()
     const { isLeftSidebarExpanded, isRightSidebarExpanded, isInstructionWidgetExpanded, setInstructionWidgetExpanded } = useLayout()
-    const { systemPrompt, setSystemPrompt, selectedInstructionId, setSelectedInstructionId } = useConversation()
+    const { setSystemPrompt, selectedInstructionId, setSelectedInstructionId } = useConversation()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
     const location = useLocation()

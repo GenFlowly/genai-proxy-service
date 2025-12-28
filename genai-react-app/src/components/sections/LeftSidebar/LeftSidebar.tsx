@@ -5,7 +5,7 @@ import InstructionSidebarWidget from '../../widgets/SidebarWidgets/InstructionSi
 import styles from './LeftSidebar.module.scss'
 
 export default function LeftSidebar(): React.ReactElement {
-    const { isLeftSidebarExpanded, toggleLeftSidebar } = useLayout()
+    const { isLeftSidebarExpanded } = useLayout()
     const collapsed = !isLeftSidebarExpanded
 
     return (

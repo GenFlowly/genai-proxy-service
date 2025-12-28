@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { AIVendor } from '../constants/vendors'
-import { countTokens } from '../utils/tokenizer'
 import { InstructionResponse } from '../models/instruction.models'
 import { useAuth } from './AuthContext'
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useState } from 'react'
 import { ICONS } from '../../../constants/icons'
 import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
@@ -50,11 +50,13 @@ export default function PromptEditor({ id, value, onChange, disableCache = false
         }
     }, [])
 
+    /*
     const handleMarkReusable = async () => {
         // Dummy API call
         console.log('Marking as reusable:', tooltipState.text)
         setTooltipState((prev) => ({ ...prev, visible: false }))
     }
+    */
 
     const extensions = React.useMemo(() => [
         EditorView.lineWrapping,
