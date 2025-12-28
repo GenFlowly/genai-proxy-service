@@ -272,4 +272,145 @@ class AIRequestManager(
                     "$aiVendor - ${e.message}"
         }
     }
+
+    suspend fun processTextGenerateStreamRequest(
+        aiConfig: List<AIConfig>,
+        systemPrompt: String,
+        prompt: String,
+        conversationId: String?,
+        selectedResponseId: String?,
+        client: String,
+        customerId: String
+    ): kotlinx.coroutines.flow.Flow<String> = kotlinx.coroutines.flow.flow {
+
+        // Step 1 - Fetch existing or Create new conversation
+        val activeConversationId =
+            getConversationId(customerId, client, conversationId)
+
+        // Step 2 - Create message object
+        val message = Message(
+            conversationId = activeConversationId,
+            customerId = customerId,
+            client = client,
+            role = "user",
+            text = prompt,
+            previousMessageId = selectedResponseId,
+            aiConfig = aiConfig,
+            systemPrompt = systemPrompt
+        )
+
+        // Step 3 - Add message request to conversation
+        conversationService.addMessageInConversation(message)
+
+        logger.info("Added Message id {} to conversation", message.messageId)
+
+        // For streaming, we currently support only the first config or iterate?
+        // Let's take the first one for now.
+        val config = aiConfig.firstOrNull()
+        if (config == null) {
+            logger.warn("No AI config provided in request")
+            return@flow
+        }
+
+        // Build conversation history for prompt
+        val promptWithContext = includeThreadContextInPrompt(
+            message.conversationId,
+            message.messageId,
+            message.text
+        )
+
+        val sb = StringBuilder()
+
+        try {
+            generateTextStream(
+                config.aiVendor,
+                config.model,
+                promptWithContext,
+                message.systemPrompt,
+                message.customerId
+            ).collect { chunk ->
+                sb.append(chunk)
+                emit(chunk)
+            }
+        } catch (e: Exception) {
+            logger.error("Error during streaming", e)
+            throw e
+        } finally {
+            val responseText = sb.toString()
+            if (responseText.isNotEmpty()) {
+                val responseMessage = Message(
+                    conversationId = message.conversationId,
+                    customerId = message.customerId,
+                    client = message.client,
+                    role = "assistant",
+                    text = responseText,
+                    previousMessageId = message.messageId,
+                    aiConfig = listOf(config),
+                    systemPrompt = message.systemPrompt
+                )
+                conversationService.addMessageInConversation(responseMessage)
+            }
+        }
+
+    }
+
+    private suspend fun generateTextStream(
+        aiVendor: AIVendor,
+        model: String,
+        prompt: String,
+        systemPrompt: String?,
+        customerId: String
+    ): kotlinx.coroutines.flow.Flow<String> {
+        val apiKey = fetchApiKey(
+            aiVendor,
+            customerId,
+            customerProfileService
+        )
+
+        return kotlinx.coroutines.flow.flow {
+             when (aiVendor) {
+                AIVendor.OPENAI -> {
+                    val params = aiRequestService.buildOpenAIRequest(
+                        prompt,
+                        model,
+                        systemPrompt ?: ""
+                    )
+                    val httpClient = aiRequestService.getOpenAIProvider(apiKey)
+                    httpClient.generateResponseStream(
+                        com.genflowly.aicallerlib.models.openai.OpenAIRequest(
+                            params
+                        )
+                    ).collect { emit(it.getText()) }
+                }
+
+                AIVendor.GEMINI -> {
+                    val params = aiRequestService.buildGeminiRequest(
+                        prompt,
+                        model,
+                        systemPrompt ?: ""
+                    )
+                    val httpClient = aiRequestService.getGeminiProvider(apiKey)
+                    httpClient.generateResponseStream(
+                        com.genflowly.aicallerlib.models.gemini.GeminiRequest(
+                            params
+                        )
+                    ).collect { emit(it.getText() ?: "") }
+                }
+
+                AIVendor.CLAUDE -> {
+                    val params = aiRequestService.buildClaudeRequest(
+                        prompt,
+                        model,
+                        systemPrompt ?: ""
+                    )
+                    val httpClient = aiRequestService.getClaudeProvider(apiKey)
+                    httpClient.generateResponseStream(
+                        com.genflowly.aicallerlib.models.claude.ClaudeRequest(
+                            params
+                        )
+                    ).collect { emit(it.getText()) }
+                }
+            }
+        }
+    }
 }
