@@ -4,7 +4,6 @@ import Navbar from '../components/navbar/Navbar'
 import LeftSidebar from '../components/sections/LeftSidebar/LeftSidebar'
 import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
 import CenterSection from '../components/sections/CenterSection/CenterSection'
-import { useLayout } from '../context/LayoutContext'
 import { useConversation } from '../context/ConversationContext'
 import styles from './LandingPage.module.scss'
 

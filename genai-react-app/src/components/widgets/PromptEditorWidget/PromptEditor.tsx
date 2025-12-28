@@ -16,52 +16,6 @@ interface PromptEditorProps {
 }
 
 export default function PromptEditor({ id, value, onChange, disableCache = false }: PromptEditorProps): React.ReactElement {
-    // Tooltip State
-    const [tooltipState, setTooltipState] = useState<{
-        visible: boolean
-        top: number
-        left: number
-        text: string
-    }>({ visible: false, top: 0, left: 0, text: '' })
-
-
-    const handleEditorUpdate = React.useCallback((viewUpdate: any) => {
-        if (viewUpdate.docChanged || viewUpdate.selectionSet) {
-            const view = viewUpdate.view
-            const { from, to } = view.state.selection.main
-
-            if (from === to) {
-                setTooltipState((prev) => ({ ...prev, visible: false }))
-                return
-            }
-
-            const text = view.state.sliceDoc(from, to)
-            // Get coordinates for the selection end
-            const coords = view.coordsAtPos(to)
-
-            if (coords) {
-                setTooltipState({
-                    visible: true,
-                    top: coords.top,
-                    left: coords.left,
-                    text
-                })
-            }
-        }
-    }, [])
-
-    /*
-    const handleMarkReusable = async () => {
-        // Dummy API call
-        console.log('Marking as reusable:', tooltipState.text)
-        setTooltipState((prev) => ({ ...prev, visible: false }))
-    }
-    */
-
-    const extensions = React.useMemo(() => [
-        EditorView.lineWrapping,
-        EditorView.updateListener.of(handleEditorUpdate)
-    ], [handleEditorUpdate])
 
     return (
         <div className={styles.container}>
@@ -84,7 +38,6 @@ export default function PromptEditor({ id, value, onChange, disableCache = false
                                 addExamplesCommand,
 
                             ]}
-                            extensions={extensions}
                         />
                     </div>
                     <div className={styles.controlsRow}>
@@ -97,14 +50,6 @@ export default function PromptEditor({ id, value, onChange, disableCache = false
                     </div>
                 </div>
             </div>
-
-            {/* Tooltip Portal */}
-            {/*<PromptEditorTooltip*/}
-            {/*    visible={tooltipState.visible}*/}
-            {/*    top={tooltipState.top}*/}
-            {/*    left={tooltipState.left}*/}
-            {/*    onMarkReusable={handleMarkReusable}*/}
-            {/*/>*/}
         </div>
     )
 }
