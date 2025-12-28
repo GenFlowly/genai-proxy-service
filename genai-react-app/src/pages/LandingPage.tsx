@@ -9,7 +9,6 @@ import { useConversation } from '../context/ConversationContext'
 import styles from './LandingPage.module.scss'
 
 function LandingPageContent() {
-    const { } = useLayout()
 
     return (
         <div className={styles.layout}>
