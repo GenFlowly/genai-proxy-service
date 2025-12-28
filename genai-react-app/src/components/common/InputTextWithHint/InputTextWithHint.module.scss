@@ -4,7 +4,15 @@
 @import '../../../styles/mixins.scss';
 
 .container {
-    @include inputWithHint;
+    @include input-with-hint-container;
+}
+
+.prefixArea {
+    @include input-with-hint-prefix;
+}
+
+.inputElement {
+    @include input-with-hint-element;
 }
 
 .icon {

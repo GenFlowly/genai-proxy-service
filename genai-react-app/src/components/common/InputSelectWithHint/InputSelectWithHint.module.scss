@@ -2,7 +2,11 @@
 @import '../../../styles/mixins.scss';
 
 .container {
-    @include inputWithHint;
+    @include input-with-hint-container;
+}
+
+.prefixArea {
+    @include input-with-hint-prefix;
 }
 
 .icon {
@@ -11,5 +15,6 @@
 }
 
 .inputElement {
-    width: 100%;
+    @include input-with-hint-element;
+    width: 100%; // Keeping component specific override if any
 }
