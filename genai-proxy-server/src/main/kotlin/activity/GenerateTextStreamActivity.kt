@@ -7,6 +7,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.Route
@@ -37,6 +38,10 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.toString()
                 )
 
+                call.response.header("Cache-Control", "no-cache")
+                call.response.header("Connection", "keep-alive")
+                call.response.header("X-Accel-Buffering", "no")
+
                 call.respondTextWriter(contentType = ContentType.Text.Plain) {
                     try {
                         aiRequestManager.processTextGenerateStreamRequest(
@@ -51,11 +56,10 @@ fun Route.registerGenerateTextStreamRoutes(
                             write(chunk)
                             flush()
                         }
+                    } catch (e: java.io.IOException) {
+                        logger.warn("Stream closed by client: {}", e.message)
                     } catch (e: Exception) {
                         logger.error("Error during streaming response", e)
-                        // If headers are already sent, we can't change status code.
-                        // We might want to close the connection or write an error marker if protocol allows.
-                        // For plain text, we just stop.
                     }
                 }
 
