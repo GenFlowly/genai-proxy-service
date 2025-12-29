@@ -15,7 +15,6 @@ interface RequestProps {
 export default function Request({ blockId }: RequestProps) {
     const {
         conversationBlockList,
-        generateResponses,
         generateResponsesStream,
         getSelectedResponseForBlock,
         setEditorPrompt,
