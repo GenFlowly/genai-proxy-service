@@ -109,8 +109,9 @@ export default function Request({ blockId }: RequestProps) {
 
     if (!conversationBlock) return null
 
-    // If we have responses, this block is "resolved" -> Show static text
-    if (conversationBlock.responseMessages.length > 0) {
+    // If we have responses AND loading is finished, this block is "resolved" -> Show static text
+    // We keep the editor visible during loading so the user sees the "Generating..." button state.
+    if (conversationBlock.responseMessages.length > 0 && !conversationBlock.isLoading) {
         return (
             <div className={styles.requestWrapper}>
                 <TextContainer
