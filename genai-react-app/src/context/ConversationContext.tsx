@@ -326,6 +326,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         updateConversationBlock(id, {
             isLoading: true,
+            prompt: promptToUse,
             responseMessages: initialResponseMessages
         })
 

@@ -300,9 +300,11 @@ class AIRequestManager(
         )
 
         // Step 3 - Add message request to conversation
-        conversationService.addMessageInConversation(message)
+        // If duplicated, this returns the existing message ID
+        val savedMessageId = conversationService.addMessageInConversation(message)
+        val savedMessage = message.copy(messageId = savedMessageId)
 
-        logger.info("Added Message id {} to conversation", message.messageId)
+        logger.info("Added/Found Message id {} in conversation", savedMessageId)
 
         // For streaming, we currently support only the first config or iterate?
         // Let's take the first one for now.
@@ -313,10 +315,11 @@ class AIRequestManager(
         }
 
         // Build conversation history for prompt
+        // USE SAVED MESSAGE ID so context is correct
         val promptWithContext = includeThreadContextInPrompt(
-            message.conversationId,
-            message.messageId,
-            message.text
+            savedMessage.conversationId,
+            savedMessage.messageId,
+            savedMessage.text
         )
 
         val sb = StringBuilder()
@@ -339,14 +342,14 @@ class AIRequestManager(
             val responseText = sb.toString()
             if (responseText.isNotEmpty()) {
                 val responseMessage = Message(
-                    conversationId = message.conversationId,
-                    customerId = message.customerId,
-                    client = message.client,
+                    conversationId = savedMessage.conversationId,
+                    customerId = savedMessage.customerId,
+                    client = savedMessage.client,
                     role = "assistant",
                     text = responseText,
-                    previousMessageId = message.messageId,
+                    previousMessageId = savedMessage.messageId,
                     aiConfig = listOf(config),
-                    systemPrompt = message.systemPrompt
+                    systemPrompt = savedMessage.systemPrompt
                 )
                 conversationService.addMessageInConversation(responseMessage)
             }

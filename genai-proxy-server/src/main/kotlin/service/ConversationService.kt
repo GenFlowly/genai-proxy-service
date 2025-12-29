@@ -95,6 +95,23 @@ class ConversationService(
     suspend fun addMessageInConversation(
         message: Message
     ): String {
+        // Prevent duplication: Check if an identical message (same text, role, conversation) already exists
+        // especially for the latest turn.
+        // This handles the race condition where multiple vendor requests send the same user prompt simultaneously.
+        if (message.role == "user") {
+            val existingMessages = dynamoDBProvider.getMessagesForConversation(message.conversationId)
+            val duplicate = existingMessages.find { 
+                it.role == "user" && 
+                it.text == message.text && 
+                // deduplicate only if it's the same 'turn', i.e. same parent or just verify it's recent?
+                // matching previousMessageId is the strict check ensuring it's the exact same context.
+                it.previousMessageId == message.previousMessageId 
+            }
+            if (duplicate != null) {
+                return duplicate.messageId
+            }
+        }
+
         val updateSequenceMessage =
             updateSequenceOfMessageInConversation(message)
         dynamoDBProvider.createMessage(updateSequenceMessage)
