@@ -18,14 +18,16 @@ export default function ConversationBlock({ id }: { id: string }) {
 
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === id)
     const responseRef = useRef<HTMLDivElement | null>(null)
+    const hasScrolledRef = useRef(false)
 
     useEffect(() => {
-        if (conversationBlock?.responseMessages?.length && responseRef.current) {
+        if (conversationBlock?.responseMessages?.length && responseRef.current && !hasScrolledRef.current) {
             if ("scrollIntoView" in responseRef.current) {
                 responseRef.current.scrollIntoView({
                     behavior: 'smooth',
                     block: 'start',
                 })
+                hasScrolledRef.current = true
             }
         }
     }, [conversationBlock?.responseMessages])

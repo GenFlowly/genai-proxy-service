@@ -28,9 +28,9 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
     const selectedResponseId = getSelectedResponseForBlock(blockId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
 
-    const responseList = responseMessages
+    const responseList = responseMessages.filter(msg => msg.text.length > 0)
 
-    if (!responseMessages || responseMessages.length === 0) return null
+    if (!responseList || responseList.length === 0) return null
 
     const handleFollowUp = (messageId: string) => {
         if (disabled) return
