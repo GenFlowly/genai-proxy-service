@@ -332,27 +332,23 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         try {
             const token = await getAccessTokenSilently()
 
-            // Create a promise for each vendor stream
-            const streamPromises = aiConfigs.map(async (config, index) => {
-                const messageId = initialResponseMessages[index].messageId
+            const currentConversationId = conversationIdRef.current
+            // Helper to perform the fetch for a specific config
+            const runStream = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void) => {
                 let accumulatedText = ""
-
                 await fetchVendorResponseStream(
                     token,
-                    config,
+                    conf,
                     promptToUse,
                     finalSelectedResponseId,
                     systemPrompt,
                     (chunk) => {
                         accumulatedText += chunk
-
                         setConversationBlockList(prev =>
                             prev.map(block => {
                                 if (block.conversationBlockId === id) {
                                     const msgs = block.responseMessages.map(m =>
-                                        m.messageId === messageId
-                                            ? { ...m, text: accumulatedText }
-                                            : m
+                                        m.messageId === msgId ? { ...m, text: accumulatedText } : m
                                     )
                                     return { ...block, responseMessages: msgs }
                                 }
@@ -365,15 +361,50 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             setConversationId(newConversationId)
                             conversationIdRef.current = newConversationId
                             console.log('SET Conversation ID Stream', newConversationId)
-
-                            // Sync URL
                             navigate(`/chat/${newConversationId}`)
                         }
+                        if (onIdResolved) onIdResolved(newConversationId)
                     }
                 )
-            })
+            }
 
-            await Promise.all(streamPromises)
+            if (currentConversationId) {
+                // Scenario A: Parallel execution for existing chat
+                await Promise.all(aiConfigs.map((config, index) =>
+                    runStream(config, initialResponseMessages[index].messageId)
+                ))
+            } else {
+                // Scenario B: Smart Sequential Start for new conversation
+                const firstConfig = aiConfigs[0]
+                const firstMsgId = initialResponseMessages[0].messageId
+
+                // Create a promise that resolves when ID is received
+                let resolveId: (id: string) => void = () => { }
+                const idPromise = new Promise<string>(r => { resolveId = r })
+
+                // Start first stream
+                const firstStreamPromise = runStream(firstConfig, firstMsgId, resolveId)
+
+                // Race: Wait for ID or First Stream Completion (in case of error/no-ID)
+                const result = await Promise.race([
+                    idPromise.then(id => ({ type: 'id', value: id })),
+                    firstStreamPromise.then(() => ({ type: 'done', value: null }))
+                ])
+
+                const pendingPromises: Promise<any>[] = [firstStreamPromise]
+
+                if (result.type === 'id' && result.value && aiConfigs.length > 1) {
+                    // ID established! Launch the rest immediately.
+                    const remainingConfigs = aiConfigs.slice(1)
+                    const remainingMsgs = initialResponseMessages.slice(1)
+                    const others = remainingConfigs.map((config, index) =>
+                        runStream(config, remainingMsgs[index].messageId)
+                    )
+                    pendingPromises.push(...others)
+                }
+
+                await Promise.all(pendingPromises)
+            }
 
             updateConversationBlock(id, {
                 isLoading: false,
