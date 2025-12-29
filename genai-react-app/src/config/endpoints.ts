@@ -8,6 +8,7 @@ export const endpoints = {
     getCustomerProfile: `${BASE}${API_PREFIX}/customer/profile`,
     storeCustomerVendorApiKey: `${BASE}${API_PREFIX}/store-api-key`,
     generateText: `${BASE}${API_PREFIX}/generate-text`,
+    generateTextStream: `${BASE}${API_PREFIX}/generate-text-stream`,
     batchGenerateText: `${BASE}${API_PREFIX}/batch-generate-text`,
     getTextGenerationModels: `${BASE}${API_PREFIX}/models`,
     saveAIConfig: `${BASE}${API_PREFIX}/save-ai-config`,

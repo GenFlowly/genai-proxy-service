@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext'
 import { AIConfig, useAI } from './AIContext'
 import { useLayout } from './LayoutContext'
 import { generateText } from '../services/generateTextService'
+import { generateTextStream } from '../services/generateTextStreamService'
 import { getConversation } from '../services/conversationService'
 import {
     ConversationBlock,
@@ -159,6 +160,26 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         }))
     }
 
+    const fetchVendorResponseStream = async (
+        token: string,
+        aiConfig: AIConfig,
+        prompt: string,
+        selectedResponseId: string | null,
+        currentSystemPrompt: string,
+        onDelta: (chunk: string) => void
+    ): Promise<void> => {
+        await generateTextStream(token, {
+            aiConfig: aiConfig,
+            prompt: {
+                systemPrompt: currentSystemPrompt || "You are a helpful assistant",
+                prompt,
+            },
+            selectedResponseId: selectedResponseId ?? '',
+            conversationId: conversationIdRef.current,
+            client: 'REACT_APP',
+        }, onDelta)
+    }
+
     const loadConversation = useCallback(async (id: string) => {
         if (!isAuthenticated || !customerId) return
 
@@ -215,31 +236,43 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         updateConversationBlock(conversationBlockId, { prompt })
     }
 
-    const generateResponses = async (id: string, overridePrompt?: string, selectedMessageId?: string | null) => {
+    const validateAndPrepareGeneration = (id: string, overridePrompt?: string, selectedMessageId?: string | null) => {
         const conversationBlock = conversationBlockList.find(c => c.conversationBlockId === id)
-        if (!conversationBlock) return
-        if (!isAuthenticated || !customerId) return alert('Please log in first.')
+        if (!conversationBlock) return null
+        if (!isAuthenticated || !customerId) {
+            alert('Please log in first.')
+            return null
+        }
 
         const aiConfigs = config
-        if (aiConfigs.length === 0) return alert('Select at least one vendor and model.')
+        if (aiConfigs.length === 0) {
+            alert('Select at least one vendor and model.')
+            return null
+        }
+
+        const contextSelectedId = getSelectedResponseForBlock(id)
+        const finalSelectedResponseId = selectedMessageId !== undefined ? selectedMessageId : contextSelectedId
+        const promptToUse = overridePrompt ?? conversationBlock.prompt
+
+        return { conversationBlock, aiConfigs, finalSelectedResponseId, promptToUse }
+    }
+
+    const generateResponses = async (id: string, overridePrompt?: string, selectedMessageId?: string | null) => {
+        const prep = validateAndPrepareGeneration(id, overridePrompt, selectedMessageId)
+        if (!prep) return
+
+        const { aiConfigs, finalSelectedResponseId, promptToUse } = prep
 
         updateConversationBlock(id, { isLoading: true, responseMessages: [] })
 
         try {
             const token = await getAccessTokenSilently()
-            // Prefer explicit ID, fallback to context state
-            const contextSelectedId = getSelectedResponseForBlock(id)
-            const finalSelectedResponseId = selectedMessageId !== undefined ? selectedMessageId : contextSelectedId
 
             console.log('DEBUG generateResponses', {
                 id,
                 explicitId: selectedMessageId,
-                contextId: contextSelectedId,
                 finalId: finalSelectedResponseId
             })
-
-            // Use overridePrompt if provided, otherwise fall back to block.prompt (compatibility)
-            const promptToUse = overridePrompt ?? conversationBlock.prompt
 
             const responses = await fetchVendorResponses(
                 token,
@@ -275,6 +308,86 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         }
     }
 
+    const generateResponsesStream = async (id: string, overridePrompt?: string, selectedMessageId?: string | null) => {
+        const prep = validateAndPrepareGeneration(id, overridePrompt, selectedMessageId)
+        if (!prep) return
+
+        const { aiConfigs, finalSelectedResponseId, promptToUse } = prep
+
+        // Initialize placeholders for all selected vendors
+        const timestamp = Date.now()
+        const initialResponseMessages: Message[] = aiConfigs.map((config, index) => ({
+            aiVendor: config.aiVendor,
+            text: '',
+            messageId: `resp-${timestamp}-${index}`,
+            isLoading: true
+        }))
+
+        updateConversationBlock(id, {
+            isLoading: true,
+            responseMessages: initialResponseMessages
+        })
+
+        try {
+            const token = await getAccessTokenSilently()
+
+            // Create a promise for each vendor stream
+            const streamPromises = aiConfigs.map(async (config, index) => {
+                const messageId = initialResponseMessages[index].messageId
+                let accumulatedText = ""
+
+                await fetchVendorResponseStream(
+                    token,
+                    config,
+                    promptToUse,
+                    finalSelectedResponseId,
+                    systemPrompt,
+                    (chunk) => {
+                        accumulatedText += chunk
+
+                        setConversationBlockList(prev =>
+                            prev.map(block => {
+                                if (block.conversationBlockId === id) {
+                                    const msgs = block.responseMessages.map(m =>
+                                        m.messageId === messageId
+                                            ? { ...m, text: accumulatedText }
+                                            : m
+                                    )
+                                    return { ...block, responseMessages: msgs }
+                                }
+                                return block
+                            })
+                        )
+                    }
+                )
+            })
+
+            await Promise.all(streamPromises)
+
+            updateConversationBlock(id, {
+                isLoading: false,
+                prompt: promptToUse
+            })
+            setSelectedResponseForBlock(id, '')
+            setLeftSidebarExpanded(false)
+            setRightSidebarExpanded(false)
+
+
+        } catch (err) {
+            console.error(err)
+            updateConversationBlock(id, {
+                responseMessages: [
+                    {
+                        aiVendor: AIVendor.OPENAI,
+                        text: 'Error generating text stream.',
+                        messageId: 'error',
+                    },
+                ],
+                isLoading: false,
+            })
+        }
+    }
+
     const addNewConversationBlockWithId = (id: string) => {
         const newConversation: ConversationBlock = {
             conversationBlockId: id,
@@ -301,6 +414,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 addNewConversationBlockWithId,
                 updateResponseInConversationBlock: updatePromptInConversationBlock,
                 generateResponses,
+                generateResponsesStream,
                 selectedResponseByBlock,
                 setSelectedResponseForBlock,
                 getSelectedResponseForBlock,

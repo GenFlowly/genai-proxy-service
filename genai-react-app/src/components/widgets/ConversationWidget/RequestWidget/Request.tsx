@@ -16,6 +16,7 @@ export default function Request({ blockId }: RequestProps) {
     const {
         conversationBlockList,
         generateResponses,
+        generateResponsesStream,
         getSelectedResponseForBlock,
         setEditorPrompt,
         setActiveBlockId
@@ -136,7 +137,7 @@ export default function Request({ blockId }: RequestProps) {
                         onClick={() => {
                             if (!hasAnyValidApiKey) return
                             const selectedId = getSelectedResponseForBlock(blockId)
-                            generateResponses(blockId, draftPrompt, selectedId)
+                            generateResponsesStream(blockId, draftPrompt, selectedId)
                         }}
                         label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
                         disabled={conversationBlock.isLoading || !hasAnyValidApiKey}
