@@ -12,7 +12,7 @@ import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import kotlinx.serialization.SerializationException
-import models.GenerateTextRequest
+import com.genflowly.models.api.GenerateTextStreamRequest
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
 
@@ -25,19 +25,11 @@ fun Route.registerGenerateTextStreamRoutes(
     authenticate("auth0") {
         post(Routes.GENERATE_TEXT_STREAM) {
             try {
-                val request = call.receive<GenerateTextRequest>()
+                val request = call.receive<GenerateTextStreamRequest>()
 
                 val customerId = call.requireAuthenticatedCustomerId(
                     customerProfileService
                 )
-
-                if (request.aiConfig.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("error" to "At least one AI vendor must be provided")
-                    )
-                    return@post
-                }
 
                 logger.info(
                     "Received GenerateTextStream request from customerId {} : {}",
@@ -48,7 +40,7 @@ fun Route.registerGenerateTextStreamRoutes(
                 call.respondTextWriter(contentType = ContentType.Text.Plain) {
                     try {
                         aiRequestManager.processTextGenerateStreamRequest(
-                            request.aiConfig,
+                            listOf(request.aiConfig),
                             request.prompt.systemPrompt,
                             request.prompt.prompt,
                             request.conversationId,

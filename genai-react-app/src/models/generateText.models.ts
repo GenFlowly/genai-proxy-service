@@ -14,6 +14,14 @@ export interface GenerateTextRequest {
     client: string
 }
 
+export interface GenerateTextStreamRequest {
+    aiConfig: AIConfig
+    prompt: Prompt
+    selectedResponseId: string
+    conversationId: string
+    client: string
+}
+
 export interface GenerateTextResponse {
     text: string
     aiVendor: string

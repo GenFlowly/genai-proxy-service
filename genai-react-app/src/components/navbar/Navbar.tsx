@@ -127,7 +127,7 @@ export default function Navbar(): React.ReactElement {
 
                 <div className={`${styles.rightControls} ${!isRightSidebarExpanded ? styles.collapsed : ''}`}>
                     <div className={styles.auth}>
-                        {!isAuthenticated ? (
+                        {!isAuthenticated || !user ? (
                             <button
                                 onClick={() => loginWithRedirect()}
                                 className={styles.loginButton}
