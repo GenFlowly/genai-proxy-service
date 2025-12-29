@@ -288,7 +288,14 @@ class AIRequestManager(
             getConversationId(customerId, client, conversationId)
 
         // Step 2 - Create message object
+        // Step 2 - Create message object
+        // Use Deterministic ID to prevent duplication in DDB when multiple vendor requests occur simultaneously.
+        // Uniquely identifies this turn based on conversation, user text, and parent message.
+        val uniqueContent = "${activeConversationId}-${prompt}-${selectedResponseId ?: ""}-user"
+        val deterministicId = java.util.UUID.nameUUIDFromBytes(uniqueContent.toByteArray()).toString()
+
         val message = Message(
+            messageId = deterministicId,
             conversationId = activeConversationId,
             customerId = customerId,
             client = client,
@@ -300,11 +307,9 @@ class AIRequestManager(
         )
 
         // Step 3 - Add message request to conversation
-        // If duplicated, this returns the existing message ID
-        val savedMessageId = conversationService.addMessageInConversation(message)
-        val savedMessage = message.copy(messageId = savedMessageId)
+        conversationService.addMessageInConversation(message)
 
-        logger.info("Added/Found Message id {} in conversation", savedMessageId)
+        logger.info("Added Message id {} to conversation", message.messageId)
 
         // For streaming, we currently support only the first config or iterate?
         // Let's take the first one for now.
@@ -315,11 +320,10 @@ class AIRequestManager(
         }
 
         // Build conversation history for prompt
-        // USE SAVED MESSAGE ID so context is correct
         val promptWithContext = includeThreadContextInPrompt(
-            savedMessage.conversationId,
-            savedMessage.messageId,
-            savedMessage.text
+            message.conversationId,
+            message.messageId,
+            message.text
         )
 
         val sb = StringBuilder()
@@ -342,14 +346,14 @@ class AIRequestManager(
             val responseText = sb.toString()
             if (responseText.isNotEmpty()) {
                 val responseMessage = Message(
-                    conversationId = savedMessage.conversationId,
-                    customerId = savedMessage.customerId,
-                    client = savedMessage.client,
+                    conversationId = message.conversationId,
+                    customerId = message.customerId,
+                    client = message.client,
                     role = "assistant",
                     text = responseText,
-                    previousMessageId = savedMessage.messageId,
+                    previousMessageId = message.messageId,
                     aiConfig = listOf(config),
-                    systemPrompt = savedMessage.systemPrompt
+                    systemPrompt = message.systemPrompt
                 )
                 conversationService.addMessageInConversation(responseMessage)
             }
