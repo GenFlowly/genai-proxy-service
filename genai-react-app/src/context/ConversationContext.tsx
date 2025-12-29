@@ -166,7 +166,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         prompt: string,
         selectedResponseId: string | null,
         currentSystemPrompt: string,
-        onDelta: (chunk: string) => void
+        onDelta: (chunk: string) => void,
+        onConversationId?: (id: string) => void
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -177,7 +178,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta)
+        }, onDelta, onConversationId)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -358,6 +359,16 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                                 return block
                             })
                         )
+                    },
+                    (newConversationId) => {
+                        if (newConversationId && newConversationId !== conversationIdRef.current) {
+                            setConversationId(newConversationId)
+                            conversationIdRef.current = newConversationId
+                            console.log('SET Conversation ID Stream', newConversationId)
+
+                            // Sync URL
+                            navigate(`/chat/${newConversationId}`)
+                        }
                     }
                 )
             })

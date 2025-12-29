@@ -32,6 +32,14 @@ fun Route.registerGenerateTextStreamRoutes(
                     customerProfileService
                 )
 
+                val conversationId = aiRequestManager.getConversationId(
+                    customerId,
+                    request.client,
+                    request.conversationId
+                )
+
+                call.response.header("X-Conversation-Id", conversationId)
+                
                 logger.info(
                     "Received GenerateTextStream request from customerId {} : {}",
                     customerId,
@@ -48,7 +56,7 @@ fun Route.registerGenerateTextStreamRoutes(
                             listOf(request.aiConfig),
                             request.prompt.systemPrompt,
                             request.prompt.prompt,
-                            request.conversationId,
+                            conversationId,
                             request.selectedResponseId,
                             request.client,
                             customerId
