@@ -82,6 +82,7 @@ fun Application.module() {
         allowHeader(HttpHeaders.AccessControlAllowOrigin)
         allowHeader(HttpHeaders.AccessControlAllowHeaders)
         allowHeader(HttpHeaders.AccessControlAllowMethods)
+        exposeHeader("X-Conversation-Id")
         
         allowCredentials = true
         allowNonSimpleContentTypes = true
