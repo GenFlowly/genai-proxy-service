@@ -5,7 +5,8 @@ import { GenerateTextStreamRequest } from "../models/generateText.models";
 export async function generateTextStream(
     token: string,
     request: GenerateTextStreamRequest,
-    onDelta: (chunk: string) => void
+    onDelta: (chunk: string) => void,
+    onConversationId?: (id: string) => void
 ): Promise<void> {
     const response = await fetch(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -18,6 +19,11 @@ export async function generateTextStream(
 
     if (!response.ok) {
         throw new Error(`Text generation failed: ${response.status} ${response.statusText}`);
+    }
+
+    const conversationId = response.headers.get("X-Conversation-Id");
+    if (conversationId && onConversationId) {
+        onConversationId(conversationId);
     }
 
     const reader = response.body?.getReader();
