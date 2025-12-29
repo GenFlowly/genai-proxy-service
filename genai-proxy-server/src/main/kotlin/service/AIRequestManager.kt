@@ -5,16 +5,13 @@ import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.fetchApiKey
-import io.ktor.server.response.respond
 import models.AIConfig
 import models.GenerateTextRequest
-import models.GenerateTextResponse
 import models.Message
 import org.slf4j.LoggerFactory
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import models.BatchGenerateTextResponse
 
 class AIRequestManager(
     private val aiRequestService: AIRequestService,
