@@ -167,7 +167,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         selectedResponseId: string | null,
         currentSystemPrompt: string,
         onDelta: (chunk: string) => void,
-        onConversationId?: (id: string) => void
+        onConversationId?: (id: string) => void,
+        // Added idOverride to support explicit conversation targeting (parallel streams)
+        idOverride?: string
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -176,7 +178,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 prompt,
             },
             selectedResponseId: selectedResponseId ?? '',
-            conversationId: conversationIdRef.current,
+            conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
         }, onDelta, onConversationId)
     }
@@ -335,8 +337,11 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
             const currentConversationId = conversationIdRef.current
             // Helper to perform the fetch for a specific config
-            const runStream = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void) => {
+            const runStream = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void, explicitConversationId?: string) => {
                 let accumulatedText = ""
+                // Use explicit ID if provided (for parallel launches), otherwise ref (for first launch)
+                const idToUse = explicitConversationId || conversationIdRef.current
+
                 await fetchVendorResponseStream(
                     token,
                     conf,
@@ -362,10 +367,12 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             setConversationId(newConversationId)
                             conversationIdRef.current = newConversationId
                             console.log('SET Conversation ID Stream', newConversationId)
-                            navigate(`/chat/${newConversationId}`)
+                            // Deferred navigation to prevent stream cancellation
+                            // navigate(`/chat/${newConversationId}`) 
                         }
                         if (onIdResolved) onIdResolved(newConversationId)
-                    }
+                    },
+                    idToUse
                 )
             }
 
@@ -398,14 +405,19 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     // ID established! Launch the rest immediately.
                     const remainingConfigs = aiConfigs.slice(1)
                     const remainingMsgs = initialResponseMessages.slice(1)
+
+                    // Small delay to ensure backend stability and initial write settlement
+                    await new Promise(r => setTimeout(r, 200))
+
                     const others = remainingConfigs.map((config, index) =>
-                        runStream(config, remainingMsgs[index].messageId)
+                        runStream(config, remainingMsgs[index].messageId, undefined, result.value)
                     )
                     pendingPromises.push(...others)
                 }
 
                 await Promise.all(pendingPromises)
             }
+
 
             updateConversationBlock(id, {
                 isLoading: false,
@@ -414,6 +426,15 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             setSelectedResponseForBlock(id, '')
             setLeftSidebarExpanded(false)
             setRightSidebarExpanded(false)
+
+            // Navigate securely after all streams are done to avoid cancellation
+            if (conversationIdRef.current && conversationIdRef.current !== id) {
+                // Check if we are still on the "new" page or need to update URL
+                // Ideally just sync URL to the new ID
+                // We don't have access to current URL here easily unless we use location hook, 
+                // but navigating to /chat/ID is safe idempotent action.
+                navigate(`/chat/${conversationIdRef.current}`)
+            }
 
 
         } catch (err) {
