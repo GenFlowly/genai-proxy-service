@@ -2,11 +2,17 @@ import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import { GenerateTextStreamRequest } from "../models/generateText.models";
 
+export interface StreamMetadata {
+    conversationId: string | null;
+    messageId: string | null;
+    aiVendor: string | null;
+}
+
 export async function generateTextStream(
     token: string,
     request: GenerateTextStreamRequest,
     onDelta: (chunk: string) => void,
-    onConversationId?: (id: string) => void
+    onMetadata?: (metadata: StreamMetadata) => void
 ): Promise<void> {
     const response = await fetch(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -22,8 +28,15 @@ export async function generateTextStream(
     }
 
     const conversationId = response.headers.get("X-Conversation-Id");
-    if (conversationId && onConversationId) {
-        onConversationId(conversationId);
+    const messageId = response.headers.get("X-Message-Id");
+    const aiVendor = response.headers.get("X-Ai-Vendor");
+
+    if (onMetadata) {
+        onMetadata({
+            conversationId: conversationId,
+            messageId: messageId,
+            aiVendor: aiVendor
+        });
     }
 
     const reader = response.body?.getReader();

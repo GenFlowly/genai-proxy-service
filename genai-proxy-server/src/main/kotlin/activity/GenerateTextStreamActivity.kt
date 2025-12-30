@@ -50,17 +50,25 @@ fun Route.registerGenerateTextStreamRoutes(
                 call.response.header("Connection", "keep-alive")
                 call.response.header("X-Accel-Buffering", "no")
 
+                val streamResult = aiRequestManager.processTextGenerateStreamRequest(
+                    listOf(request.aiConfig),
+                    request.prompt.systemPrompt,
+                    request.prompt.prompt,
+                    conversationId,
+                    request.selectedResponseId,
+                    request.client,
+                    customerId
+                )
+
+                // Send Metadata Headers
+                // conversationId is already set (or resolved), but let's sync with result
+                call.response.header("X-Conversation-Id", streamResult.conversationId)
+                call.response.header("X-Message-Id", streamResult.messageId)
+                call.response.header("X-Ai-Vendor", request.aiConfig.aiVendor.toString())
+
                 call.respondTextWriter(contentType = ContentType.Text.Plain) {
                     try {
-                        aiRequestManager.processTextGenerateStreamRequest(
-                            listOf(request.aiConfig),
-                            request.prompt.systemPrompt,
-                            request.prompt.prompt,
-                            conversationId,
-                            request.selectedResponseId,
-                            request.client,
-                            customerId
-                        ).collect { chunk ->
+                        streamResult.flow.collect { chunk ->
                             write(chunk)
                             flush()
                         }

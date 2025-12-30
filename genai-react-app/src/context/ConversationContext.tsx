@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext'
 import { AIConfig, useAI } from './AIContext'
 import { useLayout } from './LayoutContext'
 import { generateText } from '../services/generateTextService'
-import { generateTextStream } from '../services/generateTextStreamService'
+import { generateTextStream, StreamMetadata } from '../services/generateTextStreamService'
 import { getConversation } from '../services/conversationService'
 import {
     ConversationBlock,
@@ -167,7 +167,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         selectedResponseId: string | null,
         currentSystemPrompt: string,
         onDelta: (chunk: string) => void,
-        onConversationId?: (id: string) => void,
+        onMetadata?: (metadata: StreamMetadata) => void,
         // Added idOverride to support explicit conversation targeting (parallel streams)
         idOverride?: string
     ): Promise<void> => {
@@ -180,7 +180,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta, onConversationId)
+        }, onDelta, onMetadata)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -362,7 +362,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             })
                         )
                     },
-                    (newConversationId) => {
+                    (metadata: StreamMetadata) => {
+                        const newConversationId = metadata.conversationId
+
                         if (newConversationId && newConversationId !== conversationIdRef.current) {
                             setConversationId(newConversationId)
                             conversationIdRef.current = newConversationId
@@ -370,7 +372,25 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             // Deferred navigation to prevent stream cancellation
                             // navigate(`/chat/${newConversationId}`) 
                         }
-                        if (onIdResolved) onIdResolved(newConversationId)
+
+                        // Update metadata in the conversation block (e.g. link response to user message)
+                        if (metadata.messageId) {
+                            setConversationBlockList(prev =>
+                                prev.map(block => {
+                                    if (block.conversationBlockId === id) {
+                                        const msgs = block.responseMessages.map(m =>
+                                            m.messageId === msgId
+                                                ? { ...m, previousMessageId: metadata.messageId ?? undefined }
+                                                : m
+                                        )
+                                        return { ...block, responseMessages: msgs }
+                                    }
+                                    return block
+                                })
+                            )
+                        }
+
+                        if (onIdResolved && newConversationId) onIdResolved(newConversationId)
                     },
                     idToUse
                 )
