@@ -83,6 +83,9 @@ fun Application.module() {
         allowHeader(HttpHeaders.AccessControlAllowHeaders)
         allowHeader(HttpHeaders.AccessControlAllowMethods)
         exposeHeader("X-Conversation-Id")
+        exposeHeader("X-Message-Id")
+        exposeHeader("X-Response-Message-Id")
+        exposeHeader("X-Ai-Vendor")
         
         allowCredentials = true
         allowNonSimpleContentTypes = true

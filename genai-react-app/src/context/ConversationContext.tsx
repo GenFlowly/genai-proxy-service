@@ -359,6 +359,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             // Helper to perform the fetch for a specific config
             const runStream = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void, explicitConversationId?: string) => {
                 let accumulatedText = ""
+                // Track the active message ID (starts as placeholder, updates to real backend ID)
+                let currentMsgId = msgId
+
                 // Use explicit ID if provided (for parallel launches), otherwise ref (for first launch)
                 const idToUse = explicitConversationId || conversationIdRef.current
 
@@ -374,7 +377,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             prev.map(block => {
                                 if (block.conversationBlockId === id) {
                                     const msgs = block.responseMessages.map(m =>
-                                        m.messageId === msgId ? { ...m, text: accumulatedText } : m
+                                        m.messageId === currentMsgId ? { ...m, text: accumulatedText } : m
                                     )
                                     return { ...block, responseMessages: msgs }
                                 }
@@ -398,21 +401,30 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             // navigate(`/chat/${newConversationId}`) 
                         }
 
-                        // Update metadata in the conversation block (e.g. link response to user message)
-                        if (metadata.messageId) {
-                            setConversationBlockList(prev =>
-                                prev.map(block => {
-                                    if (block.conversationBlockId === id) {
-                                        const msgs = block.responseMessages.map(m =>
-                                            m.messageId === msgId
-                                                ? { ...m, previousMessageId: metadata.messageId ?? undefined }
-                                                : m
-                                        )
-                                        return { ...block, responseMessages: msgs }
-                                    }
-                                    return block
-                                })
-                            )
+                        // Update metadata in the conversation block
+                        setConversationBlockList(prev =>
+                            prev.map(block => {
+                                if (block.conversationBlockId === id) {
+                                    const msgs = block.responseMessages.map(m => {
+                                        // 1. Link to User Message (previousMessageId)
+                                        // 2. Update to Real Assistant Message ID (metadata.responseMessageId)
+                                        if (m.messageId === currentMsgId) {
+                                            const updates: any = {}
+                                            if (metadata.messageId) updates.previousMessageId = metadata.messageId
+                                            if (metadata.responseMessageId) updates.messageId = metadata.responseMessageId
+                                            return { ...m, ...updates }
+                                        }
+                                        return m
+                                    })
+                                    return { ...block, responseMessages: msgs }
+                                }
+                                return block
+                            })
+                        )
+
+                        // Update local reference so subsequent chunks target the new ID
+                        if (metadata.responseMessageId) {
+                            currentMsgId = metadata.responseMessageId
                         }
 
                         if (onIdResolved && newConversationId) onIdResolved(newConversationId)
