@@ -273,7 +273,8 @@ class AIRequestManager(
     data class StreamExecutionResult(
         val conversationId: String,
         val messageId: String,
-        val flow: kotlinx.coroutines.flow.Flow<String>
+        val flow: kotlinx.coroutines.flow.Flow<String>,
+        val responseMessageId: String
     )
 
     suspend fun processTextGenerateStreamRequest(
@@ -317,7 +318,7 @@ class AIRequestManager(
         // Let's take the first one for now.
         val config = aiConfig.firstOrNull() ?: run {
              logger.warn("No AI config provided in request")
-             return StreamExecutionResult(activeConversationId, deterministicId, kotlinx.coroutines.flow.emptyFlow())
+             return StreamExecutionResult(activeConversationId, deterministicId, kotlinx.coroutines.flow.emptyFlow(), "")
         }
 
         // Build conversation history for prompt
@@ -326,6 +327,11 @@ class AIRequestManager(
             message.messageId,
             message.text
         )
+
+        // Pre-calculate the deterministic Response ID so we can send it to the client headers
+        // Format: userMessageId + "response" + vendor
+        val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
+        val responseMessageId = java.util.UUID.nameUUIDFromBytes(responseUniqueContent.toByteArray()).toString()
 
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
@@ -347,6 +353,7 @@ class AIRequestManager(
                 val responseText = sb.toString()
                 if (responseText.isNotEmpty()) {
                     val responseMessage = Message(
+                        messageId = responseMessageId, // Use the pre-calculated ID
                         conversationId = message.conversationId,
                         customerId = message.customerId,
                         client = message.client,
@@ -361,7 +368,7 @@ class AIRequestManager(
             }
         }
 
-        return StreamExecutionResult(activeConversationId, deterministicId, flow)
+        return StreamExecutionResult(activeConversationId, deterministicId, flow, responseMessageId)
     }
 
     private suspend fun generateTextStream(

@@ -5,6 +5,7 @@ import { GenerateTextStreamRequest } from "../models/generateText.models";
 export interface StreamMetadata {
     conversationId: string | null;
     messageId: string | null;
+    responseMessageId: string | null;
     aiVendor: string | null;
 }
 
@@ -29,12 +30,14 @@ export async function generateTextStream(
 
     const conversationId = response.headers.get("X-Conversation-Id");
     const messageId = response.headers.get("X-Message-Id");
+    const responseMessageId = response.headers.get("X-Response-Message-Id");
     const aiVendor = response.headers.get("X-Ai-Vendor");
 
     if (onMetadata) {
         onMetadata({
             conversationId: conversationId,
             messageId: messageId,
+            responseMessageId: responseMessageId,
             aiVendor: aiVendor
         });
     }

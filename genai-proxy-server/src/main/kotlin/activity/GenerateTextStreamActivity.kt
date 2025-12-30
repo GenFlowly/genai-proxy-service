@@ -62,7 +62,8 @@ fun Route.registerGenerateTextStreamRoutes(
                 // Send Metadata Headers
                 // conversationId is already set (or resolved), but let's sync with result
                 call.response.header("X-Conversation-Id", streamResult.conversationId)
-                call.response.header("X-Message-Id", streamResult.messageId)
+                call.response.header("X-Message-Id", streamResult.messageId) // User Msg ID
+                call.response.header("X-Response-Message-Id", streamResult.responseMessageId) // Assistant Msg ID
                 call.response.header("X-Ai-Vendor", request.aiConfig.aiVendor.toString())
 
                 call.respondTextWriter(contentType = ContentType.Text.Plain) {
