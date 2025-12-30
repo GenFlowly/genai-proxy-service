@@ -38,7 +38,6 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.conversationId
                 )
 
-                call.response.header("X-Conversation-Id", conversationId)
                 
                 logger.info(
                     "Received GenerateTextStream request from customerId {} : {}",

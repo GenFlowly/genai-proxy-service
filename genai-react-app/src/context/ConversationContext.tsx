@@ -253,8 +253,28 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             return null
         }
 
-        const contextSelectedId = getSelectedResponseForBlock(id)
-        const finalSelectedResponseId = selectedMessageId !== undefined ? selectedMessageId : contextSelectedId
+        const index = conversationBlockList.findIndex(c => c.conversationBlockId === id)
+        let parentResponseId = ''
+
+        // Should use the selected response from the PREVIOUS block as the parent
+        if (index > 0) {
+            const prevBlock = conversationBlockList[index - 1]
+            const prevSelectedId = getSelectedResponseForBlock(prevBlock.conversationBlockId)
+
+            // If explicit selection exists, use it. Otherwise default to first response.
+            if (prevSelectedId) {
+                parentResponseId = prevSelectedId
+            } else if (prevBlock.responseMessages.length > 0) {
+                parentResponseId = prevBlock.responseMessages[0].messageId
+            }
+        }
+
+        // If an explicit override was passed (e.g. from a specific "Regenerate" button?), use that. 
+        // Otherwise use the resolved parent from context.
+        const finalSelectedResponseId = selectedMessageId !== undefined && selectedMessageId !== null
+            ? selectedMessageId
+            : parentResponseId
+
         const promptToUse = overridePrompt ?? conversationBlock.prompt
 
         return { conversationBlock, aiConfigs, finalSelectedResponseId, promptToUse }
@@ -366,9 +386,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         const newConversationId = metadata.conversationId
 
                         if (newConversationId && newConversationId !== conversationIdRef.current) {
-                            setConversationId(newConversationId)
-                            conversationIdRef.current = newConversationId
-                            console.log('SET Conversation ID Stream', newConversationId)
+                            // Backend might send duplicate headers "id, id" if misconfigured (fixed now, but safeguard here)
+                            const sanitizedId = newConversationId.split(',')[0].trim()
+
+                            if (sanitizedId && sanitizedId !== conversationIdRef.current) {
+                                setConversationId(sanitizedId)
+                                conversationIdRef.current = sanitizedId
+                                console.log('SET Conversation ID Stream', sanitizedId)
+                            }
                             // Deferred navigation to prevent stream cancellation
                             // navigate(`/chat/${newConversationId}`) 
                         }
