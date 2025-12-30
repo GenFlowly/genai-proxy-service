@@ -16,7 +16,8 @@ COPY src ./src
 RUN gradle buildFatJar --no-daemon
 
 # Stage 2: Runtime
-FROM amazoncorretto:17-alpine
+# Switched to non-Alpine (Amazon Linux 2) to fix DNS/Network hangs
+FROM amazoncorretto:17
 
 WORKDIR /app
 

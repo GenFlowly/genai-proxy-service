@@ -33,6 +33,7 @@ dependencies {
     testImplementation("io.ktor:ktor-server-test-host")
 
     implementation("io.ktor:ktor-server-cors:3.0.0")
+    implementation("io.ktor:ktor-server-call-logging:3.0.0")
 
     // OpenAPI plugin
     implementation("io.ktor:ktor-server-openapi:3.0.0")

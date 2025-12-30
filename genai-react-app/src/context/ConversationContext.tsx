@@ -377,7 +377,10 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             prev.map(block => {
                                 if (block.conversationBlockId === id) {
                                     const msgs = block.responseMessages.map(m =>
-                                        m.messageId === currentMsgId ? { ...m, text: accumulatedText } : m
+                                        // Match either the current active ID (which might be new) OR the original placeholder ID (if state update hasn't landed yet)
+                                        (m.messageId === currentMsgId || m.messageId === msgId)
+                                            ? { ...m, text: accumulatedText }
+                                            : m
                                     )
                                     return { ...block, responseMessages: msgs }
                                 }
@@ -401,6 +404,11 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             // navigate(`/chat/${newConversationId}`) 
                         }
 
+                        // Capture currentMsgId BEFORE updating it later in this callback.
+                        // Essential because the functional state update below executes asynchronously/later, 
+                        // and if we don't capture it here, the closure might see the updated value!
+                        const targetId = currentMsgId
+
                         // Update metadata in the conversation block
                         setConversationBlockList(prev =>
                             prev.map(block => {
@@ -408,7 +416,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                                     const msgs = block.responseMessages.map(m => {
                                         // 1. Link to User Message (previousMessageId)
                                         // 2. Update to Real Assistant Message ID (metadata.responseMessageId)
-                                        if (m.messageId === currentMsgId) {
+                                        if (m.messageId === targetId) {
                                             const updates: any = {}
                                             if (metadata.messageId) updates.previousMessageId = metadata.messageId
                                             if (metadata.responseMessageId) updates.messageId = metadata.responseMessageId
