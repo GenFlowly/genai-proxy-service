@@ -270,6 +270,12 @@ class AIRequestManager(
         }
     }
 
+    data class StreamExecutionResult(
+        val conversationId: String,
+        val messageId: String,
+        val flow: kotlinx.coroutines.flow.Flow<String>
+    )
+
     suspend fun processTextGenerateStreamRequest(
         aiConfig: List<AIConfig>,
         systemPrompt: String,
@@ -278,13 +284,12 @@ class AIRequestManager(
         selectedResponseId: String?,
         client: String,
         customerId: String
-    ): kotlinx.coroutines.flow.Flow<String> = kotlinx.coroutines.flow.flow {
+    ): StreamExecutionResult {
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =
             getConversationId(customerId, client, conversationId)
 
-        // Step 2 - Create message object
         // Step 2 - Create message object
         // Use Deterministic ID to prevent duplication in DDB when multiple vendor requests occur simultaneously.
         // Uniquely identifies this turn based on conversation, user text, and parent message.
@@ -310,10 +315,9 @@ class AIRequestManager(
 
         // For streaming, we currently support only the first config or iterate?
         // Let's take the first one for now.
-        val config = aiConfig.firstOrNull()
-        if (config == null) {
-            logger.warn("No AI config provided in request")
-            return@flow
+        val config = aiConfig.firstOrNull() ?: run {
+             logger.warn("No AI config provided in request")
+             return StreamExecutionResult(activeConversationId, deterministicId, kotlinx.coroutines.flow.emptyFlow())
         }
 
         // Build conversation history for prompt
@@ -323,39 +327,41 @@ class AIRequestManager(
             message.text
         )
 
-        val sb = StringBuilder()
-
-        try {
-            generateTextStream(
-                config.aiVendor,
-                config.model,
-                promptWithContext,
-                message.systemPrompt,
-                message.customerId
-            ).collect { chunk ->
-                sb.append(chunk)
-                emit(chunk)
-            }
-        } catch (e: Exception) {
-            logger.error("Error during streaming", e)
-            throw e
-        } finally {
-            val responseText = sb.toString()
-            if (responseText.isNotEmpty()) {
-                val responseMessage = Message(
-                    conversationId = message.conversationId,
-                    customerId = message.customerId,
-                    client = message.client,
-                    role = "assistant",
-                    text = responseText,
-                    previousMessageId = message.messageId,
-                    aiConfig = listOf(config),
-                    systemPrompt = message.systemPrompt
-                )
-                conversationService.addMessageInConversation(responseMessage)
+        val flow = kotlinx.coroutines.flow.flow {
+            val sb = StringBuilder()
+            try {
+                generateTextStream(
+                    config.aiVendor,
+                    config.model,
+                    promptWithContext,
+                    message.systemPrompt,
+                    message.customerId
+                ).collect { chunk ->
+                    sb.append(chunk)
+                    emit(chunk)
+                }
+            } catch (e: Exception) {
+                logger.error("Error during streaming", e)
+                throw e
+            } finally {
+                val responseText = sb.toString()
+                if (responseText.isNotEmpty()) {
+                    val responseMessage = Message(
+                        conversationId = message.conversationId,
+                        customerId = message.customerId,
+                        client = message.client,
+                        role = "assistant",
+                        text = responseText,
+                        previousMessageId = message.messageId,
+                        aiConfig = listOf(config),
+                        systemPrompt = message.systemPrompt
+                    )
+                    conversationService.addMessageInConversation(responseMessage)
+                }
             }
         }
 
+        return StreamExecutionResult(activeConversationId, deterministicId, flow)
     }
 
     private suspend fun generateTextStream(
