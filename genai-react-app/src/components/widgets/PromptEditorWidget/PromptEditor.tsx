@@ -3,6 +3,7 @@ import { ICONS } from '../../../constants/icons'
 import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor from '@uiw/react-markdown-editor'
+import { EditorView } from '@codemirror/view'
 import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import styles from './PromptEditor.module.scss'
 import { addStepsCommand, addExamplesCommand } from './CustomToolbarCommands'
@@ -35,8 +36,8 @@ export default function PromptEditor({ id, value, onChange, disableCache = false
 
                                 addStepsCommand,
                                 addExamplesCommand,
-
                             ]}
+                            extensions={[EditorView.lineWrapping]}
                         />
                     </div>
                     <div className={styles.controlsRow}>
