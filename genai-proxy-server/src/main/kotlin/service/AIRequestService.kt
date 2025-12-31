@@ -1,6 +1,7 @@
 package com.genflowly.service
 
 import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageParam
 import com.genflowly.aicallerlib.clients.AIClient
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.aicallerlib.models.claude.ClaudeModelsListResponse
@@ -15,6 +16,9 @@ import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.GenerateContentParameters
 import com.google.genai.types.Part
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputItem
+import com.openai.models.responses.ResponseCreateParams.Input
+import models.Message
 import org.koin.core.component.KoinComponent
 import org.koin.core.parameter.parametersOf
 import org.koin.core.qualifier.named
@@ -24,16 +28,22 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
     KoinComponent {
 
     fun buildClaudeRequest(
-        prompt: String,
+        messages: List<Message>,
         model: String,
         systemPrompt: String
-    ):
-            MessageCreateParams {
+    ): MessageCreateParams {
+        val messageParams = messages.map { msg ->
+            MessageParam.builder()
+                .role(MessageParam.Role.of(msg.role))
+                .content(msg.text)
+                .build()
+        }
+
         return MessageCreateParams.builder()
             .system(systemPrompt)
-            .maxTokens(1024L)
-            .addUserMessage(prompt)
+            .maxTokens(4096L)
             .model(model)
+            .messages(messageParams)
             .build()
     }
 
@@ -45,13 +55,28 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
     }
 
     fun buildOpenAIRequest(
-        prompt: String,
+        messages: List<Message>,
         model: String,
         systemPrompt: String
     ): ResponseCreateParams {
+        val inputItems = messages.map { msg ->
+             val role = if (msg.role.equals("assistant", ignoreCase = true)) {
+                 ResponseInputItem.Message.Role.of("assistant")
+             } else {
+                 ResponseInputItem.Message.Role.of("user")
+             }
+             
+             ResponseInputItem.ofMessage(
+                 ResponseInputItem.Message.builder()
+                     .role(role)
+                     .addInputTextContent(msg.text)
+                     .build()
+             )
+        }
+
         return ResponseCreateParams.builder()
             .instructions(systemPrompt)
-            .input(prompt)
+            .input(Input.ofResponse(inputItems))
             .model(model)
             .build()
     }
@@ -64,7 +89,7 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
     }
 
     fun buildGeminiRequest(
-        prompt: String,
+        messages: List<Message>,
         model: String,
         systemPrompt: String
     ): GenerateContentParameters {
@@ -72,19 +97,18 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
             .role("system") // Role is "system" for instructions
             .parts(
                 Part.builder()
-                    .text("systemPrompt")
+                    .text(systemPrompt)
                     .build()
             )
             .build()
 
-        val content = Content.builder()
-            .role("user")
-            .parts(
-                Part.builder()
-                    .text(prompt)
-                    .build()
-            )
-            .build()
+        val mappedContents = messages.map { msg ->
+             val geminiRole = if (msg.role == "assistant") "model" else "user"
+             Content.builder()
+                .role(geminiRole)
+                .parts(Part.builder().text(msg.text).build())
+                .build()
+        }
 
         val config = GenerateContentConfig.builder()
             .systemInstruction(systemInstruction)
@@ -93,7 +117,7 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
         return GenerateContentParameters.builder()
             .model(model)
             .config(config)
-            .contents(content)
+            .contents(mappedContents)
             .build()
     }
 

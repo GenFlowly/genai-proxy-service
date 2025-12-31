@@ -21,21 +21,11 @@ class AIRequestManager(
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
 
-    private suspend fun includeThreadContextInPrompt(
+    private suspend fun getThreadContext(
         conversationId: String,
-        messageId: String,
-        prompt: String
-    ): String {
-        val messages =
-            conversationService.getMessageThread(conversationId, messageId)
-
-        if (messages.isEmpty()) return prompt.trim()
-
-        return buildString {
-            messages.forEach { msg ->
-                appendLine("${msg.role}: ${msg.text.trim()}")
-            }
-        }.trimEnd()
+        messageId: String
+    ): List<Message> {
+        return conversationService.getMessageThread(conversationId, messageId)
     }
 
 
@@ -131,19 +121,17 @@ class AIRequestManager(
         var responseText: String?
 
         // Step 1: Build conversation history for prompt
-        val promptWithContext = includeThreadContextInPrompt(
+        val messages = getThreadContext(
             message.conversationId,
-            message.messageId,
-            message.text
+            message.messageId
         )
 
-
-        logger.info("Sending prompt with context = {}", promptWithContext)
+        logger.info("Sending {} messages context", messages.size)
         
         responseText = generateText(
             aiVendor, 
             model, 
-            promptWithContext, 
+            messages, 
             message.systemPrompt, 
             message.customerId
         )
@@ -188,7 +176,7 @@ class AIRequestManager(
     suspend fun generateText(
         aiVendor: AIVendor,
         model: String,
-        prompt: String,
+        messages: List<Message>,
         systemPrompt: String?,
         customerId: String
     ): String {
@@ -206,7 +194,7 @@ class AIRequestManager(
             val aiResponse = when (aiVendor) {
                 AIVendor.OPENAI -> {
                     val params = aiRequestService.buildOpenAIRequest(
-                        prompt,
+                        messages,
                         model,
                         systemPrompt ?: ""
                     )
@@ -220,7 +208,7 @@ class AIRequestManager(
 
                 AIVendor.GEMINI -> {
                     val params = aiRequestService.buildGeminiRequest(
-                        prompt,
+                        messages,
                         model,
                         systemPrompt ?: ""
                     )
@@ -234,7 +222,7 @@ class AIRequestManager(
 
                 AIVendor.CLAUDE -> {
                     val params = aiRequestService.buildClaudeRequest(
-                        prompt,
+                        messages,
                         model,
                         systemPrompt ?: ""
                     )
@@ -322,10 +310,9 @@ class AIRequestManager(
         }
 
         // Build conversation history for prompt
-        val promptWithContext = includeThreadContextInPrompt(
+        val messages = getThreadContext(
             message.conversationId,
-            message.messageId,
-            message.text
+            message.messageId
         )
 
         // Pre-calculate the deterministic Response ID so we can send it to the client headers
@@ -339,18 +326,35 @@ class AIRequestManager(
                 generateTextStream(
                     config.aiVendor,
                     config.model,
-                    promptWithContext,
+                    messages,
                     message.systemPrompt,
                     message.customerId
                 ).collect { chunk ->
                     sb.append(chunk)
                     emit(chunk)
                 }
+            } catch (e: java.io.IOException) {
+                logger.warn("Stream disrupted (client likely disconnected): {}", e.message)
+                throw e
             } catch (e: Exception) {
                 logger.error("Error during streaming", e)
-                throw e
+                emit("\n\n[Error: ${e.message}]")
+                // Do not rethrow if we want the stream to end "gracefully" with the error text?
+                // But the caller might want to know?
+                // Activity logs it. If we swallow, activity thinks success.
+                // But we sent text.
+                // Let's rethrow so backend knows it failed, effectively.
+                // But wait, if we rethrow, does Ktor send the error?
+                // Activity uses `write(chunk)`. If we throw here, flow collection allows exception to bubble up.
+                // Activity catch block logs error. The response writer might be closed abruptly.
+                // If we want the USER to see the text, we should ensure it gets written.
+                // Emitting here puts it in the flow. Activity writes it.
+                // Then we throw. Activity catches.
+                throw e 
             } finally {
                 val responseText = sb.toString()
+                logger.info("Stream flow completed for conversation {}. Total length: {}", message.conversationId, responseText.length)
+                
                 if (responseText.isNotEmpty()) {
                     val responseMessage = Message(
                         messageId = responseMessageId, // Use the pre-calculated ID
@@ -374,7 +378,7 @@ class AIRequestManager(
     private suspend fun generateTextStream(
         aiVendor: AIVendor,
         model: String,
-        prompt: String,
+        messages: List<Message>,
         systemPrompt: String?,
         customerId: String
     ): kotlinx.coroutines.flow.Flow<String> {
@@ -388,7 +392,7 @@ class AIRequestManager(
              when (aiVendor) {
                 AIVendor.OPENAI -> {
                     val params = aiRequestService.buildOpenAIRequest(
-                        prompt,
+                        messages,
                         model,
                         systemPrompt ?: ""
                     )
@@ -402,7 +406,7 @@ class AIRequestManager(
 
                 AIVendor.GEMINI -> {
                     val params = aiRequestService.buildGeminiRequest(
-                        prompt,
+                        messages,
                         model,
                         systemPrompt ?: ""
                     )
@@ -416,7 +420,7 @@ class AIRequestManager(
 
                 AIVendor.CLAUDE -> {
                     val params = aiRequestService.buildClaudeRequest(
-                        prompt,
+                        messages,
                         model,
                         systemPrompt ?: ""
                     )
