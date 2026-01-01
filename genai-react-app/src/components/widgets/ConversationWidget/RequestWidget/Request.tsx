@@ -7,6 +7,9 @@ import { useConversation } from '../../../../context/ConversationContext'
 import { useAuth } from '../../../../context/AuthContext'
 import TextContainer from '../../../common/TextContainer/TextContainer'
 import styles from './Request.module.scss'
+import {
+    UserBrandName
+} from '../../../common/BrandName/BrandName'
 
 interface RequestProps {
     blockId: string
@@ -21,7 +24,7 @@ export default function Request({ blockId }: RequestProps) {
         setActiveBlockId
     } = useConversation()
 
-    const { aiVendorAPIKeyStatusList } = useAuth()
+    const { aiVendorAPIKeyStatusList, customerName, customerPicture, user } = useAuth()
     const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
 
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === blockId)
@@ -110,12 +113,16 @@ export default function Request({ blockId }: RequestProps) {
 
     // If we have responses AND loading is finished, this block is "resolved" -> Show static text
     // We keep the editor visible during loading so the user sees the "Generating..." button state.
+
+    const displayName = customerName || user?.name || ''
+    const displayPicture = customerPicture || user?.picture
+
     if (conversationBlock.responseMessages.length > 0 && !conversationBlock.isLoading) {
         return (
             <div className={styles.requestWrapper}>
                 <TextContainer
                     content={conversationBlock.prompt}
-                    // No title or aiVendor, just the user prompt
+                    title={<UserBrandName name={displayName} picture={displayPicture} as="span" />}
                     showCopyButton={true}
                 />
             </div>

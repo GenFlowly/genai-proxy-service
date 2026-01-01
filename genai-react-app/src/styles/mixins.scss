@@ -214,3 +214,57 @@
         box-shadow: 0 0 0 2px rgba($color-primary, 0.1);
     }
 }
+
+// Interactive Element Mixins (Hover/Focus/Active states)
+
+@mixin interactive-base {
+    transition: all 0.2s ease;
+    cursor: pointer;
+
+    // Focus visible standard
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: 2px;
+        z-index: 10;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+        box-shadow: none;
+    }
+}
+
+@mixin interactive-primary-states {
+    &:hover:not(:disabled) {
+        background-color: $color-primary-hover-alt;
+        box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    &:active:not(:disabled),
+    &.active {
+        background: $color-primary-pressed;
+        box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.15);
+    }
+}
+
+@mixin interactive-secondary-states {
+    &:hover:not(:disabled) {
+        background-color: $color-background-hover;
+        box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.1);
+        border-color: $color-border-focus;
+    }
+
+    // Secondary Pressed
+    &:active:not(:disabled) {
+        background: $color-background-selected;
+        box-shadow: inset 0px 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    // Focus override for secondary (often matches border color)
+    &:focus-visible {
+        outline: 2px solid $color-border-focus;
+        // z-index managed by base or context
+    }
+}

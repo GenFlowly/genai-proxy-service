@@ -8,6 +8,7 @@ export interface Message {
     text: string
     messageId: string
     previousMessageId?: string
+    isLoading?: boolean
 }
 
 /**

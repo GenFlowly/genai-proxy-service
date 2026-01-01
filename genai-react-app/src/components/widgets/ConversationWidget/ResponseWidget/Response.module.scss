@@ -16,8 +16,10 @@
   display: flex;
   flex-direction: row;
   gap: 0.75rem;
-  padding: 1rem 1rem;
-  padding-bottom: 3.5rem; // Increased to preventing button clipping
+  margin-top: 0.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  //padding-bottom: 3.5rem; // Increased to preventing button clipping
   width: 100%;
   overflow-x: auto;
   overflow-y: hidden; // Prevent vertical scrollbar
@@ -53,10 +55,16 @@
     // max-width provided by mixin
     // Handle alignment via parent justify-content
   }
-}
 
-.responseWrapper:hover {
-  background-color: rgba(0, 107, 232, 0.03);
+  border: 1px solid transparent; // Reserve space for border transition
+
+  @include interactive-base;
+  @include interactive-secondary-states;
+
+  // Manual override if needed, or rely on mixin.
+  // interactive-secondary-states provides hover border/shadow and focus outline.
+  // It matches the manual styles previously added.
+
 }
 
 .selected {

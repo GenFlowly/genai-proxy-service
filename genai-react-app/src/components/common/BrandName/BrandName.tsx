@@ -54,3 +54,39 @@ export function CollapsedClaudeBrandName({ size = 20, className }: { size?: numb
 export function CollapsedGeminiBrandName({ size = 20, className }: { size?: number, className?: string }) {
     return <Icon src={ICONS.GEMINI} size={size} className={className} />
 }
+
+export function UserBrandName<T extends ElementType = 'div'>({
+    name,
+    picture,
+    as,
+    className = '',
+    ...props
+}: {
+    name: string;
+    picture?: string;
+    as?: T;
+    className?: string;
+} & Omit<React.ComponentPropsWithoutRef<T>, 'className' | 'children' | 'as'>) {
+    const Component = as || 'div'
+
+    return (
+        <Component className={`${styles.brandContainer} ${className}`} {...props}>
+            {picture ? (
+                <img
+                    src={picture}
+                    alt={name}
+                    style={{
+                        width: '1.5rem',
+                        height: '1.5rem',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        flexShrink: 0
+                    }}
+                />
+            ) : (
+                <Icon src={ICONS.USER_CIRCLE} size={24} />
+            )}
+            <span>{name}</span>
+        </Component>
+    )
+}

@@ -8,18 +8,22 @@ import styles from './InstructionSidebarWidget.module.scss'
 
 export default function InstructionSidebarWidget() {
     const { systemPrompt } = useAI()
-    const { isLeftSidebarExpanded, setInstructionWidgetExpanded } = useLayout()
+    const { isLeftSidebarExpanded, setInstructionWidgetExpanded, isInstructionWidgetExpanded } = useLayout()
     const collapsed = !isLeftSidebarExpanded
 
     const handleClick = () => {
-        setInstructionWidgetExpanded(true)
-        // Scroll to instruction widget
-        setTimeout(() => {
-            const element = document.getElementById('instruction-widget-scroll-anchor')
-            if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }
-        }, 100)
+        const newState = !isInstructionWidgetExpanded
+        setInstructionWidgetExpanded(newState)
+
+        // Scroll to instruction widget only if expanding
+        if (newState) {
+            setTimeout(() => {
+                const element = document.getElementById('instruction-widget-scroll-anchor')
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+            }, 100)
+        }
     }
 
     const content = (
