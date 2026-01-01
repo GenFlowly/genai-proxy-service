@@ -10,4 +10,6 @@ export interface OnboardCustomerResponse {
     }
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[]
     customerInstructions?: InstructionResponse[]
+    customerName?: string
+    customerPicture?: string
 }

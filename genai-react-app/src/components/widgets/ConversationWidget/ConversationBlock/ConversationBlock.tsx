@@ -20,17 +20,39 @@ export default function ConversationBlock({ id }: { id: string }) {
     const responseRef = useRef<HTMLDivElement | null>(null)
     const hasScrolledRef = useRef(false)
 
+    // Reset scroll ref when loading starts (new generation)
+    useEffect(() => {
+        if (conversationBlock?.isLoading) {
+            hasScrolledRef.current = false
+        }
+    }, [conversationBlock?.isLoading])
+
+    // Scroll to response when it appears and we haven't scrolled yet (Initial "Jump" to start)
     useEffect(() => {
         if (conversationBlock?.responseMessages?.length && responseRef.current && !hasScrolledRef.current) {
-            if ("scrollIntoView" in responseRef.current) {
-                responseRef.current.scrollIntoView({
+            // Wait a tick for layout
+            setTimeout(() => {
+                responseRef.current?.scrollIntoView({
                     behavior: 'smooth',
                     block: 'start',
                 })
                 hasScrolledRef.current = true
-            }
+            }, 100)
         }
-    }, [conversationBlock?.responseMessages])
+    }, [conversationBlock?.responseMessages, conversationBlock?.isLoading])
+
+    // Continuous scroll during streaming (Sticky Bottom)
+    useEffect(() => {
+        if (conversationBlock?.isLoading && responseRef.current && hasScrolledRef.current) {
+            // Use 'auto' behavior for stickiness to avoid fighting with smooth animation lag
+            // Check if element is roughly in view or if we should force it?
+            // User requested "automatically scroll down".
+            responseRef.current.scrollIntoView({
+                behavior: 'smooth',
+                block: 'end',
+            })
+        }
+    }, [conversationBlock?.responseMessages, conversationBlock?.isLoading])
 
     if (!conversationBlock) return null
 

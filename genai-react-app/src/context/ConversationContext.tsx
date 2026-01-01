@@ -247,7 +247,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             return null
         }
 
-        const aiConfigs = config
+        const aiConfigs = config.filter(c => c.aiVendor && c.model && c.model.trim() !== '')
         if (aiConfigs.length === 0) {
             alert('Select at least one vendor and model.')
             return null

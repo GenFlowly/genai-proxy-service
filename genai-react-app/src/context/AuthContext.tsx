@@ -29,6 +29,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
     const [aiConfigPreferences, setAiConfigPreferences] = useState<AuthContextType['aiConfigPreferences']>(null)
     const [customerInstructions, setCustomerInstructions] = useState<InstructionResponse[]>([])
+    const [customerName, setCustomerName] = useState<string | undefined>(undefined)
+    const [customerPicture, setCustomerPicture] = useState<string | undefined>(undefined)
     const [isInternalLoading, setIsInternalLoading] = useState(true)
 
     // ✅ Effect 0: Handle Unauthenticated State to clear loading
@@ -95,6 +97,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                     if (onboardData.customerInstructions) {
                         setCustomerInstructions(onboardData.customerInstructions)
                     }
+                    if (onboardData.customerName) setCustomerName(onboardData.customerName)
+                    if (onboardData.customerPicture) setCustomerPicture(onboardData.customerPicture)
 
                     if (onboardData.aiConfigPreferences) {
                         setAiConfigPreferences(onboardData.aiConfigPreferences)
@@ -178,6 +182,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         customerInstructions,
         refreshInstructions,
         updateInstruction,
+        customerName,
+        customerPicture,
     }
 
     return (

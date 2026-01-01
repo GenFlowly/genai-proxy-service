@@ -23,6 +23,8 @@ export interface AuthContextType {
     customerInstructions: InstructionResponse[];
     refreshInstructions: () => Promise<void>;
     updateInstruction: (instruction: InstructionResponse) => void;
+    customerName?: string;
+    customerPicture?: string;
 }
 
 export interface AuthProviderProps {
