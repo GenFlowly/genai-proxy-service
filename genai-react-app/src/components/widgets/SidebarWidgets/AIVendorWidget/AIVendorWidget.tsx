@@ -75,7 +75,7 @@ export default function AIVendorWidget(): React.ReactElement {
             }
             setLoadedPreferencesSignature(currentSignature)
         }
-    }, [aiConfigPreferences, loadedPreferencesSignature, setSelectedModelForAIVendor])
+    }, [aiConfigPreferences, loadedPreferencesSignature, setSelectedModelForAIVendor, config])
 
     // --- Fetch models (with bypass option for refresh) ---
     const fetchModels = useCallback(

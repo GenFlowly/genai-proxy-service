@@ -20,18 +20,23 @@ function LandingPageContent() {
 
 export default function LandingPage() {
     const { conversationId: routeId } = useParams<{ conversationId: string }>()
-    const { loadConversation, conversationId: contextId } = useConversation()
+    const { loadConversation, conversationId: contextId, resetConversation } = useConversation()
 
     useEffect(() => {
-        if (routeId && routeId !== contextId) {
-            // Prevent race condition: verify routeId matches current URL
-            // because useParams might be stale during context updates.
-            // This prevents reloading the previous chat when navigating to /chat (New Chat)
-            if (!window.location.pathname.includes(routeId)) return
-
-            loadConversation(routeId)
+        if (routeId) {
+            // If URL has ID but context doesn't match, load it
+            if (routeId !== contextId) {
+                // Prevent race condition: verify routeId matches current URL
+                if (!window.location.pathname.includes(routeId)) return
+                loadConversation(routeId)
+            }
+        } else {
+            // If URL has NO ID (New Chat) but context has an ID, reset it
+            if (contextId) {
+                resetConversation()
+            }
         }
-    }, [routeId, contextId, loadConversation])
+    }, [routeId, contextId, loadConversation, resetConversation])
 
     return (
         <div className={styles.page}>

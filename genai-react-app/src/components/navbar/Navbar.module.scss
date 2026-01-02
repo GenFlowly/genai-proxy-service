@@ -44,30 +44,32 @@
   transition: all $transition-normal;
 
   &:hover {
+    &:hover {
+      background-color: $color-primary-hover;
+    }
+  }
+
+  .accountMenu {
+    position: relative;
+  }
+
+  .accountButton {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    background-color: $color-primary;
+    color: $white;
+    padding: $spacing-sm $spacing-lg;
+    border-radius: $radius-md;
+    border: none;
+    cursor: pointer;
+    transition: all $transition-normal;
+
     background-color: $color-primary-hover;
   }
 }
 
-.accountMenu {
-  position: relative;
-}
 
-.accountButton {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  background-color: $color-primary;
-  color: $white;
-  padding: $spacing-sm $spacing-lg;
-  border-radius: $radius-md;
-  border: none;
-  cursor: pointer;
-  transition: all $transition-normal;
-
-  &:hover {
-    background-color: $color-primary-hover;
-  }
-}
 
 .dropdownMenu {
   position: absolute;

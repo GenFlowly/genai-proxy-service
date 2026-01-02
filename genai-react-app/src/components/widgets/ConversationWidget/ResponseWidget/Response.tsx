@@ -110,7 +110,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                 // We will rely on the initial useEffect data.
             }
         }
-    }, [availableVendors.join(',')]) // safe dependency on string representation
+    }, [availableVendors, selectedVendors])
 
     // Mapped options for ToggleGroup
     const toggleOptions: ToggleOption[] = useMemo(() => {
