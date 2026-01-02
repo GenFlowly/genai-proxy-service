@@ -12,9 +12,10 @@ import { useLayout } from '../../context/LayoutContext'
 
 import { useConversation } from '../../context/ConversationContext'
 import logo from '../../assets/icons/logo.png'
+import { UserAvatarButton } from '../common/UserAvatarButton/UserAvatarButton'
 
 export default function Navbar(): React.ReactElement {
-    const { loginWithRedirect, logout, isAuthenticated, user } = useAuth()
+    const { loginWithRedirect, logout, isAuthenticated, user, customerPicture, customerName } = useAuth()
     const { customerInstructions } = useAI()
     const { isLeftSidebarExpanded, isRightSidebarExpanded, isInstructionWidgetExpanded, setInstructionWidgetExpanded } = useLayout()
     const { setSystemPrompt, selectedInstructionId, setSelectedInstructionId } = useConversation()
@@ -22,6 +23,9 @@ export default function Navbar(): React.ReactElement {
     const navigate = useNavigate()
     const location = useLocation()
     const menuRef = useRef<HTMLDivElement>(null)
+
+    const displayPicture = customerPicture || user?.picture
+    const displayName = customerName || user?.name || 'Account'
 
     const handleSettingsClick = () => {
         navigate('/settings')
@@ -137,19 +141,16 @@ export default function Navbar(): React.ReactElement {
                             </button>
                         ) : (
                             <div className={styles.accountMenu} ref={menuRef}>
-                                <button
+                                <UserAvatarButton
                                     onClick={() => setShowDropdown(!showDropdown)}
-                                    className={styles.accountButton}
-                                >
-                                    <Icon src={ICONS.USER_CIRCLE} size={20} />
-                                    <span>Account</span>
-                                </button>
+                                    displayName={displayName}
+                                    displayPicture={displayPicture}
+                                />
 
                                 {showDropdown && (
                                     <div className={styles.dropdownMenu}>
                                         <div className={styles.dropdownHeader}>
-                                            <p className={styles.dropdownLabel}>Signed in as</p>
-                                            <p className={styles.dropdownEmail}>{user?.email}</p>
+                                            <p className={styles.dropdownLabel}>Hello {user?.name} 👋</p>
                                         </div>
                                         <button
                                             onClick={handleSettingsClick}
