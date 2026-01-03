@@ -32,7 +32,9 @@ export default function LandingPage() {
             }
         } else {
             // If URL has NO ID (New Chat) but context has an ID, reset it
-            if (contextId) {
+            // Only reset if we are explicitly on the /chat page (not during navigation transition)
+            const isBaseChat = window.location.pathname === '/chat' || window.location.pathname === '/chat/'
+            if (contextId && isBaseChat) {
                 resetConversation()
             }
         }

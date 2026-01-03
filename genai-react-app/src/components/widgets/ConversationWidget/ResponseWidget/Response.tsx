@@ -58,6 +58,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
 
     const [selectedVendors, setSelectedVendors] = useState<string[]>([])
 
+
     // Effect to auto-select new vendors if they appear (e.g. streaming starts) 
     // and if we want them visible by default. 
     // User requirement: "By default all responses should be visible".

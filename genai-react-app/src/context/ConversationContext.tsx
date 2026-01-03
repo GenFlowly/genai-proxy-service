@@ -376,12 +376,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         setConversationBlockList(prev =>
                             prev.map(block => {
                                 if (block.conversationBlockId === id) {
-                                    const msgs = block.responseMessages.map(m =>
+                                    const msgs = block.responseMessages.map(m => {
                                         // Match either the current active ID (which might be new) OR the original placeholder ID (if state update hasn't landed yet)
-                                        (m.messageId === currentMsgId || m.messageId === msgId)
-                                            ? { ...m, text: accumulatedText }
-                                            : m
-                                    )
+                                        const isMatch = (m.messageId === currentMsgId || m.messageId === msgId)
+                                        if (isMatch) {
+                                            return { ...m, text: accumulatedText }
+                                        }
+                                        return m
+                                    })
                                     return { ...block, responseMessages: msgs }
                                 }
                                 return block
@@ -389,6 +391,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         )
                     },
                     (metadata: StreamMetadata) => {
+                        // console.log('[Stream] onMetadata received:', metadata)
                         const newConversationId = metadata.conversationId
 
                         if (newConversationId && newConversationId !== conversationIdRef.current) {
@@ -396,9 +399,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             const sanitizedId = newConversationId.split(',')[0].trim()
 
                             if (sanitizedId && sanitizedId !== conversationIdRef.current) {
-                                setConversationId(sanitizedId)
+                                // setConversationId(sanitizedId) // DO NOT update state yet to avoid LandingPage reset!
                                 conversationIdRef.current = sanitizedId
-                                console.log('SET Conversation ID Stream', sanitizedId)
+                                // console.log('SET Conversation ID Stream', sanitizedId)
                             }
                             // Deferred navigation to prevent stream cancellation
                             // navigate(`/chat/${newConversationId}`) 
@@ -494,10 +497,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
             // Navigate securely after all streams are done to avoid cancellation
             if (conversationIdRef.current && conversationIdRef.current !== id) {
-                // Check if we are still on the "new" page or need to update URL
-                // Ideally just sync URL to the new ID
-                // We don't have access to current URL here easily unless we use location hook, 
-                // but navigating to /chat/ID is safe idempotent action.
+                // Sync state so LandingPage knows we match
+                setConversationId(conversationIdRef.current)
                 navigate(`/chat/${conversationIdRef.current}`)
             }
 

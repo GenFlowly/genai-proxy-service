@@ -1,0 +1,20 @@
+FROM gradle:8.5-jdk17
+
+WORKDIR /app
+
+# Copy gradle configuration first for caching
+COPY build.gradle.kts settings.gradle.kts gradle.properties ./
+COPY gradle ./gradle
+
+# Download dependencies
+# We use --no-daemon to ensure the process exits if needed, though for caching it's fine.
+RUN gradle dependencies --no-daemon
+
+# Copy watcher script
+COPY watch.sh .
+RUN chmod +x watch.sh
+
+EXPOSE 8080
+
+# Run using the custom polling script
+CMD ["bash", "./watch.sh"]
