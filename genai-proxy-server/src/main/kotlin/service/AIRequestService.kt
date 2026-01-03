@@ -16,6 +16,9 @@ import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.GenerateContentParameters
 import com.google.genai.types.Part
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.core.JsonValue
+import com.openai.models.responses.ResponseInputText
+import com.openai.models.responses.ResponseInputContent
 import com.openai.models.responses.ResponseInputItem
 import com.openai.models.responses.ResponseCreateParams.Input
 import models.Message
@@ -38,6 +41,10 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
                 .content(msg.text)
                 .build()
         }
+
+
+        println("Sending request to CLAUDE")
+        println(messageParams)
 
         return MessageCreateParams.builder()
             .system(systemPrompt)
@@ -66,13 +73,27 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
                  ResponseInputItem.Message.Role.of("user")
              }
              
-             ResponseInputItem.ofMessage(
-                 ResponseInputItem.Message.builder()
-                     .role(role)
-                     .addInputTextContent(msg.text)
+             val builder = ResponseInputItem.Message.builder()
+                 .role(role)
+
+             if (msg.role.equals("assistant", ignoreCase = true)) {
+                 // Manually construct output_text type using ResponseInputText builder
+                 // as ResponseOutputText class is missing in this SDK version
+                 val outputContent = ResponseInputText.builder()
+                     .text(msg.text)
+                     .type(JsonValue.from("output_text"))
                      .build()
-             )
-        }
+
+                 builder.addContent(ResponseInputContent.ofInputText(outputContent))
+             } else {
+                 builder.addInputTextContent(msg.text)
+             }
+             
+             ResponseInputItem.ofMessage(builder.build())
+         }
+
+        println("Sending request to OPENAI")
+        println(inputItems)
 
         return ResponseCreateParams.builder()
             .instructions(systemPrompt)
@@ -102,13 +123,24 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
             )
             .build()
 
-        val mappedContents = messages.map { msg ->
-             val geminiRole = if (msg.role == "assistant") "model" else "user"
-             Content.builder()
-                .role(geminiRole)
-                .parts(Part.builder().text(msg.text).build())
-                .build()
+        // Usage of "model" role in direct content list may be filtered by some clients or API versions
+        // if not using the stateful ChatSession. To ensure context is preserved, we collapse history
+        // into a single "User" prompt if we suspect context loss.
+        val fullPrompt = StringBuilder()
+        messages.forEach { msg ->
+             val prefix = if (msg.role == "assistant") "Model: " else "User: "
+             fullPrompt.append("$prefix${msg.text}\n")
         }
+
+        val mappedContents = listOf(
+            Content.builder()
+                .role("user")
+                .parts(Part.builder().text(fullPrompt.toString()).build())
+                .build()
+        )
+
+        println("Sending request to GEMINI")
+        println(mappedContents)
 
         val config = GenerateContentConfig.builder()
             .systemInstruction(systemInstruction)

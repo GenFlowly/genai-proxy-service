@@ -4,10 +4,17 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: ktor-app
     ports:
       - "8080:8080"
+    volumes:
+      - .:/app
+      # Decouple build artifacts to prevent conflicting with host system (Mac vs Linux binaries)
+      - /app/build
+      - /app/.gradle
+      # Persist gradle cache to speed up startup
+      - gradle-cache:/home/gradle/.gradle
     environment:
       # ✅ Core environment variables (mirroring GitHub Actions + ECS)
       AWS_REGION: us-east-1
@@ -37,3 +44,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+
+volumes:
+  gradle-cache:
