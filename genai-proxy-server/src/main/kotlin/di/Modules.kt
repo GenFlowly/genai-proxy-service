@@ -11,6 +11,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 import service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.AIModelsService
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
@@ -37,6 +38,8 @@ fun appModule(): Module = module {
     single { CustomerProfileService(get(), get()) }
     single { ConversationService(get(), get()) }
     single { AIRequestManager(get(), get(), get()) }
+    single { AIModelsService(get(), get()) }
+
 
 }
 

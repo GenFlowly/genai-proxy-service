@@ -1,6 +1,7 @@
 import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import { GenerateTextStreamRequest } from "../models/generateText.models";
+import { fetchWithRetry } from "../utils/apiUtils";
 
 export interface StreamMetadata {
     conversationId: string | null;
@@ -9,13 +10,14 @@ export interface StreamMetadata {
     aiVendor: string | null;
 }
 
+
 export async function generateTextStream(
     token: string,
     request: GenerateTextStreamRequest,
     onDelta: (chunk: string) => void,
     onMetadata?: (metadata: StreamMetadata) => void
 ): Promise<void> {
-    const response = await fetch(endpoints.generateTextStream, {
+    const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
         headers: {
             'Content-Type': 'application/json',

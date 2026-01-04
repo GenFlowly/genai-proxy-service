@@ -13,21 +13,23 @@ interface PromptEditorProps {
     value: string
     onChange: (value: string) => void
     disableCache?: boolean
+    height?: string
+    className?: string
 }
 
-export default function PromptEditor({ id, value, onChange, disableCache = false }: PromptEditorProps): React.ReactElement {
+export default function PromptEditor({ id, value, onChange, disableCache = false, height = "40.25rem", className = '' }: PromptEditorProps): React.ReactElement {
 
     return (
-        <div className={styles.container}>
-            <div className={styles.editorWrapper}>
-                <div className={styles.innerContainer}>
+        <div className={`${styles.container} ${className}`}>
+            <div className={styles.editorWrapper} style={height === '100%' ? { height: '100%' } : {}}>
+                <div className={styles.innerContainer} style={height === '100%' ? { height: '100%' } : {}}>
                     {/* Ghost spacer for perfect centering */}
                     <div className={styles.spacer} />
-                    <div className={styles.mdxEditorRoot}>
+                    <div className={styles.mdxEditorRoot} style={height === '100%' ? { height: '100%', display: 'flex', flexDirection: 'column' } : {}}>
                         <MarkdownEditor
                             value={value}
                             onChange={onChange}
-                            height="40.25rem"
+                            height={height}
                             visible={false}
                             enablePreview={true}
                             className={styles.markdownEditor}

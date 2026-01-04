@@ -9,6 +9,7 @@
 }
 
 .container {
+  height: 3.1rem;
   width: 100%;
   padding: $spacing-lg;
   display: flex;
@@ -125,18 +126,8 @@
   align-items: center;
   gap: 1rem;
   flex: 0 0 auto;
-  width: 15rem; // Match expanded sidebar width
-  transition: width 0.3s ease; // Match sidebar transition
-  // padding-left: 1rem; // Optional overlap fix if needed
-
-  &.collapsed {
-    width: 5rem; // Match collapsed sidebar width
-    justify-content: center; // Center logo when collapsed if desired
-
-    .logoImage {
-      // Optional: adjust logo if it doesn't fit in 5rem
-    }
-  }
+  min-width: 15rem; // Fixed minimum width
+  padding-left: 0;
 }
 
 .centerControls {
@@ -158,13 +149,7 @@
   justify-content: flex-end; // Align content to right
   gap: 1rem;
   flex: 0 0 auto;
-  width: 15rem; // Match expanded sidebar width
-  transition: width 0.3s ease;
-
-  &.collapsed {
-    width: 5rem;
-    justify-content: center;
-  }
+  min-width: 15rem; // Fixed minimum width
 }
 
 .toggleButton {

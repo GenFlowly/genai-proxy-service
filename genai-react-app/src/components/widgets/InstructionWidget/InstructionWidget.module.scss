@@ -9,11 +9,12 @@
     padding-bottom: 2rem;
     background-color: $color-sidebar-background;
     border-bottom: 1px solid $color-border;
-    padding-top: 0; // Add top padding to balance visuals since background is colored
     align-items: center;
 
     // Dynamic screen height (minus navbar)
-    min-height: calc(100vh - 64px);
+    height: calc(100vh - 64px);
+    padding-top: 1rem;
+    overflow: hidden;
     justify-content: center; // Center content vertically
 }
 
@@ -26,6 +27,9 @@
     justify-content: center;
     background-color: $color-sidebar-background;
     border-bottom: 1px solid $color-border;
+    position: sticky;
+    top: 0;
+    z-index: 2;
 }
 
 .editButton {
@@ -107,5 +111,24 @@
 
     &:hover {
         color: $color-text-primary;
+    }
+}
+
+.roleInput {
+    width: 100%;
+}
+
+.promptEditorFullscreen {
+    flex: 1;
+    min-height: 0; // Allow shrinking
+    width: 100%;
+
+    // Ensure internal containers fill height
+    :global(.w-md-editor) {
+        height: 100% !important;
+    }
+
+    :global(.w-md-editor-content) {
+        height: 100% !important;
     }
 }

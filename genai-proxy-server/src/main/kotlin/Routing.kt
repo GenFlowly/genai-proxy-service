@@ -1,7 +1,7 @@
 package com.genflowly
 
 import activity.registerOnboardCustomerRoutes
-import activity.registerStoreApiKeyRoutes
+import com.genflowly.activity.registerStoreApiKeyRoutes
 import com.genflowly.activity.registerCreateInstructionRoutes
 import com.genflowly.activity.registerGenerateTextRoutes
 import com.genflowly.activity.registerGenerateTextStreamRoutes
@@ -17,6 +17,7 @@ import com.genflowly.activity.registerGetConversationRoutes
 import com.genflowly.activity.registerGetCustomerInstructionListRoutes
 import com.genflowly.activity.registerGetInstructionVersionRoutes
 import com.genflowly.service.ConversationService
+import com.genflowly.service.AIModelsService
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -41,7 +42,8 @@ fun Application.configureRouting(
     aiRequestService: AIRequestService,
     aiRequestManager: AIRequestManager,
     customerProfileService: CustomerProfileService,
-    conversationService: ConversationService
+    conversationService: ConversationService,
+    aiModelsService: AIModelsService
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -50,9 +52,9 @@ fun Application.configureRouting(
 
         registerGenerateTextRoutes(aiRequestManager, customerProfileService)
         registerGenerateTextStreamRoutes(aiRequestManager, customerProfileService)
-        registerStoreApiKeyRoutes(customerProfileService)
+        registerStoreApiKeyRoutes(customerProfileService, aiModelsService)
         registerOnboardCustomerRoutes(customerProfileService)
-        registerGetTextGenerationModelsRoutes(aiRequestService, customerProfileService)
+        registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
         registerCreateInstructionRoutes(aiRequestManager,

@@ -4,6 +4,15 @@
 .sidebarWrapper {
   @include sidebar-base(left);
 
+  // Overlay behavior
+  position: absolute;
+  right: 0;
+  height: 100%;
+  z-index: 20;
+  border-left: 1px solid $color-border;
+  // Ensure background is opaque for overlay
+  background-color: $color-sidebar-background;
+
   .collapseButton {
     background-color: $color-sidebar-background;
   }

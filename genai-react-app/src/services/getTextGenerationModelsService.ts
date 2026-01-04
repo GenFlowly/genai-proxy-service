@@ -4,6 +4,7 @@ import {
     GetTextGenerationModelsRequest,
     GetTextGenerationModelsResponse,
 } from '../models/getTextGenerationModels.models'
+import { fetchWithRetry } from "../utils/apiUtils";
 
 export function clearModelCache(customerId: string): void {
     // No-op
@@ -22,7 +23,7 @@ export async function getTextGenerationModels(
     customerId: string,
     request: GetTextGenerationModelsRequest
 ): Promise<GetTextGenerationModelsResponse> {
-    const response = await fetch(endpoints.getTextGenerationModels, {
+    const response = await fetchWithRetry(endpoints.getTextGenerationModels, {
         method: HttpMethod.POST,
         headers: {
             'Content-Type': 'application/json',

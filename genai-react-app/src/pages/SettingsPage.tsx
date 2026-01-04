@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext'
 import { AIVendor } from '../constants/vendors'
 import { storeCustomerVendorApiKey } from '../services/storeCustomerVendorApiKeysService'
 import PillButton from '../components/common/PillButton/PillButton'
-import { Icon } from '../components/common/Icon/Icon'
 import { ICONS } from '../constants/icons'
 import {
     OpenAIBrandName,
@@ -13,9 +12,13 @@ import {
     GeminiBrandName
 } from '../components/common/BrandName/BrandName'
 import { InputTextWithHint } from '../components/common/InputTextWithHint/InputTextWithHint'
+import { VendorAPIKeyStatus } from '../components/common/VendorAPIKeyStatus/VendorAPIKeyStatus'
+
+import { useToast } from '../context/ToastContext'
 
 export default function SettingsPage(): React.ReactElement {
-    const { customerId, getAccessTokenSilently, isAuthenticated, aiVendorAPIKeyStatusList } = useAuth()
+    const { customerId, getAccessTokenSilently, isAuthenticated, updateVendorApiKeyStatus } = useAuth()
+    const { showToast } = useToast()
 
     const vendors = Object.values(AIVendor) as AIVendor[]
 
@@ -25,13 +28,8 @@ export default function SettingsPage(): React.ReactElement {
         [AIVendor.GEMINI]: '',
     })
 
-    const [savedVendors, setSavedVendors] = useState<Record<AIVendor, boolean>>({
-        [AIVendor.OPENAI]: false,
-        [AIVendor.CLAUDE]: false,
-        [AIVendor.GEMINI]: false,
-    })
 
-    const [message, setMessage] = useState<string | null>(null)
+
     const [loading, setLoading] = useState<Record<AIVendor, boolean>>({
         [AIVendor.OPENAI]: false,
         [AIVendor.CLAUDE]: false,
@@ -44,51 +42,47 @@ export default function SettingsPage(): React.ReactElement {
 
     const handleSave = async (vendor: AIVendor) => {
         if (!isAuthenticated || !customerId) {
-            alert('Please log in first.')
+            showToast('Please log in first.')
             return
         }
 
         const apiKey = apiKeys[vendor]
         if (!apiKey.trim()) {
-            alert('Please enter an API key.')
+            showToast('Please enter a valid API key.')
             return
         }
 
-        if (savedVendors[vendor]) {
-            const confirmOverwrite = window.confirm(
-                `An API key for ${vendor} already exists. Overwrite it?`
-            )
-            if (!confirmOverwrite) return
-        }
+
 
         try {
             setLoading(prev => ({ ...prev, [vendor]: true }))
             const token = await getAccessTokenSilently()
 
-            await storeCustomerVendorApiKey(token, {
-                customerId,
+            const response = await storeCustomerVendorApiKey(token, {
                 aiVendor: vendor,
                 apiKey,
             })
 
-            setSavedVendors(prev => ({ ...prev, [vendor]: true }))
+
+
+            // Update global context status only on successful update
+            if (response.apiKeyStatus.updateSuccessful) {
+                updateVendorApiKeyStatus(response.apiKeyStatus)
+            }
 
             setApiKeys(prev => ({ ...prev, [vendor]: '' })) // ✅ Clear input
-            setMessage(`${vendor} API key saved successfully.`)
+
+            // Show the status message from backend
+            showToast(response.apiKeyStatus.status)
         } catch (error: any) {
             console.error(error)
-            setMessage(error.message || 'Error saving API key.')
+            showToast(error.message || 'Error saving API key.')
         } finally {
             setLoading(prev => ({ ...prev, [vendor]: false }))
-            setTimeout(() => setMessage(null), 3000)
         }
     }
 
-    // Helper to check status
-    const isVendorKeyValid = (vendor: AIVendor) => {
-        const status = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
-        return status?.isAPIKeyValid
-    }
+
 
     return (
         <div className={styles.page}>
@@ -99,7 +93,7 @@ export default function SettingsPage(): React.ReactElement {
 
                     <div className={styles.form}>
                         {vendors.map(vendor => {
-                            const isValid = isVendorKeyValid(vendor)
+
 
                             let BrandComponent = <span className={styles.vendorName}>{vendor}</span>
                             if (vendor === AIVendor.OPENAI) BrandComponent = <OpenAIBrandName className={styles.vendorBrand} />
@@ -110,16 +104,7 @@ export default function SettingsPage(): React.ReactElement {
                                 <div key={vendor} className={styles.vendorSection}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         {BrandComponent}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            {isValid ? (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-success)' }}>
-                                                    <Icon src={ICONS.VALID} size={16} />
-                                                    <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>API Key Valid</span>
-                                                </div>
-                                            ) : (
-                                                <span style={{ color: '#6B7280', fontSize: '0.9rem' }}>No API Key set</span>
-                                            )}
-                                        </div>
+                                        <VendorAPIKeyStatus vendor={vendor} />
                                     </div>
 
                                     <div >
@@ -142,9 +127,7 @@ export default function SettingsPage(): React.ReactElement {
                             )
                         })}
 
-                        {message && (
-                            <div className={styles.successMessage}>{message}</div>
-                        )}
+
                     </div>
                 </div>
             </div>

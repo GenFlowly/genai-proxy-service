@@ -7,7 +7,7 @@ suspend fun fetchApiKey(
     aiVendor: AIVendor,
     customerId: String,
     customerProfileService: CustomerProfileService
-): String {
+): String? {
     return customerProfileService.getCustomerApiKeyForVendor(
         aiVendor,
         customerId

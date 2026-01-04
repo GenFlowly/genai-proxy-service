@@ -26,9 +26,11 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.parameter.parametersOf
 import org.koin.core.qualifier.named
 import org.koin.java.KoinJavaComponent.get
+import org.slf4j.LoggerFactory
 
 class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
     KoinComponent {
+    private val logger = LoggerFactory.getLogger("AIRequestService")
 
     fun buildClaudeRequest(
         messages: List<Message>,
@@ -43,8 +45,7 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
         }
 
 
-        println("Sending request to CLAUDE")
-        println(messageParams)
+        logger.info("Sending request to CLAUDE - $messageParams")
 
         return MessageCreateParams.builder()
             .system(systemPrompt)
@@ -92,8 +93,7 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
              ResponseInputItem.ofMessage(builder.build())
          }
 
-        println("Sending request to OPENAI")
-        println(inputItems)
+        logger.info("Sending request to OPENAI - $inputItems")
 
         return ResponseCreateParams.builder()
             .instructions(systemPrompt)
@@ -115,17 +115,13 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
         systemPrompt: String
     ): GenerateContentParameters {
         val systemInstruction = Content.builder()
-            .role("system") // Role is "system" for instructions
-            .parts(
-                Part.builder()
-                    .text(systemPrompt)
-                    .build()
-            )
+            .parts(listOf(Part.builder().text(systemPrompt).build()))
             .build()
 
         // Usage of "model" role in direct content list may be filtered by some clients or API versions
         // if not using the stateful ChatSession. To ensure context is preserved, we collapse history
         // into a single "User" prompt if we suspect context loss.
+        /*
         val fullPrompt = StringBuilder()
         messages.forEach { msg ->
              val prefix = if (msg.role == "assistant") "Model: " else "User: "
@@ -138,18 +134,31 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
                 .parts(Part.builder().text(fullPrompt.toString()).build())
                 .build()
         )
+        */
 
-        println("Sending request to GEMINI")
-        println(mappedContents)
+        // 2. Map the conversation history
+        val mappedContents = messages
+            .filter { it.role.lowercase() != "system" }
+            .map { msg ->
+                val role = if (msg.role.equals("assistant", ignoreCase = true)) "model" else "user"
+                Content.builder()
+                    .role(role)
+                    .parts(listOf(Part.builder().text(msg.text).build()))
+                    .build()
+            }
 
-        val config = GenerateContentConfig.builder()
+        logger.info("Sending request to GEMINI - $mappedContents")
+
+        // 3. Build the Config containing the instructions
+        val config = com.google.genai.types.GenerateContentConfig.builder()
             .systemInstruction(systemInstruction)
             .build()
 
+        // 4. Return the parameters
         return GenerateContentParameters.builder()
             .model(model)
-            .config(config)
             .contents(mappedContents)
+            .config(config)
             .build()
     }
 

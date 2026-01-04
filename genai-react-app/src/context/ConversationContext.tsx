@@ -5,6 +5,7 @@ import { AIVendor } from '../constants/vendors'
 import { useAuth } from './AuthContext'
 import { AIConfig, useAI } from './AIContext'
 import { useLayout } from './LayoutContext'
+import { useToast } from './ToastContext'
 import { generateText } from '../services/generateTextService'
 import { generateTextStream, StreamMetadata } from '../services/generateTextStreamService'
 import { getConversation } from '../services/conversationService'
@@ -18,6 +19,7 @@ const ConversationContext = createContext<IConversationContext | undefined>(unde
 
 export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
+    const { showToast } = useToast()
 
     const {
         config,
@@ -243,13 +245,13 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         const conversationBlock = conversationBlockList.find(c => c.conversationBlockId === id)
         if (!conversationBlock) return null
         if (!isAuthenticated || !customerId) {
-            alert('Please log in first.')
+            showToast('Please log in first.')
             return null
         }
 
         const aiConfigs = config.filter(c => c.aiVendor && c.model && c.model.trim() !== '')
         if (aiConfigs.length === 0) {
-            alert('Select at least one vendor and model.')
+            showToast('Select at least one vendor and model.')
             return null
         }
 
@@ -357,7 +359,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
             const currentConversationId = conversationIdRef.current
             // Helper to perform the fetch for a specific config
-            const runStream = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void, explicitConversationId?: string) => {
+            const runStream = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void, explicitConversationId?: string, index: number = 0) => {
                 let accumulatedText = ""
                 // Track the active message ID (starts as placeholder, updates to real backend ID)
                 let currentMsgId = msgId
@@ -442,12 +444,27 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     },
                     idToUse
                 )
+
+                // ✅ Mark this specific message stream as finished using reliable Index targeting
+                setConversationBlockList(prev =>
+                    prev.map(block => {
+                        if (block.conversationBlockId === id) {
+                            const newMsgs = [...block.responseMessages]
+                            if (newMsgs[index]) {
+                                newMsgs[index] = { ...newMsgs[index], isLoading: false }
+                            }
+                            return { ...block, responseMessages: newMsgs }
+                        }
+                        return block
+                    })
+                )
             }
 
             if (currentConversationId) {
                 // Scenario A: Parallel execution for existing chat
                 await Promise.all(aiConfigs.map((config, index) =>
-                    runStream(config, initialResponseMessages[index].messageId)
+                    // Pass the index!
+                    runStream(config, initialResponseMessages[index].messageId, undefined, undefined, index)
                 ))
             } else {
                 // Scenario B: Smart Sequential Start for new conversation
@@ -459,7 +476,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 const idPromise = new Promise<string>(r => { resolveId = r })
 
                 // Start first stream
-                const firstStreamPromise = runStream(firstConfig, firstMsgId, resolveId)
+                const firstStreamPromise = runStream(firstConfig, firstMsgId, resolveId, undefined, 0)
 
                 // Race: Wait for ID or First Stream Completion (in case of error/no-ID)
                 const result = await Promise.race([
@@ -477,8 +494,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     // Small delay to ensure backend stability and initial write settlement
                     await new Promise(r => setTimeout(r, 200))
 
-                    const others = remainingConfigs.map((config, index) =>
-                        runStream(config, remainingMsgs[index].messageId, undefined, result.value)
+                    const others = remainingConfigs.map((config, i) =>
+                        // Note: index for remaining is i + 1
+                        runStream(config, remainingMsgs[i].messageId, undefined, result.value, i + 1)
                     )
                     pendingPromises.push(...others)
                 }

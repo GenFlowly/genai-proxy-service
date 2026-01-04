@@ -59,13 +59,22 @@ export default function InstructionWidget() {
             }
         } else if (!selectedInstructionId) {
             // Fallback for new creation or empty state
-            // If no instruction selected, we just keep the current systemPrompt or clear it?
-            // Usually we keep what's there if it was being edited, but the original logic
-            // reset it to `systemPrompt` (itself).
-            // Let's just ensure name is cleared.
             setInstructionName('')
         }
     }, [selectedInstructionId, customerInstructions, selectedVersion, setSystemPrompt])
+
+    // Filter instructions to show only the latest version for each ID
+    const uniqueInstructions = React.useMemo(() => {
+        if (!customerInstructions) return []
+        const map = new Map<string, typeof customerInstructions[0]>()
+        customerInstructions.forEach(inst => {
+            const existing = map.get(inst.id)
+            if (!existing || inst.version > existing.version) {
+                map.set(inst.id, inst)
+            }
+        })
+        return Array.from(map.values())
+    }, [customerInstructions])
 
     // ... (existing handlers)
     const handleCreateInstruction = async () => {
@@ -107,12 +116,60 @@ export default function InstructionWidget() {
     if (!isInstructionWidgetExpanded) {
         return (
             <div className={styles.collapsedContainer}>
+                <div style={{ flex: 1, maxWidth: '70rem', paddingRight: '0.5rem' }}>
+                    <InputSelectWithHint
+                        hint="Instructions for AI"
+                        icon={ICONS.USER_ROLE}
+                        placeholder="Select a persona"
+                        className={styles.roleInput}
+                        value={(() => {
+                            if (selectedInstructionId) return selectedInstructionId
+                            return (isInstructionWidgetExpanded) ? 'CTA_ACTION' : ''
+                        })()}
+                        onChange={(val) => {
+                            const selectedInstruction = uniqueInstructions.find(i => i.id === val)
+                            if (selectedInstruction) {
+                                setSelectedInstructionId(selectedInstruction.id)
+                                setSystemPrompt(selectedInstruction.instruction)
+                            } else {
+                                setSelectedInstructionId(null)
+                                // Only clear system prompt if explicitly deselecting?
+                                // setSystemPrompt('') // Maybe?
+                            }
+                        }}
+                        options={(() => {
+                            const filteredOptions = uniqueInstructions.map(item => ({
+                                label: item.name || item.instruction.substring(0, 50),
+                                value: item.id,
+                            }));
+
+                            const ctaOption = {
+                                label: 'Create Instructions',
+                                value: 'CTA_ACTION',
+                                isCta: true,
+                                ctaAction: () => {
+                                    setSelectedInstructionId(null)
+                                    setSystemPrompt('')
+                                    setInstructionWidgetExpanded(true)
+                                },
+                                style: {
+                                    borderTop: '1px solid #e5e7eb',
+                                    marginTop: '4px',
+                                    paddingTop: '8px',
+                                    color: '#2563eb',
+                                    fontWeight: 500
+                                }
+                            }
+                            return [...filteredOptions, ctaOption]
+                        })()}
+                    />
+                </div>
                 <button
                     className={styles.editButton}
                     onClick={() => setInstructionWidgetExpanded(true)}
                     aria-label="Edit instruction"
+                    title="Edit selected instruction"
                 >
-                    <span className={styles.collapsedText}>Edit instruction</span>
                     <Icon src={ICONS.EDIT} className={styles.editIcon} />
                 </button>
             </div>
@@ -122,55 +179,111 @@ export default function InstructionWidget() {
     return (
         <div className={styles.container}>
             {/* Metadata Display / Edit */}
-            {selectedInstructionId && (() => {
+            {(() => {
+                // Config for options
+                const instructionOptions = (() => {
+                    const filteredOptions = uniqueInstructions.map(item => ({
+                        label: item.name || item.instruction.substring(0, 50),
+                        value: item.id,
+                    }));
+
+                    const ctaOption = {
+                        label: 'Create Instructions',
+                        value: 'CTA_ACTION',
+                        isCta: true,
+                        ctaAction: () => {
+                            setSelectedInstructionId(null)
+                            setSystemPrompt('')
+                            // Ensure widget stays expanded
+                            setInstructionWidgetExpanded(true)
+                        },
+                        style: {
+                            borderTop: '1px solid #e5e7eb',
+                            marginTop: '4px',
+                            paddingTop: '8px',
+                            color: '#2563eb',
+                            fontWeight: 500
+                        }
+                    }
+                    return [...filteredOptions, ctaOption]
+                })()
+
                 // Find latest version of this instruction to establish baseline
-                const latest = customerInstructions.find(i => i.id === selectedInstructionId)
-
-                if (!latest) return null
-
-                // Determine max version from the latest record
-                const latestVersion = latest.version
+                const latest = selectedInstructionId ? customerInstructions.find(i => i.id === selectedInstructionId) : null
+                const latestVersion = latest ? latest.version : 1
 
                 return (
                     // Match PromptEditor structure:
-                    // 1. Outer Container Padding (0 3rem)
-                    // 2. Inner Container Max Width (88rem) + Gap (1rem)
-                    // 3. Spacers (2rem)
                     <div style={{ width: '100%', padding: '0 3rem', display: 'flex', justifyContent: 'center' }}>
-                        <div style={{ width: '100%', maxWidth: '88rem', display: 'flex', gap: '1rem' }}>
-                            {/* Left Spacer to match Editor Spacer */}
+                        <div style={{ width: '100%', maxWidth: '75rem', display: 'flex', gap: '1rem' }}>
+                            {/* Left Spacer */}
                             <div style={{ width: '2rem', flexShrink: 0 }} />
 
-                            {/* Main Content Area - Aligning with Editor Box */}
-                            <div className={styles.metadataContainer} style={{ flex: 1, marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {isEditingName ? (
-                                    <div className={styles.titleGroup}>
-                                        <InputTextWithHint
-                                            hint="Name"
-                                            value={instructionName}
-                                            onChange={(e) => setInstructionName(e.target.value)}
-                                            placeholder="Instruction Name"
-                                            className={styles.nameInput}
-                                        />
-                                        <button onClick={() => setIsEditingName(false)} className={styles.cancelButton}>
-                                            Cancel
-                                        </button>
+                            {/* Main Content Area */}
+                            <div className={styles.metadataContainer} style={{ flex: 1, marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+                                {/* Row 1: Dropdown Selector */}
+                                <div style={{ width: '100%' }}>
+                                    <InputSelectWithHint
+                                        hint="Persona"
+                                        icon={ICONS.USER_ROLE}
+                                        placeholder="Select a persona"
+                                        className={styles.roleInput}
+                                        value={selectedInstructionId || ''}
+                                        onChange={(val) => {
+                                            const selectedInstruction = uniqueInstructions.find(i => i.id === val)
+                                            if (selectedInstruction) {
+                                                setSelectedInstructionId(selectedInstruction.id)
+                                                setSystemPrompt(selectedInstruction.instruction)
+                                            } else {
+                                                setSelectedInstructionId(null)
+                                            }
+                                        }}
+                                        options={instructionOptions}
+                                    />
+                                </div>
+
+                                {/* Row 2: Name and Version */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+
+                                    {/* Left: Name (or Edit Input) */}
+                                    <div style={{ flex: 1, marginRight: '1rem', minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                                        {isEditingName ? (
+                                            <div className={styles.titleGroup} style={{ width: '100%' }}>
+                                                <InputTextWithHint
+                                                    hint="Name"
+                                                    value={instructionName}
+                                                    onChange={(e) => setInstructionName(e.target.value)}
+                                                    placeholder="Instruction Name"
+                                                    className={styles.nameInput}
+                                                    autoFocus
+                                                />
+                                                <button onClick={() => setIsEditingName(false)} className={styles.cancelButton}>
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className={styles.titleGroup}>
+                                                <span className={styles.instructionName} style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>
+                                                    {instructionName || latest?.name || 'Untitled Instruction'}
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        setInstructionName(instructionName || (latest?.name || ''))
+                                                        setIsEditingName(true)
+                                                    }}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center' }}
+                                                    title="Rename Instruction"
+                                                >
+                                                    <Icon src={ICONS.EDIT} size={16} className={styles.editIcon} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                ) : (
-                                    <div className={styles.metadataHeader}>
-                                        <div className={styles.titleGroup}>
-                                            <span className={styles.instructionName}>{instructionName || latest.name}</span>
-                                            <button
-                                                onClick={() => {
-                                                    setInstructionName(instructionName || latest.name)
-                                                    setIsEditingName(true)
-                                                }}
-                                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                                            >
-                                                <Icon src={ICONS.EDIT} size={14} className={styles.editIcon} />
-                                            </button>
-                                        </div>
-                                        <div style={{ width: '140px' }}>
+
+                                    {/* Right: Version Selector */}
+                                    {latest && (
+                                        <div style={{ flexShrink: 0 }}>
                                             <InputSelectWithHint
                                                 hint="Version"
                                                 value={selectedVersion?.toString() || ''}
@@ -181,9 +294,11 @@ export default function InstructionWidget() {
                                                         setIsLoading(true)
                                                         try {
                                                             const token = await getAccessTokenSilently()
-                                                            const data = await getInstructionVersion(token, selectedInstructionId, newVersion)
-                                                            setSystemPrompt(data.instruction || '')
-                                                            setInstructionName(data.name || '')
+                                                            if (selectedInstructionId) {
+                                                                const data = await getInstructionVersion(token, selectedInstructionId, newVersion)
+                                                                setSystemPrompt(data.instruction || '')
+                                                                setInstructionName(data.name || '')
+                                                            }
                                                         } catch (e) {
                                                             console.error("Failed to fetch version", e)
                                                         } finally {
@@ -192,8 +307,6 @@ export default function InstructionWidget() {
                                                     }
                                                 }}
                                                 options={(() => {
-                                                    // Generate options 1..latestVersion
-                                                    // ensure we at least have 1
                                                     const maxVer = Math.max(latestVersion, 1)
                                                     const opts = []
                                                     for (let i = maxVer; i >= 1; i--) {
@@ -207,11 +320,11 @@ export default function InstructionWidget() {
                                                 className={styles.versionSelect}
                                             />
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
 
-                            {/* Right Spacer to match Editor ControlsRow */}
+                            {/* Right Spacer */}
                             <div style={{ width: '2rem', flexShrink: 0 }} />
                         </div>
                     </div>
@@ -223,11 +336,13 @@ export default function InstructionWidget() {
                 value={systemPrompt}
                 onChange={setSystemPrompt}
                 disableCache={true}
+                height="100%"
+                className={styles.promptEditorFullscreen}
             />
 
             {/* Button Row - Aligning with Editor Box */}
             <div style={{ width: '100%', padding: '0 3rem', display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
-                <div style={{ width: '100%', maxWidth: '88rem', display: 'flex', gap: '1rem' }}>
+                <div style={{ width: '100%', maxWidth: '75rem', display: 'flex', gap: '1rem' }}>
                     {/* Left Spacer */}
                     <div style={{ width: '2rem', flexShrink: 0 }} />
 

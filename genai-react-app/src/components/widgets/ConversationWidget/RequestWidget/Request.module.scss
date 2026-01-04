@@ -7,3 +7,37 @@
     // In column layout, flex-basis affects height. Use width for width.
     width: 100%;
 }
+
+.container {
+    width: 100%;
+    // Dynamic screen height (minus navbar - 3rem instruction widget)
+    height: calc(100vh - 64px - 3rem);
+    padding-top: 1rem;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background-color: $color-sidebar-background; // Or appropriate background
+}
+
+.promptEditorFullscreen {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+
+    // Ensure internal containers fill height
+    :global(.w-md-editor) {
+        height: 100% !important;
+    }
+
+    :global(.w-md-editor-content) {
+        height: 100% !important;
+    }
+}
+
+.buttonWrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 0 0 1rem 0;
+}

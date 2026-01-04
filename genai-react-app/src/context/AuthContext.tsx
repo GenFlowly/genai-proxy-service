@@ -168,6 +168,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         })
     }
 
+    const updateVendorApiKeyStatus = (status: AIVendorAPIKeyStatus) => {
+        setAiVendorAPIKeyStatusList(prev => {
+            const index = prev.findIndex(s => s.aiVendor === status.aiVendor)
+            if (index !== -1) {
+                const updated = [...prev]
+                updated[index] = status
+                return updated
+            }
+            return [...prev, status]
+        })
+    }
+
     const contextValue: AuthContextType = {
         user,
         isAuthenticated,
@@ -178,6 +190,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         logout,
         getAccessTokenSilently,
         aiVendorAPIKeyStatusList,
+        updateVendorApiKeyStatus,
         aiConfigPreferences,
         customerInstructions,
         refreshInstructions,

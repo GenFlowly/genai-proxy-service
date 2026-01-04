@@ -6,7 +6,7 @@
   min-width: 0; // Allow shrinking
   display: flex;
   flex-direction: column;
-  margin-top: 2rem;
+  margin-top: 0;
   background-color: $color-response-container-background;
   padding: 0;
   padding-bottom: 1rem; // Add breathing room at bottom
@@ -19,11 +19,21 @@
   margin-top: 0.5rem;
   padding-left: 1rem;
   padding-right: 1rem;
-  //padding-bottom: 3.5rem; // Increased to preventing button clipping
+  padding-bottom: 1rem; // Increased to ensure scrollbar visibility
   width: 100%;
   overflow-x: auto;
   overflow-y: hidden; // Prevent vertical scrollbar
-  justify-content: center; // Center content (single item or filled if space)
+  justify-content: flex-start; // Avoid center clipping for overflow content
+
+  // Center only if content is small? No, standardized to start is safer for scrolling.
+  // Actually, if I want to center single items, I need margin: auto or center logic.
+  // But centering causes clipping in overflow: scroll containers on the LEFT side.
+  // "safe center" is the fix, but browser support?
+  // I will use justify-content: flex-start and let flex-grow center check if needed.
+  // Actually, the items have max-width. To center them, I can use margins on the wrapper.
+  // But if I use flex-start, they align left.
+  // I'll stick to flex-start for scroll safety.
+
 
   // Custom scrollbar styling
   &::-webkit-scrollbar {
@@ -47,6 +57,7 @@
 
 .responseWrapper {
   @include message-card-base;
+  margin: 0 auto; // Center if flex container is flex-start
   flex: 1 0 30rem; // Grow but don't shrink - triggers horizontal scroll when space limited
 
   // Fix for single response rendering issue
@@ -58,8 +69,8 @@
 
   border: 1px solid transparent; // Reserve space for border transition
 
-  @include interactive-base;
-  @include interactive-secondary-states;
+
+
 
   // Manual override if needed, or rely on mixin.
   // interactive-secondary-states provides hover border/shadow and focus outline.

@@ -1,3 +1,4 @@
+import { fetchWithRetry } from "../utils/apiUtils";
 import { config } from '../config/env';
 import { ConversationBlock, Message } from '../models/conversation.models';
 import { AIVendor } from '../constants/vendors';
@@ -32,11 +33,11 @@ export interface GetConversationResponse {
 export async function getConversation(
     token: string,
     conversationId: string
-): Promise<GetConversationResponse> {
+): Promise<GetConversationResponse | null> { // Changed return type to include null
 
     const url = `${config.backend.baseUrl}/api/v1/chat/${conversationId}`;
 
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, { // Changed to fetchWithRetry
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -45,6 +46,8 @@ export async function getConversation(
     });
 
     if (!response.ok) {
+        // If fetchWithRetry returns a non-ok response, we can return null or throw an error.
+        // The original code throws, so we'll keep that behavior for non-ok responses.
         throw new Error(`Failed to fetch conversation: ${response.status} ${response.statusText}`);
     }
 
