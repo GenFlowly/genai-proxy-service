@@ -116,7 +116,7 @@ export default function InstructionWidget() {
     if (!isInstructionWidgetExpanded) {
         return (
             <div className={styles.collapsedContainer}>
-                <div style={{ flex: 1, maxWidth: '70rem', paddingRight: '0.5rem' }}>
+                <div style={{ flex: 1, maxWidth: '66rem', paddingRight: '0.5rem' }}>
                     <InputSelectWithHint
                         hint="Instructions for AI"
                         icon={ICONS.USER_ROLE}
