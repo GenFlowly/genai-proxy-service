@@ -113,12 +113,13 @@ class CustomerProfileService(
     suspend fun getCustomerApiKeyForVendor(
         vendor: AIVendor,
         customerId: String
-    ): String {
+    ): String? {
         val apiKey = dynamoDBProvider.getCustomerApiKey(vendor.name, customerId)
         val decrypted = apiKey?.let { kmsProvider.decrypt(it) }
-        require(!decrypted.isNullOrBlank()) {
-            "API key not found for vendor: " +
-                    vendor.name
+        
+        if (decrypted.isNullOrBlank()) {
+            logger.warn { "API key not found for vendor: ${vendor.name}" }
+            return null
         }
         return decrypted
     }
@@ -139,7 +140,16 @@ class CustomerProfileService(
     }
 
     suspend fun getAIVendorAPIKeyStatusList(customerId: String): List<models.AIVendorAPIKeyStatus> {
-        return dynamoDBProvider.getCustomerApiKeys(customerId)
+        val storedKeys = dynamoDBProvider.getCustomerApiKeys(customerId)
+        val storedMap = storedKeys.associateBy { it.aiVendor }
+
+        return AIVendor.entries.map { vendor ->
+            storedMap[vendor] ?: models.AIVendorAPIKeyStatus(
+                aiVendor = vendor,
+                isAPIKeyValid = false,
+                status = models.APIKeyStatus.NOT_SET
+            )
+        }
     }
 
     suspend fun createInstruction(

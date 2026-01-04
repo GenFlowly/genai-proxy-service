@@ -177,9 +177,9 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             title={HeaderComponent}
                             content={text}
                             className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}
-                            isLoading={isLoading && text.length === 0}
+                            isLoading={isLoading && text.trim().length === 0}
                         >
-                            {onFollowUp && (
+                            {onFollowUp && !isLoading && (
                                 <div className={styles.followUpButtonWrapper}>
                                     <Tooltip content={disabled ? "No API keys set" : ""}>
                                         <div style={disabled ? { cursor: 'not-allowed' } : {}}>

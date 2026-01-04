@@ -513,12 +513,32 @@ class DynamoDBProvider(
                     return@mapNotNull null
                 }
                 
-                // Check explicitly stored validation status or fallback to apiKey presence
-                val isValid = item["isAPIKeyValid"]?.bool() ?: (item["apiKey"]?.s() != null)
+                // Check explicitly stored validation status AND presence of actual key
+                val isStoredValid = item["isAPIKeyValid"]?.bool() ?: false
+                val hasKey = !item["apiKey"]?.s().isNullOrBlank()
+                
+                // Fallback for legacy items: if valid flag missing but key present? 
+                // We prefer explicit flag. If flag missing, assume true if key exists (legacy behavior) 
+                // BUT if flag is TRUE and key is MISSING, that is invalid.
+                
+                val isValid = if (item.containsKey("isAPIKeyValid")) {
+                    isStoredValid && hasKey
+                } else {
+                    hasKey
+                }
+
+                val status = if (!hasKey) {
+                    models.APIKeyStatus.NOT_SET
+                } else if (isValid) {
+                    models.APIKeyStatus.VALID
+                } else {
+                    models.APIKeyStatus.INVALID
+                }
 
                 models.AIVendorAPIKeyStatus(
                     aiVendor = aiVendor,
-                    isAPIKeyValid = isValid
+                    isAPIKeyValid = isValid,
+                    status = status
                 )
             }
         }

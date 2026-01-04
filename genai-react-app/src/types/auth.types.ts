@@ -19,6 +19,7 @@ export interface AuthContextType {
     customerId: string | null;
     setCustomerId: (id: string | null) => void;
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[];
+    updateVendorApiKeyStatus: (status: AIVendorAPIKeyStatus) => void;
     aiConfigPreferences: OnboardCustomerResponse['aiConfigPreferences'] | null;
     customerInstructions: InstructionResponse[];
     refreshInstructions: () => Promise<void>;

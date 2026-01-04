@@ -131,27 +131,31 @@ export default function Request({ blockId }: RequestProps) {
 
     // Otherwise show the editor
     return (
-        <>
+        <div className={styles.container}>
             <PromptEditor
                 id={blockId}
                 value={draftPrompt}
                 onChange={handleEditorChange}
+                height="100%"
+                className={styles.promptEditorFullscreen}
             />
 
-            <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
-                <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
-                    <MultiPurposeButton
-                        onClick={() => {
-                            if (!hasAnyValidApiKey) return
-                            const selectedId = getSelectedResponseForBlock(blockId)
-                            generateResponsesStream(blockId, draftPrompt, selectedId)
-                        }}
-                        label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
-                        disabled={conversationBlock.isLoading || !hasAnyValidApiKey}
-                        icon={ICONS.SEND}
-                    />
-                </div>
-            </Tooltip>
-        </>
+            <div className={styles.buttonWrapper}>
+                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
+                    <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
+                        <MultiPurposeButton
+                            onClick={() => {
+                                if (!hasAnyValidApiKey) return
+                                const selectedId = getSelectedResponseForBlock(blockId)
+                                generateResponsesStream(blockId, draftPrompt, selectedId)
+                            }}
+                            label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
+                            disabled={conversationBlock.isLoading || !hasAnyValidApiKey}
+                            icon={ICONS.SEND}
+                        />
+                    </div>
+                </Tooltip>
+            </div>
+        </div>
     )
 }

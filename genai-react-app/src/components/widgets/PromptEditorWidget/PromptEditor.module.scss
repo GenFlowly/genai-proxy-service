@@ -1,6 +1,6 @@
 @import '../../../styles/variables.scss';
 
-$editor-width: 88rem;
+$editor-width: 75rem;
 
 .promptEditor {
   width: 100%;
@@ -64,13 +64,19 @@ $editor-width: 88rem;
     border-color: $primary-color;
   }
 
-  :global(.w-md-editor) {
+  :global(.md-editor) {
     border: none !important;
     border-radius: 0;
     background-color: $white;
+    height: 100% !important;
   }
 
-  :global(.w-md-editor-text-input) {
+  // Target inner content wrapper as requested
+  :global(.md-editor-content) {
+    height: 100% !important;
+  }
+
+  :global(.md-editor-text-input) {
     padding: $spacing-xl $spacing-2xl !important;
     font-size: 1rem !important;
     line-height: 1.6 !important;
@@ -82,7 +88,7 @@ $editor-width: 88rem;
     }
   }
 
-  :global(.w-md-editor-text-input textarea) {
+  :global(.md-editor-text-input textarea) {
     padding: $spacing-xl $spacing-2xl !important;
     font-size: 1rem !important;
     line-height: 1.6 !important;
@@ -104,6 +110,14 @@ $editor-width: 88rem;
     min-height: 2rem !important;
   }
 
+  :global(.md-editor-content-editor) {
+    height: 100% !important;
+  }
+
+  :global(.md-editor-inner) {
+    height: 100% !important;
+  }
+
   :global(.md-editor-toolbar ul) {
     display: flex;
     align-items: center;
@@ -114,8 +128,6 @@ $editor-width: 88rem;
     // color: $color-text-primary !important; // Dynamic variables (commented out in file currently but intended by prev logic)
     // Actually, looking at the file content, it has no color vars yet? wait, I saw them earlier.
     // The previous view_file confirmed the file content. It has static content commented out?
-    // Wait, the view_file shows line 113: :global(.md-editor-toolbar button) { font-size: 1rem !important; ... }
-    // It seems the color replacement didn't stick or was reverted?
     // Ah, lines 93-94 are commented out.
     // I will apply the dynamic width changes based on CURRENT content.
 
@@ -200,6 +212,7 @@ $editor-width: 88rem;
   width: 100%;
   border: none !important;
   font-size: 1.5rem;
+  height: 100% !important;
 }
 
 @media (max-width: 768px) {

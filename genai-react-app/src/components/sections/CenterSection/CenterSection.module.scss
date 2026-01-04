@@ -8,7 +8,7 @@
   align-items: flex-start;
   overflow-y: auto;
   overflow-x: hidden; // Prevent horizontal scroll on center section
-  padding: 0 0 0 0; // Remove horizontal padding and bottom padding
+  padding: 0 5rem 0 0; // Remove horizontal padding and bottom padding, but add right padding for collapsed sidebar
   background-color: $color-background;
   scroll-behavior: smooth;
 }
@@ -18,8 +18,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3rem;
-  /* slightly increased for better separation between conversation blocks */
+  gap: 0;
 }
 
 .submitButton {

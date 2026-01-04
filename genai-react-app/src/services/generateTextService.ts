@@ -1,15 +1,17 @@
-import {HttpMethod} from "../constants/http";
-import {endpoints} from "../config/endpoints";
+import { HttpMethod } from "../constants/http";
+import { endpoints } from "../config/endpoints";
 import {
     GenerateTextRequest,
     GenerateTextResponse
 } from "../models/generateText.models";
 
+import { fetchWithRetry } from "../utils/apiUtils";
+
 export async function generateText(
     token: string,
     request: GenerateTextRequest
 ): Promise<any> {
-    const response = await fetch(endpoints.generateText, {
+    const response = await fetchWithRetry(endpoints.generateText, {
         method: HttpMethod.POST,
         headers: {
             'Content-Type': 'application/json',

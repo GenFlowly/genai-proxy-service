@@ -22,6 +22,7 @@ import org.koin.ktor.ext.get
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.AIModelsService
 
 
 fun main(args: Array<String>) {
@@ -109,7 +110,8 @@ fun Application.module() {
     val aiRequestManager = get<AIRequestManager>()
     val customerProfileService = get<CustomerProfileService>()
     val conversationService = get<ConversationService>()
+    val aiModelsService = get<AIModelsService>()
 
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService)
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService)
 }

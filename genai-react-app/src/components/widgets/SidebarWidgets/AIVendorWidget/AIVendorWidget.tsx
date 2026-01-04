@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { AIVendor } from '../../../../constants/vendors'
+import { useToast } from '../../../../context/ToastContext'
 import {
     getTextGenerationModels,
     clearAllModelCache,
@@ -8,6 +9,8 @@ import {
     GetTextGenerationModelsResponse,
     AIVendorModelList,
 } from '../../../../models/getTextGenerationModels.models'
+
+import { APIKeyStatus } from '../../../../models/storeCustomerVendorAPIKeys.models'
 
 import { saveAIConfigPreferences } from '../../../../services/saveAIConfigService'
 import styles from './AIVendorWidget.module.scss'
@@ -32,6 +35,7 @@ export default function AIVendorWidget(): React.ReactElement {
     const { ai, auth } = useSidebarWidget()
     const { config, setSelectedModelForAIVendor, resetConfig } = ai
     const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList, aiConfigPreferences } = auth
+    const { showToast } = useToast()
 
     const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
     const [isRefreshing, setIsRefreshing] = useState(false)
@@ -46,7 +50,7 @@ export default function AIVendorWidget(): React.ReactElement {
 
     const isVendorEnabled = (vendor: AIVendor) => {
         const status = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
-        return status?.isAPIKeyValid ?? false
+        return status?.status === APIKeyStatus.VALID
     }
 
     // --- Sync Backend Preferences to AI Context ---
@@ -82,6 +86,8 @@ export default function AIVendorWidget(): React.ReactElement {
         async (forceRefresh = false) => {
             if (!isAuthenticated || !customerId) return
 
+            let cachedData: AIVendorModelList[] | null = null
+
             // If not forcing refresh, check cache first
             if (!forceRefresh) {
                 const cachedModels = localStorage.getItem(`${customerId}_ai_vendor_models`)
@@ -89,9 +95,9 @@ export default function AIVendorWidget(): React.ReactElement {
                     try {
                         const parsed = JSON.parse(cachedModels)
                         if (Array.isArray(parsed) && parsed.length > 0) {
-                            console.log('Using cached AI models')
+                            console.log('Using cached AI models (initial load)')
                             setAiVendorModels(parsed)
-                            return
+                            cachedData = parsed
                         }
                     } catch (e) {
                         console.error('Failed to parse cached ai vendor models', e)
@@ -108,12 +114,22 @@ export default function AIVendorWidget(): React.ReactElement {
                         { aiVendor: vendors }
                     )
 
-                const data = response.aiVendorModelList || []
-                setAiVendorModels(data)
+                const newData = response.aiVendorModelList || []
 
-                // Cache the fresh models
-                if (customerId && data.length > 0) {
-                    localStorage.setItem(`${customerId}_ai_vendor_models`, JSON.stringify(data))
+                // Compare with cache/current state to determine if update is needed
+                // Simple JSON stringify comparison is sufficient here as structure is simple
+                const isDifferent = JSON.stringify(newData) !== JSON.stringify(cachedData)
+
+                if (isDifferent) {
+                    console.log('Remote models differ from cache, updating...')
+                    setAiVendorModels(newData)
+
+                    // Cache the fresh models
+                    if (customerId && newData.length > 0) {
+                        localStorage.setItem(`${customerId}_ai_vendor_models`, JSON.stringify(newData))
+                    }
+                } else {
+                    console.log('Remote models are identical to cache, skipping update.')
                 }
             } catch (err) {
                 console.error('Failed to fetch AI models:', err)
@@ -156,10 +172,10 @@ export default function AIVendorWidget(): React.ReactElement {
                     preferredModels: config.filter(c => c.model && c.model.trim() !== '')
                 }
             })
-            alert('Preferences saved successfully!')
+            showToast('Preferences saved successfully!')
         } catch (err: any) {
             console.error('Failed to save preferences:', err)
-            alert('Failed to save preferences: ' + err.message)
+            showToast('Failed to save preferences: ' + err.message)
         } finally {
             setIsSaving(false)
         }
@@ -297,7 +313,9 @@ export default function AIVendorWidget(): React.ReactElement {
                             />
 
                             {!isEnabled && (
-                                <span className={styles.errorText}>API key not set</span>
+                                <span className={styles.errorText}>
+                                    {aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)?.status || APIKeyStatus.NOT_SET}
+                                </span>
                             )}
 
                             {isActive && isEnabled && models.length > 0 && (

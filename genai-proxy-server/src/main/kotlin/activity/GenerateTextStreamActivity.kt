@@ -68,6 +68,11 @@ fun Route.registerGenerateTextStreamRoutes(
 
                 call.respondTextWriter(contentType = ContentType.Text.Plain) {
                     try {
+                        // Force flush headers and send a heartbeat byte (space) immediately 
+                        // to prevent client timeout (TTFB) while waiting for AI vendor
+                        write(" ")
+                        flush()
+                        
                         streamResult.flow.collect { chunk ->
                             write(chunk)
                             flush()

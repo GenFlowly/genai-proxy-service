@@ -7,13 +7,15 @@ import {
 
 
 /**
- * Stores or updates a vendor API key for a given customer.
+ * Stores or updates a vendor API key.
  */
+import { fetchWithRetry } from "../utils/apiUtils";
+
 export async function storeCustomerVendorApiKey(
     token: string,
     payload: StoreCustomerVendorApiKeyRequest
 ): Promise<StoreCustomerVendorApiKeyResponse> {
-    const response = await fetch(endpoints.storeCustomerVendorApiKey, {
+    const response = await fetchWithRetry(endpoints.storeCustomerVendorApiKey, {
         method: HttpMethod.POST,
         headers: {
             'Content-Type': 'application/json',

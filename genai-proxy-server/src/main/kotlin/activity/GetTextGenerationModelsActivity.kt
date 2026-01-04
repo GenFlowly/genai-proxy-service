@@ -10,7 +10,7 @@ import com.genflowly.models.api.AIVendorModelList
 import com.genflowly.models.api.GetTextGenerationModelsRequest
 import com.genflowly.models.api.GetTextGenerationModelsResponse
 import com.genflowly.service.AIRequestService
-import com.genflowly.utils.fetchApiKey
+import com.genflowly.service.AIModelsService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
@@ -23,7 +23,7 @@ import com.genflowly.service.CustomerProfileService
 private val logger = LoggerFactory.getLogger("GetTextGenerationModelsRoute")
 
 fun Route.registerGetTextGenerationModelsRoutes(
-    aiRequestService: AIRequestService,
+    aiModelsService: AIModelsService,
     customerProfileService: CustomerProfileService
 ) {
 
@@ -36,53 +36,9 @@ fun Route.registerGetTextGenerationModelsRoutes(
                 customerProfileService
             )
 
-            val startTime = System.currentTimeMillis()
-
-            val aiVendorModelList = request.aiVendor.map { vendor ->
-                val vendorStart = System.currentTimeMillis()
-
-                val apiKey = fetchApiKey(
-                    vendor,
-                    customerId,
-                    customerProfileService
-                )
-
-                val modelsListResponse: AIModelsListResponse = when (vendor) {
-                    AIVendor.OPENAI -> {
-                        val openAIProvider: AIClient<OpenAIResponse, OpenAIModelsListResponse> =
-                            aiRequestService.getOpenAIProvider(apiKey)
-                        openAIProvider.listTextGenerationModels()
-                    }
-
-                    AIVendor.GEMINI -> {
-                        val geminiProvider: AIClient<GeminiResponse, GeminiModelsListResponse> =
-                            aiRequestService.getGeminiProvider(apiKey)
-                        geminiProvider.listTextGenerationModels()
-                    }
-
-                    AIVendor.CLAUDE -> {
-                        val claudeProvider: AIClient<ClaudeResponse, ClaudeModelsListResponse> =
-                            aiRequestService.getClaudeProvider(apiKey)
-                        claudeProvider.listTextGenerationModels()
-                    }
-                }
-
-                val vendorDuration = System.currentTimeMillis() - vendorStart
-                logger.info(
-                    "AI response received: vendor={}, durationMs={}, response={}",
-                    vendor, vendorDuration, modelsListResponse
-                )
-
-                AIVendorModelList(
-                    aiVendor = vendor,
-                    modelsList = modelsListResponse.toList()
-                )
-            }
-
-            val durationMs = System.currentTimeMillis() - startTime
-            logger.info(
-                "Total AI models fetch completed: vendors={}, totalDurationMs={}",
-                request.aiVendor, durationMs
+            val aiVendorModelList = aiModelsService.getModelsForVendors(
+                request.aiVendor,
+                customerId
             )
 
             val response = GetTextGenerationModelsResponse(

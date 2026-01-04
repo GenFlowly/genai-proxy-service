@@ -8,6 +8,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { AIProvider } from './context/AIContext'
 import { ConversationProvider } from './context/ConversationContext'
 import { LayoutProvider } from './context/LayoutContext'
+import { ToastProvider } from './context/ToastContext'
 
 export default function AppContent(): React.ReactElement {
     const { isLoading } = useAuth()
@@ -16,23 +17,25 @@ export default function AppContent(): React.ReactElement {
 
     return (
         <LayoutProvider>
-            <AIProvider>
-                <ConversationProvider>
-                    <Routes>
-                        <Route path="/" element={<Navigate to="/chat" replace />} />
-                        <Route path="/chat" element={<LandingPage />} />
-                        <Route
-                            path="/chat/:conversationId"
-                            element={
-                                <ProtectedRoute>
-                                    <LandingPage />
-                                </ProtectedRoute>
-                            }
-                        />
-                        <Route path="/settings" element={<SettingsPage />} />
-                    </Routes>
-                </ConversationProvider>
-            </AIProvider>
+            <ToastProvider>
+                <AIProvider>
+                    <ConversationProvider>
+                        <Routes>
+                            <Route path="/" element={<Navigate to="/chat" replace />} />
+                            <Route path="/chat" element={<LandingPage />} />
+                            <Route
+                                path="/chat/:conversationId"
+                                element={
+                                    <ProtectedRoute>
+                                        <LandingPage />
+                                    </ProtectedRoute>
+                                }
+                            />
+                            <Route path="/settings" element={<SettingsPage />} />
+                        </Routes>
+                    </ConversationProvider>
+                </AIProvider>
+            </ToastProvider>
         </LayoutProvider>
     )
 }

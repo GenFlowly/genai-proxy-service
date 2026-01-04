@@ -6,8 +6,10 @@ import {
     InstructionResponse
 } from "../models/instruction.models";
 
+import { fetchWithRetry } from "../utils/apiUtils";
+
 export async function getCustomerInstructions(token: string): Promise<GetCustomerInstructionListResponse> {
-    const response = await fetch(endpoints.getCustomerInstructions, {
+    const response = await fetchWithRetry(endpoints.getCustomerInstructions, {
         method: HttpMethod.GET,
         headers: {
             'Content-Type': 'application/json',
@@ -26,7 +28,7 @@ export async function createInstruction(
     token: string,
     request: CreateInstructionRequest
 ): Promise<InstructionResponse> {
-    const response = await fetch(endpoints.createInstruction, {
+    const response = await fetchWithRetry(endpoints.createInstruction, {
         method: HttpMethod.POST,
         headers: {
             'Content-Type': 'application/json',
@@ -55,7 +57,7 @@ export async function getInstructionVersion(
     // Route: /api/v1/instruction/{instructionId}/{version}
     const url = `${endpoints.createInstruction}/${instructionId}/${version}`
 
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
         method: HttpMethod.GET,
         headers: {
             'Content-Type': 'application/json',

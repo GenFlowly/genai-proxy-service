@@ -12,6 +12,9 @@ import org.slf4j.LoggerFactory
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 
 class AIRequestManager(
     private val aiRequestService: AIRequestService,
@@ -186,7 +189,7 @@ class AIRequestManager(
                 aiVendor,
                 customerId,
                 customerProfileService
-            )
+            ) ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
             // Step 2: Start timer for 3rd party API call
             val startTime = System.currentTimeMillis()
@@ -339,22 +342,12 @@ class AIRequestManager(
             } catch (e: Exception) {
                 logger.error("Error during streaming", e)
                 emit("\n\n[Error: ${e.message}]")
-                // Do not rethrow if we want the stream to end "gracefully" with the error text?
-                // But the caller might want to know?
-                // Activity logs it. If we swallow, activity thinks success.
-                // But we sent text.
-                // Let's rethrow so backend knows it failed, effectively.
-                // But wait, if we rethrow, does Ktor send the error?
-                // Activity uses `write(chunk)`. If we throw here, flow collection allows exception to bubble up.
-                // Activity catch block logs error. The response writer might be closed abruptly.
-                // If we want the USER to see the text, we should ensure it gets written.
-                // Emitting here puts it in the flow. Activity writes it.
-                // Then we throw. Activity catches.
-                throw e 
+                throw e
             } finally {
                 val responseText = sb.toString()
                 logger.info("Stream flow completed for conversation {}. Total length: {}", message.conversationId, responseText.length)
-                
+                logger.info("Received response from $config - $responseText")
+
                 if (responseText.isNotEmpty()) {
                     val responseMessage = Message(
                         messageId = responseMessageId, // Use the pre-calculated ID
@@ -386,52 +379,93 @@ class AIRequestManager(
             aiVendor,
             customerId,
             customerProfileService
-        )
+        ) ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
         return kotlinx.coroutines.flow.flow {
-             when (aiVendor) {
-                AIVendor.OPENAI -> {
-                    val params = aiRequestService.buildOpenAIRequest(
-                        messages,
-                        model,
-                        systemPrompt ?: ""
-                    )
-                    val httpClient = aiRequestService.getOpenAIProvider(apiKey)
-                    httpClient.generateResponseStream(
-                        com.genflowly.aicallerlib.models.openai.OpenAIRequest(
-                            params
+             try {
+                 when (aiVendor) {
+                    AIVendor.OPENAI -> {
+                        val params = aiRequestService.buildOpenAIRequest(
+                            messages,
+                            model,
+                            systemPrompt ?: ""
                         )
-                    ).collect { emit(it.getText()) }
-                }
+                        val httpClient = aiRequestService.getOpenAIProvider(apiKey)
+                        httpClient.generateResponseStream(
+                            com.genflowly.aicallerlib.models.openai.OpenAIRequest(
+                                params
+                            )
+                        ).collect { emit(it.getText()) }
+                    }
+    
+                    AIVendor.GEMINI -> {
+                        logger.info("Building Gemini request")
+                        val params = aiRequestService.buildGeminiRequest(
+                            messages,
+                            model,
+                            systemPrompt ?: ""
+                        )
+                        logger.info("Getting Gemini provider")
+                        val httpClient = aiRequestService.getGeminiProvider(apiKey)
+                        logger.info("Starting Gemini stream collection with timeout")
 
-                AIVendor.GEMINI -> {
-                    val params = aiRequestService.buildGeminiRequest(
-                        messages,
-                        model,
-                        systemPrompt ?: ""
-                    )
-                    val httpClient = aiRequestService.getGeminiProvider(apiKey)
-                    httpClient.generateResponseStream(
-                        com.genflowly.aicallerlib.models.gemini.GeminiRequest(
-                            params
+                        try {
+                            withTimeout(5000L) { // 20 seconds timeout to
+                                // catch silent SDK retries
+                                httpClient.generateResponseStream(
+                                    com.genflowly.aicallerlib.models.gemini.GeminiRequest(
+                                        params
+                                    )
+                                ).collect { 
+                                    logger.info("Gemini stream chunk received: ${it.getText()?.take(20)}...")
+                                    emit(it.getText() ?: "") 
+                                }
+                            }
+                        } catch (e: TimeoutCancellationException) {
+                            val timeoutMsg = "Request timed out while waiting for Gemini. This likely indicates you are rate limited (429) and the SDK is retrying silently. Please try again later."
+                            logger.warn(timeoutMsg)
+                            emit(timeoutMsg)
+                        }
+                        
+                        logger.info("Gemini stream collection finished")
+                    }
+    
+                    AIVendor.CLAUDE -> {
+                        val params = aiRequestService.buildClaudeRequest(
+                            messages,
+                            model,
+                            systemPrompt ?: ""
                         )
-                    ).collect { emit(it.getText() ?: "") }
+                        val httpClient = aiRequestService.getClaudeProvider(apiKey)
+                        httpClient.generateResponseStream(
+                            com.genflowly.aicallerlib.models.claude.ClaudeRequest(
+                                params
+                            )
+                        ).collect { emit(it.getText()) }
+                    }
                 }
+             } catch (e: Exception) {
+                 logger.error("Error during streaming definition", e)
+                 
+                 val message = e.message ?: ""
+                 val isRateLimit = message.contains("429") || 
+                                   message.contains("Quota exceeded") || 
+                                   (e.javaClass.name.contains("ClientException") && message.contains("429"))
 
-                AIVendor.CLAUDE -> {
-                    val params = aiRequestService.buildClaudeRequest(
-                        messages,
-                        model,
-                        systemPrompt ?: ""
-                    )
-                    val httpClient = aiRequestService.getClaudeProvider(apiKey)
-                    httpClient.generateResponseStream(
-                        com.genflowly.aicallerlib.models.claude.ClaudeRequest(
-                            params
-                        )
-                    ).collect { emit(it.getText()) }
-                }
-            }
-        }
+                 val isApiKeyExpired = message.contains("API key expired") || message.contains("400")
+
+                 if (isRateLimit) {
+                      val rateLimitMsg = "Rate limit exceeded for your API key. Please retry later.\nDetails: $message"
+                      logger.info("Emitting rate limit message inside flow: {}", rateLimitMsg)
+                      emit(rateLimitMsg)
+                 } else if (isApiKeyExpired) {
+                      val expiredMsg = "Please update your API key.\nDetails: $message"
+                      logger.info("Emitting expired key message inside flow: {}", expiredMsg)
+                      emit(expiredMsg)
+                 } else {
+                      throw e
+                 }
+             }
+        }.flowOn(kotlinx.coroutines.Dispatchers.IO)
     }
 }

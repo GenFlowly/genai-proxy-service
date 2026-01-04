@@ -57,7 +57,7 @@ dependencies {
     // Core HTTP client (Netty works well in Ktor)
     implementation("software.amazon.awssdk:url-connection-client")
 
-    implementation("com.genflowly:ai-caller-lib:0.0.31")
+    implementation("com.genflowly:ai-caller-lib:0.0.32")
 
     implementation("io.ktor:ktor-server-auth-jvm:3.0.0")
     implementation("io.ktor:ktor-server-auth-jwt-jvm:3.0.0")

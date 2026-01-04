@@ -1,6 +1,7 @@
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import { AIConfig } from '../context/AIContext'
+import { fetchWithRetry } from "../utils/apiUtils";
 
 export interface SaveAIConfigPreferencesRequest {
     aiConfigPreferences: {
@@ -14,7 +15,7 @@ export async function saveAIConfigPreferences(
     token: string,
     payload: SaveAIConfigPreferencesRequest
 ): Promise<void> {
-    const response = await fetch(endpoints.saveAIConfig, {
+    const response = await fetchWithRetry(endpoints.saveAIConfig, {
         method: HttpMethod.POST,
         headers: {
             'Content-Type': 'application/json',
