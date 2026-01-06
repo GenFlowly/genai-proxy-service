@@ -27,14 +27,28 @@ describe('TextContainer Component', () => {
     });
 
     test('renders loading state', () => {
-        render(<TextContainer {...defaultProps} isLoading={true} />);
+        render(<TextContainer {...defaultProps} isLoading={true} loadingContent={<div data-testid="custom-loading">Loading...</div>} />);
 
-        const loading = screen.getByTestId('test-container-loading');
+        const loading = screen.getByTestId('custom-loading');
         expect(loading).toBeInTheDocument();
-        expect(loading).toHaveTextContent('Thinking...');
+        expect(loading).toHaveTextContent('Loading...');
 
         // Should not render markdown when loading
         expect(screen.queryByTestId('markdown-content')).not.toBeInTheDocument();
+    });
+
+    test('renders nothing when loading if no loadingContent provided', () => {
+        render(<TextContainer {...defaultProps} isLoading={true} />);
+        expect(screen.queryByTestId('markdown-content')).not.toBeInTheDocument();
+        // and no loading content
+        expect(screen.queryByTestId('test-container-loading')).not.toBeInTheDocument();
+    });
+
+    test('does NOT render loadingContent when isLoading is false', () => {
+        render(<TextContainer {...defaultProps} isLoading={false} loadingContent={<div data-testid="should-not-exist">Loading...</div>} />);
+
+        expect(screen.queryByTestId('should-not-exist')).not.toBeInTheDocument();
+        expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
     });
 
     test('renders title as string', () => {

@@ -15,7 +15,7 @@ interface RequestProps {
     blockId: string
 }
 
-export default function Request({ blockId }: RequestProps) {
+export default function Request({ blockId, 'data-testid': testId }: RequestProps & { 'data-testid'?: string }) {
     const {
         conversationBlockList,
         generateResponsesStream,
@@ -119,7 +119,7 @@ export default function Request({ blockId }: RequestProps) {
 
     if (conversationBlock.responseMessages.length > 0 && !conversationBlock.isLoading) {
         return (
-            <div className={styles.requestWrapper}>
+            <div className={styles.requestWrapper} data-testid={testId || "resolved-request-wrapper"}>
                 <TextContainer
                     content={conversationBlock.prompt}
                     title={<UserBrandName name={displayName} picture={displayPicture} as="span" />}
@@ -132,7 +132,7 @@ export default function Request({ blockId }: RequestProps) {
     // Otherwise show the editor
     return (
 
-        <div className={styles.container} data-testid="request-widget-container">
+        <div className={styles.container} data-testid={testId || "request-widget-container"}>
             <PromptEditor
                 id={blockId}
                 value={draftPrompt}

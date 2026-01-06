@@ -15,7 +15,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { createInstruction, getInstructionVersion } from '../../../services/instructionService'
 import { InstructionResponse } from '../../../models/instruction.models'
 
-export default function InstructionWidget() {
+export default function InstructionWidget({ 'data-testid': testId }: { 'data-testid'?: string }) {
     const {
         systemPrompt,
         setSystemPrompt,
@@ -115,7 +115,7 @@ export default function InstructionWidget() {
 
     if (!isInstructionWidgetExpanded) {
         return (
-            <div className={styles.collapsedContainer}>
+            <div className={styles.collapsedContainer} data-testid={testId || "instruction-widget-collapsed"}>
                 <div style={{ flex: 1, maxWidth: '66rem', paddingRight: '0.5rem' }}>
                     <InputSelectWithHint
                         hint="Instructions for AI"
@@ -179,7 +179,7 @@ export default function InstructionWidget() {
     }
 
     return (
-        <div className={styles.container}>
+        <div className={styles.container} data-testid={testId || "instruction-widget-expanded"}>
             {/* Metadata Display / Edit */}
             {(() => {
                 // Config for options
@@ -268,7 +268,7 @@ export default function InstructionWidget() {
                                             </div>
                                         ) : (
                                             <div className={styles.titleGroup}>
-                                                <span className={styles.instructionName} style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>
+                                                <span className={styles.instructionName} style={{ fontSize: '1.2rem', marginRight: '0.5rem' }} data-testid="instruction-name-display">
                                                     {instructionName || latest?.name || 'Untitled Instruction'}
                                                 </span>
                                                 <button
