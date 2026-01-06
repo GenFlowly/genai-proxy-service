@@ -178,6 +178,8 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             content={text}
                             className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}
                             isLoading={isLoading && text.trim().length === 0}
+                            data-testid="response-message"
+                            aria-label={`Response from ${aiVendor}`}
                         >
                             {onFollowUp && !isLoading && (
                                 <div className={styles.followUpButtonWrapper}>

@@ -9,7 +9,7 @@ export default function LeftSidebar(): React.ReactElement {
     const collapsed = !isLeftSidebarExpanded
 
     return (
-        <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
+        <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`} data-testid="left-sidebar">
 
 
             <div className={styles.sidebarContent}>

@@ -253,6 +253,7 @@ export default function AIVendorWidget(): React.ReactElement {
                         onClick={handleRefresh}
                         disabled={isRefreshing || !hasAnyValidApiKey}
                         aria-label="Refresh Models"
+                        data-testid="refresh-models-button"
                     >
                         <Icon
                             src={ICONS.REFRESH_ICON}
@@ -310,6 +311,7 @@ export default function AIVendorWidget(): React.ReactElement {
                                 }}
                                 disabled={!isEnabled}
                                 variant={isActive ? 'primary' : 'secondary'}
+                                data-testid={`vendor-toggle-${vendor}`}
                             />
 
                             {!isEnabled && (
@@ -325,6 +327,7 @@ export default function AIVendorWidget(): React.ReactElement {
                                         setSelectedModelForAIVendor(vendor, e.target.value)
                                     }
                                     className={styles.modelSelect}
+                                    data-testid={`model-select-${vendor}`}
                                 >
                                     {models.map(model => (
                                         <option key={model} value={model}>

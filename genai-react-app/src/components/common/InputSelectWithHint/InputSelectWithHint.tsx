@@ -18,6 +18,7 @@ interface InputSelectWithHintProps {
     options: SelectOption[]
     className?: string
     placeholder?: string
+    'data-testid'?: string
 }
 
 export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
@@ -27,7 +28,8 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
     onChange,
     options,
     className = '',
-    placeholder = 'Select an option'
+    placeholder = 'Select an option',
+    'data-testid': testId
 }) => {
 
     const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -52,6 +54,7 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
                 className={styles.inputElement}
                 value={value || ''}
                 onChange={handleSelectChange}
+                data-testid={testId}
             >
                 <option value="" disabled>{placeholder}</option>
                 {options.map((opt) => (

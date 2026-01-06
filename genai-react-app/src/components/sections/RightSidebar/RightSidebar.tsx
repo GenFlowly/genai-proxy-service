@@ -12,11 +12,12 @@ export default function RightSidebar(): React.ReactElement {
     const collapsed = !isRightSidebarExpanded
 
     return (
-        <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`}>
+        <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`} data-testid="right-sidebar">
             <button
                 onClick={toggleRightSidebar}
                 className={styles.collapseButton}
                 title={isRightSidebarExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
+                data-testid="right-sidebar-toggle"
             >
                 {isRightSidebarExpanded ? (
                     <Icon src={ICONS.ALT_ARROW_RIGHT} size={15} />

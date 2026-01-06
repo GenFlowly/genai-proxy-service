@@ -24,7 +24,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const {
         config,
         setSupplementalText,
-        // Consumed from AIContext
         systemPrompt,
         setSystemPrompt,
         selectedInstructionId,
@@ -33,11 +32,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const navigate = useNavigate()
 
-    // State previously handled here is now in AIContext
 
-    // State previously handled here is now in AIContext
-
-    // ✅ Conversation Identity (Owned by ConversationContext)
     const [conversationId, setConversationId] = useState<string>('')
     const [activeBlockId, setActiveBlockId] = useState<string>('')
 
@@ -66,7 +61,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const [editorPrompt, setEditorPromptInternal] = useState<string>('') // Active text being edited
 
     const setEditorPrompt = useCallback((prompt: string) => {
-        // console.log('[ConversationContext] setEditorPrompt:', prompt.length)
         setEditorPromptInternal(prompt)
     }, [])
 
@@ -293,12 +287,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         try {
             const token = await getAccessTokenSilently()
 
-            console.log('DEBUG generateResponses', {
-                id,
-                explicitId: selectedMessageId,
-                finalId: finalSelectedResponseId
-            })
-
             const responses = await fetchVendorResponses(
                 token,
                 aiConfigs,
@@ -306,8 +294,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 finalSelectedResponseId,
                 systemPrompt
             )
-
-            console.log('DEBUG responses array:', responses)
 
             updateConversationBlock(id, {
                 responseMessages: responses,
@@ -319,7 +305,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             setLeftSidebarExpanded(false)
             setRightSidebarExpanded(false)
         } catch (err) {
-            console.error(err)
             updateConversationBlock(id, {
                 responseMessages: [
                     {
@@ -393,20 +378,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         )
                     },
                     (metadata: StreamMetadata) => {
-                        // console.log('[Stream] onMetadata received:', metadata)
                         const newConversationId = metadata.conversationId
 
                         if (newConversationId && newConversationId !== conversationIdRef.current) {
-                            // Backend might send duplicate headers "id, id" if misconfigured (fixed now, but safeguard here)
                             const sanitizedId = newConversationId.split(',')[0].trim()
 
                             if (sanitizedId && sanitizedId !== conversationIdRef.current) {
-                                // setConversationId(sanitizedId) // DO NOT update state yet to avoid LandingPage reset!
                                 conversationIdRef.current = sanitizedId
-                                // console.log('SET Conversation ID Stream', sanitizedId)
                             }
-                            // Deferred navigation to prevent stream cancellation
-                            // navigate(`/chat/${newConversationId}`) 
                         }
 
                         // Capture currentMsgId BEFORE updating it later in this callback.
@@ -522,7 +501,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
 
         } catch (err) {
-            console.error(err)
             updateConversationBlock(id, {
                 responseMessages: [
                     {
@@ -553,7 +531,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 conversationId,
                 activeBlockId,
                 setActiveBlockId,
-                // Pass-through from AIContext
                 systemPrompt,
                 setSystemPrompt,
                 selectedInstructionId,

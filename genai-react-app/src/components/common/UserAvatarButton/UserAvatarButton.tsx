@@ -25,6 +25,7 @@ export const UserAvatarButton: React.FC<UserAvatarButtonProps> = ({
                     src={displayPicture}
                     alt={displayName}
                     className={styles.avatarImage}
+                    data-testid="user-avatar-image"
                 />
             ) : (
                 <Icon src={ICONS.USER_CIRCLE} size={40} />

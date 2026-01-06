@@ -131,16 +131,18 @@ export default function Request({ blockId }: RequestProps) {
 
     // Otherwise show the editor
     return (
-        <div className={styles.container}>
+
+        <div className={styles.container} data-testid="request-widget-container">
             <PromptEditor
                 id={blockId}
                 value={draftPrompt}
                 onChange={handleEditorChange}
                 height="100%"
                 className={styles.promptEditorFullscreen}
+                data-testid="prompt-editor"
             />
 
-            <div className={styles.buttonWrapper}>
+            <div className={styles.buttonWrapper} data-testid="generate-button-wrapper">
                 <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
                     <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
                         <MultiPurposeButton
@@ -152,6 +154,7 @@ export default function Request({ blockId }: RequestProps) {
                             label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
                             disabled={conversationBlock.isLoading || !hasAnyValidApiKey}
                             icon={ICONS.SEND}
+                            data-testid="generate-button"
                         />
                     </div>
                 </Tooltip>

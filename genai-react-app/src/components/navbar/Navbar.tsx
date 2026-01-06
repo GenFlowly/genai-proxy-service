@@ -61,6 +61,7 @@ export default function Navbar(): React.ReactElement {
                             <button
                                 onClick={() => loginWithRedirect()}
                                 className={styles.loginButton}
+                                data-testid="login-button"
                             >
                                 <LoginIcon />
                                 <span>Login</span>
@@ -71,12 +72,13 @@ export default function Navbar(): React.ReactElement {
                                     onClick={() => setShowDropdown(!showDropdown)}
                                     displayName={displayName}
                                     displayPicture={displayPicture}
+                                    data-testid="user-avatar-button"
                                 />
 
                                 {showDropdown && (
                                     <div className={styles.dropdownMenu}>
                                         <div className={styles.dropdownHeader}>
-                                            <p className={styles.dropdownLabel}>Hello {user?.name} 👋</p>
+                                            <p className={styles.dropdownLabel} data-testid="user-name-display">Hello {user?.name} 👋</p>
                                         </div>
                                         <button
                                             onClick={handleSettingsClick}
