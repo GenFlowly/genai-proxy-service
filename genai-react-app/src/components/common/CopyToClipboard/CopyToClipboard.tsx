@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import styles from './CopyToClipboard.module.scss'
 import { Icon } from '../Icon/Icon'
 
-interface CopyToClipboardProps {
+interface CopyToClipboardProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     content: string
     label?: string
     buttonText?: string // To override label/icon mix
@@ -25,6 +25,7 @@ export default function CopyToClipboard({
     size = 'sm',
     variant = 'primary',
     icon,
+    ...props
 }: CopyToClipboardProps): React.ReactElement {
     const [copied, setCopied] = useState(false)
 
@@ -46,6 +47,8 @@ export default function CopyToClipboard({
             disabled={isDisabled}
             className={`${styles.copyToClipboard} ${styles[size]} ${styles[variant]} ${className}`}
             title={label}
+            data-testid="copy-to-clipboard-button"
+            {...props}
         >
             {copied ? successMessage : (
                 icon ? <Icon src={icon} size="1.2em" /> : label

@@ -6,18 +6,21 @@ import styles from './UserAvatarButton.module.scss'
 interface UserAvatarButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     displayName: string
     displayPicture?: string
+    'data-testid'?: string
 }
 
 export const UserAvatarButton: React.FC<UserAvatarButtonProps> = ({
     displayName,
     displayPicture,
     className = '',
+    'data-testid': testId,
     ...props
 }) => {
     return (
         <button
             className={`${styles.avatarButton} ${className}`}
             title={displayName}
+            data-testid={testId}
             {...props}
         >
             {displayPicture ? (
@@ -25,10 +28,10 @@ export const UserAvatarButton: React.FC<UserAvatarButtonProps> = ({
                     src={displayPicture}
                     alt={displayName}
                     className={styles.avatarImage}
-                    data-testid="user-avatar-image"
+                    data-testid={testId ? `${testId}-image` : 'user-avatar-image'}
                 />
             ) : (
-                <Icon src={ICONS.USER_CIRCLE} size={40} />
+                <Icon src={ICONS.USER_CIRCLE} size={40} data-testid={testId ? `${testId}-icon` : undefined} />
             )}
         </button>
     )

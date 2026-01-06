@@ -1,14 +1,14 @@
 // src/components/common/Icon/Icon.tsx
 import React from 'react'
 
-interface IconProps {
+interface IconProps extends React.HTMLAttributes<HTMLSpanElement> {
     src: string
     alt?: string
     size?: string | number
     className?: string
 }
 
-export const Icon = ({ src, alt, size = "1em", className }: IconProps) => (
+export const Icon = ({ src, alt, size = "1em", className, ...props }: IconProps) => (
     <span
         className={className}
         style={{
@@ -28,5 +28,6 @@ export const Icon = ({ src, alt, size = "1em", className }: IconProps) => (
         }}
         role="img"
         aria-label={alt || 'icon'}
+        {...props}
     />
 )

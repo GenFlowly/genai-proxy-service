@@ -24,10 +24,10 @@ export const InputTextWithHint: React.FC<InputTextWithHintProps> = ({
     'data-testid': testId
 }) => {
     return (
-        <div className={`${styles.container} ${className}`}>
+        <div className={`${styles.container} ${className}`} data-testid={testId ? `${testId}-container` : undefined}>
             <div className={styles.prefixArea}>
-                {icon && <Icon src={icon} size={16} className={styles.icon} />}
-                <span className={styles.hintText}>{hint}</span>
+                {icon && <Icon src={icon} size={16} className={styles.icon} data-testid={testId ? `${testId}-icon` : undefined} />}
+                <span className={styles.hintText} data-testid={testId ? `${testId}-hint` : undefined}>{hint}</span>
             </div>
             <input
                 type="text"

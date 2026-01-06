@@ -6,6 +6,7 @@ export interface PillButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
     label: React.ReactNode
     icon?: string
     variant?: 'primary' | 'secondary'
+    'data-testid'?: string
 }
 
 export default function PillButton({
@@ -13,6 +14,7 @@ export default function PillButton({
     icon,
     className = '',
     variant = 'primary',
+    'data-testid': testId,
     ...props
 }: PillButtonProps): React.ReactElement {
     const variantClass = variant === 'secondary' ? styles.secondary : ''
@@ -20,10 +22,11 @@ export default function PillButton({
     return (
         <button
             className={`${styles.pillButton} ${variantClass} ${className}`}
+            data-testid={testId}
             {...props}
         >
-            {icon && <Icon src={icon} size={16} />}
-            {typeof label === 'string' ? <span>{label}</span> : label}
+            {icon && <Icon src={icon} size={16} data-testid={testId ? `${testId}-icon` : undefined} />}
+            {typeof label === 'string' ? <span data-testid={testId ? `${testId}-text` : undefined}>{label}</span> : label}
         </button>
     )
 }

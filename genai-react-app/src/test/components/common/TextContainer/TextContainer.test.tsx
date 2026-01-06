@@ -1,0 +1,80 @@
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import TextContainer from '../../../../components/common/TextContainer/TextContainer';
+import '@testing-library/jest-dom';
+
+// Mock ReactMarkdown and plugins to avoid ESM issues and simplify testing
+jest.mock('react-markdown', () => (props: any) => {
+    return <div data-testid="markdown-content">{props.children}</div>;
+});
+jest.mock('remark-gfm', () => () => { });
+jest.mock('rehype-highlight', () => () => { });
+
+describe('TextContainer Component', () => {
+    const defaultProps = {
+        content: 'Markdown Content',
+        'data-testid': 'test-container'
+    };
+
+    test('renders content correctly', () => {
+        render(<TextContainer {...defaultProps} />);
+
+        const container = screen.getByTestId('test-container');
+        expect(container).toBeInTheDocument();
+
+        const markdown = screen.getByTestId('markdown-content');
+        expect(markdown).toHaveTextContent('Markdown Content');
+    });
+
+    test('renders loading state', () => {
+        render(<TextContainer {...defaultProps} isLoading={true} />);
+
+        const loading = screen.getByTestId('test-container-loading');
+        expect(loading).toBeInTheDocument();
+        expect(loading).toHaveTextContent('Thinking...');
+
+        // Should not render markdown when loading
+        expect(screen.queryByTestId('markdown-content')).not.toBeInTheDocument();
+    });
+
+    test('renders title as string', () => {
+        render(<TextContainer {...defaultProps} title="My Title" />);
+
+        const header = screen.getByTestId('test-container-header');
+        expect(header).toBeInTheDocument();
+        expect(header).toHaveTextContent('My Title');
+        expect(header.querySelector('h2')).toBeInTheDocument();
+    });
+
+    test('renders title as component', () => {
+        render(<TextContainer {...defaultProps} title={<span data-testid="custom-title">Custom Title</span>} />);
+
+        const customTitle = screen.getByTestId('custom-title');
+        expect(customTitle).toBeInTheDocument();
+        expect(customTitle).toHaveTextContent('Custom Title');
+    });
+
+    test('shows copy button by default', () => {
+        render(<TextContainer {...defaultProps} />);
+
+        const copyButton = screen.getByTestId('test-container-copy-button');
+        expect(copyButton).toBeInTheDocument();
+    });
+
+    test('hides copy button when prop is false', () => {
+        render(<TextContainer {...defaultProps} showCopyButton={false} />);
+
+        expect(screen.queryByTestId('test-container-copy-button')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('test-container-header')).not.toBeInTheDocument();
+    });
+
+    test('renders children', () => {
+        render(
+            <TextContainer {...defaultProps}>
+                <div data-testid="child-element">Child</div>
+            </TextContainer>
+        );
+
+        expect(screen.getByTestId('child-element')).toBeInTheDocument();
+    });
+});

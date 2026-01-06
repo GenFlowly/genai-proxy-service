@@ -14,26 +14,30 @@ interface SidebarWidgetContainerProps {
 
     /** Optional header content for collapsed state */
     headerCollapsed?: React.ReactNode
+
+    /** Optional test id */
+    'data-testid'?: string
 }
 
 export default function SidebarWidgetContainer({
     children,
     collapsedContent,
     header,
-    headerCollapsed
+    headerCollapsed,
+    'data-testid': testId
 }: SidebarWidgetContainerProps) {
     const { isRightSidebarExpanded } = useLayout()
     const collapsed = !isRightSidebarExpanded
 
     if (collapsed) {
         return (
-            <div className={styles.collapsedContainer}>
+            <div className={styles.collapsedContainer} data-testid={testId} data-collapsed="true">
                 {headerCollapsed && (
-                    <div className={styles.collapsedHeader}>
+                    <div className={styles.collapsedHeader} data-testid={testId ? `${testId}-header-collapsed` : undefined}>
                         {headerCollapsed}
                     </div>
                 )}
-                <div className={styles.collapsedContent}>
+                <div className={styles.collapsedContent} data-testid={testId ? `${testId}-content-collapsed` : undefined}>
                     {collapsedContent}
                 </div>
             </div>
@@ -42,13 +46,13 @@ export default function SidebarWidgetContainer({
 
     // Expanded View
     return (
-        <div className={styles.container}>
+        <div className={styles.container} data-testid={testId} data-collapsed="false">
             {header && (
-                <div className={styles.header}>
+                <div className={styles.header} data-testid={testId ? `${testId}-header` : undefined}>
                     {header}
                 </div>
             )}
-            <div className={styles.content}>
+            <div className={styles.content} data-testid={testId ? `${testId}-content` : undefined}>
                 {children}
             </div>
         </div>

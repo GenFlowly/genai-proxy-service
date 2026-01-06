@@ -17,7 +17,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     }, [isLoading, isAuthenticated, loginWithRedirect])
 
     if (isLoading) {
-        return <div>Loading...</div> // Or a nice spinner
+        return <div data-testid="protected-route-loading">Loading...</div> // Or a nice spinner
     }
 
     if (!isAuthenticated) {

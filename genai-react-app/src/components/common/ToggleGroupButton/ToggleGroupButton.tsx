@@ -14,6 +14,7 @@ interface ToggleGroupButtonProps {
     onChange: (selectedValues: string[]) => void
     allowEmpty?: boolean
     className?: string
+    'data-testid'?: string
 }
 
 export default function ToggleGroupButton({
@@ -21,7 +22,8 @@ export default function ToggleGroupButton({
     selectedValues,
     onChange,
     allowEmpty = false,
-    className = ''
+    className = '',
+    'data-testid': testId
 }: ToggleGroupButtonProps): React.ReactElement {
 
     const handleToggle = (optionId: string) => {
@@ -45,7 +47,7 @@ export default function ToggleGroupButton({
     if (!options || options.length === 0) return <></>
 
     return (
-        <div className={`${styles.toggleGroup} ${className}`}>
+        <div className={`${styles.toggleGroup} ${className}`} data-testid={testId}>
             {options.map((option) => {
                 const isActive = selectedValues.includes(option.id)
                 return (
@@ -56,8 +58,9 @@ export default function ToggleGroupButton({
                         type="button"
                         aria-pressed={isActive}
                         aria-label={`Toggle ${option.label}`}
+                        data-testid={testId ? `${testId}-option-${option.id}` : undefined}
                     >
-                        {option.icon && <Icon src={option.icon} size={16} />}
+                        {option.icon && <Icon src={option.icon} size={16} data-testid={testId ? `${testId}-option-${option.id}-icon` : undefined} />}
                         <span>{option.label}</span>
                     </button>
                 )

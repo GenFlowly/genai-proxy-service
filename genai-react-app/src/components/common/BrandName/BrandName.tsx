@@ -22,9 +22,9 @@ export default function BrandName<T extends ElementType = 'div'>({
     const Component = as || 'div'
 
     return (
-        <Component className={`${styles.brandContainer} ${className}`} {...props}>
-            <Icon src={icon} size={iconSize} />
-            <span>{name}</span>
+        <Component className={`${styles.brandContainer} ${className}`} {...props} data-testid="brand-name-container">
+            <Icon src={icon} size={iconSize} data-testid="brand-name-icon" />
+            <span data-testid="brand-name-text">{name}</span>
         </Component>
     )
 }
@@ -44,15 +44,15 @@ export function GeminiBrandName<T extends ElementType = 'div'>(props: Omit<Brand
 }
 
 export function CollapsedOpenAIBrandName({ size = 30, className }: { size?: number, className?: string }) {
-    return <Icon src={ICONS.OPENAI} size={30} className={className} />
+    return <Icon src={ICONS.OPENAI} size={30} className={className} data-testid="collapsed-openai-brand" />
 }
 
 export function CollapsedClaudeBrandName({ size = 20, className }: { size?: number, className?: string }) {
-    return <Icon src={ICONS.CLAUDE} size={size} className={className} />
+    return <Icon src={ICONS.CLAUDE} size={size} className={className} data-testid="collapsed-claude-brand" />
 }
 
 export function CollapsedGeminiBrandName({ size = 20, className }: { size?: number, className?: string }) {
-    return <Icon src={ICONS.GEMINI} size={size} className={className} />
+    return <Icon src={ICONS.GEMINI} size={size} className={className} data-testid="collapsed-gemini-brand" />
 }
 
 export function UserBrandName<T extends ElementType = 'div'>({
@@ -70,7 +70,7 @@ export function UserBrandName<T extends ElementType = 'div'>({
     const Component = as || 'div'
 
     return (
-        <Component className={`${styles.brandContainer} ${className}`} {...props}>
+        <Component className={`${styles.brandContainer} ${className}`} {...props} data-testid="user-brand-name-container">
             {picture ? (
                 <img
                     src={picture}
@@ -86,7 +86,7 @@ export function UserBrandName<T extends ElementType = 'div'>({
             ) : (
                 <Icon src={ICONS.USER_CIRCLE} size={24} />
             )}
-            <span>{name}</span>
+            <span data-testid="user-brand-name-text">{name}</span>
         </Component>
     )
 }

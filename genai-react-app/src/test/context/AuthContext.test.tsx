@@ -187,7 +187,7 @@ describe('AuthContext Integration with Navbar', () => {
         // but we can check checking the prop passed if we mocked it, or check the img tag if strictly rendered.
         // UserAvatarButton renders an img if displayPicture is present.
         // UserAvatarButton renders an img if displayPicture is present.
-        const img = screen.getByTestId('user-avatar-image');
+        const img = screen.getByTestId('user-avatar-button-image');
         expect(img).toHaveAttribute('src', 'bob.jpg');
         expect(img).toHaveAttribute('alt', 'Bob');
     });
