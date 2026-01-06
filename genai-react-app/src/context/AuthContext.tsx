@@ -116,6 +116,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                     if (error?.error === 'login_required' || error?.error === 'consent_required' || error?.message?.includes('Login required')) {
                         console.log('Session invalid, logging out...')
                         logout({ returnTo: window.location.origin })
+                    } else {
+                        // For other errors (e.g. 500), we must ALSO logout to ensure no sensitive Auth0 data 
+                        // (like ID tokens) remains in localStorage, as per strict security requirements.
+                        console.error('Onboarding failed, clearing session...', error)
+                        logout({ returnTo: window.location.origin })
                     }
                 } finally {
                     setIsInternalLoading(false)
@@ -132,11 +137,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
 
 
     // Map Auth0 User to our User type
+    // Strict Display: Do not fall back to Auth0 profile for name/picture if backend failed.
     const user: User | null = auth0User ? {
         sub: auth0User.sub || '',
         email: auth0User.email || '',
-        name: auth0User.name || '',
-        picture: auth0User.picture,
+        name: customerName || '', // Strictly prefer backend name; empty if missing
+        picture: customerPicture, // Strictly prefer backend picture; undefined if missing
     } : null
 
     const refreshInstructions = async () => {
@@ -180,9 +186,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         })
     }
 
+    // Strict Authentication: Considered authenticated ONLY if Auth0 says so AND we have a customerId (onboard success).
+    const isStrictlyAuthenticated = isAuthenticated && !!customerId
+
     const contextValue: AuthContextType = {
         user,
-        isAuthenticated,
+        isAuthenticated: isStrictlyAuthenticated,
         isLoading: auth0Loading || isInternalLoading,
         customerId,
         setCustomerId,

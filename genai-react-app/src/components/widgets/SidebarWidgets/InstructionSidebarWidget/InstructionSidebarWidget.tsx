@@ -30,6 +30,8 @@ export default function InstructionSidebarWidget() {
         <button
             className={`${styles.instructionItem} ${collapsed ? styles.collapsed : ''}`}
             onClick={handleClick}
+            data-testid="instruction-widget-toggle"
+            aria-expanded={isInstructionWidgetExpanded}
         >
             <span className={styles.icon}>
                 <Icon src={ICONS.USER_ROLE} />

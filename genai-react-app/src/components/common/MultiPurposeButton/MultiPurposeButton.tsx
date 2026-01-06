@@ -8,14 +8,16 @@ interface ButtonProps {
     onClick: () => void
     disabled?: boolean
     icon?: string
+    'data-testid'?: string
 }
 
-export default function MultiPurposeButton({ label, onClick, disabled = false, icon }: ButtonProps) {
+export default function MultiPurposeButton({ label, onClick, disabled = false, icon, 'data-testid': testId }: ButtonProps) {
     return (
         <button
             onClick={onClick}
             className={styles.submitButton}
             disabled={disabled}
+            data-testid={testId}
         >
             {label}
             {icon && <Icon src={icon} />}

@@ -162,6 +162,7 @@ export default function InstructionWidget() {
                             }
                             return [...filteredOptions, ctaOption]
                         })()}
+                        data-testid="instruction-selector-collapsed"
                     />
                 </div>
                 <button
@@ -169,6 +170,7 @@ export default function InstructionWidget() {
                     onClick={() => setInstructionWidgetExpanded(true)}
                     aria-label="Edit instruction"
                     title="Edit selected instruction"
+                    data-testid="instruction-edit-button"
                 >
                     <Icon src={ICONS.EDIT} className={styles.editIcon} />
                 </button>
@@ -240,6 +242,7 @@ export default function InstructionWidget() {
                                             }
                                         }}
                                         options={instructionOptions}
+                                        data-testid="instruction-selector"
                                     />
                                 </div>
 
@@ -257,6 +260,7 @@ export default function InstructionWidget() {
                                                     placeholder="Instruction Name"
                                                     className={styles.nameInput}
                                                     autoFocus
+                                                    data-testid="instruction-name-input"
                                                 />
                                                 <button onClick={() => setIsEditingName(false)} className={styles.cancelButton}>
                                                     Cancel
@@ -338,6 +342,7 @@ export default function InstructionWidget() {
                 disableCache={true}
                 height="100%"
                 className={styles.promptEditorFullscreen}
+                data-testid="system-prompt-editor"
             />
 
             {/* Button Row - Aligning with Editor Box */}
@@ -352,6 +357,7 @@ export default function InstructionWidget() {
                             label="Looks good"
                             variant="secondary"
                             onClick={() => setInstructionWidgetExpanded(false)}
+                            data-testid="instruction-looks-good-button"
                         />
 
                         <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
@@ -362,6 +368,7 @@ export default function InstructionWidget() {
                                     disabled={isLoading || !systemPrompt.trim()}
                                     icon={ICONS.SAVE_ICON}
                                     variant="primary"
+                                    data-testid="save-instruction-button"
                                 />
                             </div>
                         </Tooltip>

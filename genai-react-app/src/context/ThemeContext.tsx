@@ -23,14 +23,18 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
             document.documentElement.setAttribute('data-theme', savedTheme)
         } else {
             // Use system preference
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+            const prefersDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
             const systemTheme = prefersDark ? 'dark' : 'light'
             setThemeState(systemTheme)
             document.documentElement.setAttribute('data-theme', systemTheme)
         }
 
         // Listen for system theme changes
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+        let mediaQuery: MediaQueryList | null = null
+        if (window.matchMedia) {
+            mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+        }
+
         const handleChange = (e: MediaQueryListEvent) => {
             // Only update if user hasn't set a preference
             if (!localStorage.getItem('theme')) {
@@ -40,8 +44,14 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
             }
         }
 
-        mediaQuery.addEventListener('change', handleChange)
-        return () => mediaQuery.removeEventListener('change', handleChange)
+        if (mediaQuery) {
+            mediaQuery.addEventListener('change', handleChange)
+        }
+        return () => {
+            if (mediaQuery) {
+                mediaQuery.removeEventListener('change', handleChange)
+            }
+        }
     }, [])
 
     const setTheme = (newTheme: Theme) => {

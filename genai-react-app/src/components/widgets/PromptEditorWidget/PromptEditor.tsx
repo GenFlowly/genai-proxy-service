@@ -15,12 +15,13 @@ interface PromptEditorProps {
     disableCache?: boolean
     height?: string
     className?: string
+    'data-testid'?: string
 }
 
-export default function PromptEditor({ id, value, onChange, disableCache = false, height = "40.25rem", className = '' }: PromptEditorProps): React.ReactElement {
+export default function PromptEditor({ id, value, onChange, disableCache = false, height = "40.25rem", className = '', 'data-testid': testId }: PromptEditorProps): React.ReactElement {
 
     return (
-        <div className={`${styles.container} ${className}`}>
+        <div className={`${styles.container} ${className}`} data-testid={testId}>
             <div className={styles.editorWrapper} style={height === '100%' ? { height: '100%' } : {}}>
                 <div className={styles.innerContainer} style={height === '100%' ? { height: '100%' } : {}}>
                     {/* Ghost spacer for perfect centering */}

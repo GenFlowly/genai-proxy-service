@@ -1,2 +1,3 @@
 cd genai-react-app
+CI=true npm test
 CI=true npm run build

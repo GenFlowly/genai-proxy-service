@@ -17,7 +17,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.9.4",
+    "react-router": "^6.28.0",
+    "react-router-dom": "^6.28.0",
     "react-scripts": "5.0.1",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
@@ -28,7 +29,8 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test",
+    "test:watch": "react-scripts test --setupFilesAfterEnv '<rootDir>/src/test/setupTests.ts'",
+    "test": "react-scripts test --watchAll=false --setupFilesAfterEnv '<rootDir>/src/test/setupTests.ts'",
     "eject": "react-scripts eject",
     "prepare": "cd .. && husky genai-react-app/.husky"
   },
