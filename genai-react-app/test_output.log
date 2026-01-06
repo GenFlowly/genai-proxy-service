@@ -1,0 +1,997 @@
+(node:19843) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/InputSelectWithHint/InputSelectWithHint.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19842) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/TextContainer/TextContainer.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19839) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/BrandName/BrandName.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19834) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:19841) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/ThemeToggle/ThemeToggle.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19837) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/MultiPurposeButton/MultiPurposeButton.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19840) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/PillButton/PillButton.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19838) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/ToggleGroupButton/ToggleGroupButton.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+PASS src/test/components/common/Icon/Icon.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19836) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/UserAvatarButton/UserAvatarButton.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19833) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/common/InputTextWithHint/InputTextWithHint.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+FAIL src/test/context/AuthContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+    [0m [90m 34 |[39m         })[33m;[39m
+     [90m 35 |[39m
+    [31m[1m>[22m[39m[90m 36 |[39m         render(
+     [90m    |[39m               [31m[1m^[22m[39m
+     [90m 37 |[39m             [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 38 |[39m                 [33m<[39m[33mAuthProvider[39m[33m>[39m
+     [90m 39 |[39m                     [33m<[39m[33mNavbar[39m [33m/[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/context/AuthContext.test.tsx:36:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+    [0m [90m 34 |[39m         })[33m;[39m
+     [90m 35 |[39m
+    [31m[1m>[22m[39m[90m 36 |[39m         render(
+     [90m    |[39m               [31m[1m^[22m[39m
+     [90m 37 |[39m             [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 38 |[39m                 [33m<[39m[33mAuthProvider[39m[33m>[39m
+     [90m 39 |[39m                     [33m<[39m[33mNavbar[39m [33m/[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/context/AuthContext.test.tsx:36:15)
+
+    console.error
+      Failed to onboard user: Error: API Error
+          at Object.<anonymous> (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/test/context/AuthContext.test.tsx:116:27)
+          at Promise.then.completed (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:316:10)
+          at _callCircusTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:218:40)
+          at _runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:155:3)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:66:9)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:60:9)
+          at run (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:25:3)
+          at runAndTransformResultsToJestFormat (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)
+          at jestAdapter (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:82:19)
+          at runTestInternal (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:389:16)
+          at runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:475:34)
+          at Object.worker (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/testWorker.js:133:12)
+
+    [0m [90m 111 |[39m                     }
+     [90m 112 |[39m                 } [36mcatch[39m (error[33m:[39m any) {
+    [31m[1m>[22m[39m[90m 113 |[39m                     console[33m.[39merror([32m'Failed to onboard user:'[39m[33m,[39m error)
+     [90m     |[39m                             [31m[1m^[22m[39m
+     [90m 114 |[39m                     [90m// If we fail to get a token, it likely means the session is invalid[39m
+     [90m 115 |[39m                     [90m// despite isAuthenticated being true (stale cache).[39m
+     [90m 116 |[39m                     [36mif[39m (error[33m?[39m[33m.[39merror [33m===[39m [32m'login_required'[39m [33m||[39m error[33m?[39m[33m.[39merror [33m===[39m [32m'consent_required'[39m [33m||[39m error[33m?[39m[33m.[39mmessage[33m?[39m[33m.[39mincludes([32m'Login required'[39m)) {[0m
+
+      at onboard (src/context/AuthContext.tsx:113:29)
+
+    console.error
+      Onboarding failed, clearing session... Error: API Error
+          at Object.<anonymous> (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/test/context/AuthContext.test.tsx:116:27)
+          at Promise.then.completed (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:316:10)
+          at _callCircusTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:218:40)
+          at _runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:155:3)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:66:9)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:60:9)
+          at run (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:25:3)
+          at runAndTransformResultsToJestFormat (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)
+          at jestAdapter (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:82:19)
+          at runTestInternal (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:389:16)
+          at runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:475:34)
+          at Object.worker (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/testWorker.js:133:12)
+
+    [0m [90m 120 |[39m                         [90m// For other errors (e.g. 500), we must ALSO logout to ensure no sensitive Auth0 data [39m
+     [90m 121 |[39m                         [90m// (like ID tokens) remains in localStorage, as per strict security requirements.[39m
+    [31m[1m>[22m[39m[90m 122 |[39m                         console[33m.[39merror([32m'Onboarding failed, clearing session...'[39m[33m,[39m error)
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 123 |[39m                         logout({ returnTo[33m:[39m window[33m.[39mlocation[33m.[39morigin })
+     [90m 124 |[39m                     }
+     [90m 125 |[39m                 } [36mfinally[39m {[0m
+
+      at onboard (src/context/AuthContext.tsx:122:33)
+
+  ● AuthContext Integration with Navbar › Strictly uses Backend Profile data over Auth0 data
+
+    TestingLibraryElementError: Unable to find an element by: [data-testid="user-avatar-image"]
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<nav[39m
+          [33mclass[39m=[32m"navbar"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"container"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"leftControls"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"logoLink"[39m
+                [33mdata-testid[39m=[32m"navbar-logo-link"[39m
+                [33mhref[39m=[32m"/"[39m
+                [33mtitle[39m=[32m"Home"[39m
+              [36m>[39m
+                [36m<img[39m
+                  [33malt[39m=[32m"Create a new prompt"[39m
+                  [33mclass[39m=[32m"logoImage"[39m
+                  [33msrc[39m=[32m"logo.png"[39m
+                [36m/>[39m
+              [36m</a>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"centerControls"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rightControls"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"auth"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"accountMenu"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"avatarButton "[39m
+                    [33mdata-testid[39m=[32m"user-avatar-button"[39m
+                    [33mtitle[39m=[32m"Bob"[39m
+                  [36m>[39m
+                    [36m<img[39m
+                      [33malt[39m=[32m"Bob"[39m
+                      [33mclass[39m=[32m"avatarImage"[39m
+                      [33mdata-testid[39m=[32m"user-avatar-button-image"[39m
+                      [33msrc[39m=[32m"bob.jpg"[39m
+                    [36m/>[39m
+                  [36m</button>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"dropdownMenu"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"dropdownHeader"[39m
+                    [36m>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"dropdownLabel"[39m
+                        [33mdata-testid[39m=[32m"user-name-display"[39m
+                      [36m>[39m
+                        [0mHello [0m
+                        [0mBob[0m
+                        [0m 👋[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33mclass[39m=[32m"dropdownItem"[39m
+                      [33mdata-testid[39m=[32m"settings-button"[39m
+                    [36m>[39m
+                      [36m<svg[39m
+                        [33mfill[39m=[32m"none"[39m
+                        [33mheight[39m=[32m"16"[39m
+                        [33mstroke[39m=[32m"currentColor"[39m
+                        [33mstroke-width[39m=[32m"2"[39m
+                        [33mviewBox[39m=[32m"0 0 24 24"[39m
+                        [33mwidth[39m=[32m"16"[39m
+                      [36m>[39m
+                        [36m<circle[39m
+                          [33mcx[39m=[32m"12"[39m
+                          [33mcy[39m=[32m"12"[39m
+                          [33mr[39m=[32m"3"[39m
+                        [36m/>[39m
+                        [36m<path[39m
+                          [33md[39m=[32m"M12 1v6m0 6v6m9-9h-6m-6 0H3"[39m
+                        [36m/>[39m
+                      [36m</svg>[39m
+                      [36m<span>[39m
+                        [0mSettings[0m
+                      [36m</span>[39m
+                    [36m</button>[39m
+                    [36m<button[39m
+                      [33mclass[39m=[32m"dropdownItem"[39m
+                      [33mdata-testid[39m=[32m"logout-button"[39m
+                    [36m>[39m
+                      [0mLogout[0m
+                    [36m</button>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</nav>[39m
+      [36m</div>[39m
+    [36m</body>[39m
+
+    [0m [90m 188 |[39m         [90m// UserAvatarButton renders an img if displayPicture is present.[39m
+     [90m 189 |[39m         [90m// UserAvatarButton renders an img if displayPicture is present.[39m
+    [31m[1m>[22m[39m[90m 190 |[39m         [36mconst[39m img [33m=[39m screen[33m.[39mgetByTestId([32m'user-avatar-image'[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 191 |[39m         expect(img)[33m.[39mtoHaveAttribute([32m'src'[39m[33m,[39m [32m'bob.jpg'[39m)[33m;[39m
+     [90m 192 |[39m         expect(img)[33m.[39mtoHaveAttribute([32m'alt'[39m[33m,[39m [32m'Bob'[39m)[33m;[39m
+     [90m 193 |[39m     })[33m;[39m[0m
+
+      at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+      at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at getByTestId (node_modules/@testing-library/dom/dist/query-helpers.js:95:19)
+      at Object.<anonymous> (src/test/context/AuthContext.test.tsx:190:28)
+
+PASS src/test/components/common/SidebarWidgetContainer/SidebarWidgetContainer.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+PASS src/test/context/LayoutContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+    [0m [90m 46 |[39m
+     [90m 47 |[39m [36mconst[39m customRender [33m=[39m (ui[33m:[39m [33mReact[39m[33m.[39m[33mReactElement[39m) [33m=>[39m {
+    [31m[1m>[22m[39m[90m 48 |[39m     [36mreturn[39m render(
+     [90m    |[39m                  [31m[1m^[22m[39m
+     [90m 49 |[39m         [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 50 |[39m             [33m<[39m[33mToastProvider[39m[33m>[39m
+     [90m 51 |[39m                 [33m<[39m[33mLayoutProvider[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at customRender (src/test/context/LayoutContext.test.tsx:48:18)
+      at Object.<anonymous> (src/test/context/LayoutContext.test.tsx:77:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+    [0m [90m 46 |[39m
+     [90m 47 |[39m [36mconst[39m customRender [33m=[39m (ui[33m:[39m [33mReact[39m[33m.[39m[33mReactElement[39m) [33m=>[39m {
+    [31m[1m>[22m[39m[90m 48 |[39m     [36mreturn[39m render(
+     [90m    |[39m                  [31m[1m^[22m[39m
+     [90m 49 |[39m         [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 50 |[39m             [33m<[39m[33mToastProvider[39m[33m>[39m
+     [90m 51 |[39m                 [33m<[39m[33mLayoutProvider[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at customRender (src/test/context/LayoutContext.test.tsx:48:18)
+      at Object.<anonymous> (src/test/context/LayoutContext.test.tsx:77:9)
+
+PASS src/test/context/ToastContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+    console.error
+      Warning: An update to Toast inside a test was not wrapped in act(...).
+      
+      When testing, code that causes React state updates should be wrapped into act(...):
+      
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+      
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+          at Toast (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/components/common/Toast/Toast.tsx:16:47)
+          at div
+          at ToastProvider (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/context/ToastContext.tsx:11:33)
+
+    [0m [90m 21 |[39m
+     [90m 22 |[39m         [36mconst[39m timer [33m=[39m setTimeout(() [33m=>[39m {
+    [31m[1m>[22m[39m[90m 23 |[39m             setIsExiting([36mtrue[39m)
+     [90m    |[39m             [31m[1m^[22m[39m
+     [90m 24 |[39m         }[33m,[39m duration)
+     [90m 25 |[39m
+     [90m 26 |[39m         [36mreturn[39m () [33m=>[39m clearTimeout(timer)[0m
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27628:9)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25547:5)
+      at setIsExiting (node_modules/react-dom/cjs/react-dom.development.js:16708:7)
+      at src/components/common/Toast/Toast.tsx:23:13
+      at callTimer (node_modules/@sinonjs/fake-timers/src/fake-timers-src.js:729:24)
+      at doTickInner (node_modules/@sinonjs/fake-timers/src/fake-timers-src.js:1289:29)
+      at doTick (node_modules/@sinonjs/fake-timers/src/fake-timers-src.js:1370:20)
+      at Object.tick (node_modules/@sinonjs/fake-timers/src/fake-timers-src.js:1378:20)
+      at Object.runToLast (node_modules/@sinonjs/fake-timers/src/fake-timers-src.js:1534:26)
+      at FakeTimers.runOnlyPendingTimers (node_modules/@jest/fake-timers/build/modernFakeTimers.js:81:19)
+      at Object.<anonymous> (src/test/context/ToastContext.test.tsx:23:14)
+
+PASS src/test/context/ConversationContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+    [0m [90m 79 |[39m
+     [90m 80 |[39m [36mconst[39m customRender [33m=[39m (ui[33m:[39m [33mReact[39m[33m.[39m[33mReactElement[39m) [33m=>[39m {
+    [31m[1m>[22m[39m[90m 81 |[39m     [36mreturn[39m render(
+     [90m    |[39m                  [31m[1m^[22m[39m
+     [90m 82 |[39m         [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 83 |[39m             [33m<[39m[33mToastProvider[39m[33m>[39m
+     [90m 84 |[39m                 [33m<[39m[33mLayoutProvider[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at customRender (src/test/context/ConversationContext.test.tsx:81:18)
+      at Object.<anonymous> (src/test/context/ConversationContext.test.tsx:131:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+    [0m [90m 79 |[39m
+     [90m 80 |[39m [36mconst[39m customRender [33m=[39m (ui[33m:[39m [33mReact[39m[33m.[39m[33mReactElement[39m) [33m=>[39m {
+    [31m[1m>[22m[39m[90m 81 |[39m     [36mreturn[39m render(
+     [90m    |[39m                  [31m[1m^[22m[39m
+     [90m 82 |[39m         [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 83 |[39m             [33m<[39m[33mToastProvider[39m[33m>[39m
+     [90m 84 |[39m                 [33m<[39m[33mLayoutProvider[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at customRender (src/test/context/ConversationContext.test.tsx:81:18)
+      at Object.<anonymous> (src/test/context/ConversationContext.test.tsx:131:9)
+
+PASS src/test/components/common/CopyToClipboard/CopyToClipboard.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+PASS src/test/components/common/Tooltip/Tooltip.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+PASS src/test/components/common/Toast/Toast.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+PASS src/test/components/common/VendorAPIKeyStatus/VendorAPIKeyStatus.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+(node:19835) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/navbar/Navbar.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+    [0m [90m 36 |[39m         mockUseAuth[33m.[39mmockReturnValue(defaultAuthValues)[33m;[39m
+     [90m 37 |[39m
+    [31m[1m>[22m[39m[90m 38 |[39m         render(
+     [90m    |[39m               [31m[1m^[22m[39m
+     [90m 39 |[39m             [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 40 |[39m                 [33m<[39m[33mNavbar[39m [33m/[39m[33m>[39m
+     [90m 41 |[39m             [33m<[39m[33m/[39m[33mMemoryRouter[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/components/navbar/Navbar.test.tsx:38:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+    [0m [90m 36 |[39m         mockUseAuth[33m.[39mmockReturnValue(defaultAuthValues)[33m;[39m
+     [90m 37 |[39m
+    [31m[1m>[22m[39m[90m 38 |[39m         render(
+     [90m    |[39m               [31m[1m^[22m[39m
+     [90m 39 |[39m             [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 40 |[39m                 [33m<[39m[33mNavbar[39m [33m/[39m[33m>[39m
+     [90m 41 |[39m             [33m<[39m[33m/[39m[33mMemoryRouter[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/components/navbar/Navbar.test.tsx:38:15)
+
+PASS src/test/components/auth/ProtectedRoute.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+PASS src/test/context/AIContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+    console.log
+      Syncing AI Vendor Preferences []
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Syncing AI Vendor Preferences []
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Syncing AI Vendor Preferences []
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Syncing AI Vendor Preferences []
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+    console.log
+      Using cached AI models (initial load)
+
+      at fetchModels (src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:98:37)
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+FAIL src/test/App.test.tsx (5.543 s)
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:5:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+    [0m [90m  7 |[39m
+     [90m  8 |[39m test([32m'renders App shell and verifies authenticated state'[39m[33m,[39m [36masync[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m  9 |[39m   render(
+     [90m    |[39m         [31m[1m^[22m[39m
+     [90m 10 |[39m     [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 11 |[39m       [33m<[39m[33mApp[39m [33m/[39m[33m>[39m
+     [90m 12 |[39m     [33m<[39m[33m/[39m[33mMemoryRouter[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/App.test.tsx:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+    [0m [90m  7 |[39m
+     [90m  8 |[39m test([32m'renders App shell and verifies authenticated state'[39m[33m,[39m [36masync[39m () [33m=>[39m {
+    [31m[1m>[22m[39m[90m  9 |[39m   render(
+     [90m    |[39m         [31m[1m^[22m[39m
+     [90m 10 |[39m     [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 11 |[39m       [33m<[39m[33mApp[39m [33m/[39m[33m>[39m
+     [90m 12 |[39m     [33m<[39m[33m/[39m[33mMemoryRouter[39m[33m>[39m[0m
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/App.test.tsx:9:9)
+
+    console.log
+      !!! MANUAL MOCK onboardCustomer called !!!
+
+      at onboardCustomer (src/services/__mocks__/onboardUserService.ts:2:13)
+
+    console.error
+      Failed to fetch AI models: Error: Failed to fetch models: 401 Unauthorized
+          at getTextGenerationModels (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/services/getTextGenerationModelsService.ts:36:15)
+          at /Users/nk/workplace/genai-proxy-service/genai-react-app/src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:111:21
+
+    [0m [90m 133 |[39m                 }
+     [90m 134 |[39m             } [36mcatch[39m (err) {
+    [31m[1m>[22m[39m[90m 135 |[39m                 console[33m.[39merror([32m'Failed to fetch AI models:'[39m[33m,[39m err)
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 136 |[39m                 [90m// On error, let existing state persist[39m
+     [90m 137 |[39m             }
+     [90m 138 |[39m         }[33m,[39m[0m
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:135:25
+
+  ● renders App shell and verifies authenticated state
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test."
+
+    [0m [90m  6 |[39m jest[33m.[39mmock([32m'../services/onboardUserService'[39m)[33m;[39m
+     [90m  7 |[39m
+    [31m[1m>[22m[39m[90m  8 |[39m test([32m'renders App shell and verifies authenticated state'[39m[33m,[39m [36masync[39m () [33m=>[39m {
+     [90m    |[39m [31m[1m^[22m[39m
+     [90m  9 |[39m   render(
+     [90m 10 |[39m     [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 11 |[39m       [33m<[39m[33mApp[39m [33m/[39m[33m>[39m[0m
+
+      at Object.<anonymous> (src/test/App.test.tsx:8:1)
+
+Summary of all failing tests
+FAIL src/test/context/AuthContext.test.tsx
+  ● AuthContext Integration with Navbar › Strictly uses Backend Profile data over Auth0 data
+
+    TestingLibraryElementError: Unable to find an element by: [data-testid="user-avatar-image"]
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<nav[39m
+          [33mclass[39m=[32m"navbar"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"container"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"leftControls"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"logoLink"[39m
+                [33mdata-testid[39m=[32m"navbar-logo-link"[39m
+                [33mhref[39m=[32m"/"[39m
+                [33mtitle[39m=[32m"Home"[39m
+              [36m>[39m
+                [36m<img[39m
+                  [33malt[39m=[32m"Create a new prompt"[39m
+                  [33mclass[39m=[32m"logoImage"[39m
+                  [33msrc[39m=[32m"logo.png"[39m
+                [36m/>[39m
+              [36m</a>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"centerControls"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"rightControls"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"auth"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"accountMenu"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"avatarButton "[39m
+                    [33mdata-testid[39m=[32m"user-avatar-button"[39m
+                    [33mtitle[39m=[32m"Bob"[39m
+                  [36m>[39m
+                    [36m<img[39m
+                      [33malt[39m=[32m"Bob"[39m
+                      [33mclass[39m=[32m"avatarImage"[39m
+                      [33mdata-testid[39m=[32m"user-avatar-button-image"[39m
+                      [33msrc[39m=[32m"bob.jpg"[39m
+                    [36m/>[39m
+                  [36m</button>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"dropdownMenu"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"dropdownHeader"[39m
+                    [36m>[39m
+                      [36m<p[39m
+                        [33mclass[39m=[32m"dropdownLabel"[39m
+                        [33mdata-testid[39m=[32m"user-name-display"[39m
+                      [36m>[39m
+                        [0mHello [0m
+                        [0mBob[0m
+                        [0m ��[0m
+                      [36m</p>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33mclass[39m=[32m"dropdownItem"[39m
+                      [33mdata-testid[39m=[32m"settings-button"[39m
+                    [36m>[39m
+                      [36m<svg[39m
+                        [33mfill[39m=[32m"none"[39m
+                        [33mheight[39m=[32m"16"[39m
+                        [33mstroke[39m=[32m"currentColor"[39m
+                        [33mstroke-width[39m=[32m"2"[39m
+                        [33mviewBox[39m=[32m"0 0 24 24"[39m
+                        [33mwidth[39m=[32m"16"[39m
+                      [36m>[39m
+                        [36m<circle[39m
+                          [33mcx[39m=[32m"12"[39m
+                          [33mcy[39m=[32m"12"[39m
+                          [33mr[39m=[32m"3"[39m
+                        [36m/>[39m
+                        [36m<path[39m
+                          [33md[39m=[32m"M12 1v6m0 6v6m9-9h-6m-6 0H3"[39m
+                        [36m/>[39m
+                      [36m</svg>[39m
+                      [36m<span>[39m
+                        [0mSettings[0m
+                      [36m</span>[39m
+                    [36m</button>[39m
+                    [36m<button[39m
+                      [33mclass[39m=[32m"dropdownItem"[39m
+                      [33mdata-testid[39m=[32m"logout-button"[39m
+                    [36m>[39m
+                      [0mLogout[0m
+                    [36m</button>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</nav>[39m
+      [36m</div>[39m
+    [36m</body>[39m
+
+    [0m [90m 188 |[39m         [90m// UserAvatarButton renders an img if displayPicture is present.[39m
+     [90m 189 |[39m         [90m// UserAvatarButton renders an img if displayPicture is present.[39m
+    [31m[1m>[22m[39m[90m 190 |[39m         [36mconst[39m img [33m=[39m screen[33m.[39mgetByTestId([32m'user-avatar-image'[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 191 |[39m         expect(img)[33m.[39mtoHaveAttribute([32m'src'[39m[33m,[39m [32m'bob.jpg'[39m)[33m;[39m
+     [90m 192 |[39m         expect(img)[33m.[39mtoHaveAttribute([32m'alt'[39m[33m,[39m [32m'Bob'[39m)[33m;[39m
+     [90m 193 |[39m     })[33m;[39m[0m
+
+      at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+      at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at getByTestId (node_modules/@testing-library/dom/dist/query-helpers.js:95:19)
+      at Object.<anonymous> (src/test/context/AuthContext.test.tsx:190:28)
+
+FAIL src/test/App.test.tsx (5.543 s)
+  ● renders App shell and verifies authenticated state
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test."
+
+    [0m [90m  6 |[39m jest[33m.[39mmock([32m'../services/onboardUserService'[39m)[33m;[39m
+     [90m  7 |[39m
+    [31m[1m>[22m[39m[90m  8 |[39m test([32m'renders App shell and verifies authenticated state'[39m[33m,[39m [36masync[39m () [33m=>[39m {
+     [90m    |[39m [31m[1m^[22m[39m
+     [90m  9 |[39m   render(
+     [90m 10 |[39m     [33m<[39m[33mMemoryRouter[39m[33m>[39m
+     [90m 11 |[39m       [33m<[39m[33mApp[39m [33m/[39m[33m>[39m[0m
+
+      at Object.<anonymous> (src/test/App.test.tsx:8:1)
+
+
+Test Suites: 2 failed, 21 passed, 23 total
+Tests:       2 failed, 107 passed, 109 total
+Snapshots:   0 total
+Time:        6.928 s
+Ran all test suites.

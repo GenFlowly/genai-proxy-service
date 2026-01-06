@@ -20,7 +20,7 @@ export default function MultiPurposeButton({ label, onClick, disabled = false, i
             data-testid={testId}
         >
             {label}
-            {icon && <Icon src={icon} />}
+            {icon && <Icon src={icon} data-testid={testId ? `${testId}-icon` : undefined} />}
         </button>
     )
 }

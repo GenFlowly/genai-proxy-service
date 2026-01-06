@@ -45,10 +45,10 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
     }
 
     return (
-        <div className={`${styles.container} ${className}`}>
+        <div className={`${styles.container} ${className}`} data-testid={testId ? `${testId}-container` : undefined}>
             <div className={styles.prefixArea}>
-                {icon && <Icon src={icon} size={16} className={styles.icon} />}
-                <span className={styles.hintText}>{hint}</span>
+                {icon && <Icon src={icon} size={16} className={styles.icon} data-testid={testId ? `${testId}-icon` : undefined} />}
+                <span className={styles.hintText} data-testid={testId ? `${testId}-hint` : undefined}>{hint}</span>
             </div>
             <select
                 className={styles.inputElement}
@@ -56,12 +56,13 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
                 onChange={handleSelectChange}
                 data-testid={testId}
             >
-                <option value="" disabled>{placeholder}</option>
+                <option value="" disabled data-testid={testId ? `${testId}-placeholder` : undefined}>{placeholder}</option>
                 {options.map((opt) => (
                     <option
                         key={opt.value}
                         value={opt.value}
                         style={opt.style || (opt.isCta ? { fontWeight: 'bold', color: 'blue' } : undefined)}
+                        data-testid={testId ? `${testId}-option-${opt.value}` : undefined}
                     >
                         {opt.label}
                     </option>

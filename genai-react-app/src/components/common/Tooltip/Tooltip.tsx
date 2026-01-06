@@ -6,9 +6,10 @@ interface TooltipProps {
     content: string
     children: ReactNode
     position?: 'top' | 'bottom' | 'left' | 'right'
+    'data-testid'?: string
 }
 
-export default function Tooltip({ content, children, position = 'right' }: TooltipProps) {
+export default function Tooltip({ content, children, position = 'right', 'data-testid': testId }: TooltipProps) {
     const [isVisible, setIsVisible] = useState(false)
     const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
     const [placement, setPlacement] = useState<'right' | 'left' | 'top' | 'bottom'>(position)
@@ -71,6 +72,9 @@ export default function Tooltip({ content, children, position = 'right' }: Toolt
                 className={styles.tooltipContainer}
                 onMouseEnter={() => setIsVisible(true)}
                 onMouseLeave={() => setIsVisible(false)}
+                onFocus={() => setIsVisible(true)}
+                onBlur={() => setIsVisible(false)}
+                data-testid={testId}
             >
                 {children}
             </div>
@@ -83,6 +87,8 @@ export default function Tooltip({ content, children, position = 'right' }: Toolt
                         left: `${tooltipPosition.left}px`,
                         // transform is now handled by CSS classes based on placement
                     }}
+                    role="tooltip"
+                    data-testid={testId ? `${testId}-content` : undefined}
                 >
                     {content}
                 </div>,

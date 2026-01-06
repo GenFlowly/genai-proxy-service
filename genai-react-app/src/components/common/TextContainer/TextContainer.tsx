@@ -72,6 +72,9 @@ export interface TextContainerProps {
 
     /** Optional children to render at the bottom (e.g. actions) */
     children?: React.ReactNode
+
+    /** Optional test id */
+    'data-testid'?: string
 }
 
 /**
@@ -87,6 +90,7 @@ export default function TextContainer({
     className,
     isLoading = false,
     children,
+    'data-testid': testId,
 }: TextContainerProps) {
 
     // If title is a simple string, wrap it in h2 to maintain existing style
@@ -94,9 +98,9 @@ export default function TextContainer({
     const headerContent = (typeof title === 'string') ? <h2>{title}</h2> : title
 
     return (
-        <article className={`${styles.article} ${className || ''}`}>
+        <article className={`${styles.article} ${className || ''}`} data-testid={testId}>
             {(headerContent || showCopyButton) && (
-                <header className={styles.header}>
+                <header className={styles.header} data-testid={testId ? `${testId}-header` : undefined}>
                     <div className={styles.headerContent}>
                         {headerContent}
                         {showCopyButton && (
@@ -109,6 +113,7 @@ export default function TextContainer({
                                     successDuration={2000}
                                     size="sm"
                                     variant="secondary"
+                                    data-testid={testId ? `${testId}-copy-button` : undefined}
                                 />
                             </div>
                         )}
@@ -117,7 +122,10 @@ export default function TextContainer({
             )}
 
             {isLoading ? (
-                <div style={{ padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: 0.6, fontStyle: 'italic' }}>
+                <div
+                    style={{ padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: 0.6, fontStyle: 'italic' }}
+                    data-testid={testId ? `${testId}-loading` : undefined}
+                >
                     <Icon src={ICONS.THINK} size={20} />
                     <span>Thinking...</span>
                 </div>

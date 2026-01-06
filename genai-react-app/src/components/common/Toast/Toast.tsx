@@ -10,9 +10,10 @@ export interface ToastMessage {
 interface ToastProps {
     toast: ToastMessage
     onRemove: (id: string) => void
+    'data-testid'?: string
 }
 
-export const Toast: React.FC<ToastProps> = ({ toast, onRemove }) => {
+export const Toast: React.FC<ToastProps> = ({ toast, onRemove, 'data-testid': testId }) => {
     const [isExiting, setIsExiting] = useState(false)
 
     useEffect(() => {
@@ -40,6 +41,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onRemove }) => {
             className={`${styles.toast} ${isExiting ? styles.exiting : ''}`}
             role="status"
             aria-live="polite"
+            data-testid={testId}
         >
             {toast.message}
         </div>

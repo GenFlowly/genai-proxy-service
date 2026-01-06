@@ -46,7 +46,7 @@ export default function Navbar(): React.ReactElement {
         <nav className={styles.navbar}>
             <div className={styles.container}>
                 <div className={styles.leftControls}>
-                    <Link to="/" className={styles.logoLink} title="Home">
+                    <Link to="/" className={styles.logoLink} title="Home" data-testid="navbar-logo-link">
                         <img src={logo} alt="Create a new prompt" className={styles.logoImage} />
                     </Link>
                 </div>
@@ -83,6 +83,7 @@ export default function Navbar(): React.ReactElement {
                                         <button
                                             onClick={handleSettingsClick}
                                             className={styles.dropdownItem}
+                                            data-testid="settings-button"
                                         >
                                             <SettingsIcon />
                                             <span>Settings</span>
@@ -90,6 +91,7 @@ export default function Navbar(): React.ReactElement {
                                         <button
                                             onClick={handleLogout}
                                             className={styles.dropdownItem}
+                                            data-testid="logout-button"
                                         >
                                             Logout
                                         </button>
