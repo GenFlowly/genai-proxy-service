@@ -1,5 +1,4 @@
 import React from 'react'
-import { Icon } from '../Icon/Icon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -75,6 +74,9 @@ export interface TextContainerProps {
 
     /** Optional test id */
     'data-testid'?: string
+
+    /** Content to show when loading */
+    loadingContent?: React.ReactNode
 }
 
 /**
@@ -91,6 +93,7 @@ export default function TextContainer({
     isLoading = false,
     children,
     'data-testid': testId,
+    loadingContent
 }: TextContainerProps) {
 
     // If title is a simple string, wrap it in h2 to maintain existing style
@@ -121,15 +124,7 @@ export default function TextContainer({
                 </header>
             )}
 
-            {isLoading ? (
-                <div
-                    style={{ padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: 0.6, fontStyle: 'italic' }}
-                    data-testid={testId ? `${testId}-loading` : undefined}
-                >
-                    <Icon src={ICONS.THINK} size={20} />
-                    <span>Thinking...</span>
-                </div>
-            ) : (
+            {isLoading ? loadingContent : (
                 <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeHighlight]}

@@ -31,7 +31,7 @@ import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/Sideb
 
 const vendors = Object.values(AIVendor) as AIVendor[]
 
-export default function AIVendorWidget(): React.ReactElement {
+export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
     const { ai, auth } = useSidebarWidget()
     const { config, setSelectedModelForAIVendor, resetConfig } = ai
     const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList, aiConfigPreferences } = auth
@@ -282,6 +282,7 @@ export default function AIVendorWidget(): React.ReactElement {
             header={header}
             headerCollapsed={headerCollapsed}
             collapsedContent={collapsedContent}
+            data-testid={testId || "ai-vendor-widget"}
         >
             <div className={styles.vendorWidget}>
                 {vendors.map(vendor => {

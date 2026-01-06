@@ -7,7 +7,7 @@ import styles from './NewChatWidget.module.scss'
 import Tooltip from '../../../common/Tooltip/Tooltip'
 import { Icon } from '../../../common/Icon/Icon'
 
-export default function NewChatWidget(): React.ReactElement {
+export default function NewChatWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
     const { conversation } = useSidebarWidget()
     const { resetConversation } = conversation
 
@@ -16,6 +16,7 @@ export default function NewChatWidget(): React.ReactElement {
             <button
                 className={styles.collapsedButton}
                 onClick={resetConversation}
+                data-testid="new-chat-button-collapsed"
             >
                 <Icon src={ICONS.PLUS} size={20} />
             </button>
@@ -23,7 +24,7 @@ export default function NewChatWidget(): React.ReactElement {
     )
 
     return (
-        <SidebarWidgetContainer collapsedContent={collapsedContent}>
+        <SidebarWidgetContainer collapsedContent={collapsedContent} data-testid={testId || "new-chat-widget"}>
             <div className={styles.container}>
                 <PillButton
                     label="New Chat"
@@ -31,6 +32,7 @@ export default function NewChatWidget(): React.ReactElement {
                     icon={ICONS.PLUS}
                     className={styles.fullWidthButton}
                     variant={"secondary"}
+                    data-testid="new-chat-button-expanded"
                 />
             </div>
         </SidebarWidgetContainer>

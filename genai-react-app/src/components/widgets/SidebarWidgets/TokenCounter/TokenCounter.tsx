@@ -7,7 +7,7 @@ import Tooltip from '../../../common/Tooltip/Tooltip'
 import { countTokens } from '../../../../utils/tokenizer'
 import { AIVendor } from '../../../../constants/vendors'
 
-export default function TokenCounter() {
+export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
     const { conversation, ai } = useSidebarWidget()
     const { editorPrompt } = conversation
     const { supplementalText, config } = ai
@@ -77,7 +77,10 @@ export default function TokenCounter() {
     )
 
     const collapsedContent = (
-        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textAlign: 'center', width: '100%' }}>
+        <div
+            style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textAlign: 'center', width: '100%' }}
+            data-testid="token-count-collapsed"
+        >
             {isTokenLoading ? '...' : tokenCount}
         </div>
     )
@@ -95,9 +98,10 @@ export default function TokenCounter() {
             header={header}
             headerCollapsed={headerCollapsed}
             collapsedContent={collapsedContent}
+            data-testid={testId || "token-counter-widget"}
         >
             <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0.25rem' }}>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500" data-testid="token-count-display">
                     {isTokenLoading ? 'Counting tokens…' : `Tokens: ${tokenCount}`}
                 </div>
             </div>

@@ -4,6 +4,7 @@ import styles from './Response.module.scss'
 import { useLayout } from '../../../../context/LayoutContext'
 import { useConversation } from '../../../../context/ConversationContext'
 import TextContainer from '../../../common/TextContainer/TextContainer'
+import { Icon } from '../../../common/Icon/Icon'
 import { Message } from "../../../../models/conversation.models";
 import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
 import Tooltip from '../../../common/Tooltip/Tooltip'
@@ -23,7 +24,7 @@ interface ResponseProps {
     disabled?: boolean
 }
 
-export default function Response({ blockId, responseMessages, onFollowUp, disabled = false }: ResponseProps) {
+export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
     const { setSelectedResponseForBlock, getSelectedResponseForBlock } = useConversation()
 
@@ -143,6 +144,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         <div
             className={styles.container}
             data-response-block-id={blockId}
+            data-testid={testId}
         >
             {/* Toggle Group Header - Placed above the scrolling container */}
             {availableVendors.length > 1 && (
@@ -178,6 +180,15 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             content={text}
                             className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}
                             isLoading={isLoading && text.trim().length === 0}
+                            loadingContent={
+                                <div
+                                    style={{ padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: 0.6, fontStyle: 'italic' }}
+                                    data-testid="response-message-loading"
+                                >
+                                    <Icon src={ICONS.THINK} size={20} />
+                                    <span>Thinking...</span>
+                                </div>
+                            }
                             data-testid="response-message"
                             aria-label={`Response from ${aiVendor}`}
                         >
@@ -190,6 +201,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                                 onClick={() => handleFollowUp(messageId)}
                                                 disabled={isSelected || disabled}
                                                 icon={isSelected ? undefined : ICONS.SEND}
+                                                data-testid="follow-up-button"
                                             />
                                         </div>
                                     </Tooltip>

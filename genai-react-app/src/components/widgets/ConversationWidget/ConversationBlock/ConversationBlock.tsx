@@ -5,7 +5,7 @@ import { useConversation } from '../../../../context/ConversationContext'
 import styles from './ConversationBlock.module.scss'
 import { useAuth } from '../../../../context/AuthContext'
 
-export default function ConversationBlock({ id }: { id: string }) {
+export default function ConversationBlock({ id, 'data-testid': testId }: { id: string, 'data-testid'?: string }) {
     const {
         conversationBlockList,
         addNewConversationBlockWithId,
@@ -90,7 +90,7 @@ export default function ConversationBlock({ id }: { id: string }) {
     }
 
     return (
-        <div className={`${styles.conversationBlock} conversation-block-item`} data-block-id={id}>
+        <div className={`${styles.conversationBlock} conversation-block-item`} data-block-id={id} data-testid={testId}>
             <Request blockId={id} />
 
             {conversationBlock.responseMessages.length > 0 && (
