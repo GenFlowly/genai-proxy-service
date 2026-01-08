@@ -7,12 +7,12 @@ import TokenCounter from '../../widgets/SidebarWidgets/TokenCounter/TokenCounter
 import styles from './RightSidebar.module.scss'
 import NewChatWidget from '../../widgets/SidebarWidgets/NewChatWidget/NewChatWidget'
 
-export default function RightSidebar(): React.ReactElement {
+export default function RightSidebar({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()
     const collapsed = !isRightSidebarExpanded
 
     return (
-        <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`} data-testid="right-sidebar">
+        <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`} data-testid={testId || "right-sidebar"}>
             <button
                 onClick={toggleRightSidebar}
                 className={styles.collapseButton}
