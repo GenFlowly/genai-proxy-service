@@ -2,10 +2,16 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../App';
 
-// Mock Onboarding Service (uses __mocks__ manually)
-jest.mock('../services/onboardUserService');
+import { mockOnboardResponse } from './fixtures/customerProfile';
+import { onboardCustomer } from '../services/onboardUserService';
+
+jest.mock('../services/onboardUserService', () => ({
+  onboardCustomer: jest.fn()
+}));
 
 test('renders App shell and verifies authenticated state', async () => {
+  (onboardCustomer as jest.Mock).mockResolvedValue(mockOnboardResponse);
+
   render(
     <MemoryRouter>
       <App />

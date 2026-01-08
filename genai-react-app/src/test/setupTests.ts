@@ -1,6 +1,10 @@
 // jest-dom adds custom jest matchers for asserting on DOM nodes.
 import '@testing-library/jest-dom';
 import React from 'react';
+import { TextEncoder, TextDecoder } from 'util';
+
+global.TextEncoder = TextEncoder as any;
+global.TextDecoder = TextDecoder as any;
 
 console.log('!!! SETUP TESTS RUNNING !!!');
 
