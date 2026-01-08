@@ -22,5 +22,13 @@
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/test",
+    "src/eval",
+    "**/*.test.tsx",
+    "**/*.test.ts",
+    "**/*.spec.tsx",
+    "**/*.spec.ts"
   ]
 }
