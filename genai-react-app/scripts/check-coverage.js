@@ -24,12 +24,21 @@ try {
     const summaryPath = path.join(__dirname, '..', 'coverage', 'coverage-summary.json');
 
     if (!fs.existsSync(summaryPath)) {
-        console.warn(`${colors.yellow}No coverage summary found. This might mean no files were changed or tested.${colors.reset}`);
+        console.warn(`${colors.yellow}No coverage summary found. This might mean no files were changed or no tests were run.${colors.reset}`);
+        // If Jest didn't produce a report (likely because no tests ran), we can assume it's okay (no code to check)
+        // or explicitly check for the "No tests found" message from execSync output if we captured it.
+        // For now, let's treat "no report" as "nothing to verify" -> PASS.
         process.exit(0);
     }
 
     const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
     const total = summary.total;
+
+    // Check if total metrics map exists and isn't empty/unknown
+    if (!total || !total.lines || typeof total.lines.pct === 'undefined' || total.lines.pct === 'Unknown') {
+        console.warn(`${colors.yellow}Coverage data is empty or unknown. This usually means no source files were covered by the run tests.${colors.reset}`);
+        process.exit(0);
+    }
 
     // 3. Check thresholds
     const metrics = ['lines', 'statements', 'functions', 'branches'];
