@@ -3,17 +3,34 @@
 
 .sidebarWrapper {
   @include sidebar-base(left);
+  z-index: 20; // Ensure it sits above CenterSection content (z=10) but below Navbar (z=30)
 
-  // Overlay behavior
+  // Desktop Overlay Behavior
   position: absolute;
   right: 0;
   height: 100%;
-  z-index: 20;
-  border-left: 1px solid $color-border;
-  // Ensure background is opaque for overlay
-  background-color: $color-sidebar-background;
+
+
+
 
   .collapseButton {
     background-color: $color-sidebar-background;
+  }
+
+  /* 📱 Responsive layout: Mobile Overlay */
+  @media (max-width: 768px) {
+    display: flex; // Ensure it shows when not collapsed
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    z-index: 100;
+    width: 80%;
+    max-width: 18rem;
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
+
+    &.collapsed {
+      display: none;
+    }
   }
 }

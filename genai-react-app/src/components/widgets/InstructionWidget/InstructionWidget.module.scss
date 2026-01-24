@@ -16,6 +16,15 @@
     padding-top: 1rem;
     overflow: hidden;
     justify-content: center; // Center content vertically
+
+    @media (max-width: 768px) {
+        padding-bottom: 0;
+        border-bottom: none; // Optional: usually "eliminate gap" implies seamlessness
+        height: auto; // Allow naturally flowing height if needed, or keep calc? 
+        // User didn't ask to change height behavior, just gap.
+        // But if I remove padding, I usually want less height?
+        // Let's stick to padding removal.
+    }
 }
 
 // Collapsed State
@@ -27,9 +36,9 @@
     justify-content: center;
     background-color: $color-sidebar-background;
     border-bottom: 1px solid $color-border;
-    position: sticky;
-    top: 0;
-    z-index: 2;
+    // position: sticky; // Handled by parent wrapper in CenterSection
+    // top: 0;
+    // z-index: 2;
 }
 
 .editButton {
@@ -131,4 +140,67 @@
     :global(.w-md-editor-content) {
         height: 100% !important;
     }
+}
+
+// --- Refactored Layout Classes ---
+
+.instructionContainer {
+    width: 100%;
+    padding: 0 3rem;
+    display: flex;
+    justify-content: center;
+
+    @media (max-width: 768px) {
+        padding: 0 1rem;
+    }
+}
+
+.instructionContent {
+    width: 100%;
+    max-width: 75rem;
+    display: flex;
+    gap: 1rem;
+}
+
+.spacer {
+    width: 2rem;
+    flex-shrink: 0;
+
+    @media (max-width: 768px) {
+        display: none;
+    }
+}
+
+.metadataVerticalGroup {
+    flex: 1;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.metadataRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.buttonCommandRow {
+    width: 100%;
+    padding: 0 3rem;
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
+
+    @media (max-width: 768px) {
+        padding: 0 1rem;
+    }
+}
+
+.buttonContent {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }

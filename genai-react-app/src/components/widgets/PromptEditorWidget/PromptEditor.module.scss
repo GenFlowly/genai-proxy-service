@@ -215,8 +215,28 @@ $editor-width: 75rem;
   height: 100% !important;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+  .container {
+    padding: 0.5rem !important;
+  }
+
+  .innerContainer {
+    flex-direction: column; // Stack items vertically
+    gap: 0.5rem;
+  }
+
+  .controlsRow {
+    width: 100%;
+    order: -1; // Move to top
+    justify-content: flex-end; // Keep aligned to right (or start if preferred, but usually copy is right)
+  }
+
+  .spacer {
+    display: none; // No need for spacer in vertical layout
+  }
+
   .mdxEditorRoot {
+    width: 100%; // Ensure full width
     max-width: 100%;
     border-width: 1px;
 

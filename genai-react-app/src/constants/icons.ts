@@ -9,6 +9,7 @@ import copyIcon from '../assets/icons/copy-icon.svg'
 import userRole from '../assets/icons/user-role.svg'
 import refreshIcon from '../assets/icons/refresh-icon.svg'
 import saveIcon from '../assets/icons/save-icon.svg'
+import menuIcon from '../assets/icons/menu.svg'
 
 import addIcon from '../assets/icons/add-icon.svg'
 import openAIIcon from '../assets/icons/OpenAI.svg'
@@ -32,6 +33,7 @@ export const ICONS = {
     USER_ROLE: userRole,
     REFRESH_ICON: refreshIcon,
     SAVE_ICON: saveIcon,
+    MENU: menuIcon,
     PLUS: addIcon,
     OPENAI: openAIIcon,
     CLAUDE: claudeIcon,

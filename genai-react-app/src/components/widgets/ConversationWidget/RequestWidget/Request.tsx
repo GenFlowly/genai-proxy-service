@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react'
-import { ICONS } from '../../../../constants/icons'
+import React, {useEffect} from 'react'
+import {ICONS} from '../../../../constants/icons'
 import PromptEditor from '../../PromptEditorWidget/PromptEditor'
-import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
+import MultiPurposeButton
+    from '../../../common/MultiPurposeButton/MultiPurposeButton'
 import Tooltip from '../../../common/Tooltip/Tooltip'
-import { useConversation } from '../../../../context/ConversationContext'
-import { useAuth } from '../../../../context/AuthContext'
+import {useConversation} from '../../../../context/ConversationContext'
+import {useAuth} from '../../../../context/AuthContext'
 import TextContainer from '../../../common/TextContainer/TextContainer'
 import styles from './Request.module.scss'
 import {
@@ -15,7 +16,10 @@ interface RequestProps {
     blockId: string
 }
 
-export default function Request({ blockId, 'data-testid': testId }: RequestProps & { 'data-testid'?: string }) {
+export default function Request({
+                                    blockId,
+                                    'data-testid': testId
+                                }: RequestProps & { 'data-testid'?: string }) {
     const {
         conversationBlockList,
         generateResponsesStream,
@@ -24,7 +28,12 @@ export default function Request({ blockId, 'data-testid': testId }: RequestProps
         setActiveBlockId
     } = useConversation()
 
-    const { aiVendorAPIKeyStatusList, customerName, customerPicture, user } = useAuth()
+    const {
+        aiVendorAPIKeyStatusList,
+        customerName,
+        customerPicture,
+        user
+    } = useAuth()
     const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
 
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === blockId)
@@ -33,7 +42,7 @@ export default function Request({ blockId, 'data-testid': testId }: RequestProps
     const [draftPrompt, setDraftPrompt] = React.useState(conversationBlock?.prompt || '')
 
     // Dependencies moved from PromptEditor
-    const { customerId } = useAuth()
+    const {customerId} = useAuth()
     const storageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
     const contextTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
     const STORAGE_KEY = customerId ? `${customerId}_prompt_editor_content_conv-${blockId}` : ''
@@ -119,11 +128,15 @@ export default function Request({ blockId, 'data-testid': testId }: RequestProps
 
     if (conversationBlock.responseMessages.length > 0 && !conversationBlock.isLoading) {
         return (
-            <div className={styles.requestWrapper} data-testid={testId || "resolved-request-wrapper"}>
+            <div className={styles.resolvedRequestContainer}
+                 data-testid={testId || "resolved-request-wrapper"}>
                 <TextContainer
+                    className={styles.requestWrapper}
                     content={conversationBlock.prompt}
-                    title={<UserBrandName name={displayName} picture={displayPicture} as="span" />}
+                    title={<UserBrandName name={displayName}
+                                          picture={displayPicture} as="span"/>}
                     showCopyButton={true}
+                    data-testid={testId || "resolved-request-wrapper"}
                 />
             </div>
         )
@@ -132,7 +145,8 @@ export default function Request({ blockId, 'data-testid': testId }: RequestProps
     // Otherwise show the editor
     return (
 
-        <div className={styles.container} data-testid={testId || "request-widget-container"}>
+        <div className={styles.container}
+             data-testid={testId || "request-widget-container"}>
             <PromptEditor
                 id={blockId}
                 value={draftPrompt}
@@ -142,9 +156,11 @@ export default function Request({ blockId, 'data-testid': testId }: RequestProps
                 data-testid="prompt-editor"
             />
 
-            <div className={styles.buttonWrapper} data-testid="generate-button-wrapper">
+            <div className={styles.buttonWrapper}
+                 data-testid="generate-button-wrapper">
                 <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
-                    <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
+                    <div
+                        style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
                         <MultiPurposeButton
                             onClick={() => {
                                 if (!hasAnyValidApiKey) return

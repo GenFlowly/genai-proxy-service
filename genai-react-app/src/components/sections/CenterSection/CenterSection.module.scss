@@ -8,9 +8,10 @@
   align-items: flex-start;
   overflow-y: auto;
   overflow-x: hidden; // Prevent horizontal scroll on center section
-  padding: 0 5rem 0 0; // Remove horizontal padding and bottom padding, but add right padding for collapsed sidebar
   background-color: $color-background;
   scroll-behavior: smooth;
+  padding-bottom: 3rem; // Ensure content is accessible globally
+  padding-right: 3.5rem; // Reserve space for collapsed RightSidebar (3.5rem + buffer)
 }
 
 .contentWrapper {
@@ -45,10 +46,12 @@
 /* 📱 Responsive layout */
 @media (max-width: 768px) {
   .centerSection {
-    padding: 1.5rem 0;
+    padding: 0;
+    padding-bottom: 3rem; // Ensure content is accessible above browser bottom bar
+    padding-right: 0; // Remove desktop sidebar buffer
   }
 
   .contentWrapper {
-    gap: 2rem;
+    gap: 0;
   }
 }

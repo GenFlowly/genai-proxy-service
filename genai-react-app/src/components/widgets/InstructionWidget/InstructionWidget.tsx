@@ -118,7 +118,7 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
             <div className={styles.collapsedContainer} data-testid={testId || "instruction-widget-collapsed"}>
                 <div style={{ flex: 1, maxWidth: '66rem', paddingRight: '0.5rem' }}>
                     <InputSelectWithHint
-                        hint="Instructions for AI"
+                        hint="Instructions"
                         icon={ICONS.USER_ROLE}
                         placeholder="Select a persona"
                         className={styles.roleInput}
@@ -216,13 +216,13 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
 
                 return (
                     // Match PromptEditor structure:
-                    <div style={{ width: '100%', padding: '0 3rem', display: 'flex', justifyContent: 'center' }}>
-                        <div style={{ width: '100%', maxWidth: '75rem', display: 'flex', gap: '1rem' }}>
+                    <div className={styles.instructionContainer}>
+                        <div className={styles.instructionContent}>
                             {/* Left Spacer */}
-                            <div style={{ width: '2rem', flexShrink: 0 }} />
+                            <div className={styles.spacer} />
 
                             {/* Main Content Area */}
-                            <div className={styles.metadataContainer} style={{ flex: 1, marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div className={styles.metadataVerticalGroup}>
 
                                 {/* Row 1: Dropdown Selector */}
                                 <div style={{ width: '100%' }}>
@@ -247,7 +247,7 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
                                 </div>
 
                                 {/* Row 2: Name and Version */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                <div className={styles.metadataRow}>
 
                                     {/* Left: Name (or Edit Input) */}
                                     <div style={{ flex: 1, marginRight: '1rem', minWidth: 0, display: 'flex', alignItems: 'center' }}>
@@ -329,7 +329,7 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
                             </div>
 
                             {/* Right Spacer */}
-                            <div style={{ width: '2rem', flexShrink: 0 }} />
+                            <div className={styles.spacer} />
                         </div>
                     </div>
                 )
@@ -346,13 +346,13 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
             />
 
             {/* Button Row - Aligning with Editor Box */}
-            <div style={{ width: '100%', padding: '0 3rem', display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
-                <div style={{ width: '100%', maxWidth: '75rem', display: 'flex', gap: '1rem' }}>
+            <div className={styles.buttonCommandRow}>
+                <div className={styles.instructionContent}>
                     {/* Left Spacer */}
-                    <div style={{ width: '2rem', flexShrink: 0 }} />
+                    <div className={styles.spacer} />
 
                     {/* Main Content Area */}
-                    <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className={styles.buttonContent}>
                         <PillButton
                             label="Looks good"
                             variant="secondary"
@@ -375,7 +375,7 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
                     </div>
 
                     {/* Right Spacer */}
-                    <div style={{ width: '2rem', flexShrink: 0 }} />
+                    <div className={styles.spacer} />
                 </div>
             </div>
         </div>

@@ -76,40 +76,11 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         if (availableVendors.length > 0 && selectedVendors.length === 0) {
             setSelectedVendors(availableVendors)
         } else {
-            // Check if there are new vendors not in selection AND not previously unselected? 
-            // That requires tracking unselected history. 
-            // Simpler: If a new vendor appears, just add it to selection? 
-            // Or just leave it hidden? "By default all... visible".
-            // Let's add any vendor that is available but NOT in selection ONLY if 
-            // we assume the user hasn't unchecked it yet. 
-            // Actually, for a single Response block, the vendors are usually fixed or growing.
-            // Let's just auto-add any available vendor that isn't currently tracked? 
-            // Too complex. 
-            // Let's just set selectedVendors to availableVendors on mount/change if it was empty.
-            // If user unchecks one, selectedVendors changes.
-            // If new vendor comes in, it won't be in selectedVendors. It renders hidden.
-            // This might violate "default all visible". 
-            // Fix: Check if `selectedVendors` includes all previous `availableVendors`. 
-            // Valid strategy: Just initialize. If user toggles, we respect it. 
-            // If streaming adds a vendor, user might miss it? 
-            // Let's just add new vendors to selection automatically.
+
 
             const newVendors = availableVendors.filter(v => !selectedVendors.includes(v))
             if (newVendors.length > 0) {
-                // Heuristic: If we strictly add, unchecking might be fought by re-adding?
-                // Only add if it wasn't there before?
-                // For this task, let's proceed with: Initialize with all. 
-                // Any subsequent NEW vendor (diff) gets added.
-                // We depend on previousAvailableVendors? 
-                // Let's implement a ref to track seen vendors if needed, or just keep it simple:
-                // If selectedVendors is empty, sync.
-                // If not empty, we assume user intent? 
-                // Let's stick to: Initialize on first load.
-                // If `responseMessages` length changes (streaming), we might re-eval.
-                // Let's simply add any `availableVendor` that is NOT in `selectedVendors`? NO, that prevents unchecking.
 
-                // Final decision: effectively allow "select all on load".
-                // We will rely on the initial useEffect data.
             }
         }
     }, [availableVendors, selectedVendors])

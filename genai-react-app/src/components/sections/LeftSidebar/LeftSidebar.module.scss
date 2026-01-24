@@ -3,6 +3,8 @@
 
 .sidebar {
   @include sidebar-base(right);
+  z-index: 20; // Ensure it sits above CenterSection content (z=10) but below Navbar (z=30)
+
 
   // Specific content overrides if needed
   .sidebarContent {
@@ -12,7 +14,24 @@
   &.collapsed {
     .sidebarContent {
       padding-top: 0;
-      gap: 1rem;
+      gap: 0.5rem;
+    }
+  }
+
+  /* 📱 Responsive layout: Mobile Overlay */
+  @media (max-width: 768px) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 100;
+    width: 80%;
+    max-width: 18rem; // Reasonable max width
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+    background-color: $color-sidebar-background; // Ensure opacity
+
+    &.collapsed {
+      display: none;
     }
   }
 }

@@ -4,12 +4,16 @@ import { useAuth } from '../../context/AuthContext'
 import LoginIcon from '../icons/LoginIcon'
 import SettingsIcon from '../icons/SettingsIcon'
 import styles from './Navbar.module.scss'
+import { useLayout } from '../../context/LayoutContext'
+import { ICONS } from '../../constants/icons'
+import { Icon } from '../common/Icon/Icon'
 
 import logo from '../../assets/icons/logo.png'
 import { UserAvatarButton } from '../common/UserAvatarButton/UserAvatarButton'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user, customerPicture, customerName } = useAuth()
+    const { toggleLeftSidebar, toggleRightSidebar } = useLayout()
     const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
     const menuRef = useRef<HTMLDivElement>(null)
@@ -46,6 +50,9 @@ export default function Navbar(): React.ReactElement {
         <nav className={styles.navbar}>
             <div className={styles.container}>
                 <div className={styles.leftControls}>
+                    <button onClick={toggleLeftSidebar} className={styles.mobileToggle} data-testid="mobile-left-sidebar-toggle">
+                        <Icon src={ICONS.MENU} size={24} />
+                    </button>
                     <Link to="/" className={styles.logoLink} title="Home" data-testid="navbar-logo-link">
                         <img src={logo} alt="Create a new prompt" className={styles.logoImage} />
                     </Link>
@@ -100,6 +107,9 @@ export default function Navbar(): React.ReactElement {
                             </div>
                         )}
                     </div>
+                    <button onClick={toggleRightSidebar} className={styles.mobileToggle} data-testid="mobile-right-sidebar-toggle">
+                        <Icon src={ICONS.MODELS} size={24} />
+                    </button>
                 </div>
             </div>
         </nav>

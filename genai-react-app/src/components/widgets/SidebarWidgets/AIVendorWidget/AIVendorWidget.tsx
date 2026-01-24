@@ -244,7 +244,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
         <div className={styles.header}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
                 <Icon src={ICONS.MODELS} size={20} />
-                <h3 className={styles.title}>AI Models</h3>
+                <h3 className={styles.title}>Models</h3>
             </div>
             <div className={styles.actions}>
                 <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Refresh Models"}>

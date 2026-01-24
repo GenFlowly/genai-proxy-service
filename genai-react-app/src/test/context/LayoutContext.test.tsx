@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { LayoutProvider } from '../../context/LayoutContext';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { LayoutProvider, useLayout } from '../../context/LayoutContext';
 import { AuthProvider } from '../../context/AuthContext';
 import { AIProvider } from '../../context/AIContext';
 import { ConversationProvider } from '../../context/ConversationContext';
@@ -62,6 +62,12 @@ const customRender = (ui: React.ReactElement) => {
     );
 };
 
+// Helper component to verify context state
+const LayoutStateTester = () => {
+    const { isRightSidebarExpanded } = useLayout();
+    return <div data-testid="layout-state">{isRightSidebarExpanded ? 'expanded' : 'collapsed'}</div>;
+};
+
 describe('LayoutContext UI Integration', () => {
     beforeEach(() => {
         mockUseAuth.mockReturnValue({
@@ -71,6 +77,16 @@ describe('LayoutContext UI Integration', () => {
             refreshInstructions: jest.fn(),
             updateInstruction: jest.fn(),
         });
+    });
+
+    test('useLayout throws error when used outside provider', () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
+        const TestThrow = () => {
+            useLayout();
+            return null;
+        };
+        expect(() => render(<TestThrow />)).toThrow('useLayout must be used within a LayoutProvider');
+        consoleSpy.mockRestore();
     });
 
     test('RightSidebar toggles correctly', () => {
@@ -144,5 +160,42 @@ describe('LayoutContext UI Integration', () => {
         // Verify Collapsed
         expect(screen.queryByTestId('instruction-looks-good-button')).not.toBeInTheDocument();
         expect(screen.getByTestId('instruction-edit-button')).toBeInTheDocument();
+    });
+});
+
+describe('LayoutContext Responsive Initialization', () => {
+    const originalInnerWidth = window.innerWidth;
+
+    afterEach(() => {
+        // Restore window.innerWidth
+        Object.defineProperty(window, 'innerWidth', {
+            writable: true,
+            configurable: true,
+            value: originalInnerWidth,
+        });
+    });
+
+    test('Initializes with Right Sidebar EXPANDED on Desktop (>768px)', () => {
+        // Set width to desktop
+        Object.defineProperty(window, 'innerWidth', {
+            writable: true,
+            configurable: true,
+            value: 1024,
+        });
+
+        customRender(<LayoutStateTester />);
+        expect(screen.getByTestId('layout-state')).toHaveTextContent('expanded');
+    });
+
+    test('Initializes with Right Sidebar COLLAPSED on Mobile (<=768px)', () => {
+        // Set width to mobile
+        Object.defineProperty(window, 'innerWidth', {
+            writable: true,
+            configurable: true,
+            value: 500,
+        });
+
+        customRender(<LayoutStateTester />);
+        expect(screen.getByTestId('layout-state')).toHaveTextContent('collapsed');
     });
 });
