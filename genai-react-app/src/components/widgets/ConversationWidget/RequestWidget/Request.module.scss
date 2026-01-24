@@ -4,8 +4,10 @@
 .requestWrapper {
     @include message-card-base;
 
-    // In column layout, flex-basis affects height. Use width for width.
-    width: 100%;
+    @media (max-width: 1024px) {
+        margin: 0.5rem 0.5rem;
+    }
+
 }
 
 .container {
@@ -18,6 +20,32 @@
     flex-direction: column;
     justify-content: center;
     background-color: $color-sidebar-background; // Or appropriate background
+
+    @media (max-width: 1024px) {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 0;
+        margin: 0;
+        padding-top: 0;
+    }
+}
+
+.resolvedRequestContainer {
+    width: 100%;
+    padding: 0.5rem 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background-color: $color-sidebar-background; // Or appropriate background
+
+    @media (max-width: 1024px) {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 0;
+        margin: 0;
+        padding-top: 0;
+    }
 }
 
 .promptEditorFullscreen {

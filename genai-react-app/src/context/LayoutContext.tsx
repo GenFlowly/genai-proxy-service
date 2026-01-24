@@ -9,7 +9,13 @@ const LayoutContext = createContext<LayoutContextType | undefined>(undefined)
 
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
     const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(false)
-    const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(true)
+    // Default to collapsed on mobile (< 768px), expanded on desktop
+    const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.innerWidth > 768
+        }
+        return true
+    })
 
     const [isInstructionWidgetExpanded, setInstructionWidgetExpanded] = useState(false)
 

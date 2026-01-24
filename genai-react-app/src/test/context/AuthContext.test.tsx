@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../../context/AuthContext';
+import { LayoutProvider } from '../../context/LayoutContext';
 import { MOCK_USER, AUTH0_TOKEN_RESPONSE } from '../fixtures/auth0';
 import { MemoryRouter } from 'react-router-dom';
 import Navbar from '../../components/navbar/Navbar';
@@ -19,9 +20,27 @@ jest.mock('../../services/onboardUserService', () => ({
     onboardCustomer: jest.fn()
 }));
 
+jest.mock('../../services/instructionService', () => ({
+    getCustomerInstructions: jest.fn()
+}));
+
+
+jest.mock('../../services/instructionService', () => ({
+    getCustomerInstructions: jest.fn()
+}));
+
+
 describe('AuthContext Integration with Navbar', () => {
     beforeEach(() => {
         mockUseAuth0.mockReset();
+        mockUseAuth0.mockReturnValue({
+            isLoading: false,
+            isAuthenticated: false,
+            user: null,
+            getAccessTokenSilently: jest.fn(),
+            logout: jest.fn(),
+            loginWithRedirect: jest.fn(),
+        });
         (onboardCustomer as jest.Mock).mockResolvedValue(mockOnboardResponse);
     });
 
@@ -35,9 +54,11 @@ describe('AuthContext Integration with Navbar', () => {
 
         render(
             <MemoryRouter>
-                <AuthProvider>
-                    <Navbar />
-                </AuthProvider>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <Navbar />
+                    </AuthProvider>
+                </LayoutProvider>
             </MemoryRouter>
         );
 
@@ -53,13 +74,16 @@ describe('AuthContext Integration with Navbar', () => {
             isAuthenticated: true,
             user: MOCK_USER,
             getAccessTokenSilently: mockGetToken,
+            logout: jest.fn(), // Required
         });
 
         render(
             <MemoryRouter>
-                <AuthProvider>
-                    <Navbar />
-                </AuthProvider>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <Navbar />
+                    </AuthProvider>
+                </LayoutProvider>
             </MemoryRouter>
         );
 
@@ -97,9 +121,11 @@ describe('AuthContext Integration with Navbar', () => {
 
         render(
             <MemoryRouter>
-                <AuthProvider>
-                    <Navbar />
-                </AuthProvider>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <Navbar />
+                    </AuthProvider>
+                </LayoutProvider>
             </MemoryRouter>
         );
 
@@ -129,9 +155,11 @@ describe('AuthContext Integration with Navbar', () => {
         // 2. Render
         render(
             <MemoryRouter>
-                <AuthProvider>
-                    <Navbar />
-                </AuthProvider>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <Navbar />
+                    </AuthProvider>
+                </LayoutProvider>
             </MemoryRouter>
         );
 
@@ -165,9 +193,11 @@ describe('AuthContext Integration with Navbar', () => {
         // 2. Render
         render(
             <MemoryRouter>
-                <AuthProvider>
-                    <Navbar />
-                </AuthProvider>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <Navbar />
+                    </AuthProvider>
+                </LayoutProvider>
             </MemoryRouter>
         );
 
@@ -190,5 +220,224 @@ describe('AuthContext Integration with Navbar', () => {
         const img = screen.getByTestId('user-avatar-button-image');
         expect(img).toHaveAttribute('src', 'bob.jpg');
         expect(img).toHaveAttribute('alt', 'Bob');
+    });
+});
+
+test('Handles corrupted localStorage for AI preferences gracefully', () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
+    // Mock default Auth0 state to avoid crash
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        getAccessTokenSilently: jest.fn(),
+        logout: jest.fn(),
+    });
+
+    Storage.prototype.getItem = jest.fn((key) => {
+        if (key === 'customerId') return '123';
+        if (key === '123_ai_preferences') return '{invalid_json}';
+        return null;
+    });
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <Navbar />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to parse cached ai preferences', expect.any(Error));
+    consoleSpy.mockRestore();
+});
+
+test('refreshInstructions calls service and updates state', async () => {
+    const { getCustomerInstructions } = require('../../services/instructionService');
+    const mockInstructions = [{ id: '1', version: 1, content: 'test' }];
+    getCustomerInstructions.mockResolvedValue({ instructions: mockInstructions });
+
+    const mockGetToken = jest.fn().mockResolvedValue('token');
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: mockGetToken,
+        logout: jest.fn(),
+    });
+
+    (onboardCustomer as jest.Mock).mockResolvedValue({
+        customerId: '123',
+        customerInstructions: [],
+        aiVendorAPIKeyStatusList: [],
+        aiConfigPreferences: null
+    });
+
+    // Test component to trigger refresh
+    const TestRefresh = () => {
+        const { refreshInstructions, customerInstructions } = useAuth();
+        return (
+            <div>
+                <button onClick={refreshInstructions} data-testid="refresh-btn">Refresh</button>
+                <div data-testid="instr-count">{customerInstructions.length}</div>
+            </div>
+        );
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestRefresh />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    const btn = screen.getByTestId('refresh-btn');
+    await act(async () => {
+        btn.click();
+    });
+
+    await waitFor(() => {
+        expect(getCustomerInstructions).toHaveBeenCalled();
+        expect(screen.getByTestId('instr-count')).toHaveTextContent('1');
+    });
+});
+
+test('updateInstruction updates existing and adds new', async () => {
+    (onboardCustomer as jest.Mock).mockResolvedValue({
+        customerId: '123',
+        customerInstructions: [{ id: 'init', version: 1, name: 'Initial' }],
+        aiVendorAPIKeyStatusList: [],
+        aiConfigPreferences: null
+    });
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        logout: jest.fn(),
+    });
+
+    const TestUpdate = () => {
+        const { updateInstruction, customerInstructions } = useAuth();
+        return (
+            <div>
+                <button onClick={() => updateInstruction({ id: 'init', version: 1, name: 'Updated Initial' } as any)} data-testid="update-btn">Update</button>
+                <button onClick={() => updateInstruction({ id: 'new', version: 1, name: 'New' } as any)} data-testid="add-btn">Add</button>
+                <div data-testid="instr-list">{JSON.stringify(customerInstructions)}</div>
+            </div>
+        );
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestUpdate />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    // 1. Wait for Onboard
+    await waitFor(() => {
+        expect(screen.getByTestId('instr-list')).toHaveTextContent('Initial');
+    });
+
+    // 2. Update Existing (Hit index !== -1)
+    await act(async () => {
+        screen.getByTestId('update-btn').click();
+    });
+    expect(screen.getByTestId('instr-list')).toHaveTextContent('Updated Initial');
+
+    // 3. Add New (Hit index === -1)
+    await act(async () => {
+        screen.getByTestId('add-btn').click();
+    });
+    expect(screen.getByTestId('instr-list')).toHaveTextContent('New');
+});
+
+test('updateVendorApiKeyStatus updates existing and adds new', async () => {
+    (onboardCustomer as jest.Mock).mockResolvedValue({
+        customerId: '123',
+        customerInstructions: [],
+        aiVendorAPIKeyStatusList: [{ aiVendor: 'InitialVendor', status: 'valid' } as any],
+        aiConfigPreferences: null
+    });
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        logout: jest.fn(),
+    });
+
+    const TestVendor = () => {
+        const { updateVendorApiKeyStatus, aiVendorAPIKeyStatusList } = useAuth();
+        return (
+            <div>
+                <button onClick={() => updateVendorApiKeyStatus({ aiVendor: 'InitialVendor', isAPIKeyValid: false, status: 'invalid' } as any)} data-testid="update-existing">Update Existing</button>
+                <button onClick={() => updateVendorApiKeyStatus({ aiVendor: 'NewVendor', isAPIKeyValid: true, status: 'valid' } as any)} data-testid="add-new">Add New</button>
+                <div data-testid="vendor-list">{JSON.stringify(aiVendorAPIKeyStatusList)}</div>
+            </div>
+        );
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestVendor />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    // 1. Wait for Onboard
+    await waitFor(() => {
+        expect(screen.getByTestId('vendor-list')).toHaveTextContent('InitialVendor');
+    });
+
+    // 2. Update Existing (Hit index !== -1)
+    await act(async () => {
+        screen.getByTestId('update-existing').click();
+    });
+    expect(screen.getByTestId('vendor-list')).toHaveTextContent('invalid');
+
+    // 3. Add New (Hit index === -1)
+    await act(async () => {
+        screen.getByTestId('add-new').click();
+    });
+    expect(screen.getByTestId('vendor-list')).toHaveTextContent('NewVendor');
+});
+
+test('Logs out for login_required error', async () => {
+    const mockLogout = jest.fn();
+    const loginReqError = { error: 'login_required' };
+    (onboardCustomer as jest.Mock).mockRejectedValue(loginReqError);
+
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        logout: mockLogout,
+    });
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider><Navbar /></AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    await waitFor(() => {
+        // Should log message "Session invalid..." and logout
+        expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });
     });
 });

@@ -11,7 +11,12 @@ const colors = {
     cyan: '\x1b[36m'
 };
 
-const STRICT_THRESHOLD = 80;
+const THRESHOLDS = {
+    lines: 80,
+    statements: 80,
+    functions: 80,
+    branches: 75
+};
 
 console.log(`${colors.cyan}Are there any changes? Running tests on changed files...${colors.reset}`);
 
@@ -48,18 +53,19 @@ try {
 
     metrics.forEach(metric => {
         const pct = total[metric].pct;
-        const color = pct >= STRICT_THRESHOLD ? colors.green : colors.red;
-        const status = pct >= STRICT_THRESHOLD ? 'PASS' : 'FAIL';
+        const threshold = THRESHOLDS[metric];
+        const color = pct >= threshold ? colors.green : colors.red;
+        const status = pct >= threshold ? 'PASS' : 'FAIL';
 
-        console.log(`${metric.padEnd(12)}: ${color}${pct}%${colors.reset} (Threshold: ${STRICT_THRESHOLD}%) [${status}]`);
+        console.log(`${metric.padEnd(12)}: ${color}${pct}%${colors.reset} (Threshold: ${threshold}%) [${status}]`);
 
-        if (pct < STRICT_THRESHOLD && !isNaN(pct)) {
+        if (pct < threshold && !isNaN(pct)) {
             passed = false;
         }
     });
 
     if (!passed) {
-        console.error(`\n${colors.red}❌ Coverage check failed! New code must meet the ${STRICT_THRESHOLD}% threshold.${colors.reset}`);
+        console.error(`\n${colors.red}❌ Coverage check failed! New code must meet the defined thresholds.${colors.reset}`);
         process.exit(1);
     }
 

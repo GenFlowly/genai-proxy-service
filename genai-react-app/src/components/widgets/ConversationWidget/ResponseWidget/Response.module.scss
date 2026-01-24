@@ -9,7 +9,7 @@
   margin-top: 0;
   background-color: $color-response-container-background;
   padding: 0;
-  padding-bottom: 1rem; // Add breathing room at bottom
+  overflow-x: auto;
 }
 
 .inner {
@@ -21,7 +21,7 @@
   padding-right: 1rem;
   padding-bottom: 1rem; // Increased to ensure scrollbar visibility
   width: 100%;
-  overflow-x: auto;
+
   overflow-y: hidden; // Prevent vertical scrollbar
   justify-content: flex-start; // Avoid center clipping for overflow content
 
@@ -57,7 +57,7 @@
 
 .responseWrapper {
   @include message-card-base;
-  margin: 0 auto; // Center if flex container is flex-start
+
   flex: 1 0 30rem; // Grow but don't shrink - triggers horizontal scroll when space limited
 
   // Fix for single response rendering issue
@@ -95,15 +95,18 @@
 
 
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .inner {
     /* grid-template-columns: 1fr; */
-    padding: 0 0.5rem;
-    gap: 0.5rem;
+    padding: 0; // Remove horizontal padding for full width
+    gap: 0; // Remove gap if items are full width, though usually one item per row
+
   }
 
+  /* 📱 Fix for mobile width overflow */
+  /* 📱 Fix for mobile width overflow */
   .responseWrapper {
-    min-width: 26rem;
-    max-width: 30rem;
+    flex: 1 1 auto; // Allow shrink on mobile
+    margin: 0 0.5rem 0.5rem;
   }
 }

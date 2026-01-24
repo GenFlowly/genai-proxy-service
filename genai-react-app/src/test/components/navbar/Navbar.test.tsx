@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Navbar from '../../../components/navbar/Navbar';
 import { useAuth } from '../../../context/AuthContext';
+import { LayoutProvider } from '../../../context/LayoutContext';
 import '@testing-library/jest-dom';
 
 // Mock usages
@@ -37,7 +38,7 @@ describe('Navbar Component', () => {
 
         render(
             <MemoryRouter>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -51,7 +52,7 @@ describe('Navbar Component', () => {
 
         render(
             <MemoryRouter>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -68,7 +69,7 @@ describe('Navbar Component', () => {
 
         render(
             <MemoryRouter>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -86,7 +87,7 @@ describe('Navbar Component', () => {
 
         render(
             <MemoryRouter>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -114,7 +115,7 @@ describe('Navbar Component', () => {
 
         render(
             <MemoryRouter>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -143,7 +144,7 @@ describe('Navbar Component', () => {
 
         render(
             <MemoryRouter>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -166,7 +167,7 @@ describe('Navbar Component', () => {
         render(
             <MemoryRouter>
                 <div data-testid="outside">Outside</div>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -185,16 +186,16 @@ describe('Navbar Component', () => {
 
         render(
             <MemoryRouter>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
         const loginBtn = screen.getByTestId('login-button');
 
         // Tab to login button
-        // Note: Logo link might be skipped in some JSDOM envs, so we ensure login button is reachable
-        await userEvent.tab();
-        if (document.activeElement !== loginBtn) {
+        // Due to potential sidebar toggles (visible in JSDOM) and logo link, we tab until we reach the button
+        for (let i = 0; i < 5; i++) {
+            if (document.activeElement === loginBtn) break;
             await userEvent.tab();
         }
 
@@ -210,15 +211,15 @@ describe('Navbar Component', () => {
 
         render(
             <MemoryRouter>
-                <Navbar />
+                <LayoutProvider><Navbar /></LayoutProvider>
             </MemoryRouter>
         );
 
         const avatarBtn = screen.getByTestId('user-avatar-button');
 
         // Focus avatar
-        await userEvent.tab();
-        if (document.activeElement !== avatarBtn) {
+        for (let i = 0; i < 5; i++) {
+            if (document.activeElement === avatarBtn) break;
             await userEvent.tab();
         }
         expect(avatarBtn).toHaveFocus();

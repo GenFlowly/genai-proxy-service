@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import CenterSection from '../../../../components/sections/CenterSection/CenterSection';
 import { useConversation } from '../../../../context/ConversationContext';
+import { LayoutProvider } from '../../../../context/LayoutContext';
 import '@testing-library/jest-dom';
 
 // Mocks
@@ -27,7 +28,11 @@ describe('CenterSection', () => {
             conversationBlockList: []
         });
 
-        render(<CenterSection />);
+        render(
+            <LayoutProvider>
+                <CenterSection />
+            </LayoutProvider>
+        );
 
         expect(screen.getByTestId('center-section')).toBeInTheDocument();
         expect(screen.getByTestId('center-section-content')).toBeInTheDocument();
@@ -46,7 +51,11 @@ describe('CenterSection', () => {
             ]
         });
 
-        render(<CenterSection />);
+        render(
+            <LayoutProvider>
+                <CenterSection />
+            </LayoutProvider>
+        );
 
         expect(screen.getByTestId('instruction-widget-mock')).toBeInTheDocument();
 
@@ -62,7 +71,11 @@ describe('CenterSection', () => {
             conversationBlockList: []
         });
 
-        const { container } = render(<CenterSection />);
+        const { container } = render(
+            <LayoutProvider>
+                <CenterSection />
+            </LayoutProvider>
+        );
         // Checking for ID explicitly if needed, although styling check is tricky in jsdom
         const anchor = container.querySelector('#instruction-widget-scroll-anchor');
         expect(anchor).toBeInTheDocument();
