@@ -196,7 +196,7 @@ describe('InstructionWidget Component', () => {
         // we mainly verify the structure is as expected for the new layout logic
     });
 
-    test('expands when "Create Instructions" is selected', () => {
+    test('expands when "[+] Create Instructions" is selected', () => {
         render(<InstructionWidget />);
         const selector = screen.getByTestId('instruction-selector-collapsed');
 
@@ -576,5 +576,19 @@ describe('InstructionWidget Component', () => {
         fireEvent.change(selector, { target: { value: 'non-existent-id' } });
 
         expect(navFunctions.setSelectedInstructionId).toHaveBeenCalledWith(null);
+    });
+
+    test('renders disabled separator option', () => {
+        render(<InstructionWidget />);
+
+        const selector = screen.getByTestId('instruction-selector-collapsed');
+        const options = Array.from(selector.querySelectorAll('option'));
+
+        // Find the separator option
+        const separator = options.find((o: any) => o.value === 'SEPARATOR');
+
+        expect(separator).toBeInTheDocument();
+        expect(separator).toBeDisabled();
+        expect(separator).toHaveTextContent('────────────────');
     });
 });
