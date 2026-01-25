@@ -8,6 +8,7 @@ export interface SelectOption {
     isCta?: boolean
     ctaAction?: () => void
     style?: React.CSSProperties
+    disabled?: boolean
 }
 
 interface InputSelectWithHintProps {
@@ -62,6 +63,7 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
                         key={opt.value}
                         value={opt.value}
                         style={opt.style || (opt.isCta ? { fontWeight: 'bold', color: 'blue' } : undefined)}
+                        disabled={opt.disabled}
                         data-testid={testId ? `${testId}-option-${opt.value}` : undefined}
                     >
                         {opt.label}

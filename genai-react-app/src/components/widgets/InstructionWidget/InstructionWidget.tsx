@@ -166,7 +166,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                 }));
 
                                 const ctaOption = {
-                                    label: 'Create Instructions',
+                                    label: '[+] Create Instructions',
                                     value: 'CTA_ACTION',
                                     isCta: true,
                                     ctaAction: () => {
@@ -182,7 +182,12 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                         fontWeight: 500
                                     }
                                 }
-                                return [...filteredOptions, ctaOption]
+                                const separatorOption = {
+                                    label: '────────────────',
+                                    value: 'SEPARATOR',
+                                    disabled: true
+                                }
+                                return [...filteredOptions, separatorOption, ctaOption]
                             })()}
                             data-testid="instruction-selector-collapsed"
                         />
@@ -214,7 +219,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                     }));
 
                     const ctaOption = {
-                        label: 'Create Instructions',
+                        label: '[+] Create Instructions',
                         value: 'CTA_ACTION',
                         isCta: true,
                         ctaAction: () => {
@@ -231,7 +236,12 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                             fontWeight: 500
                         }
                     }
-                    return [...filteredOptions, ctaOption]
+                    const separatorOption = {
+                        label: '────────────────',
+                        value: 'SEPARATOR',
+                        disabled: true
+                    }
+                    return [...filteredOptions, separatorOption, ctaOption]
                 })()
 
                 // Find latest version of this instruction to establish baseline
