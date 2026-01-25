@@ -3,8 +3,8 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { TextEncoder, TextDecoder } from 'util';
 
-global.TextEncoder = TextEncoder as any;
-global.TextDecoder = TextDecoder as any;
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
 
 console.log('!!! SETUP TESTS RUNNING !!!');
 
@@ -71,7 +71,7 @@ const mockGetAccessTokenSilently = jest.fn().mockResolvedValue(ACCESS_TOKEN);
 
 // Mock Auth0
 jest.mock('@auth0/auth0-react', () => ({
-    Auth0Provider: ({ children }: any) => children,
+    Auth0Provider: ({ children }) => children,
     useAuth0: () => ({
         isAuthenticated: true,
         user: MOCK_USER,
@@ -83,14 +83,14 @@ jest.mock('@auth0/auth0-react', () => ({
 }));
 
 // Mock react-markdown and plugins to avoid ESM syntax errors in Jest
-jest.mock('react-markdown', () => (props: any) => {
+jest.mock('react-markdown', () => (props) => {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'markdown-mock' }, props.children)
 })
 jest.mock('remark-gfm', () => () => { })
 jest.mock('rehype-highlight', () => () => { })
 
-jest.mock('@uiw/react-markdown-editor', () => (props: any) => {
+jest.mock('@uiw/react-markdown-editor', () => (props) => {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'markdown-editor-mock' }, props.children)
 })

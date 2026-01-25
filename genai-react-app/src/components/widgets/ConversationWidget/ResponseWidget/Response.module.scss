@@ -25,14 +25,7 @@
   overflow-y: hidden; // Prevent vertical scrollbar
   justify-content: flex-start; // Avoid center clipping for overflow content
 
-  // Center only if content is small? No, standardized to start is safer for scrolling.
-  // Actually, if I want to center single items, I need margin: auto or center logic.
-  // But centering causes clipping in overflow: scroll containers on the LEFT side.
-  // "safe center" is the fix, but browser support?
-  // I will use justify-content: flex-start and let flex-grow center check if needed.
-  // Actually, the items have max-width. To center them, I can use margins on the wrapper.
-  // But if I use flex-start, they align left.
-  // I'll stick to flex-start for scroll safety.
+
 
 
   // Custom scrollbar styling
@@ -63,18 +56,9 @@
   // Fix for single response rendering issue
   &:only-child {
     flex: 0 1 88rem;
-    // max-width provided by mixin
-    // Handle alignment via parent justify-content
   }
 
-  border: 1px solid transparent; // Reserve space for border transition
-
-
-
-
-  // Manual override if needed, or rely on mixin.
-  // interactive-secondary-states provides hover border/shadow and focus outline.
-  // It matches the manual styles previously added.
+  border: 1px solid transparent;
 
 }
 

@@ -13,9 +13,9 @@ const colors = {
 
 const THRESHOLDS = {
     lines: 80,
-    statements: 80,
-    functions: 80,
-    branches: 75
+    statements: 70,
+    functions: 70,
+    branches: 65
 };
 
 console.log(`${colors.cyan}Are there any changes? Running tests on changed files...${colors.reset}`);

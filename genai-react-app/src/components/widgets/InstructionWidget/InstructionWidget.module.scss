@@ -41,6 +41,16 @@
     // z-index: 2;
 }
 
+
+.instructionsCTAWrapper {
+    @include message-card-base;
+    display: flex;
+    align-items: center;
+    padding: 0rem;
+}
+
+
+
 .editButton {
     display: flex;
     flex-direction: row;
@@ -142,7 +152,7 @@
     }
 }
 
-// --- Refactored Layout Classes ---
+
 
 .instructionContainer {
     width: 100%;

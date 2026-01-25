@@ -4,18 +4,27 @@ import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import PillButton from '../../common/PillButton/PillButton'
 import Tooltip from '../../common/Tooltip/Tooltip'
 import { Icon } from '../../common/Icon/Icon'
-import { InputTextWithHint } from '../../common/InputTextWithHint/InputTextWithHint'
-import { InputSelectWithHint } from '../../common/InputSelectWithHint/InputSelectWithHint'
+import {
+    InputTextWithHint
+} from '../../common/InputTextWithHint/InputTextWithHint'
+import {
+    InputSelectWithHint
+} from '../../common/InputSelectWithHint/InputSelectWithHint'
 import { useAI } from '../../../context/AIContext'
 import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
 import styles from './InstructionWidget.module.scss'
 
 import { useAuth0 } from '@auth0/auth0-react'
-import { createInstruction, getInstructionVersion } from '../../../services/instructionService'
+import {
+    createInstruction,
+    getInstructionVersion
+} from '../../../services/instructionService'
 import { InstructionResponse } from '../../../models/instruction.models'
 
-export default function InstructionWidget({ 'data-testid': testId }: { 'data-testid'?: string }) {
+export default function InstructionWidget({ 'data-testid': testId }: {
+    'data-testid'?: string
+}) {
     const {
         systemPrompt,
         setSystemPrompt,
@@ -25,9 +34,17 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
 
     const { getAccessTokenSilently } = useAuth0()
     // Use LayoutContext for expansion state
-    const { isInstructionWidgetExpanded, setInstructionWidgetExpanded } = useLayout()
+    const {
+        isInstructionWidgetExpanded,
+        setInstructionWidgetExpanded
+    } = useLayout()
 
-    const { aiVendorAPIKeyStatusList, refreshInstructions, updateInstruction, customerInstructions } = useAuth()
+    const {
+        aiVendorAPIKeyStatusList,
+        refreshInstructions,
+        updateInstruction,
+        customerInstructions
+    } = useAuth()
     const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
 
     const [isLoading, setIsLoading] = useState(false)
@@ -115,71 +132,78 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
 
     if (!isInstructionWidgetExpanded) {
         return (
-            <div className={styles.collapsedContainer} data-testid={testId || "instruction-widget-collapsed"}>
-                <div style={{ flex: 1, maxWidth: '66rem', paddingRight: '0.5rem' }}>
-                    <InputSelectWithHint
-                        hint="Instructions"
-                        icon={ICONS.USER_ROLE}
-                        placeholder="Select a persona"
-                        className={styles.roleInput}
-                        value={(() => {
-                            if (selectedInstructionId) return selectedInstructionId
-                            return (isInstructionWidgetExpanded) ? 'CTA_ACTION' : ''
-                        })()}
-                        onChange={(val) => {
-                            const selectedInstruction = uniqueInstructions.find(i => i.id === val)
-                            if (selectedInstruction) {
-                                setSelectedInstructionId(selectedInstruction.id)
-                                setSystemPrompt(selectedInstruction.instruction)
-                            } else {
-                                setSelectedInstructionId(null)
-                                // Only clear system prompt if explicitly deselecting?
-                                // setSystemPrompt('') // Maybe?
-                            }
-                        }}
-                        options={(() => {
-                            const filteredOptions = uniqueInstructions.map(item => ({
-                                label: item.name || item.instruction.substring(0, 50),
-                                value: item.id,
-                            }));
-
-                            const ctaOption = {
-                                label: 'Create Instructions',
-                                value: 'CTA_ACTION',
-                                isCta: true,
-                                ctaAction: () => {
+            <div className={styles.collapsedContainer}
+                data-testid={testId || "instruction-widget-collapsed"}>
+                <div className={styles.instructionsCTAWrapper}
+                    data-testid="instructions-cta-wrapper">
+                    <div style={{
+                        flex: 1,
+                    }}>
+                        <InputSelectWithHint
+                            hint="Instructions"
+                            icon={ICONS.USER_ROLE}
+                            placeholder="Select a persona"
+                            className={styles.roleInput}
+                            value={(() => {
+                                if (selectedInstructionId) return selectedInstructionId
+                                return (isInstructionWidgetExpanded) ? 'CTA_ACTION' : ''
+                            })()}
+                            onChange={(val) => {
+                                const selectedInstruction = uniqueInstructions.find(i => i.id === val)
+                                if (selectedInstruction) {
+                                    setSelectedInstructionId(selectedInstruction.id)
+                                    setSystemPrompt(selectedInstruction.instruction)
+                                } else {
                                     setSelectedInstructionId(null)
-                                    setSystemPrompt('')
-                                    setInstructionWidgetExpanded(true)
-                                },
-                                style: {
-                                    borderTop: '1px solid #e5e7eb',
-                                    marginTop: '4px',
-                                    paddingTop: '8px',
-                                    color: '#2563eb',
-                                    fontWeight: 500
+                                    // Only clear system prompt if explicitly deselecting?
+                                    // setSystemPrompt('') // Maybe?
                                 }
-                            }
-                            return [...filteredOptions, ctaOption]
-                        })()}
-                        data-testid="instruction-selector-collapsed"
-                    />
+                            }}
+                            options={(() => {
+                                const filteredOptions = uniqueInstructions.map(item => ({
+                                    label: item.name || item.instruction.substring(0, 50),
+                                    value: item.id,
+                                }));
+
+                                const ctaOption = {
+                                    label: 'Create Instructions',
+                                    value: 'CTA_ACTION',
+                                    isCta: true,
+                                    ctaAction: () => {
+                                        setSelectedInstructionId(null)
+                                        setSystemPrompt('')
+                                        setInstructionWidgetExpanded(true)
+                                    },
+                                    style: {
+                                        borderTop: '1px solid #e5e7eb',
+                                        marginTop: '4px',
+                                        paddingTop: '8px',
+                                        color: '#2563eb',
+                                        fontWeight: 500
+                                    }
+                                }
+                                return [...filteredOptions, ctaOption]
+                            })()}
+                            data-testid="instruction-selector-collapsed"
+                        />
+                    </div>
+                    <button
+                        className={styles.editButton}
+                        onClick={() => setInstructionWidgetExpanded(true)}
+                        aria-label="Edit instruction"
+                        title="Edit selected instruction"
+                        data-testid="instruction-edit-button"
+                    >
+                        <Icon src={ICONS.EDIT} className={styles.editIcon} />
+                    </button>
                 </div>
-                <button
-                    className={styles.editButton}
-                    onClick={() => setInstructionWidgetExpanded(true)}
-                    aria-label="Edit instruction"
-                    title="Edit selected instruction"
-                    data-testid="instruction-edit-button"
-                >
-                    <Icon src={ICONS.EDIT} className={styles.editIcon} />
-                </button>
             </div>
         )
     }
 
     return (
-        <div className={styles.container} data-testid={testId || "instruction-widget-expanded"}>
+        <div className={styles.container}
+            data-testid={testId || "instruction-widget-expanded"}>
             {/* Metadata Display / Edit */}
             {(() => {
                 // Config for options
@@ -250,9 +274,16 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
                                 <div className={styles.metadataRow}>
 
                                     {/* Left: Name (or Edit Input) */}
-                                    <div style={{ flex: 1, marginRight: '1rem', minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                                    <div style={{
+                                        flex: 1,
+                                        marginRight: '1rem',
+                                        minWidth: 0,
+                                        display: 'flex',
+                                        alignItems: 'center'
+                                    }}>
                                         {isEditingName ? (
-                                            <div className={styles.titleGroup} style={{ width: '100%' }}>
+                                            <div className={styles.titleGroup}
+                                                style={{ width: '100%' }}>
                                                 <InputTextWithHint
                                                     hint="Name"
                                                     value={instructionName}
@@ -262,13 +293,21 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
                                                     autoFocus
                                                     data-testid="instruction-name-input"
                                                 />
-                                                <button onClick={() => setIsEditingName(false)} className={styles.cancelButton}>
+                                                <button
+                                                    onClick={() => setIsEditingName(false)}
+                                                    className={styles.cancelButton}>
                                                     Cancel
                                                 </button>
                                             </div>
                                         ) : (
                                             <div className={styles.titleGroup}>
-                                                <span className={styles.instructionName} style={{ fontSize: '1.2rem', marginRight: '0.5rem' }} data-testid="instruction-name-display">
+                                                <span
+                                                    className={styles.instructionName}
+                                                    style={{
+                                                        fontSize: '1.2rem',
+                                                        marginRight: '0.5rem'
+                                                    }}
+                                                    data-testid="instruction-name-display">
                                                     {instructionName || latest?.name || 'Untitled Instruction'}
                                                 </span>
                                                 <button
@@ -276,10 +315,19 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
                                                         setInstructionName(instructionName || (latest?.name || ''))
                                                         setIsEditingName(true)
                                                     }}
-                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center' }}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        padding: '0.5rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center'
+                                                    }}
                                                     title="Rename Instruction"
                                                 >
-                                                    <Icon src={ICONS.EDIT} size={16} className={styles.editIcon} />
+                                                    <Icon src={ICONS.EDIT}
+                                                        size={16}
+                                                        className={styles.editIcon} />
                                                 </button>
                                             </div>
                                         )}
@@ -360,8 +408,10 @@ export default function InstructionWidget({ 'data-testid': testId }: { 'data-tes
                             data-testid="instruction-looks-good-button"
                         />
 
-                        <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
-                            <div style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
+                        <Tooltip
+                            content={!hasAnyValidApiKey ? "No API keys set" : ""}>
+                            <div
+                                style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
                                 <PillButton
                                     onClick={handleCreateInstruction}
                                     label={isLoading ? 'Processing...' : 'Save Instructions'}
