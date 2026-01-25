@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { ICONS } from '../../../constants/icons'
 import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import PillButton from '../../common/PillButton/PillButton'
@@ -51,6 +51,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
     const [instructionName, setInstructionName] = useState('')
     const [isEditingName, setIsEditingName] = useState(false)
     const [selectedVersion, setSelectedVersion] = useState<number | null>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
 
     // Reset/Init version when ID changes (default to latest)
     useEffect(() => {
@@ -133,6 +134,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
     if (!isInstructionWidgetExpanded) {
         return (
             <div className={styles.collapsedContainer}
+                ref={containerRef}
                 data-testid={testId || "instruction-widget-collapsed"}>
                 <div className={styles.instructionsCTAWrapper}
                     data-testid="instructions-cta-wrapper">
@@ -173,6 +175,9 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                         setSelectedInstructionId(null)
                                         setSystemPrompt('')
                                         setInstructionWidgetExpanded(true)
+                                        setTimeout(() => {
+                                            containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                        }, 100)
                                     },
                                     style: {
                                         borderTop: '1px solid #e5e7eb',
@@ -208,6 +213,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
 
     return (
         <div className={styles.container}
+            ref={containerRef}
             data-testid={testId || "instruction-widget-expanded"}>
             {/* Metadata Display / Edit */}
             {(() => {
@@ -227,6 +233,9 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                             setSystemPrompt('')
                             // Ensure widget stays expanded
                             setInstructionWidgetExpanded(true)
+                            setTimeout(() => {
+                                containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                            }, 100)
                         },
                         style: {
                             borderTop: '1px solid #e5e7eb',

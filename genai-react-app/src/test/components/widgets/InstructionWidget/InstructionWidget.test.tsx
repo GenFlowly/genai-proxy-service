@@ -26,6 +26,9 @@ jest.mock('../../../../components/widgets/PromptEditorWidget/PromptEditor', () =
     />
 ));
 
+// Mock scrollIntoView
+window.HTMLElement.prototype.scrollIntoView = jest.fn();
+
 describe('InstructionWidget Component', () => {
     const mockUseAI = useAI as jest.Mock;
     const mockUseAuth = useAuth as jest.Mock;
@@ -196,7 +199,7 @@ describe('InstructionWidget Component', () => {
         // we mainly verify the structure is as expected for the new layout logic
     });
 
-    test('expands when "[+] Create Instructions" is selected', () => {
+    test('expands when "[+] Create Instructions" is selected', async () => {
         render(<InstructionWidget />);
         const selector = screen.getByTestId('instruction-selector-collapsed');
 
@@ -206,6 +209,11 @@ describe('InstructionWidget Component', () => {
         expect(navFunctions.setSelectedInstructionId).toHaveBeenCalledWith(null);
         expect(navFunctions.setSystemPrompt).toHaveBeenCalledWith('');
         expect(navFunctions.setInstructionWidgetExpanded).toHaveBeenCalledWith(true);
+
+        // Verify scroll is called (wrapped in setTimeout)
+        await waitFor(() => {
+            expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+        });
     });
 
     test('updates instruction when version is changed', async () => {
@@ -485,7 +493,7 @@ describe('InstructionWidget Component', () => {
         expect(textContent.some(t => t.includes('A v1'))).toBe(false); // Should NOT show old v1
     });
 
-    test('selects "Create Instructions" from expanded mode selector', () => {
+    test('selects "Create Instructions" from expanded mode selector', async () => {
         mockUseLayout.mockReturnValue({
             isInstructionWidgetExpanded: true,
             setInstructionWidgetExpanded: navFunctions.setInstructionWidgetExpanded
@@ -499,6 +507,11 @@ describe('InstructionWidget Component', () => {
         expect(navFunctions.setSelectedInstructionId).toHaveBeenCalledWith(null);
         expect(navFunctions.setSystemPrompt).toHaveBeenCalledWith('');
         expect(navFunctions.setInstructionWidgetExpanded).toHaveBeenCalledWith(true);
+
+        // Verify scroll is called (wrapped in setTimeout)
+        await waitFor(() => {
+            expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+        });
     });
 
     test('handles error when fetching version fails', async () => {
