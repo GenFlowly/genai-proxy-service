@@ -1,12 +1,10 @@
 import React from 'react'
-import { ICONS } from '../../../constants/icons'
 import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
-import MarkdownEditor from '@uiw/react-markdown-editor'
+import MarkdownEditor, { fullscreen, preview } from '@uiw/react-markdown-editor'
 import { EditorView } from '@codemirror/view'
-import CopyToClipboard from '../../common/CopyToClipboard/CopyToClipboard'
 import styles from './PromptEditor.module.scss'
-import { addStepsCommand, addExamplesCommand } from './CustomToolbarCommands'
+import { addStepsCommand, addExamplesCommand, addCopyCommand } from './CustomToolbarCommands'
 
 interface PromptEditorProps {
     id: string
@@ -40,16 +38,15 @@ export default function PromptEditor({ id, value, onChange, disableCache = false
                                 addStepsCommand,
                                 addExamplesCommand,
                             ]}
+                            toolbarsMode={[
+                                preview,
+                                fullscreen,
+                                addCopyCommand,
+                            ]}
                             extensions={[EditorView.lineWrapping]}
                         />
                     </div>
                     <div className={styles.controlsRow}>
-                        <CopyToClipboard
-                            content={value}
-                            label="Copy Prompt"
-                            icon={ICONS.COPY}
-                            successDuration={2000}
-                        />
                     </div>
                 </div>
             </div>

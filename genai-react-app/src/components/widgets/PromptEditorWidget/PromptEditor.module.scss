@@ -96,13 +96,15 @@ $editor-width: 75rem;
   }
 
   :global(.md-editor-toolbar) {
-    //background-color: $white !important;
+    background-color: $white !important;
     //border-bottom: 1px solid $border-color !important;
     border-radius: 0;
     min-height: 2rem;
     /* Increase overall height per user request */
     display: flex;
     align-items: center;
+    position: relative;
+    z-index: 1;
   }
 
   /* User suggested targeting this wrapper specifically for height */
