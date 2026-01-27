@@ -1,11 +1,15 @@
-import { render, screen } from '@testing-library/react';
-import { addStepsCommand, addExamplesCommand } from '../../../../components/widgets/PromptEditorWidget/CustomToolbarCommands';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { addStepsCommand, addExamplesCommand, addCopyCommand } from '../../../../components/widgets/PromptEditorWidget/CustomToolbarCommands';
 import '@testing-library/jest-dom';
 
 // Mocks
 jest.mock('../../../../components/common/Icon/Icon', () => ({
     Icon: ({ alt }: any) => <span data-testid={`icon-${alt}`}>{alt}</span>
 }));
+
+jest.mock('../../../../components/common/Tooltip/Tooltip', () => {
+    return ({ content, children }: any) => <div data-testid="tooltip-mock" data-content={content}>{children}</div>;
+});
 
 const createMockEditor = (docString: string, selection = { from: 0, to: 0 }) => {
     const dispatch = jest.fn();
@@ -111,6 +115,91 @@ describe('CustomToolbarCommands', () => {
                     insert: '\n\nExample 3 - \nUser - \nResponse - \n'
                 }
             });
+        });
+    });
+
+    describe('addCopyCommand', () => {
+        const mockWriteText = jest.fn();
+
+        beforeAll(() => {
+            Object.assign(navigator, {
+                clipboard: {
+                    writeText: mockWriteText.mockImplementation(() => Promise.resolve()),
+                },
+            });
+        });
+
+        beforeEach(() => {
+            jest.clearAllMocks();
+            mockWriteText.mockResolvedValue(undefined); // Ensure it returns a Promise
+            jest.useFakeTimers(); // Enable fake timers
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        test('has correct properties', () => {
+            expect(addCopyCommand.name).toBe('copy');
+            expect(addCopyCommand.keyCommand).toBe('copy');
+        });
+
+        test('renders copy button and handles click', async () => {
+            const docContent = 'Content to copy';
+            const editor = createMockEditor(docContent);
+
+            const options = {
+                editor: {
+                    current: {
+                        view: editor.view
+                    }
+                }
+            };
+
+            const ButtonComponent = addCopyCommand.button;
+            render(ButtonComponent(null, null, options));
+
+            // Verify initial state
+            expect(screen.getByTestId('tooltip-mock')).toHaveAttribute('data-content', 'Copy to clipboard');
+            expect(screen.queryByText('✓')).not.toBeInTheDocument();
+
+            // Initial icon (undefined because alt is not passed, but we know it's not the checkmark)
+            expect(screen.getByTestId('icon-Copy')).toBeInTheDocument();
+
+            // Click the button
+            // The tooltip renders a div, inside is the span with onClick
+            const tooltip = screen.getByTestId('tooltip-mock');
+            const buttonSpan = tooltip.firstChild as HTMLElement;
+            fireEvent.click(buttonSpan);
+
+            // Verify clipboard write
+            expect(mockWriteText).toHaveBeenCalledWith(docContent);
+
+            // Verify copied state (resolved promise)
+            // waitFor acts as a way to wait for the Promise chain to resolve and state to update
+            await waitFor(() => {
+                expect(screen.getByText('✓')).toBeInTheDocument();
+            });
+
+            expect(screen.getByTestId('tooltip-mock')).toHaveAttribute('data-content', 'Copied!');
+            expect(screen.queryByTestId('icon-Copy')).not.toBeInTheDocument();
+
+            // Verify timeout (2000ms)
+            act(() => {
+                jest.advanceTimersByTime(2000);
+            });
+
+            // Verify reset to initial state
+            await waitFor(() => {
+                expect(screen.queryByText('✓')).not.toBeInTheDocument();
+                expect(screen.getByTestId('icon-Copy')).toBeInTheDocument();
+                expect(screen.getByTestId('tooltip-mock')).toHaveAttribute('data-content', 'Copy to clipboard');
+            });
+        });
+
+        test('execute does nothing (handled by button)', () => {
+            // Function exists but is a no-op
+            expect(() => addCopyCommand.execute(null)).not.toThrow();
         });
     });
 });
