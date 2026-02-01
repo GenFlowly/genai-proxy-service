@@ -92,3 +92,57 @@ describe('TextContainer Component', () => {
         expect(screen.getByTestId('child-element')).toBeInTheDocument();
     });
 });
+
+import { extractText, PreBlock } from '../../../../components/common/TextContainer/TextContainer';
+
+describe('TextContainer Internals', () => {
+    describe('extractText', () => {
+        test('extracts text from simple node', () => {
+            const nodes = [{ value: 'Hello' }];
+            expect(extractText(nodes)).toBe('Hello');
+        });
+
+        test('extracts text from nested nodes', () => {
+            const nodes = [
+                { value: 'Hello ' },
+                { children: [{ value: 'World' }] }
+            ];
+            expect(extractText(nodes)).toBe('Hello World');
+        });
+
+        test('handles empty input', () => {
+            expect(extractText([])).toBe('');
+        });
+
+        test('ignores nodes without value or children', () => {
+            const nodes = [{ other: 'prop' }, { value: 'Text' }];
+            expect(extractText(nodes)).toBe('Text');
+        });
+    });
+
+    describe('PreBlock', () => {
+        test('renders pre block with copy button', () => {
+            const node = {
+                children: [{ value: 'console.log("test")' }]
+            };
+
+            render(
+                <PreBlock node={node}>
+                    <code>console.log("test")</code>
+                </PreBlock>
+            );
+
+            expect(screen.getByTitle('Copy Code')).toBeInTheDocument();
+            expect(screen.getByText('console.log("test")')).toBeInTheDocument();
+        });
+
+        test('handles node without children', () => {
+            render(
+                <PreBlock>
+                    <code>Info</code>
+                </PreBlock>
+            );
+            expect(screen.getByTitle('Copy Code')).toBeInTheDocument();
+        });
+    });
+});

@@ -7,13 +7,18 @@ import CenterSection from '../components/sections/CenterSection/CenterSection'
 import { useConversation } from '../context/ConversationContext'
 import styles from './LandingPage.module.scss'
 
+import { getPageConfig } from '../config/PageWidgetConfig'
+
 function LandingPageContent() {
+    // Current Chat Page uses the 'CHAT_PAGE' config
+    // In future, you could dynamically pick config based on 'useConversation' or 'routeId'
+    const config = getPageConfig('CHAT_PAGE')
 
     return (
         <div className={styles.layout}>
-            <LeftSidebar />
-            <CenterSection />
-            <RightSidebar />
+            <LeftSidebar widgetIds={config.leftSidebar} />
+            <CenterSection widgetIds={config.centerSection} />
+            <RightSidebar widgetIds={config.rightSidebar} />
         </div>
     )
 }

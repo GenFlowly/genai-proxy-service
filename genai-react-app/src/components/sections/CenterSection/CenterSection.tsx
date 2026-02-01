@@ -1,15 +1,15 @@
-// CenterSection.tsx
 import React from 'react'
-import { useConversation } from '../../../context/ConversationContext'
-import ConversationBlock from '../../widgets/ConversationWidget/ConversationBlock/ConversationBlock';
-// @ts-ignore
-import InstructionWidget from '../../widgets/InstructionWidget/InstructionWidget'
-import styles from './CenterSection.module.scss'
-
 import { useLayout } from '../../../context/LayoutContext'
+import styles from './CenterSection.module.scss'
+import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
 
-export default function CenterSection({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
-    const { conversationBlockList } = useConversation()
+interface CenterSectionProps {
+    widgetIds: string[]
+    'data-testid'?: string
+}
+
+export default function CenterSection({ widgetIds, 'data-testid': testId }: CenterSectionProps) {
+    const widgets = useWidgetResolver(widgetIds)
     const { isInstructionWidgetExpanded } = useLayout()
 
     return (
@@ -25,10 +25,9 @@ export default function CenterSection({ 'data-testid': testId }: { 'data-testid'
                         backgroundColor: !isInstructionWidgetExpanded ? 'var(--color-sidebar-background)' : undefined
                     }}
                 >
-                    <InstructionWidget />
                 </div>
-                {conversationBlockList.map(block => (
-                    <ConversationBlock key={block.conversationBlockId} id={block.conversationBlockId} />
+                {widgets.map(widget => (
+                    <widget.component key={widget.id} />
                 ))}
             </div>
         </div>

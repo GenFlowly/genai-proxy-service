@@ -64,3 +64,5 @@ describe('ToastContext', () => {
         expect(screen.queryByText('Short Toast')).not.toBeInTheDocument();
     });
 });
+
+// Coverage refresh

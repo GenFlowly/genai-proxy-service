@@ -1,20 +1,26 @@
 import React from 'react'
 import { useLayout } from '../../../context/LayoutContext'
-import ThreadWidget from '../../widgets/SidebarWidgets/ThreadWidget/ThreadWidget'
-import InstructionSidebarWidget from '../../widgets/SidebarWidgets/InstructionSidebarWidget/InstructionSidebarWidget'
 import styles from './LeftSidebar.module.scss'
+import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
 
-export default function LeftSidebar({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
+interface LeftSidebarProps {
+    widgetIds: string[]
+    'data-testid'?: string
+}
+
+export default function LeftSidebar({ widgetIds, 'data-testid': testId }: LeftSidebarProps): React.ReactElement {
     const { isLeftSidebarExpanded } = useLayout()
     const collapsed = !isLeftSidebarExpanded
+    const widgets = useWidgetResolver(widgetIds)
 
     return (
         <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`} data-testid={testId || "left-sidebar"}>
 
 
             <div className={styles.sidebarContent}>
-                <InstructionSidebarWidget />
-                <ThreadWidget />
+                {widgets.map(widget => (
+                    <widget.component key={widget.id} />
+                ))}
             </div>
         </aside>
     )

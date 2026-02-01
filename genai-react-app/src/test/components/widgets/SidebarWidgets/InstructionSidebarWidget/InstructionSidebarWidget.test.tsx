@@ -115,3 +115,5 @@ describe('InstructionSidebarWidget', () => {
         expect(document.getElementById).not.toHaveBeenCalledWith('instruction-widget-scroll-anchor');
     });
 });
+
+// Coverage refresh

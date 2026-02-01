@@ -90,7 +90,7 @@ describe('LayoutContext UI Integration', () => {
     });
 
     test('RightSidebar toggles correctly', () => {
-        customRender(<RightSidebar />);
+        customRender(<RightSidebar widgetIds={[]} />);
 
         const sidebar = screen.getByTestId('right-sidebar');
         const toggleBtn = screen.getByTestId('right-sidebar-toggle');
@@ -118,7 +118,7 @@ describe('LayoutContext UI Integration', () => {
     });
 
     test('LeftSidebar initializes correctly', () => {
-        customRender(<LeftSidebar />);
+        customRender(<LeftSidebar widgetIds={[]} />);
         const sidebar = screen.getByTestId('left-sidebar');
         expect(sidebar.className).toContain('collapsed');
     });

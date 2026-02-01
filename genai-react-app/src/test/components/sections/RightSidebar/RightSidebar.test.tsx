@@ -5,14 +5,16 @@ import { useLayout } from '../../../../context/LayoutContext';
 import '@testing-library/jest-dom';
 
 // Mocks
+// Mocks
 jest.mock('../../../../context/LayoutContext');
-jest.mock('../../../../components/widgets/SidebarWidgets/NewChatWidget/NewChatWidget', () => () => <div data-testid="new-chat-widget-mock">NewChatWidget</div>);
-jest.mock('../../../../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget', () => () => <div data-testid="ai-vendor-widget-mock">AIVendorWidget</div>);
-jest.mock('../../../../components/widgets/SidebarWidgets/TokenCounter/TokenCounter', () => () => <div data-testid="token-counter-mock">TokenCounter</div>);
+jest.mock('../../../../hooks/useWidgetResolver', () => ({
+    useWidgetResolver: jest.fn()
+}));
 
 describe('RightSidebar', () => {
     const mockUseLayout = useLayout as jest.Mock;
     const mockToggleRightSidebar = jest.fn();
+    const mockUseWidgetResolver = jest.requireMock('../../../../hooks/useWidgetResolver').useWidgetResolver;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -20,18 +22,19 @@ describe('RightSidebar', () => {
             isRightSidebarExpanded: true,
             toggleRightSidebar: mockToggleRightSidebar
         });
+        mockUseWidgetResolver.mockReturnValue([
+            { id: 'MOCK_WIDGET', component: () => <div data-testid="mock-widget">Mock Widget</div> }
+        ]);
     });
 
     test('renders correctly (Expanded)', () => {
-        render(<RightSidebar />);
+        render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
 
         const sidebar = screen.getByTestId('right-sidebar');
         expect(sidebar).toBeInTheDocument();
         expect(sidebar).not.toHaveClass('collapsed');
 
-        expect(screen.getByTestId('new-chat-widget-mock')).toBeInTheDocument();
-        expect(screen.getByTestId('ai-vendor-widget-mock')).toBeInTheDocument();
-        expect(screen.getByTestId('token-counter-mock')).toBeInTheDocument();
+        expect(screen.getByTestId('mock-widget')).toBeInTheDocument();
 
         const toggleBtn = screen.getByTestId('right-sidebar-toggle');
         expect(toggleBtn).toBeInTheDocument();
@@ -44,7 +47,7 @@ describe('RightSidebar', () => {
             toggleRightSidebar: mockToggleRightSidebar
         });
 
-        render(<RightSidebar />);
+        render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
 
         const sidebar = screen.getByTestId('right-sidebar');
         expect(sidebar).toBeInTheDocument();
@@ -53,7 +56,7 @@ describe('RightSidebar', () => {
     });
 
     test('toggles sidebar on click', () => {
-        render(<RightSidebar />);
+        render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
         const toggleBtn = screen.getByTestId('right-sidebar-toggle');
         fireEvent.click(toggleBtn);
         expect(mockToggleRightSidebar).toHaveBeenCalledTimes(1);
