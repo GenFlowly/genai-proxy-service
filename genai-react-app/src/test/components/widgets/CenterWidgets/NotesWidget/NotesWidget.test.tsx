@@ -1,49 +1,88 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import NotesWidget from '../../../../../components/widgets/CenterWidgets/NotesWidget/NotesWidget';
 
 // Mock child components
-jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', () => (props: any) => (
-    <textarea
-        data-testid="mock-prompt-editor"
-        value={props.value}
-        onChange={(e) => props.onChange(e.target.value)}
-    />
+jest.mock('../../../../../components/widgets/CenterWidgets/NotesWidget/PlainNotes', () => () => (
+    <div data-testid="plain-notes-component">PlainNotes Component</div>
 ));
 
-jest.mock('../../../../../components/common/MultiPurposeButton/MultiPurposeButton', () => (props: any) => (
-    <button data-testid="save-button" onClick={props.onClick}>
-        {props.label}
-    </button>
+jest.mock('../../../../../components/widgets/CenterWidgets/NotesWidget/KeyValueNotes', () => () => (
+    <div data-testid="key-value-notes-component">KeyValueNotes Component</div>
+));
+
+jest.mock('../../../../../components/common/ToggleGroupButton/ToggleGroupButton', () => (props: any) => (
+    <div data-testid="toggle-group-button">
+        {props.options.map((opt: any) => (
+            <button
+                key={opt.id}
+                data-testid={`toggle-option-${opt.id}`}
+                onClick={() => props.onChange([opt.id])}
+                aria-pressed={props.selectedValues.includes(opt.id)}
+            >
+                {opt.label}
+            </button>
+        ))}
+    </div>
 ));
 
 describe('NotesWidget', () => {
-    test('renders correctly', () => {
+    test('renders toggle with 3 options', () => {
         render(<NotesWidget />);
-        expect(screen.getByTestId('mock-prompt-editor')).toBeInTheDocument();
-        expect(screen.getByTestId('save-button')).toBeInTheDocument();
+        expect(screen.getByTestId('toggle-group-button')).toBeInTheDocument();
+        expect(screen.getByTestId('toggle-option-PLAIN')).toBeInTheDocument();
+        expect(screen.getByTestId('toggle-option-KEY_VALUE')).toBeInTheDocument();
+        expect(screen.getByTestId('toggle-option-UPLOAD')).toBeInTheDocument();
     });
 
-    test('updates content when typing', () => {
+    test('defaults to PLAIN mode', () => {
         render(<NotesWidget />);
-        const editor = screen.getByTestId('mock-prompt-editor');
-
-        fireEvent.change(editor, { target: { value: 'New Note Content' } });
-
-        expect(editor).toHaveValue('New Note Content');
+        const plainOption = screen.getByTestId('toggle-option-PLAIN');
+        expect(plainOption).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('plain-notes-component')).toBeInTheDocument();
     });
 
-    test('handles save click', () => {
-        const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { });
+    test('renders PlainNotes when PLAIN is selected', () => {
+        render(<NotesWidget />);
+        expect(screen.getByTestId('plain-notes-component')).toBeInTheDocument();
+        expect(screen.queryByTestId('key-value-notes-component')).not.toBeInTheDocument();
+    });
+
+    test('renders KeyValueNotes when KEY_VALUE is selected', async () => {
+        render(<NotesWidget />);
+        const keyValueOption = screen.getByTestId('toggle-option-KEY_VALUE');
+
+        await userEvent.click(keyValueOption);
+
+        expect(screen.getByTestId('key-value-notes-component')).toBeInTheDocument();
+        expect(screen.queryByTestId('plain-notes-component')).not.toBeInTheDocument();
+    });
+
+    test('renders nothing when UPLOAD is selected', async () => {
+        render(<NotesWidget />);
+        const uploadOption = screen.getByTestId('toggle-option-UPLOAD');
+
+        await userEvent.click(uploadOption);
+
+        expect(screen.queryByTestId('plain-notes-component')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('key-value-notes-component')).not.toBeInTheDocument();
+    });
+
+    test('switches between modes correctly', async () => {
         render(<NotesWidget />);
 
-        const editor = screen.getByTestId('mock-prompt-editor');
-        fireEvent.change(editor, { target: { value: 'Note to save' } });
+        // Start with PLAIN
+        expect(screen.getByTestId('plain-notes-component')).toBeInTheDocument();
 
-        const saveBtn = screen.getByTestId('save-button');
-        fireEvent.click(saveBtn);
+        // Switch to KEY_VALUE
+        await userEvent.click(screen.getByTestId('toggle-option-KEY_VALUE'));
+        expect(screen.getByTestId('key-value-notes-component')).toBeInTheDocument();
+        expect(screen.queryByTestId('plain-notes-component')).not.toBeInTheDocument();
 
-        expect(consoleSpy).toHaveBeenCalledWith('Save clicked', { prompt: 'Note to save' });
-        consoleSpy.mockRestore();
+        // Switch back to PLAIN
+        await userEvent.click(screen.getByTestId('toggle-option-PLAIN'));
+        expect(screen.getByTestId('plain-notes-component')).toBeInTheDocument();
+        expect(screen.queryByTestId('key-value-notes-component')).not.toBeInTheDocument();
     });
 });

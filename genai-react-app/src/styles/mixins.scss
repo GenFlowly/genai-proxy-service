@@ -276,3 +276,29 @@
         // z-index managed by base or context
     }
 }
+
+// HOST CONTAINER for PromptEditor to ensure consistent width/centering
+@mixin prompt-editor-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    // Ensure the container allows PromptEditor's internal max-width (75rem) to center itself
+    align-items: center;
+
+    // Reset side padding if the host has it, because PromptEditor has its own internal padding (3rem)
+    // We expect the host to use vertical padding if needed, but horizontal padding should be handled carefully
+    // so we don't double-pad and shrink the editor.
+    padding-left: 0;
+    padding-right: 0;
+
+    background-color: $color-request-container-background; // Match the chat background
+
+    @media (max-width: 1024px) {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        // Ensure no border radius on full screen mobile view if valid
+        border-radius: 0;
+    }
+}

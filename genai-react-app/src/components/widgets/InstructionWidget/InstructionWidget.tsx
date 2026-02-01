@@ -135,6 +135,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
         return (
             <div className={styles.collapsedContainer}
                 ref={containerRef}
+                style={{ position: 'sticky', top: 0, zIndex: 2 }}
                 data-testid={testId || "instruction-widget-collapsed"}>
                 <div className={styles.instructionsCTAWrapper}
                     data-testid="instructions-cta-wrapper">

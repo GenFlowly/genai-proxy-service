@@ -36,9 +36,8 @@
     justify-content: center;
     background-color: $color-sidebar-background;
     border-bottom: 1px solid $color-border;
-    // position: sticky; // Handled by parent wrapper in CenterSection
-    // top: 0;
-    // z-index: 2;
+    // sticky handled inline for testing enforcement
+
 }
 
 

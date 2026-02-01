@@ -116,4 +116,56 @@ describe('ToggleGroupButton Component', () => {
         await userEvent.tab();
         expect(opt2).not.toHaveFocus();
     });
+
+    test('singleSelection mode: only one option selected at a time', async () => {
+        render(
+            <ToggleGroupButton
+                {...defaultProps}
+                selectedValues={['opt1']}
+                singleSelection={true}
+            />
+        );
+        const opt2 = screen.getByTestId('test-group-option-opt2');
+
+        await userEvent.click(opt2);
+
+        // Should replace opt1 with opt2
+        expect(mockOnChange).toHaveBeenCalledTimes(1);
+        expect(mockOnChange).toHaveBeenCalledWith(['opt2']);
+    });
+
+    test('singleSelection mode: clicking selected item does nothing', async () => {
+        render(
+            <ToggleGroupButton
+                {...defaultProps}
+                selectedValues={['opt1']}
+                singleSelection={true}
+                allowEmpty={false}
+            />
+        );
+        const opt1 = screen.getByTestId('test-group-option-opt1');
+
+        await userEvent.click(opt1);
+
+        // Should not change anything (already selected)
+        expect(mockOnChange).not.toHaveBeenCalled();
+    });
+
+    test('singleSelection mode: works with allowEmpty=true', async () => {
+        render(
+            <ToggleGroupButton
+                {...defaultProps}
+                selectedValues={['opt1']}
+                singleSelection={true}
+                allowEmpty={true}
+            />
+        );
+        const opt1 = screen.getByTestId('test-group-option-opt1');
+
+        await userEvent.click(opt1);
+
+        // Should deselect opt1
+        expect(mockOnChange).toHaveBeenCalledTimes(1);
+        expect(mockOnChange).toHaveBeenCalledWith([]);
+    });
 });
