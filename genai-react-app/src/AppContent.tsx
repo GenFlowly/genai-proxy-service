@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage'
+import MemoryPage from './pages/MemoryPage/MemoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 
 import { AIProvider } from './context/AIContext'
@@ -32,6 +33,7 @@ export default function AppContent(): React.ReactElement {
                                 }
                             />
                             <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/memory" element={<MemoryPage />} />
                         </Routes>
                     </ConversationProvider>
                 </AIProvider>

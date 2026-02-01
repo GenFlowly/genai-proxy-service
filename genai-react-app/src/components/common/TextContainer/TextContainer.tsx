@@ -10,7 +10,10 @@ import { ICONS } from '../../../constants/icons'
 /**
  * Utility to recursively extract text from markdown AST nodes
  */
-const extractText = (nodes: any[]): string => {
+/**
+ * Utility to recursively extract text from markdown AST nodes
+ */
+export const extractText = (nodes: any[]): string => {
     return nodes
         .map((node: any) => {
             if (node.value) return node.value
@@ -23,7 +26,7 @@ const extractText = (nodes: any[]): string => {
 /**
  * Custom <pre> block with copy-to-clipboard button for code snippets
  */
-const PreBlock = ({ node, children, ...props }: any) => {
+export const PreBlock = ({ node, children, ...props }: any) => {
     const codeString = node?.children
         ? extractText(node.children).replace(/\n$/, '')
         : ''

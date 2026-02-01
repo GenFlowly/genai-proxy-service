@@ -441,3 +441,5 @@ test('Logs out for login_required error', async () => {
         expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });
     });
 });
+
+// Coverage refresh

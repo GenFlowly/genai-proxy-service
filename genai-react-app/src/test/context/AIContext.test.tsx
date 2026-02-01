@@ -224,3 +224,5 @@ describe('AIContext UI Integration', () => {
         });
     });
 });
+
+// Coverage refresh

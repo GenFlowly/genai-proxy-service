@@ -2,14 +2,18 @@ import React from 'react'
 import { useLayout } from '../../../context/LayoutContext'
 import { Icon } from '../../common/Icon/Icon'
 import { ICONS } from '../../../constants/icons'
-import AIVendorWidget from '../../widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget'
-import TokenCounter from '../../widgets/SidebarWidgets/TokenCounter/TokenCounter'
 import styles from './RightSidebar.module.scss'
-import NewChatWidget from '../../widgets/SidebarWidgets/NewChatWidget/NewChatWidget'
+import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
 
-export default function RightSidebar({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
+interface RightSidebarProps {
+    widgetIds: string[]
+    'data-testid'?: string
+}
+
+export default function RightSidebar({ widgetIds, 'data-testid': testId }: RightSidebarProps): React.ReactElement {
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()
     const collapsed = !isRightSidebarExpanded
+    const widgets = useWidgetResolver(widgetIds)
 
     return (
         <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`} data-testid={testId || "right-sidebar"}>
@@ -27,9 +31,9 @@ export default function RightSidebar({ 'data-testid': testId }: { 'data-testid'?
             </button>
 
             <div className={styles.sidebarContent}>
-                <NewChatWidget />
-                <AIVendorWidget />
-                <TokenCounter />
+                {widgets.map(widget => (
+                    <widget.component key={widget.id} />
+                ))}
             </div>
         </div>
     )

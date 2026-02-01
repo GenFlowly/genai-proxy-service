@@ -605,3 +605,5 @@ describe('InstructionWidget Component', () => {
         expect(separator).toHaveTextContent('────────────────');
     });
 });
+
+// Coverage refresh
