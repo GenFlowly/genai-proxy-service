@@ -74,7 +74,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
         // Add route with JWT authorization
         this.api.addRoutes({
-            path: '/sync',
+            path: '/encode',
             methods: [apigatewayv2.HttpMethod.POST],
             integration: integration,
             authorizer: authorizer,
