@@ -14,15 +14,27 @@ jest.mock('../../config/PageWidgetConfig', () => ({
 }));
 const { getPageConfig } = require('../../config/PageWidgetConfig');
 
+// Mock LayoutContext
+jest.mock('../../context/LayoutContext', () => ({
+    useLayout: jest.fn()
+}));
+const { useLayout } = require('../../context/LayoutContext');
+
 import { MemoryRouter } from 'react-router-dom';
 
 describe('MemoryPage', () => {
+    const mockSetRightSidebarExpanded = jest.fn();
+
     beforeEach(() => {
+        jest.clearAllMocks();
         getPageConfig.mockReturnValue({
             pageId: 'MEMORY_PAGE',
             leftSidebar: ['MOCK_LEFT'],
             rightSidebar: ['MOCK_RIGHT'],
             centerSection: ['MOCK_CENTER']
+        });
+        useLayout.mockReturnValue({
+            setRightSidebarExpanded: mockSetRightSidebarExpanded
         });
     });
 
@@ -46,5 +58,16 @@ describe('MemoryPage', () => {
         const right = screen.getByTestId('right-sidebar');
         expect(right).toBeInTheDocument();
         expect(right).toHaveAttribute('data-widget-ids', '["MOCK_RIGHT"]');
+    });
+
+    test('collapses right sidebar on mount', () => {
+        render(
+            <MemoryRouter>
+                <MemoryPage />
+            </MemoryRouter>
+        );
+
+        expect(mockSetRightSidebarExpanded).toHaveBeenCalledWith(false);
+        expect(mockSetRightSidebarExpanded).toHaveBeenCalledTimes(1);
     });
 });

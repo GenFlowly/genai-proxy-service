@@ -203,3 +203,4 @@ describe('CustomToolbarCommands', () => {
         });
     });
 });
+// Trigger coverage check

@@ -140,3 +140,4 @@ describe('PromptEditor Component', () => {
         expect(copyBtn).toHaveTextContent('Copied!');
     });
 });
+// Trigger coverage check
