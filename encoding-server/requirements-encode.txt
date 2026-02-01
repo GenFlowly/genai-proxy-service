@@ -4,4 +4,5 @@
 # Encode-specific dependencies
 pymilvus[model]>=2.4.0
 sentence-transformers>=2.2.0
+scikit-learn<1.6
 numpy<2.0.0
