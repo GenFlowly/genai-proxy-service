@@ -4,16 +4,7 @@
 
 .editorWrapper {
     width: 100%;
-    // We remove the fixed height border/radius to match Request layout
-    // Use flex-grow if container dictates height, or fixed height if needed.
-    // User asked to match style/width. Matching height? 
-    // "PromptEditor should match in both widgets ... width".
-    // Let's explicitly NOT set fixed height here to let PromptEditor control it or props.
-    // However, NotesWidget.tsx passes height='100%'.
-
-    // If we want it to look like Request, it should rely on PromptEditor's internal styling.
-    // Removing border/radius.
-    height: 40vh; // User requested 40% of screen size
+    height: 60vh;
 }
 
 .actions {
@@ -21,10 +12,6 @@
     justify-content: center;
     width: 100%;
 
-    // Align with editor content max-width (75rem) - padding (3rem side)?
-    // PromptEditor has internal max-width. Actions should probably align with that.
-    // But PromptEditor centers itself.
-    // We can center the actions wrapper too?
     max-width: 75rem;
-    padding: 0 3rem; // Match PromptEditor internal padding
+    padding: 0 3rem;
 }
