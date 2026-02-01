@@ -13,6 +13,7 @@ interface ToggleGroupButtonProps {
     selectedValues: string[]
     onChange: (selectedValues: string[]) => void
     allowEmpty?: boolean
+    singleSelection?: boolean
     className?: string
     'data-testid'?: string
 }
@@ -22,6 +23,7 @@ export default function ToggleGroupButton({
     selectedValues,
     onChange,
     allowEmpty = false,
+    singleSelection = false,
     className = '',
     'data-testid': testId
 }: ToggleGroupButtonProps): React.ReactElement {
@@ -30,10 +32,27 @@ export default function ToggleGroupButton({
         const isSelected = selectedValues.includes(optionId)
         let newSelection: string[]
 
-        if (isSelected) {
-            newSelection = selectedValues.filter(id => id !== optionId)
+        if (singleSelection) {
+            // Single selection mode logic
+            if (isSelected) {
+                // If clicking already selected item
+                if (!allowEmpty) {
+                    // If empty not allowed, keep it selected (no change)
+                    return
+                }
+                // If empty allowed, deselect it
+                newSelection = []
+            } else {
+                // Select the new item, replace others
+                newSelection = [optionId]
+            }
         } else {
-            newSelection = [...selectedValues, optionId]
+            // Multi-selection mode logic (default)
+            if (isSelected) {
+                newSelection = selectedValues.filter(id => id !== optionId)
+            } else {
+                newSelection = [...selectedValues, optionId]
+            }
         }
 
         // Visualize logic: if emptying is not allowed and new selection is empty, revert (do nothing)

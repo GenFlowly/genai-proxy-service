@@ -1,32 +1,33 @@
 import React, { useState } from 'react'
-import PromptEditor from '../../PromptEditorWidget/PromptEditor'
-import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
 import styles from './NotesWidget.module.scss'
+import ToggleGroupButton, { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
+import { ICONS } from '../../../../constants/icons'
+import PlainNotes from './PlainNotes'
+import KeyValueNotes from './KeyValueNotes'
+
+const NOTE_OPTIONS: ToggleOption[] = [
+    { id: 'PLAIN', label: 'Plain Notes', icon: ICONS.EDIT },
+    { id: 'KEY_VALUE', label: 'Key Value Notes', icon: ICONS.TOKENS }, // Placeholder for document
+    { id: 'UPLOAD', label: 'Upload File', icon: ICONS.PLUS } // Placeholder for upload
+]
 
 export default function NotesWidget() {
-    const [prompt, setPrompt] = useState('')
-
-    const handleSave = () => {
-        console.log('Save clicked', { prompt })
-    }
+    const [selectedMode, setSelectedMode] = useState<string[]>(['PLAIN'])
 
     return (
         <div className={styles.container}>
-            <div className={styles.editorWrapper}>
-                <PromptEditor
-                    id="notes-widget-editor"
-                    value={prompt}
-                    onChange={setPrompt}
-                    height="100%"
+            <div className={styles.toggleWrapper}>
+                <ToggleGroupButton
+                    options={NOTE_OPTIONS}
+                    selectedValues={selectedMode}
+                    onChange={setSelectedMode}
+                    allowEmpty={false}
+                    singleSelection={true}
                 />
             </div>
 
-            <div className={styles.actions}>
-                <MultiPurposeButton
-                    label="Save"
-                    onClick={handleSave}
-                />
-            </div>
+            {selectedMode[0] === 'PLAIN' && <PlainNotes />}
+            {selectedMode[0] === 'KEY_VALUE' && <KeyValueNotes />}
         </div>
     )
 }

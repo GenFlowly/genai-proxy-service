@@ -1,23 +1,20 @@
 @import '../../../../styles/variables.scss';
 @import '../../../../styles/themes.scss';
+@import '../../../../styles/mixins.scss';
 
 .container {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    padding: 0 2rem;
-    width: 100%;
+    @include prompt-editor-container;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    gap: 1rem;
 }
 
-.editorWrapper {
+.toggleWrapper {
     width: 100%;
-    height: 500px;
-    border: 1px solid $color-border;
-    border-radius: 8px;
-    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    max-width: 75rem; // Match editor width constraint
+    padding: 0 3rem; // Match editor padding
 }
 
-.actions {
-    display: flex;
-    justify-content: flex-end;
-}
+// Editor and actions styles moved to PlainNotes.module.scss

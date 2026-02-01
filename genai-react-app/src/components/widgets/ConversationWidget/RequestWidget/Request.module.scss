@@ -11,20 +11,18 @@
 }
 
 .container {
-    width: 100%;
     // Dynamic screen height (minus navbar - 3rem instruction widget)
     height: calc(100vh - 64px - 3rem);
     padding-top: 1rem;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
+
+    // Request specific: vertical centering
     justify-content: center;
-    background-color: $color-request-container-background;
+
+    @include prompt-editor-container;
 
     @media (max-width: 1024px) {
-        width: 100% !important;
-        max-width: 100% !important;
-        border-radius: 0;
+        // Width/Radius handled by mixin
         margin: 0;
         padding-top: 0;
     }

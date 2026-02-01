@@ -45,33 +45,5 @@ describe('CenterSection', () => {
         expect(mockUseWidgetResolver).toHaveBeenCalledWith(['WIDGET_A', 'WIDGET_B']);
     });
 
-    test('renders sticky scroll anchor when instruction widget is NOT expanded', () => {
-        mockUseLayout.mockReturnValue({ isInstructionWidgetExpanded: false });
 
-        const { container } = render(
-            <CenterSection widgetIds={[]} />
-        );
-
-        // Access via ID as it's static
-        // element id="instruction-widget-scroll-anchor"
-        const anchor = container.querySelector('#instruction-widget-scroll-anchor');
-        expect(anchor).toHaveStyle({
-            position: 'sticky',
-            top: '0',
-            backgroundColor: 'var(--color-sidebar-background)'
-        });
-    });
-
-    test('renders non-sticky scroll anchor when instruction widget IS expanded', () => {
-        mockUseLayout.mockReturnValue({ isInstructionWidgetExpanded: true });
-
-        const { container } = render(
-            <CenterSection widgetIds={[]} />
-        );
-
-        const anchor = container.querySelector('#instruction-widget-scroll-anchor');
-        // When expanded, styles should be undefined (not present in jsdom style usually, or check specifically)
-        // Check strict style
-        expect(anchor).not.toHaveStyle({ position: 'sticky' });
-    });
 });

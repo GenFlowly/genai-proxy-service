@@ -82,6 +82,14 @@ describe('InstructionWidget Component', () => {
         expect(screen.getByTestId('instruction-widget-collapsed')).toBeInTheDocument();
         expect(screen.getByTestId('instruction-selector-collapsed')).toBeInTheDocument();
         expect(screen.getByTestId('instruction-edit-button')).toBeInTheDocument();
+
+        // Enforce sticky behavior via inline style check
+        const collapsedContainer = screen.getByTestId('instruction-widget-collapsed');
+        expect(collapsedContainer).toHaveStyle({
+            position: 'sticky',
+            top: '0',
+            zIndex: '2'
+        });
     });
 
     test('renders expanded state when context says so', () => {
