@@ -55,36 +55,25 @@ class NoteProcessor(DataProcessor):
         # Serialize the entire Payload object
         message_body = json.dumps(payload.to_dict())
         
-        message_attributes = {
-            'noteKey': {
-                'StringValue': notes_model.note_key or '',
-                'DataType': 'String'
-            },
-            'noteValue': {
-                'StringValue': notes_model.note_value,
-                'DataType': 'String'
-            },
-            'title': {
-                'StringValue': notes_model.title or '',
-                'DataType': 'String'
-            },
-            'createdAt': {
-                'StringValue': notes_model.created_at,
-                'DataType': 'String'
-            },
-            'type': {
-                'StringValue': 'note',
-                'DataType': 'String'
-            },
-            'client': {
-                'StringValue': notes_model.client,
-                'DataType': 'String'
-            },
-            'customerId': {
-                'StringValue': payload.customer_id,
-                'DataType': 'String'
-            }
+        # Helper to safely add string attributes
+        message_attributes = {}
+        
+        attributes_map = {
+            'noteKey': notes_model.note_key,
+            'noteValue': notes_model.note_value,
+            'title': notes_model.title,
+            'createdAt': notes_model.created_at,
+            'type': 'note',
+            'client': notes_model.client,
+            'customerId': payload.customer_id
         }
+
+        for key, value in attributes_map.items():
+            if value: # Only add if not None and not empty string
+                message_attributes[key] = {
+                    'StringValue': str(value),
+                    'DataType': 'String'
+                }
         
         return message_body, message_attributes
 
