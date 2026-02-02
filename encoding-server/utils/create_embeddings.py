@@ -33,4 +33,9 @@ def encode_text(text: str) -> List[float]:
     embeddings = encoder.encode_documents([text])
     # The return type is a list of embeddings (which are lists of floats)
     # direct access is simpler with this class
-    return embeddings[0]
+    embedding = embeddings[0]
+    
+    # Check if it's a numpy array and convert to list
+    if hasattr(embedding, 'tolist'):
+        return embedding.tolist()
+    return list(embedding)
