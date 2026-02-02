@@ -65,7 +65,7 @@ class NoteProcessor(DataProcessor):
                 'DataType': 'String'
             },
             'title': {
-                'StringValue': notes_model.title,
+                'StringValue': notes_model.title or '',
                 'DataType': 'String'
             },
             'createdAt': {
