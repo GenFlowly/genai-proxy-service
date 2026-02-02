@@ -44,6 +44,7 @@ COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 COPY models ${LAMBDA_TASK_ROOT}/models
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 COPY processors ${LAMBDA_TASK_ROOT}/processors
+COPY utils ${LAMBDA_TASK_ROOT}/utils
 
 # Set the handler
 CMD [ "handlers.encode_lambda.handler" ]

@@ -9,6 +9,7 @@ from models.payload import Payload
 # Trigger rebuild for initial deployment, List
 from pymilvus import model
 from processors.processor_factory import ProcessorFactory
+from utils.create_embeddings import encode_text
 
 # Set cache directories to /tmp (only writable location in Lambda)
 os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
@@ -19,33 +20,6 @@ os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp/joblib_tmp'
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-# Initialize encoder model (loaded once per container)
-#
-embedding_fn = None
-
-def get_encoder():
-    """Lazy load the embedding function."""
-    global embedding_fn
-    if embedding_fn is None:
-        logger.info("Loading embedding model...")
-        logger.info(f"Cache directory: {os.environ.get('TRANSFORMERS_CACHE')}")
-        
-        # Create cache directories if they don't exist
-        os.makedirs('/tmp/transformers_cache', exist_ok=True)
-        os.makedirs('/tmp/huggingface', exist_ok=True)
-        
-        # Use pymilvus DefaultEmbeddingFunction
-        embedding_fn = model.DefaultEmbeddingFunction()
-        logger.info(f"Model loaded successfully. Dimension: {embedding_fn.dim}")
-    return embedding_fn
-
-def encode_text(text: str) -> List[float]:
-    """Encode text to vector embedding."""
-    encoder = get_encoder()
-    # DefaultEmbeddingFunction expects a list of documents
-    embeddings = encoder.encode_documents([text])
-    return embeddings[0].tolist() if hasattr(embeddings[0], 'tolist') else list(embeddings[0])
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
