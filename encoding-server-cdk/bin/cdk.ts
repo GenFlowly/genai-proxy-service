@@ -62,5 +62,6 @@ if (!process.env.AUTH0_SPA_DOMAIN) {
 const apiGatewayStack = new ApiGatewayStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-ApiGatewayStack`, {
     stage,
     ingestionLambda: lambdaStack.ingestionLambda,
+    ingestNotesLambda: lambdaStack.ingestNotesLambda,
     auth0Domain: process.env.AUTH0_SPA_DOMAIN,
 });
