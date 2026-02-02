@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from processors.data_processor import DataProcessor
 from processors.email_processor import EmailProcessor
+from processors.note_processor import NoteProcessor
 
 class ProcessorFactory:
     """
@@ -15,6 +16,10 @@ class ProcessorFactory:
         # Heuristic for Email
         if 'message_id' in data and 'subject' in data:
             return EmailProcessor()
+
+        # Heuristic for Note
+        if 'note_value' in data:
+            return NoteProcessor()
         
         # Future: Add other types here
         

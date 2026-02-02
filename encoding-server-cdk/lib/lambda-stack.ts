@@ -36,6 +36,7 @@ export interface LambdaStackProps extends cdk.StackProps {
 export class LambdaStack extends cdk.Stack {
 
     public readonly ingestionLambda: lambda.Function;
+    public readonly ingestNotesLambda: lambda.Function;
     public readonly encodeLambda: DockerImageFunction;
     public readonly createCollectionLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
@@ -69,6 +70,25 @@ export class LambdaStack extends cdk.Stack {
 
         props.ingestionQueue.grantSendMessages(this.ingestionLambda);
         customerProfileTable.grantReadData(this.ingestionLambda);
+
+        /**
+         * Ingest Notes Lambda
+         * Validates notes payloads and pushes to SQS
+         */
+        this.ingestNotesLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingest-notes-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingest-notes-lambda`,
+            code: ingestionLambdaCode,
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(30),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                QUEUE_URL: props.ingestionQueue.queueUrl,
+                CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
+            },
+        });
+
+        props.ingestionQueue.grantSendMessages(this.ingestNotesLambda);
+        customerProfileTable.grantReadData(this.ingestNotesLambda);
 
         /**
          * Processing Workflow

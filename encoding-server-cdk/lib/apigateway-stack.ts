@@ -11,6 +11,7 @@ import { RESOURCE_NAMES } from './constants';
 export interface ApiGatewayStackProps extends cdk.StackProps {
     stage: STAGES;
     ingestionLambda: lambda.IFunction;
+    ingestNotesLambda: lambda.IFunction;
     auth0Domain: string;
 }
 
@@ -63,7 +64,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
         // Create JWT Authorizer for Auth0
         const authorizer = new HttpJwtAuthorizer('Auth0Authorizer', auth0Issuer, {
-            jwtAudience: [auth0Audience],
+            jwtAudience: [auth0Audience, 'https://genflowly-beta'],
         });
 
         // Create Lambda integration
@@ -77,6 +78,18 @@ export class ApiGatewayStack extends cdk.Stack {
             path: '/encode',
             methods: [apigatewayv2.HttpMethod.POST],
             integration: integration,
+            authorizer: authorizer,
+        });
+
+        const ingestNotesIntegration = new HttpLambdaIntegration(
+            'IngestNotesIntegration',
+            props.ingestNotesLambda
+        );
+
+        this.api.addRoutes({
+            path: '/notes',
+            methods: [apigatewayv2.HttpMethod.POST],
+            integration: ingestNotesIntegration,
             authorizer: authorizer,
         });
 
