@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List, Callable
 from models.payload import Payload
 
 class DataProcessor(ABC):
@@ -29,5 +29,13 @@ class DataProcessor(ABC):
         """
         Prepare data for insertion into Vector DB.
         Returns a dictionary representing the record to be inserted.
+        """
+        pass
+
+    @abstractmethod
+    def create_embeddings(self, data: Dict[str, Any], encode_text: Callable[[str], List[float]]) -> List[float]:
+        """
+        Create embeddings for the data.
+        Returns a list of floats representing the embedding.
         """
         pass

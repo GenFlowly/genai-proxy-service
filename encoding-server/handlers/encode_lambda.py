@@ -8,7 +8,7 @@ from models.payload import Payload
 
 # Trigger rebuild for initial deployment, List
 from pymilvus import model
-from models.encoding.email_model import EmailModel
+from processors.processor_factory import ProcessorFactory
 
 # Set cache directories to /tmp (only writable location in Lambda)
 os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
@@ -83,12 +83,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Extract data for encoding
         data = payload.data
         
-        # Create EmailModel to get text
-        email = EmailModel.from_dict(data)
-        logger.info(f"Encoding email: {email.message_id}")
-
-        text_to_encode = f"{email.subject} {email.body}"
-        embedding = encode_text(text_to_encode)
+        # Get appropriate processor
+        processor = ProcessorFactory.get_processor(data)
+        
+        # Create embedding (processor handles type-specific logic)
+        embedding = processor.create_embeddings(data, encode_text)
         
         # Add embedding to data
         # We update the data in the payload

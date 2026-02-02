@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List, Callable
 from .data_processor import DataProcessor
 from models.payload import Payload
 
@@ -95,3 +95,14 @@ class EmailProcessor(DataProcessor):
             "in_reply_to": (email_model.in_reply_to or "")[:200],
             "s3_key": f"emails/{email_model.folder}/{email_model.message_id}.json"
         }
+
+    def create_embeddings(self, data: Dict[str, Any], encode_text: Callable[[str], List[float]]) -> List[float]:
+        """
+        Create embeddings for the email.
+        """
+        # Create EmailModel to get text
+        email = EmailModel.from_dict(data)
+        logger.info(f"Encoding email: {email.message_id}")
+
+        text_to_encode = f"{email.subject} {email.body}"
+        return encode_text(text_to_encode)
