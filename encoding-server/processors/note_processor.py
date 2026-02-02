@@ -57,7 +57,19 @@ class NoteProcessor(DataProcessor):
         
         message_attributes = {
             'noteKey': {
-                'StringValue': notes_model.note_key,
+                'StringValue': notes_model.note_key or '',
+                'DataType': 'String'
+            },
+            'noteValue': {
+                'StringValue': notes_model.note_value,
+                'DataType': 'String'
+            },
+            'title': {
+                'StringValue': notes_model.title,
+                'DataType': 'String'
+            },
+            'createdAt': {
+                'StringValue': notes_model.created_at,
                 'DataType': 'String'
             },
             'type': {
