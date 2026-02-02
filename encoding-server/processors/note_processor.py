@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List, Callable
 from .data_processor import DataProcessor
 from models.payload import Payload
 
@@ -92,3 +92,14 @@ class NoteProcessor(DataProcessor):
             "created_at": notes_model.created_at,
             "s3_key": f"notes/{notes_model.client}/{notes_model.note_key}.json"
         }
+
+    def create_embeddings(self, data: Dict[str, Any], encode_text: Callable[[str], List[float]]) -> List[float]:
+        """
+        Create embeddings for the note.
+        """
+        note = NotesModel.from_dict(data)
+        logger.info(f"Encoding note: {note.note_value}")
+
+        # Handle optional fields safely
+        text_to_encode = f"{note.title or ''} {note.note_key or ''} {note.note_value}"
+        return encode_text(text_to_encode)
