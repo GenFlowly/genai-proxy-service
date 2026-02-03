@@ -112,6 +112,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             notes_schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384) # Using all-MiniLM-L6-v2 which is 384 dim, NOT 768
             notes_schema.add_field(field_name="note_value", datatype=DataType.VARCHAR, max_length=65535)
             notes_schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=512)
+            notes_schema.add_field(field_name="note_key", datatype=DataType.VARCHAR, max_length=256) # Separate note_key
             notes_schema.add_field(field_name="client", datatype=DataType.VARCHAR, max_length=100)
             notes_schema.add_field(field_name="created_at", datatype=DataType.VARCHAR, max_length=64)
             notes_schema.add_field(field_name="s3_key", datatype=DataType.VARCHAR, max_length=512)

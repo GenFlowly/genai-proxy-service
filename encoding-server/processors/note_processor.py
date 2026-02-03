@@ -14,6 +14,8 @@ except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from models.encoding.notes_model import NotesModel
 
+import uuid
+
 logger = logging.getLogger()
 
 class NoteProcessor(DataProcessor):
@@ -83,14 +85,18 @@ class NoteProcessor(DataProcessor):
         """
         notes_model = NotesModel.from_dict(data)
         
+        # id is internal Milvus ID (UUID), note_key is optional external ID
+        milvus_id = str(uuid.uuid4())
+        
         return {
-            "id": notes_model.note_key,
+            "id": milvus_id,
             "vector": embedding,
             "note_value": notes_model.note_value[:65535], # Limit size if necessary
             "title": (notes_model.title or "")[:500],
+            "note_key": (notes_model.note_key or "")[:256],
             "client": notes_model.client[:100],
             "created_at": notes_model.created_at,
-            "s3_key": f"notes/{notes_model.client}/{notes_model.note_key}.json"
+            "s3_key": f"notes/{notes_model.client}/{milvus_id}.json"
         }
 
     def create_embeddings(self, data: Dict[str, Any], encode_text: Callable[[str], List[float]]) -> List[float]:
