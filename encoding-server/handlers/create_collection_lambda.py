@@ -90,6 +90,49 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
             
             logger.info(f"Successfully created collection '{collection_name}'")
+
+        # ---------------------------------------------------------
+        # Create Notes Collection
+        # ---------------------------------------------------------
+        notes_collection_name = f"{customer_id}_notes"
+        
+        if client.has_collection(notes_collection_name):
+             logger.info(f"Collection '{notes_collection_name}' already exists. Skipping creation.")
+        else:
+            logger.info(f"Collection '{notes_collection_name}' does not exist. Creating...")
+            
+            # Define Schema for Notes
+            notes_schema = MilvusClient.create_schema(
+                auto_id=False,
+                enable_dynamic_field=True,
+            )
+            
+            # Add fields for Notes
+            notes_schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
+            notes_schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384) # Using all-MiniLM-L6-v2 which is 384 dim, NOT 768
+            notes_schema.add_field(field_name="note_value", datatype=DataType.VARCHAR, max_length=65535)
+            notes_schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=512)
+            notes_schema.add_field(field_name="client", datatype=DataType.VARCHAR, max_length=100)
+            notes_schema.add_field(field_name="created_at", datatype=DataType.VARCHAR, max_length=64)
+            notes_schema.add_field(field_name="s3_key", datatype=DataType.VARCHAR, max_length=512)
+            
+            # Create index parameters
+            notes_index_params = client.prepare_index_params()
+            
+            notes_index_params.add_index(
+                field_name="vector", 
+                index_type="AUTOINDEX",
+                metric_type="COSINE"
+            )
+            
+            # Create collection
+            client.create_collection(
+                collection_name=notes_collection_name,
+                schema=notes_schema,
+                index_params=notes_index_params
+            )
+            
+            logger.info(f"Successfully created collection '{notes_collection_name}'")
             
         # Pass the event through to the next step
         return event
