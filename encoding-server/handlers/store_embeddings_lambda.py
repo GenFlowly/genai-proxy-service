@@ -83,7 +83,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             raise ValueError("No embedding found in payload data")
             
         logger.info(f"Storing embedding for data item in collection {customer_id}")
-        store_in_zilliz(data, embedding, customer_id)
+        
+        # Determine collection name based on data type
+        collection_name = customer_id
+        if 'note_value' in data:
+            collection_name = f"{customer_id}_notes"
+            
+        store_in_zilliz(data, embedding, collection_name)
         
         # Return payload for next step
         # Optional: remove embedding from data if not needed downstream to save space
