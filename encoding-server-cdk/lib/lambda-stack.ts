@@ -15,7 +15,6 @@ export interface LambdaStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     ingestionRepo: ecr.IRepository;
     encodeRepo: ecr.IRepository;
-    createCollectionRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
     ingestionImageTag?: string;
@@ -33,7 +32,6 @@ export class LambdaStack extends cdk.Stack {
     public readonly ingestionLambda: lambda.Function;
     public readonly ingestNotesLambda: lambda.Function;
     public readonly encodeLambda: DockerImageFunction;
-    public readonly createCollectionLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly storeS3Lambda: DockerImageFunction;
 
