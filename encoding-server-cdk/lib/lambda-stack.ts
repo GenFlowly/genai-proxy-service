@@ -19,7 +19,6 @@ export interface LambdaStackProps extends cdk.StackProps {
     storeS3Repo: ecr.IRepository;
     ingestionImageTag?: string;
     encodeImageTag?: string;
-    createCollectionImageTag?: string;
     storeEmbeddingsImageTag?: string;
     storeS3ImageTag?: string;
     zillizEndpoint: string;

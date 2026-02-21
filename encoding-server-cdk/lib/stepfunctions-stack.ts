@@ -15,7 +15,6 @@ export interface StepFunctionsStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     storeS3Repo: ecr.IRepository;
     encodeLambda: lambda.IFunction;
-    createCollectionLambda: lambda.IFunction;
     storeEmbeddingsLambda: lambda.IFunction;
     storeS3Lambda: lambda.IFunction;
 }
@@ -30,7 +29,7 @@ export class StepFunctionsStack extends cdk.Stack {
         // Define Step Functions Tasks
         const encodeTask = new tasks.LambdaInvoke(this, 'Chunk and Encode' +
             ' Text', {
-            lambdaFunction: props.createCollectionLambda,
+            lambdaFunction: props.encodeLambda,
             payloadResponseOnly: true, // Return only the payload
         });
 
