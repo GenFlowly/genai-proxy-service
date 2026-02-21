@@ -45,6 +45,8 @@ COPY models ${LAMBDA_TASK_ROOT}/models
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 COPY processors ${LAMBDA_TASK_ROOT}/processors
 COPY utils ${LAMBDA_TASK_ROOT}/utils
+COPY encoders ${LAMBDA_TASK_ROOT}/encoders
+COPY chunkers ${LAMBDA_TASK_ROOT}/chunkers
 
 # Set the handler
 CMD [ "handlers.encode_lambda.handler" ]

@@ -27,25 +27,26 @@ def get_milvus_client():
         token=ZILLIZ_TOKEN
     )
 
-def store_in_zilliz(data: Dict[str, Any], embedding: List[float], collection_name: str) -> str:
-    """Store data embedding in Zilliz Cloud."""
+def store_in_zilliz(data: Dict[str, Any], embeddings: List[Dict[str, Any]], collection_name: str) -> List[str]:
+    """Store data embeddings in Zilliz Cloud."""
     try:
         client = get_milvus_client()
         
         # Get appropriate processor
         processor = ProcessorFactory.get_processor(data)
         
-        # Prepare data for insertion
-        record = processor.prepare_for_vector_db(data, embedding)
+        # Prepare data for insertion (returns list of records)
+        records = processor.prepare_for_vector_db(data, embeddings)
         
         # Insert into collection
+        # client.insert can handle list of dicts
         result = client.insert(
             collection_name=collection_name,
-            data=[record]
+            data=records
         )
         
         logger.info(f"Successfully inserted into Zilliz collection '{collection_name}'. Insert count: {result.get('insert_count', 0)}")
-        return record.get('id', 'unknown')
+        return [r.get('id', 'unknown') for r in records]
         
     except Exception as e:
         logger.error(f"Error storing in Zilliz: {str(e)}", exc_info=True)
@@ -76,26 +77,38 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
         data = payload.data
         
-        # Extract embedding
-        embedding = data.get('embedding')
+        # Extract embeddings (list of chunks)
+        embeddings = data.get('embeddings')
         
-        if not embedding:
-            raise ValueError("No embedding found in payload data")
+        # Backward compatibility / Fallback
+        if not embeddings:
+            single_embedding = data.get('embedding')
+            if single_embedding:
+                # Wrap single embedding in list format expected by processor
+                # We don't have text/index here easily, but processor might handle empty text if needed
+                # Ideally encode_lambda always returns 'embeddings' now.
+                embeddings = [{'vector': single_embedding, 'text': '', 'index': 0}]
+        
+        if not embeddings:
+            raise ValueError("No embeddings found in payload data")
             
-        logger.info(f"Storing embedding for data item in collection {customer_id}")
+        logger.info(f"Storing {len(embeddings)} embedding chunks for data item in collection {customer_id}")
         
         # Determine collection name based on data type
         collection_name = customer_id
         if 'note_value' in data:
             collection_name = f"{customer_id}_notes"
             
-        store_in_zilliz(data, embedding, collection_name)
+        store_in_zilliz(data, embeddings, collection_name)
         
         # Return payload for next step
         # Optional: remove embedding from data if not needed downstream to save space
+        if 'embeddings' in data:
+            del data['embeddings']
         if 'embedding' in data:
-            del data['embedding']
-            payload.data = data
+             del data['embedding']
+             
+        payload.data = data
             
         return payload.to_dict()
 

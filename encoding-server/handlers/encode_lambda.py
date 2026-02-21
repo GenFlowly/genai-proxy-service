@@ -7,9 +7,9 @@ from models.payload import Payload
 # Trigger build - separated ECR repos
 
 # Trigger rebuild for initial deployment, List
-from pymilvus import model
 from processors.processor_factory import ProcessorFactory
-from utils.create_embeddings import encode_text
+from encoders.factory import EncoderFactory
+from encoders.enums import ModelType, ModelName
 
 # Set cache directories to /tmp (only writable location in Lambda)
 os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
@@ -21,37 +21,49 @@ os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp/joblib_tmp'
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# TODO make sure this can take requests from a kotlin ktor app
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Encode Handler - Step 1
-    Receives email data (from SQS via Lambda/Step Function), generates embedding.
-    Returns: Email data + Embedding
+    Receives data generates embedding.
+    Returns: data + Embedding
     """
 
 
 
-    try:
-        # Parse payload
-        # Event should be the Payload dict from Step Functions
-        payload_dict = event
-        
-        # Handle SQS wrapping if present (though Trigger Lambda should have unwrapped it)
-        if 'Records' in event:
-             # This shouldn't happen with current Step Functions flow, but just in case
-             pass
-             
-        # Reconstruct Payload object
+    # Parse payload
+    payload_dict = event
+    
+    # Handle API Gateway / Ktor App requests
+    # If invoked via API Gateway, the actual payload is in the 'body' string
+    if 'body' in event:
         try:
-            payload = Payload.from_dict(payload_dict)
-        except Exception:
-            # Fallback for legacy events or if structure doesn't match
-            logger.warning("Event does not match Payload structure, attempting legacy handling")
-            # Assume event IS the data
-            payload = Payload(
-                customer_id=event.get('customerId', 'unknown'),
-                data=event
-            )
+            body = event['body']
+            # If body is a string (JSON), parse it
+            if isinstance(body, str):
+                payload_dict = json.loads(body)
+            else:
+                payload_dict = body
+            logger.info("Parsed payload from API Gateway event body")
+        except Exception as e:
+            logger.error(f"Failed to parse event body: {e}")
+            raise ValueError(f"Invalid JSON in event body: {e}")
 
+    # Reconstruct Payload object
+    try:
+        payload = Payload.from_dict(payload_dict)
+        # If we successfully parsed the standard Payload, we still need to process it
+        logger.info("Successfully parsed Payload structure")
+    except Exception:
+        # Fallback for legacy events or if structure doesn't match
+        logger.warning("Event does not match Payload structure, attempting legacy handling")
+        # Assume event IS the data
+        payload = Payload(
+            customer_id=event.get('customerId', 'unknown'),
+            data=event
+        )
+
+    try:
         logger.info(f"Received payload for customer: {payload.customer_id}")
         
         # Extract data for encoding
@@ -60,12 +72,27 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Get appropriate processor
         processor = ProcessorFactory.get_processor(data)
         
+
+
+        # Get appropriate encoder (default to sentence-transformer/all-MiniLM-L6-v2)
+        # We could extract model params from payload if provided
+        # TODO add payload.data.set
+        model_type_str = payload.data.get('model_type', ModelType.SENTENCE_TRANSFORMER.value)
+        model_name_str = payload.data.get('model_name', ModelName.ALL_MINILM_L6_V2.value) 
+        
+        encoder = EncoderFactory.get_encoder(model_type_str, model_name_str)
+        
         # Create embedding (processor handles type-specific logic)
-        embedding = processor.create_embeddings(data, encode_text)
+        # Now returns a list of chunks (dicts with vector, text, index)
+        embeddings = processor.create_embeddings(data, encoder)
         
         # Add embedding to data
         # We update the data in the payload
-        data['embedding'] = embedding
+        # 'embedding' field now contains the list of chunk dicts
+        data['embeddings'] = embeddings # Rename to embeddings (plural) to indicate list
+        # For backward compatibility or if processor returns old format (unlikely now)
+        # we can check type, but we updated all processors.
+        
         payload.data = data
         
         # Return the payload dict
