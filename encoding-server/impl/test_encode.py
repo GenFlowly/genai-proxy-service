@@ -19,7 +19,7 @@ def test_encode_note():
             "client": "test-client",
             "created_at": "2026-02-21T12:00:00Z",
             "title": "My Refactor Test Note",
-            "chunking_type": "semantic" # Explicitly request semantic chunking to test the refactored code path
+            "chunking_type": "semantic" # Explicitly request semantic chunking
         }
     }
 

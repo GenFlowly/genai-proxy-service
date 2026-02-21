@@ -28,7 +28,8 @@ export class StepFunctionsStack extends cdk.Stack {
         super(scope, id, props);
 
         // Define Step Functions Tasks
-        const encodeTask = new tasks.LambdaInvoke(this, 'Encode Email', {
+        const encodeTask = new tasks.LambdaInvoke(this, 'Chunk and Encode' +
+            ' Text', {
             lambdaFunction: props.encodeLambda,
             payloadResponseOnly: true, // Return only the payload
         });

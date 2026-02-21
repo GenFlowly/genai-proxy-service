@@ -19,6 +19,9 @@ class ChunkerFactory:
         Get a chunker instance based on type and technique.
         kwargs are passed to the specific strategy or chunker constructor.
         """
+        # Pop encoder early to avoid passing it into splitters that don't expect it
+        encoder = kwargs.pop('encoder', None)
+
         # Normalize input to Enum
         if isinstance(chunking_type, str):
             try:
@@ -54,7 +57,6 @@ class ChunkerFactory:
                     pass
 
             # Encoder must be passed
-            encoder = kwargs.pop('encoder', None)
             if not encoder:
                 raise ValueError("Encoder instance required for semantic chunking")
 
