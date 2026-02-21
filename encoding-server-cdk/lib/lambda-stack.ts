@@ -1,16 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
-import { CfnOutput } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { STAGES } from '@genflowly/cdk-commons';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { DockerImageCode, DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
-import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
-import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-import * as path from 'path';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { RESOURCE_NAMES } from "./constants";
 
@@ -107,23 +102,7 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
         });
 
-        // 2. Create Collection Lambda
-        this.createCollectionLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collection-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collection-lambda`,
-            code: DockerImageCode.fromEcr(props.createCollectionRepo, {
-                tagOrDigest: props.createCollectionImageTag || 'create-collection-latest',
-                cmd: ['handlers.create_collection_lambda.handler'],
-            }),
-            memorySize: 512,
-            timeout: cdk.Duration.seconds(60),
-            architecture: lambda.Architecture.X86_64,
-            environment: {
-                ZILLIZ_ENDPOINT: props.zillizEndpoint,
-                ZILLIZ_TOKEN: props.zillizToken,
-            },
-        });
-
-        // 3. Store Embeddings Lambda
+        // 2. Store Embeddings Lambda
         this.storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`,
             code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
@@ -140,7 +119,7 @@ export class LambdaStack extends cdk.Stack {
             },
         });
 
-        // 4. Store S3 Lambda
+        // 3. Store S3 Lambda
         this.storeS3Lambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`,
             code: DockerImageCode.fromEcr(props.storeS3Repo, {

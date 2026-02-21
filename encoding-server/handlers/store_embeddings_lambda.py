@@ -1,7 +1,7 @@
 import os
 import logging
 from typing import Dict, Any, List
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient, DataType
 from processors.processor_factory import ProcessorFactory
 from models.payload import Payload
 
@@ -27,10 +27,63 @@ def get_milvus_client():
         token=ZILLIZ_TOKEN
     )
 
+def ensure_collection_exists(client, collection_name: str, is_notes_collection: bool):
+    """Dynamically creates the target collection on Zilliz if it does not already exist."""
+    if client.has_collection(collection_name):
+        return
+        
+    logger.info(f"Collection '{collection_name}' does not exist. Creating dynamically...")
+    
+    schema = MilvusClient.create_schema(
+        auto_id=False,
+        enable_dynamic_field=True,
+    )
+    
+    if is_notes_collection:
+        schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
+        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384)
+        schema.add_field(field_name="note_value", datatype=DataType.VARCHAR, max_length=65535)
+        schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=512)
+        schema.add_field(field_name="note_key", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="client", datatype=DataType.VARCHAR, max_length=100)
+        schema.add_field(field_name="created_at", datatype=DataType.VARCHAR, max_length=64)
+        schema.add_field(field_name="s3_key", datatype=DataType.VARCHAR, max_length=512)
+    else:
+        # Default Email Schema
+        schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
+        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=768)
+        schema.add_field(field_name="subject", datatype=DataType.VARCHAR, max_length=512)
+        schema.add_field(field_name="from_email", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="to_email", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="date", datatype=DataType.VARCHAR, max_length=64)
+        schema.add_field(field_name="folder", datatype=DataType.VARCHAR, max_length=128)
+        schema.add_field(field_name="thread_id", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="in_reply_to", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="s3_key", datatype=DataType.VARCHAR, max_length=512)
+        
+    index_params = client.prepare_index_params()
+    index_params.add_index(
+        field_name="vector", 
+        index_type="AUTOINDEX",
+        metric_type="COSINE"
+    )
+    
+    client.create_collection(
+        collection_name=collection_name,
+        schema=schema,
+        index_params=index_params
+    )
+    
+    logger.info(f"Successfully created dynamic collection '{collection_name}'")
+
 def store_in_zilliz(data: Dict[str, Any], embeddings: List[Dict[str, Any]], collection_name: str) -> List[str]:
     """Store data embeddings in Zilliz Cloud."""
     try:
         client = get_milvus_client()
+        
+        # Ensure the target collection schema exists
+        is_notes = collection_name.endswith('_notes')
+        ensure_collection_exists(client, collection_name, is_notes)
         
         # Get appropriate processor
         processor = ProcessorFactory.get_processor(data)
