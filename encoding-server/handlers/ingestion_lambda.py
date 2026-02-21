@@ -18,6 +18,7 @@ QUEUE_URL = os.environ.get('QUEUE_URL')
 # Initialize Authorization Service
 auth_service = AuthorizationService()
 
+# LAMBDA 1
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     First lambda in encoding server

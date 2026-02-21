@@ -3,6 +3,7 @@ import logging
 from typing import Dict, Any, Tuple, List, Callable
 from .data_processor import DataProcessor
 from models.payload import Payload
+import uuid
 
 # Assuming notes_model is in the python path
 try:
@@ -14,7 +15,6 @@ except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from models.encoding.notes_model import NotesModel
 
-import uuid
 
 logger = logging.getLogger()
 
@@ -79,33 +79,97 @@ class NoteProcessor(DataProcessor):
         
         return message_body, message_attributes
 
-    def prepare_for_vector_db(self, data: Dict[str, Any], embedding: list) -> Dict[str, Any]:
+    def prepare_for_vector_db(self, data: Dict[str, Any], embeddings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Prepare note data for insertion into Zilliz/Milvus.
+        Returns a list of records, one per chunk.
         """
         notes_model = NotesModel.from_dict(data)
         
-        # id is internal Milvus ID (UUID), note_key is optional external ID
-        milvus_id = str(uuid.uuid4())
+        # Ensure note_key is present (required for ID)
+        if not notes_model.note_key:
+            notes_model.note_key = str(uuid.uuid4())
+            logger.info(f"Generated UUID for missing note_key: {notes_model.note_key}")
         
-        return {
-            "id": milvus_id,
-            "vector": embedding,
-            "note_value": notes_model.note_value[:65535], # Limit size if necessary
-            "title": (notes_model.title or "")[:500],
-            "note_key": (notes_model.note_key or "")[:256],
-            "client": notes_model.client[:100],
-            "created_at": notes_model.created_at,
-            "s3_key": f"notes/{notes_model.client}/{milvus_id}.json"
-        }
+        records = []
+        
+        for chunk_data in embeddings:
+            # id is internal Milvus ID (UUID), note_key is optional external ID
+            milvus_id = str(uuid.uuid4())
+            chunk_text = chunk_data['text']
+            vector = chunk_data['vector']
+            chunk_index = chunk_data['index']
+            
+            record = {
+                "id": milvus_id,
+                "vector": vector,
+                "note_value": chunk_text[:65535], # Store the CHUNK text, not the whole note
+                "title": (notes_model.title or "")[:500],
+                "note_key": (notes_model.note_key or "")[:256],
+                "client": notes_model.client[:100],
+                "created_at": notes_model.created_at,
+                "s3_key": f"notes/{notes_model.client}/{milvus_id}.json",
+                # Optional: Add chunk specific metadata if schema supports it
+                # "chunk_index": chunk_index 
+            }
+            records.append(record)
+            
+        return records
 
-    def create_embeddings(self, data: Dict[str, Any], encode_text: Callable[[str], List[float]]) -> List[float]:
+
+
+    def create_embeddings(self, data: Dict[str, Any], encoder: Any) -> List[Dict[str, Any]]:
         """
-        Create embeddings for the note.
+        Create embeddings for the note using configured chunker and encoder.
         """
         note = NotesModel.from_dict(data)
-        logger.info(f"Encoding note: {note.note_value}")
+        logger.info(f"Encoding note: {note.note_value[:100]}...")
 
-        # Handle optional fields safely
-        text_to_encode = f"{note.title or ''} {note.note_key or ''} {note.note_value}"
-        return encode_text(text_to_encode)
+        text_to_encode = f"{note.title or ''}\n\n{note.note_value}"
+        
+        from chunkers.factory import ChunkerFactory
+        from chunkers.enums import ChunkingType, RecursiveTechnique
+        
+        # Get chunking config from data or use defaults
+        # We can pass strings, Factory will normalize
+        chunking_type_str = data.get('chunking_type', ChunkingType.RECURSIVE.value)
+        chunking_technique_str = data.get('chunking_technique', RecursiveTechnique.CHARACTER.value)
+        
+        # Get chunker
+        # Pass encoder as kwarg for semantic chunking if needed
+        chunker = ChunkerFactory.get_chunker(
+            chunking_type=chunking_type_str,
+            technique=chunking_technique_str,
+            encoder=encoder
+        )
+        
+        # Chunk text
+        chunks = chunker.chunk(text_to_encode)
+        
+        if not chunks:
+            return []
+            
+        # Encode chunks
+        # Expect encoder to have encode_documents method
+        if hasattr(encoder, 'encode_documents'):
+            embeddings = encoder.encode_documents(chunks)
+        else:
+             # Fallback if interface mismatch (shouldn't happen with new Encoder)
+             raise ValueError("Encoder does not support encode_documents")
+             
+        # Format result
+        result = []
+        for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+            vector = embedding
+            if hasattr(vector, 'tolist'):
+                vector = vector.tolist()
+            else:
+                vector = list(vector)
+                
+            result.append({
+                'text': chunk_text,
+                'vector': vector,
+                'index': i
+            })
+            
+        return result

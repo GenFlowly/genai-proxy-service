@@ -25,17 +25,18 @@ class DataProcessor(ABC):
         pass
 
     @abstractmethod
-    def prepare_for_vector_db(self, data: Dict[str, Any], embedding: list) -> Dict[str, Any]:
+    def prepare_for_vector_db(self, data: Dict[str, Any], embeddings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Prepare data for insertion into Vector DB.
-        Returns a dictionary representing the record to be inserted.
+        Returns a LIST of dictionaries, where each dict is a record to be inserted.
+        This allows for 1-to-many relationship (e.g. 1 Note -> Multiple Chunks).
         """
         pass
 
     @abstractmethod
-    def create_embeddings(self, data: Dict[str, Any], encode_text: Callable[[str], List[float]]) -> List[float]:
+    def create_embeddings(self, data: Dict[str, Any], encoder: Any) -> List[Dict[str, Any]]:
         """
         Create embeddings for the data.
-        Returns a list of floats representing the embedding.
+        Returns a list of dictionaries, each containing 'text' and 'vector'.
         """
         pass
