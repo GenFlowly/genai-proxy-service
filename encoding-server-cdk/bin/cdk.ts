@@ -28,7 +28,6 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     storeS3Repo: ecrStack.storeS3Repo,
     ingestionImageTag: process.env.INGESTION_IMAGE_TAG,
     encodeImageTag: process.env.ENCODE_IMAGE_TAG,
-    createCollectionImageTag: process.env.CREATE_COLLECTION_IMAGE_TAG,
     storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG,
     storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG,
     zillizEndpoint: process.env.ZILLIZ_ENDPOINT!,
@@ -49,7 +48,6 @@ const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODIN
     ingestionQueue: sqsStack.ingestionQueue,
     storeS3Repo: ecrStack.storeS3Repo,
     encodeLambda: lambdaStack.encodeLambda,
-    createCollectionLambda: lambdaStack.createCollectionLambda,
     storeEmbeddingsLambda: lambdaStack.storeEmbeddingsLambda,
     storeS3Lambda: lambdaStack.storeS3Lambda,
 });
