@@ -30,13 +30,8 @@ export class StepFunctionsStack extends cdk.Stack {
         // Define Step Functions Tasks
         const encodeTask = new tasks.LambdaInvoke(this, 'Chunk and Encode' +
             ' Text', {
-            lambdaFunction: props.encodeLambda,
-            payloadResponseOnly: true, // Return only the payload
-        });
-
-        const createCollectionTask = new tasks.LambdaInvoke(this, 'Create Collection', {
             lambdaFunction: props.createCollectionLambda,
-            payloadResponseOnly: true,
+            payloadResponseOnly: true, // Return only the payload
         });
 
         const storeEmbeddingsTask = new tasks.LambdaInvoke(this, 'Store Embeddings', {
@@ -51,7 +46,6 @@ export class StepFunctionsStack extends cdk.Stack {
 
         // Define Chain: Encode -> Create Collection -> Store Embeddings -> Store S3
         const definition = encodeTask
-            .next(createCollectionTask)
             .next(storeEmbeddingsTask)
             .next(storeS3Task);
 
