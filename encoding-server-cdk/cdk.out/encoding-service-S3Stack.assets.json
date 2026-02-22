@@ -1,7 +1,21 @@
 {
   "version": "41.0.0",
   "files": {
-    "0b3f1042724efbb2ef5643f84a946c3c265bc8157e243cebe8f75dbef537868b": {
+    "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6": {
+      "displayName": "encoding-service-S3Stack/Custom::S3AutoDeleteObjectsCustomResourceProvider Code",
+      "source": {
+        "path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-current_region": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
+          "objectKey": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+        }
+      }
+    },
+    "c7a369322f49ba86a0676137ce7c87e27f437f3ed8d35ae8ead1132baab75307": {
       "displayName": "encoding-service-S3Stack Template",
       "source": {
         "path": "encoding-service-S3Stack.template.json",
@@ -10,7 +24,7 @@
       "destinations": {
         "current_account-current_region": {
           "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
-          "objectKey": "0b3f1042724efbb2ef5643f84a946c3c265bc8157e243cebe8f75dbef537868b.json",
+          "objectKey": "c7a369322f49ba86a0676137ce7c87e27f437f3ed8d35ae8ead1132baab75307.json",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
         }
       }

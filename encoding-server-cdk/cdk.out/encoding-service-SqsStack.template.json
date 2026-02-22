@@ -1,9 +1,30 @@
 {
  "Resources": {
+  "encodingservicedevelopmentdlq5E34264A": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "encoding-service-development-dlq"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "encoding-service-SqsStack/encoding-service-development-dlq/Resource"
+   }
+  },
   "encodingservicedevelopmentqueue16914A7B": {
    "Type": "AWS::SQS::Queue",
    "Properties": {
     "QueueName": "encoding-service-development-queue",
+    "RedrivePolicy": {
+     "deadLetterTargetArn": {
+      "Fn::GetAtt": [
+       "encodingservicedevelopmentdlq5E34264A",
+       "Arn"
+      ]
+     },
+     "maxReceiveCount": 3
+    },
     "VisibilityTimeout": 5400
    },
    "UpdateReplacePolicy": "Delete",
@@ -25,8 +46,15 @@
  },
  "Outputs": {
   "encodingservicedevelopmentqueueoutput": {
+   "Description": "Main ingestion queue URL",
    "Value": {
     "Ref": "encodingservicedevelopmentqueue16914A7B"
+   }
+  },
+  "encodingservicedevelopmentdlqoutput": {
+   "Description": "Dead letter queue URL for failed messages",
+   "Value": {
+    "Ref": "encodingservicedevelopmentdlq5E34264A"
    }
   },
   "ExportsOutputFnGetAttencodingservicedevelopmentqueue16914A7BArnC56A1507": {
