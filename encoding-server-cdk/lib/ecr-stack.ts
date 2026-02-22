@@ -13,6 +13,7 @@ export class EcrStack extends cdk.Stack {
 
     public readonly ingestionRepo: IRepository;
     public readonly encodeRepo: IRepository;
+    public readonly createCollectionRepo: IRepository;
     public readonly storeEmbeddingsRepo: IRepository;
     public readonly storeS3Repo: IRepository;
 
@@ -32,6 +33,13 @@ export class EcrStack extends cdk.Stack {
         // Encode Lambda Repository
         this.encodeRepo = new Repository(this, 'EncodeLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-repo`,
+            removalPolicy: removalPolicy,
+            lifecycleRules: [{ maxImageCount: 5 }],
+        });
+
+        // Create Collection Lambda Repository
+        this.createCollectionRepo = new Repository(this, 'CreateCollectionLambdaRepo', {
+            repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collection-repo`,
             removalPolicy: removalPolicy,
             lifecycleRules: [{ maxImageCount: 5 }],
         });
@@ -57,6 +65,10 @@ export class EcrStack extends cdk.Stack {
 
         new CfnOutput(this, 'EncodeRepoUri', {
             value: this.encodeRepo.repositoryUri,
+        });
+
+        new CfnOutput(this, 'CreateCollectionRepoUri', {
+            value: this.createCollectionRepo.repositoryUri,
         });
 
         new CfnOutput(this, 'StoreEmbeddingsRepoUri', {
