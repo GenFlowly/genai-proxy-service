@@ -133,5 +133,10 @@ export class LambdaStack extends cdk.Stack {
         });
 
         props.rawEmailBucket.grantPut(this.storeS3Lambda);
+
+        // Dummy output just to maintain the cross-stack reference and prevent CloudFormation rollback
+        new cdk.CfnOutput(this, 'DummyCreateCollectionRepoArn', {
+            value: props.createCollectionRepo.repositoryArn
+        });
     }
 }
