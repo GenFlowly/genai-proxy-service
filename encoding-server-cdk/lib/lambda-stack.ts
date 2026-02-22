@@ -15,7 +15,6 @@ export interface LambdaStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     ingestionRepo: ecr.IRepository;
     encodeRepo: ecr.IRepository;
-    createCollectionRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
     ingestionImageTag?: string;
@@ -133,12 +132,5 @@ export class LambdaStack extends cdk.Stack {
         });
 
         props.rawEmailBucket.grantPut(this.storeS3Lambda);
-
-        // Dummy output just to maintain the cross-stack reference and prevent CloudFormation rollback
-        // We know it failed on an "OutputRef" for the repo, meaning it expects the physical ID reference.
-        new cdk.CfnOutput(this, 'DummyCreateCollectionRepoRef', {
-            value: (props.createCollectionRepo.node.defaultChild as cdk.aws_ecr.CfnRepository).ref,
-            exportName: 'DummyCreateCollectionRepoRef'
-        });
     }
 }
