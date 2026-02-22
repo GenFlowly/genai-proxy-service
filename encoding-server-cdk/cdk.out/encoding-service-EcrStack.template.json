@@ -1,17 +1,123 @@
 {
  "Resources": {
-  "ProcessingLambdaRepo9E47CA56": {
+  "IngestionLambdaRepo80F9CDDB": {
    "Type": "AWS::ECR::Repository",
    "Properties": {
     "LifecyclePolicy": {
      "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
     },
-    "RepositoryName": "encoding-service-development-repo"
+    "RepositoryName": "encoding-service-development-ingestion-repo",
+    "RepositoryPolicyText": {
+     "Statement": [
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
    },
-   "UpdateReplacePolicy": "Retain",
-   "DeletionPolicy": "Retain",
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
    "Metadata": {
-    "aws:cdk:path": "encoding-service-EcrStack/ProcessingLambdaRepo/Resource"
+    "aws:cdk:path": "encoding-service-EcrStack/IngestionLambdaRepo/Resource"
+   }
+  },
+  "EncodeLambdaRepo73A6F6C5": {
+   "Type": "AWS::ECR::Repository",
+   "Properties": {
+    "LifecyclePolicy": {
+     "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+    },
+    "RepositoryName": "encoding-service-development-encode-repo",
+    "RepositoryPolicyText": {
+     "Statement": [
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "encoding-service-EcrStack/EncodeLambdaRepo/Resource"
+   }
+  },
+  "StoreEmbeddingsLambdaRepo755A5589": {
+   "Type": "AWS::ECR::Repository",
+   "Properties": {
+    "LifecyclePolicy": {
+     "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+    },
+    "RepositoryName": "encoding-service-development-store-embeddings-repo",
+    "RepositoryPolicyText": {
+     "Statement": [
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "encoding-service-EcrStack/StoreEmbeddingsLambdaRepo/Resource"
+   }
+  },
+  "StoreS3LambdaRepoB7A0F5F3": {
+   "Type": "AWS::ECR::Repository",
+   "Properties": {
+    "LifecyclePolicy": {
+     "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+    },
+    "RepositoryName": "encoding-service-development-store-s3-repo",
+    "RepositoryPolicyText": {
+     "Statement": [
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "encoding-service-EcrStack/StoreS3LambdaRepo/Resource"
    }
   },
   "CDKMetadata": {
@@ -26,7 +132,7 @@
   }
  },
  "Outputs": {
-  "ProcessingRepoUri": {
+  "IngestionRepoUri": {
    "Value": {
     "Fn::Join": [
      "",
@@ -39,7 +145,7 @@
           ":",
           {
            "Fn::GetAtt": [
-            "ProcessingLambdaRepo9E47CA56",
+            "IngestionLambdaRepo80F9CDDB",
             "Arn"
            ]
           }
@@ -56,7 +162,7 @@
           ":",
           {
            "Fn::GetAtt": [
-            "ProcessingLambdaRepo9E47CA56",
+            "IngestionLambdaRepo80F9CDDB",
             "Arn"
            ]
           }
@@ -70,10 +176,236 @@
       },
       "/",
       {
-       "Ref": "ProcessingLambdaRepo9E47CA56"
+       "Ref": "IngestionLambdaRepo80F9CDDB"
       }
      ]
     ]
+   }
+  },
+  "EncodeRepoUri": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      {
+       "Fn::Select": [
+        4,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "EncodeLambdaRepo73A6F6C5",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".dkr.ecr.",
+      {
+       "Fn::Select": [
+        3,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "EncodeLambdaRepo73A6F6C5",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "EncodeLambdaRepo73A6F6C5"
+      }
+     ]
+    ]
+   }
+  },
+  "StoreEmbeddingsRepoUri": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      {
+       "Fn::Select": [
+        4,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "StoreEmbeddingsLambdaRepo755A5589",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".dkr.ecr.",
+      {
+       "Fn::Select": [
+        3,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "StoreEmbeddingsLambdaRepo755A5589",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "StoreEmbeddingsLambdaRepo755A5589"
+      }
+     ]
+    ]
+   }
+  },
+  "StoreS3RepoUri": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      {
+       "Fn::Select": [
+        4,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "StoreS3LambdaRepoB7A0F5F3",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".dkr.ecr.",
+      {
+       "Fn::Select": [
+        3,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "StoreS3LambdaRepoB7A0F5F3",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "StoreS3LambdaRepoB7A0F5F3"
+      }
+     ]
+    ]
+   }
+  },
+  "ExportsOutputFnGetAttIngestionLambdaRepo80F9CDDBArn141A54CB": {
+   "Value": {
+    "Fn::GetAtt": [
+     "IngestionLambdaRepo80F9CDDB",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "encoding-service-EcrStack:ExportsOutputFnGetAttIngestionLambdaRepo80F9CDDBArn141A54CB"
+   }
+  },
+  "ExportsOutputRefIngestionLambdaRepo80F9CDDBA77E5B3B": {
+   "Value": {
+    "Ref": "IngestionLambdaRepo80F9CDDB"
+   },
+   "Export": {
+    "Name": "encoding-service-EcrStack:ExportsOutputRefIngestionLambdaRepo80F9CDDBA77E5B3B"
+   }
+  },
+  "ExportsOutputFnGetAttEncodeLambdaRepo73A6F6C5Arn0CB8C274": {
+   "Value": {
+    "Fn::GetAtt": [
+     "EncodeLambdaRepo73A6F6C5",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "encoding-service-EcrStack:ExportsOutputFnGetAttEncodeLambdaRepo73A6F6C5Arn0CB8C274"
+   }
+  },
+  "ExportsOutputRefEncodeLambdaRepo73A6F6C59F69E5A0": {
+   "Value": {
+    "Ref": "EncodeLambdaRepo73A6F6C5"
+   },
+   "Export": {
+    "Name": "encoding-service-EcrStack:ExportsOutputRefEncodeLambdaRepo73A6F6C59F69E5A0"
+   }
+  },
+  "ExportsOutputFnGetAttStoreEmbeddingsLambdaRepo755A5589Arn64C90C7F": {
+   "Value": {
+    "Fn::GetAtt": [
+     "StoreEmbeddingsLambdaRepo755A5589",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "encoding-service-EcrStack:ExportsOutputFnGetAttStoreEmbeddingsLambdaRepo755A5589Arn64C90C7F"
+   }
+  },
+  "ExportsOutputRefStoreEmbeddingsLambdaRepo755A55896A4E503D": {
+   "Value": {
+    "Ref": "StoreEmbeddingsLambdaRepo755A5589"
+   },
+   "Export": {
+    "Name": "encoding-service-EcrStack:ExportsOutputRefStoreEmbeddingsLambdaRepo755A55896A4E503D"
+   }
+  },
+  "ExportsOutputFnGetAttStoreS3LambdaRepoB7A0F5F3Arn763F1D20": {
+   "Value": {
+    "Fn::GetAtt": [
+     "StoreS3LambdaRepoB7A0F5F3",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "encoding-service-EcrStack:ExportsOutputFnGetAttStoreS3LambdaRepoB7A0F5F3Arn763F1D20"
+   }
+  },
+  "ExportsOutputRefStoreS3LambdaRepoB7A0F5F3078D7672": {
+   "Value": {
+    "Ref": "StoreS3LambdaRepoB7A0F5F3"
+   },
+   "Export": {
+    "Name": "encoding-service-EcrStack:ExportsOutputRefStoreS3LambdaRepoB7A0F5F3078D7672"
    }
   }
  },

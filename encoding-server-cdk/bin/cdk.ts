@@ -26,22 +26,16 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     encodeRepo: ecrStack.encodeRepo,
     storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
     storeS3Repo: ecrStack.storeS3Repo,
-    ingestionImageTag: process.env.INGESTION_IMAGE_TAG,
-    encodeImageTag: process.env.ENCODE_IMAGE_TAG,
-    storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG,
-    storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG,
-    zillizEndpoint: process.env.ZILLIZ_ENDPOINT!,
-    zillizToken: process.env.ZILLIZ_TOKEN!,
+    ingestionImageTag: process.env.INGESTION_IMAGE_TAG || 'latest',
+    encodeImageTag: process.env.ENCODE_IMAGE_TAG || 'latest',
+    storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG || 'latest',
+    storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG || 'latest',
+    zillizEndpoint: process.env.ZILLIZ_ENDPOINT || 'dummy_zilliz_endpoint',
+    zillizToken: process.env.ZILLIZ_TOKEN || 'dummy_zilliz_token',
     customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
 });
 
-if (!process.env.INGESTION_IMAGE_TAG || !process.env.ENCODE_IMAGE_TAG || !process.env.STORE_EMBEDDINGS_IMAGE_TAG || !process.env.STORE_S3_IMAGE_TAG) {
-    throw new Error('Image tags (INGESTION_IMAGE_TAG, ENCODE_IMAGE_TAG, STORE_EMBEDDINGS_IMAGE_TAG, STORE_S3_IMAGE_TAG) are required');
-}
 
-if (!process.env.ZILLIZ_ENDPOINT || !process.env.ZILLIZ_TOKEN) {
-    throw new Error('Zilliz configuration (ZILLIZ_ENDPOINT, ZILLIZ_TOKEN) is required');
-}
 
 const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsStack`, {
     stage,
@@ -52,13 +46,11 @@ const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODIN
     storeS3Lambda: lambdaStack.storeS3Lambda,
 });
 
-if (!process.env.AUTH0_SPA_DOMAIN) {
-    throw new Error('AUTH0_SPA_DOMAIN environment variable is required');
-}
+
 
 const apiGatewayStack = new ApiGatewayStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-ApiGatewayStack`, {
     stage,
     ingestionLambda: lambdaStack.ingestionLambda,
     ingestNotesLambda: lambdaStack.ingestNotesLambda,
-    auth0Domain: process.env.AUTH0_SPA_DOMAIN,
+    auth0Domain: process.env.AUTH0_SPA_DOMAIN || 'dummy.auth0.com',
 });
