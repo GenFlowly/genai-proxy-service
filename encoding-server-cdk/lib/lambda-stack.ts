@@ -15,6 +15,7 @@ export interface LambdaStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     ingestionRepo: ecr.IRepository;
     encodeRepo: ecr.IRepository;
+    createCollectionRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
     ingestionImageTag?: string;
