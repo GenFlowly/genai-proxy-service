@@ -1,0 +1,52 @@
+# Build stage
+FROM public.ecr.aws/lambda/python:3.11 AS builder
+
+# Install build dependencies  
+RUN yum install -y gcc gcc-c++ make cmake
+
+# Copy and install dependencies with CPU-only PyTorch
+COPY requirements.txt /tmp/requirements.txt
+COPY requirements-retrieval.txt /tmp/requirements-retrieval.txt
+RUN pip install --no-cache-dir \
+    --target /tmp/python \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    torch \
+    -r /tmp/requirements-retrieval.txt
+
+# Clean up to save space
+RUN find /tmp/python -type d -name "tests" -exec rm -rf {} + && \
+    find /tmp/python -type d -name "__pycache__" -exec rm -rf {} + && \
+    rm -rf /tmp/python/pip /tmp/python/setuptools /tmp/python/wheel
+
+# Runtime stage
+FROM public.ecr.aws/lambda/python:3.11
+
+# AWS Lambda environment variables (provided by base image):
+# - LAMBDA_TASK_ROOT=/var/task (our code goes here)
+# - LAMBDA_RUNTIME_DIR=/var/runtime
+
+# Custom environment variables for ML libraries
+# Note: Lambda only allows writes to /tmp (512MB limit), so we point all caches there
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache \
+    HF_HOME=/tmp/huggingface \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    NUMBA_CACHE_DIR=/tmp/numba_cache \
+    JOBLIB_TEMP_FOLDER=/tmp/joblib_tmp \
+    JOBLIB_MULTIPROCESSING=0 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1
+
+# Copy installed dependencies
+COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
+
+# Copy application code
+COPY models ${LAMBDA_TASK_ROOT}/models
+COPY handlers ${LAMBDA_TASK_ROOT}/handlers
+COPY processors ${LAMBDA_TASK_ROOT}/processors
+COPY utils ${LAMBDA_TASK_ROOT}/utils
+COPY encoders ${LAMBDA_TASK_ROOT}/encoders
+COPY chunkers ${LAMBDA_TASK_ROOT}/chunkers
+
+# Set the handler
+CMD [ "handlers.retrieval_lambda.handler" ]
