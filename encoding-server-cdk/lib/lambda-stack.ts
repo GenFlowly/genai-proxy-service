@@ -17,10 +17,12 @@ export interface LambdaStackProps extends cdk.StackProps {
     encodeRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
+    retrievalRepo: ecr.IRepository;
     ingestionImageTag?: string;
     encodeImageTag?: string;
     storeEmbeddingsImageTag?: string;
     storeS3ImageTag?: string;
+    retrievalImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
     customerProfileTableName: string;
@@ -33,6 +35,7 @@ export class LambdaStack extends cdk.Stack {
     public readonly encodeLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly storeS3Lambda: DockerImageFunction;
+    public readonly retrievalLambda: DockerImageFunction;
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
@@ -132,5 +135,21 @@ export class LambdaStack extends cdk.Stack {
         });
 
         props.rawEmailBucket.grantPut(this.storeS3Lambda);
+
+        // 4. Retrieval Lambda (Query / Search)
+        this.retrievalLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-retrieval-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-retrieval-lambda`,
+            code: DockerImageCode.fromEcr(props.retrievalRepo, {
+                tagOrDigest: props.retrievalImageTag || 'retrieval-latest',
+                cmd: ['handlers.retrieval_lambda.handler'],
+            }),
+            memorySize: 3008, // Needs memory for model
+            timeout: cdk.Duration.seconds(300),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ZILLIZ_ENDPOINT: props.zillizEndpoint,
+                ZILLIZ_TOKEN: props.zillizToken,
+            },
+        });
     }
 }

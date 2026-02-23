@@ -1,0 +1,9 @@
+# Include base requirements
+-r requirements.txt
+
+# Retrieval-specific dependencies (Needs Both Encoder and DB connections)
+pymilvus[model]>=2.4.0
+sentence-transformers>=2.2.0
+scikit-learn<1.6
+scipy<1.14
+numpy<2.0.0

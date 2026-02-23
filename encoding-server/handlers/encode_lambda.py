@@ -7,9 +7,7 @@ from models.payload import Payload
 # Trigger build - separated ECR repos
 
 # Trigger rebuild for initial deployment, List
-from processors.processor_factory import ProcessorFactory
-from encoders.factory import EncoderFactory
-from encoders.enums import ModelType, ModelName
+from utils.embedding_utils import create_embeddings
 
 # Set cache directories to /tmp (only writable location in Lambda)
 os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
@@ -69,22 +67,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Extract data for encoding
         data = payload.data
         
-        # Get appropriate processor
-        processor = ProcessorFactory.get_processor(data)
-        
-
-
-        # Get appropriate encoder (default to sentence-transformer/all-MiniLM-L6-v2)
-        # We could extract model params from payload if provided
-        # TODO add payload.data.set
-        model_type_str = payload.data.get('model_type', ModelType.SENTENCE_TRANSFORMER.value)
-        model_name_str = payload.data.get('model_name', ModelName.ALL_MINILM_L6_V2.value) 
-        
-        encoder = EncoderFactory.get_encoder(model_type_str, model_name_str)
-        
-        # Create embedding (processor handles type-specific logic)
-        # Now returns a list of chunks (dicts with vector, text, index)
-        embeddings = processor.create_embeddings(data, encoder)
+        # Create embedding using common utility
+        # Returns a list of chunks (dicts with vector, text, index)
+        embeddings = create_embeddings(data)
         
         # Add embedding to data
         # We update the data in the payload
