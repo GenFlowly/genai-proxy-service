@@ -1,0 +1,30 @@
+name: Weekly React App Deploy
+
+on:
+  schedule:
+    # Runs at 00:00 UTC every Friday
+    - cron: '0 0 * * 5'
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
+
+jobs:
+  deploy:
+    name: Deploy React App to Netlify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy React App to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        working-directory: genai-react-app
+        run: |
+          npm ci
+          npm run build
+          npx netlify-cli deploy --prod --dir=build
