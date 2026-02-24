@@ -71,7 +71,6 @@ jobs:
           ENCODE_IMAGE_TAG: "placeholder"
           STORE_EMBEDDINGS_IMAGE_TAG: "placeholder"
           STORE_S3_IMAGE_TAG: "placeholder"
-          RETRIEVAL_IMAGE_TAG: "placeholder"
 
       - name: Get ECR Repository URIs
         id: get-ecr-uri
@@ -107,14 +106,6 @@ jobs:
           echo "STORE_S3_ECR_URI=$STORE_S3_ECR_URI" >> $GITHUB_ENV
           echo "STORE_S3_ECR_REPO=$(basename $STORE_S3_ECR_URI)" >> $GITHUB_ENV
           echo "Using Store S3 Lambda ECR: $STORE_S3_ECR_URI"
-
-          RETRIEVAL_ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name encoding-service-EcrStack \
-            --query "Stacks[0].Outputs[?OutputKey=='RetrievalRepoUri'].OutputValue" \
-            --output text)
-          echo "RETRIEVAL_ECR_URI=$RETRIEVAL_ECR_URI" >> $GITHUB_ENV
-          echo "RETRIEVAL_ECR_REPO=$(basename $RETRIEVAL_ECR_URI)" >> $GITHUB_ENV
-          echo "Using Retrieval Lambda ECR: $RETRIEVAL_ECR_URI"
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -221,25 +212,6 @@ jobs:
           docker push $ECR_REGISTRY/$STORE_S3_ECR_REPO:store-s3-latest
           echo "Pushed Store S3 Lambda: $STORE_S3_IMAGE_URI and store-s3-latest"
 
-      - name: Build Retrieval Lambda Docker image
-        working-directory: encoding-server
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          IMAGE_TAG=${GITHUB_SHA::7}
-          docker build -f Dockerfile.retrieval -t retrieval-lambda:$IMAGE_TAG .
-          docker tag retrieval-lambda:$IMAGE_TAG $ECR_REGISTRY/$RETRIEVAL_ECR_REPO:retrieval-$IMAGE_TAG
-          docker tag retrieval-lambda:$IMAGE_TAG $ECR_REGISTRY/$RETRIEVAL_ECR_REPO:retrieval-latest
-          echo "RETRIEVAL_IMAGE_URI=$ECR_REGISTRY/$RETRIEVAL_ECR_REPO:retrieval-$IMAGE_TAG" >> $GITHUB_ENV
-          echo "RETRIEVAL_IMAGE_TAG=retrieval-$IMAGE_TAG" >> $GITHUB_ENV
-
-      - name: Push Retrieval Lambda Docker image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          docker push $RETRIEVAL_IMAGE_URI
-          docker push $ECR_REGISTRY/$RETRIEVAL_ECR_REPO:retrieval-latest
-          echo "Pushed Retrieval Lambda: $RETRIEVAL_IMAGE_URI and retrieval-latest"
 
       - name: Deploy S3Stack, SqsStack, LambdaStack, StepFunctionsStack, ApiGatewayStack
         working-directory: ${{ env.ENCODING_CDK_PATH }}
