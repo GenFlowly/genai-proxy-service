@@ -2,8 +2,4 @@
 -r requirements.txt
 
 # Encode-specific dependencies
-pymilvus[model]>=2.4.0
-sentence-transformers>=2.2.0
-scikit-learn<1.6
-scipy<1.14
-numpy<2.0.0
+genflowly-encoding-library>=0.1.3

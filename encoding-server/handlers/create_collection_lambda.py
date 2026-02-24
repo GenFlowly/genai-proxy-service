@@ -3,7 +3,7 @@ import logging
 import json
 from typing import Dict, Any
 from pymilvus import MilvusClient, DataType
-from models.payload import Payload
+from encoding_library.models.payload import Payload
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

@@ -2,12 +2,12 @@ import json
 import os
 import logging
 from typing import Dict, Any, List
-from models.payload import Payload
+from encoding_library.models.payload import Payload
 
 # Trigger build - separated ECR repos
 
 # Trigger rebuild for initial deployment, List
-from utils.embedding_utils import create_embeddings
+from encoding_library.utils.embedding_utils import create_embeddings
 
 # Set cache directories to /tmp (only writable location in Lambda)
 os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'

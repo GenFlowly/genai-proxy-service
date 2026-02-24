@@ -2,8 +2,8 @@ import os
 import logging
 from typing import Dict, Any, List
 from pymilvus import MilvusClient, DataType
-from processors.processor_factory import ProcessorFactory
-from models.payload import Payload
+from encoding_library.processors.processor_factory import ProcessorFactory
+from encoding_library.models.payload import Payload
 
 # Trigger build - separated ECR repos
 
