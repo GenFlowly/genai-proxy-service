@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genflowly-encoding-library"
-version = "0.1.0"
+version = "0.1.1"
 description = "Text encoding and chunking library."
 dependencies = [
-    "pymilvus",
+    "pymilvus[model]>=2.4.0",
     "sentence-transformers>=2.2.0",
+    "requests>=2.31.0",
     "scikit-learn",
     "scipy",
     "numpy"
