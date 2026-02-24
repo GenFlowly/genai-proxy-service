@@ -19,12 +19,18 @@ jobs:
         with:
           node-version: 20
 
+      - name: Create .npmrc file
+        working-directory: genai-react-app
+        run: |
+          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}" >> .npmrc
+
       - name: Deploy React App to Netlify
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         working-directory: genai-react-app
         run: |
-          npm ci
+          npm install
           npm run build
           npx netlify-cli deploy --prod --dir=build
