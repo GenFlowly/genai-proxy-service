@@ -120,36 +120,6 @@
     "aws:cdk:path": "encoding-service-EcrStack/StoreS3LambdaRepo/Resource"
    }
   },
-  "RetrievalLambdaRepoF95FB17C": {
-   "Type": "AWS::ECR::Repository",
-   "Properties": {
-    "LifecyclePolicy": {
-     "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
-    },
-    "RepositoryName": "encoding-service-development-retrieval-repo",
-    "RepositoryPolicyText": {
-     "Statement": [
-      {
-       "Action": [
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:BatchGetImage",
-        "ecr:GetDownloadUrlForLayer"
-       ],
-       "Effect": "Allow",
-       "Principal": {
-        "Service": "lambda.amazonaws.com"
-       }
-      }
-     ],
-     "Version": "2012-10-17"
-    }
-   },
-   "UpdateReplacePolicy": "Delete",
-   "DeletionPolicy": "Delete",
-   "Metadata": {
-    "aws:cdk:path": "encoding-service-EcrStack/RetrievalLambdaRepo/Resource"
-   }
-  },
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
@@ -362,56 +332,6 @@
     ]
    }
   },
-  "RetrievalRepoUri": {
-   "Value": {
-    "Fn::Join": [
-     "",
-     [
-      {
-       "Fn::Select": [
-        4,
-        {
-         "Fn::Split": [
-          ":",
-          {
-           "Fn::GetAtt": [
-            "RetrievalLambdaRepoF95FB17C",
-            "Arn"
-           ]
-          }
-         ]
-        }
-       ]
-      },
-      ".dkr.ecr.",
-      {
-       "Fn::Select": [
-        3,
-        {
-         "Fn::Split": [
-          ":",
-          {
-           "Fn::GetAtt": [
-            "RetrievalLambdaRepoF95FB17C",
-            "Arn"
-           ]
-          }
-         ]
-        }
-       ]
-      },
-      ".",
-      {
-       "Ref": "AWS::URLSuffix"
-      },
-      "/",
-      {
-       "Ref": "RetrievalLambdaRepoF95FB17C"
-      }
-     ]
-    ]
-   }
-  },
   "ExportsOutputFnGetAttIngestionLambdaRepo80F9CDDBArn141A54CB": {
    "Value": {
     "Fn::GetAtt": [
@@ -486,25 +406,6 @@
    },
    "Export": {
     "Name": "encoding-service-EcrStack:ExportsOutputRefStoreS3LambdaRepoB7A0F5F3078D7672"
-   }
-  },
-  "ExportsOutputFnGetAttRetrievalLambdaRepoF95FB17CArn2EE39D9C": {
-   "Value": {
-    "Fn::GetAtt": [
-     "RetrievalLambdaRepoF95FB17C",
-     "Arn"
-    ]
-   },
-   "Export": {
-    "Name": "encoding-service-EcrStack:ExportsOutputFnGetAttRetrievalLambdaRepoF95FB17CArn2EE39D9C"
-   }
-  },
-  "ExportsOutputRefRetrievalLambdaRepoF95FB17CE4E5AF55": {
-   "Value": {
-    "Ref": "RetrievalLambdaRepoF95FB17C"
-   },
-   "Export": {
-    "Name": "encoding-service-EcrStack:ExportsOutputRefRetrievalLambdaRepoF95FB17CE4E5AF55"
    }
   }
  },

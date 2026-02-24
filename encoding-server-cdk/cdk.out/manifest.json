@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/78a751e3432c6337b8d902f164d4d4d47f592d7e1d48e178425788fd6645de4a.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/42de531d432bd38c61e71449d670f6e77cc1778b1d20abffbfbf940c5e21a4d0.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -58,12 +58,6 @@
             "data": "StoreS3LambdaRepoB7A0F5F3"
           }
         ],
-        "/encoding-service-EcrStack/RetrievalLambdaRepo/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "RetrievalLambdaRepoF95FB17C"
-          }
-        ],
         "/encoding-service-EcrStack/IngestionRepoUri": [
           {
             "type": "aws:cdk:logicalId",
@@ -86,12 +80,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "StoreS3RepoUri"
-          }
-        ],
-        "/encoding-service-EcrStack/RetrievalRepoUri": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "RetrievalRepoUri"
           }
         ],
         "/encoding-service-EcrStack/CDKMetadata/Default": [
@@ -152,18 +140,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "ExportsOutputRefStoreS3LambdaRepoB7A0F5F3078D7672"
-          }
-        ],
-        "/encoding-service-EcrStack/Exports/Output{\"Fn::GetAtt\":[\"RetrievalLambdaRepoF95FB17C\",\"Arn\"]}": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "ExportsOutputFnGetAttRetrievalLambdaRepoF95FB17CArn2EE39D9C"
-          }
-        ],
-        "/encoding-service-EcrStack/Exports/Output{\"Ref\":\"RetrievalLambdaRepoF95FB17C\"}": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "ExportsOutputRefRetrievalLambdaRepoF95FB17CE4E5AF55"
           }
         ],
         "/encoding-service-EcrStack/BootstrapVersion": [
@@ -408,7 +384,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c4c67a8bb5f659a450b9569810a79bb531eef6cd1eb724f516376b64fbdc6786.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/7c8fc9ca0e1e858863fed7df79ec8c21e3cf36c427623793383af7ace547819d.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -503,18 +479,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "encodingservicedevelopmentstores3lambda302D95E5"
-          }
-        ],
-        "/encoding-service-LambdaStack/encoding-service-development-retrieval-lambda/ServiceRole/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "encodingservicedevelopmentretrievallambdaServiceRole4E4308C8"
-          }
-        ],
-        "/encoding-service-LambdaStack/encoding-service-development-retrieval-lambda/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "encodingservicedevelopmentretrievallambda7371CB07"
           }
         ],
         "/encoding-service-LambdaStack/CDKMetadata/Default": [
