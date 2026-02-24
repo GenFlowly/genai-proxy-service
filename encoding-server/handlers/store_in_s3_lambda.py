@@ -3,8 +3,8 @@ import os
 import boto3
 import logging
 from typing import Dict, Any
-from models.payload import Payload
-from models.encoding.email_model import EmailModel
+from encoding_library.models.payload import Payload
+from encoding_library.models.encoding.email_model import EmailModel
 
 # Trigger build - separated ECR repos
 
