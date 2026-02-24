@@ -4,15 +4,7 @@ from typing import Dict, Any, Tuple, List, Callable
 from .data_processor import DataProcessor
 from encoding_library.models.payload import Payload
 
-# Assuming email_model is in the python path (root of lambda task)
-try:
-    from models.encoding.email_model import EmailModel
-except ImportError:
-    # Fallback for local development if needed, though usually root is in path
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from email_model import EmailModel
+from encoding_library.models.encoding.email_model import EmailModel
 
 logger = logging.getLogger()
 

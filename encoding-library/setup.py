@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="genflowly-encoding-library",
-    version="0.1.2",
+    version="0.1.3",
     description="A library for text chunking and embedding operations.",
     author="Genflowly",
     packages=find_packages(where="src"),
