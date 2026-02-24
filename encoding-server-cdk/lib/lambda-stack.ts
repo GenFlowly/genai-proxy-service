@@ -17,12 +17,10 @@ export interface LambdaStackProps extends cdk.StackProps {
     encodeRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
-    retrievalRepo: ecr.IRepository;
     ingestionImageTag?: string;
     encodeImageTag?: string;
     storeEmbeddingsImageTag?: string;
     storeS3ImageTag?: string;
-    retrievalImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
     customerProfileTableName: string;
@@ -35,7 +33,6 @@ export class LambdaStack extends cdk.Stack {
     public readonly encodeLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly storeS3Lambda: DockerImageFunction;
-    public readonly retrievalLambda: DockerImageFunction;
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
