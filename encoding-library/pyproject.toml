@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genflowly-encoding-library"
+version = "0.1.0"
+description = "Text encoding and chunking library."
+dependencies = [
+    "pymilvus",
+    "sentence-transformers>=2.2.0",
+    "scikit-learn",
+    "scipy",
+    "numpy"
+]
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "flake8"
+]
