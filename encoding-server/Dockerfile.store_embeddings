@@ -17,11 +17,6 @@ COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 
 # Copy application code
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
-COPY processors ${LAMBDA_TASK_ROOT}/processors
-COPY models ${LAMBDA_TASK_ROOT}/models
-COPY chunkers ${LAMBDA_TASK_ROOT}/chunkers
-COPY encoders ${LAMBDA_TASK_ROOT}/encoders
-COPY utils ${LAMBDA_TASK_ROOT}/utils
 
 # Set the handler
 CMD [ "handlers.store_embeddings_lambda.handler" ]
