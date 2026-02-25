@@ -143,7 +143,7 @@ jobs:
           echo "Pushed ingestion Lambda: $INGESTION_IMAGE_URI and ingestion-latest"
           docker rmi $INGESTION_IMAGE_URI
           docker rmi $ECR_REGISTRY/$INGESTION_ECR_REPO:ingestion-latest
-          docker rmi ingestion-lambda:$INGESTION_IMAGE_TAG
+          docker rmi ingestion-lambda:${GITHUB_SHA::7}
           docker system prune -f
 
       - name: Build Encode Lambda Docker image
@@ -167,7 +167,7 @@ jobs:
           echo "Pushed Encode Lambda: $ENCODE_IMAGE_URI and encode-latest"
           docker rmi $ENCODE_IMAGE_URI
           docker rmi $ECR_REGISTRY/$ENCODE_ECR_REPO:encode-latest
-          docker rmi encode-lambda:$ENCODE_IMAGE_TAG
+          docker rmi encode-lambda:${GITHUB_SHA::7}
           docker system prune -f
 
       - name: Build Store Embeddings Lambda Docker image
@@ -191,7 +191,7 @@ jobs:
           echo "Pushed Store Embeddings Lambda: $STORE_EMBEDDINGS_IMAGE_URI and store-embeddings-latest"
           docker rmi $STORE_EMBEDDINGS_IMAGE_URI
           docker rmi $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-latest
-          docker rmi store-embeddings-lambda:$STORE_EMBEDDINGS_IMAGE_TAG
+          docker rmi store-embeddings-lambda:${GITHUB_SHA::7}
           docker system prune -f
 
       - name: Build Store S3 Lambda Docker image
