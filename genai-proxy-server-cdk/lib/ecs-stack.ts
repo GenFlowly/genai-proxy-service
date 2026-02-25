@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import {
     GatewayVpcEndpointAwsService,
@@ -19,7 +20,8 @@ import { RESOURCE_NAMES } from "./constants";
 
 export interface EcsStackProps extends cdk.StackProps {
     stage: STAGES;
-    ecrRepo: IRepository,
+    proxyEcrRepo: IRepository;
+    retrievalEcrRepo: IRepository;
     dynamoDbTableList: ITable[];
     kmsKey: IKey;
     domainName?: string;
@@ -90,7 +92,7 @@ export class EcsStack extends cdk.Stack {
                 assignPublicIp: true,
                 certificate,
                 taskImageOptions: {
-                    image: ecs.ContainerImage.fromEcrRepository(props.ecrRepo, imageTag),
+                    image: ecs.ContainerImage.fromEcrRepository(props.proxyEcrRepo, imageTag),
                     containerName,
                     containerPort: 8080,
                     enableLogging: true,
@@ -99,6 +101,7 @@ export class EcsStack extends cdk.Stack {
                         AUTH0_SPA_CLIENT_ID: process.env.AUTH0_SPA_CLIENT_ID ?? '',
                         AUTH0_API_AUDIENCE: process.env.AUTH0_API_AUDIENCE ?? '',
                         KMS_KEY_ID: props.kmsKey.keyArn,
+                        RETRIEVAL_SERVER_URL: 'http://localhost:5001'
                     },
                 },
                 capacityProviderStrategies: [
@@ -108,10 +111,23 @@ export class EcsStack extends cdk.Stack {
             }
         );
 
+        fargateService.taskDefinition.addContainer('RetrievalContainer', {
+            image: ecs.ContainerImage.fromEcrRepository(props.retrievalEcrRepo, imageTag),
+            containerName: 'retrieval-server',
+            portMappings: [{ containerPort: 5001 }],
+            logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'retrieval-server' }),
+        });
+
         props.dynamoDbTableList.forEach((it) =>
             it.grantReadWriteData(fargateService.taskDefinition.taskRole));
 
         props.kmsKey.grantEncryptDecrypt(fargateService.taskDefinition.taskRole);
+
+        // Allow Fargate tasks to invoke the Encoding Lambda
+        fargateService.taskDefinition.taskRole.addToPrincipalPolicy(new iam.PolicyStatement({
+            actions: ['lambda:InvokeFunction'],
+            resources: ['*'], // Can be scoped down to just the specific lambda ARN if passed in via props
+        }));
 
         // Configure auto scaling
         // Note: AWS ECS auto scaling with ALB metrics doesn't support minCapacity: 0

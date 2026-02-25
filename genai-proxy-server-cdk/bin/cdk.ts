@@ -23,7 +23,8 @@ const ecrStack = new EcrStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcrSt
 const kmsStack = new KmsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-KmsStack`, { stage })
 new EcsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcsStack`, {
     stage,
-    ecrRepo: ecrStack.repository,
+    proxyEcrRepo: ecrStack.proxyRepository,
+    retrievalEcrRepo: ecrStack.retrievalRepository,
     dynamoDbTableList: dynamoDBStack.dynamoDbTableList,
     kmsKey: kmsStack.kmsKey,
     domainName: rootDomain,

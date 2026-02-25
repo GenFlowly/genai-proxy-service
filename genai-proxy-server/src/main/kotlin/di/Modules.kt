@@ -15,6 +15,9 @@ import com.genflowly.service.AIModelsService
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
+import software.amazon.awssdk.services.lambda.LambdaClient
+import com.genflowly.service.PromptGenerationService
+import com.genflowly.service.RetrievalService
 
 fun appModule(): Module = module {
     single { provideJson() }
@@ -32,14 +35,21 @@ fun appModule(): Module = module {
             .build()
     }
 
+    single {
+        LambdaClient.builder()
+            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .build()
+    }
+
     single { DynamoDBProvider(get(), get()) }
     single { KMSProvider(get(), get()) }
     single { AIRequestService(get()) }
     single { CustomerProfileService(get(), get()) }
     single { ConversationService(get(), get()) }
-    single { AIRequestManager(get(), get(), get()) }
+    single { AIRequestManager(get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
-
+    single { RetrievalService(get(), get()) }
+    single { PromptGenerationService(get()) }
 
 }
 
