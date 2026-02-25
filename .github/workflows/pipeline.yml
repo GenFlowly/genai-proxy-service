@@ -38,6 +38,7 @@ jobs:
               - 'genai-proxy-server/**'
               - 'genai-proxy-server-cdk/**'
               - 'genai-react-app/**'
+              - 'retrieval-server/**'
               - '.github/workflows/pipeline.yml'
               - '.github/workflows/proxy-server.yml'
             encoding-server:

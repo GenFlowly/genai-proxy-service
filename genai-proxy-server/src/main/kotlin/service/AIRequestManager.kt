@@ -4,6 +4,7 @@ import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.PromptGenerationService
 import com.genflowly.utils.fetchApiKey
 import models.AIConfig
 import models.GenerateTextRequest
@@ -19,7 +20,8 @@ import kotlinx.coroutines.TimeoutCancellationException
 class AIRequestManager(
     private val aiRequestService: AIRequestService,
     private val customerProfileService: CustomerProfileService,
-    private val conversationService: ConversationService
+    private val conversationService: ConversationService,
+    private val promptGenerationService: PromptGenerationService
 ) {
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
@@ -67,7 +69,7 @@ class AIRequestManager(
     suspend fun processTextGenerateRequest(
         aiConfig: List<AIConfig>,
         systemPrompt: String,
-        prompt: String,
+        userRequestRawPrompt: String,
         conversationId: String?,
         selectedResponseId: String?,
         client: String,
@@ -80,7 +82,10 @@ class AIRequestManager(
         val conversationId =
             getConversationId(customerId, client, conversationId)
 
-        // Step 2 - Create message object
+        // Step 2 - Add context to prompt
+        val prompt = promptGenerationService.generatePrompt(customerId, userRequestRawPrompt, systemPrompt)
+
+        // Step 3 - Create message object
         val message = Message(
             conversationId = conversationId,
             customerId = customerId,
@@ -92,12 +97,12 @@ class AIRequestManager(
             systemPrompt = systemPrompt
         )
 
-        // Step 3 - Add message request to conversation
+        // Step 4 - Add message request to conversation
         conversationService.addMessageInConversation(message)
 
         logger.info("Added Message id {} to conversation", message.messageId)
 
-        // Step 4 - Handle request for each AI vendor in loop
+        // Step 5 - Handle request for each AI vendor in loop
         val responseMessageList = coroutineScope {
             message.aiConfig.map { aiConfig ->
                 async {
@@ -110,7 +115,7 @@ class AIRequestManager(
             }.awaitAll()
         }
 
-        // Step 5 - Return message response list
+        // Step 6 - Return message response list
         return responseMessageList
     }
 
@@ -271,7 +276,7 @@ class AIRequestManager(
     suspend fun processTextGenerateStreamRequest(
         aiConfig: List<AIConfig>,
         systemPrompt: String,
-        prompt: String,
+        userRequestRawPrompt: String,
         conversationId: String?,
         selectedResponseId: String?,
         client: String,
@@ -282,10 +287,12 @@ class AIRequestManager(
         val activeConversationId =
             getConversationId(customerId, client, conversationId)
 
+        val prompt = promptGenerationService.generatePrompt(customerId, userRequestRawPrompt, systemPrompt)
+
         // Step 2 - Create message object
         // Use Deterministic ID to prevent duplication in DDB when multiple vendor requests occur simultaneously.
         // Uniquely identifies this turn based on conversation, user text, and parent message.
-        val uniqueContent = "${activeConversationId}-${prompt}-${selectedResponseId ?: ""}-user"
+        val uniqueContent = "${activeConversationId}-${userRequestRawPrompt}-${selectedResponseId ?: ""}-user"
         val deterministicId = java.util.UUID.nameUUIDFromBytes(uniqueContent.toByteArray()).toString()
 
         val message = Message(

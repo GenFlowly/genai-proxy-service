@@ -112,6 +112,5 @@ fun Application.module() {
     val conversationService = get<ConversationService>()
     val aiModelsService = get<AIModelsService>()
 
-
     configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService)
 }

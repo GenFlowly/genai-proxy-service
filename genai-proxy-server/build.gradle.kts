@@ -41,6 +41,11 @@ dependencies {
     api("io.ktor:ktor-server-content-negotiation:3.0.0")
     api("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
 
+    // Ktor Client
+    implementation("io.ktor:ktor-client-core:3.0.0")
+    implementation("io.ktor:ktor-client-cio:3.0.0")
+    implementation("io.ktor:ktor-client-content-negotiation:3.0.0")
+
 
     implementation("io.insert-koin:koin-ktor:3.5.6") // or latest stable
     implementation("io.insert-koin:koin-logger-slf4j:3.5.6")
@@ -54,6 +59,7 @@ dependencies {
     // DynamoDB client
     implementation("software.amazon.awssdk:dynamodb")
     implementation("software.amazon.awssdk:kms")
+    implementation("software.amazon.awssdk:lambda")
     // Core HTTP client (Netty works well in Ktor)
     implementation("software.amazon.awssdk:url-connection-client")
 
