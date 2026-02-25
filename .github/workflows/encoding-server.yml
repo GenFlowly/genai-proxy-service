@@ -112,25 +112,15 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Free up disk space before building
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          
-          # Remove huge unnecessary tools
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/.ghcup
-          
-          # Remove unused Docker images and build cache
-          docker system prune -af --volumes
-          
-          # Remove unused packages
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-          
-          echo "Disk space after cleanup:"
-          df -h
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Build ingestion Lambda Docker image
         working-directory: encoding-server
@@ -151,6 +141,10 @@ jobs:
           docker push $INGESTION_IMAGE_URI
           docker push $ECR_REGISTRY/$INGESTION_ECR_REPO:ingestion-latest
           echo "Pushed ingestion Lambda: $INGESTION_IMAGE_URI and ingestion-latest"
+          docker rmi $INGESTION_IMAGE_URI
+          docker rmi $ECR_REGISTRY/$INGESTION_ECR_REPO:ingestion-latest
+          docker rmi ingestion-lambda:$INGESTION_IMAGE_TAG
+          docker system prune -f
 
       - name: Build Encode Lambda Docker image
         working-directory: encoding-server
@@ -171,6 +165,10 @@ jobs:
           docker push $ENCODE_IMAGE_URI
           docker push $ECR_REGISTRY/$ENCODE_ECR_REPO:encode-latest
           echo "Pushed Encode Lambda: $ENCODE_IMAGE_URI and encode-latest"
+          docker rmi $ENCODE_IMAGE_URI
+          docker rmi $ECR_REGISTRY/$ENCODE_ECR_REPO:encode-latest
+          docker rmi encode-lambda:$ENCODE_IMAGE_TAG
+          docker system prune -f
 
       - name: Build Store Embeddings Lambda Docker image
         working-directory: encoding-server
@@ -191,6 +189,10 @@ jobs:
           docker push $STORE_EMBEDDINGS_IMAGE_URI
           docker push $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-latest
           echo "Pushed Store Embeddings Lambda: $STORE_EMBEDDINGS_IMAGE_URI and store-embeddings-latest"
+          docker rmi $STORE_EMBEDDINGS_IMAGE_URI
+          docker rmi $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-latest
+          docker rmi store-embeddings-lambda:$STORE_EMBEDDINGS_IMAGE_TAG
+          docker system prune -f
 
       - name: Build Store S3 Lambda Docker image
         working-directory: encoding-server
