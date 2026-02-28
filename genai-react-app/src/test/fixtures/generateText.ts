@@ -6,7 +6,8 @@ export const mockGenerateTextRequest: GenerateTextRequest = {
     client: 'REACT_APP',
     selectedResponseId: 'msg-prev',
     prompt: {
-        systemPrompt: 'You are helpful',
+        instructionId: '',
+        instructionVersion: '',
         prompt: 'Hello'
     },
     aiConfig: [
@@ -29,7 +30,8 @@ export const mockGenerateTextStreamRequest = {
     client: 'REACT_APP',
     selectedResponseId: 'msg-prev',
     prompt: {
-        systemPrompt: 'You are helpful',
+        instructionId: '',
+        instructionVersion: '',
         prompt: 'Hello'
     },
     aiConfig: {

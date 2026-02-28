@@ -13,7 +13,7 @@ jest.mock('../../../../../context/LayoutContext', () => ({
 import { useLayout } from '../../../../../context/LayoutContext';
 
 jest.mock('../../../../../context/AIContext', () => ({
-    useAI: () => ({ systemPrompt: 'Sys Prompt' }),
+    useAI: () => ({ systemPrompt: 'Sys Prompt', customerInstructions: [] }),
     AIProvider: ({ children }: any) => children
 }));
 

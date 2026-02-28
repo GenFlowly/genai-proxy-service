@@ -28,6 +28,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         setSystemPrompt,
         selectedInstructionId,
         setSelectedInstructionId,
+        customerInstructions,
     } = useAI()
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const navigate = useNavigate()
@@ -110,12 +111,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         aiConfigs: AIConfig[],
         prompt: string,
         selectedResponseId: string | null,
-        currentSystemPrompt: string
+        instructionId: string,
+        instructionVersion: string
     ): Promise<Message[]> => {
         const response = await generateText(token, {
             aiConfig: aiConfigs.filter(c => c.aiVendor && c.model),
             prompt: {
-                systemPrompt: currentSystemPrompt || "You are a helpful assistant",
+                instructionId,
+                instructionVersion,
                 prompt,
             },
             // customerId: customerId!,
@@ -161,7 +164,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         aiConfig: AIConfig,
         prompt: string,
         selectedResponseId: string | null,
-        currentSystemPrompt: string,
+        instructionId: string,
+        instructionVersion: string,
         onDelta: (chunk: string) => void,
         onMetadata?: (metadata: StreamMetadata) => void,
         // Added idOverride to support explicit conversation targeting (parallel streams)
@@ -170,7 +174,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
             prompt: {
-                systemPrompt: currentSystemPrompt || "You are a helpful assistant",
+                instructionId,
+                instructionVersion,
                 prompt,
             },
             selectedResponseId: selectedResponseId ?? '',
@@ -287,12 +292,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         try {
             const token = await getAccessTokenSilently()
 
+            const instruction = customerInstructions.find(i => i.id === selectedInstructionId)
+            const instructionVersion = instruction ? instruction.version.toString() : ""
+            const instructionId = selectedInstructionId || ""
+
             const responses = await fetchVendorResponses(
                 token,
                 aiConfigs,
                 promptToUse,
                 finalSelectedResponseId,
-                systemPrompt
+                instructionId,
+                instructionVersion
             )
 
             updateConversationBlock(id, {
@@ -352,12 +362,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 // Use explicit ID if provided (for parallel launches), otherwise ref (for first launch)
                 const idToUse = explicitConversationId || conversationIdRef.current
 
+                const instruction = customerInstructions.find(i => i.id === selectedInstructionId)
+                const instructionVersion = instruction ? instruction.version.toString() : ""
+                const instructionId = selectedInstructionId || ""
+
                 await fetchVendorResponseStream(
                     token,
                     conf,
                     promptToUse,
                     finalSelectedResponseId,
-                    systemPrompt,
+                    instructionId,
+                    instructionVersion,
                     (chunk) => {
                         accumulatedText += chunk
                         setConversationBlockList(prev =>

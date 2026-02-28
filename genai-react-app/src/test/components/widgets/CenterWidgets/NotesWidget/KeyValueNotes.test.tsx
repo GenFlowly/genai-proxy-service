@@ -1,6 +1,14 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import KeyValueNotes from '../../../../../components/widgets/CenterWidgets/NotesWidget/KeyValueNotes';
+import { saveNote } from '../../../../../services/saveNotesService';
+
+jest.mock('../../../../../context/AuthContext', () => ({
+    useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token') })
+}));
+jest.mock('../../../../../services/saveNotesService', () => ({
+    saveNote: jest.fn().mockResolvedValue({})
+}));
 
 // Mock PromptEditor to make it testable
 jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', () => {
@@ -49,23 +57,22 @@ describe('KeyValueNotes', () => {
         expect(valueEditor).toHaveValue('My value');
     });
 
-    test('calls handleSave with empty values initially', () => {
-        const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { });
+    test('calls handleSave with empty values initially', async () => {
         render(<KeyValueNotes />);
 
         const saveBtn = screen.getByText('Save');
         fireEvent.click(saveBtn);
 
-        expect(consoleSpy).toHaveBeenCalledWith('Save clicked', {
-            key: '',
-            value: '',
-            mode: 'KEY_VALUE'
+        await waitFor(() => {
+            expect(saveNote).toHaveBeenCalledWith(expect.objectContaining({
+                noteKey: '',
+                noteValue: '',
+                client: 'REACT_APP'
+            }), 'mock-token');
         });
-        consoleSpy.mockRestore();
     });
 
-    test('calls handleSave with updated values', () => {
-        const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { });
+    test('calls handleSave with updated values', async () => {
         render(<KeyValueNotes />);
 
         const keyEditor = screen.getByTestId('notes-widget-key-editor');
@@ -77,11 +84,12 @@ describe('KeyValueNotes', () => {
         const saveBtn = screen.getByText('Save');
         fireEvent.click(saveBtn);
 
-        expect(consoleSpy).toHaveBeenCalledWith('Save clicked', {
-            key: 'test-key',
-            value: 'test-value',
-            mode: 'KEY_VALUE'
+        await waitFor(() => {
+            expect(saveNote).toHaveBeenCalledWith(expect.objectContaining({
+                noteKey: 'test-key',
+                noteValue: 'test-value',
+                client: 'REACT_APP'
+            }), 'mock-token');
         });
-        consoleSpy.mockRestore();
     });
 });

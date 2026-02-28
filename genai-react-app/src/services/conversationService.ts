@@ -5,7 +5,8 @@ import { AIVendor } from '../constants/vendors';
 
 // Backend types matching Kotlin data classes
 interface BackendPrompt {
-    systemPrompt: string;
+    instructionId: string;
+    instructionVersion: string;
     prompt: string;
 }
 
