@@ -25,6 +25,7 @@ jobs:
     outputs:
       proxy-server: ${{ steps.filter.outputs.proxy-server }}
       encoding-server: ${{ steps.filter.outputs.encoding-server }}
+      encoding-library: ${{ steps.filter.outputs.encoding-library }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -37,7 +38,6 @@ jobs:
             proxy-server:
               - 'genai-proxy-server/**'
               - 'genai-proxy-server-cdk/**'
-              - 'genai-react-app/**'
               - 'retrieval-server/**'
               - '.github/workflows/pipeline.yml'
               - '.github/workflows/proxy-server.yml'
@@ -46,6 +46,10 @@ jobs:
               - 'encoding-server-cdk/**'
               - '.github/workflows/pipeline.yml'
               - '.github/workflows/encoding-server.yml'
+            encoding-library:
+              - 'encoding-library/**'
+              - '.github/workflows/pipeline.yml'
+              - '.github/workflows/publish-encoding-library.yml'
 
   proxy-server-development:
     name: Proxy Service
@@ -74,3 +78,11 @@ jobs:
       AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
       ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
       ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
+
+  encoding-library-publish:
+    name: Publish Encoding Library
+    needs: detect-changes
+    if: needs.detect-changes.outputs.encoding-library == 'true'
+    uses: ./.github/workflows/publish-encoding-library.yml
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
