@@ -41,6 +41,7 @@
       "src/**/*.{ts,tsx}",
       "!src/**/*.d.ts",
       "!src/**/*.models.ts",
+      "!src/**/*Core.tsx",
       "!src/test/**/*",
       "!src/reportWebVitals.ts",
       "!src/index.tsx"

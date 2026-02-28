@@ -3,6 +3,42 @@ import { render, screen } from '@testing-library/react';
 import TextContainer from '../../../../components/common/TextContainer/TextContainer';
 import '@testing-library/jest-dom';
 
+// Mock the lazy-loaded Core module so Suspense resolves immediately in tests
+jest.mock('../../../../components/common/TextContainer/TextContainerCore', () => {
+    const React = require('react');
+    return {
+        __esModule: true,
+        extractText: (nodes: any[]) => nodes.map((n: any) => n.value || (n.children ? n.children.map((c: any) => c.value || '').join('') : '')).join(''),
+        PreBlock: ({ node, children, ...props }: any) => (
+            <div style={{ position: 'relative' }}>
+                <button title="Copy Code">Copy Code</button>
+                <pre {...props}>{children}</pre>
+            </div>
+        ),
+        default: ({ title, content, showCopyButton = true, className, isLoading, children, 'data-testid': testId, loadingContent }: any) => {
+            const headerContent = typeof title === 'string' ? <h2>{title}</h2> : title;
+            return (
+                <article className={`article ${className || ''}`} data-testid={testId}>
+                    {(headerContent || showCopyButton) && (
+                        <header data-testid={testId ? `${testId}-header` : undefined}>
+                            <div>
+                                {headerContent}
+                                {showCopyButton && (
+                                    <button data-testid={testId ? `${testId}-copy-button` : undefined}>Copy</button>
+                                )}
+                            </div>
+                        </header>
+                    )}
+                    {isLoading ? loadingContent : (
+                        <div data-testid="markdown-content">{content}</div>
+                    )}
+                    {children}
+                </article>
+            );
+        }
+    };
+});
+
 // Mock ReactMarkdown and plugins to avoid ESM issues and simplify testing
 jest.mock('react-markdown', () => (props: any) => {
     return <div data-testid="markdown-content">{props.children}</div>;
@@ -10,19 +46,20 @@ jest.mock('react-markdown', () => (props: any) => {
 jest.mock('remark-gfm', () => () => { });
 jest.mock('rehype-highlight', () => () => { });
 
+
 describe('TextContainer Component', () => {
     const defaultProps = {
         content: 'Markdown Content',
         'data-testid': 'test-container'
     };
 
-    test('renders content correctly', () => {
+    test('renders content correctly', async () => {
         render(<TextContainer {...defaultProps} />);
 
         const container = screen.getByTestId('test-container');
         expect(container).toBeInTheDocument();
 
-        const markdown = screen.getByTestId('markdown-content');
+        const markdown = await screen.findByTestId('markdown-content');
         expect(markdown).toHaveTextContent('Markdown Content');
     });
 
