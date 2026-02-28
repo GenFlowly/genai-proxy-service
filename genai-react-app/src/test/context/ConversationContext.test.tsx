@@ -61,6 +61,9 @@ const mockUseAI = jest.fn(() => ({
     systemPrompt: '',
     setSystemPrompt: jest.fn(),
     setSupplementalText: jest.fn(),
+    customerInstructions: [],
+    selectedInstructionId: null,
+    setSelectedInstructionId: jest.fn()
 }));
 const mockSetSupplementalText = jest.fn();
 jest.mock('../../context/AIContext', () => ({
@@ -155,6 +158,9 @@ describe('ConversationContext UI Integration', () => {
             systemPrompt: 'You are an tax expert...',
             setSystemPrompt: jest.fn(),
             setSupplementalText: mockSetSupplementalText,
+            customerInstructions: [],
+            selectedInstructionId: null,
+            setSelectedInstructionId: jest.fn()
         });
     });
 
@@ -206,6 +212,9 @@ describe('ConversationContext UI Integration', () => {
             systemPrompt: '',
             setSystemPrompt: jest.fn(),
             setSupplementalText: mockSetSupplementalText,
+            customerInstructions: [],
+            selectedInstructionId: null,
+            setSelectedInstructionId: jest.fn()
         });
         customRender(<TestConversationUI />);
         const editor = await screen.findByTestId('prompt-editor');
@@ -264,6 +273,9 @@ describe('ConversationContext UI Integration', () => {
             systemPrompt: '',
             setSystemPrompt: jest.fn(),
             setSupplementalText: mockSetSupplementalText,
+            customerInstructions: [],
+            selectedInstructionId: null,
+            setSelectedInstructionId: jest.fn()
         });
         (generateTextStreamService.generateTextStream as jest.Mock).mockImplementation(
             async (token, payload, onDelta, onMetadata) => {

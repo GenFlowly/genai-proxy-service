@@ -22,7 +22,7 @@ describe('conversationService', () => {
         const mockBackendResponse = {
             promptAndResponseList: [
                 {
-                    prompt: { systemPrompt: 'Sys', prompt: 'Hello' },
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Hello' },
                     response: {
                         text: 'World',
                         aiVendor: 'OPENAI',
@@ -31,7 +31,7 @@ describe('conversationService', () => {
                     }
                 },
                 {
-                    prompt: { systemPrompt: 'Sys', prompt: 'Question' },
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Question' },
                     response: {
                         text: 'Answer',
                         aiVendor: 'CLAUDE',
@@ -80,7 +80,7 @@ describe('conversationService', () => {
         const mockBackendResponse = {
             promptAndResponseList: [
                 {
-                    prompt: { systemPrompt: '', prompt: 'Valid' },
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Valid' },
                     response: { text: null, aiVendor: null, conversationId: null, messageId: null }
                 }
             ]
@@ -117,7 +117,7 @@ describe('conversationService', () => {
         const mockBackendResponse = {
             promptAndResponseList: [
                 {
-                    prompt: { systemPrompt: 'Sys', prompt: 'Hello' },
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Hello' },
                     response: {
                         text: 'World',
                         aiVendor: null, // No vendor

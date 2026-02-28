@@ -1,6 +1,14 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import PlainNotes from '../../../../../components/widgets/CenterWidgets/NotesWidget/PlainNotes';
+import { saveNote } from '../../../../../services/saveNotesService';
+
+jest.mock('../../../../../context/AuthContext', () => ({
+    useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token') })
+}));
+jest.mock('../../../../../services/saveNotesService', () => ({
+    saveNote: jest.fn().mockResolvedValue({})
+}));
 
 // Mock PromptEditor to make it testable
 jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', () => {
@@ -37,19 +45,21 @@ describe('PlainNotes', () => {
         expect(editor).toHaveValue('My note content');
     });
 
-    test('calls handleSave with empty prompt initially', () => {
-        const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { });
+    test('calls handleSave with empty prompt initially', async () => {
         render(<PlainNotes />);
 
         const saveBtn = screen.getByText('Save');
         fireEvent.click(saveBtn);
 
-        expect(consoleSpy).toHaveBeenCalledWith('Save clicked', { prompt: '', mode: 'PLAIN' });
-        consoleSpy.mockRestore();
+        await waitFor(() => {
+            expect(saveNote).toHaveBeenCalledWith(expect.objectContaining({
+                noteValue: '',
+                client: 'REACT_APP'
+            }), 'mock-token');
+        });
     });
 
-    test('calls handleSave with updated prompt', () => {
-        const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { });
+    test('calls handleSave with updated prompt', async () => {
         render(<PlainNotes />);
 
         const editor = screen.getByTestId('notes-widget-editor');
@@ -58,7 +68,11 @@ describe('PlainNotes', () => {
         const saveBtn = screen.getByText('Save');
         fireEvent.click(saveBtn);
 
-        expect(consoleSpy).toHaveBeenCalledWith('Save clicked', { prompt: 'Test content', mode: 'PLAIN' });
-        consoleSpy.mockRestore();
+        await waitFor(() => {
+            expect(saveNote).toHaveBeenCalledWith(expect.objectContaining({
+                noteValue: 'Test content',
+                client: 'REACT_APP'
+            }), 'mock-token');
+        });
     });
 });

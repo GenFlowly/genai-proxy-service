@@ -57,7 +57,8 @@ describe('InstructionWidget Component', () => {
             systemPrompt: '',
             setSystemPrompt: navFunctions.setSystemPrompt,
             selectedInstructionId: null,
-            setSelectedInstructionId: navFunctions.setSelectedInstructionId
+            setSelectedInstructionId: navFunctions.setSelectedInstructionId,
+            customerInstructions: mockInstructions
         });
 
         mockUseAuth.mockReturnValue({
@@ -141,7 +142,8 @@ describe('InstructionWidget Component', () => {
             systemPrompt: 'New System Prompt',
             setSystemPrompt: navFunctions.setSystemPrompt,
             selectedInstructionId: null,
-            setSelectedInstructionId: navFunctions.setSelectedInstructionId
+            setSelectedInstructionId: navFunctions.setSelectedInstructionId,
+            customerInstructions: mockInstructions
         });
         mockCreateInstruction.mockResolvedValue({
             id: 'new-id',
@@ -176,7 +178,8 @@ describe('InstructionWidget Component', () => {
             systemPrompt: 'Prompt',
             setSystemPrompt: navFunctions.setSystemPrompt,
             selectedInstructionId: 'inst-1',
-            setSelectedInstructionId: navFunctions.setSelectedInstructionId
+            setSelectedInstructionId: navFunctions.setSelectedInstructionId,
+            customerInstructions: mockInstructions
         });
 
         render(<InstructionWidget />);
@@ -229,7 +232,8 @@ describe('InstructionWidget Component', () => {
             systemPrompt: 'System Prompt 1 v2',
             setSystemPrompt: navFunctions.setSystemPrompt,
             selectedInstructionId: 'inst-1',
-            setSelectedInstructionId: navFunctions.setSelectedInstructionId
+            setSelectedInstructionId: navFunctions.setSelectedInstructionId,
+            customerInstructions: mockInstructions
         });
         mockUseLayout.mockReturnValue({
             isInstructionWidgetExpanded: true,
@@ -282,7 +286,7 @@ describe('InstructionWidget Component', () => {
     test('handles error during instruction creation', async () => {
         const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
         mockUseLayout.mockReturnValue({ isInstructionWidgetExpanded: true, setInstructionWidgetExpanded: navFunctions.setInstructionWidgetExpanded });
-        mockUseAI.mockReturnValue({ systemPrompt: 'Fail Prompt', setSystemPrompt: navFunctions.setSystemPrompt, selectedInstructionId: null, setSelectedInstructionId: navFunctions.setSelectedInstructionId });
+        mockUseAI.mockReturnValue({ systemPrompt: 'Fail Prompt', setSystemPrompt: navFunctions.setSystemPrompt, selectedInstructionId: null, setSelectedInstructionId: navFunctions.setSelectedInstructionId, customerInstructions: mockInstructions });
 
         mockCreateInstruction.mockRejectedValue(new Error('API Error'));
 
@@ -310,7 +314,7 @@ describe('InstructionWidget Component', () => {
             refreshInstructions: navFunctions.refreshInstructions,
             updateInstruction: navFunctions.updateInstruction
         });
-        mockUseAI.mockReturnValue({ systemPrompt: 'Some prompt', setSystemPrompt: navFunctions.setSystemPrompt, selectedInstructionId: null, setSelectedInstructionId: navFunctions.setSelectedInstructionId });
+        mockUseAI.mockReturnValue({ systemPrompt: 'Some prompt', setSystemPrompt: navFunctions.setSystemPrompt, selectedInstructionId: null, setSelectedInstructionId: navFunctions.setSelectedInstructionId, customerInstructions: [] });
 
         render(<InstructionWidget />);
 
@@ -397,7 +401,8 @@ describe('InstructionWidget Component', () => {
             systemPrompt: 'Updated Prompt',
             setSystemPrompt: navFunctions.setSystemPrompt,
             selectedInstructionId: 'inst-1', // SELECTED
-            setSelectedInstructionId: navFunctions.setSelectedInstructionId
+            setSelectedInstructionId: navFunctions.setSelectedInstructionId,
+            customerInstructions: mockInstructions
         });
 
         mockCreateInstruction.mockResolvedValue({
@@ -425,7 +430,7 @@ describe('InstructionWidget Component', () => {
 
     test('cancels rename action', () => {
         mockUseLayout.mockReturnValue({ isInstructionWidgetExpanded: true, setInstructionWidgetExpanded: navFunctions.setInstructionWidgetExpanded });
-        mockUseAI.mockReturnValue({ systemPrompt: '', setSystemPrompt: navFunctions.setSystemPrompt, selectedInstructionId: 'inst-1', setSelectedInstructionId: navFunctions.setSelectedInstructionId });
+        mockUseAI.mockReturnValue({ systemPrompt: '', setSystemPrompt: navFunctions.setSystemPrompt, selectedInstructionId: 'inst-1', setSelectedInstructionId: navFunctions.setSelectedInstructionId, customerInstructions: mockInstructions });
 
         render(<InstructionWidget />);
 
@@ -528,7 +533,8 @@ describe('InstructionWidget Component', () => {
             systemPrompt: 'System Prompt 1 v2',
             setSystemPrompt: navFunctions.setSystemPrompt,
             selectedInstructionId: 'inst-1',
-            setSelectedInstructionId: navFunctions.setSelectedInstructionId
+            setSelectedInstructionId: navFunctions.setSelectedInstructionId,
+            customerInstructions: mockInstructions
         });
         mockUseLayout.mockReturnValue({ isInstructionWidgetExpanded: true, setInstructionWidgetExpanded: navFunctions.setInstructionWidgetExpanded });
 

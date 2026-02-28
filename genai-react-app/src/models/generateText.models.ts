@@ -2,7 +2,8 @@
 import { AIConfig } from "../context/AIContext";
 
 export interface Prompt {
-    systemPrompt: string
+    instructionId: string
+    instructionVersion: string
     prompt: string
 }
 

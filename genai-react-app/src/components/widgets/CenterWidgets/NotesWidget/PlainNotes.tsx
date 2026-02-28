@@ -2,12 +2,30 @@ import React, { useState } from 'react'
 import PromptEditor from '../../PromptEditorWidget/PromptEditor'
 import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
 import styles from './PlainNotes.module.scss'
+import { useAuth } from '../../../../context/AuthContext'
+import { saveNote } from '../../../../services/saveNotesService'
 
 export default function PlainNotes() {
+    const { getAccessTokenSilently } = useAuth()
     const [prompt, setPrompt] = useState('')
+    const [isLoading, setIsLoading] = useState(false)
 
-    const handleSave = () => {
-        console.log('Save clicked', { prompt, mode: 'PLAIN' })
+    const handleSave = async () => {
+        try {
+            setIsLoading(true)
+            const token = await getAccessTokenSilently()
+            await saveNote({
+                noteValue: prompt,
+                createdAt: new Date().toISOString(),
+                client: 'REACT_APP',
+            }, token)
+            console.log('Plain Note saved successfully')
+            setPrompt('') // Optional: clear after save
+        } catch (error) {
+            console.error('Failed to save plain note:', error)
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (
