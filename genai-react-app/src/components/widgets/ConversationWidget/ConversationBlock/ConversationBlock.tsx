@@ -19,11 +19,13 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === id)
     const responseRef = useRef<HTMLDivElement | null>(null)
     const hasScrolledRef = useRef(false)
+    const isAutoScrollPausedRef = useRef(false)
 
     // Reset scroll ref when loading starts (new generation)
     useEffect(() => {
         if (conversationBlock?.isLoading) {
             hasScrolledRef.current = false
+            isAutoScrollPausedRef.current = false
         }
     }, [conversationBlock?.isLoading])
 
@@ -43,16 +45,54 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
 
     // Continuous scroll during streaming (Sticky Bottom)
     useEffect(() => {
-        if (conversationBlock?.isLoading && responseRef.current && hasScrolledRef.current) {
+        if (conversationBlock?.isLoading && responseRef.current && hasScrolledRef.current && !isAutoScrollPausedRef.current) {
             // Use 'auto' behavior for stickiness to avoid fighting with smooth animation lag
-            // Check if element is roughly in view or if we should force it?
-            // User requested "automatically scroll down".
             responseRef.current.scrollIntoView({
                 behavior: 'smooth',
                 block: 'end',
             })
         }
     }, [conversationBlock?.responseMessages, conversationBlock?.isLoading])
+
+    // Detect user scroll to pause/resume auto-scroll
+    useEffect(() => {
+        if (!conversationBlock?.isLoading || !responseRef.current) return;
+
+        const scrollElement = responseRef.current.closest('[data-testid*="center-section"]');
+        const scrollContainer = scrollElement || window;
+
+        const handleWheel = (e: WheelEvent) => {
+            if (e.deltaY < 0) {
+                // User scrolled up
+                isAutoScrollPausedRef.current = true;
+            }
+        };
+
+        const handleTouchStart = () => {
+            // Pause on touch interactions to allow manual drag
+            isAutoScrollPausedRef.current = true;
+        };
+
+        const handleScroll = () => {
+            // Resume if user scrolls to the bottom of the container naturally
+            const container = scrollElement ? (scrollElement as HTMLElement) : document.documentElement;
+            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+
+            if (isNearBottom) {
+                isAutoScrollPausedRef.current = false;
+            }
+        };
+
+        scrollContainer.addEventListener('wheel', handleWheel as EventListener, { passive: true });
+        scrollContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
+        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+
+        return () => {
+            scrollContainer.removeEventListener('wheel', handleWheel as EventListener);
+            scrollContainer.removeEventListener('touchstart', handleTouchStart);
+            scrollContainer.removeEventListener('scroll', handleScroll);
+        }
+    }, [conversationBlock?.isLoading])
 
     if (!conversationBlock) return null
 
