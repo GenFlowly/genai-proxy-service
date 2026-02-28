@@ -3,7 +3,6 @@ package com.genflowly.service
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import models.Prompt
 import mu.KLogger
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -46,11 +45,11 @@ class RetrievalService(
         }
     }
 
-    suspend fun retrieveContext(customerId: String, prompt: Prompt): String? {
+    suspend fun retrieveContext(customerId: String, userPrompt: String, systemPrompt: String?): String? {
         logger.info { "Retrieving context for customer $customerId using URL: $retrievalServerUrl/retrieve" }
 
         // We reuse the note_value processor as requested by the user, squashing the system & user prompts
-        val combinedPrompt = "${prompt.systemPrompt}\n\n${prompt.prompt}"
+        val combinedPrompt = "${systemPrompt ?: ""}\n\n$userPrompt"
         
         val payload = RetrievalLambdaPayload(
             customer_id = customerId,

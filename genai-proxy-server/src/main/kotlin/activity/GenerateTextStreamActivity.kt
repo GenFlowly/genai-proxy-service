@@ -51,7 +51,8 @@ fun Route.registerGenerateTextStreamRoutes(
 
                 val streamResult = aiRequestManager.processTextGenerateStreamRequest(
                     listOf(request.aiConfig),
-                    request.prompt.systemPrompt,
+                    request.prompt.instructionId,
+                    request.prompt.instructionVersion,
                     request.prompt.prompt,
                     conversationId,
                     request.selectedResponseId,

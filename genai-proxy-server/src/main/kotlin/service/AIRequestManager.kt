@@ -68,7 +68,8 @@ class AIRequestManager(
 
     suspend fun processTextGenerateRequest(
         aiConfig: List<AIConfig>,
-        systemPrompt: String,
+        instructionId: String,
+        instructionVersion: String,
         userRequestRawPrompt: String,
         conversationId: String?,
         selectedResponseId: String?,
@@ -77,6 +78,9 @@ class AIRequestManager(
 
     ): List<Message> {
 
+        val versionInt = instructionVersion.toIntOrNull() ?: 1
+        val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, versionInt)
+        val systemPrompt = instructionResp?.instruction ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
         val conversationId =
@@ -275,13 +279,18 @@ class AIRequestManager(
 
     suspend fun processTextGenerateStreamRequest(
         aiConfig: List<AIConfig>,
-        systemPrompt: String,
+        instructionId: String,
+        instructionVersion: String,
         userRequestRawPrompt: String,
         conversationId: String?,
         selectedResponseId: String?,
         client: String,
         customerId: String
     ): StreamExecutionResult {
+
+        val versionInt = instructionVersion.toIntOrNull() ?: 1
+        val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, versionInt)
+        val systemPrompt = instructionResp?.instruction ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =

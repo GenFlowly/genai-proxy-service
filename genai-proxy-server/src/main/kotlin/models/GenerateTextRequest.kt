@@ -21,6 +21,7 @@ data class AIConfig(
 
 @Serializable
 data class Prompt(
-    val systemPrompt: String,
+    val instructionId: String,
+    val instructionVersion: String,
     val prompt: String,
 )

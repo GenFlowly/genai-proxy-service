@@ -4,7 +4,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import models.Prompt
 import org.slf4j.LoggerFactory
 
 class PromptGenerationService(
@@ -14,8 +13,7 @@ class PromptGenerationService(
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun generatePrompt(customerId: String, userRequestRawPrompt: String, systemPrompt: String?): String {
-        val promptObj = Prompt(prompt = userRequestRawPrompt, systemPrompt = systemPrompt ?: "")
-        val vectorResponse = retrievalService.retrieveContext(customerId, promptObj)
+        val vectorResponse = retrievalService.retrieveContext(customerId, userRequestRawPrompt, systemPrompt)
 
         if (vectorResponse == null) {
             logger.warn("Retrieval Service returned null or failed for customer $customerId")

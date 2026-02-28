@@ -23,7 +23,7 @@ class ConversationService(
         while (i < messages.size) {
             val msg = messages[i]
             if (msg.role == "user") {
-                val prompt = Prompt(systemPrompt = msg.systemPrompt, prompt = msg.text)
+                val prompt = Prompt(instructionId = "", instructionVersion = "", prompt = msg.text)
                 
                 // Default empty response
                 var responseObj = GenerateTextResponse(
