@@ -1,10 +1,8 @@
-import React from 'react'
-import '@uiw/react-markdown-editor/markdown-editor.css'
-import '@uiw/react-markdown-preview/markdown.css'
-import MarkdownEditor, { fullscreen, preview } from '@uiw/react-markdown-editor'
-import { EditorView } from '@codemirror/view'
+import React, { Suspense, lazy } from 'react'
 import styles from './PromptEditor.module.scss'
-import { addStepsCommand, addExamplesCommand, addCopyCommand } from './CustomToolbarCommands'
+
+// Lazy load the heavy Markdown editor component
+const PromptEditorCore = lazy(() => import('./PromptEditorCore'))
 
 interface PromptEditorProps {
     id: string
@@ -19,37 +17,22 @@ interface PromptEditorProps {
 export default function PromptEditor({ id, value, onChange, disableCache = false, height = "40.25rem", className = '', 'data-testid': testId }: PromptEditorProps): React.ReactElement {
 
     return (
-        <div className={`${styles.container} ${className}`} data-testid={testId} style={height === '100%' ? { height: '100%' } : {}}>
-            <div className={styles.editorWrapper} style={height === '100%' ? { height: '100%' } : {}}>
-                <div className={styles.innerContainer} style={height === '100%' ? { height: '100%' } : {}}>
-                    {/* Ghost spacer for perfect centering */}
-                    <div className={styles.spacer} />
-                    <div className={styles.mdxEditorRoot} style={height === '100%' ? { height: '100%', display: 'flex', flexDirection: 'column' } : {}}>
-                        <MarkdownEditor
-                            value={value}
-                            onChange={onChange}
-                            height={height}
-                            visible={false}
-                            enablePreview={true}
-                            className={styles.markdownEditor}
-                            toolbars={[
-
-
-                                addStepsCommand,
-                                addExamplesCommand,
-                            ]}
-                            toolbarsMode={[
-                                preview,
-                                fullscreen,
-                                addCopyCommand,
-                            ]}
-                            extensions={[EditorView.lineWrapping]}
-                        />
-                    </div>
-                    <div className={styles.controlsRow}>
-                    </div>
+        <Suspense fallback={
+            <div className={`${styles.container} ${className}`} data-testid={testId} style={height === '100%' ? { height: '100%' } : {}}>
+                <div className={styles.editorWrapper} style={height === '100%' ? { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' } : { display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ color: 'var(--color-text-tertiary)' }}>Loading editor...</div>
                 </div>
             </div>
-        </div>
+        }>
+            <PromptEditorCore
+                id={id}
+                value={value}
+                onChange={onChange}
+                disableCache={disableCache}
+                height={height}
+                className={className}
+                data-testid={testId}
+            />
+        </Suspense>
     )
 }
