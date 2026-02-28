@@ -58,7 +58,8 @@ fun Route.registerGenerateTextRoutes(
                 val responseMessageList = aiRequestManager
                     .processTextGenerateRequest(
                         request.aiConfig,
-                        request.prompt.systemPrompt,
+                        request.prompt.instructionId,
+                        request.prompt.instructionVersion,
                         request.prompt.prompt,
                         request.conversationId,
                         request.selectedResponseId,
