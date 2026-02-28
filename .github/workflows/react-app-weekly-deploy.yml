@@ -5,6 +5,14 @@ on:
     # Runs at 00:00 UTC every Friday
     - cron: '0 0 * * 5'
   workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
+  workflow_call:
+    secrets:
+      NETLIFY_AUTH_TOKEN:
+        required: true
+      NETLIFY_SITE_ID:
+        required: true
+      GH_PAT_TOKEN_FOR_FREE_ACCOUNT:
+        required: true
 
 jobs:
   deploy:
