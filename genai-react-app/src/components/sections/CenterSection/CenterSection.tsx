@@ -1,5 +1,4 @@
 import React from 'react'
-import { useLayout } from '../../../context/LayoutContext'
 import styles from './CenterSection.module.scss'
 import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
 
@@ -10,7 +9,6 @@ interface CenterSectionProps {
 
 export default function CenterSection({ widgetIds, 'data-testid': testId }: CenterSectionProps) {
     const widgets = useWidgetResolver(widgetIds)
-    const { isInstructionWidgetExpanded } = useLayout()
 
     return (
         <div className={styles.centerSection} data-testid={testId || "center-section"}>

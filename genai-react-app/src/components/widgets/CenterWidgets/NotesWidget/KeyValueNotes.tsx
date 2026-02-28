@@ -54,6 +54,7 @@ export default function KeyValueNotes() {
                 <MultiPurposeButton
                     label="Save"
                     onClick={handleSave}
+                    disabled={isLoading}
                 />
             </div>
         </>

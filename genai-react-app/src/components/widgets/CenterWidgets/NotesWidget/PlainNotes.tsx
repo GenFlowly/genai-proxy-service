@@ -43,6 +43,7 @@ export default function PlainNotes() {
                 <MultiPurposeButton
                     label="Save"
                     onClick={handleSave}
+                    disabled={isLoading}
                 />
             </div>
         </>
