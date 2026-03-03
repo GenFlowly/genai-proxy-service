@@ -13,5 +13,7 @@ data class Message(
     var sequence: Int? = 0,
     val systemPrompt: String,
     val aiConfig: List<AIConfig>,
-    val previousMessageId: String?
+    val previousMessageId: String?,
+    val inputTokens: Int? = null,
+    val outputTokens: Int? = null
 )

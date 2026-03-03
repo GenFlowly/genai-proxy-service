@@ -104,6 +104,8 @@ private fun createResponse(message: Message): GenerateTextResponse {
         text = message.text,
         aiVendor = message.aiConfig.first().aiVendor.name,
         conversationId = message.conversationId,
-        messageId = message.messageId
+        messageId = message.messageId,
+        inputTokens = message.inputTokens,
+        outputTokens = message.outputTokens
     )
 }
