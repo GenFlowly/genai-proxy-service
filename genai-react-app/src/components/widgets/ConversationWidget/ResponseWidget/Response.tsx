@@ -133,7 +133,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                 className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}
             >
 
-                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading }) => {
+                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens }) => {
                     const isSelected = selectedResponseId === messageId
 
                     let HeaderComponent: React.ReactNode = null
@@ -165,6 +165,28 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                         >
                             {onFollowUp && !isLoading && (
                                 <div className={styles.followUpButtonWrapper}>
+                                    {(inputTokens != null || outputTokens != null) && (
+                                        <div className={styles.tokenBadge}>
+                                            {inputTokens != null && (
+                                                <span className={styles.tokenItem} title="Input tokens">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                        <path d="M2 17l10 5 10-5" />
+                                                        <path d="M2 12l10 5 10-5" />
+                                                    </svg>
+                                                    {inputTokens.toLocaleString()}
+                                                </span>
+                                            )}
+                                            {outputTokens != null && (
+                                                <span className={styles.tokenItem} title="Output tokens">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                                                    </svg>
+                                                    {outputTokens.toLocaleString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                     <Tooltip content={disabled ? "No API keys set" : ""}>
                                         <div style={disabled ? { cursor: 'not-allowed' } : {}}>
                                             <MultiPurposeButton
