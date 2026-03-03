@@ -53,7 +53,7 @@ dependencies {
     // Kotlin‑logging (nice DSL) + SLF4J API
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
     // Logback classic (SLF4J implementation)
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.6")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.13")
 
     implementation(platform("software.amazon.awssdk:bom:2.25.42"))
     // DynamoDB client
@@ -63,7 +63,7 @@ dependencies {
     // Core HTTP client (Netty works well in Ktor)
     implementation("software.amazon.awssdk:url-connection-client")
 
-    implementation("com.genflowly:ai-caller-lib:0.0.32")
+    implementation("com.genflowly:ai-caller-lib:0.0.33")
 
     implementation("io.ktor:ktor-server-auth-jvm:3.0.0")
     implementation("io.ktor:ktor-server-auth-jwt-jvm:3.0.0")

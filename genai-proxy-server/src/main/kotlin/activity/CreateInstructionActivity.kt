@@ -54,7 +54,7 @@ fun Route.registerCreateInstructionRoutes(
                                 "\n" +
                                 "Return only the name of Role, nothing else",
                         customerId
-                    )
+                    ).text
                 }
                 val response = customerProfileService.createInstruction(
                     customerId, instructionName, request.instruction,

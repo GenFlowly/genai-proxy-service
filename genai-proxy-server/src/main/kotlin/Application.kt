@@ -87,6 +87,8 @@ fun Application.module() {
         exposeHeader("X-Message-Id")
         exposeHeader("X-Response-Message-Id")
         exposeHeader("X-Ai-Vendor")
+        exposeHeader("X-Input-Tokens")
+        exposeHeader("X-Output-Tokens")
         
         allowCredentials = true
         allowNonSimpleContentTypes = true

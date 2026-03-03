@@ -164,6 +164,9 @@ class DynamoDBProvider(
         val aiConfigAttr = item["aiConfig"] ?: return null
         val aiConfig = attributeValueToAiConfig(aiConfigAttr)
 
+        val inputTokens = item["inputTokens"]?.n()?.toIntOrNull()
+        val outputTokens = item["outputTokens"]?.n()?.toIntOrNull()
+
         return Message(
             messageId = item["messageId"]?.s() ?: return null,
             conversationId = item["conversationId"]?.s() ?: return null,
@@ -174,7 +177,9 @@ class DynamoDBProvider(
             sequence = sequence,
             systemPrompt = systemPrompt,
             aiConfig = aiConfig,
-            previousMessageId = previousMessageId
+            previousMessageId = previousMessageId,
+            inputTokens = inputTokens,
+            outputTokens = outputTokens
         )
     }
 
@@ -233,7 +238,14 @@ class DynamoDBProvider(
                     "previousMessageId" to AttributeValue.builder()
                         .s(message.previousMessageId ?: "")
                         .build()
-                )
+                ).also { map ->
+                    message.inputTokens?.let {
+                        map["inputTokens"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    message.outputTokens?.let {
+                        map["outputTokens"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                }
             )
 
             val putReq = PutItemRequest.builder()

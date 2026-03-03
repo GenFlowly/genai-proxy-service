@@ -1,12 +1,17 @@
 package service
 
+import com.genflowly.aicallerlib.models.AIUsageMetadata
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.aicallerlib.models.claude.ClaudeUsageMetadata
+import com.genflowly.aicallerlib.models.gemini.GeminiUsageMetadata
+import com.genflowly.aicallerlib.models.openai.OpenAIUsageMetadata
 import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.PromptGenerationService
 import com.genflowly.utils.fetchApiKey
 import models.AIConfig
+import models.AIGenerateResult
 import models.GenerateTextRequest
 import models.Message
 import org.slf4j.LoggerFactory
@@ -130,8 +135,6 @@ class AIRequestManager(
         message: Message
     ): Message {
 
-        var responseText: String?
-
         // Step 1: Build conversation history for prompt
         val messages = getThreadContext(
             message.conversationId,
@@ -140,7 +143,7 @@ class AIRequestManager(
 
         logger.info("Sending {} messages context", messages.size)
         
-        responseText = generateText(
+        val result = generateText(
             aiVendor, 
             model, 
             messages, 
@@ -149,7 +152,7 @@ class AIRequestManager(
         )
 
         val responseMessage: Message
-        if (!responseText.isNullOrBlank()) {
+        if (result.text.isNotBlank()) {
 
             // Step 7: Create response message object
             responseMessage = Message(
@@ -157,10 +160,12 @@ class AIRequestManager(
                 customerId = message.customerId,
                 client = message.client,
                 role = "assistant",
-                text = responseText,
+                text = result.text,
                 previousMessageId = message.messageId,
                 aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
-                systemPrompt = message.systemPrompt
+                systemPrompt = message.systemPrompt,
+                inputTokens = result.inputTokens,
+                outputTokens = result.outputTokens
             )
         } else {
             responseMessage = Message(
@@ -191,7 +196,7 @@ class AIRequestManager(
         messages: List<Message>,
         systemPrompt: String?,
         customerId: String
-    ): String {
+    ): AIGenerateResult {
         try {
             // Step 1: Fetch API key for 3rd party AI vendor
             val apiKey = fetchApiKey(
@@ -251,22 +256,42 @@ class AIRequestManager(
             // Step 3: Stop timer for 3rd party API call
             val durationMs = System.currentTimeMillis() - startTime
 
-            // Step 4: Null check response and throw exception if null
+            // Step 4: Extract text and usage metadata
             val responseText = aiResponse.getText() ?: ""
+            val (inputTokens, outputTokens) = extractTokens(aiResponse.getUsageMetadata())
 
             logger.info(
                 "AI response received: vendor={}, model={}, " +
-                        "responseText={}, durationMs={}",
+                        "responseText={}, durationMs={}, inputTokens={}, outputTokens={}",
                 aiVendor,
                 model,
                 responseText,
-                durationMs
+                durationMs,
+                inputTokens,
+                outputTokens
             )
-            return responseText
+            return AIGenerateResult(text = responseText, inputTokens = inputTokens, outputTokens = outputTokens)
 
         } catch (e: Exception) {
-            return "Error occurred while generating response from " +
-                    "$aiVendor - ${e.message}"
+            val errorText = "Error occurred while generating response from $aiVendor - ${e.message}"
+            return AIGenerateResult(text = errorText, inputTokens = null, outputTokens = null)
+        }
+    }
+
+    /**
+     * Normalises provider-specific [AIUsageMetadata] into a simple
+     * (inputTokens, outputTokens) pair usable by the rest of the server.
+     */
+    private fun extractTokens(metadata: AIUsageMetadata?): Pair<Int?, Int?> {
+        if (metadata == null) return Pair(null, null)
+        return when (metadata) {
+            is GeminiUsageMetadata -> Pair(metadata.promptTokens, metadata.completionTokens)
+            is OpenAIUsageMetadata -> Pair(metadata.inputTokens, metadata.outputTokens)
+            is ClaudeUsageMetadata -> Pair(
+                metadata.inputTokens?.toInt(),
+                metadata.outputTokens?.toInt()
+            )
+            else -> Pair(null, null)
         }
     }
 
@@ -288,8 +313,7 @@ class AIRequestManager(
         customerId: String
     ): StreamExecutionResult {
 
-        val versionInt = instructionVersion.toIntOrNull() ?: 1
-        val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, versionInt)
+        val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, instructionVersion.toIntOrNull() ?: 1)
         val systemPrompt = instructionResp?.instruction ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
@@ -339,18 +363,27 @@ class AIRequestManager(
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
         val responseMessageId = java.util.UUID.nameUUIDFromBytes(responseUniqueContent.toByteArray()).toString()
 
+        var streamInputTokens: Int? = null
+        var streamOutputTokens: Int? = null
+
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
             try {
-                generateTextStream(
+                generateTextStreamWithUsage(
                     config.aiVendor,
                     config.model,
                     messages,
                     message.systemPrompt,
                     message.customerId
-                ).collect { chunk ->
+                ).collect { (chunk, aiResponse) ->
                     sb.append(chunk)
                     emit(chunk)
+                    // Track the most recent AIResponse that carries usage data
+                    if (aiResponse != null && aiResponse.getUsageMetadata() != null) {
+                        val (inp, out) = extractTokens(aiResponse.getUsageMetadata())
+                        if (inp != null) streamInputTokens = inp
+                        if (out != null) streamOutputTokens = out
+                    }
                 }
             } catch (e: java.io.IOException) {
                 logger.warn("Stream disrupted (client likely disconnected): {}", e.message)
@@ -374,23 +407,43 @@ class AIRequestManager(
                         text = responseText,
                         previousMessageId = message.messageId,
                         aiConfig = listOf(config),
-                        systemPrompt = message.systemPrompt
+                        systemPrompt = message.systemPrompt,
+                        inputTokens = streamInputTokens,
+                        outputTokens = streamOutputTokens
                     )
                     conversationService.addMessageInConversation(responseMessage)
+                }
+
+                // Emit a sentinel chunk so the client can extract token usage after streaming.
+                // Format: "\n[USAGE:{\"inputTokens\":N,\"outputTokens\":N}]" - only emitted when at least one count is known.
+                if (streamInputTokens != null || streamOutputTokens != null) {
+                    val inputPart = streamInputTokens?.toString() ?: "null"
+                    val outputPart = streamOutputTokens?.toString() ?: "null"
+                    emit("\n[USAGE:{\"inputTokens\":$inputPart,\"outputTokens\":$outputPart}]")
                 }
             }
         }
 
-        return StreamExecutionResult(activeConversationId, deterministicId, flow, responseMessageId)
+        return StreamExecutionResult(
+            activeConversationId,
+            deterministicId,
+            flow,
+            responseMessageId
+        )
     }
 
-    private suspend fun generateTextStream(
+    /**
+     * Internal streaming helper that emits pairs of (text chunk, raw AIResponse).
+     * The AIResponse is included so callers can extract usage metadata from
+     * provider-specific chunks (e.g. the final chunk that contains token counts).
+     */
+    private suspend fun generateTextStreamWithUsage(
         aiVendor: AIVendor,
         model: String,
         messages: List<Message>,
         systemPrompt: String?,
         customerId: String
-    ): kotlinx.coroutines.flow.Flow<String> {
+    ): kotlinx.coroutines.flow.Flow<Pair<String, com.genflowly.aicallerlib.models.AIResponse?>> {
         val apiKey = fetchApiKey(
             aiVendor,
             customerId,
@@ -411,7 +464,7 @@ class AIRequestManager(
                             com.genflowly.aicallerlib.models.openai.OpenAIRequest(
                                 params
                             )
-                        ).collect { emit(it.getText()) }
+                        ).collect { response -> emit(Pair(response.getText(), response)) }
                     }
     
                     AIVendor.GEMINI -> {
@@ -432,15 +485,15 @@ class AIRequestManager(
                                     com.genflowly.aicallerlib.models.gemini.GeminiRequest(
                                         params
                                     )
-                                ).collect { 
-                                    logger.info("Gemini stream chunk received: ${it.getText()?.take(20)}...")
-                                    emit(it.getText() ?: "") 
+                                ).collect { response ->
+                                    logger.info("Gemini stream chunk received: ${response.getText()?.take(20)}...")
+                                    emit(Pair(response.getText() ?: "", response))
                                 }
                             }
                         } catch (e: TimeoutCancellationException) {
                             val timeoutMsg = "Request timed out while waiting for Gemini. This likely indicates you are rate limited (429) and the SDK is retrying silently. Please try again later."
                             logger.warn(timeoutMsg)
-                            emit(timeoutMsg)
+                            emit(Pair(timeoutMsg, null))
                         }
                         
                         logger.info("Gemini stream collection finished")
@@ -457,7 +510,7 @@ class AIRequestManager(
                             com.genflowly.aicallerlib.models.claude.ClaudeRequest(
                                 params
                             )
-                        ).collect { emit(it.getText()) }
+                        ).collect { response -> emit(Pair(response.getText(), response)) }
                     }
                 }
              } catch (e: Exception) {
@@ -473,11 +526,11 @@ class AIRequestManager(
                  if (isRateLimit) {
                       val rateLimitMsg = "Rate limit exceeded for your API key. Please retry later.\nDetails: $message"
                       logger.info("Emitting rate limit message inside flow: {}", rateLimitMsg)
-                      emit(rateLimitMsg)
+                      emit(Pair(rateLimitMsg, null))
                  } else if (isApiKeyExpired) {
                       val expiredMsg = "Please update your API key.\nDetails: $message"
                       logger.info("Emitting expired key message inside flow: {}", expiredMsg)
-                      emit(expiredMsg)
+                      emit(Pair(expiredMsg, null))
                  } else {
                       throw e
                  }
