@@ -71,7 +71,9 @@ describe('generateTextStreamService', () => {
             conversationId: 'conv-123',
             messageId: 'msg-new',
             responseMessageId: 'resp-new',
-            aiVendor: 'OPENAI'
+            aiVendor: 'OPENAI',
+            inputTokens: null,
+            outputTokens: null
         });
 
         // Assert Stream Chunks
@@ -81,6 +83,54 @@ describe('generateTextStreamService', () => {
 
         // Assert Cleanup
         expect(mockReader.releaseLock).toHaveBeenCalled();
+    });
+
+    test('generateTextStream extracts USAGE sentinel and fires second onMetadata', async () => {
+        const encoder = new TextEncoder();
+        const chunk1 = encoder.encode('Hel');
+        const chunk2 = encoder.encode('lo\n[USAGE:{"inputTokens":123,"outputTokens":456}]');
+
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: chunk1 })
+                .mockResolvedValueOnce({ done: false, value: chunk2 })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+
+        const mockHeaders = new Map();
+        mockHeaders.set('X-Conversation-Id', 'conv-123');
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            headers: mockHeaders,
+            body: { getReader: () => mockReader }
+        });
+
+        const onDelta = jest.fn();
+        const onMetadata = jest.fn();
+
+        await generateTextStream(mockToken, mockGenerateTextStreamRequest as GenerateTextStreamRequest, onDelta, onMetadata);
+
+        expect(onMetadata).toHaveBeenCalledTimes(2);
+
+        // First call (from headers)
+        expect(onMetadata).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            conversationId: 'conv-123',
+            inputTokens: null,
+            outputTokens: null
+        }));
+
+        // Second call (from sentinel)
+        expect(onMetadata).toHaveBeenNthCalledWith(2, expect.objectContaining({
+            conversationId: 'conv-123',
+            inputTokens: 123,
+            outputTokens: 456
+        }));
+
+        // Delta should ONLY get "Hel" and "lo", and NOT the sentinel text
+        expect(onDelta).toHaveBeenCalledTimes(2);
+        expect(onDelta).toHaveBeenNthCalledWith(1, 'Hel');
+        expect(onDelta).toHaveBeenNthCalledWith(2, 'lo');
     });
 
     test('generateTextStream throws error on non-ok response', async () => {

@@ -28,6 +28,8 @@ export interface GenerateTextResponse {
     aiVendor: string
     messageId: string
     conversationId: string
+    inputTokens?: number | null
+    outputTokens?: number | null
 }
 
 export interface BatchGenerateTextRequest {

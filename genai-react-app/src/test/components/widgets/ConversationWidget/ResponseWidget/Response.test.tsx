@@ -130,4 +130,38 @@ describe('Response Widget Component', () => {
         expect(screen.getByTestId('res-comp')).toBeInTheDocument();
         expect(screen.queryByTestId('follow-up-button')).not.toBeInTheDocument();
     });
+
+    test('renders token badge when input and output tokens are provided', () => {
+        const msgsWithTokens = [
+            {
+                messageId: 'msg-tokens',
+                text: 'Here is a response',
+                aiVendor: AIVendor.OPENAI,
+                isLoading: false,
+                inputTokens: 1234,
+                outputTokens: 567
+            }
+        ];
+        render(<Response blockId="block-1" responseMessages={msgsWithTokens} onFollowUp={jest.fn()} />);
+
+        // Check if both token counts are rendered
+        expect(screen.getByTitle('Input tokens')).toHaveTextContent('1,234');
+        expect(screen.getByTitle('Output tokens')).toHaveTextContent('567');
+    });
+
+    test('does not render token badge when tokens are null or undefined', () => {
+        const msgsWithoutTokens = [
+            {
+                messageId: 'msg-no-tokens',
+                text: 'Here is a response without tokens',
+                aiVendor: AIVendor.OPENAI,
+                isLoading: false
+            }
+        ];
+        render(<Response blockId="block-1" responseMessages={msgsWithoutTokens} onFollowUp={jest.fn()} />);
+
+        // Check if token titles are ABSENT
+        expect(screen.queryByTitle('Input tokens')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Output tokens')).not.toBeInTheDocument();
+    });
 });

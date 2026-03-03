@@ -156,6 +156,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             aiVendor: r.aiVendor as AIVendor,
             text: r.text ?? '',
             messageId: r.messageId ?? '',
+            inputTokens: r.inputTokens ?? null,
+            outputTokens: r.outputTokens ?? null,
         }))
     }
 
@@ -419,6 +421,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                                             const updates: any = {}
                                             if (metadata.messageId) updates.previousMessageId = metadata.messageId
                                             if (metadata.responseMessageId) updates.messageId = metadata.responseMessageId
+                                            if (metadata.inputTokens != null) updates.inputTokens = metadata.inputTokens
+                                            if (metadata.outputTokens != null) updates.outputTokens = metadata.outputTokens
                                             return { ...m, ...updates }
                                         }
                                         return m

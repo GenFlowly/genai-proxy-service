@@ -9,6 +9,8 @@ export interface Message {
     messageId: string
     previousMessageId?: string
     isLoading?: boolean
+    inputTokens?: number | null
+    outputTokens?: number | null
 }
 
 /**
