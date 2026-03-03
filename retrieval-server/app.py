@@ -70,6 +70,7 @@ def retrieve():
         query_data = data.get('query_data')
         top_n = data.get('top_n', 3)
         search_params = data.get('search_params', {"metric_type": "COSINE", "params": {"nprobe": 10}})
+        similarity_threshold = data.get('similarity_threshold', 0.6)
         
         if not query_data:
             return jsonify({"error": "query_data is required in payload data"}), 400
@@ -110,15 +111,19 @@ def retrieve():
                 output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"]
             )
             
-            # Format results
+            # Format results and apply similarity threshold filter
             formatted_results = []
             for hits in search_res:
                 for hit in hits:
-                    formatted_results.append({
-                        "id": hit.get("id"),
-                        "distance": hit.get("distance"),
-                        "entity": hit.get("entity", {})
-                    })
+                    distance = hit.get("distance", 0.0)
+                    if distance >= similarity_threshold:
+                        formatted_results.append({
+                            "id": hit.get("id"),
+                            "distance": distance,
+                            "entity": hit.get("entity", {})
+                        })
+                    else:
+                        logger.info(f"Discarding hit {hit.get('id')} with distance {distance} below threshold {similarity_threshold}")
                     
             data['retrieval_results'] = formatted_results
             logger.info(f"Retrieved {len(formatted_results)} chunks from Zilliz.")
