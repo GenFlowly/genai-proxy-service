@@ -1,0 +1,31 @@
+@import '../../../styles/themes.scss';
+
+.navLinks {
+    display: flex;
+    gap: 0.25rem; // Tight gap like Mac menu bar
+    align-items: center;
+    /* Minimal translucent background to group them if desired, or none to blend precisely with navbar */
+    /* Remove border to look more like native OS menu bar */
+    padding: 0 0.5rem;
+}
+
+.navLink {
+    color: $color-navbar-text;
+    text-decoration: none;
+    font-size: 0.775rem; // Approx 12px
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 500;
+    padding: 0.25rem 0.6rem; // Rounded small padding
+    border-radius: 4px; // Small native-like radius
+    transition: background-color 0.1s ease;
+    white-space: nowrap;
+
+    &:hover {
+        // Subtle white translucent overlay like macOS menu item hover
+        background-color: rgba(255, 255, 255, 0.15);
+    }
+}
+
+.activeNavLink {
+    font-weight: 700; // Bold text for active "App" just like macOS highlighting the current app's name
+}

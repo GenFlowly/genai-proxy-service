@@ -10,6 +10,7 @@ import { Icon } from '../common/Icon/Icon'
 
 import logo from '../../assets/icons/logo.png'
 import { UserAvatarButton } from '../common/UserAvatarButton/UserAvatarButton'
+import { NavbarMenu } from '../widgets/NavbarMenuWidget/NavbarMenu'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, logout, isAuthenticated, user, customerPicture, customerName } = useAuth()
@@ -59,7 +60,7 @@ export default function Navbar(): React.ReactElement {
                 </div>
 
                 <div className={styles.centerControls}>
-                    {/* Placeholder for future center controls if needed */}
+                    <NavbarMenu />
                 </div>
 
                 <div className={styles.rightControls}>
