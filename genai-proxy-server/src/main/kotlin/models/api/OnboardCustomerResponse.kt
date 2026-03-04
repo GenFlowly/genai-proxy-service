@@ -2,6 +2,7 @@ package com.genflowly.models.api
 
 import kotlinx.serialization.Serializable
 import models.AIVendorAPIKeyStatus
+import models.VectorDBConfigStatus
 
 @Serializable
 data class OnboardCustomerResponse(
@@ -10,6 +11,7 @@ data class OnboardCustomerResponse(
     val aiVendorAPIKeyStatusList: List<AIVendorAPIKeyStatus>,
     val customerName: String?,
     val customerPicture: String?,
-    val customerInstructions: List<InstructionResponse>?
+    val customerInstructions: List<InstructionResponse>?,
+    val vectorDBConfigStatusList: List<VectorDBConfigStatus> = emptyList()
 )
 

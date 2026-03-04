@@ -38,7 +38,10 @@ class PromptGenerationService(
 
             val extractedContext = contextBuilder.toString().trim()
             if (extractedContext.isNotEmpty()) {
-                "$userRequestRawPrompt\n\nContext:\n$extractedContext"
+                "$userRequestRawPrompt\n\n Here is " +
+                        "some Context from my knowledge " +
+                        "base, use this information to " +
+                        "improve your answer :\n$extractedContext"
             } else {
                 userRequestRawPrompt
             }
