@@ -1,6 +1,6 @@
-import {aws_dynamodb as dynamodb} from 'aws-cdk-lib';
+import { aws_dynamodb as dynamodb } from 'aws-cdk-lib';
 import * as cdk from 'aws-cdk-lib';
-import {Construct} from 'constructs';
+import { Construct } from 'constructs';
 import {
     createDefaultDynamoDbTable,
     CreateTableProps,
@@ -18,7 +18,7 @@ export class DynamoDBStack extends cdk.Stack {
 
         const createCustomerTableProps: CreateTableProps = {
             tableName: 'CustomerProfile',
-            partitionKey: {name: 'sub', type: dynamodb.AttributeType.STRING},
+            partitionKey: { name: 'sub', type: dynamodb.AttributeType.STRING },
             sortKey: {
                 name: 'client',
                 type: dynamodb.AttributeType.STRING
@@ -31,7 +31,7 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'customerId',
                 type: dynamodb.AttributeType.STRING
             },
-            sortKey: {name: 'aiVendor', type: dynamodb.AttributeType.STRING},
+            sortKey: { name: 'aiVendor', type: dynamodb.AttributeType.STRING },
         };
 
         const customerApiUsageTableProps: CreateTableProps = {
@@ -40,7 +40,7 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'customerId',
                 type: dynamodb.AttributeType.STRING
             },
-            sortKey: {name: 'usageDate', type: dynamodb.AttributeType.STRING},
+            sortKey: { name: 'usageDate', type: dynamodb.AttributeType.STRING },
         };
 
         const conversationTableProps: CreateTableProps = {
@@ -61,11 +61,19 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'conversationId',
                 type: dynamodb.AttributeType.STRING
             },
-            sortKey: {name: 'messageId', type: dynamodb.AttributeType.STRING},
+            sortKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
         };
 
         const customerPreferencesTableProps: CreateTableProps = {
             tableName: 'CustomerPreferences',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING
+            },
+        };
+
+        const customerVectorDBConfigTableProps: CreateTableProps = {
+            tableName: 'CustomerVectorDBConfig',
             partitionKey: {
                 name: 'customerId',
                 type: dynamodb.AttributeType.STRING
@@ -78,7 +86,7 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'instructionId',
                 type: dynamodb.AttributeType.STRING
             },
-            sortKey: {name: 'version', type: dynamodb.AttributeType.NUMBER},
+            sortKey: { name: 'version', type: dynamodb.AttributeType.NUMBER },
             globalSecondaryIndexes: [
                 {
                     indexName: 'creatorIndex',
@@ -113,8 +121,9 @@ export class DynamoDBStack extends cdk.Stack {
         const conversationTable = createDefaultDynamoDbTable(this, conversationTableProps);
         const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
         const customerPreferencesTable = createDefaultDynamoDbTable(this, customerPreferencesTableProps);
+        const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
 
-        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable, instructionsTable)
+        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable, customerVectorDBConfigTable, instructionsTable)
     }
 }
