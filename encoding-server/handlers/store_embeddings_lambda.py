@@ -4,6 +4,7 @@ from typing import Dict, Any, List
 from pymilvus import MilvusClient, DataType
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.models.payload import Payload
+from encoding_library.utils.vector_db import get_zilliz_credentials
 
 # Trigger build - separated ECR repos
 
@@ -11,20 +12,14 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Environment variables
-ZILLIZ_ENDPOINT = os.environ.get('ZILLIZ_ENDPOINT')
-ZILLIZ_TOKEN = os.environ.get('ZILLIZ_TOKEN')
 COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'test')
 
-if not ZILLIZ_ENDPOINT:
-    raise ValueError("ZILLIZ_ENDPOINT environment variable is required")
-if not ZILLIZ_TOKEN:
-    raise ValueError("ZILLIZ_TOKEN environment variable is required")
-
-def get_milvus_client():
-    """Create Milvus client connection."""
+def get_milvus_client(customer_id: str):
+    """Create Milvus client connection using credentials fetched dynamically."""
+    zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
     return MilvusClient(
-        uri=ZILLIZ_ENDPOINT,
-        token=ZILLIZ_TOKEN
+        uri=zilliz_endpoint,
+        token=zilliz_token
     )
 
 def ensure_collection_exists(client, collection_name: str, is_notes_collection: bool):
@@ -76,10 +71,10 @@ def ensure_collection_exists(client, collection_name: str, is_notes_collection: 
     
     logger.info(f"Successfully created dynamic collection '{collection_name}'")
 
-def store_in_zilliz(data: Dict[str, Any], embeddings: List[Dict[str, Any]], collection_name: str) -> List[str]:
+def store_in_zilliz(data: Dict[str, Any], embeddings: List[Dict[str, Any]], collection_name: str, customer_id: str) -> List[str]:
     """Store data embeddings in Zilliz Cloud."""
     try:
-        client = get_milvus_client()
+        client = get_milvus_client(customer_id)
         
         # Ensure the target collection schema exists
         is_notes = collection_name.endswith('_notes')
@@ -152,7 +147,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if 'note_value' in data:
             collection_name = f"{customer_id}_notes"
             
-        store_in_zilliz(data, embeddings, collection_name)
+        store_in_zilliz(data, embeddings, collection_name, customer_id)
         
         # Return payload for next step
         # Optional: remove embedding from data if not needed downstream to save space

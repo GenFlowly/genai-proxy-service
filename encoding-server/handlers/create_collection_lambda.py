@@ -1,26 +1,13 @@
 import os
 import logging
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 from pymilvus import MilvusClient, DataType
 from encoding_library.models.payload import Payload
+from encoding_library.utils.vector_db import get_zilliz_credentials
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-# Environment variables
-ZILLIZ_ENDPOINT = os.environ.get('ZILLIZ_ENDPOINT')
-ZILLIZ_TOKEN = os.environ.get('ZILLIZ_TOKEN')
-
-# Initialize Milvus Client
-try:
-    client = MilvusClient(
-        uri=ZILLIZ_ENDPOINT,
-        token=ZILLIZ_TOKEN
-    )
-except Exception as e:
-    logger.error(f"Failed to connect to Zilliz: {str(e)}")
-    raise e
 
 
 
@@ -46,6 +33,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         if not customer_id:
             raise ValueError("customer_id is missing from the payload")
+            
+        # Initialize Milvus Client specifically for this customer
+        zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
+        client = MilvusClient(
+            uri=zilliz_endpoint,
+            token=zilliz_token
+        )
             
         collection_name = customer_id
         

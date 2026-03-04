@@ -76,15 +76,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Convert to SQS message format
                 message_body, message_attributes = processor.to_sqs_message(payload)
                 
-                # Send to SQS
-                response = sqs.send_message(
-                    QueueUrl=QUEUE_URL,
-                    MessageBody=message_body,
-                    MessageAttributes=message_attributes
-                )
+                # Batch entries for SQS
+                entries.append({
+                    'Id': str(idx),
+                    'MessageBody': message_body,
+                    'MessageAttributes': message_attributes
+                })
                 
-                sqs_message_ids.append(response['MessageId'])
-                processed_count += 1
+                if len(entries) == 10:
+                    response = sqs.send_message_batch(
+                        QueueUrl=QUEUE_URL,
+                        Entries=entries
+                    )
+                    for success in response.get('Successful', []):
+                    # We might want to retain exactly which ids succeeded/failed, but typical is:
+                        sqs_message_ids.append(success['MessageId'])
+                        processed_count += 1
+                    for failed in response.get('Failed', []):
+                        error_msg = f"SQS Batch Failed for item ID {failed.get('Id')}: {failed['Message']}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
+                        failed_count += 1
+                    entries = []
                 
             except ValueError as ve:
                 error_msg = f"Item {idx}: Validation error: {str(ve)}"
@@ -94,6 +107,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             except Exception as e:
                 error_msg = f"Item {idx}: Error processing: {str(e)}"
                 logger.error(error_msg, exc_info=True)
+                errors.append(error_msg)
+                failed_count += 1
+
+        # Send any remaining entries
+        if entries:
+            response = sqs.send_message_batch(
+                QueueUrl=QUEUE_URL,
+                Entries=entries
+            )
+            for success in response.get('Successful', []):
+                sqs_message_ids.append(success['MessageId'])
+                processed_count += 1
+            for failed in response.get('Failed', []):
+                error_msg = f"SQS Batch Failed for item ID {failed.get('Id')}: {failed['Message']}"
+                logger.error(error_msg)
                 errors.append(error_msg)
                 failed_count += 1
         
