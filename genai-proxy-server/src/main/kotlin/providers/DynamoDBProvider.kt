@@ -8,6 +8,8 @@ import com.genflowly.DynamoDBConstants.CUSTOMER_API_KEY_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_PREFERENCES_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_TABLE
+import com.genflowly.DynamoDBConstants.CUSTOMER_VECTOR_DB_CONFIG_TABLE
+import com.genflowly.DynamoDBConstants.VENDOR_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_CONTENT_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_CREATOR_GSI_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_CREATOR_KEY
@@ -370,6 +372,70 @@ class DynamoDBProvider(
         } catch (e: Exception) {
             logger.error("Failed to save API key to DynamoDB", e)
             throw e
+        }
+    }
+
+    suspend fun saveCustomerVectorDBConfig(
+        customerId: String,
+        vendor: String,
+        encryptedEndpoint: String,
+        encryptedToken: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                VENDOR_KEY to AttributeValue.builder().s(vendor).build(),
+                "endpoint" to AttributeValue.builder().s(encryptedEndpoint).build(),
+                "token" to AttributeValue.builder().s(encryptedToken).build(),
+                "isConfigValid" to AttributeValue.builder().bool(true).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(CUSTOMER_VECTOR_DB_CONFIG_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Saved Vector DB Config for $customerId to DynamoDB")
+        } catch (e: Exception) {
+            logger.error("Failed to save Vector DB config to DynamoDB", e)
+            throw e
+        }
+    }
+
+    suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<models.VectorDBConfigStatus> = withContext(Dispatchers.IO) {
+        try {
+            val getReq = GetItemRequest.builder()
+                .tableName(CUSTOMER_VECTOR_DB_CONFIG_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()
+                ))
+                .build()
+
+            val response = dynamoDbClient.getItem(getReq)
+            
+            if (response.hasItem()) {
+                val item = response.item()
+                val status = if (item["isConfigValid"]?.bool() == true) {
+                    models.VectorDBConfigStatusValue.PRESENT
+                } else {
+                    models.VectorDBConfigStatusValue.NOT_SET
+                }
+
+                listOf(
+                    models.VectorDBConfigStatus(
+                        vendor = item[VENDOR_KEY]?.s() ?: "Zilliz",
+                        isConfigValid = item["isConfigValid"]?.bool() ?: false,
+                        status = status,
+                        updateSuccessful = true
+                    )
+                )
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to get Vector DB config status list from DynamoDB", e)
+            emptyList()
         }
     }
 

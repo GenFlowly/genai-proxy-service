@@ -19,6 +19,9 @@ object DynamoDBConstants {
     const val MESSAGE_ID_SORT_KEY = "messageId"
 
     const val CUSTOMER_PREFERENCES_TABLE = "CustomerPreferences"
+    
+    const val CUSTOMER_VECTOR_DB_CONFIG_TABLE = "CustomerVectorDBConfig"
+    const val VENDOR_KEY = "vendor"
 
     const val INSTRUCTION_TABLE = "Instructions"
     const val INSTRUCTION_ID_KEY = "instructionId"

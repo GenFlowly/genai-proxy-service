@@ -41,6 +41,8 @@ fun Route.registerOnboardCustomerRoutes(
                 ?: AIConfigPreferences()
             
             val aiVendorAPIKeyStatusList = customerProfileService.getAIVendorAPIKeyStatusList(customerProfile.customerId)
+            
+            val vectorDBConfigStatusList = customerProfileService.getCustomerVectorDBConfigStatusList(customerProfile.customerId)
 
             val response = OnboardCustomerResponse(
                 customerId = customerProfile.customerId,
@@ -48,7 +50,8 @@ fun Route.registerOnboardCustomerRoutes(
                 aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList,
                 customerName = customerProfile.name ?: "User",
                 customerPicture = customerProfile.picture,
-                customerInstructions = customerProfileService.getLatestCustomerInstructions(customerProfile.customerId)
+                customerInstructions = customerProfileService.getLatestCustomerInstructions(customerProfile.customerId),
+                vectorDBConfigStatusList = vectorDBConfigStatusList
             )
 
             call.respond(response)
