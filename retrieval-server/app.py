@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from encoding_library.models.payload import Payload
 from encoding_library.utils.embedding_utils import create_embeddings
+from encoding_library.utils.vector_db import get_zilliz_credentials
 
 # Set cache directories to /tmp for consistent environment behavior
 os.environ['TRANSFORMERS_CACHE'] = '/tmp/transformers_cache'
@@ -27,15 +28,11 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-ZILLIZ_ENDPOINT = "https://in03-0e3d96c83ea3190.serverless.aws-eu-central-1.cloud.zilliz.com"
-ZILLIZ_TOKEN = "27cc6072560645598da1fad99cc23a4f5bb89e916850c099d93a0e8128a5f853d9c586ee85e38147cd5006714234f94cdf247b5d"
-
-def get_milvus_client():
-    if not ZILLIZ_ENDPOINT or not ZILLIZ_TOKEN:
-        raise ValueError("ZILLIZ_ENDPOINT and ZILLIZ_TOKEN environment variables must be set")
+def get_milvus_client(customer_id: str):
+    zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
     return MilvusClient(
-        uri=ZILLIZ_ENDPOINT,
-        token=ZILLIZ_TOKEN
+        uri=zilliz_endpoint,
+        token=zilliz_token
     )
 
 @app.route('/health', methods=['GET'])
@@ -83,50 +80,55 @@ def retrieve():
         # Use first chunk vector exactly as query
         query_vector = query_embeddings[0].get('vector')
         
-        # Determine collection name
-        # If 'note_value' is queried, we search the notes collection
-        collection_name = payload.customer_id
-        if 'note_value' in query_data:
-            collection_name = f"{payload.customer_id}_notes"
-            
+        # Collections to search
+        collection_names = [payload.customer_id, f"{payload.customer_id}_notes"]
+        
         # Connect to Zilliz
         try:
-            client = get_milvus_client()
-        except ValueError as e:
+            client = get_milvus_client(payload.customer_id)
+        except Exception as e:
             logger.error(f"Configuration error: {e}")
             return jsonify({"error": str(e)}), 500
             
-        # Ensure collection even exists before searching
-        if not client.has_collection(collection_name):
-            logger.warning(f"Collection {collection_name} does not exist, no results.")
-            data['retrieval_results'] = []
-        else:
-            # 2 & 3. generate similarities and return top N chunks
-            # Pass our 1 query vector in a list of lists.
-            search_res = client.search(
-                collection_name=collection_name,
-                data=[query_vector],
-                limit=top_n,
-                search_params=search_params,
-                output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"]
-            )
+        all_formatted_results = []
             
-            # Format results and apply similarity threshold filter
-            formatted_results = []
-            for hits in search_res:
-                for hit in hits:
-                    distance = hit.get("distance", 0.0)
-                    if distance >= similarity_threshold:
-                        formatted_results.append({
-                            "id": hit.get("id"),
-                            "distance": distance,
-                            "entity": hit.get("entity", {})
-                        })
-                    else:
-                        logger.info(f"Discarding hit {hit.get('id')} with distance {distance} below threshold {similarity_threshold}")
+        for collection_name in collection_names:
+            if not client.has_collection(collection_name):
+                logger.warning(f"Collection {collection_name} does not exist, skipping.")
+                continue
+            
+            try:
+                # 2 & 3. generate similarities and return top N chunks
+                search_res = client.search(
+                    collection_name=collection_name,
+                    data=[query_vector],
+                    limit=top_n,
+                    search_params=search_params,
+                    output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"]
+                )
+                
+                # Format results and apply similarity threshold filter
+                for hits in search_res:
+                    for hit in hits:
+                        distance = hit.get("distance", 0.0)
+                        if distance >= similarity_threshold:
+                            all_formatted_results.append({
+                                "id": hit.get("id"),
+                                "distance": distance,
+                                "entity": hit.get("entity", {}),
+                                "source_collection": collection_name
+                            })
+                        else:
+                            logger.info(f"Discarding hit {hit.get('id')} from {collection_name} with distance {distance} below threshold {similarity_threshold}")
+            except Exception as e:
+                logger.error(f"Error searching collection {collection_name}: {e}")
+                
+        # Sort combined results descending by distance and take top N
+        all_formatted_results.sort(key=lambda x: x['distance'], reverse=True)
+        top_results = all_formatted_results[:top_n]
                     
-            data['retrieval_results'] = formatted_results
-            logger.info(f"Retrieved {len(formatted_results)} chunks from Zilliz.")
+        data['retrieval_results'] = top_results
+        logger.info(f"Retrieved {len(top_results)} top chunks from Zilliz across collections.")
         
         payload.data = data
         return jsonify(payload.to_dict()), 200
