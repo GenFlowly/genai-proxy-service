@@ -1,5 +1,6 @@
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { OnboardCustomerResponse } from '../models/onboardUser.models'
+import { VectorDBConfigStatusValue } from '../models/storeCustomerVectorDBConfig.models'
 import { InstructionResponse } from '../models/instruction.models'
 
 export interface User {
@@ -19,6 +20,12 @@ export interface AuthContextType {
     customerId: string | null;
     setCustomerId: (id: string | null) => void;
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[];
+    vectorDBConfigStatusList: {
+        vendor: string;
+        isConfigValid: boolean;
+        status: VectorDBConfigStatusValue;
+        updateSuccessful: boolean;
+    }[];
     updateVendorApiKeyStatus: (status: AIVendorAPIKeyStatus) => void;
     aiConfigPreferences: OnboardCustomerResponse['aiConfigPreferences'] | null;
     customerInstructions: InstructionResponse[];
