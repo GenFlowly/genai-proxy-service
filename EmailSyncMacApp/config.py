@@ -23,11 +23,11 @@ AUTH0_SCOPES = os.getenv("AUTH0_SCOPES", "openid profile email")
 
 # IMPORTANT: Set this to your API identifier in Auth0 to get JWT access tokens
 # Without this, Auth0 returns opaque tokens that API Gateway cannot validate
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "https://9rwqqmvex2.execute-api.us-east-1.amazonaws.com")
+AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "https://pzf0twaaq5.execute-api.us-east-1.amazonaws.com")
 
 # API Configuration
 # Change based on environment (dev, staging, production)
-API_BASE_URL = os.getenv("API_BASE_URL", "https://9rwqqmvex2.execute-api.us-east-1.amazonaws.com/development")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://pzf0twaaq5.execute-api.us-east-1.amazonaws.com/development")
 API_BATCH_ENDPOINT = os.getenv("API_BATCH_ENDPOINT", "/sync")
 
 
