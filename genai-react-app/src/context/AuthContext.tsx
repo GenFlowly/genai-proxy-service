@@ -8,6 +8,7 @@ import React, {
 import { useAuth0 } from '@auth0/auth0-react'
 import { AuthContextType, User } from '../types/auth.types'
 import { onboardCustomer } from '../services/onboardUserService'
+import { OnboardCustomerResponse } from '../models/onboardUser.models'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { InstructionResponse } from '../models/instruction.models'
 
@@ -27,7 +28,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         localStorage.getItem('customerId')
     )
     const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
-    const [aiConfigPreferences, setAiConfigPreferences] = useState<AuthContextType['aiConfigPreferences']>(null)
+    const [vectorDBConfigStatusList, setVectorDBConfigStatusList] = useState<any[]>([]);
+    const [aiConfigPreferences, setAiConfigPreferences] = useState<OnboardCustomerResponse['aiConfigPreferences'] | null>(null);
     const [customerInstructions, setCustomerInstructions] = useState<InstructionResponse[]>([])
     const [customerName, setCustomerName] = useState<string | undefined>(undefined)
     const [customerPicture, setCustomerPicture] = useState<string | undefined>(undefined)
@@ -64,6 +66,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         setAiVendorAPIKeyStatusList([])
         setAiConfigPreferences(null)
         setCustomerInstructions([])
+        setVectorDBConfigStatusList([]) // Clear vectorDBConfigStatusList on logout
         localStorage.removeItem('customerId')
 
         auth0Logout({
@@ -101,7 +104,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                     if (onboardData.customerPicture) setCustomerPicture(onboardData.customerPicture)
 
                     if (onboardData.aiConfigPreferences) {
-                        setAiConfigPreferences(onboardData.aiConfigPreferences)
+                        setAiConfigPreferences(onboardData.aiConfigPreferences || null);
                         if (onboardData.customerId) {
                             localStorage.setItem(
                                 `${onboardData.customerId}_ai_preferences`,
@@ -109,6 +112,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             )
                         }
                     }
+                    // Set customer instructions and vectorDBConfigStatusList if present in onboardData
+                    if (onboardData.customerInstructions) {
+                        setCustomerInstructions(onboardData.customerInstructions || []);
+                    }
+                    if (onboardData.vectorDBConfigStatusList) {
+                        setVectorDBConfigStatusList(onboardData.vectorDBConfigStatusList);
+                    }
+                    console.log('User onboarded successfully');
                 } catch (error: any) {
                     console.error('Failed to onboard user:', error)
                     // If we fail to get a token, it likely means the session is invalid
@@ -199,6 +210,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         logout,
         getAccessTokenSilently,
         aiVendorAPIKeyStatusList,
+        vectorDBConfigStatusList, // Added vectorDBConfigStatusList to context
         updateVendorApiKeyStatus,
         aiConfigPreferences,
         customerInstructions,

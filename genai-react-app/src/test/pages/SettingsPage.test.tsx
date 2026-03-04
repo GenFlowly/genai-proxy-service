@@ -14,6 +14,9 @@ jest.mock('../../components/common/BrandName/BrandName', () => ({
 jest.mock('../../components/common/VendorAPIKeyStatus/VendorAPIKeyStatus', () => ({
     VendorAPIKeyStatus: () => <div data-testid="vendor-status">Status</div>
 }));
+jest.mock('../../components/common/CustomerVectorDBConfigStatus/CustomerVectorDBConfigStatus', () => ({
+    CustomerVectorDBConfigStatus: () => <div data-testid="vector-db-status">DBStatus</div>
+}));
 jest.mock('../../services/storeCustomerVendorApiKeysService');
 
 const mockUpdateVendorApiKeyStatus = jest.fn();
@@ -49,6 +52,8 @@ describe('SettingsPage', () => {
         // Check for mocked brand
         expect(screen.getByTestId('brand-openai')).toBeInTheDocument();
         expect(screen.getAllByTestId('vendor-status')).toHaveLength(3); // 3 vendors
+        expect(screen.getByText('Vector Database Settings')).toBeInTheDocument();
+        expect(screen.getByTestId('vector-db-status')).toBeInTheDocument();
     });
 
     test('validates inputs before save', async () => {

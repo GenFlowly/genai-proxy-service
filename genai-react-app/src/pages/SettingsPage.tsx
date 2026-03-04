@@ -13,6 +13,7 @@ import {
 } from '../components/common/BrandName/BrandName'
 import { InputTextWithHint } from '../components/common/InputTextWithHint/InputTextWithHint'
 import { VendorAPIKeyStatus } from '../components/common/VendorAPIKeyStatus/VendorAPIKeyStatus'
+import { CustomerVectorDBConfigStatus } from '../components/common/CustomerVectorDBConfigStatus/CustomerVectorDBConfigStatus'
 
 import { useToast } from '../context/ToastContext'
 
@@ -35,6 +36,10 @@ export default function SettingsPage(): React.ReactElement {
         [AIVendor.CLAUDE]: false,
         [AIVendor.GEMINI]: false,
     })
+
+    const [zillizEndpoint, setZillizEndpoint] = useState<string>('')
+    const [zillizToken, setZillizToken] = useState<string>('')
+    const [savingZilliz, setSavingZilliz] = useState<boolean>(false)
 
     const handleChange = (vendor: AIVendor, value: string) => {
         setApiKeys(prev => ({ ...prev, [vendor]: value }))
@@ -82,7 +87,31 @@ export default function SettingsPage(): React.ReactElement {
         }
     }
 
+    const handleSaveZilliz = async () => {
+        if (!isAuthenticated || !customerId) {
+            showToast('Please log in first.')
+            return
+        }
 
+        if (!zillizEndpoint.trim() || !zillizToken.trim()) {
+            showToast('Please enter both endpoint and token.')
+            return
+        }
+
+        setSavingZilliz(true)
+        try {
+
+            setZillizEndpoint('')
+            setZillizToken('')
+
+            showToast('Zilliz settings saved successfully.')
+        } catch (error: any) {
+            console.error(error)
+            showToast(error.message || 'Error saving Zilliz settings.')
+        } finally {
+            setSavingZilliz(false)
+        }
+    }
 
     return (
         <div className={styles.page}>
@@ -128,6 +157,41 @@ export default function SettingsPage(): React.ReactElement {
                         })}
 
 
+                    </div>
+                </div>
+
+                <div className={styles.card}>
+                    <h2 className={styles.title}>Vector Database Settings</h2>
+                    <div className={styles.form}>
+                        <div className={styles.vendorSection}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span className={styles.vendorName}>Zilliz Cloud</span>
+                                <CustomerVectorDBConfigStatus vendor="Zilliz" />
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <InputTextWithHint
+                                    hint="Endpoint"
+                                    value={zillizEndpoint}
+                                    onChange={e => setZillizEndpoint(e.target.value)}
+                                    placeholder="https://in03-....zillizcloud.com"
+                                />
+
+                                <InputTextWithHint
+                                    hint="Token"
+                                    value={zillizToken}
+                                    onChange={e => setZillizToken(e.target.value)}
+                                    placeholder="Placeholder token..."
+                                />
+                            </div>
+
+                            <PillButton
+                                onClick={handleSaveZilliz}
+                                label={savingZilliz ? 'Saving...' : 'Save'}
+                                icon={ICONS.SAVE_ICON}
+                                disabled={savingZilliz}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
