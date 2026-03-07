@@ -6,8 +6,9 @@ from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
-dynamodb = boto3.resource('dynamodb')
-kms_client = boto3.client('kms')
+region_name = os.environ.get('AWS_REGION', 'us-east-1')
+dynamodb = boto3.resource('dynamodb', region_name=region_name)
+kms_client = boto3.client('kms', region_name=region_name)
 
 VECTOR_DB_TABLE_NAME = os.environ.get('CUSTOMER_VECTOR_DB_CONFIG_TABLE', 'CustomerVectorDBConfig')
 vector_db_table = dynamodb.Table(VECTOR_DB_TABLE_NAME)
