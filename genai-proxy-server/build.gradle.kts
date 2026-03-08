@@ -36,8 +36,12 @@ dependencies {
     implementation("io.ktor:ktor-server-call-logging:3.0.0")
 
     // OpenAPI plugin
-    implementation("io.ktor:ktor-server-openapi:3.0.0")
-    implementation("io.ktor:ktor-server-swagger:3.0.0")
+    implementation("io.ktor:ktor-server-openapi:3.0.0") {
+        exclude(group = "ch.qos.logback", module = "logback-classic")
+    }
+    implementation("io.ktor:ktor-server-swagger:3.0.0") {
+        exclude(group = "ch.qos.logback", module = "logback-classic")
+    }
     api("io.ktor:ktor-server-content-negotiation:3.0.0")
     api("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
 
@@ -63,7 +67,7 @@ dependencies {
     // Core HTTP client (Netty works well in Ktor)
     implementation("software.amazon.awssdk:url-connection-client")
 
-    implementation("com.genflowly:ai-caller-lib:0.0.33")
+    implementation("com.genflowly:ai-caller-lib:0.0.34")
 
     implementation("io.ktor:ktor-server-auth-jvm:3.0.0")
     implementation("io.ktor:ktor-server-auth-jwt-jvm:3.0.0")

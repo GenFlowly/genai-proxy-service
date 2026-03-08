@@ -168,6 +168,8 @@ class DynamoDBProvider(
 
         val inputTokens = item["inputTokens"]?.n()?.toIntOrNull()
         val outputTokens = item["outputTokens"]?.n()?.toIntOrNull()
+        val totalTokens = item["totalTokens"]?.n()?.toIntOrNull()
+        val tokensReadFromCache = item["tokensReadFromCache"]?.n()?.toIntOrNull()
 
         return Message(
             messageId = item["messageId"]?.s() ?: return null,
@@ -181,7 +183,9 @@ class DynamoDBProvider(
             aiConfig = aiConfig,
             previousMessageId = previousMessageId,
             inputTokens = inputTokens,
-            outputTokens = outputTokens
+            outputTokens = outputTokens,
+            totalTokens = totalTokens,
+            tokensReadFromCache = tokensReadFromCache
         )
     }
 
@@ -246,6 +250,12 @@ class DynamoDBProvider(
                     }
                     message.outputTokens?.let {
                         map["outputTokens"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    message.totalTokens?.let {
+                        map["totalTokens"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    message.tokensReadFromCache?.let {
+                        map["tokensReadFromCache"] = AttributeValue.builder().n(it.toString()).build()
                     }
                 }
             )

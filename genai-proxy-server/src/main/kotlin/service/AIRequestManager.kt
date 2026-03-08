@@ -165,7 +165,9 @@ class AIRequestManager(
                 aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
                 systemPrompt = message.systemPrompt,
                 inputTokens = result.inputTokens,
-                outputTokens = result.outputTokens
+                outputTokens = result.outputTokens,
+                totalTokens = result.totalTokens,
+                tokensReadFromCache = result.tokensReadFromCache
             )
         } else {
             responseMessage = Message(
@@ -258,7 +260,10 @@ class AIRequestManager(
 
             // Step 4: Extract text and usage metadata
             val responseText = aiResponse.getText() ?: ""
-            val (inputTokens, outputTokens) = extractTokens(aiResponse.getUsageMetadata())
+            val metadata = aiResponse.getUsageMetadata()
+            val (inputTokens, outputTokens) = extractTokens(metadata)
+            val totalTokens = metadata?.getTotalTokenCount()?.toInt()
+            val tokensReadFromCache = metadata?.getTokenCountReadFromCache()?.toInt()
 
             logger.info(
                 "AI response received: vendor={}, model={}, " +
@@ -270,11 +275,17 @@ class AIRequestManager(
                 inputTokens,
                 outputTokens
             )
-            return AIGenerateResult(text = responseText, inputTokens = inputTokens, outputTokens = outputTokens)
+            return AIGenerateResult(
+                text = responseText, 
+                inputTokens = inputTokens, 
+                outputTokens = outputTokens,
+                totalTokens = totalTokens,
+                tokensReadFromCache = tokensReadFromCache
+            )
 
         } catch (e: Exception) {
             val errorText = "Error occurred while generating response from $aiVendor - ${e.message}"
-            return AIGenerateResult(text = errorText, inputTokens = null, outputTokens = null)
+            return AIGenerateResult(text = errorText, inputTokens = null, outputTokens = null, totalTokens = null, tokensReadFromCache = null)
         }
     }
 
@@ -363,8 +374,10 @@ class AIRequestManager(
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
         val responseMessageId = java.util.UUID.nameUUIDFromBytes(responseUniqueContent.toByteArray()).toString()
 
-        var streamInputTokens: Int? = null
-        var streamOutputTokens: Int? = null
+        var streamInputTokens: Long? = null
+        var streamOutputTokens: Long? = null
+        var streamTotalTokens: Long? = null
+        var streamTokensReadFromCache: Long? = null
 
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
@@ -380,9 +393,16 @@ class AIRequestManager(
                     emit(chunk)
                     // Track the most recent AIResponse that carries usage data
                     if (aiResponse != null && aiResponse.getUsageMetadata() != null) {
-                        val (inp, out) = extractTokens(aiResponse.getUsageMetadata())
-                        if (inp != null) streamInputTokens = inp
-                        if (out != null) streamOutputTokens = out
+                        val usage = aiResponse.getUsageMetadata()!!
+                        streamInputTokens = usage.getInputTokenCount() ?: streamInputTokens
+                        streamOutputTokens = usage.getOutputTokenCount() ?: streamOutputTokens
+                        streamTotalTokens = usage.getTotalTokenCount() ?: streamTotalTokens
+                        streamTokensReadFromCache = usage.getTokenCountReadFromCache() ?: streamTokensReadFromCache
+
+                        // Fallback using extractTokens in case underlying provider object lacks the new interface property
+                        val (inp, out) = extractTokens(usage)
+                        if (streamInputTokens == null && inp != null) streamInputTokens = inp.toLong()
+                        if (streamOutputTokens == null && out != null) streamOutputTokens = out.toLong()
                     }
                 }
             } catch (e: java.io.IOException) {
@@ -408,18 +428,22 @@ class AIRequestManager(
                         previousMessageId = message.messageId,
                         aiConfig = listOf(config),
                         systemPrompt = message.systemPrompt,
-                        inputTokens = streamInputTokens,
-                        outputTokens = streamOutputTokens
+                        inputTokens = streamInputTokens?.toInt(),
+                        outputTokens = streamOutputTokens?.toInt(),
+                        totalTokens = streamTotalTokens?.toInt(),
+                        tokensReadFromCache = streamTokensReadFromCache?.toInt()
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }
 
                 // Emit a sentinel chunk so the client can extract token usage after streaming.
-                // Format: "\n[USAGE:{\"inputTokens\":N,\"outputTokens\":N}]" - only emitted when at least one count is known.
+                // Format: "\n[USAGE:{\"inputTokens\":N,\"outputTokens\":N,\"totalTokens\":N,\"tokensReadFromCache\":N}]" - only emitted when at least one count is known.
                 if (streamInputTokens != null || streamOutputTokens != null) {
                     val inputPart = streamInputTokens?.toString() ?: "null"
                     val outputPart = streamOutputTokens?.toString() ?: "null"
-                    emit("\n[USAGE:{\"inputTokens\":$inputPart,\"outputTokens\":$outputPart}]")
+                    val totalPart = streamTotalTokens?.toString() ?: "null"
+                    val cachePart = streamTokensReadFromCache?.toString() ?: "null"
+                    emit("\n[USAGE:{\"inputTokens\":$inputPart,\"outputTokens\":$outputPart,\"totalTokens\":$totalPart,\"tokensReadFromCache\":$cachePart}]")
                 }
             }
         }

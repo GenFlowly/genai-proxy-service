@@ -15,5 +15,7 @@ data class Message(
     val aiConfig: List<AIConfig>,
     val previousMessageId: String?,
     val inputTokens: Int? = null,
-    val outputTokens: Int? = null
+    val outputTokens: Int? = null,
+    val totalTokens: Int? = null,
+    val tokensReadFromCache: Int? = null
 )

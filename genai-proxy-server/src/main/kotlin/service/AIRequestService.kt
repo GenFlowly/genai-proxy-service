@@ -1,7 +1,10 @@
 package com.genflowly.service
 
+import com.anthropic.models.messages.CacheControlEphemeral
+import com.anthropic.models.messages.ContentBlockParam
 import com.anthropic.models.messages.MessageCreateParams
 import com.anthropic.models.messages.MessageParam
+import com.anthropic.models.messages.TextBlockParam
 import com.genflowly.aicallerlib.clients.AIClient
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.aicallerlib.models.claude.ClaudeModelsListResponse
@@ -21,6 +24,7 @@ import com.openai.models.responses.ResponseInputText
 import com.openai.models.responses.ResponseInputContent
 import com.openai.models.responses.ResponseInputItem
 import com.openai.models.responses.ResponseCreateParams.Input
+import java.time.Duration
 import models.Message
 import org.koin.core.component.KoinComponent
 import org.koin.core.parameter.parametersOf
@@ -37,19 +41,50 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
         model: String,
         systemPrompt: String
     ): MessageCreateParams {
-        val messageParams = messages.map { msg ->
-            MessageParam.builder()
-                .role(MessageParam.Role.of(msg.role))
-                .content(msg.text)
-                .build()
+        val messageParams = messages.mapIndexed { index, msg ->
+            val role = MessageParam.Role.of(msg.role)
+            return@mapIndexed if (index == messages.lastIndex) {
+                MessageParam.builder()
+                    .role(role)
+                    .content(
+                        MessageParam.Content.ofBlockParams(
+                            listOf(
+                                ContentBlockParam.ofText(
+                                    TextBlockParam.builder()
+                                        .text(msg.text)
+                                        .cacheControl(CacheControlEphemeral.builder().build())
+                                        .build()
+                                )
+                            )
+                        )
+                    )
+                    .build()
+            } else {
+                MessageParam.builder()
+                    .role(role)
+                    .content(msg.text)
+                    .build()
+            }
         }
 
 
-        logger.info("Sending request to CLAUDE - $messageParams")
+        logger.debug("Sending request to CLAUDE - {}", messageParams)
 
         return MessageCreateParams.builder()
-            .system(systemPrompt)
-            .maxTokens(4096L)
+            .system(
+                MessageCreateParams.System.ofTextBlockParams(
+                    listOf(
+                        TextBlockParam.builder()
+                            .text(systemPrompt)
+                            .cacheControl(
+                                CacheControlEphemeral.builder()
+                                    .build()
+                            )
+                            .build()
+                    )
+                )
+            )
+            .maxTokens(16384L)
             .model(model)
             .messages(messageParams)
             .build()
@@ -93,12 +128,17 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
              ResponseInputItem.ofMessage(builder.build())
          }
 
-        logger.info("Sending request to OPENAI - $inputItems")
+        logger.info("Sending request to OPENAI - {}", inputItems)
+
+        // Set conversationId as prompt cache key
+        val promptCacheKey: String = messages[0].conversationId
+        logger.info("Prompt Cache Key {}", promptCacheKey)
 
         return ResponseCreateParams.builder()
             .instructions(systemPrompt)
             .input(Input.ofResponse(inputItems))
             .model(model)
+            .promptCacheKey(promptCacheKey)
             .build()
     }
 
