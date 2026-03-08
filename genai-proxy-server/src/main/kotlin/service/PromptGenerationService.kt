@@ -13,7 +13,7 @@ class PromptGenerationService(
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun generatePrompt(customerId: String, userRequestRawPrompt: String, systemPrompt: String?): String {
-        val vectorResponse = retrievalService.retrieveContext(customerId, userRequestRawPrompt, systemPrompt)
+        val vectorResponse = retrievalService.retrieveContext(customerId, userRequestRawPrompt, "")
 
         if (vectorResponse == null) {
             logger.warn("Retrieval Service returned null or failed for customer $customerId")
@@ -39,8 +39,9 @@ class PromptGenerationService(
             val extractedContext = contextBuilder.toString().trim()
             if (extractedContext.isNotEmpty()) {
                 "$userRequestRawPrompt\n\n Here is " +
-                        "some Context from my knowledge " +
-                        "base, use this information to " +
+                        "some context from my knowledge " +
+                        "base, use your knowledge along with this information" +
+                        " to " +
                         "improve your answer :\n$extractedContext"
             } else {
                 userRequestRawPrompt

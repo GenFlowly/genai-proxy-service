@@ -7,5 +7,7 @@ package models
 data class AIGenerateResult(
     val text: String,
     val inputTokens: Int?,
-    val outputTokens: Int?
+    val outputTokens: Int?,
+    val totalTokens: Int? = null,
+    val tokensReadFromCache: Int? = null
 )
