@@ -133,7 +133,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                 className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}
             >
 
-                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens }) => {
+                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
                     const isSelected = selectedResponseId === messageId
 
                     let HeaderComponent: React.ReactNode = null
@@ -165,25 +165,39 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                         >
                             {onFollowUp && !isLoading && (
                                 <div className={styles.followUpButtonWrapper}>
-                                    {(inputTokens != null || outputTokens != null) && (
+                                    {(inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
                                         <div className={styles.tokenBadge}>
                                             {inputTokens != null && (
-                                                <span className={styles.tokenItem} title="Input tokens">
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                                        <path d="M2 17l10 5 10-5" />
-                                                        <path d="M2 12l10 5 10-5" />
-                                                    </svg>
-                                                    {inputTokens.toLocaleString()}
-                                                </span>
+                                                <Tooltip content="Total Input Tokens">
+                                                    <span className={styles.tokenItem}>
+                                                        <Icon src={ICONS.INPUT_TOKENS} size={12} />
+                                                        {inputTokens.toLocaleString()}
+                                                    </span>
+                                                </Tooltip>
                                             )}
                                             {outputTokens != null && (
-                                                <span className={styles.tokenItem} title="Output tokens">
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                                                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                                                    </svg>
-                                                    {outputTokens.toLocaleString()}
-                                                </span>
+                                                <Tooltip content="Total Output Tokens">
+                                                    <span className={styles.tokenItem}>
+                                                        <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
+                                                        {outputTokens.toLocaleString()}
+                                                    </span>
+                                                </Tooltip>
+                                            )}
+                                            {tokensReadFromCache != null && (
+                                                <Tooltip content="Tokens read from cache">
+                                                    <span className={styles.tokenItem}>
+                                                        <Icon src={ICONS.CACHE_TOKENS} size={12} />
+                                                        {tokensReadFromCache.toLocaleString()}
+                                                    </span>
+                                                </Tooltip>
+                                            )}
+                                            {totalTokens != null && (
+                                                <Tooltip content="Total Tokens">
+                                                    <span className={styles.tokenItem}>
+                                                        <Icon src={ICONS.TOTAL_TOKENS} size={12} />
+                                                        {totalTokens.toLocaleString()}
+                                                    </span>
+                                                </Tooltip>
                                             )}
                                         </div>
                                     )}

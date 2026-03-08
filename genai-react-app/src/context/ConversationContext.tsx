@@ -158,6 +158,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             messageId: r.messageId ?? '',
             inputTokens: r.inputTokens ?? null,
             outputTokens: r.outputTokens ?? null,
+            totalTokens: r.totalTokens ?? null,
+            tokensReadFromCache: r.tokensReadFromCache ?? null,
         }))
     }
 
@@ -423,6 +425,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                                             if (metadata.responseMessageId) updates.messageId = metadata.responseMessageId
                                             if (metadata.inputTokens != null) updates.inputTokens = metadata.inputTokens
                                             if (metadata.outputTokens != null) updates.outputTokens = metadata.outputTokens
+                                            if (metadata.totalTokens != null) updates.totalTokens = metadata.totalTokens
+                                            if (metadata.tokensReadFromCache != null) updates.tokensReadFromCache = metadata.tokensReadFromCache
                                             return { ...m, ...updates }
                                         }
                                         return m

@@ -10,6 +10,8 @@ export interface StreamMetadata {
     aiVendor: string | null;
     inputTokens: number | null;
     outputTokens: number | null;
+    totalTokens: number | null;
+    tokensReadFromCache: number | null;
 }
 
 /**
@@ -51,6 +53,8 @@ export async function generateTextStream(
             aiVendor,
             inputTokens: null,
             outputTokens: null,
+            totalTokens: null,
+            tokensReadFromCache: null,
         });
     }
 
@@ -82,7 +86,12 @@ export async function generateTextStream(
 
                 // Parse usage and fire a second onMetadata call with token counts
                 try {
-                    const usage = JSON.parse(match[1]) as { inputTokens?: number | null; outputTokens?: number | null };
+                    const usage = JSON.parse(match[1]) as {
+                        inputTokens?: number | null;
+                        outputTokens?: number | null;
+                        totalTokens?: number | null;
+                        tokensReadFromCache?: number | null;
+                    };
                     if (onMetadata) {
                         onMetadata({
                             conversationId,
@@ -91,6 +100,8 @@ export async function generateTextStream(
                             aiVendor,
                             inputTokens: usage.inputTokens ?? null,
                             outputTokens: usage.outputTokens ?? null,
+                            totalTokens: usage.totalTokens ?? null,
+                            tokensReadFromCache: usage.tokensReadFromCache ?? null,
                         });
                     }
                 } catch {

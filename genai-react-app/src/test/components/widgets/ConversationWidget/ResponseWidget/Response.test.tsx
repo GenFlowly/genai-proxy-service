@@ -131,7 +131,7 @@ describe('Response Widget Component', () => {
         expect(screen.queryByTestId('follow-up-button')).not.toBeInTheDocument();
     });
 
-    test('renders token badge when input and output tokens are provided', () => {
+    test('renders token badge when input, output, total, and cache tokens are provided', () => {
         const msgsWithTokens = [
             {
                 messageId: 'msg-tokens',
@@ -139,14 +139,18 @@ describe('Response Widget Component', () => {
                 aiVendor: AIVendor.OPENAI,
                 isLoading: false,
                 inputTokens: 1234,
-                outputTokens: 567
+                outputTokens: 567,
+                totalTokens: 1801,
+                tokensReadFromCache: 0,
             }
         ];
         render(<Response blockId="block-1" responseMessages={msgsWithTokens} onFollowUp={jest.fn()} />);
 
-        // Check if both token counts are rendered
-        expect(screen.getByTitle('Input tokens')).toHaveTextContent('1,234');
-        expect(screen.getByTitle('Output tokens')).toHaveTextContent('567');
+        // Check if all token counts are rendered
+        expect(screen.getByText('1,234')).toBeInTheDocument();
+        expect(screen.getByText('567')).toBeInTheDocument();
+        expect(screen.getByText('1,801')).toBeInTheDocument();
+        expect(screen.getByText('0')).toBeInTheDocument();
     });
 
     test('does not render token badge when tokens are null or undefined', () => {
