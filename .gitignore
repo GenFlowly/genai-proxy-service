@@ -5,8 +5,9 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
-!**/.venv/**
-!**/.kotlin/**
+# Python virtual environments
+.venv/
+**/.venv/
 
 ### STS ###
 .apt_generated
