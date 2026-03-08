@@ -62,7 +62,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
 
     // Collapsed Content
     const headerCollapsed = (
-        <Tooltip content="Tokens" position="left">
+        <Tooltip content="Prompt Tokens" position="left">
             <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -89,7 +89,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
     const header = (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.25rem' }}>
             <Icon src={ICONS.TOKENS} size={20} />
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: 0 }}>Tokens</h3>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: 0 }}>Prompt Tokens</h3>
         </div>
     )
 
@@ -102,7 +102,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
         >
             <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0.25rem' }}>
                 <div className="text-xs text-gray-500" data-testid="token-count-display">
-                    {isTokenLoading ? 'Counting tokens…' : `Tokens: ${tokenCount}`}
+                    {isTokenLoading ? 'Counting prompt tokens…' : `Prompt Tokens: ${tokenCount}`}
                 </div>
             </div>
         </SidebarWidgetContainer>

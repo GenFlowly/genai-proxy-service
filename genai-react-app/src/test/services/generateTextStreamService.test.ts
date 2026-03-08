@@ -73,7 +73,9 @@ describe('generateTextStreamService', () => {
             responseMessageId: 'resp-new',
             aiVendor: 'OPENAI',
             inputTokens: null,
-            outputTokens: null
+            outputTokens: null,
+            totalTokens: null,
+            tokensReadFromCache: null
         });
 
         // Assert Stream Chunks
@@ -88,7 +90,7 @@ describe('generateTextStreamService', () => {
     test('generateTextStream extracts USAGE sentinel and fires second onMetadata', async () => {
         const encoder = new TextEncoder();
         const chunk1 = encoder.encode('Hel');
-        const chunk2 = encoder.encode('lo\n[USAGE:{"inputTokens":123,"outputTokens":456}]');
+        const chunk2 = encoder.encode('lo\n[USAGE:{"inputTokens":123,"outputTokens":456,"totalTokens":579,"tokensReadFromCache":100}]');
 
         const mockReader = {
             read: jest.fn()
@@ -117,14 +119,18 @@ describe('generateTextStreamService', () => {
         expect(onMetadata).toHaveBeenNthCalledWith(1, expect.objectContaining({
             conversationId: 'conv-123',
             inputTokens: null,
-            outputTokens: null
+            outputTokens: null,
+            totalTokens: null,
+            tokensReadFromCache: null
         }));
 
         // Second call (from sentinel)
         expect(onMetadata).toHaveBeenNthCalledWith(2, expect.objectContaining({
             conversationId: 'conv-123',
             inputTokens: 123,
-            outputTokens: 456
+            outputTokens: 456,
+            totalTokens: 579,
+            tokensReadFromCache: 100
         }));
 
         // Delta should ONLY get "Hel" and "lo", and NOT the sentinel text

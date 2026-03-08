@@ -20,6 +20,10 @@ import tokensIcon from '../assets/icons/tokens.svg'
 import editIcon from '../assets/icons/edit.svg'
 import validIcon from '../assets/icons/valid.svg'
 import thinkIcon from '../assets/icons/think.svg'
+import inputTokensIcon from '../assets/icons/input-tokens.svg'
+import outputTokensIcon from '../assets/icons/output-tokens.svg'
+import totalTokensIcon from '../assets/icons/total-tokens.svg'
+import cacheTokensIcon from '../assets/icons/cache-tokens.svg'
 
 export const ICONS = {
     EDIT: editIcon,
@@ -42,4 +46,8 @@ export const ICONS = {
     TOKENS: tokensIcon,
     VALID: validIcon,
     THINK: thinkIcon,
+    INPUT_TOKENS: inputTokensIcon,
+    OUTPUT_TOKENS: outputTokensIcon,
+    TOTAL_TOKENS: totalTokensIcon,
+    CACHE_TOKENS: cacheTokensIcon,
 }

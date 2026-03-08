@@ -11,6 +11,8 @@ export interface Message {
     isLoading?: boolean
     inputTokens?: number | null
     outputTokens?: number | null
+    totalTokens?: number | null
+    tokensReadFromCache?: number | null
 }
 
 /**

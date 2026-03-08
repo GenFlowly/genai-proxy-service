@@ -57,7 +57,7 @@ describe('TokenCounter', () => {
         });
 
         expect(screen.getByTestId('token-counter-widget')).toBeInTheDocument();
-        expect(screen.getByTestId('token-count-display')).toHaveTextContent('Tokens: 0');
+        expect(screen.getByTestId('token-count-display')).toHaveTextContent('Prompt Tokens: 0');
         expect(screen.getByTestId('token-count-collapsed')).toHaveTextContent('0');
     });
 
@@ -82,7 +82,7 @@ describe('TokenCounter', () => {
 
         // Wait for async update
         await waitFor(() => {
-            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Tokens: 2');
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Prompt Tokens: 2');
         });
 
         expect(mockCountTokens).toHaveBeenCalledWith('Hello World', 'gpt-4');
@@ -107,7 +107,7 @@ describe('TokenCounter', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Tokens: 5');
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Prompt Tokens: 5');
         });
 
         expect(mockCountTokens).toHaveBeenCalledWith('PromptContext', 'gpt-4');
@@ -143,26 +143,29 @@ describe('TokenCounter', () => {
         });
 
         // Delay resolution
-        mockCountTokens.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve(10), 100)));
+        let resolveCount: (value: number) => void;
+        mockCountTokens.mockImplementation(() => new Promise(resolve => {
+            resolveCount = resolve;
+        }));
 
         render(<TokenCounter />);
 
         act(() => {
-            jest.advanceTimersByTime(600); // Trigger calculation start
+            jest.advanceTimersByTime(500); // Trigger calculation start
         });
 
         // Should be loading now
         await waitFor(() => {
-            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Counting tokens…');
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Counting prompt tokens…');
         });
 
         // Resolve
         act(() => {
-            jest.advanceTimersByTime(200);
+            resolveCount!(10);
         });
 
         await waitFor(() => {
-            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Tokens: 10');
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Prompt Tokens: 10');
         });
     });
 });
