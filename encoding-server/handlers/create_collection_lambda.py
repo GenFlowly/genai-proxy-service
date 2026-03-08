@@ -41,7 +41,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             token=zilliz_token
         )
             
-        collection_name = customer_id
+        collection_name = f"{customer_id}_email"
         
         # Check if collection exists
         if client.has_collection(collection_name):
@@ -57,7 +57,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             # Add fields
             schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
-            schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=768)
+            schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384)
             schema.add_field(field_name="subject", datatype=DataType.VARCHAR, max_length=512)
             schema.add_field(field_name="from_email", datatype=DataType.VARCHAR, max_length=256)
             schema.add_field(field_name="to_email", datatype=DataType.VARCHAR, max_length=256)
@@ -103,7 +103,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             # Add fields for Notes
             notes_schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
-            notes_schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384) # Using all-MiniLM-L6-v2 which is 384 dim, NOT 768
+            notes_schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384) # Using all-MiniLM-L6-v2 which is 384 dim
             notes_schema.add_field(field_name="note_value", datatype=DataType.VARCHAR, max_length=65535)
             notes_schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=512)
             notes_schema.add_field(field_name="note_key", datatype=DataType.VARCHAR, max_length=256) # Separate note_key
