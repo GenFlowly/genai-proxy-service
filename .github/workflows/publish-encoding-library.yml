@@ -54,6 +54,7 @@ jobs:
           pytest
 
   publish:
+    name: Prod
     needs: build
     runs-on: ubuntu-latest
     defaults:
