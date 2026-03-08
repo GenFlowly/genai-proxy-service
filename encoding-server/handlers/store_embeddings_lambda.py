@@ -46,7 +46,7 @@ def ensure_collection_exists(client, collection_name: str, is_notes_collection: 
     else:
         # Default Email Schema
         schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
-        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=768)
+        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384)
         schema.add_field(field_name="subject", datatype=DataType.VARCHAR, max_length=512)
         schema.add_field(field_name="from_email", datatype=DataType.VARCHAR, max_length=256)
         schema.add_field(field_name="to_email", datatype=DataType.VARCHAR, max_length=256)
