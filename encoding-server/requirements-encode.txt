@@ -2,4 +2,4 @@
 -r requirements.txt
 
 # Encode-specific dependencies (includes ML libraries)
-genflowly-encoding-library[ml]>=0.1.9
+genflowly-encoding-library[ml]>=0.1.11
