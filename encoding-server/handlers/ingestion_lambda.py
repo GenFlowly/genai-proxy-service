@@ -12,11 +12,12 @@ from encoding_library.models.payload import Payload
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-sqs = boto3.client('sqs')
+# We initialize these inside the handler to prevent INIT phase credential timeouts 
+# if the environment is missing AWS_REGION.
+sqs = None
 QUEUE_URL = os.environ.get('QUEUE_URL')
 
-# Initialize Authorization Service
-auth_service = AuthorizationService()
+auth_service = None
 
 # LAMBDA 1
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -30,6 +31,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         logger.info(f"Received event: {json.dumps(event)}")
         
+        # Initialize AWS clients inside the handler so they don't block the INIT phase
+        global sqs, auth_service
+        if sqs is None:
+            region = os.environ.get('AWS_REGION', 'us-east-1')
+            sqs = boto3.client('sqs', region_name=region)
+        if auth_service is None:
+            # AuthorizationService also initializes DynamoDB, so it must be delayed as well
+            auth_service = AuthorizationService()
+            
         # 1. Authorization Check: Verify user exists in DynamoDB and get customerId
         is_authorized, customer_id, error_response = auth_service.verify_user(event)
         if not is_authorized:
