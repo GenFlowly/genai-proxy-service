@@ -12,7 +12,8 @@ class AuthorizationService:
     """
     
     def __init__(self):
-        self.dynamodb = boto3.resource('dynamodb')
+        region = os.environ.get('AWS_REGION', 'us-east-1')
+        self.dynamodb = boto3.resource('dynamodb', region_name=region)
         self.table_name = os.environ.get('CUSTOMER_PROFILE_TABLE_NAME', 'CustomerProfile')
         self.table = self.dynamodb.Table(self.table_name)
 
