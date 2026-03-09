@@ -1,17 +1,16 @@
 Metadata-Version: 2.4
 Name: genflowly-encoding-library
-Version: 0.1.2
+Version: 0.1.8
 Summary: Text encoding and chunking library.
-Author: Genflowly
 Requires-Python: >=3.9
-Requires-Dist: pymilvus[model]>=2.4.0
-Requires-Dist: sentence-transformers>=2.2.0
 Requires-Dist: requests>=2.31.0
-Requires-Dist: scikit-learn
-Requires-Dist: scipy
-Requires-Dist: numpy
+Requires-Dist: boto3
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: flake8; extra == "dev"
-Dynamic: author
-Dynamic: requires-python
+Provides-Extra: ml
+Requires-Dist: pymilvus[model]>=2.4.0; extra == "ml"
+Requires-Dist: sentence-transformers>=2.2.0; extra == "ml"
+Requires-Dist: scikit-learn; extra == "ml"
+Requires-Dist: scipy; extra == "ml"
+Requires-Dist: numpy<2.0.0; extra == "ml"
