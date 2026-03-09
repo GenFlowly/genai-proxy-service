@@ -1,6 +1,5 @@
 import logging
 from typing import List, Dict, Any
-from pymilvus.model.dense import SentenceTransformerEmbeddingFunction
 from .encoder import Encoder
 
 logger = logging.getLogger()
@@ -24,6 +23,8 @@ class SentenceTransformerEncoder(Encoder):
             self.device = device
             try:
                 logger.info(f"Loading SentenceTransformer model: {model_name} on {device}")
+                # Lazy import to prevent PyTorch loading during Lambda INIT phase
+                from pymilvus.model.dense import SentenceTransformerEmbeddingFunction
                 self.embedding_fn = SentenceTransformerEmbeddingFunction(
                     model_name=model_name,
                     device=device

@@ -1,6 +1,6 @@
 pyproject.toml
-setup.py
 src/encoding_library/__init__.py
+src/encoding_library/test.py
 src/encoding_library/chunkers/__init__.py
 src/encoding_library/chunkers/base_chunker.py
 src/encoding_library/chunkers/enums.py
@@ -29,6 +29,7 @@ src/encoding_library/processors/processor_factory.py
 src/encoding_library/utils/__init__.py
 src/encoding_library/utils/embedding_utils.py
 src/encoding_library/utils/text_preprocessor.py
+src/encoding_library/utils/vector_db.py
 src/genflowly_encoding_library.egg-info/PKG-INFO
 src/genflowly_encoding_library.egg-info/SOURCES.txt
 src/genflowly_encoding_library.egg-info/dependency_links.txt

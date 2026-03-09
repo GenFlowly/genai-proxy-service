@@ -1,10 +1,13 @@
-pymilvus[model]>=2.4.0
-sentence-transformers>=2.2.0
 requests>=2.31.0
-scikit-learn
-scipy
-numpy
+boto3
 
 [dev]
 pytest
 flake8
+
+[ml]
+pymilvus[model]>=2.4.0
+sentence-transformers>=2.2.0
+scikit-learn
+scipy
+numpy<2.0.0
