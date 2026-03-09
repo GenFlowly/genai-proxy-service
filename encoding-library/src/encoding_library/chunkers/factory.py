@@ -2,8 +2,6 @@ from typing import Any, Union
 from .base_chunker import BaseChunker
 from .recursive_chunker import RecursiveChunker
 from .recursive.splitters import CharacterSplitter, TokenSplitter
-from .semantic_chunker import SemanticChunker
-from .semantic.thresholds import PercentileThreshold, StandardDeviationThreshold
 from .enums import ChunkingType, RecursiveTechnique, SemanticTechnique
 
 class ChunkerFactory:
@@ -59,6 +57,10 @@ class ChunkerFactory:
             # Encoder must be passed
             if not encoder:
                 raise ValueError("Encoder instance required for semantic chunking")
+
+            # Lazy import semantic chunkers to avoid hard dependency on numpy
+            from .semantic_chunker import SemanticChunker
+            from .semantic.thresholds import PercentileThreshold, StandardDeviationThreshold
 
             if technique == SemanticTechnique.STD_DEV:
                 strategy = StandardDeviationThreshold(**kwargs)

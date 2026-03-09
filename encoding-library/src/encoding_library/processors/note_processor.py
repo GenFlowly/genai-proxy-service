@@ -4,8 +4,6 @@ from typing import Dict, Any, Tuple, List, Callable
 from .data_processor import DataProcessor
 from encoding_library.models.payload import Payload
 import uuid
-from encoding_library.chunkers.factory import ChunkerFactory
-from encoding_library.chunkers.enums import ChunkingType, RecursiveTechnique
 
 # Assuming notes_model is in the python path
 try:
@@ -129,6 +127,8 @@ class NoteProcessor(DataProcessor):
 
         text_to_encode = f"{note.title or ''}\n\n{note.note_value}"
 
+        from encoding_library.chunkers.factory import ChunkerFactory
+        from encoding_library.chunkers.enums import ChunkingType, RecursiveTechnique
         
         # Get chunking config from data or use defaults
         # We can pass strings, Factory will normalize
