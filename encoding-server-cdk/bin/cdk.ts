@@ -33,6 +33,7 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     zillizEndpoint: process.env.ZILLIZ_ENDPOINT || 'dummy_zilliz_endpoint',
     zillizToken: process.env.ZILLIZ_TOKEN || 'dummy_zilliz_token',
     customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
+    customerVectorDBConfigTableName: process.env.CUSTOMER_VECTOR_DB_CONFIG_TABLE_NAME || 'CustomerVectorDBConfig',
 });
 
 
