@@ -4,6 +4,7 @@ import styles from './SettingsPage.module.scss'
 import { useAuth } from '../context/AuthContext'
 import { AIVendor } from '../constants/vendors'
 import { storeCustomerVendorApiKey } from '../services/storeCustomerVendorApiKeysService'
+import { storeCustomerVectorDBConfig } from '../services/storeCustomerVectorDBConfigService'
 import PillButton from '../components/common/PillButton/PillButton'
 import { ICONS } from '../constants/icons'
 import {
@@ -18,7 +19,7 @@ import { CustomerVectorDBConfigStatus } from '../components/common/CustomerVecto
 import { useToast } from '../context/ToastContext'
 
 export default function SettingsPage(): React.ReactElement {
-    const { customerId, getAccessTokenSilently, isAuthenticated, updateVendorApiKeyStatus } = useAuth()
+    const { customerId, getAccessTokenSilently, isAuthenticated, updateVendorApiKeyStatus, updateVectorDBConfigStatus } = useAuth()
     const { showToast } = useToast()
 
     const vendors = Object.values(AIVendor) as AIVendor[]
@@ -93,13 +94,39 @@ export default function SettingsPage(): React.ReactElement {
             return
         }
 
-        if (!zillizEndpoint.trim() || !zillizToken.trim()) {
+        const endpointValue = zillizEndpoint.trim()
+        const tokenValue = zillizToken.trim()
+
+        if (!endpointValue || !tokenValue) {
             showToast('Please enter both endpoint and token.')
+            return
+        }
+
+        const endpointRegex = /^https:\/\/[a-zA-Z0-9-]+\.(?:serverless|dedicated)\.[a-zA-Z0-9-]+\.cloud\.zilliz\.com\/?$/i
+        if (!endpointRegex.test(endpointValue)) {
+            showToast('Invalid Zilliz endpoint format.')
+            return
+        }
+
+        const tokenRegex = /^[a-fA-F0-9]{64,}$/
+        if (!tokenRegex.test(tokenValue)) {
+            showToast('Invalid Zilliz token format. Expected a long hex string.')
             return
         }
 
         setSavingZilliz(true)
         try {
+            const token = await getAccessTokenSilently()
+
+            const response = await storeCustomerVectorDBConfig(token, {
+                vendor: 'Zilliz',
+                endpoint: zillizEndpoint,
+                token: zillizToken
+            })
+
+            if (response.configStatus && response.configStatus.updateSuccessful) {
+                updateVectorDBConfigStatus(response.configStatus)
+            }
 
             setZillizEndpoint('')
             setZillizToken('')
@@ -189,7 +216,7 @@ export default function SettingsPage(): React.ReactElement {
                                 onClick={handleSaveZilliz}
                                 label={savingZilliz ? 'Saving...' : 'Save'}
                                 icon={ICONS.SAVE_ICON}
-                                disabled={savingZilliz}
+                                disabled={savingZilliz || !zillizEndpoint.trim() || !zillizToken.trim()}
                             />
                         </div>
                     </div>

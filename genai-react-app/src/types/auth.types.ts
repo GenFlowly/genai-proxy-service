@@ -1,6 +1,6 @@
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { OnboardCustomerResponse } from '../models/onboardUser.models'
-import { VectorDBConfigStatusValue } from '../models/storeCustomerVectorDBConfig.models'
+import { StoreCustomerVectorDBConfigResponse, VectorDBConfigStatusValue } from '../models/storeCustomerVectorDBConfig.models'
 import { InstructionResponse } from '../models/instruction.models'
 
 export interface User {
@@ -27,6 +27,7 @@ export interface AuthContextType {
         updateSuccessful: boolean;
     }[];
     updateVendorApiKeyStatus: (status: AIVendorAPIKeyStatus) => void;
+    updateVectorDBConfigStatus: (status: StoreCustomerVectorDBConfigResponse['configStatus']) => void;
     aiConfigPreferences: OnboardCustomerResponse['aiConfigPreferences'] | null;
     customerInstructions: InstructionResponse[];
     refreshInstructions: () => Promise<void>;

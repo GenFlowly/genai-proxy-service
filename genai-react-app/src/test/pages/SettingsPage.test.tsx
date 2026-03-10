@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SettingsPage from '../../pages/SettingsPage';
 import { AIVendor } from '../../constants/vendors';
 import { storeCustomerVendorApiKey } from '../../services/storeCustomerVendorApiKeysService';
+import { storeCustomerVectorDBConfig } from '../../services/storeCustomerVectorDBConfigService';
 
 // Mocks
 jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar">Navbar</div>);
@@ -18,8 +19,10 @@ jest.mock('../../components/common/CustomerVectorDBConfigStatus/CustomerVectorDB
     CustomerVectorDBConfigStatus: () => <div data-testid="vector-db-status">DBStatus</div>
 }));
 jest.mock('../../services/storeCustomerVendorApiKeysService');
+jest.mock('../../services/storeCustomerVectorDBConfigService');
 
 const mockUpdateVendorApiKeyStatus = jest.fn();
+const mockUpdateVectorDBConfigStatus = jest.fn();
 const mockGetAccessTokenSilently = jest.fn();
 const mockShowToast = jest.fn();
 
@@ -29,6 +32,7 @@ jest.mock('../../context/AuthContext', () => ({
         isAuthenticated: true,
         getAccessTokenSilently: mockGetAccessTokenSilently,
         updateVendorApiKeyStatus: mockUpdateVendorApiKeyStatus,
+        updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus,
         aiVendorAPIKeyStatusList: []
     })
 }));
@@ -109,6 +113,119 @@ describe('SettingsPage', () => {
 
         await waitFor(() => {
             expect(mockShowToast).toHaveBeenCalledWith('API Fail');
+        });
+    });
+
+    describe('Vector Database Settings (Zilliz)', () => {
+        test('validates missing endpoint and token', () => {
+            render(<SettingsPage />);
+            const zillizSaveButton = screen.getAllByRole('button', { name: /Save/i })[3]; // 4th button
+
+            expect(zillizSaveButton).toBeDisabled();
+        });
+
+        test('validates incorrect endpoint format', async () => {
+            render(<SettingsPage />);
+            const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
+            const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+            const buttons = screen.getAllByText('Save');
+
+            fireEvent.change(endpointInput, { target: { value: 'invalid-url' } });
+            fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
+
+            fireEvent.click(buttons[3]);
+
+            expect(mockShowToast).toHaveBeenCalledWith('Invalid Zilliz endpoint format.');
+            expect(storeCustomerVectorDBConfig).not.toHaveBeenCalled();
+        });
+
+        test('validates incorrect token format', async () => {
+            render(<SettingsPage />);
+            const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
+            const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+            const buttons = screen.getAllByText('Save');
+
+            fireEvent.change(endpointInput, { target: { value: 'https://in03-123.serverless.aws.cloud.zilliz.com' } });
+            fireEvent.change(tokenInput, { target: { value: 'short-token' } });
+
+            fireEvent.click(buttons[3]);
+
+            expect(mockShowToast).toHaveBeenCalledWith('Invalid Zilliz token format. Expected a long hex string.');
+            expect(storeCustomerVectorDBConfig).not.toHaveBeenCalled();
+        });
+
+        test('saves valid Zilliz settings successfully', async () => {
+            (storeCustomerVectorDBConfig as jest.Mock).mockResolvedValue({
+                configStatus: { updateSuccessful: true, vendor: 'Zilliz', status: 'PRESENT' }
+            });
+
+            render(<SettingsPage />);
+            const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
+            const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+            const buttons = screen.getAllByText('Save');
+
+            fireEvent.change(endpointInput, { target: { value: 'https://in03-123.serverless.aws.cloud.zilliz.com' } });
+            fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
+
+            fireEvent.click(buttons[3]);
+
+            await waitFor(() => {
+                expect(storeCustomerVectorDBConfig).toHaveBeenCalledWith('token', {
+                    vendor: 'Zilliz',
+                    endpoint: 'https://in03-123.serverless.aws.cloud.zilliz.com',
+                    token: 'a'.repeat(64)
+                });
+                expect(mockUpdateVectorDBConfigStatus).toHaveBeenCalledWith(
+                    expect.objectContaining({ updateSuccessful: true, vendor: 'Zilliz', status: 'PRESENT' })
+                );
+                expect(mockShowToast).toHaveBeenCalledWith('Zilliz settings saved successfully.');
+            });
+
+            expect(endpointInput).toHaveValue('');
+            expect(tokenInput).toHaveValue('');
+        });
+
+        test('handles Zilliz save failure cleanly without updating context', async () => {
+            (storeCustomerVectorDBConfig as jest.Mock).mockResolvedValue({
+                configStatus: { updateSuccessful: false, vendor: 'Zilliz', status: 'NOT_SET' }
+            });
+
+            render(<SettingsPage />);
+            const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
+            const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+            const buttons = screen.getAllByText('Save');
+
+            fireEvent.change(endpointInput, { target: { value: 'https://in03-123.serverless.aws.cloud.zilliz.com' } });
+            fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
+
+            fireEvent.click(buttons[3]);
+
+            await waitFor(() => {
+                expect(storeCustomerVectorDBConfig).toHaveBeenCalled();
+                expect(mockUpdateVectorDBConfigStatus).not.toHaveBeenCalled();
+                expect(mockShowToast).toHaveBeenCalledWith('Zilliz settings saved successfully.');
+            });
+
+            expect(endpointInput).toHaveValue('');
+            expect(tokenInput).toHaveValue('');
+        });
+
+        test('catches completely rejected promise from Zilliz save', async () => {
+            (storeCustomerVectorDBConfig as jest.Mock).mockRejectedValue(new Error('VectorDB API Fail'));
+
+            render(<SettingsPage />);
+            const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
+            const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+            const buttons = screen.getAllByText('Save');
+
+            fireEvent.change(endpointInput, { target: { value: 'https://in03-123.serverless.aws.cloud.zilliz.com' } });
+            fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
+
+            fireEvent.click(buttons[3]);
+
+            await waitFor(() => {
+                expect(mockShowToast).toHaveBeenCalledWith('VectorDB API Fail');
+            });
         });
     });
 });

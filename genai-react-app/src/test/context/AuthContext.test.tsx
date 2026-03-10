@@ -415,6 +415,61 @@ test('updateVendorApiKeyStatus updates existing and adds new', async () => {
     expect(screen.getByTestId('vendor-list')).toHaveTextContent('NewVendor');
 });
 
+test('updateVectorDBConfigStatus updates existing and adds new', async () => {
+    (onboardCustomer as jest.Mock).mockResolvedValue({
+        customerId: '123',
+        customerInstructions: [],
+        aiVendorAPIKeyStatusList: [],
+        vectorDBConfigStatusList: [{ vendor: 'Zilliz', status: 'NOT_SET' } as any],
+        aiConfigPreferences: null
+    });
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        logout: jest.fn(),
+    });
+
+    const TestVectorDB = () => {
+        const { updateVectorDBConfigStatus, vectorDBConfigStatusList } = useAuth();
+        return (
+            <div>
+                <button onClick={() => updateVectorDBConfigStatus({ vendor: 'Zilliz', isConfigValid: true, status: 'PRESENT', updateSuccessful: true } as any)} data-testid="update-existing">Update Existing</button>
+                <button onClick={() => updateVectorDBConfigStatus({ vendor: 'Milvus', isConfigValid: false, status: 'NOT_SET', updateSuccessful: false } as any)} data-testid="add-new">Add New</button>
+                <div data-testid="db-list">{JSON.stringify(vectorDBConfigStatusList)}</div>
+            </div>
+        );
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestVectorDB />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    // 1. Wait for Onboard
+    await waitFor(() => {
+        expect(screen.getByTestId('db-list')).toHaveTextContent('Zilliz');
+    });
+
+    // 2. Update Existing (Hit index !== -1)
+    await act(async () => {
+        screen.getByTestId('update-existing').click();
+    });
+    expect(screen.getByTestId('db-list')).toHaveTextContent('PRESENT');
+
+    // 3. Add New (Hit index === -1)
+    await act(async () => {
+        screen.getByTestId('add-new').click();
+    });
+    expect(screen.getByTestId('db-list')).toHaveTextContent('Milvus');
+});
+
 test('Logs out for login_required error', async () => {
     const mockLogout = jest.fn();
     const loginReqError = { error: 'login_required' };
