@@ -7,6 +7,7 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { DockerImageCode, DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { RESOURCE_NAMES } from "./constants";
 
 export interface LambdaStackProps extends cdk.StackProps {
@@ -24,6 +25,7 @@ export interface LambdaStackProps extends cdk.StackProps {
     zillizEndpoint: string;
     zillizToken: string;
     customerProfileTableName: string;
+    customerVectorDBConfigTableName: string;
 }
 
 export class LambdaStack extends cdk.Stack {
@@ -39,6 +41,7 @@ export class LambdaStack extends cdk.Stack {
 
         // Import CustomerProfile table
         const customerProfileTable = dynamodb.Table.fromTableName(this, 'CustomerProfileTable', props.customerProfileTableName);
+        const customerVectorDBConfigTable = dynamodb.Table.fromTableName(this, 'CustomerVectorDBConfigTable', props.customerVectorDBConfigTableName);
 
         /**
          * Ingestion Lambda
@@ -113,8 +116,16 @@ export class LambdaStack extends cdk.Stack {
                 ZILLIZ_ENDPOINT: props.zillizEndpoint,
                 ZILLIZ_TOKEN: props.zillizToken,
                 COLLECTION_NAME: 'test',
+                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
             },
         });
+
+        // Grant permissions to access Zilliz credentials from DynamoDB and decrypt them via KMS
+        customerVectorDBConfigTable.grantReadData(this.storeEmbeddingsLambda);
+        this.storeEmbeddingsLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'], // Needs to decrypt tokens with the KMS key
+        }));
 
         // 3. Store S3 Lambda
         this.storeS3Lambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`, {
