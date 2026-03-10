@@ -2,7 +2,7 @@ import { NotesModel } from '../models/encoding.models'
 import { HttpMethod } from '../constants/http'
 
 // TODO remove Hardcoded API URL as requested
-const API_URL = 'https://b6m08mq0pj.execute-api.us-east-1.amazonaws.com/development/encode'
+const API_URL = 'https://pzf0twaaq5.execute-api.us-east-1.amazonaws.com/development/encode'
 
 export async function saveNote(
     note: NotesModel,

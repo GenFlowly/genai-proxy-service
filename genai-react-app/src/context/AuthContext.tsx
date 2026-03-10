@@ -11,6 +11,7 @@ import { onboardCustomer } from '../services/onboardUserService'
 import { OnboardCustomerResponse } from '../models/onboardUser.models'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { InstructionResponse } from '../models/instruction.models'
+import { StoreCustomerVectorDBConfigResponse } from '../models/storeCustomerVectorDBConfig.models'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
@@ -197,6 +198,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         })
     }
 
+    const updateVectorDBConfigStatus = (status: StoreCustomerVectorDBConfigResponse['configStatus']) => {
+        setVectorDBConfigStatusList(prev => {
+            const index = prev.findIndex(s => s.vendor === status.vendor)
+            if (index !== -1) {
+                const updated = [...prev]
+                updated[index] = status
+                return updated
+            }
+            return [...prev, status]
+        })
+    }
+
     // Strict Authentication: Considered authenticated ONLY if Auth0 says so AND we have a customerId (onboard success).
     const isStrictlyAuthenticated = isAuthenticated && !!customerId
 
@@ -212,6 +225,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         aiVendorAPIKeyStatusList,
         vectorDBConfigStatusList, // Added vectorDBConfigStatusList to context
         updateVendorApiKeyStatus,
+        updateVectorDBConfigStatus,
         aiConfigPreferences,
         customerInstructions,
         refreshInstructions,
