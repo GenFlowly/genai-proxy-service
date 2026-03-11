@@ -84,7 +84,7 @@ class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
                     )
                 )
             )
-            .maxTokens(16384L)
+            .maxTokens(4096L)
             .model(model)
             .messages(messageParams)
             .build()
