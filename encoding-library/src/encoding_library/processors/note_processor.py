@@ -3,6 +3,7 @@ import logging
 from typing import Dict, Any, Tuple, List, Callable
 from .data_processor import DataProcessor
 from encoding_library.models.payload import Payload
+from encoding_library.encoders.encoder import Encoder
 import uuid
 
 # Assuming notes_model is in the python path
@@ -118,7 +119,7 @@ class NoteProcessor(DataProcessor):
 
 
 
-    def create_embeddings(self, data: Dict[str, Any], encoder: Any) -> List[Dict[str, Any]]:
+    def create_embeddings(self, data: Dict[str, Any], encoder: Encoder) -> List[Dict[str, Any]]:
         """
         Create embeddings for the note using configured chunker and encoder.
         """
@@ -150,12 +151,7 @@ class NoteProcessor(DataProcessor):
             return []
             
         # Encode chunks
-        # Expect encoder to have encode_documents method
-        if hasattr(encoder, 'encode_documents'):
-            embeddings = encoder.encode_documents(chunks)
-        else:
-             # Fallback if interface mismatch (shouldn't happen with new Encoder)
-             raise ValueError("Encoder does not support encode_documents")
+        embeddings = encoder.encode_documents(chunks)
              
         # Format result
         result = []
@@ -173,3 +169,49 @@ class NoteProcessor(DataProcessor):
             })
             
         return result
+
+    def get_collection_name(self, customer_id: str, data: Dict[str, Any]) -> str:
+        """
+        Get the name of the vector database collection for this data type.
+        """
+        model_name = data.get('model_name', 'all-MiniLM-L6-v2')
+        # Sanitize model name for Milvus collection name (replace hyphens with underscores)
+        safe_model_name = model_name.replace('-', '_')
+        return f"{customer_id}_notes_{safe_model_name}"
+        
+    def get_collection_schema(self) -> Any:
+        """
+        Get the Milvus schema definition for note type.
+        """
+        # Lazy import heavy PyMilvus libraries
+        try:
+            from pymilvus import MilvusClient, DataType
+        except ImportError:
+            import sys, os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from pymilvus import MilvusClient, DataType
+
+        notes_schema = MilvusClient.create_schema(
+            auto_id=False,
+            enable_dynamic_field=True,
+        )
+        
+        # Add fields for Notes
+        notes_schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
+        notes_schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384) # Using all-MiniLM-L6-v2 which is 384 dim
+        notes_schema.add_field(field_name="note_value", datatype=DataType.VARCHAR, max_length=65535)
+        notes_schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=512)
+        notes_schema.add_field(field_name="note_key", datatype=DataType.VARCHAR, max_length=256)
+        notes_schema.add_field(field_name="client", datatype=DataType.VARCHAR, max_length=100)
+        notes_schema.add_field(field_name="created_at", datatype=DataType.VARCHAR, max_length=64)
+        notes_schema.add_field(field_name="s3_key", datatype=DataType.VARCHAR, max_length=512)
+        
+        notes_index_params = MilvusClient.prepare_index_params()
+        
+        notes_index_params.add_index(
+            field_name="vector", 
+            index_type="AUTOINDEX",
+            metric_type="COSINE"
+        )
+        
+        return notes_schema, notes_index_params
