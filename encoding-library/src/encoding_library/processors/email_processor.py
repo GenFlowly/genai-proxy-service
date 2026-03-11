@@ -3,6 +3,7 @@ import logging
 from typing import Dict, Any, Tuple, List, Callable
 from .data_processor import DataProcessor
 from encoding_library.models.payload import Payload
+from encoding_library.encoders.encoder import Encoder
 
 from encoding_library.models.encoding.email_model import EmailModel
 
@@ -97,7 +98,7 @@ class EmailProcessor(DataProcessor):
         
         return [record]
 
-    def create_embeddings(self, data: Dict[str, Any], encoder: Any) -> List[Dict[str, Any]]:
+    def create_embeddings(self, data: Dict[str, Any], encoder: Encoder) -> List[Dict[str, Any]]:
         """
         Create embeddings for the email.
         """
@@ -130,3 +131,51 @@ class EmailProcessor(DataProcessor):
             vector = list(vector)
             
         return [{'text': text_to_encode[:100], 'vector': vector, 'index': 0}]
+
+    def get_collection_name(self, customer_id: str, data: Dict[str, Any]) -> str:
+        """
+        Get the name of the vector database collection for this data type.
+        """
+        model_name = data.get('model_name', 'all-MiniLM-L6-v2')
+        # Sanitize model name for Milvus collection name (replace hyphens with underscores)
+        safe_model_name = model_name.replace('-', '_')
+        return f"{customer_id}_email_{safe_model_name}"
+        
+    def get_collection_schema(self) -> Any:
+        """
+        Get the Milvus schema definition for email type.
+        """
+        # Lazy import heavy PyMilvus libraries
+        try:
+            from pymilvus import MilvusClient, DataType
+        except ImportError:
+            import sys, os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from pymilvus import MilvusClient, DataType
+
+        schema = MilvusClient.create_schema(
+            auto_id=False,
+            enable_dynamic_field=True,
+        )
+        
+        # Add fields
+        schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
+        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384)
+        schema.add_field(field_name="subject", datatype=DataType.VARCHAR, max_length=512)
+        schema.add_field(field_name="from_email", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="to_email", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="date", datatype=DataType.VARCHAR, max_length=64)
+        schema.add_field(field_name="folder", datatype=DataType.VARCHAR, max_length=128)
+        schema.add_field(field_name="thread_id", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="in_reply_to", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="s3_key", datatype=DataType.VARCHAR, max_length=512)
+        
+        index_params = MilvusClient.prepare_index_params()
+        
+        index_params.add_index(
+            field_name="vector", 
+            index_type="AUTOINDEX",
+            metric_type="COSINE"
+        )
+        
+        return schema, index_params

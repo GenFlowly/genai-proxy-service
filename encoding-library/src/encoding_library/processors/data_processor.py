@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple, List, Callable
 from encoding_library.models.payload import Payload
+from encoding_library.encoders.encoder import Encoder
 
 class DataProcessor(ABC):
     """
@@ -34,9 +35,25 @@ class DataProcessor(ABC):
         pass
 
     @abstractmethod
-    def create_embeddings(self, data: Dict[str, Any], encoder: Any) -> List[Dict[str, Any]]:
+    def create_embeddings(self, data: Dict[str, Any], encoder: Encoder) -> List[Dict[str, Any]]:
         """
         Create embeddings for the data.
         Returns a list of dictionaries, each containing 'text' and 'vector'.
         """
         pass
+
+    @abstractmethod
+    def get_collection_name(self, customer_id: str, data: Dict[str, Any]) -> str:
+        """
+        Get the name of the vector database collection for this data type.
+        """
+        pass
+        
+    @abstractmethod
+    def get_collection_schema(self) -> Any:
+        """
+        Get the Milvus schema definition for this data type.
+        Returns a tuple of (schema, index_params).
+        """
+        pass
+
