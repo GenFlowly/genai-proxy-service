@@ -19,7 +19,7 @@ os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp/joblib_tmp'
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# TODO make sure this can take requests from a kotlin ktor app
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Encode Handler - Step 1
