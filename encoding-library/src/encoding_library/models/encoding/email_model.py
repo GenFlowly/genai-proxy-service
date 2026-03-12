@@ -1,35 +1,26 @@
-from dataclasses import dataclass, field
 from typing import List, Optional
 from datetime import datetime
 import email.utils
 from email.header import decode_header
+from pydantic import BaseModel, ConfigDict, Field
 
-@dataclass
-class EmailModel:
+class EmailModel(BaseModel):
     message_id: str
     subject: str
-    from_addr: str
-    to_addrs: List[str]
-    date: datetime
+    from_addr: str = Field(alias="from")
+    to_addrs: List[str] = Field(alias="to")
+    date: Optional[datetime] = None
     body: str
     folder: str
-    references: List[str] = field(default_factory=list)
+    references: List[str] = Field(default_factory=list)
     in_reply_to: Optional[str] = None
     thread_id: Optional[str] = None # Can be derived or assigned by server
 
+    model_config = ConfigDict(populate_by_name=True)
+
+
     def to_dict(self):
-        return {
-            "message_id": self.message_id,
-            "subject": self.subject,
-            "from": self.from_addr,
-            "to": self.to_addrs,
-            "date": self.date.isoformat() if self.date else None,
-            "body": self.body,
-            "folder": self.folder,
-            "references": self.references,
-            "in_reply_to": self.in_reply_to,
-            "thread_id": self.thread_id
-        }
+        return self.model_dump(by_alias=True, exclude_none=True)
 
     @staticmethod
     def decode_subject(subject):

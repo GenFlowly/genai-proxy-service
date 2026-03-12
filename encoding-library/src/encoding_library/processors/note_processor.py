@@ -59,24 +59,12 @@ class NoteProcessor(DataProcessor):
         message_body = json.dumps(payload.to_dict())
         
         # Helper to safely add string attributes
-        message_attributes = {}
-        
-        attributes_map = {
-            'noteKey': notes_model.note_key,
-            'noteValue': notes_model.note_value,
-            'title': notes_model.title,
-            'createdAt': notes_model.created_at,
-            'type': 'note',
-            'client': notes_model.client,
-            'customerId': payload.customer_id
+        message_attributes = {
+            'customerId': {
+                'StringValue': str(payload.customer_id),
+                'DataType': 'String'
+            }
         }
-
-        for key, value in attributes_map.items():
-            if value: # Only add if not None and not empty string
-                message_attributes[key] = {
-                    'StringValue': str(value),
-                    'DataType': 'String'
-                }
         
         return message_body, message_attributes
 
@@ -96,20 +84,20 @@ class NoteProcessor(DataProcessor):
         
         for chunk_data in embeddings:
             # id is internal Milvus ID (UUID), note_key is optional external ID
-            milvus_id = str(uuid.uuid4())
+            data_id = str(uuid.uuid4())
             chunk_text = chunk_data['text']
             vector = chunk_data['vector']
             chunk_index = chunk_data['index']
             
             record = {
-                "id": milvus_id,
+                "id": data_id,
                 "vector": vector,
                 "note_value": chunk_text[:65535], # Store the CHUNK text, not the whole note
                 "title": (notes_model.title or "")[:500],
                 "note_key": (notes_model.note_key or "")[:256],
                 "client": notes_model.client[:100],
                 "created_at": notes_model.created_at,
-                "s3_key": f"notes/{notes_model.client}/{milvus_id}.json",
+                "s3_key": f"notes/{notes_model.client}/{data_id}.json",
                 # Optional: Add chunk specific metadata if schema supports it
                 # "chunk_index": chunk_index 
             }
