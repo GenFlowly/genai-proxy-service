@@ -1,23 +1,17 @@
-from dataclasses import dataclass, asdict
 from typing import Dict, Any, Optional
+from pydantic import BaseModel, ConfigDict, Field
 
-@dataclass
-class NotesModel:
+class NotesModel(BaseModel):
     note_key: Optional[str] = None
     note_value: str = ''
     title: Optional[str] = None
     created_at: str = ''
-    client: str = ''
+    
+    model_config = ConfigDict(populate_by_name=True)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        return {
-            'note_key': self.note_key,
-            'note_value': self.note_value,
-            'title': self.title,
-            'created_at': self.created_at,
-            'client': self.client
-        }
+        return self.model_dump(by_alias=True, exclude_none=True)
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'NotesModel':
@@ -27,5 +21,4 @@ class NotesModel:
             note_value=data.get('note_value', ''),
             title=data.get('title'),
             created_at=data.get('created_at', ''),
-            client=data.get('client', '')
         )

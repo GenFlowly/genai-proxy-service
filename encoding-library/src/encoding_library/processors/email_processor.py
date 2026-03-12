@@ -50,18 +50,6 @@ class EmailProcessor(DataProcessor):
         message_body = json.dumps(payload.to_dict())
         
         message_attributes = {
-            'messageId': {
-                'StringValue': email_model.message_id,
-                'DataType': 'String'
-            },
-            'folder': {
-                'StringValue': email_model.folder,
-                'DataType': 'String'
-            },
-            'type': {
-                'StringValue': 'email',
-                'DataType': 'String'
-            },
             'customerId': {
                 'StringValue': payload.customer_id,
                 'DataType': 'String'
