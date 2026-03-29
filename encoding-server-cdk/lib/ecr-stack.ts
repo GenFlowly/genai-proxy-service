@@ -15,6 +15,7 @@ export class EcrStack extends cdk.Stack {
     public readonly encodeRepo: IRepository;
     public readonly storeEmbeddingsRepo: IRepository;
     public readonly storeS3Repo: IRepository;
+    public readonly updateDynamoDbRepo: IRepository;
 
     constructor(scope: Construct, id: string, props: EcrStackProps) {
         super(scope, id, props);
@@ -43,9 +44,16 @@ export class EcrStack extends cdk.Stack {
             lifecycleRules: [{ maxImageCount: 5 }],
         });
 
-        // Store S3 Lambda Repository (shared with trigger)
+        // KEEP FOR PHASE 1 CI OVERLAP
         this.storeS3Repo = new Repository(this, 'StoreS3LambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-repo`,
+            removalPolicy: removalPolicy,
+            lifecycleRules: [{ maxImageCount: 5 }],
+        });
+
+        // Update DynamoDB Lambda Repository (shared with trigger)
+        this.updateDynamoDbRepo = new Repository(this, 'UpdateDynamoDbLambdaRepo', {
+            repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-repo`,
             removalPolicy: removalPolicy,
             lifecycleRules: [{ maxImageCount: 5 }],
         });
@@ -65,6 +73,10 @@ export class EcrStack extends cdk.Stack {
 
         new CfnOutput(this, 'StoreS3RepoUri', {
             value: this.storeS3Repo.repositoryUri,
+        });
+
+        new CfnOutput(this, 'UpdateDynamoDbRepoUri', {
+            value: this.updateDynamoDbRepo.repositoryUri,
         });
 
     }

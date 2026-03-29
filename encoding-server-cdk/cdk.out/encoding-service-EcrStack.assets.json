@@ -1,7 +1,7 @@
 {
   "version": "41.0.0",
   "files": {
-    "42de531d432bd38c61e71449d670f6e77cc1778b1d20abffbfbf940c5e21a4d0": {
+    "c940941d28bfef23247baa932478b16fe10b55cf53b52821d29be340229c2004": {
       "displayName": "encoding-service-EcrStack Template",
       "source": {
         "path": "encoding-service-EcrStack.template.json",
@@ -10,7 +10,7 @@
       "destinations": {
         "current_account-current_region": {
           "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
-          "objectKey": "42de531d432bd38c61e71449d670f6e77cc1778b1d20abffbfbf940c5e21a4d0.json",
+          "objectKey": "c940941d28bfef23247baa932478b16fe10b55cf53b52821d29be340229c2004.json",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
         }
       }

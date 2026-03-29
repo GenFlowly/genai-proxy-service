@@ -18,10 +18,12 @@ export interface LambdaStackProps extends cdk.StackProps {
     encodeRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
+    updateDynamoDbRepo: ecr.IRepository;
     ingestionImageTag?: string;
     encodeImageTag?: string;
     storeEmbeddingsImageTag?: string;
     storeS3ImageTag?: string;
+    updateDynamoDbImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
     customerProfileTableName: string;
@@ -35,6 +37,7 @@ export class LambdaStack extends cdk.Stack {
     public readonly encodeLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly storeS3Lambda: DockerImageFunction;
+    public readonly updateDynamoDbLambda: DockerImageFunction;
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
@@ -55,7 +58,7 @@ export class LambdaStack extends cdk.Stack {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`,
             code: ingestionLambdaCode,
             memorySize: 512,
-            timeout: cdk.Duration.seconds(30),
+            timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
                 QUEUE_URL: props.ingestionQueue.queueUrl,
@@ -74,7 +77,7 @@ export class LambdaStack extends cdk.Stack {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingest-notes-lambda`,
             code: ingestionLambdaCode,
             memorySize: 512,
-            timeout: cdk.Duration.seconds(30),
+            timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
                 QUEUE_URL: props.ingestionQueue.queueUrl,
@@ -98,7 +101,7 @@ export class LambdaStack extends cdk.Stack {
                 cmd: ['handlers.encode_lambda.handler'],
             }),
             memorySize: 3008, // Needs memory for model
-            timeout: cdk.Duration.seconds(300),
+            timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
         });
 
@@ -110,7 +113,7 @@ export class LambdaStack extends cdk.Stack {
                 cmd: ['handlers.store_embeddings_lambda.handler'],
             }),
             memorySize: 512,
-            timeout: cdk.Duration.seconds(60),
+            timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
                 ZILLIZ_ENDPOINT: props.zillizEndpoint,
@@ -127,21 +130,38 @@ export class LambdaStack extends cdk.Stack {
             resources: ['*'], // Needs to decrypt tokens with the KMS key
         }));
 
-        // 3. Store S3 Lambda
+        // KEEP FOR PHASE 1 CI OVERLAP
         this.storeS3Lambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`,
             code: DockerImageCode.fromEcr(props.storeS3Repo, {
                 tagOrDigest: props.storeS3ImageTag || 'store-s3-latest',
-                cmd: ['handlers.store_in_s3_lambda.handler'],
+                cmd: ['handlers.store_in_s3_lambda.handler'], // Note: Can
+                // point to the new python file safely since it still runs
             }),
             memorySize: 512,
-            timeout: cdk.Duration.seconds(60),
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                BUCKET_NAME: props.rawEmailBucket.bucketName,
+            },
+        });
+        props.rawEmailBucket.grantPut(this.storeS3Lambda);
+
+        // 3. Update DynamoDB Lambda
+        this.updateDynamoDbLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-lambda`,
+            code: DockerImageCode.fromEcr(props.updateDynamoDbRepo, {
+                tagOrDigest: props.updateDynamoDbImageTag || 'update-dynamodb-latest',
+                cmd: ['handlers.update_dynamo_db_lambda.handler'],
+            }),
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
                 BUCKET_NAME: props.rawEmailBucket.bucketName,
             },
         });
 
-        props.rawEmailBucket.grantPut(this.storeS3Lambda);
+        props.rawEmailBucket.grantPut(this.updateDynamoDbLambda);
     }
 }

@@ -14,9 +14,11 @@ export interface StepFunctionsStackProps extends cdk.StackProps {
     stage: STAGES;
     ingestionQueue: sqs.IQueue;
     storeS3Repo: ecr.IRepository;
+    updateDynamoDbRepo: ecr.IRepository;
     encodeLambda: lambda.IFunction;
     storeEmbeddingsLambda: lambda.IFunction;
     storeS3Lambda: lambda.IFunction;
+    updateDynamoDbLambda: lambda.IFunction;
 }
 
 export class StepFunctionsStack extends cdk.Stack {
@@ -38,15 +40,15 @@ export class StepFunctionsStack extends cdk.Stack {
             payloadResponseOnly: true,
         });
 
-        const storeS3Task = new tasks.LambdaInvoke(this, 'Store Backup', {
-            lambdaFunction: props.storeS3Lambda,
+        const updateDynamoDbTask = new tasks.LambdaInvoke(this, 'UpdateDynamoDB Lambda', {
+            lambdaFunction: props.updateDynamoDbLambda,
             payloadResponseOnly: true,
         });
 
-        // Define Chain: Encode -> Create Collection -> Store Embeddings -> Store S3
+        // Define Chain: Encode -> Create Collection -> Store Embeddings -> Update DynamoDB
         const definition = encodeTask
             .next(storeEmbeddingsTask)
-            .next(storeS3Task);
+            .next(updateDynamoDbTask);
 
         // Define State Machine (Express Workflow for high throughput/low latency)
         const logGroup = new cdk.aws_logs.LogGroup(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-sm-logs`, {
@@ -55,10 +57,10 @@ export class StepFunctionsStack extends cdk.Stack {
         });
 
         this.processingStateMachine = new sfn.StateMachine(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-processing-sm`, {
-            stateMachineName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-state-machine`,
+            stateMachineName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-state-machine-standard`,
             definitionBody: sfn.DefinitionBody.fromChainable(definition),
-            stateMachineType: sfn.StateMachineType.EXPRESS,
-            timeout: cdk.Duration.minutes(5),
+            stateMachineType: sfn.StateMachineType.STANDARD,
+            timeout: cdk.Duration.hours(2),
             logs: {
                 destination: logGroup,
                 level: sfn.LogLevel.ALL,
@@ -73,12 +75,12 @@ export class StepFunctionsStack extends cdk.Stack {
 
         const triggerLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda`,
-            code: DockerImageCode.fromEcr(props.storeS3Repo, {
-                tagOrDigest: 'store-s3-latest',
+            code: DockerImageCode.fromEcr(props.updateDynamoDbRepo, {
+                tagOrDigest: 'update-dynamodb-latest',
                 cmd: ['handlers.trigger_lambda.handler'],
             }),
             memorySize: 256,
-            timeout: cdk.Duration.seconds(60), // Needs to wait for SF execution
+            timeout: cdk.Duration.seconds(900), // Maxed out as requested
             architecture: lambda.Architecture.X86_64,
             environment: {
                 STATE_MACHINE_ARN: this.processingStateMachine.stateMachineArn,
@@ -86,7 +88,7 @@ export class StepFunctionsStack extends cdk.Stack {
         });
 
         // Grant permissions
-        this.processingStateMachine.grantStartSyncExecution(triggerLambda);
+        this.processingStateMachine.grantStartExecution(triggerLambda);
         props.ingestionQueue.grantConsumeMessages(triggerLambda);
 
         // Add SQS Trigger
