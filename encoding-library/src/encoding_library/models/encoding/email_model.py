@@ -15,6 +15,10 @@ class EmailModel(BaseModel):
     references: List[str] = Field(default_factory=list)
     in_reply_to: Optional[str] = None
     thread_id: Optional[str] = None # Can be derived or assigned by server
+    model_type: Optional[str] = None
+    model_name: Optional[str] = None
+    chunking_type: Optional[str] = None
+    chunking_technique: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -114,5 +118,9 @@ class EmailModel(BaseModel):
             folder=data.get('folder', 'inbox'),
             references=data.get('references', []),
             in_reply_to=data.get('in_reply_to'),
-            thread_id=data.get('thread_id')
+            thread_id=data.get('thread_id'),
+            model_type=data.get('model_type'),
+            model_name=data.get('model_name'),
+            chunking_type=data.get('chunking_type'),
+            chunking_technique=data.get('chunking_technique')
         )

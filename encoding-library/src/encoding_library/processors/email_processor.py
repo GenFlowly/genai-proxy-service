@@ -33,8 +33,6 @@ class EmailProcessor(DataProcessor):
             
         return True
 
-
-
     def to_sqs_message(self, state: MemoryRequestInternalState) -> Tuple[str, Dict[str, Any]]:
         """
         Convert email data to SQS message format.
@@ -86,39 +84,15 @@ class EmailProcessor(DataProcessor):
         
         return [record]
 
-    def create_embeddings(self, data: Dict[str, Any], encoder: Encoder) -> List[Dict[str, Any]]:
+    def get_text_to_encode(self, data: Dict[str, Any]) -> str:
         """
-        Create embeddings for the email.
+        Extract the raw text string for an Email.
         """
         # Create EmailModel to get text
         email = EmailModel.from_dict(data)
-        logger.info(f"Encoding email: {email.message_id}")
-
-        text_to_encode = f"{email.subject} {email.body}"
+        logger.info(f"Extracting text for email: {email.message_id}")
         
-        # We treat the whole email as one chunk for now to maintain existing behavior
-        # But for new interface we need to use encoder.encode_documents
-        
-        # Expect encoder to have encode_documents method
-        if hasattr(encoder, 'encode_documents'):
-            embeddings = encoder.encode_documents([text_to_encode])
-        else:
-             # Fallback 
-             raise ValueError("Encoder does not support encode_documents")
-        
-        if not embeddings:
-            return []
-            
-        # We only sent one document, so we expect one embedding
-        embedding = embeddings[0]
-            
-        vector = embedding
-        if hasattr(vector, 'tolist'):
-            vector = vector.tolist()
-        else:
-            vector = list(vector)
-            
-        return [{'text': text_to_encode[:100], 'vector': vector, 'index': 0}]
+        return f"{email.subject}\n\n{email.body}"
 
     def get_collection_name(self, customer_id: str, data: Dict[str, Any]) -> str:
         """

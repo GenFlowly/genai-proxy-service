@@ -6,6 +6,10 @@ class NotesModel(BaseModel):
     note_value: str = ''
     title: Optional[str] = None
     created_at: str = ''
+    model_type: Optional[str] = None
+    model_name: Optional[str] = None
+    chunking_type: Optional[str] = None
+    chunking_technique: Optional[str] = None
     
     model_config = ConfigDict(populate_by_name=True)
 
@@ -21,4 +25,8 @@ class NotesModel(BaseModel):
             note_value=data.get('note_value', ''),
             title=data.get('title'),
             created_at=data.get('created_at', ''),
+            model_type=data.get('model_type'),
+            model_name=data.get('model_name'),
+            chunking_type=data.get('chunking_type'),
+            chunking_technique=data.get('chunking_technique'),
         )

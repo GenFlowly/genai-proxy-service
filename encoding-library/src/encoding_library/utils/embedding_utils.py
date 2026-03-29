@@ -12,6 +12,9 @@ def create_embeddings(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     # Get appropriate processor
     processor = ProcessorFactory.get_processor(data)
+    
+    # Extract raw text to encode
+    text_to_encode = processor.get_text_to_encode(data)
 
     # Get appropriate encoder (default to sentence-transformer/all-MiniLM-L6-v2)
     model_type_str = data.get('model_type', ModelType.SENTENCE_TRANSFORMER.value)
@@ -19,9 +22,44 @@ def create_embeddings(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     
     encoder = EncoderFactory.get_encoder(model_type_str, model_name_str)
     
-    # Create embedding (processor handles type-specific logic)
-    embeddings = processor.create_embeddings(data, encoder)
-    return embeddings
+    # Get chunking config
+    from encoding_library.chunkers.factory import ChunkerFactory
+    from encoding_library.chunkers.enums import ChunkingType, RecursiveTechnique
+    
+    chunking_type_str = data.get('chunking_type', ChunkingType.RECURSIVE.value)
+    chunking_technique_str = data.get('chunking_technique', RecursiveTechnique.CHARACTER.value)
+    
+    chunker = ChunkerFactory.get_chunker(
+        chunking_type=chunking_type_str,
+        technique=chunking_technique_str,
+        encoder=encoder
+    )
+    
+    # Chunk text
+    chunks = chunker.chunk(text_to_encode)
+    
+    if not chunks:
+        return []
+        
+    # Encode chunks
+    embeddings = encoder.encode_documents(chunks)
+         
+    # Format result
+    result = []
+    for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+        vector = embedding
+        if hasattr(vector, 'tolist'):
+            vector = vector.tolist()
+        else:
+            vector = list(vector)
+            
+        result.append({
+            'text': chunk_text,
+            'vector': vector,
+            'index': i
+        })
+        
+    return result
 
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     """

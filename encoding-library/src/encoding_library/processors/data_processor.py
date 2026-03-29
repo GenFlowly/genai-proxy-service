@@ -38,10 +38,9 @@ class DataProcessor(ABC):
         pass
 
     @abstractmethod
-    def create_embeddings(self, data: Dict[str, Any], encoder: Encoder) -> List[Dict[str, Any]]:
+    def get_text_to_encode(self, data: Dict[str, Any]) -> str:
         """
-        Create embeddings for the data.
-        Returns a list of dictionaries, each containing 'text' and 'vector'.
+        Extract the raw text string that should be embedded for this data type.
         """
         pass
 
