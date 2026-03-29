@@ -44,24 +44,24 @@ class NoteProcessor(DataProcessor):
             
         return True
 
-    def to_sqs_message(self, state: MemoryRequestInternalState) -> Tuple[str, Dict[str, Any]]:
+    def to_sqs_message(self, memory_request_internal_state: MemoryRequestInternalState) -> Tuple[str, Dict[str, Any]]:
         """
         Convert note data to SQS message format.
         state.raw_data contains the note dictionary.
         """
         # Validate/Process note data from state
-        notes_model = NotesModel.from_dict(state.raw_data)
+        notes_model = NotesModel.from_dict(memory_request_internal_state.raw_data)
         
         # We update state.raw_data with the processed model dict (standardized)
-        state.raw_data = notes_model.to_dict()
+        memory_request_internal_state.raw_data = notes_model.to_dict()
         
         # Serialize the entire state object
-        message_body = json.dumps(state.to_dict())
+        message_body = json.dumps(memory_request_internal_state.to_dict())
         
         # Helper to safely add string attributes
         message_attributes = {
             'customerId': {
-                'StringValue': str(state.customer_id),
+                'StringValue': str(memory_request_internal_state.customer_id),
                 'DataType': 'String'
             }
         }
@@ -95,9 +95,9 @@ class NoteProcessor(DataProcessor):
                 "note_value": chunk_text[:65535], # Store the CHUNK text, not the whole note
                 "title": (notes_model.title or "")[:500],
                 "note_key": (notes_model.note_key or "")[:256],
-                "client": notes_model.client[:100],
+                "client": str(data.get('client', 'unknown_client'))[:100],
                 "created_at": notes_model.created_at,
-                "s3_key": f"notes/{notes_model.client}/{data_id}.json",
+                "s3_key": f"notes/{data.get('client', 'unknown_client')}/{data_id}.json",
                 # Optional: Add chunk specific metadata if schema supports it
                 # "chunk_index": chunk_index 
             }
@@ -107,56 +107,14 @@ class NoteProcessor(DataProcessor):
 
 
 
-    def create_embeddings(self, data: Dict[str, Any], encoder: Encoder) -> List[Dict[str, Any]]:
+    def get_text_to_encode(self, data: Dict[str, Any]) -> str:
         """
-        Create embeddings for the note using configured chunker and encoder.
+        Extract the raw text string for a Note.
         """
         note = NotesModel.from_dict(data)
-        logger.info(f"Encoding note: {note.note_value[:100]}...")
-
-        text_to_encode = f"{note.title or ''}\n\n{note.note_value}"
-
-        from encoding_library.chunkers.factory import ChunkerFactory
-        from encoding_library.chunkers.enums import ChunkingType, RecursiveTechnique
+        logger.info(f"Extracting text for note: {note.note_value[:100]}...")
         
-        # Get chunking config from data or use defaults
-        # We can pass strings, Factory will normalize
-        chunking_type_str = data.get('chunking_type', ChunkingType.RECURSIVE.value)
-        chunking_technique_str = data.get('chunking_technique', RecursiveTechnique.CHARACTER.value)
-        
-        # Get chunker
-        # Pass encoder as kwarg for semantic chunking if needed
-        chunker = ChunkerFactory.get_chunker(
-            chunking_type=chunking_type_str,
-            technique=chunking_technique_str,
-            encoder=encoder
-        )
-        
-        # Chunk text
-        chunks = chunker.chunk(text_to_encode)
-        
-        if not chunks:
-            return []
-            
-        # Encode chunks
-        embeddings = encoder.encode_documents(chunks)
-             
-        # Format result
-        result = []
-        for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
-            vector = embedding
-            if hasattr(vector, 'tolist'):
-                vector = vector.tolist()
-            else:
-                vector = list(vector)
-                
-            result.append({
-                'text': chunk_text,
-                'vector': vector,
-                'index': i
-            })
-            
-        return result
+        return f"{note.title or ''}\n\n{note.note_value}"
 
     def get_collection_name(self, customer_id: str, data: Dict[str, Any]) -> str:
         """
