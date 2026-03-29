@@ -3,7 +3,7 @@ import os
 import boto3
 import logging
 from typing import Dict, Any
-from encoding_library.models.payload import Payload
+from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.models.encoding.email_model import EmailModel
 
 # Trigger build - separated ECR repos
@@ -53,21 +53,18 @@ def store_in_s3(email: EmailModel) -> str:
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Store S3 Handler - Step 3
-    Receives: Payload (with Data)
+    Receives: MemoryRequestInternalState (with Data)
     Returns: Success status
     """
     try:
-        # Reconstruct Payload object
+        # Reconstruct Internal State object
         try:
-            payload = Payload.from_dict(event)
-        except Exception:
-            # Fallback
-            payload = Payload(
-                customer_id=event.get('customerId') or event.get('customer_id'),
-                data=event
-            )
+            internal_state = MemoryRequestInternalState.from_dict(event)
+        except Exception as e:
+            logger.error(f"Event parsing into MemoryRequestInternalState failed: {e}")
+            raise ValueError(f"Invalid state payload: {e}")
             
-        data = payload.data
+        data = internal_state.raw_data
         email = EmailModel.from_dict(data)
         logger.info(f"Backing up email to S3: {email.message_id}")
         

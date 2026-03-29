@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from typing import Dict, Any, List
-from encoding_library.models.payload import Payload
+from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 
 # Trigger build - separated ECR repos
 
@@ -27,17 +27,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns: data + Embedding
     """
 
-
-
     # Parse payload
     payload_dict = event
     
     # Handle API Gateway / Ktor App requests
-    # If invoked via API Gateway, the actual payload is in the 'body' string
     if 'body' in event:
         try:
             body = event['body']
-            # If body is a string (JSON), parse it
             if isinstance(body, str):
                 payload_dict = json.loads(body)
             else:
@@ -47,41 +43,32 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.error(f"Failed to parse event body: {e}")
             raise ValueError(f"Invalid JSON in event body: {e}")
 
-    # Reconstruct Payload object
+    # Reconstruct Internal State object
     try:
-        payload = Payload.from_dict(payload_dict)
-        # If we successfully parsed the standard Payload, we still need to process it
-        logger.info("Successfully parsed Payload structure")
-    except Exception:
-        # Fallback for legacy events or if structure doesn't match
-        logger.warning("Event does not match Payload structure, attempting legacy handling")
-        # Assume event IS the data
-        payload = Payload(
-            customer_id=event.get('customerId', 'unknown'),
-            data=event
-        )
+        memory_request_internal_state = MemoryRequestInternalState.from_dict(payload_dict)
+        logger.info("Successfully parsed MemoryRequestInternalState structure")
+    except Exception as e:
+        logger.error(f"Event does not match MemoryRequestInternalState structure. Parsing failed: {e}")
+        raise ValueError("Invalid state payload received in SQS")
 
     try:
-        logger.info(f"Received payload for customer: {payload.customer_id}")
+        logger.info(f"Received internal state for customer: {memory_request_internal_state.customer_id}")
         
         # Extract data for encoding
-        data = payload.data
+        data = memory_request_internal_state.raw_data
+        
+        # Inject dataType so that ProcessorFactory can route it correctly
+        data['dataType'] = memory_request_internal_state.data_type
         
         # Create embedding using common utility
         # Returns a list of chunks (dicts with vector, text, index)
         embeddings = create_embeddings(data)
         
-        # Add embedding to data
-        # We update the data in the payload
-        # 'embedding' field now contains the list of chunk dicts
-        data['embeddings'] = embeddings # Rename to embeddings (plural) to indicate list
-        # For backward compatibility or if processor returns old format (unlikely now)
-        # we can check type, but we updated all processors.
+        # Attach the embeddings precisely back into the formalized node structure
+        memory_request_internal_state.data_embeddings = embeddings
         
-        payload.data = data
-        
-        # Return the payload dict
-        return payload.to_dict()
+        # Return the serialized dictionary representation
+        return memory_request_internal_state.to_dict()
 
     except Exception as e:
         logger.error(f"Error in encode handler: {str(e)}", exc_info=True)

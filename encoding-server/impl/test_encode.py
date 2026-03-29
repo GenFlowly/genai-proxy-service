@@ -13,14 +13,17 @@ def test_encode_note():
     # Construct a dummy Note payload event
     # Similar to what the API Gateway or SQS would trigger
     event = {
+        "data_type": "NOTE",
         "customer_id": "test-customer-123",
-        "data": {
+        "client": "test-client",
+        "raw_data": {
             "note_value": "This is a test note. It contains multiple sentences. We want to see how the chunker handles it and how the encoder embeds it! The refactor should have fixed the circular import perfectly.",
-            "client": "test-client",
-            "created_at": "2026-02-21T12:00:00Z",
             "title": "My Refactor Test Note",
-            "chunking_type": "semantic" # Explicitly request semantic chunking
-        }
+            "created_at": "2026-03-28T12:00:00Z",
+            "chunking_type": "semantic", # Explicitly request semantic chunking
+            "model_type": "sentence-transformer"
+        },
+        "data_embeddings": None
     }
 
     # Dummy context (not used by lambda currently, but required by signature)

@@ -7,6 +7,7 @@ import { S3Stack } from "../lib/s3-stack";
 import { SqsStack } from "../lib/sqs-stack";
 import { LambdaStack } from "../lib/lambda-stack";
 import { ApiGatewayStack } from "../lib/apigateway-stack";
+import { DynamoDBStack } from "../lib/dynamodb-stack";
 import { RESOURCE_NAMES } from "../lib/constants";
 
 import { StepFunctionsStack } from "../lib/stepfunctions-stack";
@@ -18,6 +19,7 @@ const app = new cdk.App();
 const ecrStack = new EcrStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-EcrStack`, { stage });
 const s3Stack = new S3Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-S3Stack`, { stage });
 const sqsStack = new SqsStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-SqsStack`, { stage });
+const dynamoDBStack = new DynamoDBStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-DynamoDBStack`, { stage });
 const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-LambdaStack`, {
     stage,
     ingestionQueue: sqsStack.ingestionQueue,

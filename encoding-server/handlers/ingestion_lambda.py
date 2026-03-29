@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any
 from encoding_library.processors.processor_factory import ProcessorFactory
 from services.authorization_service import AuthorizationService
-from encoding_library.models.payload import Payload
+from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 
 # Trigger build - separated ECR repos
 
@@ -23,7 +23,12 @@ auth_service = None
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     First lambda in encoding server
-    Ingestion Lambda - Receives requests from API Gateway and sends to SQS.
+    Ingestion Lambda -
+    1. Authorizes request
+    1. Receives List of MemoryRequest from API Gateway
+    2. Validates the request
+    3. Wraps it in Internal Memory Request
+    4. Sends to SQS.
     
     Supports both single object and batch (array) of objects.
     Uses ProcessorFactory to handle different data types (e.g. Email).
@@ -71,20 +76,30 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         for idx, item_data in enumerate(items_to_process):
             try:
+                if not all(k in item_data for k in ('dataType', 'client', 'data')):
+                    raise ValueError(f"Payload must be a MemoryRequest with 'dataType', 'client', and 'data'. Got keys: {list(item_data.keys())}")
+                
+                # Extract inner data and inject envelope metadata for the Processor pipeline
+                raw_data = item_data['data']
+                raw_data['dataType'] = item_data['dataType']
+                raw_data['client'] = item_data['client']
+
                 # Get appropriate processor for the data
-                processor = ProcessorFactory.get_processor(item_data)
+                processor = ProcessorFactory.get_processor(raw_data)
                 
                 # Validate data
-                processor.validate(item_data)
+                processor.validate(raw_data)
                 
-                # Wrap in Payload
-                payload = Payload(
+                # Wrap in internal state payload
+                internal_state = MemoryRequestInternalState(
+                    data_type=item_data['dataType'],
                     customer_id=customer_id,
-                    data=item_data
+                    client=item_data['client'],
+                    raw_data=raw_data
                 )
                 
                 # Convert to SQS message format
-                message_body, message_attributes = processor.to_sqs_message(payload)
+                message_body, message_attributes = processor.to_sqs_message(internal_state)
 
                 # Send to SQS
                 response = sqs.send_message(
