@@ -147,6 +147,9 @@ export class LambdaStack extends cdk.Stack {
         });
         props.rawEmailBucket.grantPut(this.storeS3Lambda);
 
+        // Force CDK to keep the export alive during Phase 1 deployment
+        this.exportValue(this.storeS3Lambda.functionArn);
+
         // 3. Update DynamoDB Lambda
         this.updateDynamoDbLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-lambda`,
