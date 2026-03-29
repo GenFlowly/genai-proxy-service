@@ -170,7 +170,7 @@
       "Arn"
      ]
     },
-    "Timeout": 30
+    "Timeout": 900
    },
    "DependsOn": [
     "encodingservicedevelopmentingestionlambdaServiceRoleDefaultPolicy01260E67",
@@ -350,7 +350,7 @@
       "Arn"
      ]
     },
-    "Timeout": 30
+    "Timeout": 900
    },
    "DependsOn": [
     "encodingservicedevelopmentingestnoteslambdaServiceRoleDefaultPolicy1A9F7F44",
@@ -459,7 +459,7 @@
       "Arn"
      ]
     },
-    "Timeout": 300
+    "Timeout": 900
    },
    "DependsOn": [
     "encodingservicedevelopmentencodelambdaServiceRoleEFE51EBD"
@@ -500,6 +500,68 @@
    },
    "Metadata": {
     "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-store-embeddings-lambda/ServiceRole/Resource"
+   }
+  },
+  "encodingservicedevelopmentstoreembeddingslambdaServiceRoleDefaultPolicyAC9C4516": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":dynamodb:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":table/CustomerVectorDBConfig"
+          ]
+         ]
+        },
+        {
+         "Ref": "AWS::NoValue"
+        }
+       ]
+      },
+      {
+       "Action": "kms:Decrypt",
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "encodingservicedevelopmentstoreembeddingslambdaServiceRoleDefaultPolicyAC9C4516",
+    "Roles": [
+     {
+      "Ref": "encodingservicedevelopmentstoreembeddingslambdaServiceRole2673DA1C"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-store-embeddings-lambda/ServiceRole/DefaultPolicy/Resource"
    }
   },
   "encodingservicedevelopmentstoreembeddingslambda24672E49": {
@@ -557,7 +619,8 @@
      "Variables": {
       "ZILLIZ_ENDPOINT": "dummy_zilliz_endpoint",
       "ZILLIZ_TOKEN": "dummy_zilliz_token",
-      "COLLECTION_NAME": "test"
+      "COLLECTION_NAME": "test",
+      "CUSTOMER_VECTOR_DB_CONFIG_TABLE": "CustomerVectorDBConfig"
      }
     },
     "FunctionName": "encoding-service-development-store-embeddings-lambda",
@@ -574,16 +637,17 @@
       "Arn"
      ]
     },
-    "Timeout": 60
+    "Timeout": 900
    },
    "DependsOn": [
+    "encodingservicedevelopmentstoreembeddingslambdaServiceRoleDefaultPolicyAC9C4516",
     "encodingservicedevelopmentstoreembeddingslambdaServiceRole2673DA1C"
    ],
    "Metadata": {
     "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-store-embeddings-lambda/Resource"
    }
   },
-  "encodingservicedevelopmentstores3lambdaServiceRoleF7548FF0": {
+  "encodingservicedevelopmentupdatedynamodblambdaServiceRoleB86C1AE8": {
    "Type": "AWS::IAM::Role",
    "Properties": {
     "AssumeRolePolicyDocument": {
@@ -614,10 +678,10 @@
     ]
    },
    "Metadata": {
-    "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-store-s3-lambda/ServiceRole/Resource"
+    "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-update-dynamodb-lambda/ServiceRole/Resource"
    }
   },
-  "encodingservicedevelopmentstores3lambdaServiceRoleDefaultPolicy748093CB": {
+  "encodingservicedevelopmentupdatedynamodblambdaServiceRoleDefaultPolicy33A643AE": {
    "Type": "AWS::IAM::Policy",
    "Properties": {
     "PolicyDocument": {
@@ -647,18 +711,18 @@
      ],
      "Version": "2012-10-17"
     },
-    "PolicyName": "encodingservicedevelopmentstores3lambdaServiceRoleDefaultPolicy748093CB",
+    "PolicyName": "encodingservicedevelopmentupdatedynamodblambdaServiceRoleDefaultPolicy33A643AE",
     "Roles": [
      {
-      "Ref": "encodingservicedevelopmentstores3lambdaServiceRoleF7548FF0"
+      "Ref": "encodingservicedevelopmentupdatedynamodblambdaServiceRoleB86C1AE8"
      }
     ]
    },
    "Metadata": {
-    "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-store-s3-lambda/ServiceRole/DefaultPolicy/Resource"
+    "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-update-dynamodb-lambda/ServiceRole/DefaultPolicy/Resource"
    }
   },
-  "encodingservicedevelopmentstores3lambda302D95E5": {
+  "encodingservicedevelopmentupdatedynamodblambda181A83BB": {
    "Type": "AWS::Lambda::Function",
    "Properties": {
     "Architectures": [
@@ -676,7 +740,7 @@
            "Fn::Split": [
             ":",
             {
-             "Fn::ImportValue": "encoding-service-EcrStack:ExportsOutputFnGetAttStoreS3LambdaRepoB7A0F5F3Arn763F1D20"
+             "Fn::ImportValue": "encoding-service-EcrStack:ExportsOutputFnGetAttUpdateDynamoDbLambdaRepoC82385F7ArnC394CD6D"
             }
            ]
           }
@@ -690,7 +754,7 @@
            "Fn::Split": [
             ":",
             {
-             "Fn::ImportValue": "encoding-service-EcrStack:ExportsOutputFnGetAttStoreS3LambdaRepoB7A0F5F3Arn763F1D20"
+             "Fn::ImportValue": "encoding-service-EcrStack:ExportsOutputFnGetAttUpdateDynamoDbLambdaRepoC82385F7ArnC394CD6D"
             }
            ]
           }
@@ -702,7 +766,7 @@
         },
         "/",
         {
-         "Fn::ImportValue": "encoding-service-EcrStack:ExportsOutputRefStoreS3LambdaRepoB7A0F5F3078D7672"
+         "Fn::ImportValue": "encoding-service-EcrStack:ExportsOutputRefUpdateDynamoDbLambdaRepoC82385F76F1B4510"
         },
         ":latest"
        ]
@@ -716,28 +780,28 @@
       }
      }
     },
-    "FunctionName": "encoding-service-development-store-s3-lambda",
+    "FunctionName": "encoding-service-development-update-dynamodb-lambda",
     "ImageConfig": {
      "Command": [
-      "handlers.store_in_s3_lambda.handler"
+      "handlers.update_dynamo_db_lambda.handler"
      ]
     },
     "MemorySize": 512,
     "PackageType": "Image",
     "Role": {
      "Fn::GetAtt": [
-      "encodingservicedevelopmentstores3lambdaServiceRoleF7548FF0",
+      "encodingservicedevelopmentupdatedynamodblambdaServiceRoleB86C1AE8",
       "Arn"
      ]
     },
-    "Timeout": 60
+    "Timeout": 900
    },
    "DependsOn": [
-    "encodingservicedevelopmentstores3lambdaServiceRoleDefaultPolicy748093CB",
-    "encodingservicedevelopmentstores3lambdaServiceRoleF7548FF0"
+    "encodingservicedevelopmentupdatedynamodblambdaServiceRoleDefaultPolicy33A643AE",
+    "encodingservicedevelopmentupdatedynamodblambdaServiceRoleB86C1AE8"
    ],
    "Metadata": {
-    "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-store-s3-lambda/Resource"
+    "aws:cdk:path": "encoding-service-LambdaStack/encoding-service-development-update-dynamodb-lambda/Resource"
    }
   },
   "CDKMetadata": {
@@ -1040,15 +1104,15 @@
     "Name": "encoding-service-LambdaStack:ExportsOutputFnGetAttencodingservicedevelopmentstoreembeddingslambda24672E49ArnDF1C3A47"
    }
   },
-  "ExportsOutputFnGetAttencodingservicedevelopmentstores3lambda302D95E5Arn26E18856": {
+  "ExportsOutputFnGetAttencodingservicedevelopmentupdatedynamodblambda181A83BBArn7772D067": {
    "Value": {
     "Fn::GetAtt": [
-     "encodingservicedevelopmentstores3lambda302D95E5",
+     "encodingservicedevelopmentupdatedynamodblambda181A83BB",
      "Arn"
     ]
    },
    "Export": {
-    "Name": "encoding-service-LambdaStack:ExportsOutputFnGetAttencodingservicedevelopmentstores3lambda302D95E5Arn26E18856"
+    "Name": "encoding-service-LambdaStack:ExportsOutputFnGetAttencodingservicedevelopmentupdatedynamodblambda181A83BBArn7772D067"
    }
   },
   "ExportsOutputFnGetAttencodingservicedevelopmentingestionlambdaBB7EA5F8Arn2A1D5B2A": {

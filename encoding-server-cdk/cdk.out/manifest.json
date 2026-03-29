@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/42de531d432bd38c61e71449d670f6e77cc1778b1d20abffbfbf940c5e21a4d0.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c940941d28bfef23247baa932478b16fe10b55cf53b52821d29be340229c2004.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -52,10 +52,10 @@
             "data": "StoreEmbeddingsLambdaRepo755A5589"
           }
         ],
-        "/encoding-service-EcrStack/StoreS3LambdaRepo/Resource": [
+        "/encoding-service-EcrStack/UpdateDynamoDbLambdaRepo/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "StoreS3LambdaRepoB7A0F5F3"
+            "data": "UpdateDynamoDbLambdaRepoC82385F7"
           }
         ],
         "/encoding-service-EcrStack/IngestionRepoUri": [
@@ -76,10 +76,10 @@
             "data": "StoreEmbeddingsRepoUri"
           }
         ],
-        "/encoding-service-EcrStack/StoreS3RepoUri": [
+        "/encoding-service-EcrStack/UpdateDynamoDbRepoUri": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "StoreS3RepoUri"
+            "data": "UpdateDynamoDbRepoUri"
           }
         ],
         "/encoding-service-EcrStack/CDKMetadata/Default": [
@@ -130,16 +130,16 @@
             "data": "ExportsOutputRefStoreEmbeddingsLambdaRepo755A55896A4E503D"
           }
         ],
-        "/encoding-service-EcrStack/Exports/Output{\"Fn::GetAtt\":[\"StoreS3LambdaRepoB7A0F5F3\",\"Arn\"]}": [
+        "/encoding-service-EcrStack/Exports/Output{\"Fn::GetAtt\":[\"UpdateDynamoDbLambdaRepoC82385F7\",\"Arn\"]}": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "ExportsOutputFnGetAttStoreS3LambdaRepoB7A0F5F3Arn763F1D20"
+            "data": "ExportsOutputFnGetAttUpdateDynamoDbLambdaRepoC82385F7ArnC394CD6D"
           }
         ],
-        "/encoding-service-EcrStack/Exports/Output{\"Ref\":\"StoreS3LambdaRepoB7A0F5F3\"}": [
+        "/encoding-service-EcrStack/Exports/Output{\"Ref\":\"UpdateDynamoDbLambdaRepoC82385F7\"}": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "ExportsOutputRefStoreS3LambdaRepoB7A0F5F3078D7672"
+            "data": "ExportsOutputRefUpdateDynamoDbLambdaRepoC82385F76F1B4510"
           }
         ],
         "/encoding-service-EcrStack/BootstrapVersion": [
@@ -367,6 +367,80 @@
       },
       "displayName": "encoding-service-SqsStack"
     },
+    "encoding-service-DynamoDBStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "encoding-service-DynamoDBStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "encoding-service-DynamoDBStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "encoding-service-DynamoDBStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c6186f8f69b3f4e9405cb96957254768235f57bc590b611a4380ffd13ddd1cee.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "encoding-service-DynamoDBStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "encoding-service-DynamoDBStack.assets"
+      ],
+      "metadata": {
+        "/encoding-service-DynamoDBStack/CustomerVectorDBBackupContent": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "CustomerVectorDBBackupContent54BA2A0D"
+            }
+          }
+        ],
+        "/encoding-service-DynamoDBStack/CustomerVectorDBBackupContent/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomerVectorDBBackupContent54BA2A0D"
+          }
+        ],
+        "/encoding-service-DynamoDBStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/encoding-service-DynamoDBStack/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/encoding-service-DynamoDBStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/encoding-service-DynamoDBStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "encoding-service-DynamoDBStack"
+    },
     "encoding-service-LambdaStack.assets": {
       "type": "cdk:asset-manifest",
       "properties": {
@@ -384,7 +458,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/7c8fc9ca0e1e858863fed7df79ec8c21e3cf36c427623793383af7ace547819d.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/6fd9fd6e0765819aefdf7b674c431e1b8b1d66cdb82e9115e99ce7efc61bb4dc.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -457,28 +531,34 @@
             "data": "encodingservicedevelopmentstoreembeddingslambdaServiceRole2673DA1C"
           }
         ],
+        "/encoding-service-LambdaStack/encoding-service-development-store-embeddings-lambda/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "encodingservicedevelopmentstoreembeddingslambdaServiceRoleDefaultPolicyAC9C4516"
+          }
+        ],
         "/encoding-service-LambdaStack/encoding-service-development-store-embeddings-lambda/Resource": [
           {
             "type": "aws:cdk:logicalId",
             "data": "encodingservicedevelopmentstoreembeddingslambda24672E49"
           }
         ],
-        "/encoding-service-LambdaStack/encoding-service-development-store-s3-lambda/ServiceRole/Resource": [
+        "/encoding-service-LambdaStack/encoding-service-development-update-dynamodb-lambda/ServiceRole/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "encodingservicedevelopmentstores3lambdaServiceRoleF7548FF0"
+            "data": "encodingservicedevelopmentupdatedynamodblambdaServiceRoleB86C1AE8"
           }
         ],
-        "/encoding-service-LambdaStack/encoding-service-development-store-s3-lambda/ServiceRole/DefaultPolicy/Resource": [
+        "/encoding-service-LambdaStack/encoding-service-development-update-dynamodb-lambda/ServiceRole/DefaultPolicy/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "encodingservicedevelopmentstores3lambdaServiceRoleDefaultPolicy748093CB"
+            "data": "encodingservicedevelopmentupdatedynamodblambdaServiceRoleDefaultPolicy33A643AE"
           }
         ],
-        "/encoding-service-LambdaStack/encoding-service-development-store-s3-lambda/Resource": [
+        "/encoding-service-LambdaStack/encoding-service-development-update-dynamodb-lambda/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "encodingservicedevelopmentstores3lambda302D95E5"
+            "data": "encodingservicedevelopmentupdatedynamodblambda181A83BB"
           }
         ],
         "/encoding-service-LambdaStack/CDKMetadata/Default": [
@@ -505,10 +585,10 @@
             "data": "ExportsOutputFnGetAttencodingservicedevelopmentstoreembeddingslambda24672E49ArnDF1C3A47"
           }
         ],
-        "/encoding-service-LambdaStack/Exports/Output{\"Fn::GetAtt\":[\"encodingservicedevelopmentstores3lambda302D95E5\",\"Arn\"]}": [
+        "/encoding-service-LambdaStack/Exports/Output{\"Fn::GetAtt\":[\"encodingservicedevelopmentupdatedynamodblambda181A83BB\",\"Arn\"]}": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "ExportsOutputFnGetAttencodingservicedevelopmentstores3lambda302D95E5Arn26E18856"
+            "data": "ExportsOutputFnGetAttencodingservicedevelopmentupdatedynamodblambda181A83BBArn7772D067"
           }
         ],
         "/encoding-service-LambdaStack/Exports/Output{\"Fn::GetAtt\":[\"encodingservicedevelopmentingestionlambdaBB7EA5F8\",\"Arn\"]}": [
@@ -555,7 +635,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/f99de52d780adf6322e14a444080e6b7da51590e04da5728273ae758551bca9a.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/52ee9a0e67ded6b53c2feec8ee1ecb2a749226f0e907fc9089a13afbde52b1f2.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [

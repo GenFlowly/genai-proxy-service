@@ -50,21 +50,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     logger.info(f"Found customer_id {customer_id} in state payload for message {message_id}")
                 
-                # Start Synchronous Execution
+                # Start Asynchronous Execution (Standard Workflow)
                 logger.info(f"Starting execution for message {message_id}")
-                response = sfn.start_sync_execution(
+                response = sfn.start_execution(
                     stateMachineArn=STATE_MACHINE_ARN,
                     name=f"{message_id}-{context.aws_request_id}", # Unique name
                     input=json.dumps(body)
                 )
                 
                 # Check status
-                #
-                if response['status'] != 'SUCCEEDED':
-                    logger.error(f"Execution failed for {message_id}: {response.get('error')} - {response.get('cause')}")
-                    batch_item_failures.append({"itemIdentifier": message_id})
-                else:
-                    logger.info(f"Execution succeeded for {message_id}")
+                # Standard execution immediately returns executionArn
+                logger.info(f"Execution {response.get('executionArn')} dispatched for {message_id}")
                     
             except Exception as e:
                 logger.error(f"Error processing message {message_id}: {str(e)}", exc_info=True)

@@ -90,13 +90,13 @@
     "aws:cdk:path": "encoding-service-EcrStack/StoreEmbeddingsLambdaRepo/Resource"
    }
   },
-  "StoreS3LambdaRepoB7A0F5F3": {
+  "UpdateDynamoDbLambdaRepoC82385F7": {
    "Type": "AWS::ECR::Repository",
    "Properties": {
     "LifecyclePolicy": {
      "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
     },
-    "RepositoryName": "encoding-service-development-store-s3-repo",
+    "RepositoryName": "encoding-service-development-update-dynamodb-repo",
     "RepositoryPolicyText": {
      "Statement": [
       {
@@ -117,7 +117,7 @@
    "UpdateReplacePolicy": "Delete",
    "DeletionPolicy": "Delete",
    "Metadata": {
-    "aws:cdk:path": "encoding-service-EcrStack/StoreS3LambdaRepo/Resource"
+    "aws:cdk:path": "encoding-service-EcrStack/UpdateDynamoDbLambdaRepo/Resource"
    }
   },
   "CDKMetadata": {
@@ -282,7 +282,7 @@
     ]
    }
   },
-  "StoreS3RepoUri": {
+  "UpdateDynamoDbRepoUri": {
    "Value": {
     "Fn::Join": [
      "",
@@ -295,7 +295,7 @@
           ":",
           {
            "Fn::GetAtt": [
-            "StoreS3LambdaRepoB7A0F5F3",
+            "UpdateDynamoDbLambdaRepoC82385F7",
             "Arn"
            ]
           }
@@ -312,7 +312,7 @@
           ":",
           {
            "Fn::GetAtt": [
-            "StoreS3LambdaRepoB7A0F5F3",
+            "UpdateDynamoDbLambdaRepoC82385F7",
             "Arn"
            ]
           }
@@ -326,7 +326,7 @@
       },
       "/",
       {
-       "Ref": "StoreS3LambdaRepoB7A0F5F3"
+       "Ref": "UpdateDynamoDbLambdaRepoC82385F7"
       }
      ]
     ]
@@ -389,23 +389,23 @@
     "Name": "encoding-service-EcrStack:ExportsOutputRefStoreEmbeddingsLambdaRepo755A55896A4E503D"
    }
   },
-  "ExportsOutputFnGetAttStoreS3LambdaRepoB7A0F5F3Arn763F1D20": {
+  "ExportsOutputFnGetAttUpdateDynamoDbLambdaRepoC82385F7ArnC394CD6D": {
    "Value": {
     "Fn::GetAtt": [
-     "StoreS3LambdaRepoB7A0F5F3",
+     "UpdateDynamoDbLambdaRepoC82385F7",
      "Arn"
     ]
    },
    "Export": {
-    "Name": "encoding-service-EcrStack:ExportsOutputFnGetAttStoreS3LambdaRepoB7A0F5F3Arn763F1D20"
+    "Name": "encoding-service-EcrStack:ExportsOutputFnGetAttUpdateDynamoDbLambdaRepoC82385F7ArnC394CD6D"
    }
   },
-  "ExportsOutputRefStoreS3LambdaRepoB7A0F5F3078D7672": {
+  "ExportsOutputRefUpdateDynamoDbLambdaRepoC82385F76F1B4510": {
    "Value": {
-    "Ref": "StoreS3LambdaRepoB7A0F5F3"
+    "Ref": "UpdateDynamoDbLambdaRepoC82385F7"
    },
    "Export": {
-    "Name": "encoding-service-EcrStack:ExportsOutputRefStoreS3LambdaRepoB7A0F5F3078D7672"
+    "Name": "encoding-service-EcrStack:ExportsOutputRefUpdateDynamoDbLambdaRepoC82385F76F1B4510"
    }
   }
  },
