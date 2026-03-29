@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Dict, Any, Tuple, List, Callable
 from .data_processor import DataProcessor
-from encoding_library.models.payload import Payload
+from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.encoders.encoder import Encoder
 import uuid
 
@@ -44,24 +44,24 @@ class NoteProcessor(DataProcessor):
             
         return True
 
-    def to_sqs_message(self, payload: Payload) -> Tuple[str, Dict[str, Any]]:
+    def to_sqs_message(self, state: MemoryRequestInternalState) -> Tuple[str, Dict[str, Any]]:
         """
         Convert note data to SQS message format.
-        Payload.data contains the note dictionary.
+        state.raw_data contains the note dictionary.
         """
-        # Validate/Process note data from payload
-        notes_model = NotesModel.from_dict(payload.data)
+        # Validate/Process note data from state
+        notes_model = NotesModel.from_dict(state.raw_data)
         
-        # We update payload.data with the processed model dict (standardized)
-        payload.data = notes_model.to_dict()
+        # We update state.raw_data with the processed model dict (standardized)
+        state.raw_data = notes_model.to_dict()
         
-        # Serialize the entire Payload object
-        message_body = json.dumps(payload.to_dict())
+        # Serialize the entire state object
+        message_body = json.dumps(state.to_dict())
         
         # Helper to safely add string attributes
         message_attributes = {
             'customerId': {
-                'StringValue': str(payload.customer_id),
+                'StringValue': str(state.customer_id),
                 'DataType': 'String'
             }
         }
