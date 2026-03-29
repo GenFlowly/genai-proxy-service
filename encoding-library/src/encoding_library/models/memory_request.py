@@ -10,7 +10,6 @@ class MemoryRequest(BaseModel, Generic[T]):
     Standard format for incoming API requests to the Ingestion server.
     """
     data_type: DataType = Field(alias="dataType")
-    customer_id: str = Field(alias="customerId")
     client: str
     data: T
     
