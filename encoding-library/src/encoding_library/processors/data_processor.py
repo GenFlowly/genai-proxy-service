@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple, List, Callable
-from encoding_library.models.payload import Payload
+from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.encoders.encoder import Encoder
 
 class DataProcessor(ABC):
@@ -18,10 +18,13 @@ class DataProcessor(ABC):
         pass
 
     @abstractmethod
-    def to_sqs_message(self, payload: Payload) -> Tuple[str, Dict[str, Any]]:
+    def to_sqs_message(self, state: MemoryRequestInternalState) -> Tuple[str, Dict[str, Any]]:
         """
-        Convert payload to SQS message format.
-        Returns a tuple of (MessageBody, MessageAttributes).
+        Convert to SQS message format.
+        Args:
+            state: MemoryRequestInternalState object containing the data to format.
+        Returns:
+            Tuple of (MessageBody, MessageAttributes)
         """
         pass
 

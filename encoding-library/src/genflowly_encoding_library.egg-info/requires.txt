@@ -1,5 +1,6 @@
 requests>=2.31.0
 boto3
+pydantic
 
 [dev]
 pytest

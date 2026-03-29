@@ -17,7 +17,9 @@ src/encoding_library/encoders/enums.py
 src/encoding_library/encoders/factory.py
 src/encoding_library/encoders/sentence_transformer_encoder.py
 src/encoding_library/models/__init__.py
-src/encoding_library/models/payload.py
+src/encoding_library/models/data_type.py
+src/encoding_library/models/memory_request.py
+src/encoding_library/models/memory_request_internal_state.py
 src/encoding_library/models/encoding/__init__.py
 src/encoding_library/models/encoding/email_model.py
 src/encoding_library/models/encoding/notes_model.py
