@@ -32,10 +32,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Parse message body
                 body = json.loads(record['body'])
                 
-                # Check if body is already a Payload (has customer_id)
-                # Note: Payload uses 'customer_id', but previous logic injected 'customerId'
-                # We should standardize on 'customer_id' but support 'customerId' for compatibility if needed?
-                # The Payload class uses 'customer_id'.
+                # Check if body is already a MemoryRequestInternalState (has customer_id)
+                # Note: MemoryRequestInternalState uses 'customer_id', but ingestion may use 'customerId'
                 
                 customer_id = body.get('customer_id') or body.get('customerId')
                 
@@ -48,9 +46,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     
                     if customer_id:
                         body['customer_id'] = customer_id
-                        logger.info(f"Added customer_id {customer_id} to payload for message {message_id}")
+                        logger.info(f"Added customer_id {customer_id} to state payload for message {message_id}")
                 else:
-                    logger.info(f"Found customer_id {customer_id} in payload for message {message_id}")
+                    logger.info(f"Found customer_id {customer_id} in state payload for message {message_id}")
                 
                 # Start Synchronous Execution
                 logger.info(f"Starting execution for message {message_id}")
