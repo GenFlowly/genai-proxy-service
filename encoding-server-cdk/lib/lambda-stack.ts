@@ -118,7 +118,6 @@ export class LambdaStack extends cdk.Stack {
             environment: {
                 ZILLIZ_ENDPOINT: props.zillizEndpoint,
                 ZILLIZ_TOKEN: props.zillizToken,
-                COLLECTION_NAME: 'test',
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
             },
         });
