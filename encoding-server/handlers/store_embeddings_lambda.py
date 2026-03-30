@@ -11,8 +11,6 @@ from encoding_library.utils.vector_db import get_zilliz_credentials
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Environment variables
-COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'test')
 
 def get_milvus_client(customer_id: str):
     """Create Milvus client connection using credentials fetched dynamically."""
@@ -20,12 +18,18 @@ def get_milvus_client(customer_id: str):
     zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
     
     logger.info(f"Instantiating MilvusClient against endpoint: {zilliz_endpoint}")
-    client = MilvusClient(
-        uri=zilliz_endpoint,
-        token=zilliz_token
-    )
-    logger.info(f"MilvusClient instantiated successfully")
-    return client
+    try:
+        # Prevent indefinite gRPC connection hanging with explicit 10s timeout
+        client = MilvusClient(
+            uri=zilliz_endpoint,
+            token=zilliz_token,
+            timeout=10.0
+        )
+        logger.info(f"MilvusClient instantiated successfully")
+        return client
+    except Exception as e:
+        logger.error(f"Failed to establish connection with Milvus cluster: {e}")
+        raise ConnectionError(f"Milvus endpoint connection failed or timed out: {e}")
 
 def ensure_collection_exists(client, collection_name: str, processor: Any):
     """Dynamically creates the target collection on Zilliz if it does not already exist."""
@@ -69,7 +73,10 @@ def store_in_zilliz(data: Dict[str, Any], embeddings: List[Dict[str, Any]], cust
             data=records
         )
         
-        logger.info(f"Successfully inserted into Zilliz collection '{collection_name}'. Insert count: {result.get('insert_count', 0)}")
+        # Explicitly flush the collection to ensure records are immediately verifiable and searchable
+        client.flush(collection_name=collection_name)
+        
+        logger.info(f"Successfully inserted and flushed {result.get('insert_count', 0)} records into Zilliz collection '{collection_name}'.")
         return [r.get('id', 'unknown') for r in records]
         
     except Exception as e:
