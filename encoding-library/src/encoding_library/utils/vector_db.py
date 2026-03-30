@@ -21,10 +21,13 @@ def get_zilliz_credentials(customer_id: str) -> Tuple[str, str]:
     Fetches Zilliz endpoint and token from DynamoDB, decrypting them with KMS.
     Falls back to environment variables if DynamoDB record is missing or fetching fails.
     """
+    logger.info(f"Fetching Zilliz credentials from DynamoDB for {customer_id}")
     try:
+        logger.info(f"Calling DynamoDB get_item for {customer_id}")
         response = vector_db_table.get_item(
             Key={'customerId': customer_id}
         )
+        logger.info(f"DynamoDB response received for {customer_id}")
         item = response.get('Item')
         if not item:
             if GLOBAL_ZILLIZ_ENDPOINT and GLOBAL_ZILLIZ_TOKEN:
