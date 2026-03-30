@@ -17,13 +17,19 @@ def get_milvus_client(customer_id: str):
     logger.info(f"Starting get_milvus_client for {customer_id}")
     zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
     
+    # PyMilvus auto-defaults to 19530 if a port is not explicitly specified, which drops connections for Zilliz Cloud
+    zilliz_endpoint = zilliz_endpoint.rstrip('/')
+    if zilliz_endpoint.startswith("https://") and zilliz_endpoint.count(":") == 1:
+        zilliz_endpoint = f"{zilliz_endpoint}:443"
+
     logger.info(f"Instantiating MilvusClient against endpoint: {zilliz_endpoint}")
     try:
-        # Prevent indefinite gRPC connection hanging with explicit 10s timeout
+        # Prevent indefinite gRPC connection hanging with explicit 10s timeout and secure flag
         client = MilvusClient(
             uri=zilliz_endpoint,
             token=zilliz_token,
-            timeout=10.0
+            timeout=10.0,
+            secure=True if zilliz_endpoint.startswith("https://") else False
         )
         logger.info(f"MilvusClient instantiated successfully")
         return client
