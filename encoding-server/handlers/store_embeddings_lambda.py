@@ -16,11 +16,16 @@ COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'test')
 
 def get_milvus_client(customer_id: str):
     """Create Milvus client connection using credentials fetched dynamically."""
+    logger.info(f"Starting get_milvus_client for {customer_id}")
     zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
-    return MilvusClient(
+    
+    logger.info(f"Instantiating MilvusClient against endpoint: {zilliz_endpoint}")
+    client = MilvusClient(
         uri=zilliz_endpoint,
         token=zilliz_token
     )
+    logger.info(f"MilvusClient instantiated successfully")
+    return client
 
 def ensure_collection_exists(client, collection_name: str, processor: Any):
     """Dynamically creates the target collection on Zilliz if it does not already exist."""
