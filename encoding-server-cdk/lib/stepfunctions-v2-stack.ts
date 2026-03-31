@@ -13,7 +13,7 @@ import { RESOURCE_NAMES } from "./constants";
 export interface StepFunctionsV2StackProps extends cdk.StackProps {
     stage: STAGES;
     ingestionQueue: sqs.IQueue;
-    updateDynamoDbRepo: ecr.IRepository;
+    parseAndChunkRepo: ecr.IRepository;
     parseAndChunkLambda: lambda.IFunction;
 }
 
@@ -57,8 +57,8 @@ export class StepFunctionsV2Stack extends cdk.Stack {
          */
         const triggerLambdaV2 = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda-v2`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda-v2`,
-            code: DockerImageCode.fromEcr(props.updateDynamoDbRepo, {
-                tagOrDigest: 'update-dynamodb-latest',
+            code: DockerImageCode.fromEcr(props.parseAndChunkRepo, {
+                tagOrDigest: 'parse-and-chunk-latest',
                 cmd: ['handlers.trigger_lambda.handler'],
             }),
             memorySize: 256,
