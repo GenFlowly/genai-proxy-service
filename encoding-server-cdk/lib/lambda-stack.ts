@@ -16,15 +16,8 @@ export interface LambdaStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     ingestionRepo: ecr.IRepository;
     parseAndChunkRepo: ecr.IRepository;
-    encodeRepo: ecr.IRepository;
-    storeEmbeddingsRepo: ecr.IRepository;
-    storeS3Repo: ecr.IRepository;
-    updateDynamoDbRepo: ecr.IRepository;
     ingestionImageTag?: string;
     parseAndChunkImageTag?: string;
-    storeEmbeddingsImageTag?: string;
-    storeS3ImageTag?: string;
-    updateDynamoDbImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
     customerProfileTableName: string;
@@ -36,10 +29,6 @@ export class LambdaStack extends cdk.Stack {
     public readonly ingestionLambda: lambda.Function;
     public readonly ingestNotesLambda: lambda.Function;
     public readonly parseAndChunkLambda: DockerImageFunction;
-    public readonly encodeLambda: DockerImageFunction;
-    public readonly storeEmbeddingsLambda: DockerImageFunction;
-    public readonly storeS3Lambda: DockerImageFunction;
-    public readonly updateDynamoDbLambda: DockerImageFunction;
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
@@ -106,78 +95,5 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
         });
-
-        // TEMPORARY: Dummy Encode Lambda binding to strictly prevent CloudFormation from deleting the physical encodeRepo Ref/Arn exports before V2 ParseAndChunk completely overrides the system tree.
-        this.encodeLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`,
-            code: DockerImageCode.fromEcr(props.encodeRepo, {
-                tagOrDigest: 'encode-latest', // Safe because AWS ECR natively caches old tags
-                cmd: ['handlers.trigger_lambda.handler'],
-            }),
-            memorySize: 256,
-            timeout: cdk.Duration.seconds(10),
-            architecture: lambda.Architecture.X86_64,
-        });
-
-        // 1. Store Embeddings Lambda
-        this.storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`,
-            code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
-                tagOrDigest: props.storeEmbeddingsImageTag || 'store-embeddings-latest',
-                cmd: ['handlers.store_embeddings_lambda.handler'],
-            }),
-            memorySize: 512,
-            timeout: cdk.Duration.seconds(900),
-            architecture: lambda.Architecture.X86_64,
-            environment: {
-                ZILLIZ_ENDPOINT: props.zillizEndpoint,
-                ZILLIZ_TOKEN: props.zillizToken,
-                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
-            },
-        });
-
-        // Grant permissions to access Zilliz credentials from DynamoDB and decrypt them via KMS
-        customerVectorDBConfigTable.grantReadData(this.storeEmbeddingsLambda);
-        this.storeEmbeddingsLambda.addToRolePolicy(new iam.PolicyStatement({
-            actions: ['kms:Decrypt'],
-            resources: ['*'], // Needs to decrypt tokens with the KMS key
-        }));
-
-        // KEEP FOR PHASE 1 CI OVERLAP
-        this.storeS3Lambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-s3-lambda`,
-            code: DockerImageCode.fromEcr(props.storeS3Repo, {
-                tagOrDigest: props.storeS3ImageTag || 'store-s3-latest',
-                cmd: ['handlers.store_in_s3_lambda.handler'], // Note: Can
-                // point to the new python file safely since it still runs
-            }),
-            memorySize: 512,
-            timeout: cdk.Duration.seconds(900),
-            architecture: lambda.Architecture.X86_64,
-            environment: {
-                BUCKET_NAME: props.rawEmailBucket.bucketName,
-            },
-        });
-        props.rawEmailBucket.grantPut(this.storeS3Lambda);
-
-        // Force CDK to keep the export alive during Phase 1 deployment
-        this.exportValue(this.storeS3Lambda.functionArn);
-
-        // 2. Update DynamoDB Lambda
-        this.updateDynamoDbLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-lambda`,
-            code: DockerImageCode.fromEcr(props.updateDynamoDbRepo, {
-                tagOrDigest: props.updateDynamoDbImageTag || 'update-dynamodb-latest',
-                cmd: ['handlers.update_dynamo_db_lambda.handler'],
-            }),
-            memorySize: 512,
-            timeout: cdk.Duration.seconds(900),
-            architecture: lambda.Architecture.X86_64,
-            environment: {
-                BUCKET_NAME: props.rawEmailBucket.bucketName,
-            },
-        });
-
-        props.rawEmailBucket.grantPut(this.updateDynamoDbLambda);
     }
 }

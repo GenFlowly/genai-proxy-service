@@ -26,15 +26,8 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     rawEmailBucket: s3Stack.rawEmailBucket,
     ingestionRepo: ecrStack.ingestionRepo,
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
-    encodeRepo: ecrStack.encodeRepo,
-    storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
-    storeS3Repo: ecrStack.storeS3Repo,
-    updateDynamoDbRepo: ecrStack.updateDynamoDbRepo,
     ingestionImageTag: process.env.INGESTION_IMAGE_TAG || 'latest',
     parseAndChunkImageTag: process.env.PARSE_AND_CHUNK_IMAGE_TAG || 'latest',
-    storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG || 'latest',
-    storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG || 'latest',
-    updateDynamoDbImageTag: process.env.UPDATE_DYNAMODB_IMAGE_TAG || 'latest',
     zillizEndpoint: process.env.ZILLIZ_ENDPOINT || 'dummy_zilliz_endpoint',
     zillizToken: process.env.ZILLIZ_TOKEN || 'dummy_zilliz_token',
     customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
@@ -44,7 +37,7 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
 const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsV2Stack`, {
     stage,
     ingestionQueue: sqsStack.ingestionQueue,
-    updateDynamoDbRepo: ecrStack.updateDynamoDbRepo,
+    parseAndChunkRepo: ecrStack.parseAndChunkRepo,
     parseAndChunkLambda: lambdaStack.parseAndChunkLambda,
 });
 
