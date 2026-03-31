@@ -88,7 +88,7 @@ jobs:
       ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
 
   react-app-deploy:
-    name: Deploy React App
+    name: React App
     needs: detect-changes
     if: (needs.detect-changes.outputs.react-app == 'true' && github.event_name == 'workflow_dispatch') || github.event_name == 'schedule'
     uses: ./.github/workflows/react-app-weekly-deploy.yml

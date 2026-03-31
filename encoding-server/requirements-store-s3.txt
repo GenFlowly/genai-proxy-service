@@ -1,4 +1,0 @@
-# Include base requirements
--r requirements.txt
-
-# Store S3 has no additional dependencies beyond base (boto3)
