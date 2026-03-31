@@ -258,4 +258,7 @@ jobs:
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
           CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
-        run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
+        run: |
+          aws cloudformation delete-stack --stack-name encoding-service-StepFunctionsStack || true
+          aws cloudformation wait stack-delete-complete --stack-name encoding-service-StepFunctionsStack || true
+          cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
