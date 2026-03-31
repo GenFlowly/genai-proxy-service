@@ -4,12 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genflowly-encoding-library"
-version = "0.1.18"
+version = "0.1.19"
 description = "Text encoding and chunking library."
 dependencies = [
     "requests>=2.31.0",
     "boto3",
-    "pydantic"
+    "pydantic",
+    "langchain-text-splitters",
+    "tiktoken",
+    "langchain-experimental",
+    "langchain-huggingface",
+    "langchain-openai"
 ]
 requires-python = ">=3.9"
 

@@ -1,33 +1,28 @@
 import math
 from typing import Dict, Any, List
 
-from encoding_library.processors.processor_factory import ProcessorFactory
-from encoding_library.encoders.factory import EncoderFactory
-from encoding_library.encoders.enums import ModelType, ModelName
-
-def create_embeddings(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+def get_embedding_model(model_type_str: str, model_name_str: str) -> Any:
     """
-    Creates embeddings for the provided data dictionary using the appropriate processor and encoder.
-    Returns a list of chunks (dicts with vector, text, index).
+    Instantiates and returns the appropriate Langchain embedding model.
     """
-    # Get appropriate processor
-    processor = ProcessorFactory.get_processor(data)
-    
-    # Extract raw text to encode
-    text_to_encode = processor.get_text_to_encode(data)
+    if model_type_str == "sentence-transformer":
+        from langchain_huggingface import HuggingFaceEmbeddings
+        return HuggingFaceEmbeddings(model_name=model_name_str)
+    elif model_type_str == "openai":
+        from langchain_openai import OpenAIEmbeddings
+        return OpenAIEmbeddings(model=model_name_str)
+    else:
+        raise ValueError(f"Unknown language model type specified: {model_type_str}")
 
-    # Get appropriate encoder (default to sentence-transformer/all-MiniLM-L6-v2)
-    model_type_str = data.get('model_type', ModelType.SENTENCE_TRANSFORMER.value)
-    model_name_str = data.get('model_name', ModelName.ALL_MINILM_L6_V2.value) 
-    
-    encoder = EncoderFactory.get_encoder(model_type_str, model_name_str)
-    
-    # Get chunking config
+def create_chunks(data: Dict[str, Any], text_to_encode: str, encoder: Any) -> List[str]:
+    """
+    Creates chunks for the given text based on configurations found in the data dictionary.
+    """
     from encoding_library.chunkers.factory import ChunkerFactory
     from encoding_library.chunkers.enums import ChunkingType, RecursiveTechnique
     
     chunking_type_str = data.get('chunking_type', ChunkingType.RECURSIVE.value)
-    chunking_technique_str = data.get('chunking_technique', RecursiveTechnique.CHARACTER.value)
+    chunking_technique_str = data.get('chunking_technique', RecursiveTechnique.TOKEN.value)
     
     chunker = ChunkerFactory.get_chunker(
         chunking_type=chunking_type_str,
@@ -35,14 +30,18 @@ def create_embeddings(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         encoder=encoder
     )
     
-    # Chunk text
-    chunks = chunker.chunk(text_to_encode)
-    
+    return chunker.chunk(text_to_encode)
+
+def create_embeddings(chunks: List[str], encoder: Any) -> List[Dict[str, Any]]:
+    """
+    Creates embeddings for the provided chunks using the specified encoder.
+    Returns a list of chunks (dicts with vector, text, index).
+    """
     if not chunks:
         return []
         
-    # Encode chunks
-    embeddings = encoder.encode_documents(chunks)
+    # Encode chunks using native Langchain API implementation format
+    embeddings = encoder.embed_documents(chunks)
          
     # Format result
     result = []

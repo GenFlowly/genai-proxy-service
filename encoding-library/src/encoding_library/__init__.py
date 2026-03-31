@@ -1,14 +1,12 @@
-from .encoders.factory import EncoderFactory
 from .chunkers.factory import ChunkerFactory
-from .chunkers.enums import ChunkingType, RecursiveTechnique, SemanticTechnique
-from .encoders.enums import ModelType, ModelName
+from .chunkers.enums import ChunkingType, RecursiveTechnique
+from .utils.embedding_utils import create_embeddings, cosine_similarity, get_embedding_model
 
 __all__ = [
-    "EncoderFactory",
     "ChunkerFactory",
     "ChunkingType",
     "RecursiveTechnique",
-    "SemanticTechnique",
-    "ModelType",
-    "ModelName"
+    "create_embeddings",
+    "cosine_similarity",
+    "get_embedding_model"
 ]
