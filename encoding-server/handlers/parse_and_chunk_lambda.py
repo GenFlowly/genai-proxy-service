@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 from typing import Dict, Any
@@ -9,44 +10,58 @@ from encoding_library.utils.embedding_utils import create_chunks, get_embedding_
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+BATCH_SIZE = int(os.environ.get('BATCH_SIZE', 25))
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Lambda handler for parsing and chunking text payload.
-    Receives a MemoryRequestInternalState dict from the Step Function triggers, 
-    breaks down the text_to_encode into discrete chunks, and attaches them to state.
+    Parse and Chunk Lambda — first node in the Step Functions V2 pipeline.
+    Receives a MemoryRequestInternalState, chunks the text, and returns
+    a { "batches": [...] } payload for the downstream Map state.
     """
     try:
-        logger.info(f"Received parsing request: {json.dumps(event)}")
-        
-        # Deserialize standard internal state
-        internal_state = MemoryRequestInternalState.from_dict(event)
-        
-        # Construct proxy dict for legacy extraction compatibility
-        data = internal_state.raw_data.copy()
-        data['dataType'] = internal_state.data_type
-        
-        # Instantiate Processor based on strict Data Type parsing logic
-        processor = ProcessorFactory.get_processor(data)
-        text_to_encode = processor.get_text_to_encode(data)
-        
-        # Read the native model metadata embedded by the user
-        model_type_str = data.get('model_type', "sentence-transformer")
-        model_name_str = data.get('model_name', "all-MiniLM-L6-v2") 
-        
-        # Extract native Langchain embedding instantiation
-        encoder = get_embedding_model(model_type_str, model_name_str)
-        
-        # Execute Semantic/Recursive chunking logic natively
-        chunks = create_chunks(data, text_to_encode, encoder)
-        
-        logger.info(f"Successfully chunked payload into {len(chunks)} pieces.")
-        
-        # Deposit chunk array directly into shared state pipeline memory
-        internal_state.data_chunks = chunks
-        
-        # Output exactly the serialized state payload mapped for the subsequent EncodeLambda task
-        return internal_state.to_dict()
-        
+        logger.info(f"Received parse-and-chunk request.")
+
+        memory_request_internal_state = MemoryRequestInternalState.from_dict(event)
+
+        processor = ProcessorFactory.get_processor(memory_request_internal_state)
+        text_to_encode = processor.get_text_to_encode(memory_request_internal_state)
+
+        encoder = get_embedding_model(
+            memory_request_internal_state.model_type,
+            memory_request_internal_state.model_name,
+        )
+        chunks = create_chunks(
+            text_to_encode,
+            encoder,
+            chunking_type=memory_request_internal_state.chunking_type,
+            chunking_technique=memory_request_internal_state.chunking_technique,
+        )
+
+        logger.info(f"Chunked into {len(chunks)} pieces across batch_size={BATCH_SIZE}.")
+
+        # Clear raw_data after chunking — the full document text is no longer needed
+        # downstream and would otherwise blow the 256KB Step Functions payload limit.
+        memory_request_internal_state.raw_data = {}
+
+        batches = []
+        for i in range(0, len(chunks), BATCH_SIZE):
+            batch_state = MemoryRequestInternalState(
+                data_type=memory_request_internal_state.data_type,
+                customer_id=memory_request_internal_state.customer_id,
+                client=memory_request_internal_state.client,
+                raw_data={},
+                model_type=memory_request_internal_state.model_type,
+                model_name=memory_request_internal_state.model_name,
+                chunking_type=memory_request_internal_state.chunking_type,
+                chunking_technique=memory_request_internal_state.chunking_technique,
+                data_chunks=chunks[i:i + BATCH_SIZE],
+            )
+            batches.append(batch_state.to_dict())
+
+        logger.info(f"Returning {len(batches)} batches to Map state.")
+        return {"batches": batches}
+
     except Exception as e:
-        logger.error(f"Error parsing and chunking inbound text payload: {str(e)}")
+        logger.error(f"Error in parse_and_chunk_lambda: {str(e)}")
         raise

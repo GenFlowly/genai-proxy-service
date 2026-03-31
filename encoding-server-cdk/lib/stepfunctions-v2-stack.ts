@@ -15,6 +15,8 @@ export interface StepFunctionsV2StackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     parseAndChunkRepo: ecr.IRepository;
     parseAndChunkLambda: lambda.IFunction;
+    embedLambda: lambda.IFunction;
+    storeEmbeddingsLambda: lambda.IFunction;
 }
 
 export class StepFunctionsV2Stack extends cdk.Stack {
@@ -26,12 +28,34 @@ export class StepFunctionsV2Stack extends cdk.Stack {
 
         // Define Step Functions Tasks
         const parseAndChunkTask = new tasks.LambdaInvoke(this, 'Parse and Chunk Text', {
+            stateName:'Parse and Chunk Text',
             lambdaFunction: props.parseAndChunkLambda,
             payloadResponseOnly: true, // Return only the payload sequentially
         });
 
-        // Define Chain: ParseAndChunk (Only for now as orchestrated)
-        const definition = parseAndChunkTask;
+        const createEmbeddingsTask = new tasks.LambdaInvoke(this, 'CreateEmbeddings', {
+            stateName:'CreateEmbeddings',
+            lambdaFunction: props.embedLambda,
+            payloadResponseOnly: true,
+        });
+
+        const storeEmbeddingsTask = new tasks.LambdaInvoke(this, 'StoreEmbeddings', {
+            stateName:'StoreEmbeddings',
+            lambdaFunction: props.storeEmbeddingsLambda,
+            payloadResponseOnly: true,
+        });
+
+        const processBatchDefinition = createEmbeddingsTask.next(storeEmbeddingsTask);
+
+        const processBatchesMap = new sfn.Map(this, 'Process Batches Concurrently', {
+            maxConcurrency: 3, // Set due to OpenAI API rate limits
+            itemsPath: sfn.JsonPath.stringAt('$.batches'),
+        });
+
+        processBatchesMap.itemProcessor(processBatchDefinition);
+
+        // Define Master Sequence Chain
+        const definition = parseAndChunkTask.next(processBatchesMap);
 
         // Define State Machine (Standard Workflow for extended timeout limits)
         const logGroup = new cdk.aws_logs.LogGroup(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-sm-v2-logs`, {
