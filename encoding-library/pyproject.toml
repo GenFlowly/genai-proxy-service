@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genflowly-encoding-library"
-version = "0.1.20"
+version = "0.1.21"
 description = "Text encoding and chunking library."
 dependencies = [
     "requests>=2.31.0",

@@ -12,6 +12,10 @@ class MemoryRequest(BaseModel, Generic[T]):
     data_type: DataType = Field(alias="dataType")
     client: str
     data: T
+    model_type: Optional[str] = None
+    model_name: Optional[str] = None
+    chunking_type: Optional[str] = None
+    chunking_technique: Optional[str] = None
     
     class Config:
         populate_by_name = True
