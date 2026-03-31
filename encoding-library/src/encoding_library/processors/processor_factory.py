@@ -1,33 +1,32 @@
-from typing import Dict, Any
 from encoding_library.processors.data_processor import DataProcessor
 from encoding_library.processors.email_processor import EmailProcessor
 from encoding_library.processors.note_processor import NoteProcessor
+from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.models.data_type import DataType
+
 
 class ProcessorFactory:
     """
-    Factory to get the appropriate DataProcessor.
+    Factory to get the appropriate DataProcessor based on MemoryRequestInternalState.
     """
 
     @staticmethod
-    def get_processor(data: Dict[str, Any]) -> DataProcessor:
+    def get_processor(state: MemoryRequestInternalState) -> DataProcessor:
         """
-        Determine the type of data and return the corresponding processor.
+        Return the correct processor for the given state's data_type.
         """
-        data_type_str = data.get('dataType') or data.get('data_type')
-        
+        data_type_str = state.data_type
+
         if data_type_str:
             try:
                 data_type_enum = DataType(data_type_str.upper())
-                
+
                 if data_type_enum == DataType.EMAIL:
                     return EmailProcessor()
                 elif data_type_enum == DataType.NOTE:
                     return NoteProcessor()
-                    
+
             except ValueError:
-                # If invalid enum, log or fallback below
                 pass
-        
-        # Default or Error
-        raise ValueError(f"Unknown data type or missing dataType field in payload: {list(data.keys())}")
+
+        raise ValueError(f"Unknown or missing data_type in state: '{data_type_str}'")
