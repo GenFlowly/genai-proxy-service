@@ -15,9 +15,6 @@ FROM public.ecr.aws/lambda/python:3.11
 # Copy installed dependencies to Lambda task directory
 COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 
-# Copy encoding library
-COPY lib/encoding_library/ ${LAMBDA_TASK_ROOT}/encoding_library/
-
 # Copy application code
 COPY handlers/store_embeddings_lambda.py ${LAMBDA_TASK_ROOT}/handlers/store_embeddings_lambda.py
 
