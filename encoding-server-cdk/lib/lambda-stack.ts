@@ -16,13 +16,11 @@ export interface LambdaStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     ingestionRepo: ecr.IRepository;
     parseAndChunkRepo: ecr.IRepository;
-    encodeRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
     updateDynamoDbRepo: ecr.IRepository;
     ingestionImageTag?: string;
     parseAndChunkImageTag?: string;
-    encodeImageTag?: string;
     storeEmbeddingsImageTag?: string;
     storeS3ImageTag?: string;
     updateDynamoDbImageTag?: string;
@@ -37,7 +35,6 @@ export class LambdaStack extends cdk.Stack {
     public readonly ingestionLambda: lambda.Function;
     public readonly ingestNotesLambda: lambda.Function;
     public readonly parseAndChunkLambda: DockerImageFunction;
-    public readonly encodeLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly storeS3Lambda: DockerImageFunction;
     public readonly updateDynamoDbLambda: DockerImageFunction;
@@ -108,19 +105,7 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
         });
 
-        // 1. Encode Lambda
-        this.encodeLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`,
-            code: DockerImageCode.fromEcr(props.encodeRepo, {
-                tagOrDigest: props.encodeImageTag || 'encode-latest',
-                cmd: ['handlers.encode_lambda.handler'],
-            }),
-            memorySize: 3008, // Needs memory for model
-            timeout: cdk.Duration.seconds(900),
-            architecture: lambda.Architecture.X86_64,
-        });
-
-        // 2. Store Embeddings Lambda
+        // 1. Store Embeddings Lambda
         this.storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`,
             code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
@@ -164,7 +149,7 @@ export class LambdaStack extends cdk.Stack {
         // Force CDK to keep the export alive during Phase 1 deployment
         this.exportValue(this.storeS3Lambda.functionArn);
 
-        // 3. Update DynamoDB Lambda
+        // 2. Update DynamoDB Lambda
         this.updateDynamoDbLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-update-dynamodb-lambda`,
             code: DockerImageCode.fromEcr(props.updateDynamoDbRepo, {

@@ -10,7 +10,7 @@ import { ApiGatewayStack } from "../lib/apigateway-stack";
 import { DynamoDBStack } from "../lib/dynamodb-stack";
 import { RESOURCE_NAMES } from "../lib/constants";
 
-import { StepFunctionsStack } from "../lib/stepfunctions-stack";
+import { StepFunctionsV2Stack } from "../lib/stepfunctions-v2-stack";
 
 const stage: STAGES = STAGES.BETA;
 
@@ -26,13 +26,11 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     rawEmailBucket: s3Stack.rawEmailBucket,
     ingestionRepo: ecrStack.ingestionRepo,
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
-    encodeRepo: ecrStack.encodeRepo,
     storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
     storeS3Repo: ecrStack.storeS3Repo,
     updateDynamoDbRepo: ecrStack.updateDynamoDbRepo,
     ingestionImageTag: process.env.INGESTION_IMAGE_TAG || 'latest',
     parseAndChunkImageTag: process.env.PARSE_AND_CHUNK_IMAGE_TAG || 'latest',
-    encodeImageTag: process.env.ENCODE_IMAGE_TAG || 'latest',
     storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG || 'latest',
     storeS3ImageTag: process.env.STORE_S3_IMAGE_TAG || 'latest',
     updateDynamoDbImageTag: process.env.UPDATE_DYNAMODB_IMAGE_TAG || 'latest',
@@ -42,17 +40,11 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     customerVectorDBConfigTableName: process.env.CUSTOMER_VECTOR_DB_CONFIG_TABLE_NAME || 'CustomerVectorDBConfig',
 });
 
-
-
-const stepFunctionsStack = new StepFunctionsStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsStack`, {
+const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsV2Stack`, {
     stage,
     ingestionQueue: sqsStack.ingestionQueue,
-    storeS3Repo: ecrStack.storeS3Repo,
     updateDynamoDbRepo: ecrStack.updateDynamoDbRepo,
-    encodeLambda: lambdaStack.encodeLambda,
-    storeEmbeddingsLambda: lambdaStack.storeEmbeddingsLambda,
-    storeS3Lambda: lambdaStack.storeS3Lambda,
-    updateDynamoDbLambda: lambdaStack.updateDynamoDbLambda,
+    parseAndChunkLambda: lambdaStack.parseAndChunkLambda,
 });
 
 
