@@ -16,6 +16,7 @@ export interface LambdaStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     ingestionRepo: ecr.IRepository;
     parseAndChunkRepo: ecr.IRepository;
+    encodeRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
     updateDynamoDbRepo: ecr.IRepository;
@@ -35,6 +36,7 @@ export class LambdaStack extends cdk.Stack {
     public readonly ingestionLambda: lambda.Function;
     public readonly ingestNotesLambda: lambda.Function;
     public readonly parseAndChunkLambda: DockerImageFunction;
+    public readonly encodeLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly storeS3Lambda: DockerImageFunction;
     public readonly updateDynamoDbLambda: DockerImageFunction;
@@ -102,6 +104,18 @@ export class LambdaStack extends cdk.Stack {
             }),
             memorySize: 1024,
             timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+        });
+
+        // TEMPORARY: Dummy Encode Lambda binding to strictly prevent CloudFormation from deleting the physical encodeRepo Ref/Arn exports before V2 ParseAndChunk completely overrides the system tree.
+        this.encodeLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`,
+            code: DockerImageCode.fromEcr(props.encodeRepo, {
+                tagOrDigest: 'encode-latest', // Safe because AWS ECR natively caches old tags
+                cmd: ['handlers.trigger_lambda.handler'],
+            }),
+            memorySize: 256,
+            timeout: cdk.Duration.seconds(10),
             architecture: lambda.Architecture.X86_64,
         });
 
