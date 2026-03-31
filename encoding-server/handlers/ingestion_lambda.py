@@ -77,27 +77,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         for idx, item_data in enumerate(items_to_process):
             try:
                 if not all(k in item_data for k in ('dataType', 'client', 'data')):
-                    raise ValueError(f"Payload must be a MemoryRequest with 'dataType', 'client', and 'data'. Got keys: {list(item_data.keys())}")
-                
-                # Extract inner data and inject envelope metadata for the Processor pipeline
-                raw_data = item_data['data']
-                raw_data['dataType'] = item_data['dataType']
-                raw_data['client'] = item_data['client']
+                    raise ValueError(f"Payload must contain 'dataType', 'client', and 'data'. Got keys: {list(item_data.keys())}")
 
-                # Get appropriate processor for the data
-                processor = ProcessorFactory.get_processor(raw_data)
-                
-                # Validate data
-                processor.validate(raw_data)
-                
-                # Wrap in internal state payload
+                # Build typed internal state directly from the envelope — no flattening
                 internal_state = MemoryRequestInternalState(
                     data_type=item_data['dataType'],
                     customer_id=customer_id,
                     client=item_data['client'],
-                    raw_data=raw_data
+                    raw_data=item_data['data'],
+                    model_type=item_data.get('model_type'),
+                    model_name=item_data.get('model_name'),
+                    chunking_type=item_data.get('chunking_type'),
+                    chunking_technique=item_data.get('chunking_technique'),
                 )
-                
+
+                # Get appropriate processor from the typed state
+                processor = ProcessorFactory.get_processor(internal_state)
+
+                # Validate via typed state
+                processor.validate(internal_state)
+
                 # Convert to SQS message format
                 message_body, message_attributes = processor.to_sqs_message(internal_state)
 

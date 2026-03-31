@@ -16,8 +16,12 @@ export interface LambdaStackProps extends cdk.StackProps {
     ingestionQueue: sqs.IQueue;
     ingestionRepo: ecr.IRepository;
     parseAndChunkRepo: ecr.IRepository;
+    embedRepo: ecr.IRepository;
+    storeEmbeddingsRepo: ecr.IRepository;
     ingestionImageTag?: string;
     parseAndChunkImageTag?: string;
+    embedImageTag?: string;
+    storeEmbeddingsImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
     customerProfileTableName: string;
@@ -29,6 +33,8 @@ export class LambdaStack extends cdk.Stack {
     public readonly ingestionLambda: lambda.Function;
     public readonly ingestNotesLambda: lambda.Function;
     public readonly parseAndChunkLambda: DockerImageFunction;
+    public readonly embedLambda: DockerImageFunction;
+    public readonly storeEmbeddingsLambda: DockerImageFunction;
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
@@ -95,5 +101,41 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
         });
+
+        // 1. Embed Lambda natively decoupled
+        this.embedLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-embeddings-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-embeddings-lambda`,
+            code: DockerImageCode.fromEcr(props.embedRepo, {
+                tagOrDigest: props.embedImageTag || 'embed-latest',
+                cmd: ['handlers.create_embeddings_lambda.handler'],
+            }),
+            memorySize: 3008, // Massive parallel compute mathematically isolated
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+        });
+
+        // 2. Store Embeddings Lambda natively rewritten cleanly
+        this.storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`,
+            code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
+                tagOrDigest: props.storeEmbeddingsImageTag || 'store-embeddings-latest',
+                cmd: ['handlers.store_embeddings_lambda.handler'],
+            }),
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ZILLIZ_ENDPOINT: props.zillizEndpoint,
+                ZILLIZ_TOKEN: props.zillizToken,
+                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
+            },
+        });
+
+        // Expose cryptographic arrays perfectly mapping AWS natively safely
+        customerVectorDBConfigTable.grantReadData(this.storeEmbeddingsLambda);
+        this.storeEmbeddingsLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'], 
+        }));
     }
 }

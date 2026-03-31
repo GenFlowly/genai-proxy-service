@@ -26,8 +26,12 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     rawEmailBucket: s3Stack.rawEmailBucket,
     ingestionRepo: ecrStack.ingestionRepo,
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
+    embedRepo: ecrStack.createEmbeddingsRepo,
+    storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
     ingestionImageTag: process.env.INGESTION_IMAGE_TAG || 'latest',
     parseAndChunkImageTag: process.env.PARSE_AND_CHUNK_IMAGE_TAG || 'latest',
+    embedImageTag: process.env.CREATE_EMBEDDINGS_IMAGE_TAG || 'latest',
+    storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG || 'latest',
     zillizEndpoint: process.env.ZILLIZ_ENDPOINT || 'dummy_zilliz_endpoint',
     zillizToken: process.env.ZILLIZ_TOKEN || 'dummy_zilliz_token',
     customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
@@ -35,10 +39,12 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
 });
 
 const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsV2Stack`, {
-    stage,
+    stage: stage,
     ingestionQueue: sqsStack.ingestionQueue,
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
     parseAndChunkLambda: lambdaStack.parseAndChunkLambda,
+    embedLambda: lambdaStack.embedLambda,
+    storeEmbeddingsLambda: lambdaStack.storeEmbeddingsLambda,
 });
 
 

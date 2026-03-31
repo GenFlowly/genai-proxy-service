@@ -1,0 +1,16 @@
+FROM public.ecr.aws/lambda/python:3.12
+
+# Install heavy foundational model dependencies dynamically explicitly configured natively via shared python environments
+COPY requirements-create-embeddings.txt .
+RUN pip install -r requirements-create-embeddings.txt
+
+# Incorporate the formal internal SDK strictly mapped securely structurally internally
+COPY lib/encoding_library/ /var/task/encoding_library/
+COPY lib/encoding_library/pyproject.toml /var/task/encoding_library/
+RUN pip install -e /var/task/encoding_library
+
+# Instantiate the specifically designed lambda mapping securely decoupled away from chunking nodes purely targeting embeddings
+COPY handlers/create_embeddings_lambda.py /var/task/handlers/create_embeddings_lambda.py
+
+# Terminate sequentially native handler logic
+CMD ["handlers.create_embeddings_lambda.handler"]

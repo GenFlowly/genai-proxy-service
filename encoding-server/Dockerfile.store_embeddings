@@ -1,0 +1,17 @@
+FROM public.ecr.aws/lambda/python:3.12
+
+# Install standard execution layer APIs natively structurally configuring explicit vectors
+COPY requirements-encode.txt .
+RUN pip install -r requirements-encode.txt
+RUN pip install pymilvus==2.5.0 boto3
+
+# Incorporate proprietary models strictly mapping structurally structurally into container execution arrays sequentially
+COPY lib/encoding_library/ /var/task/encoding_library/
+COPY lib/encoding_library/pyproject.toml /var/task/encoding_library/
+RUN pip install -e /var/task/encoding_library
+
+# Instanciate structurally executing deployment logic explicitly sequentially 
+COPY handlers/store_embeddings_lambda.py /var/task/handlers/store_embeddings_lambda.py
+
+# Boot structural deployment node recursively natively
+CMD ["handlers.store_embeddings_lambda.handler"]
