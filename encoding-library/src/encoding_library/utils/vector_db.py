@@ -57,3 +57,29 @@ def get_zilliz_credentials(customer_id: str) -> Tuple[str, str]:
             logger.info(f"Using environment fallback due to error for {customer_id}")
             return GLOBAL_ZILLIZ_ENDPOINT, GLOBAL_ZILLIZ_TOKEN
         raise e
+
+
+def get_milvus_client(customer_id: str):
+    """
+    Creates and returns an authenticated MilvusClient for the given customer.
+    Credentials are fetched via get_zilliz_credentials.
+    """
+    zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
+
+    zilliz_endpoint = zilliz_endpoint.rstrip('/')
+    if zilliz_endpoint.startswith("https://") and zilliz_endpoint.count(":") == 1:
+        zilliz_endpoint = f"{zilliz_endpoint}:443"
+
+    try:
+        from pymilvus import MilvusClient
+        client = MilvusClient(
+            uri=zilliz_endpoint,
+            token=zilliz_token,
+            timeout=10.0,
+            secure=zilliz_endpoint.startswith("https://")
+        )
+        logger.info(f"MilvusClient connected for customer {customer_id}")
+        return client
+    except Exception as e:
+        logger.error(f"Failed to connect to Milvus for customer {customer_id}: {e}")
+        raise
