@@ -1,8 +1,7 @@
 from typing import Any, Union
 from .base_chunker import BaseChunker
 from .recursive_chunker import RecursiveChunker
-from .recursive.splitters import CharacterSplitter, TokenSplitter
-from .enums import ChunkingType, RecursiveTechnique, SemanticTechnique
+from .enums import ChunkingType, RecursiveTechnique
 
 class ChunkerFactory:
     """
@@ -11,7 +10,7 @@ class ChunkerFactory:
     
     @staticmethod
     def get_chunker(chunking_type: Union[str, ChunkingType] = ChunkingType.RECURSIVE, 
-                    technique: Union[str, RecursiveTechnique, SemanticTechnique] = None, 
+                    technique: Union[str, RecursiveTechnique] = None, 
                     **kwargs) -> BaseChunker:
         """
         Get a chunker instance based on type and technique.
@@ -27,6 +26,7 @@ class ChunkerFactory:
             except ValueError:
                 raise ValueError(f"Unknown chunking type: {chunking_type}")
 
+        from .recursive_chunker import RecursiveChunker
         if chunking_type == ChunkingType.RECURSIVE:
             # recursive types: character (default), token
             if isinstance(technique, str):
@@ -34,40 +34,22 @@ class ChunkerFactory:
                     technique = RecursiveTechnique(technique)
                 except ValueError:
                     # Fallback or allow arbitrary string if convenient? No, strict is better for now.
-                    # Or just treat unknown as None/Default?
-                    # Let's try to convert, if fail, assume default or error.
                     pass
             
-            if technique == RecursiveTechnique.TOKEN:
-                splitter = TokenSplitter(**kwargs)
-            else:
-                # Default to character splitter
-                splitter = CharacterSplitter(**kwargs)
-                
-            return RecursiveChunker(splitter=splitter)
+            return RecursiveChunker(technique=technique, **kwargs)
 
         elif chunking_type == ChunkingType.SEMANTIC:
-            # semantic types: percentile (default), std_dev
-            if isinstance(technique, str):
-                try:
-                    technique = SemanticTechnique(technique)
-                except ValueError:
-                    pass
+            # semantic types: percentile (default), std_dev, interquartile, gradient
+            # Langchain naturally expects a string for the semantic breakpoint threshold
+            if not isinstance(technique, str):
+                technique = "percentile"
 
             # Encoder must be passed
             if not encoder:
                 raise ValueError("Encoder instance required for semantic chunking")
 
-            # Lazy import semantic chunkers to avoid hard dependency on numpy
             from .semantic_chunker import SemanticChunker
-            from .semantic.thresholds import PercentileThreshold, StandardDeviationThreshold
-
-            if technique == SemanticTechnique.STD_DEV:
-                strategy = StandardDeviationThreshold(**kwargs)
-            else:
-                strategy = PercentileThreshold(**kwargs)
-                
-            return SemanticChunker(encoder=encoder, threshold_strategy=strategy)
+            return SemanticChunker(technique=technique, encoder=encoder, **kwargs)
 
         else:
             raise ValueError(f"Unknown chunking type: {chunking_type}")
