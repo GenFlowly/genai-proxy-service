@@ -166,5 +166,12 @@ jobs:
         run: |
           echo "Phase 1: Deploying Lambdas and StateMachines exclusively to organically break CloudFormation ECR export locks..."
           cdk deploy encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack --exclusively --require-approval never
+          
+          echo "Force-Purging Orphaned ECR Repositories to bypass CloudFormation 'Non-Empty' data-loss safeguards..."
+          aws ecr delete-repository --repository-name encoding-service-development-encode-repo --force || true
+          aws ecr delete-repository --repository-name encoding-service-development-store-embeddings-repo --force || true
+          aws ecr delete-repository --repository-name encoding-service-development-store-s3-repo --force || true
+          aws ecr delete-repository --repository-name encoding-service-development-update-dynamodb-repo --force || true
+
           echo "Phase 2: Deploying remaining infrastructure safely..."
           cdk deploy "encoding-service-*" --require-approval never
