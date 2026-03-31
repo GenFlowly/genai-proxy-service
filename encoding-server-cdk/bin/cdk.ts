@@ -26,6 +26,7 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     rawEmailBucket: s3Stack.rawEmailBucket,
     ingestionRepo: ecrStack.ingestionRepo,
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
+    encodeRepo: ecrStack.encodeRepo,
     storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
     storeS3Repo: ecrStack.storeS3Repo,
     updateDynamoDbRepo: ecrStack.updateDynamoDbRepo,
