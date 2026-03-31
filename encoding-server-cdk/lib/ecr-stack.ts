@@ -13,7 +13,6 @@ export class EcrStack extends cdk.Stack {
 
     public readonly ingestionRepo: IRepository;
     public readonly parseAndChunkRepo: IRepository;
-    public readonly encodeRepo: IRepository;
     public readonly storeEmbeddingsRepo: IRepository;
     public readonly storeS3Repo: IRepository;
     public readonly updateDynamoDbRepo: IRepository;
@@ -34,13 +33,6 @@ export class EcrStack extends cdk.Stack {
         // Parse and Chunk Lambda Repository
         this.parseAndChunkRepo = new Repository(this, 'ParseAndChunkLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-parse-and-chunk-repo`,
-            removalPolicy: removalPolicy,
-            lifecycleRules: [{ maxImageCount: 5 }],
-        });
-
-        // Encode Lambda Repository
-        this.encodeRepo = new Repository(this, 'EncodeLambdaRepo', {
-            repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-repo`,
             removalPolicy: removalPolicy,
             lifecycleRules: [{ maxImageCount: 5 }],
         });
@@ -73,10 +65,6 @@ export class EcrStack extends cdk.Stack {
 
         new CfnOutput(this, 'ParseAndChunkRepoUri', {
             value: this.parseAndChunkRepo.repositoryUri,
-        });
-
-        new CfnOutput(this, 'EncodeRepoUri', {
-            value: this.encodeRepo.repositoryUri,
         });
 
         new CfnOutput(this, 'StoreEmbeddingsRepoUri', {
