@@ -1,0 +1,4 @@
+# Parse and Chunk Lambda requirements
+# Includes base requirements and encoding library with ML extras for chunking
+-r requirements.txt
+genflowly-encoding-library[ml]>=0.1.24
