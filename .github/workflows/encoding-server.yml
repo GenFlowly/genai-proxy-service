@@ -164,6 +164,7 @@ jobs:
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
           CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
         run: |
-          cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
-          echo "Deploying ECR Stack last to safely purge the perfectly orchestrated orphaned repositories..."
-          cdk deploy encoding-service-EcrStack --require-approval never
+          echo "Phase 1: Deploying Lambdas and StateMachines exclusively to organically break CloudFormation ECR export locks..."
+          cdk deploy encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack --exclusively --require-approval never
+          echo "Phase 2: Deploying remaining infrastructure safely..."
+          cdk deploy "encoding-service-*" --require-approval never
