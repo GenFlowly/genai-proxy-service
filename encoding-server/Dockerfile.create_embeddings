@@ -1,16 +1,25 @@
-FROM public.ecr.aws/lambda/python:3.12
+# Build stage
+FROM public.ecr.aws/lambda/python:3.11 AS builder
 
-# Install heavy foundational model dependencies dynamically explicitly configured natively via shared python environments
-COPY requirements-create-embeddings.txt .
-RUN pip install -r requirements-create-embeddings.txt
+# Install build dependencies
+RUN yum install -y gcc gcc-c++ make cmake
 
-# Incorporate the formal internal SDK strictly mapped securely structurally internally
-COPY lib/encoding_library/ /var/task/encoding_library/
-COPY lib/encoding_library/pyproject.toml /var/task/encoding_library/
-RUN pip install -e /var/task/encoding_library
+# Copy and install dependencies
+COPY requirements.txt /tmp/
+COPY requirements-create-embeddings.txt /tmp/
+RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements-create-embeddings.txt --target /tmp/python
 
-# Instantiate the specifically designed lambda mapping securely decoupled away from chunking nodes purely targeting embeddings
-COPY handlers/create_embeddings_lambda.py /var/task/handlers/create_embeddings_lambda.py
+# Runtime stage
+FROM public.ecr.aws/lambda/python:3.11
 
-# Terminate sequentially native handler logic
-CMD ["handlers.create_embeddings_lambda.handler"]
+# Copy installed dependencies to Lambda task directory
+COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
+
+# Copy encoding library
+COPY lib/encoding_library/ ${LAMBDA_TASK_ROOT}/encoding_library/
+
+# Copy application code
+COPY handlers/create_embeddings_lambda.py ${LAMBDA_TASK_ROOT}/handlers/create_embeddings_lambda.py
+
+# Set the handler
+CMD [ "handlers.create_embeddings_lambda.handler" ]
