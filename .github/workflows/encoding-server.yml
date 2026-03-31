@@ -63,8 +63,8 @@ jobs:
       - name: Deploy ECR stack first to create repositories
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         run: |
-          echo "Deploying ECR stack to create repositories..."
-          cdk deploy encoding-service-EcrStack --require-approval never
+          echo "Skipping ECR stack early deploy to safely bypass CloudFormation export locks..."
+          # cdk deploy encoding-service-EcrStack --require-approval never
         env:
           # Dummy values to satisfy bin/cdk.ts validation during ECR stack deployment
           INGESTION_IMAGE_TAG: "placeholder"
@@ -163,4 +163,7 @@ jobs:
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
           CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
-        run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
+        run: |
+          cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
+          echo "Deploying ECR Stack last to safely purge the perfectly orchestrated orphaned repositories..."
+          cdk deploy encoding-service-EcrStack --require-approval never
