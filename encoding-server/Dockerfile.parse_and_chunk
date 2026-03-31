@@ -1,0 +1,22 @@
+# Build stage
+FROM public.ecr.aws/lambda/python:3.11 AS builder
+
+# Install build dependencies
+RUN yum install -y gcc gcc-c++ make cmake
+
+# Copy and install dependencies
+COPY requirements.txt /tmp/requirements.txt
+COPY requirements-encode.txt /tmp/requirements-encode.txt
+RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements-encode.txt --target /tmp/python
+
+# Runtime stage
+FROM public.ecr.aws/lambda/python:3.11
+
+# Copy installed common dependencies and compiled machine learning libs
+COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
+
+# Copy application code payload
+COPY handlers ${LAMBDA_TASK_ROOT}/handlers
+
+# Set the dedicated chunking handler
+CMD [ "handlers.parse_and_chunk_lambda.handler" ]

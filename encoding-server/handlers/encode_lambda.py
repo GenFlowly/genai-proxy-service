@@ -60,9 +60,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Inject dataType so that ProcessorFactory can route it correctly
         data['dataType'] = memory_request_internal_state.data_type
         
-        # Create embedding using common utility
+        from encoding_library.processors.processor_factory import ProcessorFactory
+        from encoding_library.utils.embedding_utils import create_embeddings, create_chunks, get_embedding_model
+
+        processor = ProcessorFactory.get_processor(data)
+        text_to_encode = processor.get_text_to_encode(data)
+        
+        model_type_str = data.get('model_type', "sentence-transformer")
+        model_name_str = data.get('model_name', "all-MiniLM-L6-v2") 
+        
+        encoder = get_embedding_model(model_type_str, model_name_str)
+        
+        chunks = create_chunks(data, text_to_encode, encoder)
+        
+        # Create embedding using Langchain integrated common utility
         # Returns a list of chunks (dicts with vector, text, index)
-        embeddings = create_embeddings(data)
+        embeddings = create_embeddings(chunks, encoder)
         
         # Attach the embeddings precisely back into the formalized node structure
         memory_request_internal_state.data_embeddings = embeddings

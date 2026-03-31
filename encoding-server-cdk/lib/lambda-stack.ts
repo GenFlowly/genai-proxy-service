@@ -15,11 +15,13 @@ export interface LambdaStackProps extends cdk.StackProps {
     rawEmailBucket: s3.IBucket;
     ingestionQueue: sqs.IQueue;
     ingestionRepo: ecr.IRepository;
+    parseAndChunkRepo: ecr.IRepository;
     encodeRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
     storeS3Repo: ecr.IRepository;
     updateDynamoDbRepo: ecr.IRepository;
     ingestionImageTag?: string;
+    parseAndChunkImageTag?: string;
     encodeImageTag?: string;
     storeEmbeddingsImageTag?: string;
     storeS3ImageTag?: string;
@@ -34,6 +36,7 @@ export class LambdaStack extends cdk.Stack {
 
     public readonly ingestionLambda: lambda.Function;
     public readonly ingestNotesLambda: lambda.Function;
+    public readonly parseAndChunkLambda: DockerImageFunction;
     public readonly encodeLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly storeS3Lambda: DockerImageFunction;
@@ -90,8 +93,20 @@ export class LambdaStack extends cdk.Stack {
 
         /**
          * Processing Workflow
-         * Split into 3 steps: Encode -> Store Zilliz -> Store S3
+         * Split into 4 steps: ParseAndChunk -> Encode -> Store Zilliz -> Store S3
          */
+
+        // 0. Parse And Chunk Lambda
+        this.parseAndChunkLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-parse-and-chunk-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-parse-and-chunk-lambda`,
+            code: DockerImageCode.fromEcr(props.parseAndChunkRepo, {
+                tagOrDigest: props.parseAndChunkImageTag || 'parse-and-chunk-latest',
+                cmd: ['handlers.parse_and_chunk_lambda.handler'],
+            }),
+            memorySize: 1024,
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+        });
 
         // 1. Encode Lambda
         this.encodeLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-encode-lambda`, {
