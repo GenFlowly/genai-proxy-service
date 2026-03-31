@@ -63,8 +63,8 @@ jobs:
       - name: Deploy ECR stack first to create repositories
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         run: |
-          echo "Skipping ECR stack early deploy to safely bypass CloudFormation export locks..."
-          # cdk deploy encoding-service-EcrStack --require-approval never
+          echo "Deploying ECR stack to create repositories..."
+          cdk deploy encoding-service-EcrStack --require-approval never
         env:
           # Dummy values to satisfy bin/cdk.ts validation during ECR stack deployment
           INGESTION_IMAGE_TAG: "placeholder"
@@ -158,20 +158,8 @@ jobs:
           INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
           INGESTION_IMAGE_TAG: ${{ env.INGESTION_IMAGE_TAG }}
           PARSE_AND_CHUNK_IMAGE_TAG: ${{ env.PARSE_AND_CHUNK_IMAGE_TAG }}
-          RETRIEVAL_IMAGE_TAG: ${{ env.RETRIEVAL_IMAGE_TAG }}
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
           CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
-        run: |
-          echo "Phase 1: Deploying Lambdas and StateMachines exclusively to organically break CloudFormation ECR export locks..."
-          cdk deploy encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack --exclusively --require-approval never
-          
-          echo "Force-Purging Orphaned ECR Repositories to bypass CloudFormation 'Non-Empty' data-loss safeguards..."
-          aws ecr delete-repository --repository-name encoding-service-development-encode-repo --force || true
-          aws ecr delete-repository --repository-name encoding-service-development-store-embeddings-repo --force || true
-          aws ecr delete-repository --repository-name encoding-service-development-store-s3-repo --force || true
-          aws ecr delete-repository --repository-name encoding-service-development-update-dynamodb-repo --force || true
-
-          echo "Phase 2: Deploying remaining infrastructure safely..."
-          cdk deploy "encoding-service-*" --require-approval never
+        run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
