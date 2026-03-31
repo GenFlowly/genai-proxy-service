@@ -69,6 +69,8 @@ jobs:
           # Dummy values to satisfy bin/cdk.ts validation during ECR stack deployment
           INGESTION_IMAGE_TAG: "placeholder"
           PARSE_AND_CHUNK_IMAGE_TAG: "placeholder"
+          CREATE_EMBEDDINGS_IMAGE_TAG: "placeholder"
+          STORE_EMBEDDINGS_IMAGE_TAG: "placeholder"
 
       - name: Get ECR Repository URIs
         id: get-ecr-uri
@@ -88,6 +90,22 @@ jobs:
           echo "PARSE_AND_CHUNK_ECR_URI=$PARSE_AND_CHUNK_ECR_URI" >> $GITHUB_ENV
           echo "PARSE_AND_CHUNK_ECR_REPO=$(basename $PARSE_AND_CHUNK_ECR_URI)" >> $GITHUB_ENV
           echo "Using Parse and Chunk Lambda ECR: $PARSE_AND_CHUNK_ECR_URI"
+          
+          CREATE_EMBEDDINGS_ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name encoding-service-EcrStack \
+            --query "Stacks[0].Outputs[?OutputKey=='CreateEmbeddingsRepoUri'].OutputValue" \
+            --output text)
+          echo "CREATE_EMBEDDINGS_ECR_URI=$CREATE_EMBEDDINGS_ECR_URI" >> $GITHUB_ENV
+          echo "CREATE_EMBEDDINGS_ECR_REPO=$(basename $CREATE_EMBEDDINGS_ECR_URI)" >> $GITHUB_ENV
+          echo "Using Create Embeddings Lambda ECR: $CREATE_EMBEDDINGS_ECR_URI"
+
+          STORE_EMBEDDINGS_ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name encoding-service-EcrStack \
+            --query "Stacks[0].Outputs[?OutputKey=='StoreEmbeddingsRepoUri'].OutputValue" \
+            --output text)
+          echo "STORE_EMBEDDINGS_ECR_URI=$STORE_EMBEDDINGS_ECR_URI" >> $GITHUB_ENV
+          echo "STORE_EMBEDDINGS_ECR_REPO=$(basename $STORE_EMBEDDINGS_ECR_URI)" >> $GITHUB_ENV
+          echo "Using Store Embeddings Lambda ECR: $STORE_EMBEDDINGS_ECR_URI"
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -152,12 +170,61 @@ jobs:
           docker rmi parse-and-chunk-lambda:${GITHUB_SHA::7}
           docker system prune -f
 
+      - name: Build Create Embeddings Lambda Docker image
+        working-directory: encoding-server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -f Dockerfile.create_embeddings -t create-embeddings-lambda:$IMAGE_TAG .
+          docker tag create-embeddings-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-$IMAGE_TAG
+          docker tag create-embeddings-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-latest
+          echo "CREATE_EMBEDDINGS_IMAGE_URI=$ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "CREATE_EMBEDDINGS_IMAGE_TAG=create-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Push Create Embeddings Lambda Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push $CREATE_EMBEDDINGS_IMAGE_URI
+          docker push $ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-latest
+          echo "Pushed Create Embeddings Lambda: $CREATE_EMBEDDINGS_IMAGE_URI and create-embeddings-latest"
+          docker rmi $CREATE_EMBEDDINGS_IMAGE_URI
+          docker rmi $ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-latest
+          docker rmi create-embeddings-lambda:${GITHUB_SHA::7}
+          docker system prune -f
+
+      - name: Build Store Embeddings Lambda Docker image
+        working-directory: encoding-server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -f Dockerfile.store_embeddings -t store-embeddings-lambda:$IMAGE_TAG .
+          docker tag store-embeddings-lambda:$IMAGE_TAG $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-$IMAGE_TAG
+          docker tag store-embeddings-lambda:$IMAGE_TAG $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-latest
+          echo "STORE_EMBEDDINGS_IMAGE_URI=$ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "STORE_EMBEDDINGS_IMAGE_TAG=store-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Push Store Embeddings Lambda Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push $STORE_EMBEDDINGS_IMAGE_URI
+          docker push $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-latest
+          echo "Pushed Store Embeddings Lambda: $STORE_EMBEDDINGS_IMAGE_URI and store-embeddings-latest"
+          docker rmi $STORE_EMBEDDINGS_IMAGE_URI
+          docker rmi $ECR_REGISTRY/$STORE_EMBEDDINGS_ECR_REPO:store-embeddings-latest
+          docker rmi store-embeddings-lambda:${GITHUB_SHA::7}
+          docker system prune -f
+
       - name: Deploy S3Stack, SqsStack, LambdaStack, StepFunctionsV2Stack, ApiGatewayStack
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         env:
-          INGESTION_IMAGE_URI: ${{ env.INGESTION_IMAGE_URI }}
           INGESTION_IMAGE_TAG: ${{ env.INGESTION_IMAGE_TAG }}
           PARSE_AND_CHUNK_IMAGE_TAG: ${{ env.PARSE_AND_CHUNK_IMAGE_TAG }}
+          CREATE_EMBEDDINGS_IMAGE_TAG: ${{ env.CREATE_EMBEDDINGS_IMAGE_TAG }}
+          STORE_EMBEDDINGS_IMAGE_TAG: ${{ env.STORE_EMBEDDINGS_IMAGE_TAG }}
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
