@@ -80,10 +80,7 @@ class EmailProcessor(DataProcessor):
         return f"{email.subject}\n\n{email.body}"
 
     def get_collection_name(self, state: MemoryRequestInternalState) -> str:
-        """
-        Get the Milvus collection name for emails.
-        """
-        model_name = state.raw_data.get('model_name', 'all-MiniLM-L6-v2')
+        model_name = state.model_name or 'all-MiniLM-L6-v2'
         safe_model_name = model_name.replace('-', '_')
         return f"{state.customer_id}_email_{safe_model_name}"
 
