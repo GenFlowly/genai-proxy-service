@@ -97,9 +97,12 @@ export class LambdaStack extends cdk.Stack {
                 tagOrDigest: props.parseAndChunkImageTag || 'parse-and-chunk-latest',
                 cmd: ['handlers.parse_and_chunk_lambda.handler'],
             }),
-            memorySize: 1024,
+            memorySize: 3008,
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
+            environment: {
+                JOBLIB_TEMP_FOLDER: '/tmp',
+            },
         });
 
         // 1. Embed Lambda natively decoupled
@@ -109,9 +112,12 @@ export class LambdaStack extends cdk.Stack {
                 tagOrDigest: props.embedImageTag || 'embed-latest',
                 cmd: ['handlers.create_embeddings_lambda.handler'],
             }),
-            memorySize: 3008, // Massive parallel compute mathematically isolated
+            memorySize: 3008,
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
+            environment: {
+                JOBLIB_TEMP_FOLDER: '/tmp',
+            },
         });
 
         // 2. Store Embeddings Lambda natively rewritten cleanly
