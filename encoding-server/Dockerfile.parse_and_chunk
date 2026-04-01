@@ -12,7 +12,12 @@ RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements-parse-an
 # Runtime stage
 FROM public.ecr.aws/lambda/python:3.11
 
-# Copy installed dependencies to Lambda task directory
+# Redirect HuggingFace cache to /tmp (the only writable dir in Lambda)
+ENV HF_HOME=/tmp/hf_cache
+ENV TRANSFORMERS_CACHE=/tmp/hf_cache
+ENV SENTENCE_TRANSFORMERS_HOME=/tmp/hf_cache
+
+# Copy installed dependencies (including baked-in model) to Lambda task directory
 COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 
 # Copy application code
