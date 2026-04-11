@@ -416,13 +416,15 @@ class DynamoDBProvider(
     suspend fun saveCustomerSupabaseConfig(
         customerId: String,
         encryptedEndpoint: String,
-        encryptedToken: String
+        encryptedToken: String,
+        encryptedPassword: String
     ) = withContext(Dispatchers.IO) {
         try {
             val item = withTimestamps(mapOf(
                 CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
                 "endpoint" to AttributeValue.builder().s(encryptedEndpoint).build(),
                 "token" to AttributeValue.builder().s(encryptedToken).build(),
+                "password" to AttributeValue.builder().s(encryptedPassword).build(),
                 "isConfigValid" to AttributeValue.builder().bool(true).build()
             ))
 

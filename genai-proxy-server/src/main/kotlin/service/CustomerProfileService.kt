@@ -125,11 +125,13 @@ class CustomerProfileService(
     suspend fun storeCustomerSupabaseConfig(
         customerId: String,
         endpoint: String,
-        token: String
+        token: String,
+        password: String
     ): Boolean {
         val encryptedEndpoint = kmsProvider.encrypt(endpoint)
         val encryptedToken = kmsProvider.encrypt(token)
-        dynamoDBProvider.saveCustomerSupabaseConfig(customerId, encryptedEndpoint, encryptedToken)
+        val encryptedPassword = kmsProvider.encrypt(password)
+        dynamoDBProvider.saveCustomerSupabaseConfig(customerId, encryptedEndpoint, encryptedToken, encryptedPassword)
         return true
     }
 

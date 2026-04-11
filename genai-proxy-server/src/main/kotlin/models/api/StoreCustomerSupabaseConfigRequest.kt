@@ -5,7 +5,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class StoreCustomerSupabaseConfigRequest(
     val endpoint: String,
-    val token: String
+    val token: String,
+    val password: String
 )
 
 @Serializable

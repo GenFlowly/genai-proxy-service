@@ -6,6 +6,7 @@ export enum SupabaseConfigStatusValue {
 export interface StoreCustomerSupabaseConfigRequest {
     endpoint: string;
     token: string;
+    password?: string;
 }
 
 export interface SupabaseConfigStatus {

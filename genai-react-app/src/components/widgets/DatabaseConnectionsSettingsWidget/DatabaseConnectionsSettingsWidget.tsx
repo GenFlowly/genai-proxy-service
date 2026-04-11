@@ -20,6 +20,7 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
 
     const [supabaseEndpoint, setSupabaseEndpoint] = useState<string>('')
     const [supabaseKey, setSupabaseKey] = useState<string>('')
+    const [supabasePassword, setSupabasePassword] = useState<string>('')
     const [savingSupabase, setSavingSupabase] = useState<boolean>(false)
 
     const handleSaveZilliz = async () => {
@@ -97,7 +98,8 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
             const token = await getAccessTokenSilently()
             const response = await storeCustomerSupabaseConfig(token, {
                 endpoint: supabaseEndpoint,
-                token: supabaseKey
+                token: supabaseKey,
+                password: supabasePassword
             })
 
             if (response.configStatus && response.configStatus.updateSuccessful) {
@@ -107,6 +109,7 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
             }
             setSupabaseEndpoint('')
             setSupabaseKey('')
+            setSupabasePassword('')
             showToast('Supabase settings saved successfully.')
         } catch (error: any) {
             console.error(error)
@@ -163,14 +166,21 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
                             hint="Key"
                             value={supabaseKey}
                             onChange={e => setSupabaseKey(e.target.value)}
-                            placeholder="your-anon-key"
+                            placeholder="your-anon-key / service_role"
+                        />
+                        <InputTextWithHint
+                            hint="Password"
+                            value={supabasePassword}
+                            onChange={e => setSupabasePassword(e.target.value)}
+                            placeholder="PostgreSQL Database Password"
+                            type="password"
                         />
                     </div>
                     <PillButton
                         onClick={handleSaveSupabase}
                         label={savingSupabase ? 'Saving...' : 'Save'}
                         icon={ICONS.SAVE_ICON}
-                        disabled={savingSupabase || !supabaseEndpoint.trim() || !supabaseKey.trim()}
+                        disabled={savingSupabase || !supabaseEndpoint.trim() || !supabaseKey.trim() || !supabasePassword.trim()}
                     />
                 </div>
             </div>
