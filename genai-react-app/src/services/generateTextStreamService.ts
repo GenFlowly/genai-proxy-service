@@ -27,7 +27,8 @@ export async function generateTextStream(
     token: string,
     request: GenerateTextStreamRequest,
     onDelta: (chunk: string) => void,
-    onMetadata?: (metadata: StreamMetadata) => void
+    onMetadata?: (metadata: StreamMetadata) => void,
+    signal?: AbortSignal
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -36,6 +37,7 @@ export async function generateTextStream(
             Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(request),
+        signal,
     });
 
     if (!response.ok) {

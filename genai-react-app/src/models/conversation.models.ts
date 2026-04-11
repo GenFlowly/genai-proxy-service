@@ -47,6 +47,7 @@ export interface IConversationContext {
     updateResponseInConversationBlock: (conversationBlockId: string, prompt: string) => void
     generateResponses: (conversationBlockId: string, prompt?: string, selectedMessageId?: string | null) => void
     generateResponsesStream: (conversationBlockId: string, prompt?: string, selectedMessageId?: string | null) => void
+    stopGenerating: (blockId?: string) => void
 
     /** Per-block selected response management */
     selectedResponseByBlock: Record<string, string | null>
