@@ -35,20 +35,30 @@ class ConversationService(
                 )
 
                 // Check next for assistant response
-                if (i + 1 < messages.size) {
-                    val nextMsg = messages[i+1]
+                val responses = mutableListOf<GenerateTextResponse>()
+                while (i + 1 < messages.size) {
+                    val nextMsg = messages[i + 1]
                     if (nextMsg.role == "assistant") {
                         val vendor = nextMsg.aiConfig.firstOrNull()?.aiVendor?.name
-                        responseObj = GenerateTextResponse(
-                            text = nextMsg.text,
-                            aiVendor = vendor,
-                            conversationId = conversationId,
-                            messageId = nextMsg.messageId
+                        responses.add(
+                            GenerateTextResponse(
+                                text = nextMsg.text,
+                                aiVendor = vendor,
+                                conversationId = conversationId,
+                                messageId = nextMsg.messageId
+                            )
                         )
                         i++ // consume next message
+                    } else {
+                        break
                     }
                 }
-                pairs.add(PromptAndResponse(prompt, responseObj))
+                
+                if (responses.isNotEmpty()) {
+                    responseObj = responses.first()
+                }
+                
+                pairs.add(PromptAndResponse(prompt, responseObj, responses))
             }
             i++
         }
