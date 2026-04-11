@@ -10,7 +10,7 @@ export interface PageConfig {
 export const PAGE_WIDGET_CONFIG: PageConfig[] = [
     {
         pageId: 'CHAT_PAGE',
-        leftSidebar: ['INSTRUCTION_SIDEBAR', 'THREAD_LIST'],
+        leftSidebar: ['CONVERSATION_HISTORY_SIDEBAR_WIDGET', 'THREAD_LIST'],
         rightSidebar: ['NEW_CHAT', 'AI_VENDOR', 'TOKEN_COUNTER'],
         centerSection: ['INSTRUCTION_WIDGET', 'CONVERSATION_LIST'],
     },

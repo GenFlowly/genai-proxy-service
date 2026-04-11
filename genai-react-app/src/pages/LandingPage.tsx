@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import Navbar from '../components/navbar/Navbar'
 import LeftSidebar from '../components/sections/LeftSidebar/LeftSidebar'
+import ConversationHistoryComponent from '../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent'
 import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
 import CenterSection from '../components/sections/CenterSection/CenterSection'
 import { useConversation } from '../context/ConversationContext'
@@ -16,9 +17,15 @@ function LandingPageContent() {
     // In future, you could dynamically pick config based on 'useConversation' or 'routeId'
     usePageTitle()
     const config = getPageConfig('CHAT_PAGE')
+    const { isHistoryWidgetExpanded } = useLayout()
 
     return (
         <div className={styles.layout}>
+            {isHistoryWidgetExpanded && config.pageId === 'CHAT_PAGE' && (
+                <div className={styles.historySidebar}>
+                    <ConversationHistoryComponent />
+                </div>
+            )}
             <LeftSidebar widgetIds={config.leftSidebar} />
             <CenterSection widgetIds={config.centerSection} />
             <RightSidebar widgetIds={config.rightSidebar} />

@@ -10,4 +10,6 @@ export interface LayoutContextType {
     setRightSidebarExpanded: (visible: boolean) => void
     isInstructionWidgetExpanded: boolean
     setInstructionWidgetExpanded: (expanded: boolean) => void
+    isHistoryWidgetExpanded: boolean
+    setHistoryWidgetExpanded: (expanded: boolean) => void
 }

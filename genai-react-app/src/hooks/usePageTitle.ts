@@ -3,7 +3,7 @@ import { useLocation, useParams } from 'react-router-dom'
 import { useSidebarMenu } from '../context/SidebarMenuContext'
 import { SIDEBAR_MENU_REGISTRY } from '../config/SidebarMenuConfig'
 
-const DEFAULT_TITLE = 'Genflowly'
+const DEFAULT_TITLE = 'Privacy AI'
 
 const ROUTE_TITLES: Record<string, string> = {
     '/chat': DEFAULT_TITLE,
@@ -11,8 +11,8 @@ const ROUTE_TITLES: Record<string, string> = {
 }
 
 const WIDGET_TITLES: Record<string, string> = {
-    'CONFIGURE_AI_VENDOR_SETTINGS': `AI Vendor API Keys Settings | ${DEFAULT_TITLE}`,
-    'DATABASE_CONNECTIONS_SETTINGS': `Database Settings | ${DEFAULT_TITLE}`,
+    'CONFIGURE_AI_VENDOR_SETTINGS': `AI Vendor API Keys Settings`,
+    'DATABASE_CONNECTIONS_SETTINGS': `Database Settings`,
 }
 
 export const usePageTitle = () => {

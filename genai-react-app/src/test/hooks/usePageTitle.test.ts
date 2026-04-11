@@ -14,7 +14,7 @@ jest.mock('../../context/SidebarMenuContext', () => ({
 }));
 
 describe('usePageTitle Hook', () => {
-    const DEFAULT_TITLE = 'Genflowly';
+    const DEFAULT_TITLE = 'Privacy AI';
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -65,7 +65,7 @@ describe('usePageTitle Hook', () => {
 
         renderHook(() => usePageTitle());
 
-        expect(document.title).toBe(`AI Vendor API Keys Settings | ${DEFAULT_TITLE}`);
+        expect(document.title).toBe(`AI Vendor API Keys Settings`);
     });
 
     test('sets "Database Settings" title for database settings widget', () => {
@@ -77,6 +77,6 @@ describe('usePageTitle Hook', () => {
 
         renderHook(() => usePageTitle());
 
-        expect(document.title).toBe(`Database Settings | ${DEFAULT_TITLE}`);
+        expect(document.title).toBe(`Database Settings`);
     });
 });

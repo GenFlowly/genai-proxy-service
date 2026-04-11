@@ -1,4 +1,5 @@
 @import '../styles/variables.scss';
+@import '../styles/mixins.scss';
 
 .page {
   height: 100vh; // Fixed height instead of min-height
@@ -15,4 +16,11 @@
   width: 100%;
   overflow: hidden;
   position: relative; // Context for absolute sidebars
+}
+
+.historySidebar {
+  @include sidebar-base(right);
+  width: 14rem; // Slightly wider than default 10rem
+  background-color: var(--color-background-tertiary); // slightly distinct background
+  z-index: 15;
 }
