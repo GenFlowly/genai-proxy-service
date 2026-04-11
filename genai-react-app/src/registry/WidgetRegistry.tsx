@@ -1,6 +1,7 @@
 import React from 'react'
 
 import InstructionSidebarWidget from '../components/widgets/SidebarWidgets/InstructionSidebarWidget/InstructionSidebarWidget'
+import ConversationHistorySidebarWidget from '../components/widgets/SidebarWidgets/ConversationHistorySidebarWidget/ConversationHistorySidebarWidget'
 // @ts-ignore
 import InstructionWidget from '../components/widgets/InstructionWidget/InstructionWidget'
 import ThreadWidget from '../components/widgets/SidebarWidgets/ThreadWidget/ThreadWidget'
@@ -13,6 +14,7 @@ import ConversationListWidget from '../components/widgets/CenterWidgets/Conversa
 import ConfigureAIVendorSettingsWidget from '../components/widgets/ConfigureAIVendorSettingsWidget/ConfigureAIVendorSettingsWidget'
 import DatabaseConnectionsSettingsWidget from '../components/widgets/DatabaseConnectionsSettingsWidget/DatabaseConnectionsSettingsWidget'
 import SidebarMenu from '../components/widgets/SidebarWidgets/SidebarMenu/SidebarMenu'
+import ConversationHistoryComponent from '../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent'
 
 export interface WidgetContext {
     userId?: string
@@ -31,6 +33,10 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
     'INSTRUCTION_SIDEBAR': {
         id: 'INSTRUCTION_SIDEBAR',
         component: InstructionSidebarWidget,
+    },
+    'CONVERSATION_HISTORY_SIDEBAR_WIDGET': {
+        id: 'CONVERSATION_HISTORY_SIDEBAR_WIDGET',
+        component: ConversationHistorySidebarWidget,
     },
     'THREAD_LIST': {
         id: 'THREAD_LIST',
@@ -76,5 +82,10 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
     'SIDEBAR_MENU': {
         id: 'SIDEBAR_MENU',
         component: SidebarMenu,
+    },
+    'CONVERSATION_HISTORY': {
+        id: 'CONVERSATION_HISTORY',
+        component: ConversationHistoryComponent,
+        name: 'Conversation History',
     },
 }
