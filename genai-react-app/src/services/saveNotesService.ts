@@ -9,11 +9,14 @@ export async function saveNote(
     token: string
 ): Promise<void> {
     const payload = {
-        note_key: note.noteKey,
-        note_value: note.noteValue,
-        title: note.title,
-        created_at: note.createdAt,
-        client: note.client,
+        dataType: 'NOTE',
+        client: 'genai-react-app',
+        data: {
+            note_key: note.noteKey,
+            note_value: note.noteValue,
+            title: note.title,
+            created_at: note.createdAt,
+        }
     }
 
     const response = await fetch(API_URL, {

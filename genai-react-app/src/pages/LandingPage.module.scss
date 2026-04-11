@@ -10,8 +10,6 @@
 
 .layout {
   display: flex;
-  height: calc(100vh - 64px);
-  /* adjust for Navbar height */
   width: 100%;
   overflow: hidden;
   position: relative; // Context for absolute sidebars

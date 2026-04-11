@@ -2,7 +2,7 @@ import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
-import SettingsPage from './pages/SettingsPage'
+import SettingsPage from './pages/SettingsPage/SettingsPage'
 import MemoryPage from './pages/MemoryPage/MemoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 

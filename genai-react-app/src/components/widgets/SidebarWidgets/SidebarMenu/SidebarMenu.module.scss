@@ -1,0 +1,55 @@
+@import '../../../../styles/mixins.scss';
+
+.menuContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $color-text-secondary;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 500;
+
+  &:hover {
+    background: transparent;
+    color: $color-primary-hover;
+  }
+
+  &.active {
+    background: transparent;
+    color: $color-primary-pressed;
+
+  }
+
+  .icon {
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  &.active .icon {
+    opacity: 1;
+    color: $color-primary;
+  }
+}
+
+.collapsed {
+  .menuItem {
+    padding: 0.75rem;
+    justify-content: center;
+    
+    .label {
+      display: none;
+    }
+  }
+}

@@ -17,6 +17,9 @@ interface SidebarWidgetContainerProps {
 
     /** Optional test id */
     'data-testid'?: string
+
+    /** Override internal right sidebar state with explicit collapse state */
+    isCollapsed?: boolean
 }
 
 export default function SidebarWidgetContainer({
@@ -24,10 +27,11 @@ export default function SidebarWidgetContainer({
     collapsedContent,
     header,
     headerCollapsed,
-    'data-testid': testId
+    'data-testid': testId,
+    isCollapsed: propIsCollapsed
 }: SidebarWidgetContainerProps) {
     const { isRightSidebarExpanded } = useLayout()
-    const collapsed = !isRightSidebarExpanded
+    const collapsed = propIsCollapsed !== undefined ? propIsCollapsed : !isRightSidebarExpanded
 
     if (collapsed) {
         return (

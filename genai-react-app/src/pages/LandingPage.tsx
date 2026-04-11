@@ -6,6 +6,7 @@ import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
 import CenterSection from '../components/sections/CenterSection/CenterSection'
 import { useConversation } from '../context/ConversationContext'
 import styles from './LandingPage.module.scss'
+import { useLayout } from '../context/LayoutContext'
 
 import { getPageConfig } from '../config/PageWidgetConfig'
 
@@ -26,7 +27,12 @@ function LandingPageContent() {
 export default function LandingPage() {
     const { conversationId: routeId } = useParams<{ conversationId: string }>()
     const { loadConversation, conversationId: contextId, resetConversation } = useConversation()
+    const { setLeftSidebarExpanded } = useLayout()
     const location = useLocation()
+
+    useEffect(() => {
+        setLeftSidebarExpanded(false)
+    }, [setLeftSidebarExpanded])
 
     useEffect(() => {
         if (routeId) {
