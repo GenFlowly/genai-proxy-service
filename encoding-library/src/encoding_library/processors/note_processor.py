@@ -62,9 +62,6 @@ class NoteProcessor(DataProcessor):
         """
         notes_model = NotesModel.from_dict(state.raw_data)
 
-        if not notes_model.note_key:
-            notes_model.note_key = str(uuid.uuid4())
-            logger.info(f"Generated UUID for missing note_key: {notes_model.note_key}")
 
         records = []
         for chunk_data in embeddings:
@@ -77,7 +74,6 @@ class NoteProcessor(DataProcessor):
                 "note_key": (notes_model.note_key or "")[:256],
                 "client": state.client[:100],
                 "created_at": notes_model.created_at,
-                "s3_key": f"notes/{state.client}/{data_id}.json",
             }
             records.append(record)
 

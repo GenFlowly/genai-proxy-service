@@ -1,8 +1,10 @@
+import uuid
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 class NotesModel(BaseModel):
-    note_key: Optional[str] = None
+    notes_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    note_key: str = Field(default_factory=lambda: str(uuid.uuid4()))
     note_value: str = ''
     title: Optional[str] = None
     created_at: str = ''
@@ -17,7 +19,8 @@ class NotesModel(BaseModel):
     def from_dict(data: Dict[str, Any]) -> 'NotesModel':
         """Create NotesModel from dictionary."""
         return NotesModel(
-            note_key=data.get('note_key'),
+            notes_id=data.get('notes_id', str(uuid.uuid4())),
+            note_key=data.get('note_key', str(uuid.uuid4())),
             note_value=data.get('note_value', ''),
             title=data.get('title'),
             created_at=data.get('created_at', ''),
