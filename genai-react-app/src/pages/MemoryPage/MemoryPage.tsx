@@ -6,10 +6,12 @@ import CenterSection from '../../components/sections/CenterSection/CenterSection
 import styles from './MemoryPage.module.scss'
 import { getPageConfig } from '../../config/PageWidgetConfig'
 import { useLayout } from '../../context/LayoutContext'
+import { usePageTitle } from '../../hooks/usePageTitle'
 
 export default function MemoryPage() {
     const config = getPageConfig('MEMORY_PAGE')
     const { setRightSidebarExpanded } = useLayout()
+    usePageTitle()
 
     useEffect(() => {
         setRightSidebarExpanded(false)

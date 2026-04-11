@@ -10,6 +10,8 @@
 
 .layout {
   display: flex;
+  flex: 1 1 0;      // Fill remaining height below the navbar
+  min-height: 0;    // Allow flex child to shrink + scroll correctly
   width: 100%;
   overflow: hidden;
   position: relative; // Context for absolute sidebars

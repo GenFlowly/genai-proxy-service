@@ -250,6 +250,24 @@ describe('ConversationContext UI Integration', () => {
         expect(debugPrompt).toHaveTextContent('Loaded Prompt');
     });
 
+    test('Flow: Load existing conversation restores document.title', async () => {
+        const mockData = {
+            conversationId: 'conv-with-title',
+            blocks: [{ conversationBlockId: 'blk-1', prompt: 'P', responseMessages: [] }],
+            title: 'Saved Conversation Title'
+        };
+        (conversationService.getConversation as jest.Mock).mockResolvedValue(mockData);
+        customRender(<TestConversationUI />);
+        
+        document.title = 'Initial Title';
+
+        fireEvent.click(screen.getByTestId('load-btn'));
+        
+        await waitFor(() => {
+            expect(document.title).toBe('Saved Conversation Title | Genflowly');
+        });
+    });
+
     test('Flow: Reset conversation', async () => {
         const mockData = {
             conversationId: 'conv-123',

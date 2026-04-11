@@ -24,11 +24,13 @@ interface BackendPromptAndResponse {
 
 interface BackendGetConversationResponse {
     promptAndResponseList: BackendPromptAndResponse[];
+    title?: string | null;
 }
 
 export interface GetConversationResponse {
     conversationId: string;
     blocks: ConversationBlock[];
+    title?: string | null;
 }
 
 export async function getConversation(
@@ -80,6 +82,7 @@ export async function getConversation(
 
     return {
         conversationId,
-        blocks
+        blocks,
+        title: data.title ?? null
     };
 }

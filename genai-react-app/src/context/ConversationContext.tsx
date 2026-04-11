@@ -198,11 +198,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             if (data && data.blocks) {
                 setConversationId(data.conversationId)
                 setConversationBlockList(data.blocks)
-                // If system prompt is stored, set it too
+
+                // Restore the page title from the saved conversation title
+                if (data.title) {
+                    document.title = `${data.title} | Genflowly`
+                }
             }
         } catch (err) {
             console.error("Failed to load conversation", err)
-            // Handle error (maybe redirect to new chat?)
         }
     }, [isAuthenticated, customerId, getAccessTokenSilently])
 

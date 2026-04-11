@@ -12,6 +12,7 @@ export interface StreamMetadata {
     outputTokens: number | null;
     totalTokens: number | null;
     tokensReadFromCache: number | null;
+    conversationTitle?: string | null;
 }
 
 /**
@@ -19,6 +20,14 @@ export interface StreamMetadata {
  * Format: "\n[USAGE:{\"inputTokens\":N,\"outputTokens\":N}]"
  */
 const USAGE_SENTINEL_RE = /\n\[USAGE:(\{[^}]+\})\]$/;
+
+/**
+ * Sentinel emitted at the very START of a stream for new conversations.
+ * Format: "[TITLE:My Conversation Title]"
+ * Note: no ^ anchor — the backend emits a heartbeat space before the flow,
+ * so the sentinel may not be at position 0 of the first received chunk.
+ */
+const TITLE_SENTINEL_RE = /\[TITLE:([^\]]+)\]/;
 
 export async function generateTextStream(
     token: string,
@@ -65,13 +74,39 @@ export async function generateTextStream(
 
     const decoder = new TextDecoder("utf-8");
     let accumulated = "";
+    let titleExtracted = false;
 
     try {
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value, { stream: true });
+            let chunk = decoder.decode(value, { stream: true });
+
+            // Check for TITLE sentinel only in the first chunk (new conversations)
+            if (!titleExtracted) {
+                const titleMatch = chunk.match(TITLE_SENTINEL_RE);
+                if (titleMatch) {
+                    titleExtracted = true;
+                    try {
+                        const title = titleMatch[1].trim();
+                        document.title = `${title} | Genflowly`;
+                        if (onMetadata) {
+                            onMetadata({
+                                conversationId, messageId, responseMessageId, aiVendor,
+                                inputTokens: null, outputTokens: null, totalTokens: null,
+                                tokensReadFromCache: null,
+                                conversationTitle: title
+                            });
+                        }
+                    } catch {
+                        console.warn("Failed to parse TITLE sentinel:", titleMatch[1]);
+                    }
+                    // Strip sentinel from chunk before forwarding
+                    chunk = chunk.replace(TITLE_SENTINEL_RE, "");
+                }
+            }
+
             accumulated += chunk;
 
             // Check if the accumulated buffer ends with the USAGE sentinel.
