@@ -20,6 +20,7 @@ interface BackendResponse {
 interface BackendPromptAndResponse {
     prompt: BackendPrompt;
     response: BackendResponse;
+    responses?: BackendResponse[];
 }
 
 interface BackendGetConversationResponse {
@@ -59,17 +60,23 @@ export async function getConversation(
     const blocks: ConversationBlock[] = data.promptAndResponseList.map((item, index) => {
         const responses: Message[] = [];
 
-        // Only map if we have minimal valid response data
-        if (item.response && item.response.text) {
-            // Map backend vendor string to frontend Enum if possible, default to something safe or keep string
-            const vendor = (item.response.aiVendor as AIVendor) || AIVendor.OPENAI;
+        const responsesToProcess = item.responses && item.responses.length > 0 
+            ? item.responses 
+            : (item.response ? [item.response] : []);
 
-            responses.push({
-                aiVendor: vendor,
-                text: item.response.text,
-                messageId: item.response.messageId || `msg-${index}`,
-            });
-        }
+        responsesToProcess.forEach((resp, respIndex) => {
+            // Only map if we have minimal valid response data
+            if (resp && resp.text) {
+                // Map backend vendor string to frontend Enum if possible, default to something safe or keep string
+                const vendor = (resp.aiVendor as AIVendor) || AIVendor.OPENAI;
+
+                responses.push({
+                    aiVendor: vendor,
+                    text: resp.text,
+                    messageId: resp.messageId || `msg-${index}-${respIndex}`,
+                });
+            }
+        });
 
         return {
             // Use messageId for block ID if available to be stable, otherwise index

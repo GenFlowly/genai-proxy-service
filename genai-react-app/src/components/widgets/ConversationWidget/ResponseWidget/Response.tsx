@@ -164,7 +164,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             data-testid="response-message"
                             aria-label={`Response from ${aiVendor}`}
                         >
-                            {onFollowUp && !isLoading && isLastResponseBlock && index === filteredResponseList.length - 1 && (
+                            {onFollowUp && !isLoading && isLastResponseBlock && (
                                 <div className={styles.followUpButtonWrapper}>
                                     {(inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
                                         <div className={styles.tokenBadge}>

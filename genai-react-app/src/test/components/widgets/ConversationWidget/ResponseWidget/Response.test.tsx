@@ -90,8 +90,8 @@ describe('Response Widget Component', () => {
         render(<Response blockId="block-1" responseMessages={mockMessages} onFollowUp={onFollowUp} />);
 
         const followUpBtns = screen.getAllByTestId('follow-up-button');
-        expect(followUpBtns).toHaveLength(1); // Only last one shows
-        fireEvent.click(followUpBtns[0]); // Click the only one (msg-2)
+        expect(followUpBtns).toHaveLength(2); // Should show for all responses
+        fireEvent.click(followUpBtns[1]); // Click the second one (msg-2)
 
         expect(mockSetSelectedResponseForBlock).toHaveBeenCalledWith('block-1', 'msg-2');
         expect(onFollowUp).toHaveBeenCalledWith('msg-2');
@@ -103,21 +103,26 @@ describe('Response Widget Component', () => {
 
         const followUpBtns = screen.getAllByTestId('follow-up-button');
         expect(followUpBtns[0]).toBeDisabled();
+        expect(followUpBtns[1]).toBeDisabled();
 
-        fireEvent.click(followUpBtns[0]);
+        fireEvent.click(followUpBtns[1]);
         expect(onFollowUp).not.toHaveBeenCalled();
     });
 
     test('Follow Up button indicates "Selected" state', () => {
-        mockGetSelectedResponseForBlock.mockReturnValue('msg-2'); // Msg 2 selected (it's the only one with a button)
+        mockGetSelectedResponseForBlock.mockReturnValue('msg-2'); // Msg 2 selected
         render(<Response blockId="block-1" responseMessages={mockMessages} onFollowUp={jest.fn()} />);
 
         const btns = screen.getAllByTestId('follow-up-button'); 
-        expect(btns).toHaveLength(1);
+        expect(btns).toHaveLength(2);
         
-        // The only button (for msg-2) should say 'Selected' and be disabled
-        expect(btns[0]).toHaveTextContent('Selected');
-        expect(btns[0]).toBeDisabled();
+        // The second button (for msg-2) should say 'Selected' and be disabled
+        expect(btns[1]).toHaveTextContent('Selected');
+        expect(btns[1]).toBeDisabled();
+
+        // The first button should not say 'Selected'
+        expect(btns[0]).not.toHaveTextContent('Selected');
+        expect(btns[0]).not.toBeDisabled();
     });
     test('does NOT show Follow Up button if content is loading', () => {
         const loadingMsgs = [
