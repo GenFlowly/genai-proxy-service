@@ -1,15 +1,17 @@
 import React, { useState } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { storeCustomerVectorDBConfig } from '../../../services/storeCustomerVectorDBConfigService'
+import { storeCustomerSupabaseConfig } from '../../../services/storeCustomerSupabaseConfigService'
 import PillButton from '../../common/PillButton/PillButton'
 import { ICONS } from '../../../constants/icons'
 import { InputTextWithHint } from '../../common/InputTextWithHint/InputTextWithHint'
 import { CustomerVectorDBConfigStatus } from '../../common/CustomerVectorDBConfigStatus/CustomerVectorDBConfigStatus'
+import { CustomerSupabaseConfigStatus } from '../../common/CustomerSupabaseConfigStatus/CustomerSupabaseConfigStatus'
 import { useToast } from '../../../context/ToastContext'
 import styles from './DatabaseConnectionsSettingsWidget.module.scss'
 
 export default function DatabaseConnectionsSettingsWidget(): React.ReactElement {
-    const { customerId, getAccessTokenSilently, isAuthenticated, updateVectorDBConfigStatus } = useAuth()
+    const { customerId, getAccessTokenSilently, isAuthenticated, updateVectorDBConfigStatus, updateSupabaseConfigStatus } = useAuth()
     const { showToast } = useToast()
 
     const [zillizEndpoint, setZillizEndpoint] = useState<string>('')
@@ -93,14 +95,15 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
         setSavingSupabase(true)
         try {
             const token = await getAccessTokenSilently()
-            const response = await storeCustomerVectorDBConfig(token, {
-                vendor: 'Supabase',
+            const response = await storeCustomerSupabaseConfig(token, {
                 endpoint: supabaseEndpoint,
                 token: supabaseKey
             })
 
             if (response.configStatus && response.configStatus.updateSuccessful) {
-                updateVectorDBConfigStatus(response.configStatus)
+                if (updateSupabaseConfigStatus) {
+                    updateSupabaseConfigStatus(response.configStatus)
+                }
             }
             setSupabaseEndpoint('')
             setSupabaseKey('')
@@ -147,7 +150,7 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
                 <div className={styles.vendorSection}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span className={styles.vendorName}>Supabase</span>
-                        <CustomerVectorDBConfigStatus vendor="Supabase" />
+                        <CustomerSupabaseConfigStatus />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <InputTextWithHint

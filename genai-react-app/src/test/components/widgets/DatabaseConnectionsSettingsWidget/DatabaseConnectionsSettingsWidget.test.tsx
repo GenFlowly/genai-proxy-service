@@ -2,11 +2,13 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import DatabaseConnectionsSettingsWidget from '../../../../components/widgets/DatabaseConnectionsSettingsWidget/DatabaseConnectionsSettingsWidget';
 import { storeCustomerVectorDBConfig } from '../../../../services/storeCustomerVectorDBConfigService';
+import { storeCustomerSupabaseConfig } from '../../../../services/storeCustomerSupabaseConfigService';
 import { useAuth } from '../../../../context/AuthContext';
 import { useToast } from '../../../../context/ToastContext';
 
 // Mocks
 jest.mock('../../../../services/storeCustomerVectorDBConfigService');
+jest.mock('../../../../services/storeCustomerSupabaseConfigService');
 jest.mock('../../../../context/AuthContext');
 jest.mock('../../../../context/ToastContext');
 
@@ -14,8 +16,13 @@ jest.mock('../../../../components/common/CustomerVectorDBConfigStatus/CustomerVe
     CustomerVectorDBConfigStatus: ({ vendor }: any) => <div data-testid={`vector-db-status-${vendor}`}>Status</div>
 }));
 
+jest.mock('../../../../components/common/CustomerSupabaseConfigStatus/CustomerSupabaseConfigStatus', () => ({
+    CustomerSupabaseConfigStatus: () => <div data-testid={`supabase-status`}>Status</div>
+}));
+
 describe('DatabaseConnectionsSettingsWidget', () => {
     const mockUpdateVectorDBConfigStatus = jest.fn();
+    const mockUpdateSupabaseConfigStatus = jest.fn();
     const mockGetAccessTokenSilently = jest.fn();
     const mockShowToast = jest.fn();
 
@@ -25,7 +32,8 @@ describe('DatabaseConnectionsSettingsWidget', () => {
             customerId: '123',
             isAuthenticated: true,
             getAccessTokenSilently: mockGetAccessTokenSilently,
-            updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus
+            updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus,
+            updateSupabaseConfigStatus: mockUpdateSupabaseConfigStatus
         });
         (useToast as jest.Mock).mockReturnValue({
             showToast: mockShowToast
@@ -45,7 +53,8 @@ describe('DatabaseConnectionsSettingsWidget', () => {
             customerId: null,
             isAuthenticated: false,
             getAccessTokenSilently: mockGetAccessTokenSilently,
-            updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus
+            updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus,
+            updateSupabaseConfigStatus: mockUpdateSupabaseConfigStatus
         });
 
         render(<DatabaseConnectionsSettingsWidget />);
@@ -131,12 +140,12 @@ describe('DatabaseConnectionsSettingsWidget', () => {
         fireEvent.click(buttons[1]); // Supabase
 
         expect(mockShowToast).toHaveBeenCalledWith('Invalid Supabase endpoint format. Please enter a valid URL.');
-        expect(storeCustomerVectorDBConfig).not.toHaveBeenCalled();
+        expect(storeCustomerSupabaseConfig).not.toHaveBeenCalled();
     });
 
     test('saves valid Supabase config successfully', async () => {
-        (storeCustomerVectorDBConfig as jest.Mock).mockResolvedValue({
-            configStatus: { updateSuccessful: true, status: 'Success', vendor: 'Supabase' }
+        (storeCustomerSupabaseConfig as jest.Mock).mockResolvedValue({
+            configStatus: { updateSuccessful: true, status: 'Success' }
         });
 
         render(<DatabaseConnectionsSettingsWidget />);
@@ -150,12 +159,11 @@ describe('DatabaseConnectionsSettingsWidget', () => {
         fireEvent.click(buttons[1]);
 
         await waitFor(() => {
-            expect(storeCustomerVectorDBConfig).toHaveBeenCalledWith('token', {
-                vendor: 'Supabase',
+            expect(storeCustomerSupabaseConfig).toHaveBeenCalledWith('token', {
                 endpoint: 'https://xyz.supabase.co',
                 token: 'some-key'
             });
-            expect(mockUpdateVectorDBConfigStatus).toHaveBeenCalled();
+            expect(mockUpdateSupabaseConfigStatus).toHaveBeenCalled();
             expect(mockShowToast).toHaveBeenCalledWith('Supabase settings saved successfully.');
         });
     });
