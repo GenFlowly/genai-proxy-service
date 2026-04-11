@@ -1,0 +1,146 @@
+
+> genai-react-app@0.1.0 test
+> react-scripts test --watchAll=false --setupFilesAfterEnv '<rootDir>/src/test/setupTests.ts' --coverage --watchAll=false --setupFilesAfterEnv <rootDir>/src/test/setupTests.ts
+
+----------------------------------------------------------------|---------|----------|---------|---------|--------------------------------------
+File                                                            | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                    
+----------------------------------------------------------------|---------|----------|---------|---------|--------------------------------------
+All files                                                       |   92.35 |    82.39 |    93.5 |      94 |                                      
+ src                                                            |     100 |      100 |     100 |     100 |                                      
+  App.tsx                                                       |     100 |      100 |     100 |     100 |                                      
+  AppContent.tsx                                                |     100 |      100 |     100 |     100 |                                      
+ src/components/auth                                            |     100 |      100 |     100 |     100 |                                      
+  ProtectedRoute.tsx                                            |     100 |      100 |     100 |     100 |                                      
+ src/components/common/BrandName                                |     100 |      100 |     100 |     100 |                                      
+  BrandName.tsx                                                 |     100 |      100 |     100 |     100 |                                      
+ src/components/common/CopyToClipboard                          |      90 |     92.3 |     100 |   88.88 |                                      
+  CopyToClipboard.tsx                                           |      90 |     92.3 |     100 |   88.88 | 38                                   
+ src/components/common/CustomerSupabaseConfigStatus             |      20 |        0 |       0 |      20 |                                      
+  CustomerSupabaseConfigStatus.tsx                              |      20 |        0 |       0 |      20 | 12-17                                
+ src/components/common/CustomerVectorDBConfigStatus             |     100 |    64.28 |     100 |     100 |                                      
+  CustomerVectorDBConfigStatus.tsx                              |     100 |    64.28 |     100 |     100 | 31-37                                
+ src/components/common/Icon                                     |     100 |      100 |     100 |     100 |                                      
+  Icon.tsx                                                      |     100 |      100 |     100 |     100 |                                      
+ src/components/common/InputSelectWithHint                      |     100 |    95.45 |     100 |     100 |                                      
+  InputSelectWithHint.tsx                                       |     100 |    95.45 |     100 |     100 | 51                                   
+ src/components/common/InputTextWithHint                        |     100 |     90.9 |     100 |     100 |                                      
+  InputTextWithHint.tsx                                         |     100 |     90.9 |     100 |     100 | 31                                   
+ src/components/common/MultiPurposeButton                       |     100 |       80 |     100 |     100 |                                      
+  MultiPurposeButton.tsx                                        |     100 |       80 |     100 |     100 | 23                                   
+ src/components/common/PillButton                               |     100 |      100 |     100 |     100 |                                      
+  PillButton.tsx                                                |     100 |      100 |     100 |     100 |                                      
+ src/components/common/SidebarWidgetContainer                   |     100 |       75 |     100 |     100 |                                      
+  SidebarWidgetContainer.tsx                                    |     100 |       75 |     100 |     100 | 40-44,55-59                          
+ src/components/common/TextContainer                            |     100 |      100 |     100 |     100 |                                      
+  TextContainer.tsx                                             |     100 |      100 |     100 |     100 |                                      
+ src/components/common/ThemeToggle                              |     100 |       90 |     100 |     100 |                                      
+  ThemeToggle.tsx                                               |     100 |       90 |     100 |     100 | 10                                   
+ src/components/common/Toast                                    |     100 |      100 |     100 |     100 |                                      
+  Toast.tsx                                                     |     100 |      100 |     100 |     100 |                                      
+ src/components/common/ToggleGroupButton                        |   95.23 |    96.29 |     100 |     100 |                                      
+  ToggleGroupButton.tsx                                         |   95.23 |    96.29 |     100 |     100 | 66                                   
+ src/components/common/Tooltip                                  |   75.75 |    69.56 |     100 |   75.75 |                                      
+  Tooltip.tsx                                                   |   75.75 |    69.56 |     100 |   75.75 | 34-48,57,59                          
+ src/components/common/UserAvatarButton                         |     100 |    71.42 |     100 |     100 |                                      
+  UserAvatarButton.tsx                                          |     100 |    71.42 |     100 |     100 | 31-34                                
+ src/components/common/VendorAPIKeyStatus                       |     100 |    66.66 |     100 |     100 |                                      
+  VendorAPIKeyStatus.tsx                                        |     100 |    66.66 |     100 |     100 | 24,33-39                             
+ src/components/icons                                           |     100 |      100 |     100 |     100 |                                      
+  LoginIcon.tsx                                                 |     100 |      100 |     100 |     100 |                                      
+  SettingsIcon.tsx                                              |     100 |      100 |     100 |     100 |                                      
+  UserIcon.tsx                                                  |     100 |      100 |     100 |     100 |                                      
+ src/components/navbar                                          |     100 |      100 |     100 |     100 |                                      
+  Navbar.tsx                                                    |     100 |      100 |     100 |     100 |                                      
+ src/components/sections/CenterSection                          |   83.33 |    66.66 |   66.66 |   83.33 |                                      
+  CenterSection.tsx                                             |   83.33 |    66.66 |   66.66 |   83.33 | 18                                   
+ src/components/sections/LeftSidebar                            |     100 |      100 |     100 |     100 |                                      
+  LeftSidebar.tsx                                               |     100 |      100 |     100 |     100 |                                      
+ src/components/sections/RightSidebar                           |     100 |      100 |     100 |     100 |                                      
+  RightSidebar.tsx                                              |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/CenterWidgets/ConversationListWidget    |     100 |      100 |     100 |     100 |                                      
+  ConversationListWidget.tsx                                    |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/CenterWidgets/NotesWidget               |   93.54 |      100 |     100 |   93.54 |                                      
+  KeyValueNotes.tsx                                             |   93.33 |      100 |     100 |   93.33 | 28                                   
+  NotesWidget.tsx                                               |     100 |      100 |     100 |     100 |                                      
+  PlainNotes.tsx                                                |    92.3 |      100 |     100 |    92.3 | 25                                   
+ src/components/widgets/ConfigureAIVendorSettingsWidget         |     100 |    88.88 |     100 |     100 |                                      
+  ConfigureAIVendorSettingsWidget.tsx                           |     100 |    88.88 |     100 |     100 | 59-66                                
+ src/components/widgets/ConversationWidget/ConversationBlock    |   77.41 |    69.69 |   66.66 |   78.94 |                                      
+  ConversationBlock.tsx                                         |   77.41 |    69.69 |   66.66 |   78.94 | 50,65-67,73,78-82,115-116,126-127    
+ src/components/widgets/ConversationWidget/RequestWidget        |   87.71 |    88.67 |     100 |   93.75 |                                      
+  Request.tsx                                                   |   87.71 |    88.67 |     100 |   93.75 | 62,70,102                            
+ src/components/widgets/ConversationWidget/ResponseWidget       |   91.11 |       84 |     100 |   94.44 |                                      
+  Response.tsx                                                  |   91.11 |       84 |     100 |   94.44 | 143-144                              
+ src/components/widgets/DatabaseConnectionsSettingsWidget       |   85.91 |    77.77 |     100 |   85.91 |                                      
+  DatabaseConnectionsSettingsWidget.tsx                         |   85.91 |    77.77 |     100 |   85.91 | 36-37,68-69,77-78,85-86,115-116      
+ src/components/widgets/InstructionWidget                       |   98.38 |    84.44 |     100 |     100 |                                      
+  InstructionWidget.tsx                                         |   98.38 |    84.44 |     100 |     100 | 61,86,99,132,170,185,242,353,382-390 
+ src/components/widgets/NavbarMenuWidget                        |     100 |      100 |     100 |     100 |                                      
+  NavbarMenu.tsx                                                |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/PromptEditorWidget                      |   94.64 |    81.48 |     100 |     100 |                                      
+  CustomToolbarCommands.tsx                                     |   93.87 |    72.22 |     100 |     100 | 13,52-61,96-105                      
+  PromptEditor.tsx                                              |     100 |      100 |     100 |     100 |                                      
+  PromptEditorTooltip.tsx                                       |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/SidebarWidgets/AIVendorWidget           |   86.46 |     78.3 |      88 |   91.22 |                                      
+  AIVendorWidget.tsx                                            |   86.46 |     78.3 |      88 |   91.22 | 103,135,177-178,222-228              
+ src/components/widgets/SidebarWidgets/InstructionSidebarWidget |     100 |      100 |     100 |     100 |                                      
+  InstructionSidebarWidget.tsx                                  |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/SidebarWidgets/NewChatWidget            |     100 |    66.66 |     100 |     100 |                                      
+  NewChatWidget.tsx                                             |     100 |    66.66 |     100 |     100 | 10                                   
+ src/components/widgets/SidebarWidgets/SidebarMenu              |     100 |      100 |     100 |     100 |                                      
+  SidebarMenu.tsx                                               |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/SidebarWidgets/ThreadWidget             |   95.65 |    88.37 |     100 |   95.65 |                                      
+  ThreadPromptItem.tsx                                          |     100 |    84.61 |     100 |     100 | 25,40                                
+  ThreadResponseItem.tsx                                        |     100 |      100 |     100 |     100 |                                      
+  ThreadWidget.tsx                                              |   88.88 |    85.71 |     100 |   88.88 | 28                                   
+ src/components/widgets/SidebarWidgets/TokenCounter             |    87.5 |    94.73 |     100 |   86.66 |                                      
+  TokenCounter.tsx                                              |    87.5 |    94.73 |     100 |   86.66 | 43-44,52-53                          
+ src/config                                                     |     100 |      100 |     100 |     100 |                                      
+  PageWidgetConfig.ts                                           |     100 |      100 |     100 |     100 |                                      
+  SidebarMenuConfig.ts                                          |     100 |      100 |     100 |     100 |                                      
+  endpoints.ts                                                  |     100 |      100 |     100 |     100 |                                      
+  env.ts                                                        |     100 |      100 |     100 |     100 |                                      
+ src/constants                                                  |     100 |      100 |     100 |     100 |                                      
+  http.ts                                                       |       0 |        0 |       0 |       0 |                                      
+  icons.ts                                                      |     100 |      100 |     100 |     100 |                                      
+  vendors.ts                                                    |       0 |        0 |       0 |       0 |                                      
+ src/context                                                    |    93.6 |    77.89 |    87.5 |   96.04 |                                      
+  AIContext.tsx                                                 |   95.91 |       88 |   57.14 |   95.74 | 48,105                               
+  AuthContext.tsx                                               |   95.86 |    84.41 |   94.73 |   97.36 | 126,173,219                          
+  ConversationContext.tsx                                       |   91.28 |    73.37 |    92.3 |   94.88 | 269-276,398,439,463,470-472          
+  LayoutContext.tsx                                             |    87.5 |       75 |   77.77 |   94.11 | 17                                   
+  SidebarMenuContext.tsx                                        |     100 |      100 |   66.66 |     100 |                                      
+  ThemeContext.tsx                                              |     100 |       75 |     100 |     100 | 26,34,41-51                          
+  ToastContext.tsx                                              |   94.44 |       50 |     100 |   93.33 | 42                                   
+ src/hooks                                                      |    87.5 |    81.48 |    87.5 |   89.74 |                                      
+  usePageTitle.ts                                               |   79.16 |       75 |   66.66 |    82.6 | 42-45                                
+  useSidebarWidget.ts                                           |     100 |      100 |     100 |     100 |                                      
+  useWidgetResolver.ts                                          |     100 |      100 |     100 |     100 |                                      
+ src/pages                                                      |     100 |      100 |     100 |     100 |                                      
+  LandingPage.tsx                                               |     100 |      100 |     100 |     100 |                                      
+ src/pages/MemoryPage                                           |     100 |      100 |     100 |     100 |                                      
+  MemoryPage.tsx                                                |     100 |      100 |     100 |     100 |                                      
+ src/pages/SettingsPage                                         |     100 |       50 |     100 |     100 |                                      
+  SettingsPage.tsx                                              |     100 |       50 |     100 |     100 | 33                                   
+ src/registry                                                   |     100 |      100 |     100 |     100 |                                      
+  WidgetRegistry.tsx                                            |     100 |      100 |     100 |     100 |                                      
+ src/services                                                   |   90.51 |    84.37 |   94.11 |   90.35 |                                      
+  conversationService.ts                                        |     100 |    92.85 |     100 |     100 | 70                                   
+  generateTextService.ts                                        |     100 |      100 |     100 |     100 |                                      
+  generateTextStreamService.ts                                  |      96 |       75 |     100 |   95.83 | 103,143                              
+  getTextGenerationModelsService.ts                             |     100 |      100 |     100 |     100 |                                      
+  instructionService.ts                                         |     100 |      100 |     100 |     100 |                                      
+  onboardUserService.ts                                         |     100 |      100 |     100 |     100 |                                      
+  saveAIConfigService.ts                                        |     100 |      100 |     100 |     100 |                                      
+  saveNotesService.ts                                           |     100 |      100 |     100 |     100 |                                      
+  storeCustomerSupabaseConfigService.ts                         |      10 |        0 |       0 |      10 | 8-27                                 
+  storeCustomerVectorDBConfigService.ts                         |     100 |      100 |     100 |     100 |                                      
+  storeCustomerVendorApiKeysService.ts                          |     100 |      100 |     100 |     100 |                                      
+ src/types                                                      |       0 |        0 |       0 |       0 |                                      
+  auth.types.ts                                                 |       0 |        0 |       0 |       0 |                                      
+ src/utils                                                      |   95.49 |    86.48 |     100 |   95.19 |                                      
+  apiUtils.ts                                                   |   96.42 |      100 |     100 |   96.15 | 60                                   
+  cache.ts                                                      |   92.45 |    73.33 |     100 |      92 | 84,97,118-119                        
+  parseJwt.ts                                                   |     100 |      100 |     100 |     100 |                                      
+  tokenizer.ts                                                  |     100 |       90 |     100 |     100 | 44                                   
+----------------------------------------------------------------|---------|----------|---------|---------|--------------------------------------

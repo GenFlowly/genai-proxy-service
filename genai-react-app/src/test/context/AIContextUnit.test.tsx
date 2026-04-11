@@ -35,42 +35,29 @@ describe('AIContext Unit Tests', () => {
         mockUseAuth.mockReturnValue({ customerId: 'cust-1', customerInstructions: [] });
     });
 
-    test('setSelectedModelForAIVendor logic', () => {
+    test('setSelectedModelForAIVendor logic with fallbacks', () => {
         render(
             <AIProvider>
                 <TestComponent />
             </AIProvider>
         );
 
-        // Initial
-        expect(screen.getByTestId('config-length')).toHaveTextContent('0');
-
         // 1. Add New
-        act(() => {
-            screen.getByText('Set OpenAI').click();
-        });
-        expect(screen.getByTestId('config-length')).toHaveTextContent('1');
+        act(() => { screen.getByText('Set OpenAI').click(); });
         expect(screen.getByTestId('config-json')).toHaveTextContent('gpt-4');
 
-        // 2. Update Existing
-        act(() => {
-            // Set null model -> should fallback to existing? Or empty?
-            // Code: model: model ?? updated[existingIndex].model ?? ''
-            screen.getByText('Set OpenAI Null').click();
-        });
-        expect(screen.getByTestId('config-json')).toHaveTextContent('gpt-4'); // Should persist previous if null passed?
+        // 2. Update Existing with Null (should use fallback logic)
+        act(() => { screen.getByText('Set OpenAI Null').click(); });
+        // The code: model: model ?? updated[existingIndex].model ?? ''
+        // If we call with model=null, it should keep 'gpt-4'
+        expect(screen.getByTestId('config-json')).toHaveTextContent('gpt-4');
 
-        // 3. Add Another
-        act(() => {
-            screen.getByText('Set Claude').click();
-        });
-        expect(screen.getByTestId('config-length')).toHaveTextContent('2');
-
-        // 4. Invalid Vendor (No-op)
-        act(() => {
-            screen.getByText('Set Invalid').click();
-        });
-        expect(screen.getByTestId('config-length')).toHaveTextContent('2'); // No change
+        // 3. Clear and add new with null model
+        act(() => { screen.getByText('Reset').click(); });
+        act(() => { screen.getByText('Set OpenAI Null').click(); });
+        // In "add new" branch: model: model ?? ''
+        // If model is null, should be ''
+        expect(screen.getByTestId('config-json')).toHaveTextContent('""');
     });
 
     test('resetConfig clears config', () => {

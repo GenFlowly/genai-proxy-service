@@ -1,0 +1,9 @@
+
+> genai-react-app@0.1.0 test
+> react-scripts test --watchAll=false --setupFilesAfterEnv '<rootDir>/src/test/setupTests.ts' --testPathPattern=InstructionWidget
+
+  console.log
+    !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+

@@ -307,6 +307,34 @@ test('refreshInstructions calls service and updates state', async () => {
     });
 });
 
+test('refreshInstructions handles error during fetch', async () => {
+    const { getCustomerInstructions } = require('../../services/instructionService');
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
+    getCustomerInstructions.mockRejectedValue(new Error('Refresh Failed'));
+
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        logout: jest.fn(),
+    });
+
+    const TestRefreshError = () => {
+        const { refreshInstructions } = useAuth();
+        return <button onClick={refreshInstructions} data-testid="refresh-err-btn">Refresh Error</button>;
+    };
+
+    render(<MemoryRouter><LayoutProvider><AuthProvider><TestRefreshError /></AuthProvider></LayoutProvider></MemoryRouter>);
+
+    act(() => { screen.getByTestId('refresh-err-btn').click(); });
+
+    await waitFor(() => {
+        expect(consoleSpy).toHaveBeenCalledWith('Failed to refresh instructions', expect.any(Error));
+    });
+    consoleSpy.mockRestore();
+});
+
 test('updateInstruction updates existing and adds new', async () => {
     (onboardCustomer as jest.Mock).mockResolvedValue({
         customerId: '123',

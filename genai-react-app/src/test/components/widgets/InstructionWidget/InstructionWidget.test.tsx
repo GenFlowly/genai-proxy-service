@@ -159,13 +159,24 @@ describe('InstructionWidget Component', () => {
 
         fireEvent.click(saveBtn);
 
+        // Should close IMMEDIATELY now
+        expect(navFunctions.setInstructionWidgetExpanded).toHaveBeenCalledWith(false);
+
+        // OPTIMISTIC UPDATE verification
+        expect(navFunctions.updateInstruction).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'pending-instruction-id',
+            name: '',
+            instruction: 'New System Prompt'
+        }));
+        expect(navFunctions.setSelectedInstructionId).toHaveBeenCalledWith('pending-instruction-id');
+
         await waitFor(() => {
             expect(mockCreateInstruction).toHaveBeenCalledWith('mock-token', expect.objectContaining({
                 instruction: 'New System Prompt'
             }));
+            // FINAL RESOLUTION verification
             expect(navFunctions.setSelectedInstructionId).toHaveBeenCalledWith('new-id');
             expect(navFunctions.refreshInstructions).toHaveBeenCalled();
-            expect(navFunctions.setInstructionWidgetExpanded).toHaveBeenCalledWith(false);
         });
     });
 
@@ -295,13 +306,13 @@ describe('InstructionWidget Component', () => {
         const saveBtn = screen.getByTestId('save-instruction-button');
         fireEvent.click(saveBtn);
 
+        // Should close IMMEDIATELY now
+        expect(navFunctions.setInstructionWidgetExpanded).toHaveBeenCalledWith(false);
+
         await waitFor(() => {
             expect(mockCreateInstruction).toHaveBeenCalled();
-            expect(consoleSpy).toHaveBeenCalledWith("Failed to save instruction", expect.any(Error));
+            expect(consoleSpy).toHaveBeenCalledWith("Failed to save instruction in background", expect.any(Error));
         });
-
-        // Should NOT have closed the widget or updated context on failure
-        expect(navFunctions.setInstructionWidgetExpanded).not.toHaveBeenCalled();
 
         consoleSpy.mockRestore();
     });
@@ -416,6 +427,16 @@ describe('InstructionWidget Component', () => {
         const saveBtn = screen.getByTestId('save-instruction-button');
         fireEvent.click(saveBtn);
 
+        // Should close IMMEDIATELY
+        expect(navFunctions.setInstructionWidgetExpanded).toHaveBeenCalledWith(false);
+
+        // OPTIMISTIC UPDATE for existing
+        expect(navFunctions.updateInstruction).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'inst-1',
+            name: '',
+            instruction: 'Updated Prompt'
+        }));
+
         await waitFor(() => {
             expect(mockCreateInstruction).toHaveBeenCalledWith('mock-token', expect.objectContaining({
                 instruction: 'Updated Prompt',
@@ -504,6 +525,27 @@ describe('InstructionWidget Component', () => {
         expect(textContent.some(t => t.includes('A v2'))).toBe(true);
         expect(textContent.some(t => t.includes('B v3'))).toBe(true);
         expect(textContent.some(t => t.includes('A v1'))).toBe(false); // Should NOT show old v1
+    });
+
+    test('truncates instruction text with ellipses in dropdown labels', () => {
+        const longInstruction = 'This is a very long system instruction that definitely exceeds the fifty character limit for truncation';
+        const expectedTruncation = 'This is a very long system instruction that defini...';
+
+        mockUseAuth.mockReturnValue({
+            aiVendorAPIKeyStatusList: [{ isAPIKeyValid: true }],
+            customerInstructions: [
+                { id: 'inst-long', name: '', version: 1, instruction: longInstruction }
+            ],
+            refreshInstructions: navFunctions.refreshInstructions,
+            updateInstruction: navFunctions.updateInstruction
+        });
+
+        render(<InstructionWidget />);
+
+        const selector = screen.getByTestId('instruction-selector-collapsed');
+        const options = Array.from(selector.querySelectorAll('option'));
+        
+        expect(options.some(o => o.textContent === expectedTruncation)).toBe(true);
     });
 
     test('selects "Create Instructions" from expanded mode selector', async () => {
