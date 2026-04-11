@@ -34,6 +34,7 @@ describe('Request Widget Component', () => {
     const mockUseConversation = useConversation as jest.Mock;
     const mockUseAuth = useAuth as jest.Mock;
     const mockGenerateResponsesStream = jest.fn();
+    const mockStopGenerating = jest.fn();
     const mockSetEditorPrompt = jest.fn();
     const mockSetActiveBlockId = jest.fn();
     const mockGetSelectedResponseForBlock = jest.fn();
@@ -48,6 +49,7 @@ describe('Request Widget Component', () => {
                 prompt: ''
             }],
             generateResponsesStream: mockGenerateResponsesStream,
+            stopGenerating: mockStopGenerating,
             getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
             setEditorPrompt: mockSetEditorPrompt,
             setActiveBlockId: mockSetActiveBlockId
@@ -77,6 +79,7 @@ describe('Request Widget Component', () => {
                 prompt: 'Resolved Prompt'
             }],
             generateResponsesStream: mockGenerateResponsesStream,
+            stopGenerating: mockStopGenerating,
             getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
             setEditorPrompt: mockSetEditorPrompt,
             setActiveBlockId: mockSetActiveBlockId
@@ -125,6 +128,7 @@ describe('Request Widget Component', () => {
                 prompt: 'Ready Prompt'
             }],
             generateResponsesStream: mockGenerateResponsesStream,
+            stopGenerating: mockStopGenerating,
             getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
             setEditorPrompt: mockSetEditorPrompt,
             setActiveBlockId: mockSetActiveBlockId
@@ -137,6 +141,35 @@ describe('Request Widget Component', () => {
         fireEvent.click(btn);
 
         expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', 'Ready Prompt', 'selected-res-id');
+    });
+
+    test('renders in Editor mode with Stop Generating button when loading', () => {
+        mockUseConversation.mockReturnValue({
+            conversationBlockList: [{
+                conversationBlockId: 'block-1',
+                responseMessages: [],
+                isLoading: true,
+                prompt: 'Streaming Prompt'
+            }],
+            generateResponsesStream: mockGenerateResponsesStream,
+            stopGenerating: mockStopGenerating,
+            getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
+            setEditorPrompt: mockSetEditorPrompt,
+            setActiveBlockId: mockSetActiveBlockId
+        });
+
+        render(<Request blockId="block-1" />);
+        // Editor should be visible
+        expect(screen.getByTestId('prompt-editor')).toBeInTheDocument();
+        
+        // Button should exist
+        const btn = screen.getByTestId('generate-button');
+        expect(btn).toBeInTheDocument();
+
+        // Clicking it should call stopGenerating
+        fireEvent.click(btn);
+        expect(mockStopGenerating).toHaveBeenCalledWith('block-1');
+        expect(mockGenerateResponsesStream).not.toHaveBeenCalled();
     });
 
     test('disable Generate button if API key invalid', () => {

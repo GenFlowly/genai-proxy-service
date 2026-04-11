@@ -23,6 +23,7 @@ export default function Request({
     const {
         conversationBlockList,
         generateResponsesStream,
+        stopGenerating,
         getSelectedResponseForBlock,
         setEditorPrompt,
         setActiveBlockId
@@ -121,12 +122,11 @@ export default function Request({
     if (!conversationBlock) return null
 
     // If we have responses AND loading is finished, this block is "resolved" -> Show static text
-    // We keep the editor visible during loading so the user sees the "Generating..." button state.
-
+    // We keep the editor visible during loading so the user sees the "Stop Generating" button state.
     const displayName = customerName || user?.name || ''
     const displayPicture = customerPicture || user?.picture
 
-    if (conversationBlock.responseMessages.length > 0 || conversationBlock.isLoading) {
+    if (conversationBlock.responseMessages.length > 0 && !conversationBlock.isLoading) {
         return (
             <div className={styles.resolvedRequestContainer}
                  data-testid={testId || "resolved-request-wrapper"}>
@@ -163,13 +163,17 @@ export default function Request({
                         style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
                         <MultiPurposeButton
                             onClick={() => {
-                                if (!hasAnyValidApiKey) return
-                                const selectedId = getSelectedResponseForBlock(blockId)
-                                generateResponsesStream(blockId, draftPrompt, selectedId)
+                                if (conversationBlock.isLoading) {
+                                    stopGenerating(blockId)
+                                } else {
+                                    if (!hasAnyValidApiKey) return
+                                    const selectedId = getSelectedResponseForBlock(blockId)
+                                    generateResponsesStream(blockId, draftPrompt, selectedId)
+                                }
                             }}
-                            label={conversationBlock.isLoading ? 'Generating...' : 'Generate'}
-                            disabled={conversationBlock.isLoading || !hasAnyValidApiKey}
-                            icon={ICONS.SEND}
+                            label={conversationBlock.isLoading ? 'Stop Generating' : 'Generate'}
+                            disabled={!conversationBlock.isLoading && !hasAnyValidApiKey}
+                            icon={conversationBlock.isLoading ? undefined : ICONS.SEND}
                             data-testid="generate-button"
                         />
                     </div>

@@ -37,6 +37,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const [conversationId, setConversationId] = useState<string>('')
     const [activeBlockId, setActiveBlockId] = useState<string>('')
+    
+    // Manage aborted streams natively
+    const abortControllers = useRef<Map<string, AbortController>>(new Map())
+
+    const stopGenerating = useCallback((blockId?: string) => {
+        const idToAbort = blockId || activeBlockId;
+        if (idToAbort && abortControllers.current.has(idToAbort)) {
+             abortControllers.current.get(idToAbort)?.abort()
+             abortControllers.current.delete(idToAbort)
+        }
+    }, [activeBlockId])
 
     // ✅ Ref to always hold the latest conversationId
     const conversationIdRef = useRef(conversationId)
@@ -174,7 +185,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         onDelta: (chunk: string) => void,
         onMetadata?: (metadata: StreamMetadata) => void,
         // Added idOverride to support explicit conversation targeting (parallel streams)
-        idOverride?: string
+        idOverride?: string,
+        signal?: AbortSignal
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -186,7 +198,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta, onMetadata)
+        }, onDelta, onMetadata, signal)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -341,6 +353,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         if (!prep) return
 
         const { aiConfigs, finalSelectedResponseId, promptToUse } = prep
+        const controller = new AbortController()
+        abortControllers.current.set(id, controller)
 
         // Initialize placeholders for all selected vendors
         const timestamp = Date.now()
@@ -450,7 +464,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
                         if (onIdResolved && newConversationId) onIdResolved(newConversationId)
                     },
-                    idToUse
+                    idToUse,
+                    controller.signal
                 )
 
                 // ✅ Mark this specific message stream as finished using reliable Index targeting
@@ -540,18 +555,25 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 navigate(`/chat/${conversationIdRef.current}`)
             }
 
-
-        } catch (err) {
-            updateConversationBlock(id, {
-                responseMessages: [
-                    {
-                        aiVendor: AIVendor.OPENAI,
-                        text: 'Error generating text stream.',
-                        messageId: 'error',
-                    },
-                ],
-                isLoading: false,
-            })
+        } catch (err: any) {
+            if (err.name === 'AbortError') {
+                updateConversationBlock(id, {
+                    isLoading: false,
+                })
+            } else {
+                updateConversationBlock(id, {
+                    responseMessages: [
+                        {
+                            aiVendor: AIVendor.OPENAI,
+                            text: 'Error generating text stream.',
+                            messageId: 'error',
+                        },
+                    ],
+                    isLoading: false,
+                })
+            }
+        } finally {
+            abortControllers.current.delete(id)
         }
     }
 
@@ -581,6 +603,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 updateResponseInConversationBlock: updatePromptInConversationBlock,
                 generateResponses,
                 generateResponsesStream,
+                stopGenerating,
                 selectedResponseByBlock,
                 setSelectedResponseForBlock,
                 getSelectedResponseForBlock,
