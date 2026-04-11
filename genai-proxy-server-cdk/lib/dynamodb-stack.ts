@@ -80,6 +80,14 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        const customerSupabaseConfigTableProps: CreateTableProps = {
+            tableName: 'CustomerSupabaseConfig',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING
+            },
+        };
+
         const instructionsTableProps: CreateTableProps = {
             tableName: 'Instructions',
             partitionKey: {
@@ -122,8 +130,9 @@ export class DynamoDBStack extends cdk.Stack {
         const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
         const customerPreferencesTable = createDefaultDynamoDbTable(this, customerPreferencesTableProps);
         const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
+        const customerSupabaseConfigTable = createDefaultDynamoDbTable(this, customerSupabaseConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
 
-        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable, customerVectorDBConfigTable, instructionsTable)
+        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable, customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable)
     }
 }

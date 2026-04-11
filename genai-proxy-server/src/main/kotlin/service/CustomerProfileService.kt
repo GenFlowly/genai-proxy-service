@@ -122,6 +122,18 @@ class CustomerProfileService(
         return true
     }
 
+    suspend fun storeCustomerSupabaseConfig(
+        customerId: String,
+        endpoint: String,
+        token: String
+    ): Boolean {
+        val encryptedEndpoint = kmsProvider.encrypt(endpoint)
+        val encryptedToken = kmsProvider.encrypt(token)
+        dynamoDBProvider.saveCustomerSupabaseConfig(customerId, encryptedEndpoint, encryptedToken)
+        return true
+    }
+
+
     suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<models.VectorDBConfigStatus> {
         return dynamoDBProvider.getCustomerVectorDBConfigStatusList(customerId)
     }

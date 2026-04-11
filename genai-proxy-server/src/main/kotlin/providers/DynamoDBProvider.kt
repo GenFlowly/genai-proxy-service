@@ -413,6 +413,32 @@ class DynamoDBProvider(
         }
     }
 
+    suspend fun saveCustomerSupabaseConfig(
+        customerId: String,
+        encryptedEndpoint: String,
+        encryptedToken: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                "endpoint" to AttributeValue.builder().s(encryptedEndpoint).build(),
+                "token" to AttributeValue.builder().s(encryptedToken).build(),
+                "isConfigValid" to AttributeValue.builder().bool(true).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_SUPABASE_CONFIG_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Saved Supabase Config for $customerId to DynamoDB")
+        } catch (e: Exception) {
+            logger.error("Failed to save Supabase config to DynamoDB", e)
+            throw e
+        }
+    }
+
     suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<models.VectorDBConfigStatus> = withContext(Dispatchers.IO) {
         try {
             val getReq = GetItemRequest.builder()

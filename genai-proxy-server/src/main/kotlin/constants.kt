@@ -23,6 +23,8 @@ object DynamoDBConstants {
     const val CUSTOMER_VECTOR_DB_CONFIG_TABLE = "CustomerVectorDBConfig"
     const val VENDOR_KEY = "vendor"
 
+    const val CUSTOMER_SUPABASE_CONFIG_TABLE = "CustomerSupabaseConfig"
+
     const val INSTRUCTION_TABLE = "Instructions"
     const val INSTRUCTION_ID_KEY = "instructionId"
     const val INSTRUCTION_CREATOR_KEY = "creator"
