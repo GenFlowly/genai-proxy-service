@@ -49,8 +49,8 @@
 }
 
 .responseWrapper {
-  @include message-card-base;
-
+  // Common card styling is now handled by TextContainer's own CSS module
+  
   flex: 1 0 30rem; // Grow but don't shrink - triggers horizontal scroll when space limited
 
   // Fix for single response rendering issue
@@ -110,6 +110,6 @@
   /* 📱 Fix for mobile width overflow */
   .responseWrapper {
     flex: 1 1 auto; // Allow shrink on mobile
-    margin: 0 0.5rem 0.5rem;
+    // margin is now handled by TextContainer (inherited from message-card-base)
   }
 }

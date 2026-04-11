@@ -2,12 +2,7 @@
 @import '../../../../styles/mixins.scss';
 
 .requestWrapper {
-    @include message-card-base;
-
-    @media (max-width: 1024px) {
-        margin: 0.5rem 0.5rem;
-    }
-
+    // Card styling and responsiveness are now handled by TextContainer's own CSS module
 }
 
 .container {

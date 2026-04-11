@@ -1,11 +1,10 @@
 @import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
 
 .article {
+  @include message-card-base;
   background: $color-background;
   color: $color-text-primary;
-  border-radius: $radius-md;
-  padding: 0.5rem 2.5rem;
-  box-shadow: $shadow-sm;
   border: 1px solid $color-border-light;
   line-height: 1.7;
   transition: all 0.25s ease-in-out;
@@ -88,6 +87,7 @@
 
 @media (max-width: 1024px) {
   .article {
+    // padding is handled by message-card-base or can be adjusted here if specific inner padding needed
     padding: $spacing-md $spacing-lg;
   }
 }
