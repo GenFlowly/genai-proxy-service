@@ -1,6 +1,7 @@
 import { AIConfig } from '../context/AIContext'
 import { AIVendorAPIKeyStatus } from './storeCustomerVendorAPIKeys.models'
 import { VectorDBConfigStatusValue } from './storeCustomerVectorDBConfig.models'
+import { SupabaseConfigStatus } from './storeCustomerSupabaseConfig.models'
 import { InstructionResponse } from './instruction.models'
 
 export interface OnboardCustomerResponse {
@@ -19,4 +20,5 @@ export interface OnboardCustomerResponse {
         status: VectorDBConfigStatusValue
         updateSuccessful: boolean
     }[]
+    supabaseConfigStatus?: SupabaseConfigStatus
 }
