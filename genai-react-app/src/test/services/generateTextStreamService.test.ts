@@ -139,6 +139,47 @@ describe('generateTextStreamService', () => {
         expect(onDelta).toHaveBeenNthCalledWith(2, 'lo');
     });
 
+    test('generateTextStream extracts TITLE sentinel, updates document.title and fires onMetadata', async () => {
+        const encoder = new TextEncoder();
+        // Case: Heartbeat space followed by TITLE sentinel
+        const chunk1 = encoder.encode(' [TITLE:My Amazing Chat]Beginning of');
+        const chunk2 = encoder.encode(' response content');
+
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: chunk1 })
+                .mockResolvedValueOnce({ done: false, value: chunk2 })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+
+        const mockHeaders = new Map();
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            headers: mockHeaders,
+            body: { getReader: () => mockReader }
+        });
+
+        const onDelta = jest.fn();
+        const onMetadata = jest.fn();
+        document.title = 'Initial Title';
+
+        await generateTextStream(mockToken, mockGenerateTextStreamRequest as GenerateTextStreamRequest, onDelta, onMetadata);
+
+        // Should have updated document.title
+        expect(document.title).toBe('My Amazing Chat | Genflowly');
+
+        // Should have stripped sentinel from delta
+        expect(onDelta).toHaveBeenCalledTimes(2);
+        expect(onDelta).toHaveBeenNthCalledWith(1, ' Beginning of'); // Note the preserved space before sentinel or stripped sentinel space
+        expect(onDelta).toHaveBeenNthCalledWith(2, ' response content');
+
+        // Should have fired metadata with title
+        expect(onMetadata).toHaveBeenCalledWith(expect.objectContaining({
+            conversationTitle: 'My Amazing Chat'
+        }));
+    });
+
     test('generateTextStream throws error on non-ok response', async () => {
         mockFetchWithRetry.mockResolvedValue({
             ok: false,

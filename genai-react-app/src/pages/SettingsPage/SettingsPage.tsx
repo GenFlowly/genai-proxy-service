@@ -7,6 +7,19 @@ import CenterSection from '../../components/sections/CenterSection/CenterSection
 import { getPageConfig } from '../../config/PageWidgetConfig'
 import { SidebarMenuProvider } from '../../context/SidebarMenuContext'
 import { SIDEBAR_MENU_REGISTRY } from '../../config/SidebarMenuConfig'
+import { usePageTitle } from '../../hooks/usePageTitle'
+
+function SettingsPageInner({ config }: { config: ReturnType<typeof getPageConfig> }): React.ReactElement {
+    usePageTitle()
+    return (
+        <div className={styles.layout}>
+            <LeftSidebar widgetIds={config.leftSidebar} />
+            <div className={styles.content}>
+                <CenterSection widgetIds={config.centerSection} />
+            </div>
+        </div>
+    )
+}
 
 export default function SettingsPage(): React.ReactElement {
     const { setLeftSidebarExpanded } = useLayout()
@@ -23,12 +36,7 @@ export default function SettingsPage(): React.ReactElement {
         <SidebarMenuProvider pageId="SETTINGS_PAGE" initialWidgetId={initialWidgetId}>
             <div className={styles.page}>
                 <Navbar />
-                <div className={styles.layout}>
-                    <LeftSidebar widgetIds={config.leftSidebar} />
-                    <div className={styles.content}>
-                        <CenterSection widgetIds={config.centerSection} />
-                    </div>
-                </div>
+                <SettingsPageInner config={config} />
             </div>
         </SidebarMenuProvider>
     )

@@ -9,10 +9,12 @@ import styles from './LandingPage.module.scss'
 import { useLayout } from '../context/LayoutContext'
 
 import { getPageConfig } from '../config/PageWidgetConfig'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 function LandingPageContent() {
     // Current Chat Page uses the 'CHAT_PAGE' config
     // In future, you could dynamically pick config based on 'useConversation' or 'routeId'
+    usePageTitle()
     const config = getPageConfig('CHAT_PAGE')
 
     return (
