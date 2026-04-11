@@ -21,6 +21,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 
 class AIRequestManager(
     private val aiRequestService: AIRequestService,
@@ -29,6 +33,9 @@ class AIRequestManager(
     private val promptGenerationService: PromptGenerationService
 ) {
     private val logger = LoggerFactory.getLogger("AIRequestManager")
+
+    private val defaultAIModel: String = "gpt-5"
+    private val defaultAIVendor: AIVendor = AIVendor.OPENAI;
 
 
     private suspend fun getThreadContext(
@@ -379,8 +386,19 @@ class AIRequestManager(
         var streamTotalTokens: Long? = null
         var streamTokensReadFromCache: Long? = null
 
+        // Kick off title generation asynchronously so the stream starts immediately.
+        // It runs in parallel on IO; we await the result at the END of the flow (before USAGE sentinel).
+        val titleDeferred: Deferred<String?> = if (conversationId.isNullOrBlank()) {
+            CoroutineScope(Dispatchers.IO).async {
+                createConversationTitle(activeConversationId, customerId, userRequestRawPrompt, instructionResp?.name)
+            }
+        } else {
+            CompletableDeferred(null)
+        }
+
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
+
             try {
                 generateTextStreamWithUsage(
                     config.aiVendor,
@@ -434,6 +452,13 @@ class AIRequestManager(
                         tokensReadFromCache = streamTokensReadFromCache?.toInt()
                     )
                     conversationService.addMessageInConversation(responseMessage)
+                }
+
+                // Emit [TITLE:...] sentinel if a title was generated (awaits the parallel task).
+                // Emitted here so it arrives after all response text but before [USAGE:...].
+                val conversationTitle = titleDeferred.await()
+                if (conversationTitle != null) {
+                    emit("[TITLE:${conversationTitle}]")
                 }
 
                 // Emit a sentinel chunk so the client can extract token usage after streaming.
@@ -560,5 +585,79 @@ class AIRequestManager(
                  }
              }
         }.flowOn(kotlinx.coroutines.Dispatchers.IO)
+    }
+
+    suspend fun createConversationTitle(
+        conversationId: String,
+        customerId: String,
+        prompt: String,
+        instructionName: String? = null
+    ): String? {
+        return try {
+            val titleMessage = Message(
+                conversationId = "title-generation",
+                text = "I am starting a conversation with $instructionName " +
+                        "using" +
+                        "this prompt - $prompt. Create a short title for this" +
+                        "conversation. Just give the title",
+                client = "internal",
+                role = "user",
+                customerId = customerId,
+                systemPrompt = "",
+                aiConfig = listOf(AIConfig(defaultAIVendor, defaultAIModel)),
+                previousMessageId = null
+            )
+
+            val result = generateText(
+                defaultAIVendor,
+                defaultAIModel,
+                listOf(titleMessage),
+                "",
+                customerId
+            )
+
+            // Strip any surrounding quotes the LLM may include (e.g. "My Title" -> My Title)
+            val title = result.text.trim().removePrefix("\"").removeSuffix("\"").trim().take(200)
+            if (title.isNotBlank()) {
+                conversationService.updateConversationTitle(conversationId, customerId, title)
+                logger.info("Conversation title set for $conversationId: '$title'")
+                title
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to generate conversation title for $conversationId: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun generateInstructionPersona(
+        instructionText: String,
+        customerId: String
+    ): String {
+
+        return generateText(
+            defaultAIVendor,
+            defaultAIModel,
+            listOf(
+                Message(
+                    conversationId = "instruction-creation",
+                    text = instructionText,
+                    client = "internal",
+                    role = "user",
+                    customerId = customerId,
+                    systemPrompt = "",
+                    aiConfig = listOf(AIConfig(defaultAIVendor, defaultAIModel)),
+                    previousMessageId = null
+                )
+            ),
+            "Create a persona for this system instructions.\n" +
+                    "\n" +
+                    "The role should be generic enough to be understood what are it's key technical skills but also specific enough to not make it a broad term.\n" +
+                    "\n" +
+                    "\n" +
+                    "Return only the name of Role, nothing else",
+            customerId
+        ).text
     }
 }

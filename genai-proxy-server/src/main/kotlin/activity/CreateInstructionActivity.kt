@@ -32,29 +32,7 @@ fun Route.registerCreateInstructionRoutes(
                 val instructionName = if (!request.instructionName.isNullOrBlank()) {
                     request.instructionName
                 } else {
-                    aiRequestManager.generateText(
-                        AIVendor.OPENAI,
-                        "gpt-3.5-turbo",
-                        listOf(
-                            Message(
-                                conversationId = "instruction-creation",
-                                text = request.instruction,
-                                client = "internal",
-                                role = "user",
-                                customerId = customerId,
-                                systemPrompt = "",
-                                aiConfig = listOf(AIConfig(AIVendor.OPENAI, "gpt-3.5-turbo")),
-                                previousMessageId = null
-                            )
-                        ),
-                        "Create a persona for this system instructions.\n" +
-                                "\n" +
-                                "The role should be generic enough to be understood what are it's key technical skills but also specific enough to not make it a broad term.\n" +
-                                "\n" +
-                                "\n" +
-                                "Return only the name of Role, nothing else",
-                        customerId
-                    ).text
+                    aiRequestManager.generateInstructionPersona(request.instruction, customerId)
                 }
                 val response = customerProfileService.createInstruction(
                     customerId, instructionName, request.instruction,

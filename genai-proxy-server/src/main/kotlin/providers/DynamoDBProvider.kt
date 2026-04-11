@@ -116,6 +116,50 @@ class DynamoDBProvider(
         }
     }
 
+    suspend fun updateConversationTitle(
+        conversationId: String,
+        customerId: String,
+        title: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val updateReq = software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                ))
+                .updateExpression("SET #t = :title")
+                .expressionAttributeNames(mapOf("#t" to "title"))
+                .expressionAttributeValues(mapOf(":title" to AttributeValue.builder().s(title).build()))
+                .build()
+
+            dynamoDbClient.updateItem(updateReq)
+            logger.info("Updated title for conversation $conversationId to '$title'")
+        } catch (e: Exception) {
+            logger.error("Failed to update conversation title in DynamoDB", e)
+        }
+    }
+
+    suspend fun getConversationTitle(
+        conversationId: String,
+        customerId: String
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val getReq = GetItemRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                ))
+                .build()
+            val response = dynamoDbClient.getItem(getReq)
+            response.item()?.get("title")?.s()
+        } catch (e: Exception) {
+            logger.error("Failed to get conversation title from DynamoDB", e)
+            null
+        }
+    }
+
     suspend fun getMessage(
         conversationId: String,
         messageId: String
@@ -474,6 +518,39 @@ class DynamoDBProvider(
         } catch (e: Exception) {
             logger.error("Failed to get Vector DB config status list from DynamoDB", e)
             emptyList()
+        }
+    }
+
+    suspend fun getCustomerSupabaseConfigStatus(customerId: String): models.SupabaseConfigStatus? = withContext(Dispatchers.IO) {
+        try {
+            val getReq = GetItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_SUPABASE_CONFIG_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()
+                ))
+                .build()
+
+            val response = dynamoDbClient.getItem(getReq)
+            
+            if (response.hasItem()) {
+                val item = response.item()
+                val status = if (item["isConfigValid"]?.bool() == true) {
+                    models.SupabaseConfigStatusValue.PRESENT
+                } else {
+                    models.SupabaseConfigStatusValue.NOT_SET
+                }
+
+                models.SupabaseConfigStatus(
+                    isConfigValid = item["isConfigValid"]?.bool() ?: false,
+                    status = status,
+                    updateSuccessful = true
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to get Supabase config status from DynamoDB", e)
+            null
         }
     }
 

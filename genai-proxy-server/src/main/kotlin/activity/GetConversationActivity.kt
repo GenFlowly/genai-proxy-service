@@ -9,6 +9,7 @@ import io.ktor.server.routing.get
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.ConversationService
+import com.genflowly.utils.requireAuthenticatedCustomerId
 
 private val logger = LoggerFactory.getLogger("GetConversationRoute")
 
@@ -29,7 +30,9 @@ fun Route.registerGetConversationRoutes(
                     return@get
                 }
 
-                val response = conversationService.getConversationHistory(conversationId)
+                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+
+                val response = conversationService.getConversationHistory(conversationId, customerId)
                 call.respond(response)
 
             } catch (e: Exception) {
