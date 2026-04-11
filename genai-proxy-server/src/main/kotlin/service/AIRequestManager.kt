@@ -386,16 +386,6 @@ class AIRequestManager(
         var streamTotalTokens: Long? = null
         var streamTokensReadFromCache: Long? = null
 
-        // Kick off title generation asynchronously so the stream starts immediately.
-        // It runs in parallel on IO; we await the result at the END of the flow (before USAGE sentinel).
-        val titleDeferred: Deferred<String?> = if (conversationId.isNullOrBlank()) {
-            CoroutineScope(Dispatchers.IO).async {
-                createConversationTitle(activeConversationId, customerId, userRequestRawPrompt, instructionResp?.name)
-            }
-        } else {
-            CompletableDeferred(null)
-        }
-
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
 
@@ -452,13 +442,6 @@ class AIRequestManager(
                         tokensReadFromCache = streamTokensReadFromCache?.toInt()
                     )
                     conversationService.addMessageInConversation(responseMessage)
-                }
-
-                // Emit [TITLE:...] sentinel if a title was generated (awaits the parallel task).
-                // Emitted here so it arrives after all response text but before [USAGE:...].
-                val conversationTitle = titleDeferred.await()
-                if (conversationTitle != null) {
-                    emit("[TITLE:${conversationTitle}]")
                 }
 
                 // Emit a sentinel chunk so the client can extract token usage after streaming.
