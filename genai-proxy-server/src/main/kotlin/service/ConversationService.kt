@@ -3,6 +3,7 @@ package com.genflowly.service
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import com.genflowly.models.api.GetConversationResponse
+import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.models.api.PromptAndResponse
 import models.Conversation
 import models.GenerateTextResponse
@@ -75,6 +76,14 @@ class ConversationService(
         title: String
     ) {
         dynamoDBProvider.updateConversationTitle(conversationId, customerId, title)
+    }
+
+    suspend fun getCustomerConversationsPaginated(
+        customerId: String,
+        pageSize: Int = 10,
+        exclusiveStartKey: String? = null
+    ): GetCustomerConversationsResponse {
+        return dynamoDBProvider.getConversationsByCustomerPaginated(customerId, pageSize, exclusiveStartKey)
     }
 
     private suspend fun getMessage(

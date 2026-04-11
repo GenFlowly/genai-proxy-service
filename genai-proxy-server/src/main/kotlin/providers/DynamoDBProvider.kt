@@ -4,6 +4,7 @@ import com.genflowly.DynamoDBConstants.AI_VENDOR_KEY
 import com.genflowly.DynamoDBConstants.CLIENT_SORT_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_ID_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
+import com.genflowly.DynamoDBConstants.CONVERSATION_CUSTOMER_GSI_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_API_KEY_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_PREFERENCES_TABLE
@@ -35,6 +36,11 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
+import com.genflowly.models.api.ConversationSummary
+import com.genflowly.models.api.GetCustomerConversationsResponse
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 
 class DynamoDBProvider(
     private val dynamoDbClient: DynamoDbClient,
@@ -820,5 +826,60 @@ class DynamoDBProvider(
             instructions = item[INSTRUCTION_CONTENT_KEY]?.s() ?: "",
             version = item[INSTRUCTION_VERSION_KEY]?.n()?.toInt() ?: 1
         )
+    }
+
+    /**
+     * Fetches up to [pageSize] conversations for the given customer, newest first,
+     * using a GSI on the Conversation table keyed by customerId.
+     *
+     * @param customerId   Partition value to filter by.
+     * @param pageSize     Maximum number of items to return (default 10).
+     * @param exclusiveStartKey  Opaque JSON string returned as [GetCustomerConversationsResponse.lastEvaluatedKey]
+     *                     from a previous call. Pass null for the first page.
+     */
+    suspend fun getConversationsByCustomerPaginated(
+        customerId: String,
+        pageSize: Int = 10,
+        exclusiveStartKey: String? = null
+    ): GetCustomerConversationsResponse = withContext(Dispatchers.IO) {
+        val queryBuilder = QueryRequest.builder()
+            .tableName(CONVERSATION_TABLE)
+            .indexName(CONVERSATION_CUSTOMER_GSI_KEY)
+            .keyConditionExpression("#cid = :cid")
+            .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+            .expressionAttributeValues(mapOf(
+                ":cid" to AttributeValue.builder().s(customerId).build()
+            ))
+            .scanIndexForward(false) // newest first (descending by sort key)
+            .limit(pageSize)
+
+        // Resume from prior page if a continuation token was supplied
+        if (!exclusiveStartKey.isNullOrBlank()) {
+            try {
+                val keyMap: Map<String, String> = Json.decodeFromString(exclusiveStartKey)
+                val startKey = keyMap.mapValues { (_, v) -> AttributeValue.builder().s(v).build() }
+                queryBuilder.exclusiveStartKey(startKey)
+            } catch (e: Exception) {
+                logger.warn("Failed to parse exclusiveStartKey, starting from beginning: ${e.message}")
+            }
+        }
+
+        val response = dynamoDbClient.query(queryBuilder.build())
+
+        val conversations = response.items().mapNotNull { item ->
+            val convId    = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
+            val title     = item["title"]?.s()
+            val createdAt = item["createdAt"]?.s()
+            val updatedAt = item["updatedAt"]?.s()
+            ConversationSummary(conversationId = convId, title = title, createdAt = createdAt, updatedAt = updatedAt)
+        }
+
+        // Serialise LastEvaluatedKey as a simple JSON string so it is safe to round-trip through the API
+        val nextPageToken: String? = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
+            val encoded = response.lastEvaluatedKey().mapValues { (_, v) -> v.s() ?: "" }
+            Json.encodeToString(encoded)
+        } else null
+
+        GetCustomerConversationsResponse(conversations = conversations, lastEvaluatedKey = nextPageToken)
     }
 }
