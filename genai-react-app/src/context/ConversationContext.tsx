@@ -295,6 +295,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         const { aiConfigs, finalSelectedResponseId, promptToUse } = prep
 
         updateConversationBlock(id, { isLoading: true, responseMessages: [] })
+        setLeftSidebarExpanded(false)
+        setRightSidebarExpanded(false)
 
         try {
             const token = await getAccessTokenSilently()
@@ -319,8 +321,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 prompt: promptToUse
             })
             setSelectedResponseForBlock(id, '')
-            setLeftSidebarExpanded(false)
-            setRightSidebarExpanded(false)
         } catch (err) {
             updateConversationBlock(id, {
                 responseMessages: [
@@ -355,6 +355,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             prompt: promptToUse,
             responseMessages: initialResponseMessages
         })
+        setLeftSidebarExpanded(false)
+        setRightSidebarExpanded(false)
 
         try {
             const token = await getAccessTokenSilently()
@@ -515,8 +517,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 prompt: promptToUse
             })
             setSelectedResponseForBlock(id, '')
-            setLeftSidebarExpanded(false)
-            setRightSidebarExpanded(false)
 
             // Navigate securely after all streams are done to avoid cancellation
             if (conversationIdRef.current && conversationIdRef.current !== id) {

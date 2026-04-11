@@ -126,7 +126,7 @@ export default function Request({
     const displayName = customerName || user?.name || ''
     const displayPicture = customerPicture || user?.picture
 
-    if (conversationBlock.responseMessages.length > 0 && !conversationBlock.isLoading) {
+    if (conversationBlock.responseMessages.length > 0 || conversationBlock.isLoading) {
         return (
             <div className={styles.resolvedRequestContainer}
                  data-testid={testId || "resolved-request-wrapper"}>
