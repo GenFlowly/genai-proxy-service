@@ -5,66 +5,145 @@ import { InstructionResponse } from '../../models/instruction.models';
 
 // Minimal stable mock for useAuth0
 const STABLE_USER = { sub: 'sub123', email: 'test@example.com' };
+const mockGetAccessTokenSilently = jest.fn().mockResolvedValue('token');
+const mockLogout = jest.fn();
+
 jest.mock('@auth0/auth0-react', () => ({
     Auth0Provider: ({ children }: any) => children,
     useAuth0: () => ({
         isAuthenticated: true,
         user: STABLE_USER,
-        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        getAccessTokenSilently: mockGetAccessTokenSilently,
         isLoading: false,
-        logout: jest.fn(),
+        logout: mockLogout,
     }),
 }));
 
+import { MemoryRouter } from 'react-router-dom';
+import { LayoutProvider } from '../../context/LayoutContext';
+
+import { onboardCustomer } from '../../services/onboardUserService';
 jest.mock('../../services/onboardUserService', () => ({
-    onboardCustomer: jest.fn().mockResolvedValue({ customerId: 'c1' }),
+    onboardCustomer: jest.fn(),
 }));
+
+jest.mock('../../services/instructionService', () => ({
+    getCustomerInstructions: jest.fn().mockResolvedValue({ instructions: [] }),
+}));
+
 
 const TestComponent = () => {
     const auth = useAuth();
     return (
         <div>
+            <div data-testid="cust-id">{auth.customerId || 'NONE'}</div>
             <div data-testid="inst-count">{auth.customerInstructions.length}</div>
-            <button onClick={() => auth.updateInstruction({ id: 'i1', version: 1, text: 'v1' } as any)} data-testid="upd-inst">Update Inst</button>
-            <button onClick={() => auth.updateVendorApiKeyStatus({ aiVendor: 'OPENAI', hasApiKey: true } as any)} data-testid="upd-vendor">Update Vendor</button>
-            <button onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'PINECONE', isConfigured: true } as any)} data-testid="upd-vdb">Update VDB</button>
+            <div data-testid="vdb-count">{auth.vectorDBConfigStatusList.length}</div>
+            <div data-testid="vendor-count">{auth.aiVendorAPIKeyStatusList.length}</div>
+            <div data-testid="supabase-status">{auth.supabaseConfigStatus ? 'SET' : 'NOT_SET'}</div>
+
+            <button onClick={() => auth.updateInstruction({ id: 'i1', version: 1, name: 'v1' } as any)} data-testid="upd-inst-1">Add Inst 1</button>
+            <button onClick={() => auth.updateInstruction({ id: 'i1', version: 1, name: 'v1-updated' } as any)} data-testid="upd-inst-1-upd">Update Inst 1</button>
+            <button onClick={() => auth.updateInstruction({ id: 'i1', version: 2, name: 'v2' } as any)} data-testid="upd-inst-1-v2">Add Inst 1 v2</button>
+
+            <button onClick={() => auth.updateVendorApiKeyStatus({ aiVendor: 'OPENAI', isAPIKeyValid: true } as any)} data-testid="upd-vendor-new">Add Vendor</button>
+            <button onClick={() => auth.updateVendorApiKeyStatus({ aiVendor: 'OPENAI', isAPIKeyValid: false } as any)} data-testid="upd-vendor-upd">Update Vendor</button>
+
+            <button onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'PINECONE', isConfigValid: true } as any)} data-testid="upd-vdb-new">Add VDB</button>
+            <button onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'PINECONE', isConfigValid: false } as any)} data-testid="upd-vdb-upd">Update VDB</button>
+
+            <button onClick={() => auth.updateSupabaseConfigStatus({ status: 'VALID' })} data-testid="upd-supabase">Update Supabase</button>
         </div>
     );
 };
 
 describe('AuthContext Functions', () => {
-    test('updateInstruction adds or updates correctly', async () => {
-        render(<AuthProvider><TestComponent /></AuthProvider>);
-        
-        await waitFor(() => expect(screen.getByTestId('inst-count')).toHaveTextContent('0'));
-
-        act(() => {
-            screen.getByTestId('upd-inst').click();
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (onboardCustomer as jest.Mock).mockResolvedValue({
+            customerId: 'c1',
+            customerInstructions: [],
+            aiVendorAPIKeyStatusList: [],
+            vectorDBConfigStatusList: []
         });
+    });
 
-        await waitFor(() => expect(screen.getByTestId('inst-count')).toHaveTextContent('1'));
+    test('updateInstruction adds or updates correctly', async () => {
+        render(
+            <MemoryRouter>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <TestComponent />
+                    </AuthProvider>
+                </LayoutProvider>
+            </MemoryRouter>
+        );
+
+        // Wait for onboarding to settle
+        await waitFor(() => expect(screen.getByTestId('cust-id')).toHaveTextContent('c1'), { timeout: 5000 });
+        expect(screen.getByTestId('inst-count')).toHaveTextContent('0');
+
+        // Add Inst 1
+        await act(async () => {
+            screen.getByTestId('upd-inst-1').click();
+        });
+        expect(screen.getByTestId('inst-count')).toHaveTextContent('1');
 
         // Update same version
-        act(() => {
-            screen.getByTestId('upd-inst').click();
+        await act(async () => {
+            screen.getByTestId('upd-inst-1-upd').click();
         });
-        await waitFor(() => expect(screen.getByTestId('inst-count')).toHaveTextContent('1'));
+        expect(screen.getByTestId('inst-count')).toHaveTextContent('1');
 
-        // Add different version
-        act(() => {
-            const auth = (window as any).auth; // In a real test we'd expose it differently, but here we can just trigger another click if we had a button for it.
-            // For coverage of the 'else' branch in updateInstruction
+        // Add different version (prepend)
+        await act(async () => {
+            screen.getByTestId('upd-inst-1-v2').click();
         });
-    });
+        expect(screen.getByTestId('inst-count')).toHaveTextContent('2');
+    }, 15000);
 
-    test('vendor and vdb status updaters', async () => {
-        render(<AuthProvider><TestComponent /></AuthProvider>);
-        
-        act(() => {
-            screen.getByTestId('upd-vendor').click();
-            screen.getByTestId('upd-vdb').click();
+    test('vendor, vdb, and supabase status updaters', async () => {
+        render(
+            <MemoryRouter>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <TestComponent />
+                    </AuthProvider>
+                </LayoutProvider>
+            </MemoryRouter>
+        );
+
+        await waitFor(() => expect(screen.getByTestId('cust-id')).toHaveTextContent('c1'), { timeout: 5000 });
+        expect(screen.getByTestId('vendor-count')).toHaveTextContent('0');
+
+        // Vendor
+        await act(async () => {
+            screen.getByTestId('upd-vendor-new').click();
         });
-        
-        // These just update state, we verify they don't crash and exercise the branches
-    });
+        expect(screen.getByTestId('vendor-count')).toHaveTextContent('1');
+
+        await act(async () => {
+            screen.getByTestId('upd-vendor-upd').click();
+        });
+        expect(screen.getByTestId('vendor-count')).toHaveTextContent('1');
+
+        // VDB
+        await act(async () => {
+            screen.getByTestId('upd-vdb-new').click();
+        });
+        expect(screen.getByTestId('vdb-count')).toHaveTextContent('1');
+
+        await act(async () => {
+            screen.getByTestId('upd-vdb-upd').click();
+        });
+        expect(screen.getByTestId('vdb-count')).toHaveTextContent('1');
+
+        // Supabase
+        expect(screen.getByTestId('supabase-status')).toHaveTextContent('NOT_SET');
+        await act(async () => {
+            screen.getByTestId('upd-supabase').click();
+        });
+        expect(screen.getByTestId('supabase-status')).toHaveTextContent('SET');
+    }, 15000);
+
 });

@@ -94,36 +94,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                     }
 
                     const onboardData = await onboardCustomer(userInfo, token)
-                    if (onboardData.customerId) {
-                        setCustomerId(onboardData.customerId)
-                    }
-                    if (onboardData.aiVendorAPIKeyStatusList) {
-                        setAiVendorAPIKeyStatusList(onboardData.aiVendorAPIKeyStatusList)
-                    }
-                    if (onboardData.customerInstructions) {
-                        setCustomerInstructions(onboardData.customerInstructions)
-                    }
-                    if (onboardData.customerName) setCustomerName(onboardData.customerName)
-                    if (onboardData.customerPicture) setCustomerPicture(onboardData.customerPicture)
-
-                    if (onboardData.aiConfigPreferences) {
-                        setAiConfigPreferences(onboardData.aiConfigPreferences || null);
+                    if (onboardData) {
                         if (onboardData.customerId) {
-                            localStorage.setItem(
-                                `${onboardData.customerId}_ai_preferences`,
-                                JSON.stringify(onboardData.aiConfigPreferences)
-                            )
+                            setCustomerId(onboardData.customerId)
                         }
-                    }
-                    // Set customer instructions and vectorDBConfigStatusList if present in onboardData
-                    if (onboardData.customerInstructions) {
-                        setCustomerInstructions(onboardData.customerInstructions || []);
-                    }
-                    if (onboardData.vectorDBConfigStatusList) {
-                        setVectorDBConfigStatusList(onboardData.vectorDBConfigStatusList);
-                    }
-                    if (onboardData.supabaseConfigStatus) {
-                        setSupabaseConfigStatus(onboardData.supabaseConfigStatus);
+                        if (onboardData.aiVendorAPIKeyStatusList) {
+                            setAiVendorAPIKeyStatusList(onboardData.aiVendorAPIKeyStatusList)
+                        }
+                        if (onboardData.customerInstructions) {
+                            setCustomerInstructions(onboardData.customerInstructions)
+                        }
+                        if (onboardData.customerName) setCustomerName(onboardData.customerName)
+                        if (onboardData.customerPicture) setCustomerPicture(onboardData.customerPicture)
+
+                        if (onboardData.aiConfigPreferences) {
+                            setAiConfigPreferences(onboardData.aiConfigPreferences || null);
+                            if (onboardData.customerId) {
+                                localStorage.setItem(
+                                    `${onboardData.customerId}_ai_preferences`,
+                                    JSON.stringify(onboardData.aiConfigPreferences)
+                                )
+                            }
+                        }
+                        // Set customer instructions and vectorDBConfigStatusList if present in onboardData
+                        if (onboardData.customerInstructions) {
+                            setCustomerInstructions(onboardData.customerInstructions || []);
+                        }
+                        if (onboardData.vectorDBConfigStatusList) {
+                            setVectorDBConfigStatusList(onboardData.vectorDBConfigStatusList);
+                        }
+                        if (onboardData.supabaseConfigStatus) {
+                            setSupabaseConfigStatus(onboardData.supabaseConfigStatus);
+                        }
                     }
                     console.log('User onboarded successfully');
                 } catch (error: any) {

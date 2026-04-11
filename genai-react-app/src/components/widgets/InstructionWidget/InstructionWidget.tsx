@@ -95,40 +95,58 @@ export default function InstructionWidget({ 'data-testid': testId }: {
     }, [customerInstructions])
 
     // ... (existing handlers)
-    const handleCreateInstruction = async () => {
+    const handleCreateInstruction = () => {
         if (!systemPrompt.trim()) return
 
-        setIsLoading(true)
-        try {
-            const token = await getAccessTokenSilently()
-            const response: InstructionResponse = await createInstruction(token, {
-                instruction: systemPrompt,
-                instructionName: instructionName || undefined,
-                existingInstructionId: selectedInstructionId || undefined
-            })
+        // Immediately collapse and clear editing state to allow user to continue
+        setInstructionWidgetExpanded(false)
+        setIsEditingName(false)
 
-            setSystemPrompt(systemPrompt)
-            // Update the selected ID immediately so UI reflects it's an existing instruction now
-            if (response.id) {
-                setSelectedInstructionId(response.id)
-                // Optimistic update
-                updateInstruction({
-                    id: response.id,
-                    name: response.name,
-                    version: response.version,
-                    instruction: systemPrompt
+        // Fire and forget: handle the API call and state updates in the background
+        ;(async () => {
+             // Optimistic update: add a placeholder with a "pending" ID so it appears in dropdown immediately
+             // If creating new, we use a constant ID to track the pending state.
+             const isNew = !selectedInstructionId;
+             const tempId = selectedInstructionId || 'pending-instruction-id';
+
+             updateInstruction({
+                 id: tempId,
+                 name: '', // Empty name triggers the fallback to instruction text in dropdown
+                 version: selectedInstructionId ? 0 : 1, // temporary version tracking
+                 instruction: systemPrompt
+             })
+             
+             if (isNew) {
+                setSelectedInstructionId('pending-instruction-id');
+             }
+
+            try {
+                // We still need the token as it's required for the background call
+                const token = await getAccessTokenSilently()
+                const response: InstructionResponse = await createInstruction(token, {
+                    instruction: systemPrompt,
+                    instructionName: instructionName || undefined,
+                    existingInstructionId: selectedInstructionId || undefined
                 })
+
+                if (response.id) {
+                    setSelectedInstructionId(response.id)
+                    // Update the global state with the resolved data (ID, name/persona, version)
+                    updateInstruction({
+                        id: response.id,
+                        name: response.name,
+                        version: response.version,
+                        instruction: systemPrompt
+                    })
+                }
+                // Refresh list to ensure we are in sync with the backend
+                // This also naturally clears any 'pending-instruction-id' entries since they aren't on server
+                refreshInstructions()
+            } catch (error) {
+                console.error("Failed to save instruction in background", error)
+                // Error handling is kept to console for now as widget is already closed
             }
-            // Still refresh in background to be safe
-            refreshInstructions()
-            setInstructionWidgetExpanded(false) // Collapse after generation
-            setIsEditingName(false)
-        } catch (error) {
-            console.error("Failed to save instruction", error)
-            // Optionally add user notify here
-        } finally {
-            setIsLoading(false)
-        }
+        })()
     }
 
     if (!isInstructionWidgetExpanded) {
@@ -164,7 +182,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                             }}
                             options={(() => {
                                 const filteredOptions = uniqueInstructions.map(item => ({
-                                    label: item.name || item.instruction.substring(0, 50),
+                                    label: item.name || (item.instruction.length > 50 ? `${item.instruction.substring(0, 50)}...` : item.instruction),
                                     value: item.id,
                                 }));
 
@@ -221,7 +239,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                 // Config for options
                 const instructionOptions = (() => {
                     const filteredOptions = uniqueInstructions.map(item => ({
-                        label: item.name || item.instruction.substring(0, 50),
+                        label: item.name || (item.instruction.length > 50 ? `${item.instruction.substring(0, 50)}...` : item.instruction),
                         value: item.id,
                     }));
 
