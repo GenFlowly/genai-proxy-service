@@ -10,7 +10,7 @@ from pymilvus import MilvusClient
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from encoding_library.models.payload import Payload
+from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.utils.embedding_utils import create_embeddings
 from encoding_library.utils.vector_db import get_zilliz_credentials
 
@@ -54,15 +54,13 @@ def retrieve():
         payload_dict = request.get_json()
         
         try:
-            payload = Payload.from_dict(payload_dict)
-        except Exception:
-            payload = Payload(
-                customer_id=payload_dict.get('customer_id', 'unknown'),
-                data=payload_dict
-            )
+            internal_state = MemoryRequestInternalState.from_dict(payload_dict)
+        except Exception as e:
+            logger.error(f"Event parsing into MemoryRequestInternalState failed: {e}")
+            return jsonify({"error": f"Invalid state payload: {e}"}), 400
 
-        logger.info(f"Received retrieval payload for customer: {payload.customer_id}")
-        data = payload.data
+        logger.info(f"Received retrieval request for customer: {internal_state.customer_id}")
+        data = internal_state.raw_data
         
         query_data = data.get('query_data')
         top_n = data.get('top_n', 3)
@@ -81,11 +79,11 @@ def retrieve():
         query_vector = query_embeddings[0].get('vector')
         
         # Collections to search
-        collection_names = [payload.customer_id, f"{payload.customer_id}_notes"]
+        collection_names = [internal_state.customer_id, f"{internal_state.customer_id}_notes"]
         
         # Connect to Zilliz
         try:
-            client = get_milvus_client(payload.customer_id)
+            client = get_milvus_client(internal_state.customer_id)
         except Exception as e:
             logger.error(f"Configuration error: {e}")
             return jsonify({"error": str(e)}), 500
@@ -130,8 +128,8 @@ def retrieve():
         data['retrieval_results'] = top_results
         logger.info(f"Retrieved {len(top_results)} top chunks from Zilliz across collections.")
         
-        payload.data = data
-        return jsonify(payload.to_dict()), 200
+        internal_state.raw_data = data
+        return jsonify(internal_state.to_dict()), 200
 
     except Exception as e:
         logger.error(f"Error in retrieval handler: {str(e)}", exc_info=True)
