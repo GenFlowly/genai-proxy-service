@@ -11,7 +11,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
-from encoding_library.utils.embedding_utils import create_embeddings
+from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 from encoding_library.utils.vector_db import get_zilliz_credentials
 
 # Set cache directories to /tmp for consistent environment behavior
@@ -71,7 +71,8 @@ def retrieve():
             return jsonify({"error": "query_data is required in payload data"}), 400
             
         # 1. create embeddings of text provided
-        query_embeddings = create_embeddings(query_data)
+        encoder = get_embedding_model(internal_state.model_type, internal_state.model_name)
+        query_embeddings = create_embeddings([query_data], encoder)
         if not query_embeddings:
             return jsonify({"error": "Failed to create embedding for query_data"}), 500
             
