@@ -90,10 +90,11 @@ describe('Response Widget Component', () => {
         render(<Response blockId="block-1" responseMessages={mockMessages} onFollowUp={onFollowUp} />);
 
         const followUpBtns = screen.getAllByTestId('follow-up-button');
-        fireEvent.click(followUpBtns[0]); // Click first one
+        expect(followUpBtns).toHaveLength(1); // Only last one shows
+        fireEvent.click(followUpBtns[0]); // Click the only one (msg-2)
 
-        expect(mockSetSelectedResponseForBlock).toHaveBeenCalledWith('block-1', 'msg-1');
-        expect(onFollowUp).toHaveBeenCalledWith('msg-1');
+        expect(mockSetSelectedResponseForBlock).toHaveBeenCalledWith('block-1', 'msg-2');
+        expect(onFollowUp).toHaveBeenCalledWith('msg-2');
     });
 
     test('Follow Up button disabled if props.disabled is true', () => {
@@ -108,17 +109,15 @@ describe('Response Widget Component', () => {
     });
 
     test('Follow Up button indicates "Selected" state', () => {
-        mockGetSelectedResponseForBlock.mockReturnValue('msg-1'); // Msg 1 selected
+        mockGetSelectedResponseForBlock.mockReturnValue('msg-2'); // Msg 2 selected (it's the only one with a button)
         render(<Response blockId="block-1" responseMessages={mockMessages} onFollowUp={jest.fn()} />);
 
-        const btns = screen.getAllByTestId('follow-up-button'); // use test id to target
-        // First button should say 'Selected' and be disabled
+        const btns = screen.getAllByTestId('follow-up-button'); 
+        expect(btns).toHaveLength(1);
+        
+        // The only button (for msg-2) should say 'Selected' and be disabled
         expect(btns[0]).toHaveTextContent('Selected');
         expect(btns[0]).toBeDisabled();
-
-        // Second button should act normal
-        expect(btns[1]).toHaveTextContent('Follow up');
-        expect(btns[1]).not.toBeDisabled();
     });
     test('does NOT show Follow Up button if content is loading', () => {
         const loadingMsgs = [

@@ -16,4 +16,5 @@ export const endpoints = {
     saveAIConfig: `${BASE}${API_PREFIX}/save-ai-config`,
     createInstruction: `${BASE}${API_PREFIX}/instruction`,
     getCustomerInstructions: `${BASE}${API_PREFIX}/instructions`,
+    createConversationTitle: `${BASE}${API_PREFIX}/conversation/title`,
 };

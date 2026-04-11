@@ -22,9 +22,10 @@ interface ResponseProps {
     responseMessages: Message[]
     onFollowUp?: (selectedMessageId: string) => void
     disabled?: boolean
+    isLastResponseBlock?: boolean
 }
 
-export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
+export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
     const { setSelectedResponseForBlock, getSelectedResponseForBlock } = useConversation()
 
@@ -133,7 +134,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                 className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}
             >
 
-                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
+                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens, totalTokens, tokensReadFromCache }, index) => {
                     const isSelected = selectedResponseId === messageId
 
                     let HeaderComponent: React.ReactNode = null
@@ -163,7 +164,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             data-testid="response-message"
                             aria-label={`Response from ${aiVendor}`}
                         >
-                            {onFollowUp && !isLoading && (
+                            {onFollowUp && !isLoading && isLastResponseBlock && index === filteredResponseList.length - 1 && (
                                 <div className={styles.followUpButtonWrapper}>
                                     {(inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
                                         <div className={styles.tokenBadge}>

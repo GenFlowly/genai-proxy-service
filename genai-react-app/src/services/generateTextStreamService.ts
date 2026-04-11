@@ -21,13 +21,7 @@ export interface StreamMetadata {
  */
 const USAGE_SENTINEL_RE = /\n\[USAGE:(\{[^}]+\})\]$/;
 
-/**
- * Sentinel emitted at the very START of a stream for new conversations.
- * Format: "[TITLE:My Conversation Title]"
- * Note: no ^ anchor — the backend emits a heartbeat space before the flow,
- * so the sentinel may not be at position 0 of the first received chunk.
- */
-const TITLE_SENTINEL_RE = /\[TITLE:([^\]]+)\]/;
+// TITLE_SENTINEL_RE removed due to async title generation migration
 
 export async function generateTextStream(
     token: string,
@@ -74,7 +68,6 @@ export async function generateTextStream(
 
     const decoder = new TextDecoder("utf-8");
     let accumulated = "";
-    let titleExtracted = false;
 
     try {
         while (true) {
@@ -82,30 +75,6 @@ export async function generateTextStream(
             if (done) break;
 
             let chunk = decoder.decode(value, { stream: true });
-
-            // Check for TITLE sentinel only in the first chunk (new conversations)
-            if (!titleExtracted) {
-                const titleMatch = chunk.match(TITLE_SENTINEL_RE);
-                if (titleMatch) {
-                    titleExtracted = true;
-                    try {
-                        const title = titleMatch[1].trim();
-                        document.title = `${title} | Genflowly`;
-                        if (onMetadata) {
-                            onMetadata({
-                                conversationId, messageId, responseMessageId, aiVendor,
-                                inputTokens: null, outputTokens: null, totalTokens: null,
-                                tokensReadFromCache: null,
-                                conversationTitle: title
-                            });
-                        }
-                    } catch {
-                        console.warn("Failed to parse TITLE sentinel:", titleMatch[1]);
-                    }
-                    // Strip sentinel from chunk before forwarding
-                    chunk = chunk.replace(TITLE_SENTINEL_RE, "");
-                }
-            }
 
             accumulated += chunk;
 

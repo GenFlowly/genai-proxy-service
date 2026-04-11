@@ -14,6 +14,7 @@ import {
     IConversationContext,
     Message,
 } from '../models/conversation.models'
+import { createConversationTitle } from '../services/createConversationTitleService'
 
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
 
@@ -492,6 +493,20 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 ])
 
                 const pendingPromises: Promise<any>[] = [firstStreamPromise]
+
+                if (result.type === 'id' && result.value) {
+                    const instruction = customerInstructions.find(i => i.id === selectedInstructionId)
+                    // Fire-and-forget title generation
+                    createConversationTitle(token, {
+                        conversationId: result.value,
+                        prompt: promptToUse,
+                        instructionName: instruction?.name
+                    }).then(res => {
+                        if (res.title) {
+                            document.title = `${res.title} | Genflowly`
+                        }
+                    }).catch(err => console.warn("Background title generation failed", err))
+                }
 
                 if (result.type === 'id' && result.value && aiConfigs.length > 1) {
                     // ID established! Launch the rest immediately.
