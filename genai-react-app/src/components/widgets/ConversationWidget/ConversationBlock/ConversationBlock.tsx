@@ -129,6 +129,8 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
         }
     }
 
+    const isLastResponseBlock = [...conversationBlockList].reverse().find(b => b.responseMessages.length > 0)?.conversationBlockId === id
+
     return (
         <div className={`${styles.conversationBlock} conversation-block-item`} data-block-id={id} data-testid={testId}>
             <Request blockId={id} />
@@ -140,6 +142,7 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
                         responseMessages={conversationBlock.responseMessages}
                         onFollowUp={handleFollowUp}
                         disabled={!hasAnyValidApiKey}
+                        isLastResponseBlock={isLastResponseBlock}
                     />
                 </div>
             )}
