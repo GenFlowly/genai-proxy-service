@@ -140,6 +140,10 @@ class CustomerProfileService(
         return dynamoDBProvider.getCustomerVectorDBConfigStatusList(customerId)
     }
 
+    suspend fun getCustomerSupabaseConfigStatus(customerId: String): models.SupabaseConfigStatus? {
+        return dynamoDBProvider.getCustomerSupabaseConfigStatus(customerId)
+    }
+
     suspend fun getCustomerApiKeyForVendor(
         vendor: AIVendor,
         customerId: String

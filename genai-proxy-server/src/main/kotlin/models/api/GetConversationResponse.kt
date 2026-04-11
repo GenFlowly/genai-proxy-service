@@ -6,7 +6,8 @@ import models.Prompt
 
 @Serializable
 data class GetConversationResponse(
-    val promptAndResponseList: List<PromptAndResponse>
+    val promptAndResponseList: List<PromptAndResponse>,
+    val title: String? = null
 )
 
 

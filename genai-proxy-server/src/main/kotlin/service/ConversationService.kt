@@ -14,7 +14,7 @@ class ConversationService(
     private val dynamoDBProvider: DynamoDBProvider
 ) {
 
-    suspend fun getConversationHistory(conversationId: String): GetConversationResponse {
+    suspend fun getConversationHistory(conversationId: String, customerId: String): GetConversationResponse {
         val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
             .sortedBy { it.sequence }
 
@@ -52,7 +52,9 @@ class ConversationService(
             i++
         }
 
-        return GetConversationResponse(pairs)
+        val title = dynamoDBProvider.getConversationTitle(conversationId, customerId)
+
+        return GetConversationResponse(pairs, title)
     }
 
     suspend fun createConversation(
@@ -65,6 +67,14 @@ class ConversationService(
         )
         dynamoDBProvider.createConversation(conversation)
         return conversation.conversationId
+    }
+
+    suspend fun updateConversationTitle(
+        conversationId: String,
+        customerId: String,
+        title: String
+    ) {
+        dynamoDBProvider.updateConversationTitle(conversationId, customerId, title)
     }
 
     private suspend fun getMessage(
