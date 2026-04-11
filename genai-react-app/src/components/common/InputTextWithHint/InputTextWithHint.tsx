@@ -10,6 +10,7 @@ interface InputTextWithHintProps {
     onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
     className?: string
     autoFocus?: boolean
+    type?: string
     'data-testid'?: string
 }
 
@@ -21,6 +22,7 @@ export const InputTextWithHint: React.FC<InputTextWithHintProps> = ({
     onChange,
     className = '',
     autoFocus = false,
+    type = 'text',
     'data-testid': testId
 }) => {
     return (
@@ -30,7 +32,7 @@ export const InputTextWithHint: React.FC<InputTextWithHintProps> = ({
                 <span className={styles.hintText} data-testid={testId ? `${testId}-hint` : undefined}>{hint}</span>
             </div>
             <input
-                type="text"
+                type={type}
                 className={styles.inputElement}
                 placeholder={placeholder}
                 value={value}

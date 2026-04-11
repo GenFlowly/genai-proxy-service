@@ -131,10 +131,12 @@ describe('DatabaseConnectionsSettingsWidget', () => {
     test('validates Supabase endpoint format', async () => {
         render(<DatabaseConnectionsSettingsWidget />);
         const endpointInput = screen.getByPlaceholderText('https://your-project.supabase.co');
-        const tokenInput = screen.getByPlaceholderText('your-anon-key');
+        const tokenInput = screen.getByPlaceholderText('your-anon-key / service_role');
+        const passwordInput = screen.getByPlaceholderText('PostgreSQL Database Password');
         
         fireEvent.change(endpointInput, { target: { value: 'invalid-url' } });
         fireEvent.change(tokenInput, { target: { value: 'key' } });
+        fireEvent.change(passwordInput, { target: { value: 'pass' } });
 
         const buttons = screen.getAllByText('Save');
         fireEvent.click(buttons[1]); // Supabase
@@ -150,10 +152,12 @@ describe('DatabaseConnectionsSettingsWidget', () => {
 
         render(<DatabaseConnectionsSettingsWidget />);
         const endpointInput = screen.getByPlaceholderText('https://your-project.supabase.co');
-        const tokenInput = screen.getByPlaceholderText('your-anon-key');
+        const tokenInput = screen.getByPlaceholderText('your-anon-key / service_role');
+        const passwordInput = screen.getByPlaceholderText('PostgreSQL Database Password');
         
         fireEvent.change(endpointInput, { target: { value: 'https://xyz.supabase.co' } });
         fireEvent.change(tokenInput, { target: { value: 'some-key' } });
+        fireEvent.change(passwordInput, { target: { value: 'mypassword' } });
 
         const buttons = screen.getAllByText('Save');
         fireEvent.click(buttons[1]);
@@ -161,7 +165,8 @@ describe('DatabaseConnectionsSettingsWidget', () => {
         await waitFor(() => {
             expect(storeCustomerSupabaseConfig).toHaveBeenCalledWith('token', {
                 endpoint: 'https://xyz.supabase.co',
-                token: 'some-key'
+                token: 'some-key',
+                password: 'mypassword'
             });
             expect(mockUpdateSupabaseConfigStatus).toHaveBeenCalled();
             expect(mockShowToast).toHaveBeenCalledWith('Supabase settings saved successfully.');

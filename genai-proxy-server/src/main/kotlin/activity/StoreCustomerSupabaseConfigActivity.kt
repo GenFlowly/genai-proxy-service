@@ -33,7 +33,8 @@ fun Route.registerStoreSupabaseConfigRoutes(
             val stored = customerProfileService.storeCustomerSupabaseConfig(
                 customerId = customerId,
                 endpoint = request.endpoint,
-                token = request.token
+                token = request.token,
+                password = request.password
             )
             
             logger.info("Supabase Config stored: {}", stored)
