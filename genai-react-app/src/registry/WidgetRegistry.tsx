@@ -10,6 +10,9 @@ import TokenCounter from '../components/widgets/SidebarWidgets/TokenCounter/Toke
 
 import NotesWidget from '../components/widgets/CenterWidgets/NotesWidget/NotesWidget'
 import ConversationListWidget from '../components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget'
+import ConfigureAIVendorSettingsWidget from '../components/widgets/ConfigureAIVendorSettingsWidget/ConfigureAIVendorSettingsWidget'
+import DatabaseConnectionsSettingsWidget from '../components/widgets/DatabaseConnectionsSettingsWidget/DatabaseConnectionsSettingsWidget'
+import SidebarMenu from '../components/widgets/SidebarWidgets/SidebarMenu/SidebarMenu'
 
 export interface WidgetContext {
     userId?: string
@@ -20,6 +23,7 @@ export interface WidgetContext {
 export interface WidgetDefinition {
     id: string
     component: React.ComponentType<any>
+    name?: string
     isVisible?: (context: WidgetContext) => boolean
 }
 
@@ -58,5 +62,19 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
     'NOTES_WIDGET': {
         id: 'NOTES_WIDGET',
         component: NotesWidget,
+    },
+    'CONFIGURE_AI_VENDOR_SETTINGS': {
+        id: 'CONFIGURE_AI_VENDOR_SETTINGS',
+        component: ConfigureAIVendorSettingsWidget,
+        name: 'AI Vendor API Keys',
+    },
+    'DATABASE_CONNECTIONS_SETTINGS': {
+        id: 'DATABASE_CONNECTIONS_SETTINGS',
+        component: DatabaseConnectionsSettingsWidget,
+        name: 'Database Settings',
+    },
+    'SIDEBAR_MENU': {
+        id: 'SIDEBAR_MENU',
+        component: SidebarMenu,
     },
 }

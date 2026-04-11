@@ -1,11 +1,21 @@
-@import '../styles/mixins.scss';
+@import '../../styles/mixins.scss';
 
 .page {
   @include page-base;
+  overflow: hidden;
+}
+
+.layout {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
 }
 
 .content {
   @include content-container;
+  flex: 1;
 }
 
 .card {
@@ -21,6 +31,7 @@
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
+  padding-bottom: 1rem;
 }
 
 .vendorSection {
@@ -39,17 +50,6 @@
   font-weight: 600;
   color: $color-text-primary;
   margin: 0;
-}
-
-.vendorBrand {
-  // Style override for BrandName component to look like a header
-  font-size: 1.125rem !important;
-  font-weight: 600 !important;
-
-  // BrandName usually imports flex container styles, we might not need much unless we want to override spacing
-  span {
-    font-weight: 600 !important;
-  }
 }
 
 .formGroup {

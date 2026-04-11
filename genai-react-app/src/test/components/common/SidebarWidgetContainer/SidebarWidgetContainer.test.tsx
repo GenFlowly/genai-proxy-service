@@ -95,4 +95,21 @@ describe('SidebarWidgetContainer Component', () => {
         expect(screen.getByTestId('test-widget-no-header-2-content-collapsed')).toHaveTextContent('Collapsed');
         unmount();
     });
+
+    test('uses explicit isCollapsed prop over context state', () => {
+        // Mock hook to return expanded state, but pass isCollapsed=true as prop
+        mockUseLayout.mockReturnValue({ isRightSidebarExpanded: true });
+
+        render(
+            <SidebarWidgetContainer
+                {...defaultProps}
+                isCollapsed={true}
+            />
+        );
+
+        const container = screen.getByTestId('test-widget');
+        expect(container).toHaveAttribute('data-collapsed', 'true');
+        expect(screen.getByTestId('test-widget-content-collapsed')).toBeInTheDocument();
+    });
 });
+

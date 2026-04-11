@@ -13,9 +13,18 @@ jest.mock('../../components/sections/CenterSection/CenterSection', () => ({ widg
 // Mock Config
 jest.mock('../../config/PageWidgetConfig', () => ({
     getPageConfig: jest.fn(),
-    getPageIdFromPath: jest.fn() // if used or mocked by usage
+    getPageIdFromPath: jest.fn()
 }));
 const mockGetPageConfig = jest.requireMock('../../config/PageWidgetConfig').getPageConfig;
+
+// Mock LayoutContext
+const mockSetLeftSidebarExpanded = jest.fn();
+jest.mock('../../context/LayoutContext', () => ({
+    useLayout: () => ({
+        setLeftSidebarExpanded: mockSetLeftSidebarExpanded
+    })
+}));
+
 
 // Mock ConversationContext
 const mockLoadConversation = jest.fn();

@@ -1,0 +1,1942 @@
+
+> genai-react-app@0.1.0 test:coverage
+> react-scripts test --coverage --watchAll=false --setupFilesAfterEnv '<rootDir>/src/test/setupTests.ts'
+
+(node:25515) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+FAIL src/App.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+  ● App › renders correctly and wraps with providers
+
+    TypeError: auth0.Auth0Provider.mockImplementation is not a function
+
+      21 |         (router.useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+      22 |         
+    > 23 |         (auth0.Auth0Provider as unknown as jest.Mock).mockImplementation(({ children, onRedirectCallback }) => {
+         |                                                       ^
+      24 |             capturedOnRedirect = onRedirectCallback;
+      25 |             return <div data-testid="auth0-mock">{children}</div>;
+      26 |         });
+
+      at Object.<anonymous> (src/App.test.tsx:23:55)
+
+  ● App › onRedirectCallback navigates to returnTo if provided
+
+    TypeError: auth0.Auth0Provider.mockImplementation is not a function
+
+      21 |         (router.useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+      22 |         
+    > 23 |         (auth0.Auth0Provider as unknown as jest.Mock).mockImplementation(({ children, onRedirectCallback }) => {
+         |                                                       ^
+      24 |             capturedOnRedirect = onRedirectCallback;
+      25 |             return <div data-testid="auth0-mock">{children}</div>;
+      26 |         });
+
+      at Object.<anonymous> (src/App.test.tsx:23:55)
+
+  ● App › onRedirectCallback navigates to current pathname if returnTo is missing
+
+    TypeError: auth0.Auth0Provider.mockImplementation is not a function
+
+      21 |         (router.useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+      22 |         
+    > 23 |         (auth0.Auth0Provider as unknown as jest.Mock).mockImplementation(({ children, onRedirectCallback }) => {
+         |                                                       ^
+      24 |             capturedOnRedirect = onRedirectCallback;
+      25 |             return <div data-testid="auth0-mock">{children}</div>;
+      26 |         });
+
+      at Object.<anonymous> (src/App.test.tsx:23:55)
+
+(node:25522) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:25525) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/widgets/CenterWidgets/NotesWidget/NotesWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+(node:25524) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:25520) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:25518) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:25521) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:25519) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:25517) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/widgets/DatabaseConnectionsSettingsWidget/DatabaseConnectionsSettingsWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Using cached AI models (initial load)
+
+      at fetchModels (src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:98:37)
+
+    console.log
+      Remote models are identical to cache, skipping update.
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:132:29
+
+    console.log
+      Using cached AI models (initial load)
+
+      at fetchModels (src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:98:37)
+
+    console.log
+      Remote models are identical to cache, skipping update.
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:132:29
+
+    console.log
+      Using cached AI models (initial load)
+
+      at fetchModels (src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:98:37)
+
+    console.log
+      Remote models are identical to cache, skipping update.
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:132:29
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Using cached AI models (initial load)
+
+      at fetchModels (src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:98:37)
+
+    console.log
+      Remote models are identical to cache, skipping update.
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:132:29
+
+PASS src/test/components/common/PillButton/PillButton.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/context/AIContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.log
+      Syncing AI Vendor Preferences []
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at recursivelyFlushAsyncActWork (node_modules/react/cjs/react.development.js:2633:9)
+      at node_modules/react/cjs/react.development.js:2545:15
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Syncing AI Vendor Preferences []
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Syncing AI Vendor Preferences []
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+    console.log
+      Syncing AI Vendor Preferences []
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+    console.log
+      Using cached AI models (initial load)
+
+      at fetchModels (src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:98:37)
+
+    console.log
+      Remote models differ from cache, updating...
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:124:29
+
+(node:25523) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/context/AuthContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      53 |         });
+      54 |
+    > 55 |         render(
+         |               ^
+      56 |             <MemoryRouter>
+      57 |                 <LayoutProvider>
+      58 |                     <AuthProvider>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/context/AuthContext.test.tsx:55:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      53 |         });
+      54 |
+    > 55 |         render(
+         |               ^
+      56 |             <MemoryRouter>
+      57 |                 <LayoutProvider>
+      58 |                     <AuthProvider>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/context/AuthContext.test.tsx:55:15)
+
+    console.log
+      User onboarded successfully
+
+      at onboard (src/context/AuthContext.tsx:123:29)
+
+    console.error
+      Failed to onboard user: Error: API Error
+          at Object.<anonymous> (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/test/context/AuthContext.test.tsx:142:27)
+          at Promise.then.completed (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:316:10)
+          at _callCircusTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:218:40)
+          at _runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:155:3)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:66:9)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:60:9)
+          at run (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:25:3)
+          at runAndTransformResultsToJestFormat (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)
+          at jestAdapter (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:82:19)
+          at runTestInternal (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:389:16)
+          at runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:475:34)
+          at Object.worker (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/testWorker.js:133:12)
+
+      123 |                     console.log('User onboarded successfully');
+      124 |                 } catch (error: any) {
+    > 125 |                     console.error('Failed to onboard user:', error)
+          |                             ^
+      126 |                     // If we fail to get a token, it likely means the session is invalid
+      127 |                     // despite isAuthenticated being true (stale cache).
+      128 |                     if (error?.error === 'login_required' || error?.error === 'consent_required' || error?.message?.includes('Login required')) {
+
+      at onboard (src/context/AuthContext.tsx:125:29)
+
+    console.error
+      Onboarding failed, clearing session... Error: API Error
+          at Object.<anonymous> (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/test/context/AuthContext.test.tsx:142:27)
+          at Promise.then.completed (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:316:10)
+          at _callCircusTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:218:40)
+          at _runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:155:3)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:66:9)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:60:9)
+          at run (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:25:3)
+          at runAndTransformResultsToJestFormat (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)
+          at jestAdapter (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:82:19)
+          at runTestInternal (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:389:16)
+          at runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:475:34)
+          at Object.worker (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/testWorker.js:133:12)
+
+      132 |                         // For other errors (e.g. 500), we must ALSO logout to ensure no sensitive Auth0 data 
+      133 |                         // (like ID tokens) remains in localStorage, as per strict security requirements.
+    > 134 |                         console.error('Onboarding failed, clearing session...', error)
+          |                                 ^
+      135 |                         logout({ returnTo: window.location.origin })
+      136 |                     }
+      137 |                 } finally {
+
+      at onboard (src/context/AuthContext.tsx:134:33)
+
+    console.log
+      User onboarded successfully
+
+      at onboard (src/context/AuthContext.tsx:123:29)
+
+    console.log
+      User onboarded successfully
+
+      at onboard (src/context/AuthContext.tsx:123:29)
+
+    console.log
+      User onboarded successfully
+
+      at onboard (src/context/AuthContext.tsx:123:29)
+
+    console.log
+      User onboarded successfully
+
+      at onboard (src/context/AuthContext.tsx:123:29)
+
+    console.log
+      User onboarded successfully
+
+      at onboard (src/context/AuthContext.tsx:123:29)
+
+    console.error
+      Failed to onboard user: { error: 'login_required' }
+
+      123 |                     console.log('User onboarded successfully');
+      124 |                 } catch (error: any) {
+    > 125 |                     console.error('Failed to onboard user:', error)
+          |                             ^
+      126 |                     // If we fail to get a token, it likely means the session is invalid
+      127 |                     // despite isAuthenticated being true (stale cache).
+      128 |                     if (error?.error === 'login_required' || error?.error === 'consent_required' || error?.message?.includes('Login required')) {
+
+      at onboard (src/context/AuthContext.tsx:125:29)
+
+    console.log
+      Session invalid, logging out...
+
+      at onboard (src/context/AuthContext.tsx:129:33)
+
+PASS src/test/components/common/ThemeToggle/ThemeToggle.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/context/LayoutContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      46 |
+      47 | const customRender = (ui: React.ReactElement) => {
+    > 48 |     return render(
+         |                  ^
+      49 |         <MemoryRouter>
+      50 |             <ToastProvider>
+      51 |                 <LayoutProvider>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at customRender (src/test/context/LayoutContext.test.tsx:48:18)
+      at Object.<anonymous> (src/test/context/LayoutContext.test.tsx:93:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      46 |
+      47 | const customRender = (ui: React.ReactElement) => {
+    > 48 |     return render(
+         |                  ^
+      49 |         <MemoryRouter>
+      50 |             <ToastProvider>
+      51 |                 <LayoutProvider>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at customRender (src/test/context/LayoutContext.test.tsx:48:18)
+      at Object.<anonymous> (src/test/context/LayoutContext.test.tsx:93:9)
+
+PASS src/test/components/common/ToggleGroupButton/ToggleGroupButton.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/App.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      13 |   (onboardCustomer as jest.Mock).mockResolvedValue(mockOnboardResponse);
+      14 |
+    > 15 |   render(
+         |         ^
+      16 |     <MemoryRouter>
+      17 |       <App />
+      18 |     </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/App.test.tsx:15:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      13 |   (onboardCustomer as jest.Mock).mockResolvedValue(mockOnboardResponse);
+      14 |
+    > 15 |   render(
+         |         ^
+      16 |     <MemoryRouter>
+      17 |       <App />
+      18 |     </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/App.test.tsx:15:9)
+
+    console.log
+      User onboarded successfully
+
+      at onboard (src/context/AuthContext.tsx:123:29)
+
+    console.log
+      Syncing AI Vendor Preferences [
+        { aiVendor: 'CLAUDE', model: 'claude-3-haiku-20240307' },
+        { aiVendor: 'OPENAI', model: 'gpt-3.5-turbo' },
+        { aiVendor: 'GEMINI', model: 'gemini-2.5-flash' }
+      ]
+
+      at src/components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget.tsx:73:25
+
+PASS src/test/components/widgets/ConversationWidget/ResponseWidget/Response.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/Tooltip/Tooltip.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/BrandName/BrandName.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/pages/LandingPage.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      69 |
+      70 |     test('Renders all layout components with correct widget IDs', () => {
+    > 71 |         render(
+         |               ^
+      72 |             <MemoryRouter initialEntries={['/chat']}>
+      73 |                 <Routes>
+      74 |                     <Route path="/chat" element={<LandingPage />} />
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/pages/LandingPage.test.tsx:71:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      69 |
+      70 |     test('Renders all layout components with correct widget IDs', () => {
+    > 71 |         render(
+         |               ^
+      72 |             <MemoryRouter initialEntries={['/chat']}>
+      73 |                 <Routes>
+      74 |                     <Route path="/chat" element={<LandingPage />} />
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/pages/LandingPage.test.tsx:71:15)
+
+PASS src/test/components/widgets/CenterWidgets/NotesWidget/KeyValueNotes.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.log
+      Key Value Note saved successfully
+
+      at handleSave (src/components/widgets/CenterWidgets/NotesWidget/KeyValueNotes.tsx:24:21)
+
+    console.log
+      Key Value Note saved successfully
+
+      at handleSave (src/components/widgets/CenterWidgets/NotesWidget/KeyValueNotes.tsx:24:21)
+
+PASS src/test/components/common/MultiPurposeButton/MultiPurposeButton.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/SidebarWidgetContainer/SidebarWidgetContainer.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/InstructionWidget/InstructionWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/context/ThemeContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/context/ConversationContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      121 |
+      122 | const customRender = (ui: React.ReactElement) => {
+    > 123 |     return render(
+          |                  ^
+      124 |         <MemoryRouter>
+      125 |             <ToastProvider>
+      126 |                 <LayoutProvider>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at customRender (src/test/context/ConversationContext.test.tsx:123:18)
+      at Object.<anonymous> (src/test/context/ConversationContext.test.tsx:177:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      121 |
+      122 | const customRender = (ui: React.ReactElement) => {
+    > 123 |     return render(
+          |                  ^
+      124 |         <MemoryRouter>
+      125 |             <ToastProvider>
+      126 |                 <LayoutProvider>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at customRender (src/test/context/ConversationContext.test.tsx:123:18)
+      at Object.<anonymous> (src/test/context/ConversationContext.test.tsx:177:9)
+
+    console.log
+      DEBUGGING response RECEVIEVED: {
+        conversationId: 'legacy-conv-id',
+        text: 'Legacy Response Text',
+        aiVendor: 'CLAUDE',
+        messageId: 'leg-msg-1'
+      }
+
+      at fetchVendorResponses (src/context/ConversationContext.tsx:130:17)
+
+    console.log
+      SET Conversation ID legacy-conv-id
+
+      at fetchVendorResponses (src/context/ConversationContext.tsx:142:21)
+
+    console.log
+      DEBUG response: {
+        conversationId: 'legacy-conv-id',
+        text: 'Legacy Response Text',
+        aiVendor: 'CLAUDE',
+        messageId: 'leg-msg-1'
+      }
+
+      at fetchVendorResponses (src/context/ConversationContext.tsx:148:17)
+
+PASS src/test/components/icons/UserIcon.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+(node:25516) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS src/test/components/navbar/Navbar.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      37 |         mockUseAuth.mockReturnValue(defaultAuthValues);
+      38 |
+    > 39 |         render(
+         |               ^
+      40 |             <MemoryRouter>
+      41 |                 <LayoutProvider><Navbar /></LayoutProvider>
+      42 |             </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/components/navbar/Navbar.test.tsx:39:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      37 |         mockUseAuth.mockReturnValue(defaultAuthValues);
+      38 |
+    > 39 |         render(
+         |               ^
+      40 |             <MemoryRouter>
+      41 |                 <LayoutProvider><Navbar /></LayoutProvider>
+      42 |             </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/components/navbar/Navbar.test.tsx:39:15)
+
+PASS src/test/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.log
+      [TokenCounter] Debug: {
+        editorPromptLength: 11,
+        supplementalTextLength: 0,
+        configLength: 1,
+        foundModel: 'gpt-4',
+        fullTextLength: 11,
+        usingFallback: false
+      }
+
+      at calculateTokens (src/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.tsx:32:21)
+
+    console.log
+      [TokenCounter] Debug: {
+        editorPromptLength: 6,
+        supplementalTextLength: 7,
+        configLength: 1,
+        foundModel: 'gpt-4',
+        fullTextLength: 13,
+        usingFallback: false
+      }
+
+      at calculateTokens (src/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.tsx:32:21)
+
+    console.log
+      [TokenCounter] Debug: {
+        editorPromptLength: 4,
+        supplementalTextLength: 0,
+        configLength: 0,
+        foundModel: 'gpt-4o',
+        fullTextLength: 4,
+        usingFallback: true
+      }
+
+      at calculateTokens (src/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.tsx:32:21)
+
+    console.error
+      Warning: An update to TokenCounter inside a test was not wrapped in act(...).
+      
+      When testing, code that causes React state updates should be wrapped into act(...):
+      
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+      
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+          at TokenCounter (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.tsx:15:49)
+
+      48 |             try {
+      49 |                 const count = await countTokens(fullText, model)
+    > 50 |                 setTokenCount(count)
+         |                 ^
+      51 |             } catch (err) {
+      52 |                 console.error('Token counting failed:', err)
+      53 |                 setTokenCount(0)
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27628:9)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25547:5)
+      at setTokenCount (node_modules/react-dom/cjs/react-dom.development.js:16708:7)
+      at calculateTokens (src/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.tsx:50:17)
+
+    console.error
+      Warning: An update to TokenCounter inside a test was not wrapped in act(...).
+      
+      When testing, code that causes React state updates should be wrapped into act(...):
+      
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+      
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+          at TokenCounter (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.tsx:15:49)
+
+      53 |                 setTokenCount(0)
+      54 |             } finally {
+    > 55 |                 setIsTokenLoading(false)
+         |                 ^
+      56 |             }
+      57 |         }
+      58 |
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27628:9)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25547:5)
+      at setIsTokenLoading (node_modules/react-dom/cjs/react-dom.development.js:16708:7)
+      at calculateTokens (src/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.tsx:55:17)
+
+    console.log
+      [TokenCounter] Debug: {
+        editorPromptLength: 10,
+        supplementalTextLength: 0,
+        configLength: 0,
+        foundModel: 'gpt-4o',
+        fullTextLength: 10,
+        usingFallback: true
+      }
+
+      at calculateTokens (src/components/widgets/SidebarWidgets/TokenCounter/TokenCounter.tsx:32:21)
+
+PASS src/test/components/widgets/ConversationWidget/RequestWidget/Request.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/PromptEditorWidget/PromptEditorTooltip.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/SidebarWidgets/NewChatWidget/NewChatWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/ConfigureAIVendorSettingsWidget/ConfigureAIVendorSettingsWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.error
+      Error: Network Error
+          at Object.<anonymous> (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/test/components/widgets/ConfigureAIVendorSettingsWidget/ConfigureAIVendorSettingsWidget.test.tsx:102:68)
+          at Promise.then.completed (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:316:10)
+          at _callCircusTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:218:40)
+          at _runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:155:3)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:66:9)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:60:9)
+          at run (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:25:3)
+          at runAndTransformResultsToJestFormat (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)
+          at jestAdapter (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:82:19)
+          at runTestInternal (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:389:16)
+          at runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:475:34)
+          at Object.worker (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/testWorker.js:133:12)
+
+      63 |             showToast(response.apiKeyStatus.status)
+      64 |         } catch (error: any) {
+    > 65 |             console.error(error)
+         |                     ^
+      66 |             showToast(error.message || 'Error saving API key.')
+      67 |         } finally {
+      68 |             setLoading(prev => ({ ...prev, [vendor]: false }))
+
+      at handleSave (src/components/widgets/ConfigureAIVendorSettingsWidget/ConfigureAIVendorSettingsWidget.tsx:65:21)
+
+PASS src/test/components/widgets/NavbarMenuWidget/NavbarMenu.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+       8 | describe('NavbarMenu Component', () => {
+       9 |     test('renders all navigation items', () => {
+    > 10 |         render(
+         |               ^
+      11 |             <MemoryRouter initialEntries={['/']}>
+      12 |                 <NavbarMenu />
+      13 |             </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/components/widgets/NavbarMenuWidget/NavbarMenu.test.tsx:10:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+       8 | describe('NavbarMenu Component', () => {
+       9 |     test('renders all navigation items', () => {
+    > 10 |         render(
+         |               ^
+      11 |             <MemoryRouter initialEntries={['/']}>
+      12 |                 <NavbarMenu />
+      13 |             </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/components/widgets/NavbarMenuWidget/NavbarMenu.test.tsx:10:15)
+
+PASS src/test/context/SidebarMenuContext/SidebarMenuContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/SidebarWidgets/SidebarMenu/SidebarMenu.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/context/ConversationContextGaps.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      71 |         const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      72 |
+    > 73 |         render(
+         |               ^
+      74 |             <MemoryRouter>
+      75 |                 <ConversationProvider>
+      76 |                     <TestComponent />
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/context/ConversationContextGaps.test.tsx:73:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      71 |         const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      72 |
+    > 73 |         render(
+         |               ^
+      74 |             <MemoryRouter>
+      75 |                 <ConversationProvider>
+      76 |                     <TestComponent />
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/context/ConversationContextGaps.test.tsx:73:15)
+
+PASS src/test/pages/MemoryPage.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      40 |
+      41 |     test('renders layout with correct configuration', () => {
+    > 42 |         render(
+         |               ^
+      43 |             <MemoryRouter>
+      44 |                 <MemoryPage />
+      45 |             </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/pages/MemoryPage.test.tsx:42:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      40 |
+      41 |     test('renders layout with correct configuration', () => {
+    > 42 |         render(
+         |               ^
+      43 |             <MemoryRouter>
+      44 |                 <MemoryPage />
+      45 |             </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/test/pages/MemoryPage.test.tsx:42:15)
+
+PASS src/test/components/common/VendorAPIKeyStatus/VendorAPIKeyStatus.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/sections/LeftSidebar/LeftSidebar.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/context/AIContextUnit.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/InputTextWithHint/InputTextWithHint.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/InputSelectWithHint/InputSelectWithHint.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/Icon/Icon.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/pages/SettingsPage/SettingsPage.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+
+      38 |
+      39 |     test('renders correctly and initializes layout', () => {
+    > 40 |         render(
+         |               ^
+      41 |             <MemoryRouter>
+      42 |                 <SettingsPage />
+      43 |             </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:26:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/pages/SettingsPage/SettingsPage.test.tsx:40:15)
+
+    console.warn
+      ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+      38 |
+      39 |     test('renders correctly and initializes layout', () => {
+    > 40 |         render(
+         |               ^
+      41 |             <MemoryRouter>
+      42 |                 <SettingsPage />
+      43 |             </MemoryRouter>
+
+      at warnOnce (node_modules/react-router/lib/deprecations.ts:9:13)
+      at logDeprecation (node_modules/react-router/lib/deprecations.ts:14:3)
+      at logV6DeprecationWarnings (node_modules/react-router/lib/deprecations.ts:37:5)
+      at node_modules/react-router/lib/components.tsx:257:25
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom.development.js:23189:26)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom.development.js:24970:11)
+      at commitPassiveMountEffects_complete (node_modules/react-dom/cjs/react-dom.development.js:24930:9)
+      at commitPassiveMountEffects_begin (node_modules/react-dom/cjs/react-dom.development.js:24917:7)
+      at commitPassiveMountEffects (node_modules/react-dom/cjs/react-dom.development.js:24905:3)
+      at flushPassiveEffectsImpl (node_modules/react-dom/cjs/react-dom.development.js:27078:3)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom.development.js:27023:14)
+      at node_modules/react-dom/cjs/react-dom.development.js:26808:9
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:189:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:291:10)
+      at Object.<anonymous> (src/pages/SettingsPage/SettingsPage.test.tsx:40:15)
+
+PASS src/test/components/common/CopyToClipboard/CopyToClipboard.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/auth/ProtectedRoute.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/CenterWidgets/NotesWidget/PlainNotes.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.log
+      Plain Note saved successfully
+
+      at handleSave (src/components/widgets/CenterWidgets/NotesWidget/PlainNotes.tsx:22:21)
+
+    console.log
+      Plain Note saved successfully
+
+      at handleSave (src/components/widgets/CenterWidgets/NotesWidget/PlainNotes.tsx:22:21)
+
+PASS src/test/context/ToastContext.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/SidebarWidgets/ThreadWidget/ThreadPromptItem.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/SidebarWidgets/InstructionSidebarWidget/InstructionSidebarWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/services/conversationService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/SidebarWidgets/ThreadWidget/ThreadResponseItem.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/PromptEditorWidget/CustomToolbarCommands.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/ConversationWidget/ConversationBlock/ConversationBlock.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/TextContainer/TextContainer.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/PromptEditorWidget/PromptEditor.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/CustomerVectorDBConfigStatus/CustomerVectorDBConfigStatus.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/services/storeCustomerVendorApiKeysService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/UserAvatarButton/UserAvatarButton.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/utils/cache.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/sections/CenterSection/CenterSection.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/sections/RightSidebar/RightSidebar.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/services/generateTextService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/widgets/SidebarWidgets/ThreadWidget/ThreadWidget.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/hooks/useWidgetResolver.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/utils/apiUtils.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/services/generateTextStreamService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.error
+      Error reading stream Error: Stream Error
+          at Object.<anonymous> (/Users/nk/workplace/genai-proxy-service/genai-react-app/src/test/services/generateTextStreamService.test.ts:172:47)
+          at Promise.then.completed (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/utils.js:316:10)
+          at _callCircusTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:218:40)
+          at processTicksAndRejections (node:internal/process/task_queues:95:5)
+          at _runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:155:3)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:66:9)
+          at _runTestsForDescribeBlock (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:60:9)
+          at run (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/run.js:25:3)
+          at runAndTransformResultsToJestFormat (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)
+          at jestAdapter (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:82:19)
+          at runTestInternal (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:389:16)
+          at runTest (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/runTest.js:475:34)
+          at Object.worker (/Users/nk/workplace/genai-proxy-service/genai-react-app/node_modules/jest-runner/build/testWorker.js:133:12)
+
+      113 |         }
+      114 |     } catch (error) {
+    > 115 |         console.error("Error reading stream", error);
+          |                 ^
+      116 |         throw error;
+      117 |     } finally {
+      118 |         reader.releaseLock();
+
+      at generateTextStream (src/services/generateTextStreamService.ts:115:17)
+      at Object.<anonymous> (src/test/services/generateTextStreamService.test.ts:184:9)
+
+PASS src/test/services/getTextGenerationModelsService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/services/saveAIConfigService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/components/common/Toast/Toast.test.tsx
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/utils/parseJwt.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/services/storeCustomerVectorDBConfigService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/utils/tokenizer.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+    console.log
+      COUNT TOKENS  gpt-4
+
+      at countTokens (src/utils/tokenizer.ts:40:13)
+
+    console.log
+      COUNT TOKENS hello
+
+      at countTokens (src/utils/tokenizer.ts:40:13)
+
+    console.log
+      COUNT TOKENS hello world gpt-4
+
+      at countTokens (src/utils/tokenizer.ts:40:13)
+
+    console.log
+      COUNT TOKENS test1 gpt-4
+
+      at countTokens (src/utils/tokenizer.ts:40:13)
+
+    console.log
+      COUNT TOKENS test2 gpt-4
+
+      at countTokens (src/utils/tokenizer.ts:40:13)
+
+PASS src/test/services/saveNotesService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/services/onboardUserService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/services/instructionService.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+PASS src/test/config/PageWidgetConfig.test.ts
+  ● Console
+
+    console.log
+      !!! SETUP TESTS RUNNING !!!
+
+      at Object.<anonymous> (src/test/setupTests.ts:9:9)
+
+----------------------------------------------------------------|---------|----------|---------|---------|--------------------------------------
+File                                                            | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                    
+----------------------------------------------------------------|---------|----------|---------|---------|--------------------------------------
+All files                                                       |   93.16 |    82.91 |   94.11 |   94.96 |                                      
+ src                                                            |   88.88 |       50 |   66.66 |    87.5 |                                      
+  App.tsx                                                       |      80 |        0 |      50 |      80 | 14                                   
+  AppContent.tsx                                                |     100 |      100 |     100 |     100 |                                      
+ src/components/auth                                            |     100 |      100 |     100 |     100 |                                      
+  ProtectedRoute.tsx                                            |     100 |      100 |     100 |     100 |                                      
+ src/components/common/BrandName                                |     100 |      100 |     100 |     100 |                                      
+  BrandName.tsx                                                 |     100 |      100 |     100 |     100 |                                      
+ src/components/common/CopyToClipboard                          |      90 |     92.3 |     100 |   88.88 |                                      
+  CopyToClipboard.tsx                                           |      90 |     92.3 |     100 |   88.88 | 38                                   
+ src/components/common/CustomerVectorDBConfigStatus             |     100 |    64.28 |     100 |     100 |                                      
+  CustomerVectorDBConfigStatus.tsx                              |     100 |    64.28 |     100 |     100 | 31-37                                
+ src/components/common/Icon                                     |     100 |      100 |     100 |     100 |                                      
+  Icon.tsx                                                      |     100 |      100 |     100 |     100 |                                      
+ src/components/common/InputSelectWithHint                      |     100 |    95.45 |     100 |     100 |                                      
+  InputSelectWithHint.tsx                                       |     100 |    95.45 |     100 |     100 | 51                                   
+ src/components/common/InputTextWithHint                        |     100 |       90 |     100 |     100 |                                      
+  InputTextWithHint.tsx                                         |     100 |       90 |     100 |     100 | 29                                   
+ src/components/common/MultiPurposeButton                       |     100 |       80 |     100 |     100 |                                      
+  MultiPurposeButton.tsx                                        |     100 |       80 |     100 |     100 | 23                                   
+ src/components/common/PillButton                               |     100 |      100 |     100 |     100 |                                      
+  PillButton.tsx                                                |     100 |      100 |     100 |     100 |                                      
+ src/components/common/SidebarWidgetContainer                   |     100 |    68.75 |     100 |     100 |                                      
+  SidebarWidgetContainer.tsx                                    |     100 |    68.75 |     100 |     100 | 34,40-44,55-59                       
+ src/components/common/TextContainer                            |     100 |      100 |     100 |     100 |                                      
+  TextContainer.tsx                                             |     100 |      100 |     100 |     100 |                                      
+ src/components/common/ThemeToggle                              |     100 |       90 |     100 |     100 |                                      
+  ThemeToggle.tsx                                               |     100 |       90 |     100 |     100 | 10                                   
+ src/components/common/Toast                                    |     100 |      100 |     100 |     100 |                                      
+  Toast.tsx                                                     |     100 |      100 |     100 |     100 |                                      
+ src/components/common/ToggleGroupButton                        |   95.23 |    96.29 |     100 |     100 |                                      
+  ToggleGroupButton.tsx                                         |   95.23 |    96.29 |     100 |     100 | 66                                   
+ src/components/common/Tooltip                                  |   75.75 |    65.21 |     100 |   75.75 |                                      
+  Tooltip.tsx                                                   |   75.75 |    65.21 |     100 |   75.75 | 34-48,57,59                          
+ src/components/common/UserAvatarButton                         |     100 |    71.42 |     100 |     100 |                                      
+  UserAvatarButton.tsx                                          |     100 |    71.42 |     100 |     100 | 31-34                                
+ src/components/common/VendorAPIKeyStatus                       |     100 |    66.66 |     100 |     100 |                                      
+  VendorAPIKeyStatus.tsx                                        |     100 |    66.66 |     100 |     100 | 24,33-39                             
+ src/components/icons                                           |     100 |      100 |     100 |     100 |                                      
+  LoginIcon.tsx                                                 |     100 |      100 |     100 |     100 |                                      
+  SettingsIcon.tsx                                              |     100 |      100 |     100 |     100 |                                      
+  UserIcon.tsx                                                  |     100 |      100 |     100 |     100 |                                      
+ src/components/navbar                                          |     100 |      100 |     100 |     100 |                                      
+  Navbar.tsx                                                    |     100 |      100 |     100 |     100 |                                      
+ src/components/sections/CenterSection                          |   83.33 |    66.66 |   66.66 |   83.33 |                                      
+  CenterSection.tsx                                             |   83.33 |    66.66 |   66.66 |   83.33 | 18                                   
+ src/components/sections/LeftSidebar                            |     100 |      100 |     100 |     100 |                                      
+  LeftSidebar.tsx                                               |     100 |      100 |     100 |     100 |                                      
+ src/components/sections/RightSidebar                           |     100 |      100 |     100 |     100 |                                      
+  RightSidebar.tsx                                              |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/CenterWidgets/ConversationListWidget    |     100 |      100 |     100 |     100 |                                      
+  ConversationListWidget.tsx                                    |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/CenterWidgets/NotesWidget               |   93.54 |      100 |     100 |   93.54 |                                      
+  KeyValueNotes.tsx                                             |   93.33 |      100 |     100 |   93.33 | 28                                   
+  NotesWidget.tsx                                               |     100 |      100 |     100 |     100 |                                      
+  PlainNotes.tsx                                                |    92.3 |      100 |     100 |    92.3 | 25                                   
+ src/components/widgets/ConfigureAIVendorSettingsWidget         |     100 |    88.88 |     100 |     100 |                                      
+  ConfigureAIVendorSettingsWidget.tsx                           |     100 |    88.88 |     100 |     100 | 59-66                                
+ src/components/widgets/ConversationWidget/ConversationBlock    |   77.41 |    69.69 |   66.66 |   78.94 |                                      
+  ConversationBlock.tsx                                         |   77.41 |    69.69 |   66.66 |   78.94 | 50,65-67,73,78-82,115-116,126-127    
+ src/components/widgets/ConversationWidget/RequestWidget        |   87.71 |    88.67 |     100 |   93.75 |                                      
+  Request.tsx                                                   |   87.71 |    88.67 |     100 |   93.75 | 62,70,102                            
+ src/components/widgets/ConversationWidget/ResponseWidget       |   91.11 |       84 |     100 |   94.44 |                                      
+  Response.tsx                                                  |   91.11 |       84 |     100 |   94.44 | 143-144                              
+ src/components/widgets/DatabaseConnectionsSettingsWidget       |   85.07 |    78.57 |     100 |   85.07 |                                      
+  DatabaseConnectionsSettingsWidget.tsx                         |   85.07 |    78.57 |     100 |   85.07 | 33-34,65-66,74-75,82-83,109-110      
+ src/components/widgets/InstructionWidget                       |   98.34 |       85 |     100 |     100 |                                      
+  InstructionWidget.tsx                                         |   98.34 |       85 |     100 |     100 | 61,86,99,112,152,167,224,335,364-372 
+ src/components/widgets/NavbarMenuWidget                        |     100 |      100 |     100 |     100 |                                      
+  NavbarMenu.tsx                                                |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/PromptEditorWidget                      |   94.64 |    81.48 |     100 |     100 |                                      
+  CustomToolbarCommands.tsx                                     |   93.87 |    72.22 |     100 |     100 | 13,52-61,96-105                      
+  PromptEditor.tsx                                              |     100 |      100 |     100 |     100 |                                      
+  PromptEditorTooltip.tsx                                       |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/SidebarWidgets/AIVendorWidget           |   86.46 |     78.3 |      88 |   91.22 |                                      
+  AIVendorWidget.tsx                                            |   86.46 |     78.3 |      88 |   91.22 | 103,135,177-178,222-228              
+ src/components/widgets/SidebarWidgets/InstructionSidebarWidget |     100 |      100 |     100 |     100 |                                      
+  InstructionSidebarWidget.tsx                                  |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/SidebarWidgets/NewChatWidget            |     100 |    66.66 |     100 |     100 |                                      
+  NewChatWidget.tsx                                             |     100 |    66.66 |     100 |     100 | 10                                   
+ src/components/widgets/SidebarWidgets/SidebarMenu              |     100 |      100 |     100 |     100 |                                      
+  SidebarMenu.tsx                                               |     100 |      100 |     100 |     100 |                                      
+ src/components/widgets/SidebarWidgets/ThreadWidget             |   95.65 |    88.37 |     100 |   95.65 |                                      
+  ThreadPromptItem.tsx                                          |     100 |    84.61 |     100 |     100 | 25,40                                
+  ThreadResponseItem.tsx                                        |     100 |      100 |     100 |     100 |                                      
+  ThreadWidget.tsx                                              |   88.88 |    85.71 |     100 |   88.88 | 28                                   
+ src/components/widgets/SidebarWidgets/TokenCounter             |    87.5 |    94.73 |     100 |   86.66 |                                      
+  TokenCounter.tsx                                              |    87.5 |    94.73 |     100 |   86.66 | 43-44,52-53                          
+ src/config                                                     |     100 |      100 |     100 |     100 |                                      
+  PageWidgetConfig.ts                                           |     100 |      100 |     100 |     100 |                                      
+  SidebarMenuConfig.ts                                          |     100 |      100 |     100 |     100 |                                      
+  endpoints.ts                                                  |     100 |      100 |     100 |     100 |                                      
+  env.ts                                                        |     100 |      100 |     100 |     100 |                                      
+ src/constants                                                  |     100 |      100 |     100 |     100 |                                      
+  http.ts                                                       |       0 |        0 |       0 |       0 |                                      
+  icons.ts                                                      |     100 |      100 |     100 |     100 |                                      
+  vendors.ts                                                    |       0 |        0 |       0 |       0 |                                      
+ src/context                                                    |   93.69 |    76.15 |   88.28 |   96.42 |                                      
+  AIContext.tsx                                                 |   95.91 |       88 |   57.14 |   95.74 | 48,105                               
+  AuthContext.tsx                                               |   97.39 |       80 |     100 |   99.07 | 168                                  
+  ConversationContext.tsx                                       |   90.79 |    72.36 |    92.3 |   94.83 | 266-273,395,436,460,467-469          
+  LayoutContext.tsx                                             |    87.5 |       75 |   77.77 |   94.11 | 17                                   
+  SidebarMenuContext.tsx                                        |     100 |      100 |   66.66 |     100 |                                      
+  ThemeContext.tsx                                              |     100 |       75 |     100 |     100 | 26,34,41-51                          
+  ToastContext.tsx                                              |   94.44 |       50 |     100 |   93.33 | 42                                   
+ src/hooks                                                      |     100 |      100 |     100 |     100 |                                      
+  useSidebarWidget.ts                                           |     100 |      100 |     100 |     100 |                                      
+  useWidgetResolver.ts                                          |     100 |      100 |     100 |     100 |                                      
+ src/pages                                                      |     100 |      100 |     100 |     100 |                                      
+  LandingPage.tsx                                               |     100 |      100 |     100 |     100 |                                      
+ src/pages/MemoryPage                                           |     100 |      100 |     100 |     100 |                                      
+  MemoryPage.tsx                                                |     100 |      100 |     100 |     100 |                                      
+ src/pages/SettingsPage                                         |     100 |       50 |     100 |     100 |                                      
+  SettingsPage.tsx                                              |     100 |       50 |     100 |     100 | 20                                   
+ src/registry                                                   |     100 |      100 |     100 |     100 |                                      
+  WidgetRegistry.tsx                                            |     100 |      100 |     100 |     100 |                                      
+ src/services                                                   |   98.92 |    87.03 |     100 |    98.9 |                                      
+  conversationService.ts                                        |     100 |    91.66 |     100 |     100 | 68                                   
+  generateTextService.ts                                        |     100 |      100 |     100 |     100 |                                      
+  generateTextStreamService.ts                                  |   97.29 |    72.72 |     100 |   97.14 | 108                                  
+  getTextGenerationModelsService.ts                             |     100 |      100 |     100 |     100 |                                      
+  instructionService.ts                                         |     100 |      100 |     100 |     100 |                                      
+  onboardUserService.ts                                         |     100 |      100 |     100 |     100 |                                      
+  saveAIConfigService.ts                                        |     100 |      100 |     100 |     100 |                                      
+  saveNotesService.ts                                           |     100 |      100 |     100 |     100 |                                      
+  storeCustomerVectorDBConfigService.ts                         |     100 |      100 |     100 |     100 |                                      
+  storeCustomerVendorApiKeysService.ts                          |     100 |      100 |     100 |     100 |                                      
+ src/types                                                      |       0 |        0 |       0 |       0 |                                      
+  auth.types.ts                                                 |       0 |        0 |       0 |       0 |                                      
+ src/utils                                                      |   95.49 |    86.48 |     100 |   95.19 |                                      
+  apiUtils.ts                                                   |   96.42 |      100 |     100 |   96.15 | 60                                   
+  cache.ts                                                      |   92.45 |    73.33 |     100 |      92 | 84,97,118-119                        
+  parseJwt.ts                                                   |     100 |      100 |     100 |     100 |                                      
+  tokenizer.ts                                                  |     100 |       90 |     100 |     100 | 44                                   
+----------------------------------------------------------------|---------|----------|---------|---------|--------------------------------------
+
+Summary of all failing tests
+FAIL src/App.test.tsx
+  ● App › renders correctly and wraps with providers
+
+    TypeError: auth0.Auth0Provider.mockImplementation is not a function
+
+      21 |         (router.useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+      22 |         
+    > 23 |         (auth0.Auth0Provider as unknown as jest.Mock).mockImplementation(({ children, onRedirectCallback }) => {
+         |                                                       ^
+      24 |             capturedOnRedirect = onRedirectCallback;
+      25 |             return <div data-testid="auth0-mock">{children}</div>;
+      26 |         });
+
+      at Object.<anonymous> (src/App.test.tsx:23:55)
+
+  ● App › onRedirectCallback navigates to returnTo if provided
+
+    TypeError: auth0.Auth0Provider.mockImplementation is not a function
+
+      21 |         (router.useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+      22 |         
+    > 23 |         (auth0.Auth0Provider as unknown as jest.Mock).mockImplementation(({ children, onRedirectCallback }) => {
+         |                                                       ^
+      24 |             capturedOnRedirect = onRedirectCallback;
+      25 |             return <div data-testid="auth0-mock">{children}</div>;
+      26 |         });
+
+      at Object.<anonymous> (src/App.test.tsx:23:55)
+
+  ● App › onRedirectCallback navigates to current pathname if returnTo is missing
+
+    TypeError: auth0.Auth0Provider.mockImplementation is not a function
+
+      21 |         (router.useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+      22 |         
+    > 23 |         (auth0.Auth0Provider as unknown as jest.Mock).mockImplementation(({ children, onRedirectCallback }) => {
+         |                                                       ^
+      24 |             capturedOnRedirect = onRedirectCallback;
+      25 |             return <div data-testid="auth0-mock">{children}</div>;
+      26 |         });
+
+      at Object.<anonymous> (src/App.test.tsx:23:55)
+
+
+Test Suites: 1 failed, 73 passed, 74 total
+Tests:       3 failed, 380 passed, 383 total
+Snapshots:   0 total
+Time:        3.595 s
+Ran all test suites.
