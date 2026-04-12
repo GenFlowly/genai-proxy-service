@@ -8,6 +8,7 @@ import { useLayout } from './LayoutContext'
 import { useToast } from './ToastContext'
 import { generateText } from '../services/generateTextService'
 import { generateTextStream, StreamMetadata } from '../services/generateTextStreamService'
+import { getAIUsageActivity } from '../services/getAIUsageService'
 import { getConversation } from '../services/conversationService'
 import {
     ConversationBlock,
@@ -507,6 +508,35 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     idToUse,
                     controller.signal
                 )
+
+                const finalConversationId = explicitConversationId || conversationIdRef.current
+
+                if (currentMsgId && finalConversationId) {
+                    try {
+                        const metrics = await getAIUsageActivity(token, finalConversationId, currentMsgId)
+                        if (metrics) {
+                            setConversationBlockList(prev => prev.map(block => {
+                                if (block.conversationBlockId === id) {
+                                    const newMsgs = [...block.responseMessages]
+                                    const indexToUpdate = newMsgs.findIndex(m => m.messageId === currentMsgId || m.messageId === msgId)
+                                    if (indexToUpdate !== -1) {
+                                        newMsgs[indexToUpdate] = {
+                                            ...newMsgs[indexToUpdate],
+                                            inputTokens: metrics.inputTokens,
+                                            outputTokens: metrics.outputTokens,
+                                            totalTokens: metrics.totalTokens,
+                                            tokensReadFromCache: metrics.tokensReadFromCache
+                                        }
+                                    }
+                                    return { ...block, responseMessages: newMsgs }
+                                }
+                                return block
+                            }))
+                        }
+                    } catch (e) {
+                         console.warn("Failed retrieving AI usage manually after stream", e)
+                    }
+                }
 
                 // ✅ Mark this specific message stream as finished using reliable Index targeting
                 setConversationBlockList(prev =>

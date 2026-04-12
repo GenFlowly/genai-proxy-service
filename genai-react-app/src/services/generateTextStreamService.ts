@@ -15,12 +15,7 @@ export interface StreamMetadata {
     conversationTitle?: string | null;
 }
 
-/**
- * Sentinel emitted by the server at the very end of a stream when token usage is available.
- * Format: "\n[USAGE:{\"inputTokens\":N,\"outputTokens\":N}]"
- */
-const USAGE_SENTINEL_RE = /\n\[USAGE:(\{[^}]+\})\]$/;
-
+// Sentinel logic removed; token usage is explicitly queried after the stream.
 // TITLE_SENTINEL_RE removed due to async title generation migration
 
 export async function generateTextStream(
@@ -69,7 +64,6 @@ export async function generateTextStream(
     }
 
     const decoder = new TextDecoder("utf-8");
-    let accumulated = "";
 
     try {
         while (true) {
@@ -78,44 +72,8 @@ export async function generateTextStream(
 
             let chunk = decoder.decode(value, { stream: true });
 
-            accumulated += chunk;
-
-            // Check if the accumulated buffer ends with the USAGE sentinel.
-            // If so, strip it before forwarding to the caller.
-            const match = accumulated.match(USAGE_SENTINEL_RE);
-            if (match) {
-                // Strip sentinel from accumulated and emit only clean text
-                const cleanChunk = chunk.replace(USAGE_SENTINEL_RE, "");
-                accumulated = accumulated.replace(USAGE_SENTINEL_RE, "");
-
-                if (cleanChunk.length > 0) onDelta(cleanChunk);
-
-                // Parse usage and fire a second onMetadata call with token counts
-                try {
-                    const usage = JSON.parse(match[1]) as {
-                        inputTokens?: number | null;
-                        outputTokens?: number | null;
-                        totalTokens?: number | null;
-                        tokensReadFromCache?: number | null;
-                    };
-                    if (onMetadata) {
-                        onMetadata({
-                            conversationId,
-                            messageId,
-                            responseMessageId,
-                            aiVendor,
-                            inputTokens: usage.inputTokens ?? null,
-                            outputTokens: usage.outputTokens ?? null,
-                            totalTokens: usage.totalTokens ?? null,
-                            tokensReadFromCache: usage.tokensReadFromCache ?? null,
-                        });
-                    }
-                } catch {
-                    console.warn("Failed to parse USAGE sentinel:", match[1]);
-                }
-            } else {
-                onDelta(chunk);
-            }
+            // Removed USAGE sentinel parsing
+            onDelta(chunk);
         }
     } catch (error) {
         console.error("Error reading stream", error);

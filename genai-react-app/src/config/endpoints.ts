@@ -18,4 +18,5 @@ export const endpoints = {
     getCustomerInstructions: `${BASE}${API_PREFIX}/instructions`,
     createConversationTitle: `${BASE}${API_PREFIX}/conversation/title`,
     getCustomerConversations: `${BASE}${API_PREFIX}/conversations`,
+    getAIUsage: `${BASE}${API_PREFIX}/message/usage`,
 };
