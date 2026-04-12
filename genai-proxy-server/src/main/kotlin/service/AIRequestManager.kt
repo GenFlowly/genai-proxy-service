@@ -110,7 +110,9 @@ class AIRequestManager(
             text = prompt,
             previousMessageId = selectedResponseId,
             aiConfig = aiConfig,
-            systemPrompt = systemPrompt
+            systemPrompt = systemPrompt,
+            instructionId = instructionId.takeIf { it.isNotBlank() },
+            instructionVersion = instructionVersion.takeIf { it.isNotBlank() }
         )
 
         // Step 4 - Add message request to conversation
@@ -355,7 +357,9 @@ class AIRequestManager(
             text = prompt,
             previousMessageId = selectedResponseId,
             aiConfig = aiConfig,
-            systemPrompt = systemPrompt
+            systemPrompt = systemPrompt,
+            instructionId = instructionId.takeIf { it.isNotBlank() },
+            instructionVersion = instructionVersion.takeIf { it.isNotBlank() }
         )
 
         // Step 3 - Add message request to conversation

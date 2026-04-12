@@ -29,7 +29,7 @@ class ConversationService(
         while (i < messages.size) {
             val msg = messages[i]
             if (msg.role == "user") {
-                val prompt = Prompt(instructionId = "", instructionVersion = "", prompt = msg.text)
+                val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text)
                 
                 val responses = mutableListOf<GenerateTextResponse>()
                 while (i + 1 < messages.size) {
