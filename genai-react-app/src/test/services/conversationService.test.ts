@@ -171,6 +171,47 @@ describe('conversationService', () => {
         expect(result?.blocks[0].prompt).toBe('Hello');
     });
 
+    test('getConversation returns instructionId from first prompt', async () => {
+        const mockBackendResponse = {
+            promptAndResponseList: [
+                {
+                    prompt: { instructionId: 'INS-abc123', instructionVersion: '5', prompt: 'Hello' },
+                    responses: [{ text: 'Hi', aiVendor: 'OPENAI', conversationId: mockConversationId, messageId: 'msg-1' }]
+                },
+                {
+                    prompt: { instructionId: 'INS-other', instructionVersion: '1', prompt: 'Second' },
+                    responses: []
+                }
+            ]
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue(mockBackendResponse)
+        });
+
+        const result = await getConversation(mockToken, mockConversationId);
+
+        // Should use the instructionId from the first prompt only
+        expect(result?.instructionId).toBe('INS-abc123');
+    });
+
+    test('getConversation returns null instructionId when promptAndResponseList is empty', async () => {
+        const mockBackendResponse = {
+            promptAndResponseList: [],
+            title: 'Empty Chat'
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue(mockBackendResponse)
+        });
+
+        const result = await getConversation(mockToken, mockConversationId);
+
+        expect(result?.instructionId).toBeNull();
+    });
+
     test('getConversation maps unknown vendor to default (OPENAI)', async () => {
         const mockBackendResponse = {
             promptAndResponseList: [

@@ -56,6 +56,8 @@ jest.mock('../../context/AuthContext', () => ({
     AuthProvider: ({ children }: any) => children
 }));
 
+const mockSetSelectedInstructionId = jest.fn();
+
 const mockUseAI = jest.fn(() => ({
     config: [] as any[],
     systemPrompt: '',
@@ -63,7 +65,7 @@ const mockUseAI = jest.fn(() => ({
     setSupplementalText: jest.fn(),
     customerInstructions: [],
     selectedInstructionId: null,
-    setSelectedInstructionId: jest.fn()
+    setSelectedInstructionId: mockSetSelectedInstructionId
 }));
 const mockSetSupplementalText = jest.fn();
 jest.mock('../../context/AIContext', () => ({
@@ -162,7 +164,7 @@ describe('ConversationContext UI Integration', () => {
             setSupplementalText: mockSetSupplementalText,
             customerInstructions: [],
             selectedInstructionId: null,
-            setSelectedInstructionId: jest.fn()
+            setSelectedInstructionId: mockSetSelectedInstructionId
         });
     });
 
@@ -469,6 +471,40 @@ describe('ConversationContext UI Integration', () => {
 
         await waitFor(() => {
             expect(mockShowToast).toHaveBeenCalledWith('You do not have access to this conversation');
+        });
+    });
+
+    test('Flow: loadConversation calls setSelectedInstructionId with instructionId from response', async () => {
+        const mockData = {
+            conversationId: 'conv-123',
+            blocks: [{ conversationBlockId: 'blk-1', prompt: 'P', responseMessages: [] }],
+            title: null,
+            instructionId: 'INS-abc123'
+        };
+        (conversationService.getConversation as jest.Mock).mockResolvedValue(mockData);
+        customRender(<TestConversationUI />);
+
+        fireEvent.click(screen.getByTestId('load-btn'));
+
+        await waitFor(() => {
+            expect(mockSetSelectedInstructionId).toHaveBeenCalledWith('INS-abc123');
+        });
+    });
+
+    test('Flow: loadConversation calls setSelectedInstructionId with null when no instructionId', async () => {
+        const mockData = {
+            conversationId: 'conv-123',
+            blocks: [{ conversationBlockId: 'blk-1', prompt: 'P', responseMessages: [] }],
+            title: null,
+            instructionId: null
+        };
+        (conversationService.getConversation as jest.Mock).mockResolvedValue(mockData);
+        customRender(<TestConversationUI />);
+
+        fireEvent.click(screen.getByTestId('load-btn'));
+
+        await waitFor(() => {
+            expect(mockSetSelectedInstructionId).toHaveBeenCalledWith(null);
         });
     });
 });
