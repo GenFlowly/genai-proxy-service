@@ -15,6 +15,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.activity.registerGetAIUsageActivityRoutes
 import com.genflowly.activity.registerGetConversationRoutes
 import com.genflowly.activity.registerGetCustomerInstructionListRoutes
 import com.genflowly.activity.registerGetInstructionVersionRoutes
@@ -40,6 +41,7 @@ object Routes {
     const val GET_CUSTOMER_INSTRUCTIONS = "$API_V1/instructions"
     const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction"
     const val CREATE_CONVERSATION_TITLE = "$API_V1/conversation/title"
+    const val GET_AI_USAGE = "$API_V1/message/usage"
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
 }
 
@@ -72,6 +74,7 @@ fun Application.configureRouting(
         registerGetCustomerInstructionListRoutes(customerProfileService)
         registerGetInstructionVersionRoutes(customerProfileService)
         registerCreateConversationTitleRoutes(aiRequestManager, customerProfileService)
+        registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)
     }
 }
