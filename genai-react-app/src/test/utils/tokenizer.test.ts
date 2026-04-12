@@ -68,4 +68,16 @@ describe('tokenizer utils', () => {
             expect(mockEncodingForModel).toHaveBeenCalledTimes(1);
         });
     });
+
+    describe('clearTokenizerCache', () => {
+        it('should clear cached tokenizers so they reload on next call', async () => {
+            await getTokenizer('gpt-4');
+            expect(mockEncodingForModel).toHaveBeenCalledTimes(1);
+
+            clearTokenizerCache();
+
+            await getTokenizer('gpt-4');
+            expect(mockEncodingForModel).toHaveBeenCalledTimes(2);
+        });
+    });
 });

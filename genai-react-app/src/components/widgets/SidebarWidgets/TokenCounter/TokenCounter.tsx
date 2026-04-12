@@ -9,44 +9,30 @@ import { AIVendor } from '../../../../constants/vendors'
 
 export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
     const { conversation, ai } = useSidebarWidget()
-    const { editorPrompt } = conversation
-    const { supplementalText, config } = ai
+    const { editorPrompt, activeBlockId, conversationBlockList } = conversation
+    const { config } = ai
+
+    // PromptEditor is only rendered when the active block is not yet resolved
+    const activeBlock = conversationBlockList.find(b => b.conversationBlockId === activeBlockId)
+    const promptEditorVisible = !!activeBlock && !(activeBlock.status === 'resolved' && !activeBlock.isLoading)
 
     const [tokenCount, setTokenCount] = useState(0)
     const [isTokenLoading, setIsTokenLoading] = useState(false)
 
     useEffect(() => {
         const calculateTokens = async () => {
-            const fullText = (editorPrompt || '') + (supplementalText || '')
-            if (!fullText.trim()) {
+            const text = promptEditorVisible ? (editorPrompt || '') : ''
+            if (!text.trim()) {
                 setTokenCount(0)
                 return
             }
 
-            // 3. Get Model (Assumes OpenAI for counting)
-            // 3. Get Model (Assumes OpenAI for counting)
             const openaiConfig = config.find(c => c.aiVendor === AIVendor.OPENAI && !!c.model?.trim())
-            // Fallback to gpt-4o if no config found (for debugging/robustness)
             const model = openaiConfig?.model || 'gpt-4o'
-
-            console.log('[TokenCounter] Debug:', {
-                editorPromptLength: editorPrompt?.length,
-                supplementalTextLength: supplementalText?.length,
-                configLength: config?.length,
-                foundModel: model,
-                fullTextLength: fullText.length,
-                usingFallback: !openaiConfig?.model
-            })
-
-            if (!model) {
-                // Should be unreachable now with fallback
-                setTokenCount(0)
-                return
-            }
 
             setIsTokenLoading(true)
             try {
-                const count = await countTokens(fullText, model)
+                const count = await countTokens(text, model)
                 setTokenCount(count)
             } catch (err) {
                 console.error('Token counting failed:', err)
@@ -58,7 +44,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
 
         const timeout = setTimeout(calculateTokens, 500)
         return () => clearTimeout(timeout)
-    }, [editorPrompt, supplementalText, config])
+    }, [editorPrompt, promptEditorVisible, config])
 
     // Collapsed Content
     const headerCollapsed = (
@@ -102,7 +88,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
         >
             <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0.25rem' }}>
                 <div className="text-xs text-gray-500" data-testid="token-count-display">
-                    {isTokenLoading ? 'Counting prompt tokens…' : `Prompt Tokens: ${tokenCount}`}
+                    {isTokenLoading ? 'Counting tokens…' : `Estimated: ${tokenCount}`}
                 </div>
             </div>
         </SidebarWidgetContainer>

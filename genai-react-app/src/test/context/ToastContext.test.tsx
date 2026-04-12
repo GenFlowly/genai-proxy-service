@@ -65,4 +65,24 @@ describe('ToastContext', () => {
     });
 });
 
-// Coverage refresh
+    test('useToast throws when used outside ToastProvider', () => {
+        const BadComponent = () => {
+            useToast()
+            return null
+        }
+        expect(() => render(<BadComponent />)).toThrow('useToast must be used within a ToastProvider')
+    })
+
+    test('showToast works without optional duration', () => {
+        render(
+            <ToastProvider>
+                <TestComponent />
+            </ToastProvider>
+        )
+
+        act(() => {
+            screen.getByText('Show Success').click()
+        })
+
+        expect(screen.getByTestId('toast-item')).toBeInTheDocument()
+    })
