@@ -26,15 +26,6 @@ class ConversationService(
             if (msg.role == "user") {
                 val prompt = Prompt(instructionId = "", instructionVersion = "", prompt = msg.text)
                 
-                // Default empty response
-                var responseObj = GenerateTextResponse(
-                    text = null, 
-                    aiVendor = null, 
-                    conversationId = conversationId, 
-                    messageId = null
-                )
-
-                // Check next for assistant response
                 val responses = mutableListOf<GenerateTextResponse>()
                 while (i + 1 < messages.size) {
                     val nextMsg = messages[i + 1]
@@ -54,11 +45,7 @@ class ConversationService(
                     }
                 }
                 
-                if (responses.isNotEmpty()) {
-                    responseObj = responses.first()
-                }
-                
-                pairs.add(PromptAndResponse(prompt, responseObj, responses))
+                pairs.add(PromptAndResponse(prompt, responses))
             }
             i++
         }
