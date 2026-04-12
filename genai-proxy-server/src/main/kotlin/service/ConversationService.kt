@@ -36,7 +36,11 @@ class ConversationService(
                                 text = nextMsg.text,
                                 aiVendor = vendor,
                                 conversationId = conversationId,
-                                messageId = nextMsg.messageId
+                                messageId = nextMsg.messageId,
+                                inputTokens = nextMsg.inputTokens,
+                                outputTokens = nextMsg.outputTokens,
+                                totalTokens = nextMsg.totalTokens,
+                                tokensReadFromCache = nextMsg.tokensReadFromCache
                             )
                         )
                         i++ // consume next message

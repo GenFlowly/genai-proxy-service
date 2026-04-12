@@ -15,6 +15,10 @@ interface BackendResponse {
     aiVendor: string | null;
     conversationId: string | null;
     messageId: string | null;
+    inputTokens?: number | null;
+    outputTokens?: number | null;
+    totalTokens?: number | null;
+    tokensReadFromCache?: number | null;
 }
 
 interface BackendPromptAndResponse {
@@ -73,6 +77,10 @@ export async function getConversation(
                     aiVendor: vendor,
                     text: resp.text,
                     messageId: resp.messageId || `msg-${index}-${respIndex}`,
+                    inputTokens: resp.inputTokens ?? null,
+                    outputTokens: resp.outputTokens ?? null,
+                    totalTokens: resp.totalTokens ?? null,
+                    tokensReadFromCache: resp.tokensReadFromCache ?? null,
                 });
             }
         });

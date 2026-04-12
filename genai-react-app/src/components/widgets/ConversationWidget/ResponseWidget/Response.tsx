@@ -181,44 +181,44 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             data-testid="response-message"
                             aria-label={`Response from ${aiVendor}`}
                         >
+                            {!isLoading && (inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
+                                <div className={styles.tokenBadge}>
+                                    {inputTokens != null && (
+                                        <Tooltip content="Total Input Tokens">
+                                            <span className={styles.tokenItem}>
+                                                <Icon src={ICONS.INPUT_TOKENS} size={12} />
+                                                {inputTokens.toLocaleString()}
+                                            </span>
+                                        </Tooltip>
+                                    )}
+                                    {outputTokens != null && (
+                                        <Tooltip content="Total Output Tokens">
+                                            <span className={styles.tokenItem}>
+                                                <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
+                                                {outputTokens.toLocaleString()}
+                                            </span>
+                                        </Tooltip>
+                                    )}
+                                    {tokensReadFromCache != null && (
+                                        <Tooltip content="Tokens read from cache">
+                                            <span className={styles.tokenItem}>
+                                                <Icon src={ICONS.CACHE_TOKENS} size={12} />
+                                                {tokensReadFromCache.toLocaleString()}
+                                            </span>
+                                        </Tooltip>
+                                    )}
+                                    {totalTokens != null && (
+                                        <Tooltip content="Total Tokens">
+                                            <span className={styles.tokenItem}>
+                                                <Icon src={ICONS.TOTAL_TOKENS} size={12} />
+                                                {totalTokens.toLocaleString()}
+                                            </span>
+                                        </Tooltip>
+                                    )}
+                                </div>
+                            )}
                             {onFollowUp && !isLoading && isLastResponseBlock && (
                                 <div className={styles.followUpButtonWrapper}>
-                                    {(inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
-                                        <div className={styles.tokenBadge}>
-                                            {inputTokens != null && (
-                                                <Tooltip content="Total Input Tokens">
-                                                    <span className={styles.tokenItem}>
-                                                        <Icon src={ICONS.INPUT_TOKENS} size={12} />
-                                                        {inputTokens.toLocaleString()}
-                                                    </span>
-                                                </Tooltip>
-                                            )}
-                                            {outputTokens != null && (
-                                                <Tooltip content="Total Output Tokens">
-                                                    <span className={styles.tokenItem}>
-                                                        <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
-                                                        {outputTokens.toLocaleString()}
-                                                    </span>
-                                                </Tooltip>
-                                            )}
-                                            {tokensReadFromCache != null && (
-                                                <Tooltip content="Tokens read from cache">
-                                                    <span className={styles.tokenItem}>
-                                                        <Icon src={ICONS.CACHE_TOKENS} size={12} />
-                                                        {tokensReadFromCache.toLocaleString()}
-                                                    </span>
-                                                </Tooltip>
-                                            )}
-                                            {totalTokens != null && (
-                                                <Tooltip content="Total Tokens">
-                                                    <span className={styles.tokenItem}>
-                                                        <Icon src={ICONS.TOTAL_TOKENS} size={12} />
-                                                        {totalTokens.toLocaleString()}
-                                                    </span>
-                                                </Tooltip>
-                                            )}
-                                        </div>
-                                    )}
                                     <div style={{ display: 'flex', gap: '8px' }}>
                                         <Tooltip content={disabled ? "No API keys set" : ""}>
                                             <div style={disabled ? { cursor: 'not-allowed' } : {}}>

@@ -9,5 +9,7 @@ data class GenerateTextResponse(
     val conversationId: String?,
     val messageId: String?,
     val inputTokens: Int? = null,
-    val outputTokens: Int? = null
+    val outputTokens: Int? = null,
+    val totalTokens: Int? = null,
+    val tokensReadFromCache: Int? = null
 )
