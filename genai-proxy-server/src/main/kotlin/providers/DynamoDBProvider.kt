@@ -46,34 +46,35 @@ class DynamoDBProvider(
     private val dynamoDbClient: DynamoDbClient,
     private val logger: KLogger
 ) {
-//    suspend fun getConversation(conversationId: String, customerId: String): Conversation? =
-//        withContext(Dispatchers.IO) {
-//            try {
-//                val key = mapOf(
-//                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build(),
-//                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()
-//                )
-//
-//                val request = GetItemRequest.builder()
-//                    .tableName(CONVERSATION_TABLE)
-//                    .key(key)
-//                    .build()
-//
-//                val response = dynamoDbClient.getItem(request)
-//                val item = response.item() ?: return@withContext null
-//
-//                val client = item["client"]?.s() ?: return@withContext null
-//
-//                Conversation(
-//                    conversationId = conversationId,
-//                    customerId = customerId,
-//                    client = client
-//                )
-//            } catch (e: Exception) {
-//                logger.error("Failed to Get Conversation from DynamoDB", e)
-//                throw e
-//            }
-//        }
+    suspend fun getConversation(conversationId: String, customerId: String): Conversation? =
+        withContext(Dispatchers.IO) {
+            try {
+                val key = mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                )
+
+                val request = GetItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(key)
+                    .build()
+
+                val response = dynamoDbClient.getItem(request)
+                val item = response.item() ?: return@withContext null
+                if (item.isEmpty()) return@withContext null
+
+                val client = item["client"]?.s() ?: return@withContext null
+
+                Conversation(
+                    conversationId = conversationId,
+                    customerId = customerId,
+                    client = client
+                )
+            } catch (e: Exception) {
+                logger.error("Failed to Get Conversation from DynamoDB", e)
+                throw e
+            }
+        }
 
 
 

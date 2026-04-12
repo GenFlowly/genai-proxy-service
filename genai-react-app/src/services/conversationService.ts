@@ -53,9 +53,9 @@ export async function getConversation(
     });
 
     if (!response.ok) {
-        // If fetchWithRetry returns a non-ok response, we can return null or throw an error.
-        // The original code throws, so we'll keep that behavior for non-ok responses.
-        throw new Error(`Failed to fetch conversation: ${response.status} ${response.statusText}`);
+        const err = new Error(`Failed to fetch conversation: ${response.status} ${response.statusText}`) as Error & { status: number }
+        err.status = response.status
+        throw err
     }
 
     const data: BackendGetConversationResponse = await response.json();

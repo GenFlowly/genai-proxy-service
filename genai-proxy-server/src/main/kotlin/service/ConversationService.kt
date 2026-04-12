@@ -10,12 +10,17 @@ import models.GenerateTextResponse
 import models.Message
 import models.Prompt
 
+class ConversationAccessDeniedException(message: String) : Exception(message)
+
 class ConversationService(
     private val kmsProvider: KMSProvider,
     private val dynamoDBProvider: DynamoDBProvider
 ) {
 
     suspend fun getConversationHistory(conversationId: String, customerId: String): GetConversationResponse {
+        dynamoDBProvider.getConversation(conversationId, customerId)
+            ?: throw ConversationAccessDeniedException("Conversation not found or access denied")
+
         val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
             .sortedBy { it.sequence }
 
