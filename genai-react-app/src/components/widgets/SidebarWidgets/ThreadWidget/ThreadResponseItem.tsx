@@ -16,8 +16,8 @@ export default function ThreadResponseItem({ conversationBlockId, responseCount,
         const element = document.querySelector(`[data-response-block-id="${conversationBlockId}"]`)
         element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-
-    const label = responseCount > 1 ? 'Responses' : 'Response'
+    // Show 'No Responses' for 0, 'Response' for 1, 'Responses' for > 1
+    const label = responseCount === 0 ? 'No Responses' : responseCount === 1 ? 'Response' : 'Responses'
 
     if (collapsed) {
         return (

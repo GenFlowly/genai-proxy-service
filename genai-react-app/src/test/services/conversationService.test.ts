@@ -23,21 +23,21 @@ describe('conversationService', () => {
             promptAndResponseList: [
                 {
                     prompt: { instructionId: '', instructionVersion: '', prompt: 'Hello' },
-                    response: {
+                    responses: [{
                         text: 'World',
                         aiVendor: 'OPENAI',
                         conversationId: mockConversationId,
                         messageId: 'msg-1'
-                    }
+                    }]
                 },
                 {
                     prompt: { instructionId: '', instructionVersion: '', prompt: 'Question' },
-                    response: {
+                    responses: [{
                         text: 'Answer',
                         aiVendor: 'CLAUDE',
                         conversationId: mockConversationId,
                         messageId: 'msg-2'
-                    }
+                    }]
                 }
             ]
         };
@@ -81,7 +81,7 @@ describe('conversationService', () => {
             promptAndResponseList: [
                 {
                     prompt: { instructionId: '', instructionVersion: '', prompt: 'Valid' },
-                    response: { text: null, aiVendor: null, conversationId: null, messageId: null }
+                    responses: [{ text: null, aiVendor: null, conversationId: null, messageId: null }]
                 }
             ]
         };
@@ -118,12 +118,12 @@ describe('conversationService', () => {
             promptAndResponseList: [
                 {
                     prompt: { instructionId: '', instructionVersion: '', prompt: 'Hello' },
-                    response: {
+                    responses: [{
                         text: 'World',
                         aiVendor: null, // No vendor
                         conversationId: mockConversationId,
                         messageId: 'msg-1'
-                    }
+                    }]
                 }
             ]
         };

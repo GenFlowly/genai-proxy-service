@@ -15,13 +15,13 @@ export default function ThreadWidget({ 'data-testid': testId }: { 'data-testid'?
         <div className={styles.threadWidget} data-testid={testId || "thread-widget"}>
             {!collapsed && <h3 className={styles.title}>Thread</h3>}
 
-            {conversationBlockList.length === 0 || (conversationBlockList.length === 1 && !conversationBlockList[0].prompt && conversationBlockList[0].responseMessages.length === 0) ? (
+            {conversationBlockList.length === 0 || (conversationBlockList.length === 1 && !conversationBlockList[0].prompt && conversationBlockList[0].status === 'draft') ? (
                 !collapsed && <p className={styles.emptyState} data-testid="thread-empty-state">No conversation yet</p>
             ) : (
                 <div className={styles.threadList}>
                     {conversationBlockList.map((block) => {
                         const hasPrompt = block.prompt.trim().length > 0
-                        const hasResponses = block.responseMessages.length > 0
+                        const hasResponses = block.status === 'resolved' || block.responseMessages.length > 0
 
                         // Don't show blocks that are completely empty
                         if (!hasPrompt && !hasResponses) {

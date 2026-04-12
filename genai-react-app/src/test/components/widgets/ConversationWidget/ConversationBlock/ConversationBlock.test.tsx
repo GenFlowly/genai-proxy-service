@@ -48,7 +48,8 @@ describe('ConversationBlock Component', () => {
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
                 responseMessages: [],
-                isLoading: false
+                isLoading: false,
+                status: 'draft'
             }],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock
@@ -74,7 +75,8 @@ describe('ConversationBlock Component', () => {
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
                 responseMessages: [{ id: 'msg-1', content: 'Hello' }],
-                isLoading: false
+                isLoading: false,
+                status: 'resolved'
             }],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock
@@ -92,7 +94,8 @@ describe('ConversationBlock Component', () => {
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
                 responseMessages: [{ id: 'msg-1' }],
-                isLoading: false
+                isLoading: false,
+                status: 'resolved'
             }],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock
@@ -106,8 +109,8 @@ describe('ConversationBlock Component', () => {
     test('handleFollowUp reuses last empty block', async () => {
         mockUseConversation.mockReturnValue({
             conversationBlockList: [
-                { conversationBlockId: 'block-1', responseMessages: [{ id: 'msg-1' }] },
-                { conversationBlockId: 'block-2', responseMessages: [] } // Last block is empty
+                { conversationBlockId: 'block-1', responseMessages: [{ id: 'msg-1' }], status: 'resolved' },
+                { conversationBlockId: 'block-2', responseMessages: [], status: 'draft' } // Last block is empty
             ],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock
@@ -127,7 +130,7 @@ describe('ConversationBlock Component', () => {
     test('handleFollowUp creates new block if last block has content', () => {
         mockUseConversation.mockReturnValue({
             conversationBlockList: [
-                { conversationBlockId: 'block-1', responseMessages: [{ id: 'msg-1' }] } // Last block has content
+                { conversationBlockId: 'block-1', responseMessages: [{ id: 'msg-1' }], status: 'resolved' } // Last block has content
             ],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock
@@ -149,7 +152,8 @@ describe('ConversationBlock Component', () => {
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
                 responseMessages: [{ id: 'msg-1' }],
-                isLoading: false
+                isLoading: false,
+                status: 'resolved'
             }],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock
@@ -170,7 +174,8 @@ describe('ConversationBlock Component', () => {
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
                 responseMessages: [{ id: 'msg-1' }],
-                isLoading: true
+                isLoading: true,
+                status: 'draft'
             }],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock
@@ -195,7 +200,8 @@ describe('ConversationBlock Component', () => {
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
                 responseMessages: [{ id: 'msg-1' }],
-                isLoading: true
+                isLoading: true,
+                status: 'draft'
             }],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock
@@ -219,7 +225,8 @@ describe('ConversationBlock Component', () => {
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
                 responseMessages: [{ id: 'msg-1' }],
-                isLoading: true
+                isLoading: true,
+                status: 'draft'
             }],
             addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock

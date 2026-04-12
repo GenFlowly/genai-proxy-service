@@ -46,6 +46,7 @@ describe('Request Widget Component', () => {
                 conversationBlockId: 'block-1',
                 responseMessages: [],
                 isLoading: false,
+                status: 'draft',
                 prompt: ''
             }],
             generateResponsesStream: mockGenerateResponsesStream,
@@ -76,6 +77,7 @@ describe('Request Widget Component', () => {
                 conversationBlockId: 'block-1',
                 responseMessages: [{ id: 'res-1' }],
                 isLoading: false,
+                status: 'resolved',
                 prompt: 'Resolved Prompt'
             }],
             generateResponsesStream: mockGenerateResponsesStream,
@@ -125,6 +127,7 @@ describe('Request Widget Component', () => {
                 conversationBlockId: 'block-1',
                 responseMessages: [],
                 isLoading: false,
+                status: 'draft',
                 prompt: 'Ready Prompt'
             }],
             generateResponsesStream: mockGenerateResponsesStream,
@@ -149,6 +152,7 @@ describe('Request Widget Component', () => {
                 conversationBlockId: 'block-1',
                 responseMessages: [],
                 isLoading: true,
+                status: 'draft',
                 prompt: 'Streaming Prompt'
             }],
             generateResponsesStream: mockGenerateResponsesStream,

@@ -103,8 +103,8 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
         // Get the last conversation block
         const lastBlock = conversationBlockList[conversationBlockList.length - 1]
 
-        // Check if last block is empty (no responses yet)
-        const isLastBlockEmpty = lastBlock.responseMessages.length === 0
+        // Check if last block is a draft (no responses yet AND not historically resolved with 0)
+        const isLastBlockEmpty = lastBlock.status === 'draft'
 
         if (isLastBlockEmpty) {
             // Reuse the existing empty block
@@ -129,13 +129,13 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
         }
     }
 
-    const isLastResponseBlock = [...conversationBlockList].reverse().find(b => b.responseMessages.length > 0)?.conversationBlockId === id
+    const isLastResponseBlock = [...conversationBlockList].reverse().find(b => b.status === 'resolved')?.conversationBlockId === id
 
     return (
         <div className={`${styles.conversationBlock} conversation-block-item`} data-block-id={id} data-testid={testId}>
             <Request blockId={id} />
 
-            {conversationBlock.responseMessages.length > 0 && (
+            {((conversationBlock.status === 'resolved') || (conversationBlock.responseMessages.length > 0)) && (
                 <div ref={responseRef} style={{ width: '100%' }}>
                     <Response
                         blockId={id}
