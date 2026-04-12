@@ -90,6 +90,19 @@ class ConversationService(
         return dynamoDBProvider.getMessage(conversationId, previousMessageId)
     }
 
+    suspend fun getMessageUsage(
+        conversationId: String,
+        messageId: String
+    ): Map<String, Int?>? {
+        val message = dynamoDBProvider.getMessage(conversationId, messageId) ?: return null
+        return mapOf(
+            "inputTokens" to message.inputTokens,
+            "outputTokens" to message.outputTokens,
+            "totalTokens" to message.totalTokens,
+            "tokensReadFromCache" to message.tokensReadFromCache
+        )
+    }
+
     suspend fun getMessageThread(
         conversationId: String,
         messageId: String

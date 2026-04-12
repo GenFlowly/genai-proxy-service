@@ -444,15 +444,7 @@ class AIRequestManager(
                     conversationService.addMessageInConversation(responseMessage)
                 }
 
-                // Emit a sentinel chunk so the client can extract token usage after streaming.
-                // Format: "\n[USAGE:{\"inputTokens\":N,\"outputTokens\":N,\"totalTokens\":N,\"tokensReadFromCache\":N}]" - only emitted when at least one count is known.
-                if (streamInputTokens != null || streamOutputTokens != null) {
-                    val inputPart = streamInputTokens?.toString() ?: "null"
-                    val outputPart = streamOutputTokens?.toString() ?: "null"
-                    val totalPart = streamTotalTokens?.toString() ?: "null"
-                    val cachePart = streamTokensReadFromCache?.toString() ?: "null"
-                    emit("\n[USAGE:{\"inputTokens\":$inputPart,\"outputTokens\":$outputPart,\"totalTokens\":$totalPart,\"tokensReadFromCache\":$cachePart}]")
-                }
+                // Sentinel USAGE chunk removed - Token counts fetched post stream now via explicit API
             }
         }
 
