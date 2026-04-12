@@ -14,6 +14,8 @@ data class Message(
     val systemPrompt: String,
     val aiConfig: List<AIConfig>,
     val previousMessageId: String?,
+    val instructionId: String? = null,
+    val instructionVersion: String? = null,
     val inputTokens: Int? = null,
     val outputTokens: Int? = null,
     val totalTokens: Int? = null,

@@ -211,6 +211,8 @@ class DynamoDBProvider(
         val systemPrompt = item["systemPrompt"]?.s() ?: return null
 
         val previousMessageId = item["previousMessageId"]?.s()
+        val instructionId = item["instructionId"]?.s()?.takeIf { it.isNotBlank() }
+        val instructionVersion = item["instructionVersion"]?.s()?.takeIf { it.isNotBlank() }
 
         val sequence = sequenceStr.toIntOrNull() ?: return null
 
@@ -233,6 +235,8 @@ class DynamoDBProvider(
             systemPrompt = systemPrompt,
             aiConfig = aiConfig,
             previousMessageId = previousMessageId,
+            instructionId = instructionId,
+            instructionVersion = instructionVersion,
             inputTokens = inputTokens,
             outputTokens = outputTokens,
             totalTokens = totalTokens,
@@ -294,6 +298,14 @@ class DynamoDBProvider(
 
                     "previousMessageId" to AttributeValue.builder()
                         .s(message.previousMessageId ?: "")
+                        .build(),
+
+                    "instructionId" to AttributeValue.builder()
+                        .s(message.instructionId ?: "")
+                        .build(),
+
+                    "instructionVersion" to AttributeValue.builder()
+                        .s(message.instructionVersion ?: "")
                         .build()
                 ).also { map ->
                     message.inputTokens?.let {
