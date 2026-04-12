@@ -35,6 +35,7 @@ export interface GetConversationResponse {
     conversationId: string;
     blocks: ConversationBlock[];
     title?: string | null;
+    instructionId?: string | null;
 }
 
 export async function getConversation(
@@ -100,6 +101,7 @@ export async function getConversation(
     return {
         conversationId,
         blocks,
-        title: data.title ?? null
+        title: data.title ?? null,
+        instructionId: data.promptAndResponseList[0]?.prompt.instructionId ?? null,
     };
 }

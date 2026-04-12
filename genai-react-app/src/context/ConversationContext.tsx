@@ -222,6 +222,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 } else {
                     setConversationTitle(null)
                 }
+
+                // Restore the selected instruction from the conversation
+                setSelectedInstructionId(data.instructionId ?? null)
             }
         } catch (err: any) {
             if (err?.status === 403) {
@@ -231,7 +234,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 console.error("Failed to load conversation", err)
             }
         }
-    }, [isAuthenticated, customerId, getAccessTokenSilently, showToast, navigate])
+    }, [isAuthenticated, customerId, getAccessTokenSilently, showToast, navigate, setSelectedInstructionId])
 
     const resetConversation = useCallback(() => {
         navigate('/chat')
