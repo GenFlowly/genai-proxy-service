@@ -63,4 +63,6 @@ export interface IConversationContext {
 
     editorPrompt: string
     setEditorPrompt: (prompt: string) => void
+
+    conversationTitle: string | null
 }

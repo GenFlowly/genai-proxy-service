@@ -38,6 +38,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const [conversationId, setConversationId] = useState<string>('')
     const [activeBlockId, setActiveBlockId] = useState<string>('')
+    const [conversationTitle, setConversationTitle] = useState<string | null>(null)
     
     // Manage aborted streams natively
     const abortControllers = useRef<Map<string, AbortController>>(new Map())
@@ -217,6 +218,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 // Restore the page title from the saved conversation title
                 if (data.title) {
                     document.title = `${data.title} | Genflowly`
+                    setConversationTitle(data.title)
+                } else {
+                    setConversationTitle(null)
                 }
             }
         } catch (err) {
@@ -246,6 +250,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             },
         ])
         setSelectedResponseByBlock({})
+        setConversationTitle(null)
     }, [navigate, customerId])
 
     // --- Core Actions ---
@@ -590,6 +595,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     }).then(res => {
                         if (res.title) {
                             document.title = `${res.title} | Genflowly`
+                            setConversationTitle(res.title)
                         }
                     }).catch(err => console.warn("Background title generation failed", err))
                 }
@@ -686,6 +692,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 resetConversation,
                 editorPrompt,
                 setEditorPrompt,
+                conversationTitle,
 
             }}
         >
