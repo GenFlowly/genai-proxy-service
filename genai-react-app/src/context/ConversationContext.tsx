@@ -223,10 +223,15 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     setConversationTitle(null)
                 }
             }
-        } catch (err) {
-            console.error("Failed to load conversation", err)
+        } catch (err: any) {
+            if (err?.status === 403) {
+                showToast('You do not have access to this conversation')
+                navigate('/chat')
+            } else {
+                console.error("Failed to load conversation", err)
+            }
         }
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
+    }, [isAuthenticated, customerId, getAccessTokenSilently, showToast, navigate])
 
     const resetConversation = useCallback(() => {
         navigate('/chat')

@@ -9,6 +9,7 @@ import io.ktor.server.routing.get
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.ConversationService
+import com.genflowly.service.ConversationAccessDeniedException
 import com.genflowly.utils.requireAuthenticatedCustomerId
 
 private val logger = LoggerFactory.getLogger("GetConversationRoute")
@@ -35,6 +36,8 @@ fun Route.registerGetConversationRoutes(
                 val response = conversationService.getConversationHistory(conversationId, customerId)
                 call.respond(response)
 
+            } catch (e: ConversationAccessDeniedException) {
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied"))
             } catch (e: Exception) {
                 logger.error(
                     "Unexpected error in Get Conversation controller: {}",
