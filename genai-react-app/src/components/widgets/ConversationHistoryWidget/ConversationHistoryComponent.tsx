@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { useConversation } from '../../../context/ConversationContext'
 import { getCustomerConversations } from '../../../services/conversationHistoryService'
 import { ConversationSummary } from '../../../models/conversationHistory.models'
 import styles from './ConversationHistory.module.scss'
@@ -26,6 +27,7 @@ function MessageIcon({ className }: { className?: string }) {
 
 export default function ConversationHistoryComponent() {
     const { getAccessTokenSilently, isAuthenticated } = useAuth()
+    const { conversationId, conversationTitle } = useConversation()
     const navigate = useNavigate()
     const { conversationId: activeId } = useParams<{ conversationId: string }>()
 
@@ -56,6 +58,22 @@ export default function ConversationHistoryComponent() {
     useEffect(() => {
         fetchPage(null)
     }, [fetchPage])
+
+    // Patch title in list when the active conversation gets a generated title
+    useEffect(() => {
+        if (!conversationId || !conversationTitle) return
+        setItems(prev => {
+            const idx = prev.findIndex(c => c.conversationId === conversationId)
+            if (idx === -1) {
+                // Conversation not yet in list (e.g. brand new) — prepend it
+                return [{ conversationId, title: conversationTitle, createdAt: null, updatedAt: null }, ...prev]
+            }
+            if (prev[idx].title === conversationTitle) return prev
+            const next = [...prev]
+            next[idx] = { ...next[idx], title: conversationTitle }
+            return next
+        })
+    }, [conversationId, conversationTitle])
 
     const handleLoadMore = () => fetchPage(lastKey)
 
