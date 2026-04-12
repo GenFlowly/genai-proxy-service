@@ -47,7 +47,8 @@ describe('ThreadWidget', () => {
             conversationBlockList: [{
                 conversationBlockId: 'init-block',
                 prompt: '',
-                responseMessages: []
+                responseMessages: [],
+                status: 'draft'
             }]
         });
         mockUseLayout.mockReturnValue({
@@ -64,12 +65,14 @@ describe('ThreadWidget', () => {
                 {
                     conversationBlockId: 'block-1',
                     prompt: 'Block 1 Prompt',
-                    responseMessages: [{ id: 'res-1' }]
+                    responseMessages: [{ id: 'res-1' }],
+                    status: 'resolved'
                 },
                 {
                     conversationBlockId: 'block-2',
                     prompt: 'Block 2 Prompt',
-                    responseMessages: []
+                    responseMessages: [],
+                    status: 'resolved'
                 }
             ]
         });
@@ -83,9 +86,9 @@ describe('ThreadWidget', () => {
         expect(screen.getByTestId('prompt-item-block-1')).toHaveTextContent('Prompt: Block 1 Prompt');
         expect(screen.getByTestId('response-item-block-1')).toHaveTextContent('Responses: 1');
 
-        // Block 2: Only prompt
+        // Block 2: Prompt and empty Response UI hook
         expect(screen.getByTestId('prompt-item-block-2')).toHaveTextContent('Prompt: Block 2 Prompt');
-        expect(screen.queryByTestId('response-item-block-2')).not.toBeInTheDocument();
+        expect(screen.getByTestId('response-item-block-2')).toBeInTheDocument();
     });
 
     test('renders collapsed state correctly', () => {
@@ -94,7 +97,8 @@ describe('ThreadWidget', () => {
                 {
                     conversationBlockId: 'block-1',
                     prompt: 'Prompt',
-                    responseMessages: []
+                    responseMessages: [],
+                    status: 'draft'
                 }
             ]
         });

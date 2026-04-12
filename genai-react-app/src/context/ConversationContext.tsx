@@ -61,6 +61,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             prompt: '',
             responseMessages: [],
             isLoading: false,
+            status: 'draft',
         },
     ])
 
@@ -240,6 +241,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 prompt: '',
                 responseMessages: [],
                 isLoading: false,
+                status: 'draft',
             },
         ])
         setSelectedResponseByBlock({})
@@ -252,6 +254,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             prompt: '',
             responseMessages: [],
             isLoading: false,
+            status: 'draft',
         }
         setConversationBlockList(prev => [...prev, newConversation])
     }
@@ -330,6 +333,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             updateConversationBlock(id, {
                 responseMessages: responses,
                 isLoading: false,
+                status: 'resolved',
                 // Commit the prompt to context only on success
                 prompt: promptToUse
             })
@@ -344,32 +348,68 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     },
                 ],
                 isLoading: false,
+                status: 'resolved',
             })
         }
     }
 
-    const generateResponsesStream = async (id: string, overridePrompt?: string, selectedMessageId?: string | null) => {
+    const generateResponsesStream = async (id: string, overridePrompt?: string, selectedMessageId?: string | null, vendorToRegenerate?: AIVendor) => {
         const prep = validateAndPrepareGeneration(id, overridePrompt, selectedMessageId)
         if (!prep) return
 
-        const { aiConfigs, finalSelectedResponseId, promptToUse } = prep
+        let { aiConfigs, finalSelectedResponseId, promptToUse } = prep
         const controller = new AbortController()
-        abortControllers.current.set(id, controller)
+        
+        let targetIdForAbort = id
+        if (vendorToRegenerate) {
+             targetIdForAbort = `${id}-${vendorToRegenerate}`
+             aiConfigs = aiConfigs.filter(c => c.aiVendor === vendorToRegenerate)
+             if (aiConfigs.length === 0) {
+                 showToast(`Please select a valid model for ${vendorToRegenerate} first.`)
+                 return
+             }
+        }
+        
+        abortControllers.current.set(targetIdForAbort, controller)
 
-        // Initialize placeholders for all selected vendors
         const timestamp = Date.now()
-        const initialResponseMessages: Message[] = aiConfigs.map((config, index) => ({
-            aiVendor: config.aiVendor,
-            text: '',
-            messageId: `resp-${timestamp}-${index}`,
-            isLoading: true
+        
+        // Ensure we conditionally scope message injections (avoid overriding siblings)
+        let initialResponseMessages: Message[] = []
+        
+        setConversationBlockList(prev => prev.map(block => {
+             if (block.conversationBlockId === id) {
+                 let newMsgs = [...block.responseMessages]
+                 
+                 if (vendorToRegenerate) {
+                     const existingIndex = newMsgs.findIndex(m => m.aiVendor === vendorToRegenerate)
+                     const newMsg: Message = {
+                         aiVendor: vendorToRegenerate,
+                         text: '',
+                         messageId: `resp-${timestamp}-regen`,
+                         isLoading: true
+                     }
+                     if (existingIndex !== -1) {
+                         newMsgs[existingIndex] = newMsg
+                     } else {
+                         newMsgs.push(newMsg)
+                     }
+                     initialResponseMessages = [newMsg] // RunStream only gets this element
+                 } else {
+                     newMsgs = aiConfigs.map((config, index) => ({
+                         aiVendor: config.aiVendor,
+                         text: '',
+                         messageId: `resp-${timestamp}-${index}`,
+                         isLoading: true
+                     }))
+                     initialResponseMessages = newMsgs
+                 }
+                 
+                 return { ...block, isLoading: true, prompt: promptToUse, responseMessages: newMsgs }
+             }
+             return block
         }))
 
-        updateConversationBlock(id, {
-            isLoading: true,
-            prompt: promptToUse,
-            responseMessages: initialResponseMessages
-        })
         setLeftSidebarExpanded(false)
         setRightSidebarExpanded(false)
 
@@ -473,8 +513,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     prev.map(block => {
                         if (block.conversationBlockId === id) {
                             const newMsgs = [...block.responseMessages]
-                            if (newMsgs[index]) {
-                                newMsgs[index] = { ...newMsgs[index], isLoading: false }
+                            const indexToUpdate = newMsgs.findIndex(m => m.messageId === currentMsgId || m.messageId === msgId)
+                            if (indexToUpdate !== -1) {
+                                newMsgs[indexToUpdate] = { ...newMsgs[indexToUpdate], isLoading: false }
                             }
                             return { ...block, responseMessages: newMsgs }
                         }
@@ -544,6 +585,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
             updateConversationBlock(id, {
                 isLoading: false,
+                status: 'resolved',
                 prompt: promptToUse
             })
             setSelectedResponseForBlock(id, '')
@@ -559,6 +601,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             if (err.name === 'AbortError') {
                 updateConversationBlock(id, {
                     isLoading: false,
+                    status: 'resolved',
                 })
             } else {
                 updateConversationBlock(id, {
@@ -570,10 +613,11 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         },
                     ],
                     isLoading: false,
+                    status: 'resolved',
                 })
             }
         } finally {
-            abortControllers.current.delete(id)
+            abortControllers.current.delete(vendorToRegenerate ? `${id}-${vendorToRegenerate}` : id)
         }
     }
 
@@ -583,6 +627,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             prompt: '',
             responseMessages: [],
             isLoading: false,
+            status: 'draft',
         }
         setConversationBlockList(prev => [...prev, newConversation])
     }

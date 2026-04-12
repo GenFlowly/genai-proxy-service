@@ -126,7 +126,8 @@ export default function Request({
     const displayName = customerName || user?.name || ''
     const displayPicture = customerPicture || user?.picture
 
-    if (conversationBlock.responseMessages.length > 0 && !conversationBlock.isLoading) {
+    // Only lock Request when actively streaming/resolved AND not being edited
+    if (conversationBlock.status === 'resolved' && !conversationBlock.isLoading) {
         return (
             <div className={styles.resolvedRequestContainer}
                  data-testid={testId || "resolved-request-wrapper"}>

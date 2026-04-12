@@ -19,7 +19,6 @@ interface BackendResponse {
 
 interface BackendPromptAndResponse {
     prompt: BackendPrompt;
-    response: BackendResponse;
     responses?: BackendResponse[];
 }
 
@@ -62,7 +61,7 @@ export async function getConversation(
 
         const responsesToProcess = item.responses && item.responses.length > 0 
             ? item.responses 
-            : (item.response ? [item.response] : []);
+            : [];
 
         responsesToProcess.forEach((resp, respIndex) => {
             // Only map if we have minimal valid response data
@@ -80,10 +79,13 @@ export async function getConversation(
 
         return {
             // Use messageId for block ID if available to be stable, otherwise index
-            conversationBlockId: item.response.messageId ? `block-${item.response.messageId}` : `block-${index}-${Date.now()}`,
+            conversationBlockId: item.responses && item.responses.length > 0 && item.responses[0].messageId 
+                ? `block-${item.responses[0].messageId}` 
+                : `block-${index}-${Date.now()}`,
             prompt: item.prompt.prompt,
             responseMessages: responses,
-            isLoading: false
+            isLoading: false,
+            status: 'resolved'
         };
     });
 

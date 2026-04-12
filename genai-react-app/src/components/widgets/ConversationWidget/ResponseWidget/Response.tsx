@@ -27,7 +27,7 @@ interface ResponseProps {
 
 export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
-    const { setSelectedResponseForBlock, getSelectedResponseForBlock } = useConversation()
+    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream } = useConversation()
 
     const selectedResponseId = getSelectedResponseForBlock(blockId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
@@ -104,12 +104,29 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         msg.aiVendor && selectedVendors.includes(msg.aiVendor)
     )
 
-    if (!visibleMessages || visibleMessages.length === 0) return null
+    if (!visibleMessages || visibleMessages.length === 0) {
+        return (
+            <div 
+                className={styles.container} 
+                data-response-block-id={blockId} 
+                data-testid={testId || "empty-response-block"}
+            >
+                <div style={{ textAlign: 'left', padding: '1rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                    No responses were generated
+                </div>
+            </div>
+        )
+    }
 
     const handleFollowUp = (messageId: string) => {
         if (disabled) return
         setSelectedResponseForBlock(blockId, messageId)
         onFollowUp?.(messageId)
+    }
+
+    const handleRegenerate = async (vendor: AIVendor) => {
+        if (disabled) return
+        await generateResponsesStream(blockId, undefined, undefined, vendor)
     }
 
     return (
@@ -202,17 +219,31 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                             )}
                                         </div>
                                     )}
-                                    <Tooltip content={disabled ? "No API keys set" : ""}>
-                                        <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                            <MultiPurposeButton
-                                                label={isSelected ? 'Selected' : 'Follow up'}
-                                                onClick={() => handleFollowUp(messageId)}
-                                                disabled={isSelected || disabled}
-                                                icon={isSelected ? undefined : ICONS.SEND}
-                                                data-testid="follow-up-button"
-                                            />
-                                        </div>
-                                    </Tooltip>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <Tooltip content={disabled ? "No API keys set" : ""}>
+                                            <div style={disabled ? { cursor: 'not-allowed' } : {}}>
+                                                <MultiPurposeButton
+                                                    label="Regenerate"
+                                                    onClick={() => handleRegenerate(aiVendor as AIVendor)}
+                                                    disabled={disabled}
+                                                    icon={ICONS.REFRESH_ICON}
+                                                    data-testid="regenerate-button"
+                                                />
+                                            </div>
+                                        </Tooltip>
+
+                                        <Tooltip content={disabled ? "No API keys set" : ""}>
+                                            <div style={disabled ? { cursor: 'not-allowed' } : {}}>
+                                                <MultiPurposeButton
+                                                    label={isSelected ? 'Selected' : 'Follow up'}
+                                                    onClick={() => handleFollowUp(messageId)}
+                                                    disabled={isSelected || disabled}
+                                                    icon={isSelected ? undefined : ICONS.SEND}
+                                                    data-testid="follow-up-button"
+                                                />
+                                            </div>
+                                        </Tooltip>
+                                    </div>
                                 </div>
                             )}
                         </TextContainer>
