@@ -32,8 +32,8 @@ export default function AppContent(): React.ReactElement {
                                     </ProtectedRoute>
                                 }
                             />
-                            <Route path="/settings" element={<SettingsPage />} />
-                            <Route path="/memory" element={<MemoryPage />} />
+                            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                            <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
                         </Routes>
                     </ConversationProvider>
                 </AIProvider>
