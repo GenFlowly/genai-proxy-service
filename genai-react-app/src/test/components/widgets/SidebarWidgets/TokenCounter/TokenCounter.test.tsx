@@ -19,6 +19,14 @@ jest.mock('../../../../../components/common/SidebarWidgetContainer/SidebarWidget
     )
 );
 
+const draftBlock = {
+    conversationBlockId: 'block-1',
+    prompt: '',
+    responseMessages: [],
+    isLoading: false,
+    status: 'draft' as const,
+}
+
 describe('TokenCounter', () => {
     const mockUseSidebarWidget = useSidebarWidget as jest.Mock;
     const mockCountTokens = countTokens as jest.Mock;
@@ -26,13 +34,14 @@ describe('TokenCounter', () => {
     beforeEach(() => {
         jest.clearAllMocks();
 
-        // Default Context
+        // Default Context — no active block, no prompt
         mockUseSidebarWidget.mockReturnValue({
             conversation: {
-                editorPrompt: ''
+                editorPrompt: '',
+                activeBlockId: '',
+                conversationBlockList: []
             },
             ai: {
-                supplementalText: '',
                 config: []
             }
         });
@@ -57,48 +66,48 @@ describe('TokenCounter', () => {
         });
 
         expect(screen.getByTestId('token-counter-widget')).toBeInTheDocument();
-        expect(screen.getByTestId('token-count-display')).toHaveTextContent('Prompt Tokens: 0');
+        expect(screen.getByTestId('token-count-display')).toHaveTextContent('Estimated: 0');
         expect(screen.getByTestId('token-count-collapsed')).toHaveTextContent('0');
     });
 
     test('counts tokens when prompt is present', async () => {
         mockUseSidebarWidget.mockReturnValue({
             conversation: {
-                editorPrompt: 'Hello World'
+                editorPrompt: 'Hello World',
+                activeBlockId: 'block-1',
+                conversationBlockList: [draftBlock]
             },
             ai: {
-                supplementalText: '',
                 config: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-4' }]
             }
         });
-        mockCountTokens.mockResolvedValue(2); // Mocked result
+        mockCountTokens.mockResolvedValue(2);
 
         render(<TokenCounter />);
 
-        // Advance debounce
         act(() => {
             jest.advanceTimersByTime(600);
         });
 
-        // Wait for async update
         await waitFor(() => {
-            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Prompt Tokens: 2');
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Estimated: 2');
         });
 
         expect(mockCountTokens).toHaveBeenCalledWith('Hello World', 'gpt-4');
     });
 
-    test('counts tokens combining prompt and supplemental text', async () => {
+    test('counts only prompt text, not supplemental text', async () => {
         mockUseSidebarWidget.mockReturnValue({
             conversation: {
-                editorPrompt: 'Prompt'
+                editorPrompt: 'Prompt',
+                activeBlockId: 'block-1',
+                conversationBlockList: [draftBlock]
             },
             ai: {
-                supplementalText: 'Context',
                 config: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-4' }]
             }
         });
-        mockCountTokens.mockResolvedValue(5);
+        mockCountTokens.mockResolvedValue(1);
 
         render(<TokenCounter />);
 
@@ -107,20 +116,21 @@ describe('TokenCounter', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Prompt Tokens: 5');
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Counting tokens…');
         });
 
-        expect(mockCountTokens).toHaveBeenCalledWith('PromptContext', 'gpt-4');
+        expect(mockCountTokens).toHaveBeenCalledWith('Prompt', 'gpt-4');
     });
 
     test('uses fallback model if no config found', async () => {
         mockUseSidebarWidget.mockReturnValue({
             conversation: {
-                editorPrompt: 'Test'
+                editorPrompt: 'Test',
+                activeBlockId: 'block-1',
+                conversationBlockList: [draftBlock]
             },
             ai: {
-                supplementalText: '',
-                config: [] // No openai config
+                config: []
             }
         });
         mockCountTokens.mockResolvedValue(1);
@@ -136,13 +146,45 @@ describe('TokenCounter', () => {
         });
     });
 
-    test('shows loading state', async () => {
+    test('shows 0 tokens when active block is resolved', async () => {
         mockUseSidebarWidget.mockReturnValue({
-            conversation: { editorPrompt: 'Loading...' },
-            ai: { supplementalText: '', config: [] }
+            conversation: {
+                editorPrompt: 'Some text',
+                activeBlockId: 'block-1',
+                conversationBlockList: [{
+                    ...draftBlock,
+                    status: 'resolved' as const,
+                    isLoading: false
+                }]
+            },
+            ai: {
+                config: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-4' }]
+            }
         });
 
-        // Delay resolution
+        render(<TokenCounter />);
+
+        act(() => {
+            jest.advanceTimersByTime(600);
+        });
+
+        await waitFor(() => {
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Estimated: 0');
+        });
+
+        expect(mockCountTokens).not.toHaveBeenCalled();
+    });
+
+    test('shows loading state', async () => {
+        mockUseSidebarWidget.mockReturnValue({
+            conversation: {
+                editorPrompt: 'Loading...',
+                activeBlockId: 'block-1',
+                conversationBlockList: [draftBlock]
+            },
+            ai: { config: [] }
+        });
+
         let resolveCount: (value: number) => void;
         mockCountTokens.mockImplementation(() => new Promise(resolve => {
             resolveCount = resolve;
@@ -151,21 +193,19 @@ describe('TokenCounter', () => {
         render(<TokenCounter />);
 
         act(() => {
-            jest.advanceTimersByTime(500); // Trigger calculation start
+            jest.advanceTimersByTime(500);
         });
 
-        // Should be loading now
         await waitFor(() => {
-            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Counting prompt tokens…');
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Counting tokens…');
         });
 
-        // Resolve
         act(() => {
             resolveCount!(10);
         });
 
         await waitFor(() => {
-            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Prompt Tokens: 10');
+            expect(screen.getByTestId('token-count-display')).toHaveTextContent('Estimated: 10');
         });
     });
 });

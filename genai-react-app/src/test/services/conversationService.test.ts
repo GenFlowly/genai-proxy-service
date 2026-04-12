@@ -113,6 +113,64 @@ describe('conversationService', () => {
             .rejects.toThrow('Failed to fetch conversation: 404 Not Found');
     });
 
+    test('getConversation attaches status to thrown error', async () => {
+        mockFetchWithRetry.mockResolvedValue({
+            ok: false,
+            status: 403,
+            statusText: 'Forbidden'
+        });
+
+        let caughtError: any;
+        try {
+            await getConversation(mockToken, mockConversationId);
+        } catch (err) {
+            caughtError = err;
+        }
+
+        expect(caughtError).toBeDefined();
+        expect(caughtError.status).toBe(403);
+        expect(caughtError.message).toContain('403');
+    });
+
+    test('getConversation returns title from response', async () => {
+        const mockBackendResponse = {
+            promptAndResponseList: [],
+            title: 'My Conversation'
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue(mockBackendResponse)
+        });
+
+        const result = await getConversation(mockToken, mockConversationId);
+
+        expect(result?.title).toBe('My Conversation');
+        expect(result?.blocks).toHaveLength(0);
+    });
+
+    test('getConversation handles block with no responses', async () => {
+        const mockBackendResponse = {
+            promptAndResponseList: [
+                {
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Hello' },
+                    responses: []
+                }
+            ]
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue(mockBackendResponse)
+        });
+
+        const result = await getConversation(mockToken, mockConversationId);
+
+        expect(result?.blocks).toHaveLength(1);
+        expect(result?.blocks[0].responseMessages).toHaveLength(0);
+        expect(result?.blocks[0].prompt).toBe('Hello');
+    });
+
     test('getConversation maps unknown vendor to default (OPENAI)', async () => {
         const mockBackendResponse = {
             promptAndResponseList: [

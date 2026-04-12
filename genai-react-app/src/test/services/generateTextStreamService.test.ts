@@ -139,4 +139,18 @@ describe('generateTextStreamService', () => {
 
         expect(mockReader.releaseLock).toHaveBeenCalled();
     });
+
+    test('generateTextStream throws when response is not ok', async () => {
+        mockFetchWithRetry.mockResolvedValue({
+            ok: false,
+            status: 401,
+            statusText: 'Unauthorized',
+        });
+
+        await expect(generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            jest.fn()
+        )).rejects.toThrow('Text generation failed: 401 Unauthorized');
+    });
 });

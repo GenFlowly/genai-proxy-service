@@ -80,7 +80,8 @@ const TestConversationUI = () => {
         setSelectedResponseForBlock,
         activeBlockId,
         setActiveBlockId,
-        generateResponses // Expose for testing
+        generateResponses, // Expose for testing
+        conversationTitle,
     } = useConversation();
 
     // Auto-add a block if empty for testing
@@ -112,6 +113,7 @@ const TestConversationUI = () => {
                     />
                 </div>
             ))}
+            <div data-testid="conversation-title">{conversationTitle ?? ''}</div>
             <button onClick={() => loadConversation('conv-123')} data-testid="load-btn">Load</button>
             <button onClick={() => resetConversation()} data-testid="reset-btn">Reset</button>
             <button onClick={() => addNewConversationBlock()} data-testid="add-block-btn">Add Block</button>
@@ -397,6 +399,76 @@ describe('ConversationContext UI Integration', () => {
             const debugText = screen.getByTestId('debug-response-text');
             expect(debugText).toHaveTextContent('Error generating text.'); // Note: Non-stream error message might be different
             // Code: text: 'Error generating text.', (line 312 of ConversationContext)
+        });
+    });
+
+    test('Flow: conversationTitle is null initially', async () => {
+        customRender(<TestConversationUI />);
+        expect(screen.getByTestId('conversation-title')).toHaveTextContent('');
+    });
+
+    test('Flow: loadConversation sets conversationTitle when title present', async () => {
+        const mockData = {
+            conversationId: 'conv-with-title',
+            blocks: [{ conversationBlockId: 'blk-1', prompt: 'P', responseMessages: [] }],
+            title: 'My Great Chat'
+        };
+        (conversationService.getConversation as jest.Mock).mockResolvedValue(mockData);
+        customRender(<TestConversationUI />);
+
+        fireEvent.click(screen.getByTestId('load-btn'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('conversation-title')).toHaveTextContent('My Great Chat');
+        });
+    });
+
+    test('Flow: loadConversation sets conversationTitle to null when no title', async () => {
+        const mockData = {
+            conversationId: 'conv-no-title',
+            blocks: [{ conversationBlockId: 'blk-1', prompt: 'P', responseMessages: [] }],
+            title: null
+        };
+        (conversationService.getConversation as jest.Mock).mockResolvedValue(mockData);
+        customRender(<TestConversationUI />);
+
+        fireEvent.click(screen.getByTestId('load-btn'));
+
+        await waitFor(() => {
+            expect(conversationService.getConversation).toHaveBeenCalled();
+        });
+        expect(screen.getByTestId('conversation-title')).toHaveTextContent('');
+    });
+
+    test('Flow: resetConversation clears conversationTitle', async () => {
+        const mockData = {
+            conversationId: 'conv-123',
+            blocks: [{ conversationBlockId: 'blk-1', prompt: 'P', responseMessages: [] }],
+            title: 'Title To Clear'
+        };
+        (conversationService.getConversation as jest.Mock).mockResolvedValue(mockData);
+        customRender(<TestConversationUI />);
+
+        fireEvent.click(screen.getByTestId('load-btn'));
+        await waitFor(() => {
+            expect(screen.getByTestId('conversation-title')).toHaveTextContent('Title To Clear');
+        });
+
+        fireEvent.click(screen.getByTestId('reset-btn'));
+        await waitFor(() => {
+            expect(screen.getByTestId('conversation-title')).toHaveTextContent('');
+        });
+    });
+
+    test('Flow: loadConversation shows toast and navigates on 403', async () => {
+        const err = Object.assign(new Error('Forbidden'), { status: 403 });
+        (conversationService.getConversation as jest.Mock).mockRejectedValue(err);
+        customRender(<TestConversationUI />);
+
+        fireEvent.click(screen.getByTestId('load-btn'));
+
+        await waitFor(() => {
+            expect(mockShowToast).toHaveBeenCalledWith('You do not have access to this conversation');
         });
     });
 });

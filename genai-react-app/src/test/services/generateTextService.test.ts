@@ -51,4 +51,15 @@ describe('generateTextService', () => {
         await expect(generateText(mockToken, mockGenerateTextRequest))
             .rejects.toThrow('Text generation failed: 500 Internal Server Error');
     });
+
+    test('generateText throws error with correct status code in message', async () => {
+        mockFetchWithRetry.mockResolvedValue({
+            ok: false,
+            status: 403,
+            statusText: 'Forbidden'
+        });
+
+        await expect(generateText(mockToken, mockGenerateTextRequest))
+            .rejects.toThrow('Text generation failed: 403 Forbidden');
+    });
 });

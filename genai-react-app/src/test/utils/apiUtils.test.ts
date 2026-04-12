@@ -82,4 +82,15 @@ describe('fetchWithRetry', () => {
         await expect(promise).rejects.toThrow('Persistent Network Error');
         expect(global.fetch).toHaveBeenCalledTimes(3);
     });
+
+    it('should not retry on 403 Forbidden', async () => {
+        (global.fetch as jest.Mock).mockResolvedValue({
+            ok: false,
+            status: 403,
+        });
+
+        const response = await fetchWithRetry('https://api.example.com/data', { retries: 3, backoff: 1 });
+        expect(response.status).toBe(403);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
 });
