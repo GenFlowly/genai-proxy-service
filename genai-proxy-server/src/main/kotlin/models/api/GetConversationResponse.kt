@@ -14,7 +14,5 @@ data class GetConversationResponse(
 @Serializable
 data class PromptAndResponse(
     val prompt: Prompt,
-    val response: GenerateTextResponse,
     val responses: List<GenerateTextResponse>? = emptyList()
 )
-
