@@ -6,11 +6,11 @@ on:
       PYPI_API_TOKEN:
         required: true
   push:
-    branches: [ "main" ]
+    branches: [ "development" ]
     paths:
       - 'encoding-library/**'
   pull_request:
-    branches: [ "main" ]
+    branches: [ "development" ]
     paths:
       - 'encoding-library/**'
 
@@ -56,7 +56,7 @@ jobs:
   publish:
     name: Prod
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
     runs-on: ubuntu-latest
     defaults:
       run:
