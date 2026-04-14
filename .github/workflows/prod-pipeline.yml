@@ -1,0 +1,104 @@
+name: Production Pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  CDK_APP_PATH: genai-proxy-server-cdk
+  ENCODING_CDK_PATH: encoding-server-cdk
+  SERVICE_APP_PATH: genai-proxy-server
+  AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+  AUTH0_SPA_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
+  AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # Detect which services have changes
+  detect-changes:
+    name: Detect Deployment Targets
+    runs-on: ubuntu-latest
+    outputs:
+      proxy-server: ${{ steps.filter.outputs.proxy-server }}
+      encoding-server: ${{ steps.filter.outputs.encoding-server }}
+      encoding-library: ${{ steps.filter.outputs.encoding-library }}
+      react-app: ${{ steps.filter.outputs.react-app }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            proxy-server:
+              - 'genai-proxy-server/**'
+              - 'genai-proxy-server-cdk/**'
+              - 'retrieval-server/**'
+              - '.github/workflows/prod-pipeline.yml'
+              - '.github/workflows/prod-proxy-server.yml'
+            encoding-server:
+              - 'encoding-server/**'
+              - 'encoding-server-cdk/**'
+              - '.github/workflows/prod-pipeline.yml'
+              - '.github/workflows/prod-encoding-server.yml'
+            encoding-library:
+              - 'encoding-library/**'
+              - '.github/workflows/prod-pipeline.yml'
+              - '.github/workflows/prod-publish-encoding-library.yml'
+            react-app:
+              - 'genai-react-app/**'
+              - '.github/workflows/prod-pipeline.yml'
+              - '.github/workflows/prod-react-app-deploy.yml'
+
+  proxy-server-production:
+    name: Proxy Service
+    needs: detect-changes
+    if: needs.detect-changes.outputs.proxy-server == 'true' && github.event_name == 'push'
+    uses: ./.github/workflows/prod-proxy-server.yml
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GH_PAT_TOKEN_FOR_FREE_ACCOUNT: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
+      AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+      AUTH0_SPA_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
+      AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+  encoding-server-production:
+    name: Encoding Service
+    needs: detect-changes
+    if: needs.detect-changes.outputs.encoding-server == 'true' && github.event_name == 'push'
+    uses: ./.github/workflows/prod-encoding-server.yml
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GH_PAT_TOKEN_FOR_FREE_ACCOUNT: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
+      AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+      ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
+      ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
+
+  encoding-library-production:
+    name: Encoding Library
+    needs: detect-changes
+    if: needs.detect-changes.outputs.encoding-library == 'true' && github.event_name == 'push'
+    uses: ./.github/workflows/prod-publish-encoding-library.yml
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  react-app-production:
+    name: React App
+    needs: detect-changes
+    if: (needs.detect-changes.outputs.react-app == 'true' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/prod-react-app-deploy.yml
+    secrets:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      GH_PAT_TOKEN_FOR_FREE_ACCOUNT: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
