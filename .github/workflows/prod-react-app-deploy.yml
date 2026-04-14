@@ -4,11 +4,11 @@ on:
   workflow_call:
     secrets:
       NETLIFY_AUTH_TOKEN:
-        required: true
+        required: false
       NETLIFY_SITE_ID:
-        required: true
+        required: false
       GH_PAT_TOKEN_FOR_FREE_ACCOUNT:
-        required: true
+        required: false
   workflow_dispatch:
 
 jobs:

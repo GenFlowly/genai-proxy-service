@@ -4,17 +4,17 @@ on:
   workflow_call:
     secrets:
       AWS_ACCESS_KEY_ID:
-        required: true
+        required: false
       AWS_SECRET_ACCESS_KEY:
-        required: true
+        required: false
       GH_PAT_TOKEN_FOR_FREE_ACCOUNT:
-        required: true
+        required: false
       AUTH0_SPA_DOMAIN:
-        required: true
+        required: false
       ZILLIZ_ENDPOINT:
-        required: true
+        required: false
       ZILLIZ_TOKEN:
-        required: true
+        required: false
 
 env:
   AWS_REGION: us-east-1
