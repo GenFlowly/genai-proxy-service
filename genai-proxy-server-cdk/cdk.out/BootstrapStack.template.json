@@ -41,7 +41,7 @@
     "PolicyName": "GitHubActionsPolicy-production",
     "Users": [
      {
-      "Ref": "GitHubActionsdevelopment7871746D"
+      "Ref": "GitHubActionsproductionAE389471"
      }
     ]
    },
@@ -49,30 +49,46 @@
     "aws:cdk:path": "BootstrapStack/GitHubActionsPolicy-production/Resource"
    }
   },
-  "GitHubActionsdevelopment7871746D": {
+  "GitHubActionsproductionAE389471": {
    "Type": "AWS::IAM::User",
    "Properties": {
     "UserName": "GitHubActions"
    },
    "Metadata": {
-    "aws:cdk:path": "BootstrapStack/GitHubActions-development/Resource"
+    "aws:cdk:path": "BootstrapStack/GitHubActions-production/Resource"
    }
   },
-  "GitHubActionsActionKeydevelopment": {
+  "GitHubActionsActionKeyproduction": {
    "Type": "AWS::IAM::AccessKey",
    "Properties": {
     "UserName": {
-     "Ref": "GitHubActionsdevelopment7871746D"
+     "Ref": "GitHubActionsproductionAE389471"
     }
    },
    "Metadata": {
-    "aws:cdk:path": "BootstrapStack/GitHubActionsActionKey-development"
+    "aws:cdk:path": "BootstrapStack/GitHubActionsActionKey-production"
+   }
+  },
+  "ApiCertificate1D5B2B3B": {
+   "Type": "AWS::CertificateManager::Certificate",
+   "Properties": {
+    "DomainName": "api.genflowly.com",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "BootstrapStack/ApiCertificate"
+     }
+    ],
+    "ValidationMethod": "DNS"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BootstrapStack/ApiCertificate/Resource"
    }
   },
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/zPSM7Sw1DNUTCwv1k1OydbNyUzSqw4uSUzO1kksL47PTMzVqw7Iz8lMrtRxTsuDskKLU4tAXBjtmJycWlzsnVpZC+L5l5YUlJbU6uTlp6TqZRXrlxkZ6pnrGShmFWdm6haV5pVk5qbqBUFoALnXvld/AAAA"
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/02Kuw6CQBBFv4V+GYVGLQ2lhURjbcZhMMNjMTuLhGz23w1Ro9W55+TmkG13kCU4aUpVm3Zyg3D2SK3BSa9BsIdQDp3QbIraftZF2S365Z6IVQ88R0PsvNRC6LlHi3d2EIpfW95/GuMSjqN/jD4aO1QMja6eeQYbWCeNiqRutF56htObL9guPHKxAAAA"
    },
    "Metadata": {
     "aws:cdk:path": "BootstrapStack/CDKMetadata/Default"
@@ -81,17 +97,25 @@
   }
  },
  "Outputs": {
-  "GitHubAccessKeyId": {
+  "AWSACCESSKEYID": {
    "Value": {
-    "Ref": "GitHubActionsActionKeydevelopment"
+    "Ref": "GitHubActionsActionKeyproduction"
    }
   },
-  "GitHubSecretAccessKey": {
+  "AWSSECRETACCESSKEY": {
    "Value": {
     "Fn::GetAtt": [
-     "GitHubActionsActionKeydevelopment",
+     "GitHubActionsActionKeyproduction",
      "SecretAccessKey"
     ]
+   }
+  },
+  "CertificateArn": {
+   "Value": {
+    "Ref": "ApiCertificate1D5B2B3B"
+   },
+   "Export": {
+    "Name": "GenAIProxy-CertificateArn-production"
    }
   }
  },

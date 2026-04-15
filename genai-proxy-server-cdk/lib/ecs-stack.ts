@@ -71,7 +71,9 @@ export class EcsStack extends cdk.Stack {
         let certificate: acm.ICertificate | undefined = undefined;
 
         if (props.domainName && props.subdomain && props.certificateArn) {
-            domainNameFull = `${props.subdomain}-${props.stage}.${props.domainName}`;
+            domainNameFull = props.stage === STAGES.PROD
+                ? `${props.subdomain}.${props.domainName}`
+                : `${props.subdomain}-${props.stage}.${props.domainName}`;
             certificate = acm.Certificate.fromCertificateArn(
                 this,
                 'ImportedCertificate',
