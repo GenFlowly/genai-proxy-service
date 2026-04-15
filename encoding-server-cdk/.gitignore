@@ -18,5 +18,4 @@
 !jest.config.js
 
 
-!**/cdk.out/**
-!**/genai-proxy-server-cdk/cdk.out
+cdk.out/
