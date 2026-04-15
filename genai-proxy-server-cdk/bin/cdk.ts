@@ -11,7 +11,8 @@ import {
 import { KmsStack } from "../lib/kms-stack";
 import { RESOURCE_NAMES } from "../lib/constants";
 
-const stage: STAGES = STAGES.BETA; // TODO pass this via CLI
+const stageEnv = process.env.STAGE;
+const stage: STAGES = stageEnv === 'production' ? STAGES.PROD : STAGES.BETA;
 const rootDomain: string = 'genflowly.com';
 
 const app = new cdk.App();
