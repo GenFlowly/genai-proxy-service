@@ -11,7 +11,8 @@ import { RESOURCE_NAMES } from "../lib/constants";
 
 import { StepFunctionsV2Stack } from "../lib/stepfunctions-v2-stack";
 
-const stage: STAGES = STAGES.BETA;
+const stageEnv = process.env.STAGE;
+const stage: STAGES = stageEnv === 'production' ? STAGES.PROD : STAGES.BETA;
 
 const app = new cdk.App();
 

@@ -22,6 +22,7 @@ env:
   AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
   ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
   ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
+  STAGE: development
 
 jobs:
   deploy:
