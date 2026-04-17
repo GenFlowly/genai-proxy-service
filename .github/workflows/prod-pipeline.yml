@@ -1,9 +1,8 @@
 name: Production Pipeline
 
 on:
-  pull_request:
+  push:
     branches: [main]
-    types: [closed]
   schedule:
     - cron: '0 0 * * 5'
   workflow_dispatch:
