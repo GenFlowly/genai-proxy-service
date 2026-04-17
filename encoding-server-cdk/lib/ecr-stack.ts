@@ -13,7 +13,7 @@ export class EcrStack extends cdk.Stack {
 
     public readonly ingestionRepo: IRepository;
     public readonly parseAndChunkRepo: IRepository;
-    public readonly embedRepo: IRepository;
+    public readonly embedRepo: IRepository;//todo remove
     public readonly createEmbeddingsRepo: IRepository;
     public readonly storeEmbeddingsRepo: IRepository;
 
