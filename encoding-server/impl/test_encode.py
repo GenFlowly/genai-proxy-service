@@ -14,7 +14,7 @@ def test_encode_note():
     # Similar to what the API Gateway or SQS would trigger
     event = {
         "data_type": "NOTE",
-        "customer_id": "test-customer-123",
+        "customer_id": "test-customer-1234",
         "client": "test-client",
         "raw_data": {
             "note_value": "This is a test note. It contains multiple sentences. We want to see how the chunker handles it and how the encoder embeds it! The refactor should have fixed the circular import perfectly.",
