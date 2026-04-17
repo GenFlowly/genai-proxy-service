@@ -1,8 +1,9 @@
 name: Production Pipeline
 
 on:
-  push:
+  pull_request:
     branches: [main]
+    types: [closed]
   schedule:
     - cron: '0 0 * * 5'
   workflow_dispatch:
@@ -69,7 +70,7 @@ jobs:
   encoding-server-production:
     name: Encoding Service
     needs: detect-changes
-    if: needs.detect-changes.outputs.encoding-server == 'true' && github.event_name == 'push'
+    if: needs.detect-changes.outputs.encoding-server == 'true' && github.event_name == 'pull_request' && github.event.pull_request.merged == true
     uses: ./.github/workflows/prod-encoding-server.yml
     secrets: inherit
 
