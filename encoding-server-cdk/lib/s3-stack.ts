@@ -8,7 +8,7 @@ import { RESOURCE_NAMES } from './constants';
 export interface S3StackProps extends cdk.StackProps {
     stage: STAGES;
 }
-
+//
 export class S3Stack extends cdk.Stack {
 
     public readonly rawEmailBucket: s3.IBucket;
