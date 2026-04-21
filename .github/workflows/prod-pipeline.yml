@@ -20,6 +20,7 @@ env:
 permissions:
   contents: read
   id-token: write
+  pull-requests: read
 
 jobs:
   # Detect which services have changes
