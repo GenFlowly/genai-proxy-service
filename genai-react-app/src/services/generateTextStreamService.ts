@@ -23,6 +23,7 @@ export async function generateTextStream(
     request: GenerateTextStreamRequest,
     onDelta: (chunk: string) => void,
     onMetadata?: (metadata: StreamMetadata) => void,
+    onThinking?: (step: string) => void,
     signal?: AbortSignal
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
@@ -34,6 +35,12 @@ export async function generateTextStream(
         body: JSON.stringify(request),
         signal,
     });
+
+    if (response.status === 401 || response.status === 403) {
+        const err: any = new Error('Session expired')
+        err.error = 'login_required'
+        throw err
+    }
 
     if (!response.ok) {
         throw new Error(`Text generation failed: ${response.status} ${response.statusText}`);
@@ -64,17 +71,34 @@ export async function generateTextStream(
     }
 
     const decoder = new TextDecoder("utf-8");
+    let lineBuffer = "";
+
+    const processLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        try {
+            const msg = JSON.parse(trimmed);
+            if (msg.t === "c") onDelta(msg.v);
+            else if (msg.t === "k") onThinking?.(msg.v);
+            // other types (heartbeat, etc.) are silently ignored
+        } catch {
+            // Not JSON — treat as raw content (error messages, legacy format)
+            onDelta(line);
+        }
+    };
 
     try {
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            let chunk = decoder.decode(value, { stream: true });
-
-            // Removed USAGE sentinel parsing
-            onDelta(chunk);
+            lineBuffer += decoder.decode(value, { stream: true });
+            const lines = lineBuffer.split("\n");
+            lineBuffer = lines.pop() ?? "";
+            for (const line of lines) processLine(line);
         }
+        // Flush any remaining partial line
+        if (lineBuffer) processLine(lineBuffer);
     } catch (error) {
         console.error("Error reading stream", error);
         throw error;

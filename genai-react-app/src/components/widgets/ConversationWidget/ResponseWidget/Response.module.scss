@@ -90,26 +90,3 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
-
-
-
-
-
-
-
-
-@media (max-width: 1024px) {
-  .inner {
-    /* grid-template-columns: 1fr; */
-    padding: 0; // Remove horizontal padding for full width
-    gap: 0; // Remove gap if items are full width, though usually one item per row
-
-  }
-
-  /* 📱 Fix for mobile width overflow */
-  /* 📱 Fix for mobile width overflow */
-  .responseWrapper {
-    flex: 1 1 auto; // Allow shrink on mobile
-    // margin is now handled by TextContainer (inherited from message-card-base)
-  }
-}

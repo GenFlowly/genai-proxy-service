@@ -14,8 +14,7 @@ import {
     GeminiBrandName
 } from '../../../common/BrandName/BrandName'
 import { AIVendor } from '../../../../constants/vendors'
-import ToggleGroupButton, { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
-import { useState, useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 
 interface ResponseProps {
     blockId: string
@@ -27,19 +26,16 @@ interface ResponseProps {
 
 export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
-    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream } = useConversation()
+    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock } = useConversation()
 
     const selectedResponseId = getSelectedResponseForBlock(blockId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
 
-    // Filter out empty messages first
-    // Filter out messages that are empty AND not loading
     const visibleMessages = useMemo(() =>
         responseMessages.filter(msg => msg.text.length > 0 || msg.isLoading),
         [responseMessages]
     )
 
-    // Calculate available vendors
     const availableVendors = useMemo(() => {
         const vendors = new Set<string>()
         visibleMessages.forEach(msg => {
@@ -48,67 +44,17 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         return Array.from(vendors)
     }, [visibleMessages])
 
-    // State for selected vendors
-    // Initialize with all available vendors whenever availableVendors changes drastically, 
-    // or keep previous selection if possible? 
-    // For simplicity, if the blockId changes or first load, select all.
-    // Actually, simple state initialization is enough, but we want to sync with incoming streaming data if new vendor appears?
-    // Let's rely on simple state, initializing with all available.
-    // If a new vendor appears mid-stream, we might want to auto-select it? 
-    // For now, let's just initialize state once or update it?
-    // Let's use a lazy initializer styled effect or just defaulting.
-
-    const [selectedVendors, setSelectedVendors] = useState<string[]>([])
-
-
-    // Effect to auto-select new vendors if they appear (e.g. streaming starts) 
-    // and if we want them visible by default. 
-    // User requirement: "By default all responses should be visible".
-    // So if a vendor is not in state, add it? 
-    // But if user explicitly unselected it, we shouldn't add it back.
-    // Detailed logic: maintain a set of "known" vendors. If new one appears, add to selection.
-
-    // Simplest approach satisfying "default all visible":
-    // If selectedVendors is empty (initial), set to all available.
-    // But we enforce "at least one selected", so it shouldn't be empty unless no data.
-
-    useEffect(() => {
-        // If we have vendors but no selection (initial load), select all.
-        if (availableVendors.length > 0 && selectedVendors.length === 0) {
-            setSelectedVendors(availableVendors)
-        } else {
-
-
-            const newVendors = availableVendors.filter(v => !selectedVendors.includes(v))
-            if (newVendors.length > 0) {
-
-            }
-        }
-    }, [availableVendors, selectedVendors])
-
-    // Mapped options for ToggleGroup
-    const toggleOptions: ToggleOption[] = useMemo(() => {
-        return availableVendors.map(vendor => ({
-            id: vendor,
-            label: vendor === AIVendor.OPENAI ? 'OpenAI' :
-                vendor === AIVendor.CLAUDE ? 'Claude' :
-                    vendor === AIVendor.GEMINI ? 'Gemini' : vendor,
-            icon: vendor === AIVendor.OPENAI ? ICONS.OPENAI :
-                vendor === AIVendor.CLAUDE ? ICONS.CLAUDE :
-                    vendor === AIVendor.GEMINI ? ICONS.GEMINI : undefined
-        }))
-    }, [availableVendors])
-
-    // Filter list
+    const selectedVendors = getVendorSelectionForBlock(blockId)
+    const effectiveSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
     const filteredResponseList = visibleMessages.filter(msg =>
-        msg.aiVendor && selectedVendors.includes(msg.aiVendor)
+        msg.aiVendor && effectiveSelectedVendors.includes(msg.aiVendor)
     )
 
     if (!visibleMessages || visibleMessages.length === 0) {
         return (
-            <div 
-                className={styles.container} 
-                data-response-block-id={blockId} 
+            <div
+                className={styles.container}
+                data-response-block-id={blockId}
                 data-testid={testId || "empty-response-block"}
             >
                 <div style={{ textAlign: 'left', padding: '1rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
@@ -135,23 +81,8 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             data-response-block-id={blockId}
             data-testid={testId}
         >
-            {/* Toggle Group Header - Placed above the scrolling container */}
-            {availableVendors.length > 1 && (
-                <div className={styles.toggleWrapper} style={{ marginTop: '1rem', marginBottom: '0.5rem', width: '100%', display: 'flex', justifyContent: 'center' }}>
-                    <ToggleGroupButton
-                        options={toggleOptions}
-                        selectedValues={selectedVendors}
-                        onChange={setSelectedVendors}
-                        allowEmpty={false}
-                    />
-                </div>
-            )}
-
-            <div
-                className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}
-            >
-
-                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens, totalTokens, tokensReadFromCache }, index) => {
+            <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
+                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
                     const isSelected = selectedResponseId === messageId
 
                     let HeaderComponent: React.ReactNode = null
@@ -163,90 +94,82 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                     }
 
                     return (
-                        <TextContainer
-                            key={messageId}
-                            title={HeaderComponent}
-                            content={text}
-                            className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}
-                            isLoading={isLoading && text.trim().length === 0}
-                            loadingContent={
-                                <div
-                                    style={{ padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: 0.6, fontStyle: 'italic' }}
-                                    data-testid="response-message-loading"
-                                >
-                                    <Icon src={ICONS.THINK} size={20} />
-                                    <span>Thinking...</span>
-                                </div>
-                            }
-                            data-testid="response-message"
-                            aria-label={`Response from ${aiVendor}`}
-                        >
-                            {!isLoading && (inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
-                                <div className={styles.tokenBadge}>
-                                    {inputTokens != null && (
-                                        <Tooltip content="Total Input Tokens">
-                                            <span className={styles.tokenItem}>
-                                                <Icon src={ICONS.INPUT_TOKENS} size={12} />
-                                                {inputTokens.toLocaleString()}
-                                            </span>
-                                        </Tooltip>
-                                    )}
-                                    {outputTokens != null && (
-                                        <Tooltip content="Total Output Tokens">
-                                            <span className={styles.tokenItem}>
-                                                <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
-                                                {outputTokens.toLocaleString()}
-                                            </span>
-                                        </Tooltip>
-                                    )}
-                                    {tokensReadFromCache != null && (
-                                        <Tooltip content="Tokens read from cache">
-                                            <span className={styles.tokenItem}>
-                                                <Icon src={ICONS.CACHE_TOKENS} size={12} />
-                                                {tokensReadFromCache.toLocaleString()}
-                                            </span>
-                                        </Tooltip>
-                                    )}
-                                    {totalTokens != null && (
-                                        <Tooltip content="Total Tokens">
-                                            <span className={styles.tokenItem}>
-                                                <Icon src={ICONS.TOTAL_TOKENS} size={12} />
-                                                {totalTokens.toLocaleString()}
-                                            </span>
-                                        </Tooltip>
-                                    )}
-                                </div>
-                            )}
-                            {onFollowUp && !isLoading && isLastResponseBlock && (
-                                <div className={styles.followUpButtonWrapper}>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <Tooltip content={disabled ? "No API keys set" : ""}>
-                                            <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                                <MultiPurposeButton
-                                                    label="Regenerate"
-                                                    onClick={() => handleRegenerate(aiVendor as AIVendor)}
-                                                    disabled={disabled}
-                                                    icon={ICONS.REFRESH_ICON}
-                                                    data-testid="regenerate-button"
-                                                />
-                                            </div>
-                                        </Tooltip>
-
-                                        <Tooltip content={disabled ? "No API keys set" : ""}>
-                                            <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                                <MultiPurposeButton
-                                                    label={isSelected ? 'Selected' : 'Follow up'}
-                                                    onClick={() => handleFollowUp(messageId)}
-                                                    disabled={isSelected || disabled}
-                                                    icon={isSelected ? undefined : ICONS.SEND}
-                                                    data-testid="follow-up-button"
-                                                />
-                                            </div>
-                                        </Tooltip>
+                        <div key={messageId} className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}>
+                            <TextContainer
+                                title={HeaderComponent}
+                                content={text}
+                                isLoading={isLoading && text.trim().length === 0}
+                                loadingContent={null}
+                                data-testid="response-message"
+                                aria-label={`Response from ${aiVendor}`}
+                            >
+                                {!isLoading && (inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
+                                    <div className={styles.tokenBadge}>
+                                        {inputTokens != null && (
+                                            <Tooltip content="Total Input Tokens">
+                                                <span className={styles.tokenItem}>
+                                                    <Icon src={ICONS.INPUT_TOKENS} size={12} />
+                                                    {inputTokens.toLocaleString()}
+                                                </span>
+                                            </Tooltip>
+                                        )}
+                                        {outputTokens != null && (
+                                            <Tooltip content="Total Output Tokens">
+                                                <span className={styles.tokenItem}>
+                                                    <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
+                                                    {outputTokens.toLocaleString()}
+                                                </span>
+                                            </Tooltip>
+                                        )}
+                                        {tokensReadFromCache != null && (
+                                            <Tooltip content="Tokens read from cache">
+                                                <span className={styles.tokenItem}>
+                                                    <Icon src={ICONS.CACHE_TOKENS} size={12} />
+                                                    {tokensReadFromCache.toLocaleString()}
+                                                </span>
+                                            </Tooltip>
+                                        )}
+                                        {totalTokens != null && (
+                                            <Tooltip content="Total Tokens">
+                                                <span className={styles.tokenItem}>
+                                                    <Icon src={ICONS.TOTAL_TOKENS} size={12} />
+                                                    {totalTokens.toLocaleString()}
+                                                </span>
+                                            </Tooltip>
+                                        )}
                                     </div>
-                                </div>
-                            )}
-                        </TextContainer>
+                                )}
+                                {onFollowUp && !isLoading && isLastResponseBlock && (
+                                    <div className={styles.followUpButtonWrapper}>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <Tooltip content={disabled ? "No API keys set" : ""}>
+                                                <div style={disabled ? { cursor: 'not-allowed' } : {}}>
+                                                    <MultiPurposeButton
+                                                        label="Regenerate"
+                                                        onClick={() => handleRegenerate(aiVendor as AIVendor)}
+                                                        disabled={disabled}
+                                                        icon={ICONS.REFRESH_ICON}
+                                                        data-testid="regenerate-button"
+                                                    />
+                                                </div>
+                                            </Tooltip>
+
+                                            <Tooltip content={disabled ? "No API keys set" : ""}>
+                                                <div style={disabled ? { cursor: 'not-allowed' } : {}}>
+                                                    <MultiPurposeButton
+                                                        label={isSelected ? 'Selected' : 'Follow up'}
+                                                        onClick={() => handleFollowUp(messageId)}
+                                                        disabled={isSelected || disabled}
+                                                        icon={isSelected ? undefined : ICONS.SEND}
+                                                        data-testid="follow-up-button"
+                                                    />
+                                                </div>
+                                            </Tooltip>
+                                        </div>
+                                    </div>
+                                )}
+                            </TextContainer>
+                        </div>
                     )
                 })}
             </div>

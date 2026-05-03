@@ -25,7 +25,10 @@
 
 .resolvedRequestContainer {
     width: 100%;
-    padding: 0.5rem 0;
+    margin-top: 0.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-bottom: 1rem;
     overflow: hidden;
     display: flex;
     flex-direction: column;

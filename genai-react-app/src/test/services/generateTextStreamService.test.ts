@@ -20,8 +20,8 @@ describe('generateTextStreamService', () => {
     test('generateTextStream reads stream, calls onDelta, and calls onMetadata', async () => {
         // Arrange
         const encoder = new TextEncoder();
-        const chunk1 = encoder.encode('Hel');
-        const chunk2 = encoder.encode('lo');
+        const chunk1 = encoder.encode('{"t":"c","v":"Hel"}\n');
+        const chunk2 = encoder.encode('{"t":"c","v":"lo"}\n');
 
         const mockReader = {
             read: jest.fn()
@@ -151,6 +151,6 @@ describe('generateTextStreamService', () => {
             mockToken,
             mockGenerateTextStreamRequest as GenerateTextStreamRequest,
             jest.fn()
-        )).rejects.toThrow('Text generation failed: 401 Unauthorized');
+        )).rejects.toThrow('Session expired');
     });
 });
