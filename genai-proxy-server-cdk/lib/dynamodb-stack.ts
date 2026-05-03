@@ -140,21 +140,23 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
-        // Stores individual agent nodes (processing steps) that can be composed into flows.
-        // Each item holds agentType, name, config, and timestamps.
-        const customerAgentsTableProps: CreateTableProps = {
-            tableName: 'CustomerAgents',
+        // Versioned graph nodes. PK=nodeId, SK=version (Number).
+        // version=0 is always the current/live item and includes customerId for GSI indexing.
+        // version=1,2,... are immutable history snapshots and omit customerId (sparse GSI).
+        // This means the GSI only surfaces current-state items, never history.
+        const customerGraphNodesTableProps: CreateTableProps = {
+            tableName: 'CustomerGraphNodes',
             partitionKey: {
-                name: 'customerId',
+                name: 'nodeId',
                 type: dynamodb.AttributeType.STRING,
             },
             sortKey: {
-                name: 'agentId',
-                type: dynamodb.AttributeType.STRING,
+                name: 'version',
+                type: dynamodb.AttributeType.NUMBER,
             },
             globalSecondaryIndexes: [
                 {
-                    // List all agents for a customer sorted by creation time.
+                    // Lists current-state nodes for a customer (sparse: only v=0 items have customerId).
                     indexName: 'customerIdIndex',
                     partitionKey: {
                         name: 'customerId',
@@ -169,22 +171,20 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
-        // Stores graphs (flows) that wire CustomerAgents together.
-        // Each item holds agentIds (ordered node list), edges (adjacency map),
-        // isDefault flag, name, and timestamps.
-        const customerFlowsTableProps: CreateTableProps = {
-            tableName: 'CustomerFlows',
+        // Versioned graphs. Same PK=graphId, SK=version pattern as CustomerGraphNodes.
+        const customerGraphsTableProps: CreateTableProps = {
+            tableName: 'CustomerGraphs',
             partitionKey: {
-                name: 'customerId',
+                name: 'graphId',
                 type: dynamodb.AttributeType.STRING,
             },
             sortKey: {
-                name: 'flowId',
-                type: dynamodb.AttributeType.STRING,
+                name: 'version',
+                type: dynamodb.AttributeType.NUMBER,
             },
             globalSecondaryIndexes: [
                 {
-                    // List all flows for a customer sorted by creation time.
+                    // Lists current-state graphs for a customer (sparse: only v=0 items have customerId).
                     indexName: 'customerIdIndex',
                     partitionKey: {
                         name: 'customerId',
@@ -208,14 +208,14 @@ export class DynamoDBStack extends cdk.Stack {
         const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
         const customerSupabaseConfigTable = createDefaultDynamoDbTable(this, customerSupabaseConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
-        const customerAgentsTable = createDefaultDynamoDbTable(this, customerAgentsTableProps);
-        const customerFlowsTable = createDefaultDynamoDbTable(this, customerFlowsTableProps);
+        const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
+        const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
-            customerAgentsTable, customerFlowsTable,
+            customerGraphNodesTable, customerGraphsTable,
         )
     }
 }
