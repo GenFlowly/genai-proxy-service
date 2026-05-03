@@ -18,11 +18,6 @@ jest.mock('../../../../../components/common/TextContainer/TextContainer', () => 
     </div>
 ));
 
-jest.mock('../../../../../components/common/ToggleGroupButton/ToggleGroupButton', () => ({ options }: any) => (
-    <div data-testid="toggle-group">
-        {options.map((o: any) => <span key={o.id}>{o.label}</span>)}
-    </div>
-));
 
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
     OpenAIBrandName: () => <span>OpenAI</span>,
@@ -46,7 +41,9 @@ describe('Response Widget Component', () => {
         jest.clearAllMocks();
         mockUseConversation.mockReturnValue({
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
-            getSelectedResponseForBlock: mockGetSelectedResponseForBlock
+            getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
+            getVendorSelectionForBlock: jest.fn().mockReturnValue([]),
+            generateResponsesStream: jest.fn()
         });
         mockUseLayout.mockReturnValue({
             isLeftSidebarExpanded: true,
@@ -72,17 +69,6 @@ describe('Response Widget Component', () => {
         // Toggle group label + BrandName title = 2
         expect(screen.getAllByText('OpenAI').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Claude').length).toBeGreaterThanOrEqual(1);
-    });
-
-    test('renders ToggleGroup if multiple vendors', () => {
-        render(<Response blockId="block-1" responseMessages={mockMessages} />);
-        expect(screen.getByTestId('toggle-group')).toBeInTheDocument();
-    });
-
-    test('does NOT render ToggleGroup if single vendor', () => {
-        const singleMsg = [{ messageId: 'msg-1', text: 'Response 1', aiVendor: AIVendor.OPENAI, isLoading: false, timestamp: 0 }];
-        render(<Response blockId="block-1" responseMessages={singleMsg} />);
-        expect(screen.queryByTestId('toggle-group')).not.toBeInTheDocument();
     });
 
     test('handles Follow Up click', () => {
