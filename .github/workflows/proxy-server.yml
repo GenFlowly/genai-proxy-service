@@ -117,6 +117,12 @@ jobs:
         working-directory: ${{ env.CDK_APP_PATH }}
         run: cdk deploy gen-ai-proxy-service-KmsStack --require-approval never
 
+      - name: Deploy ECS stack (decouple legacy cross-stack refs before DDB update)
+        working-directory: ${{ env.CDK_APP_PATH }}
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: cdk deploy gen-ai-proxy-service-EcsStack --require-approval never --exclusively
+
       - name: Deploy DynamoDB stack
         working-directory: ${{ env.CDK_APP_PATH }}
         run: cdk deploy gen-ai-proxy-service-DynamoDBStack --require-approval never
