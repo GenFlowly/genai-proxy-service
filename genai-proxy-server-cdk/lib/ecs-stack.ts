@@ -14,6 +14,7 @@ import {
 } from "@genflowly/cdk-commons";
 import { IRepository } from "aws-cdk-lib/aws-ecr";
 import { ITable } from "aws-cdk-lib/aws-dynamodb";
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { IKey } from "aws-cdk-lib/aws-kms";
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { RESOURCE_NAMES } from "./constants";
@@ -122,6 +123,13 @@ export class EcsStack extends cdk.Stack {
 
         props.dynamoDbTableList.forEach((it) =>
             it.grantReadWriteData(fargateService.taskDefinition.taskRole));
+
+        // Transitional: grant access to legacy tables via name (not cross-stack ref) so
+        // ECS no longer imports their ARN exports from the DDB stack. Remove after Step 2.
+        ['CustomerAgents', 'CustomerFlows'].forEach(tableName => {
+            dynamodb.Table.fromTableName(this, `${tableName}LegacyRef`, tableName)
+                .grantReadWriteData(fargateService.taskDefinition.taskRole);
+        });
 
         props.kmsKey.grantEncryptDecrypt(fargateService.taskDefinition.taskRole);
 
