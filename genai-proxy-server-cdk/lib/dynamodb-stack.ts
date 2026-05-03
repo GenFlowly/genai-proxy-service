@@ -140,6 +140,60 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Legacy table — kept during migration, to be removed after CustomerGraphNodes is live.
+        const customerAgentsTableProps: CreateTableProps = {
+            tableName: 'CustomerAgents',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'agentId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
+        // Legacy table — kept during migration, to be removed after CustomerGraphs is live.
+        const customerFlowsTableProps: CreateTableProps = {
+            tableName: 'CustomerFlows',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'flowId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
         // Versioned graph nodes. PK=nodeId, SK=version (Number).
         // version=0 is always the current/live item and includes customerId for GSI indexing.
         // version=1,2,... are immutable history snapshots and omit customerId (sparse GSI).
@@ -199,6 +253,9 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        const customerAgentsTable = createDefaultDynamoDbTable(this, customerAgentsTableProps);
+        const customerFlowsTable = createDefaultDynamoDbTable(this, customerFlowsTableProps);
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
@@ -215,7 +272,8 @@ export class DynamoDBStack extends cdk.Stack {
             customerTable, customerApiKeyTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
+            customerAgentsTable, customerFlowsTable,
             customerGraphNodesTable, customerGraphsTable,
-        )
+        );
     }
 }
