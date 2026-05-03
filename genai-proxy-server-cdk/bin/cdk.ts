@@ -26,9 +26,7 @@ new EcsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-EcsStack`, {
     stage,
     proxyEcrRepo: ecrStack.proxyRepository,
     retrievalEcrRepo: ecrStack.retrievalRepository,
-    dynamoDbTableList: dynamoDBStack.dynamoDbTableList.filter(
-        t => !['CustomerAgents', 'CustomerFlows'].includes(t.tableName)
-    ),
+    dynamoDbTableList: dynamoDBStack.dynamoDbTableList,
     kmsKey: kmsStack.kmsKey,
     domainName: rootDomain,
     subdomain: 'api',
