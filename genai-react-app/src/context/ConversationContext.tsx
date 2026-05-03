@@ -304,14 +304,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         const index = conversationBlockList.findIndex(c => c.conversationBlockId === id)
         let parentResponseId = ''
 
-        // Should use the selected response from the PREVIOUS block as the parent
+        // Should use the selected response from the PREVIOUS block as the parent.
+        // handleFollowUp stores the selection on the current (new) block, so check there first.
         if (index > 0) {
             const prevBlock = conversationBlockList[index - 1]
-            const prevSelectedId = getSelectedResponseForBlock(prevBlock.conversationBlockId)
+            const currentBlockSelectedId = getSelectedResponseForBlock(id)
+            const prevBlockSelectedId = getSelectedResponseForBlock(prevBlock.conversationBlockId)
 
-            // If explicit selection exists, use it. Otherwise default to first response.
-            if (prevSelectedId) {
-                parentResponseId = prevSelectedId
+            if (currentBlockSelectedId) {
+                parentResponseId = currentBlockSelectedId
+            } else if (prevBlockSelectedId) {
+                parentResponseId = prevBlockSelectedId
             } else if (prevBlock.responseMessages.length > 0) {
                 parentResponseId = prevBlock.responseMessages[0].messageId
             }
