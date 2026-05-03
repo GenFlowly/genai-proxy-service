@@ -140,6 +140,65 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Stores individual agent nodes (processing steps) that can be composed into flows.
+        // Each item holds agentType, name, config, and timestamps.
+        const customerAgentsTableProps: CreateTableProps = {
+            tableName: 'CustomerAgents',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'agentId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    // List all agents for a customer sorted by creation time.
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
+        // Stores graphs (flows) that wire CustomerAgents together.
+        // Each item holds agentIds (ordered node list), edges (adjacency map),
+        // isDefault flag, name, and timestamps.
+        const customerFlowsTableProps: CreateTableProps = {
+            tableName: 'CustomerFlows',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'flowId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    // List all flows for a customer sorted by creation time.
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
@@ -149,7 +208,14 @@ export class DynamoDBStack extends cdk.Stack {
         const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
         const customerSupabaseConfigTable = createDefaultDynamoDbTable(this, customerSupabaseConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
+        const customerAgentsTable = createDefaultDynamoDbTable(this, customerAgentsTableProps);
+        const customerFlowsTable = createDefaultDynamoDbTable(this, customerFlowsTableProps);
 
-        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable, customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable)
+        this.dynamoDbTableList.push(
+            customerTable, customerApiKeyTable, customerApiUsageTable,
+            conversationTable, messageTable, customerPreferencesTable,
+            customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
+            customerAgentsTable, customerFlowsTable,
+        )
     }
 }
