@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
     && rm -rf /var/lib/apt/lists/*
 # Install torch in its own layer — heavy and rarely changes, so it stays cached
 # even when requirements.txt is updated.
-RUN pip install --no-cache-dir --prefix=/install torch
+RUN pip install --no-cache-dir --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
