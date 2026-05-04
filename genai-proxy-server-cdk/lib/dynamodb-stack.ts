@@ -199,6 +199,24 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Per-customer tool credentials.
+        // PK=customerId, SK=toolType ("WEB_SEARCH", "CODE_EXECUTOR", "DATABASE_QUERY",
+        //   "FILE_READER", "EMAIL", "CALENDAR").
+        // credentials: KMS-encrypted JSON blob (shape is tool-specific).
+        // authType: "api_key" | "oauth2" — determines how the proxy handles token refresh.
+        // For oauth2 tools the blob also contains refresh_token, access_token, access_token_expiry.
+        const customerToolCredentialsTableProps: CreateTableProps = {
+            tableName: 'CustomerToolCredentials',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'toolType',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
@@ -210,12 +228,14 @@ export class DynamoDBStack extends cdk.Stack {
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
         const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
         const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
+        const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
+            customerToolCredentialsTable,
         );
     }
 }

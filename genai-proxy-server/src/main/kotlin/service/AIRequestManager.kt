@@ -9,6 +9,9 @@ import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.PromptGenerationService
+import com.genflowly.service.ConversationMessage
+import com.genflowly.service.RetrievalService
+import com.genflowly.service.StreamChunk
 import com.genflowly.utils.fetchApiKey
 import models.AIConfig
 import models.AIGenerateResult
@@ -30,12 +33,25 @@ class AIRequestManager(
     private val aiRequestService: AIRequestService,
     private val customerProfileService: CustomerProfileService,
     private val conversationService: ConversationService,
-    private val promptGenerationService: PromptGenerationService
+    private val promptGenerationService: PromptGenerationService,
+    private val retrievalService: RetrievalService
 ) {
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
     private val defaultAIModel: String = "gpt-5"
-    private val defaultAIVendor: AIVendor = AIVendor.OPENAI;
+    private val defaultAIVendor: AIVendor = AIVendor.OPENAI
+
+    private fun vendorToProviderString(vendor: AIVendor): String = when (vendor) {
+        AIVendor.OPENAI -> "openai"
+        AIVendor.GEMINI -> "gemini"
+        AIVendor.CLAUDE -> "anthropic"
+    }
+
+    private fun vendorToCredentialKey(vendor: AIVendor): String = when (vendor) {
+        AIVendor.OPENAI -> "openai_api_key"
+        AIVendor.GEMINI -> "gemini_api_key"
+        AIVendor.CLAUDE -> "anthropic_api_key"
+    }
 
 
     private suspend fun getThreadContext(
@@ -98,16 +114,13 @@ class AIRequestManager(
         val conversationId =
             getConversationId(customerId, client, conversationId)
 
-        // Step 2 - Add context to prompt
-        val prompt = promptGenerationService.generatePrompt(customerId, userRequestRawPrompt, systemPrompt)
-
-        // Step 3 - Create message object
+        // Step 2 - Create message object (retrieval-server handles RAG during generation)
         val message = Message(
             conversationId = conversationId,
             customerId = customerId,
             client = client,
             role = "user",
-            text = prompt,
+            text = userRequestRawPrompt,
             previousMessageId = selectedResponseId,
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
@@ -127,6 +140,7 @@ class AIRequestManager(
                     fetchResponseFromAIVendor(
                         aiVendor = aiConfig.aiVendor,
                         model = aiConfig.model,
+                        maxTokens = aiConfig.maxTokens ?: 4096,
                         message = message
                     )
                 }
@@ -141,63 +155,41 @@ class AIRequestManager(
     suspend fun fetchResponseFromAIVendor(
         aiVendor: AIVendor,
         model: String,
+        maxTokens: Int = 4096,
         message: Message
     ): Message {
+        val apiKey = fetchApiKey(aiVendor, message.customerId, customerProfileService)
+            ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
-        // Step 1: Build conversation history for prompt
-        val messages = getThreadContext(
-            message.conversationId,
-            message.messageId
+        val thread = getThreadContext(message.conversationId, message.messageId)
+        val conversationHistory = thread.map { ConversationMessage(role = it.role, content = it.text) }
+
+        val result = retrievalService.retrieveAndGenerate(
+            customerId = message.customerId,
+            client = message.client,
+            query = message.text,
+            llmCredentials = mapOf(vendorToCredentialKey(aiVendor) to apiKey),
+            llmProvider = vendorToProviderString(aiVendor),
+            llmModel = model,
+            llmMaxTokens = maxTokens,
+            conversationHistory = conversationHistory
         )
 
-        logger.info("Sending {} messages context", messages.size)
-        
-        val result = generateText(
-            aiVendor, 
-            model, 
-            messages, 
-            message.systemPrompt, 
-            message.customerId
+        val responseMessage = Message(
+            conversationId = message.conversationId,
+            customerId = message.customerId,
+            client = message.client,
+            role = "assistant",
+            text = result.text ?: "No response received. Please try again.",
+            previousMessageId = message.messageId,
+            aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
+            systemPrompt = message.systemPrompt,
+            inputTokens = result.inputTokens,
+            outputTokens = result.outputTokens,
+            totalTokens = result.totalTokens
         )
 
-        val responseMessage: Message
-        if (result.text.isNotBlank()) {
-
-            // Step 7: Create response message object
-            responseMessage = Message(
-                conversationId = message.conversationId,
-                customerId = message.customerId,
-                client = message.client,
-                role = "assistant",
-                text = result.text,
-                previousMessageId = message.messageId,
-                aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
-                systemPrompt = message.systemPrompt,
-                inputTokens = result.inputTokens,
-                outputTokens = result.outputTokens,
-                totalTokens = result.totalTokens,
-                tokensReadFromCache = result.tokensReadFromCache
-            )
-        } else {
-            responseMessage = Message(
-                conversationId = message.conversationId,
-                customerId = message.customerId,
-                client = message.client,
-                role = "assistant",
-                text = "No response received. Please try again.",
-                previousMessageId = message.messageId,
-                aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
-                systemPrompt = message.systemPrompt
-            )
-        }
-
-
-        // Step 8: Add response message to conversation
         conversationService.addMessageInConversation(responseMessage)
-
-
-
-        // Step 5 - Return response message from the respective AI vendor
         return responseMessage
     }
     
@@ -337,14 +329,10 @@ class AIRequestManager(
         val systemPrompt = instructionResp?.instruction ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
-        val activeConversationId =
-            getConversationId(customerId, client, conversationId)
+        val activeConversationId = getConversationId(customerId, client, conversationId)
 
-        val prompt = promptGenerationService.generatePrompt(customerId, userRequestRawPrompt, systemPrompt)
-
-        // Step 2 - Create message object
-        // Use Deterministic ID to prevent duplication in DDB when multiple vendor requests occur simultaneously.
-        // Uniquely identifies this turn based on conversation, user text, and parent message.
+        // Step 2 - Create message object (retrieval-server handles RAG during generation)
+        // Use deterministic ID to prevent duplication in DDB on retries.
         val uniqueContent = "${activeConversationId}-${userRequestRawPrompt}-${selectedResponseId ?: ""}-user"
         val deterministicId = java.util.UUID.nameUUIDFromBytes(uniqueContent.toByteArray()).toString()
 
@@ -354,7 +342,7 @@ class AIRequestManager(
             customerId = customerId,
             client = client,
             role = "user",
-            text = prompt,
+            text = userRequestRawPrompt,
             previousMessageId = selectedResponseId,
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
@@ -364,57 +352,50 @@ class AIRequestManager(
 
         // Step 3 - Add message request to conversation
         conversationService.addMessageInConversation(message)
-
         logger.info("Added Message id {} to conversation", message.messageId)
 
-        // For streaming, we currently support only the first config or iterate?
-        // Let's take the first one for now.
         val config = aiConfig.firstOrNull() ?: run {
-             logger.warn("No AI config provided in request")
-             return StreamExecutionResult(activeConversationId, deterministicId, kotlinx.coroutines.flow.emptyFlow(), "")
+            logger.warn("No AI config provided in request")
+            return StreamExecutionResult(activeConversationId, deterministicId, kotlinx.coroutines.flow.emptyFlow(), "")
         }
 
-        // Build conversation history for prompt
-        val messages = getThreadContext(
-            message.conversationId,
-            message.messageId
-        )
+        // Fetch API key before building the flow so auth errors surface immediately
+        val apiKey = fetchApiKey(config.aiVendor, customerId, customerProfileService)
+            ?: throw IllegalArgumentException("API key not found for vendor: ${config.aiVendor}")
+        val llmCredentials = mapOf(vendorToCredentialKey(config.aiVendor) to apiKey)
+        val llmProvider = vendorToProviderString(config.aiVendor)
 
-        // Pre-calculate the deterministic Response ID so we can send it to the client headers
-        // Format: userMessageId + "response" + vendor
+        // Fetch conversation thread so the LLM sees full history (message is already saved above)
+        val thread = getThreadContext(activeConversationId, deterministicId)
+        val conversationHistory = thread.map { ConversationMessage(role = it.role, content = it.text) }
+
+        // Pre-calculate the deterministic response ID to send as a response header immediately
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
         val responseMessageId = java.util.UUID.nameUUIDFromBytes(responseUniqueContent.toByteArray()).toString()
 
-        var streamInputTokens: Long? = null
-        var streamOutputTokens: Long? = null
-        var streamTotalTokens: Long? = null
-        var streamTokensReadFromCache: Long? = null
-
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
-
+            var capturedUsage: StreamChunk.Usage? = null
             try {
-                generateTextStreamWithUsage(
-                    config.aiVendor,
-                    config.model,
-                    messages,
-                    message.systemPrompt,
-                    message.customerId
-                ).collect { (chunk, aiResponse) ->
-                    sb.append(chunk)
-                    emit(chunk)
-                    // Track the most recent AIResponse that carries usage data
-                    if (aiResponse != null && aiResponse.getUsageMetadata() != null) {
-                        val usage = aiResponse.getUsageMetadata()!!
-                        streamInputTokens = usage.getInputTokenCount() ?: streamInputTokens
-                        streamOutputTokens = usage.getOutputTokenCount() ?: streamOutputTokens
-                        streamTotalTokens = usage.getTotalTokenCount() ?: streamTotalTokens
-                        streamTokensReadFromCache = usage.getTokenCountReadFromCache() ?: streamTokensReadFromCache
-
-                        // Fallback using extractTokens in case underlying provider object lacks the new interface property
-                        val (inp, out) = extractTokens(usage)
-                        if (streamInputTokens == null && inp != null) streamInputTokens = inp.toLong()
-                        if (streamOutputTokens == null && out != null) streamOutputTokens = out.toLong()
+                retrievalService.retrieveAndGenerateStream(
+                    customerId = customerId,
+                    client = client,
+                    query = userRequestRawPrompt,
+                    llmCredentials = llmCredentials,
+                    llmProvider = llmProvider,
+                    llmModel = config.model,
+                    llmMaxTokens = config.maxTokens ?: 4096,
+                    conversationHistory = conversationHistory
+                ).collect { chunk ->
+                    when (chunk) {
+                        is StreamChunk.Content -> {
+                            sb.append(chunk.text)
+                            emit("{\"t\":\"c\",\"v\":${chunk.text.toJsonStringValue()}}\n")
+                        }
+                        is StreamChunk.Thinking -> {
+                            emit("{\"t\":\"k\",\"v\":${chunk.text.toJsonStringValue()}}\n")
+                        }
+                        is StreamChunk.Usage -> capturedUsage = chunk
                     }
                 }
             } catch (e: java.io.IOException) {
@@ -426,12 +407,14 @@ class AIRequestManager(
                 throw e
             } finally {
                 val responseText = sb.toString()
-                logger.info("Stream flow completed for conversation {}. Total length: {}", message.conversationId, responseText.length)
-                logger.info("Received response from $config - $responseText")
-
+                logger.info(
+                    "Stream completed for conversation {}. Length: {} input_tokens={} output_tokens={} total_tokens={}",
+                    message.conversationId, responseText.length,
+                    capturedUsage?.inputTokens, capturedUsage?.outputTokens, capturedUsage?.totalTokens
+                )
                 if (responseText.isNotEmpty()) {
                     val responseMessage = Message(
-                        messageId = responseMessageId, // Use the pre-calculated ID
+                        messageId = responseMessageId,
                         conversationId = message.conversationId,
                         customerId = message.customerId,
                         client = message.client,
@@ -440,15 +423,12 @@ class AIRequestManager(
                         previousMessageId = message.messageId,
                         aiConfig = listOf(config),
                         systemPrompt = message.systemPrompt,
-                        inputTokens = streamInputTokens?.toInt(),
-                        outputTokens = streamOutputTokens?.toInt(),
-                        totalTokens = streamTotalTokens?.toInt(),
-                        tokensReadFromCache = streamTokensReadFromCache?.toInt()
+                        inputTokens = capturedUsage?.inputTokens,
+                        outputTokens = capturedUsage?.outputTokens,
+                        totalTokens = capturedUsage?.totalTokens
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }
-
-                // Sentinel USAGE chunk removed - Token counts fetched post stream now via explicit API
             }
         }
 
@@ -639,4 +619,19 @@ class AIRequestManager(
             customerId
         ).text
     }
+}
+
+private fun String.toJsonStringValue(): String = buildString {
+    append('"')
+    for (c in this@toJsonStringValue) {
+        when (c) {
+            '"'  -> append("\\\"")
+            '\\' -> append("\\\\")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> append(c)
+        }
+    }
+    append('"')
 }

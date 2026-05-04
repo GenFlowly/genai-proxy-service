@@ -1,10 +1,13 @@
-Flask==3.0.2
-gunicorn==21.2.0
+fastapi
+uvicorn[standard]
 pydantic
 genflowly-encoding-library[ml]>=0.1.24
 
-langchain-experimental
-langchain-text-splitters
+langgraph
 langchain-core
-langchain-huggingface
 langchain-openai
+langchain-anthropic
+langchain-google-genai
+langchain-text-splitters
+
+boto3
