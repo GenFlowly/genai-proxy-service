@@ -28,6 +28,11 @@ services:
       AUTH0_API_AUDIENCE: "https://genflowly-beta"
       RETRIEVAL_SERVER_URL: "http://retrieval-server:5001"
       IMAGE_TAG: "local-dev"   # For local builds; in CI this is set from GITHUB_SHA
+      # Google OAuth — required for Gmail/Calendar tool nodes.
+      # Set actual values in .env (never commit them).
+      GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID:-}"
+      GOOGLE_OAUTH_CLIENT_SECRET: "${GOOGLE_OAUTH_CLIENT_SECRET:-}"
+      GOOGLE_OAUTH_REDIRECT_URI: "http://localhost:8080/api/v1/oauth/google/callback"
       # You can inject any other app-specific environment vars here, e.g.:
       # DATABASE_URL: postgres://user:pass@host/db
       # API_KEY: ${API_KEY}   # If you want to pass from .env
@@ -58,6 +63,7 @@ services:
     environment:
       ZILLIZ_ENDPOINT: "${ZILLIZ_ENDPOINT}"
       ZILLIZ_TOKEN: "${ZILLIZ_TOKEN}"
+      HF_HUB_DISABLE_XET: "1"
       AWS_REGION: "us-east-1"
       AWS_SECRET_ACCESS_KEY: "***REDACTED***"
       AWS_ACCESS_KEY_ID: "***REDACTED***"
@@ -66,6 +72,7 @@ services:
       # Or you can inject temporary credentials via .env in the env_file below
     volumes:
       - ~/.aws:/root/.aws:ro
+      - hf-model-cache:/app/model_cache
     env_file:
       - .env
     restart: unless-stopped
@@ -77,3 +84,4 @@ services:
 
 volumes:
   gradle-cache:
+  hf-model-cache:   # persists the embedding model across container restarts

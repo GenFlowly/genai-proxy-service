@@ -44,9 +44,15 @@ class CustomerProfileService(
         if (existingCustomer != null) {
             val existingCustomerId = existingCustomer["customerId"]?.s()
                 ?: error("Customer profile exists but missing customerId field")
-            
+
             logger.info { "User already onboarded with customerId=$existingCustomerId" }
-            
+
+            val hasDefaultGraph = dynamoDBProvider.getDefaultCustomerGraph(existingCustomerId) != null
+            if (!hasDefaultGraph) {
+                logger.info { "No default graph found for customerId=$existingCustomerId — seeding now" }
+                seedDefaultGraph(existingCustomerId)
+            }
+
             return models.CustomerProfile(
                 customerId = existingCustomerId,
                 sub = sub,
@@ -90,7 +96,10 @@ class CustomerProfileService(
             instruction = "You are a helpful assistant",
             existingInstructionId = null
         )
-        
+
+        // Seed the default RAG pipeline graph for this customer
+        seedDefaultGraph(newCustomerId)
+
         logger.info { "New user onboarded with customerId=$newCustomerId" }
         return models.CustomerProfile(
             customerId = newCustomerId,
@@ -255,6 +264,42 @@ class CustomerProfileService(
             .sortedByDescending { it.version }
     }
 
+    private suspend fun seedDefaultGraph(customerId: String) {
+        try {
+            val queryAnalyzerId = generateNodeId()
+            val queryRewriterId = generateNodeId()
+            val retrievalId = generateNodeId()
+            val resultRankerId = generateNodeId()
+            val responseGeneratorId = generateNodeId()
+
+            val queryAnalyzerConfig = """{"system_prompt":"You are a query analysis expert for a vector similarity search system. Analyze the user query and determine the intent and whether it needs rewriting to improve retrieval. Return ONLY valid JSON: {\"intent\": \"<brief description>\", \"needs_rewrite\": <true|false>}","input_template":"Query: {original_query}","response_format":"json","json_output_mapping":{"intent":"query_intent","needs_rewrite":"needs_rewrite"}}"""
+            val queryRewriterConfig = """{"system_prompt":"You are a query rewriting expert for a vector similarity search system. Rewrite the query to be more specific and retrievable: expand abbreviations, add missing context, clarify ambiguity. Return ONLY the rewritten query text, nothing else.","input_template":"Original query: {original_query}\nIntent: {query_intent}","output_key":"rewritten_query","response_format":"text"}"""
+            val resultRankerConfig = """{"system_prompt":"You are a result ranking expert. Given a query and retrieved document chunks, re-rank them by relevance and remove irrelevant ones. Return ONLY a JSON array of 0-based indices in order of relevance (most relevant first). Include only indices of relevant results. Example: [2, 0, 4]","input_template":"Query: {query}\n\nChunks:\n{chunks_text}","output_key":"ranked_results","response_format":"json_indices","json_indices_source_key":"retrieval_results"}"""
+            val responseGeneratorConfig = """{"system_prompt":"You are a helpful AI assistant. Answer the user's question using the provided context. Be concise, accurate, and helpful. If the context lacks enough information, say so clearly but remain as helpful as possible with what is available.","input_template":"Context:\n{context}\n\nQuestion: {query}","output_key":"generated_response","response_format":"text","include_conversation_history":true,"is_streaming":true}"""
+
+            dynamoDBProvider.createCustomerGraphNode(customerId, queryAnalyzerId, "QUERY_ANALYZER", "Query Analyzer", queryAnalyzerConfig)
+            dynamoDBProvider.createCustomerGraphNode(customerId, queryRewriterId, "QUERY_REWRITER", "Query Rewriter", queryRewriterConfig)
+            dynamoDBProvider.createCustomerGraphNode(customerId, retrievalId, "RETRIEVAL", "Retrieval", "{}")
+            dynamoDBProvider.createCustomerGraphNode(customerId, resultRankerId, "RESULT_RANKER", "Result Ranker", resultRankerConfig)
+            dynamoDBProvider.createCustomerGraphNode(customerId, responseGeneratorId, "RESPONSE_GENERATOR", "Response Generator", responseGeneratorConfig)
+
+            val edges = """{"edges":[{"from":"$queryRewriterId","to":"$retrievalId"},{"from":"$retrievalId","to":"$resultRankerId"},{"from":"$resultRankerId","to":"$responseGeneratorId"},{"from":"$responseGeneratorId","to":"__end__"}],"conditional_edges":[{"from":"$queryAnalyzerId","condition_key":"needs_rewrite","routes":{"true":"$queryRewriterId","false":"$retrievalId"}}]}"""
+
+            dynamoDBProvider.createCustomerGraph(
+                customerId = customerId,
+                graphId = generateGraphId(),
+                name = "Default Graph",
+                isDefault = true,
+                nodeIds = listOf(queryAnalyzerId, queryRewriterId, retrievalId, resultRankerId, responseGeneratorId),
+                edges = edges,
+                entryPoint = queryAnalyzerId
+            )
+            logger.info { "Seeded default graph for customerId=$customerId" }
+        } catch (e: Exception) {
+            logger.warn { "Failed to seed default graph for customerId=$customerId: ${e.message}" }
+        }
+    }
+
     suspend fun getInstructionVersion(
         customerId: String,
         instructionId: String,
@@ -283,7 +328,16 @@ fun generateCustomerId(): String {
 }
 
 fun generateInstructionId(): String {
-    val uuid =
-        UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
+    val uuid = UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
     return "INS$uuid"
+}
+
+fun generateNodeId(): String {
+    val uuid = UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
+    return "NOD$uuid"
+}
+
+fun generateGraphId(): String {
+    val uuid = UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
+    return "GRP$uuid"
 }

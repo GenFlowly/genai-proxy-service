@@ -65,6 +65,11 @@ export class EcsStack extends cdk.Stack {
             }
         }
 
+        // Google OAuth — required only when OAuth-based tools (Gmail, Google Calendar) are enabled.
+        // If absent at deploy time the Kotlin server starts normally; OAuth endpoints return 501.
+        const googleOAuthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
+        const googleOAuthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '';
+
         const imageTag = process.env.IMAGE_TAG;
 
         let domainNameFull: string | undefined = undefined;
@@ -103,7 +108,14 @@ export class EcsStack extends cdk.Stack {
                         AUTH0_SPA_CLIENT_ID: process.env.AUTH0_SPA_CLIENT_ID ?? '',
                         AUTH0_API_AUDIENCE: process.env.AUTH0_API_AUDIENCE ?? '',
                         KMS_KEY_ID: props.kmsKey.keyArn,
-                        RETRIEVAL_SERVER_URL: 'http://localhost:5001'
+                        RETRIEVAL_SERVER_URL: 'http://localhost:5001',
+                        GOOGLE_OAUTH_CLIENT_ID: googleOAuthClientId,
+                        GOOGLE_OAUTH_CLIENT_SECRET: googleOAuthClientSecret,
+                        // Callback URL registered in the Google Cloud Console.
+                        // Computed from the domain so it matches the deployed environment automatically.
+                        GOOGLE_OAUTH_REDIRECT_URI: domainNameFull
+                            ? `https://${domainNameFull}/api/v1/oauth/google/callback`
+                            : 'http://localhost:8080/api/v1/oauth/google/callback',
                     },
                 },
                 capacityProviderStrategies: [
