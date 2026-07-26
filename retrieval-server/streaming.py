@@ -67,7 +67,13 @@ async def stream_response(
     )
     token_count = 0
     event_count = 0
-    usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    usage = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
+    }
     try:
         async for event in graph.astream_events(state, config={"recursion_limit": recursion_limit}, version="v2"):
             event_type = event.get("event", "")
@@ -100,9 +106,12 @@ async def stream_response(
             elif event_type == "on_chat_model_end":
                 output = event["data"].get("output")
                 meta = getattr(output, "usage_metadata", None) or {}
+                details = meta.get("input_token_details") or {}
                 usage["input_tokens"] += meta.get("input_tokens", 0)
                 usage["output_tokens"] += meta.get("output_tokens", 0)
                 usage["total_tokens"] += meta.get("total_tokens", 0)
+                usage["cache_read_tokens"] += details.get("cache_read", 0)
+                usage["cache_creation_tokens"] += details.get("cache_creation", 0)
                 logger.info(
                     "Stream: LLM call ended node=%s — chunk_usage=%s running_total=%s",
                     node, meta, usage,
@@ -121,8 +130,9 @@ async def stream_response(
         if token_count == 0:
             logger.warning("Stream: ZERO tokens emitted — streaming node may have failed or produced no output")
         logger.info(
-            "Stream: total usage — input_tokens=%d output_tokens=%d total_tokens=%d",
+            "Stream: total usage — input_tokens=%d output_tokens=%d total_tokens=%d cache_read=%d cache_creation=%d",
             usage["input_tokens"], usage["output_tokens"], usage["total_tokens"],
+            usage["cache_read_tokens"], usage["cache_creation_tokens"],
         )
         yield f"data: {json.dumps({'usage': usage})}\n\n"
     except Exception as e:

@@ -172,7 +172,8 @@ class AIRequestManager(
             llmProvider = vendorToProviderString(aiVendor),
             llmModel = model,
             llmMaxTokens = maxTokens,
-            conversationHistory = conversationHistory
+            conversationHistory = conversationHistory,
+            systemPrompt = message.systemPrompt
         )
 
         val responseMessage = Message(
@@ -385,7 +386,8 @@ class AIRequestManager(
                     llmProvider = llmProvider,
                     llmModel = config.model,
                     llmMaxTokens = config.maxTokens ?: 4096,
-                    conversationHistory = conversationHistory
+                    conversationHistory = conversationHistory,
+                    systemPrompt = systemPrompt
                 ).collect { chunk ->
                     when (chunk) {
                         is StreamChunk.Content -> {

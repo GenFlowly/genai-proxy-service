@@ -37,6 +37,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         llm_max_tokens=req.llm_max_tokens,
         conversation_history=[m.model_dump() for m in req.conversation_history],
         node_configs=node_configs,
+        request_system_prompt=req.system_prompt,
         retrieval_results=[],
         ranked_results=[],
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
@@ -104,13 +105,17 @@ async def retrieve(req: RetrieveRequest):
     creds_keys = list(req.llm_credentials.keys())
     logger.info(
         "Incoming /retrieve — customer=%s client=%s provider=%s stream=%s "
-        "query='%s' credential_keys=%s",
+        "query='%s' credential_keys=%s has_system_prompt=%s system_prompt_len=%d "
+        "system_prompt=%r",
         req.customer_id,
         req.client,
         req.llm_provider,
         req.stream,
         req.raw_data.query_data[:80],
         creds_keys,
+        bool(req.system_prompt),
+        len(req.system_prompt) if req.system_prompt else 0,
+        req.system_prompt,
     )
 
     graph, node_type_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id)

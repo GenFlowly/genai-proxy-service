@@ -1,13 +1,19 @@
 package com.genflowly.service
 
 import com.genflowly.models.api.GetCustomerInstructionListResponse
+import com.genflowly.models.api.GetToolCredentialStatusListResponse
 import com.genflowly.models.api.InstructionResponse
+import com.genflowly.models.api.StoreToolCredentialsResponse
+import com.genflowly.models.api.ToolCredentialStatus
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.AIMode
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import java.util.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import models.AIConfig
 import mu.KotlinLogging
 
@@ -318,6 +324,47 @@ class CustomerProfileService(
             name = instruction.name,
             instruction = instruction.instructions // Add this locally to models
         )
+    }
+
+    suspend fun storeToolCredentials(
+        customerId: String,
+        toolType: String,
+        authType: String,
+        credentials: Map<String, String>,
+    ): StoreToolCredentialsResponse {
+        val credentialsJson = Json.encodeToString(credentials)
+        val encrypted = kmsProvider.encrypt(credentialsJson)
+        dynamoDBProvider.saveCustomerToolCredentials(customerId, toolType, authType, encrypted)
+        return StoreToolCredentialsResponse(
+            toolCredentialStatus = ToolCredentialStatus(
+                toolType = toolType,
+                authType = authType,
+                connected = true,
+            )
+        )
+    }
+
+    suspend fun getToolCredentials(customerId: String, toolType: String): Map<String, String>? {
+        val item = dynamoDBProvider.getCustomerToolCredentials(customerId, toolType) ?: return null
+        val encrypted = item["credentials"]?.s() ?: return null
+        val decrypted = kmsProvider.decrypt(encrypted)
+        return Json.decodeFromString(decrypted)
+    }
+
+    suspend fun listToolCredentialStatuses(customerId: String): GetToolCredentialStatusListResponse {
+        val statuses = dynamoDBProvider.listCustomerToolCredentials(customerId).map { item ->
+            ToolCredentialStatus(
+                toolType = item["toolType"]?.s() ?: "",
+                authType = item["authType"]?.s() ?: "api_key",
+                connected = !item["credentials"]?.s().isNullOrBlank(),
+                connectedAt = item["createdAt"]?.s(),
+            )
+        }
+        return GetToolCredentialStatusListResponse(toolCredentialStatuses = statuses)
+    }
+
+    suspend fun removeToolCredentials(customerId: String, toolType: String) {
+        dynamoDBProvider.deleteCustomerToolCredentials(customerId, toolType)
     }
 }
 

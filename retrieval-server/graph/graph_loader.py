@@ -48,6 +48,7 @@ def get_default_graph_and_nodes(customer_id: str) -> Optional[tuple[dict, list[d
             Limit=20,
         )
         items = response.get("Items", [])
+        # TODO handle this case
         if not items:
             logger.info("No default graph found for customer=%s", customer_id)
             return None

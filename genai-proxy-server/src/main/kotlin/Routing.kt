@@ -23,6 +23,7 @@ import com.genflowly.activity.registerCreateConversationTitleRoutes
 import com.genflowly.activity.registerGetCustomerConversationsPaginatedRoutes
 import com.genflowly.activity.registerGraphNodeRoutes
 import com.genflowly.activity.registerCustomerGraphRoutes
+import com.genflowly.activity.registerToolCredentialsRoutes
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
@@ -56,6 +57,9 @@ object Routes {
     const val GRAPH = "$API_V1/graphs/{graphId}"
     const val GRAPH_VERSIONS = "$API_V1/graphs/{graphId}/versions"
     const val GRAPH_ROLLBACK = "$API_V1/graphs/{graphId}/rollback/{version}"
+
+    const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
+    const val TOOL_CREDENTIAL = "$API_V1/tool-credentials/{toolType}"
 }
 
 
@@ -92,5 +96,6 @@ fun Application.configureRouting(
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)
         registerGraphNodeRoutes(graphService, customerProfileService)
         registerCustomerGraphRoutes(graphService, customerProfileService)
+        registerToolCredentialsRoutes(customerProfileService)
     }
 }
