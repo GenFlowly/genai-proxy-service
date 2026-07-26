@@ -54,6 +54,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.BatchGetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.KeysAndAttributes
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
@@ -1352,5 +1353,79 @@ class DynamoDBProvider(
             dynamoDbClient.putItem(PutItemRequest.builder().tableName(CUSTOMER_GRAPHS_TABLE).item(updatedCurrent).build())
             logger.info("Rolled back graph $graphId to v$toVersion (new snapshot v$latestVersion)")
             updatedCurrent
+        }
+
+    suspend fun saveCustomerToolCredentials(
+        customerId: String,
+        toolType: String,
+        authType: String,
+        encryptedCredentials: String,
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                com.genflowly.DynamoDBConstants.TOOL_TYPE_KEY to AttributeValue.builder().s(toolType).build(),
+                com.genflowly.DynamoDBConstants.TOOL_AUTH_TYPE_KEY to AttributeValue.builder().s(authType).build(),
+                com.genflowly.DynamoDBConstants.TOOL_CREDENTIALS_KEY to AttributeValue.builder().s(encryptedCredentials).build(),
+            ))
+            dynamoDbClient.putItem(
+                PutItemRequest.builder()
+                    .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_TOOL_CREDENTIALS_TABLE)
+                    .item(item)
+                    .build()
+            )
+            logger.info("Saved tool credentials for $customerId / $toolType")
+        } catch (e: Exception) {
+            logger.error("Failed to save tool credentials for $customerId / $toolType", e)
+            throw e
+        }
+    }
+
+    suspend fun getCustomerToolCredentials(
+        customerId: String,
+        toolType: String,
+    ): Map<String, AttributeValue>? = withContext(Dispatchers.IO) {
+        val response = dynamoDbClient.getItem(
+            GetItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_TOOL_CREDENTIALS_TABLE)
+                .key(mapOf(
+                    com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    com.genflowly.DynamoDBConstants.TOOL_TYPE_KEY to AttributeValue.builder().s(toolType).build(),
+                ))
+                .build()
+        )
+        response.item()?.takeIf { it.isNotEmpty() }
+    }
+
+    suspend fun listCustomerToolCredentials(customerId: String): List<Map<String, AttributeValue>> =
+        withContext(Dispatchers.IO) {
+            val response = dynamoDbClient.query(
+                QueryRequest.builder()
+                    .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_TOOL_CREDENTIALS_TABLE)
+                    .keyConditionExpression("#cid = :cid")
+                    .expressionAttributeNames(mapOf("#cid" to com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY))
+                    .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                    .build()
+            )
+            response.items()
+        }
+
+    suspend fun deleteCustomerToolCredentials(customerId: String, toolType: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                dynamoDbClient.deleteItem(
+                    DeleteItemRequest.builder()
+                        .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_TOOL_CREDENTIALS_TABLE)
+                        .key(mapOf(
+                            com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                            com.genflowly.DynamoDBConstants.TOOL_TYPE_KEY to AttributeValue.builder().s(toolType).build(),
+                        ))
+                        .build()
+                )
+                logger.info("Deleted tool credentials for $customerId / $toolType")
+            } catch (e: Exception) {
+                logger.error("Failed to delete tool credentials for $customerId / $toolType", e)
+                throw e
+            }
         }
 }

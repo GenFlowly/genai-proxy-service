@@ -10,14 +10,20 @@ from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SYSTEM_PROMPT = """You are a helpful AI assistant. Answer the user's question using the provided context.
-Be concise, accurate, and helpful.
+_DEFAULT_PERSONA = """You are a helpful AI assistant. Answer the user's question using the provided context.
+Be concise, accurate, and helpful."""
+
+# Appended after the persona (default or request-supplied) so the cycle-exit JSON schema
+# contract is preserved regardless of which persona is used.
+_JSON_FORMAT_REQUIREMENT = """
 
 You MUST respond with valid JSON in this exact format:
 {"answer": "<your answer here>", "needs_more_context": <true|false>}
 
 Set needs_more_context to true ONLY if the provided context is clearly insufficient to answer
 the question at all. If you can give a reasonable answer, set it to false."""
+
+_DEFAULT_SYSTEM_PROMPT = _DEFAULT_PERSONA + _JSON_FORMAT_REQUIREMENT
 
 _DEFAULT_INPUT_TEMPLATE = "Context:\n{context}\n\nQuestion: {query}"
 
@@ -44,6 +50,14 @@ def make_reflection_node(node_type: str):
         output_key = config.get("output_key", "generated_response")
         include_history: bool = config.get("include_conversation_history", False)
         model_override: str | None = config.get("model_override")
+
+        # Customer instruction from the request: replace the persona portion but keep the
+        # JSON schema requirement so needs_more_context is always emitted (cycle-exit contract).
+        if output_key == "generated_response":
+            request_sp = state.get("request_system_prompt")
+            if request_sp:
+                logger.info("Node %s: overriding system_prompt with request_system_prompt + JSON schema (len=%d)", node_type, len(request_sp))
+                system_prompt = request_sp + _JSON_FORMAT_REQUIREMENT
 
         effective_model = model_override or state.get("llm_model")
         llm = get_llm(

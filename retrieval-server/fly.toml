@@ -1,0 +1,16 @@
+app = "retrieval-server"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "5001"
+  HF_HOME = "/app/model_cache"
+
+[[mounts]]
+  source = "model_cache"
+  destination = "/app/model_cache"
+
+# No http_service section means this app won't be exposed to the public internet.
+# It will be accessible internally via `http://<app-name>.internal:5001`

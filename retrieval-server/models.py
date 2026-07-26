@@ -26,4 +26,5 @@ class RetrieveRequest(BaseModel):
     conversation_history: list[ConversationMessage] = []
     model_type: Optional[str] = None
     model_name: Optional[str] = None
+    system_prompt: Optional[str] = None
     stream: bool = False

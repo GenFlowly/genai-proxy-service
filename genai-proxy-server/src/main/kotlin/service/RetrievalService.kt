@@ -49,6 +49,7 @@ private data class RetrievalAgentPayload(
     val llm_model: String,
     val llm_max_tokens: Int,
     val conversation_history: List<ConversationMessage> = emptyList(),
+    val system_prompt: String? = null,
     val stream: Boolean = false
 )
 
@@ -81,6 +82,7 @@ class RetrievalService(
         llmModel: String,
         llmMaxTokens: Int,
         conversationHistory: List<ConversationMessage>,
+        systemPrompt: String?,
         stream: Boolean
     ): String = json.encodeToString(
         RetrievalAgentPayload(
@@ -93,6 +95,7 @@ class RetrievalService(
             llm_model = llmModel,
             llm_max_tokens = llmMaxTokens,
             conversation_history = conversationHistory,
+            system_prompt = systemPrompt?.takeIf { it.isNotBlank() },
             stream = stream
         )
     )
@@ -105,10 +108,11 @@ class RetrievalService(
         llmProvider: String,
         llmModel: String,
         llmMaxTokens: Int = 4096,
-        conversationHistory: List<ConversationMessage> = emptyList()
+        conversationHistory: List<ConversationMessage> = emptyList(),
+        systemPrompt: String? = null
     ): RetrievalResult {
-        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, stream = false)
+        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -143,10 +147,11 @@ class RetrievalService(
         llmProvider: String,
         llmModel: String,
         llmMaxTokens: Int = 4096,
-        conversationHistory: List<ConversationMessage> = emptyList()
+        conversationHistory: List<ConversationMessage> = emptyList(),
+        systemPrompt: String? = null
     ): Flow<StreamChunk> = channelFlow {
-        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, stream = true)
+        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)

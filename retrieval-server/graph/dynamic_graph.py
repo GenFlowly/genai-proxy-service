@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 _graph_cache: dict[str, tuple[Any, int]] = {}  # customer_id -> (compiled_graph, max_iterations)
 
+# safety cap on how many times the graph can loop through a cycle before LangGraph forcibly aborts the run
 _DEFAULT_MAX_ITERATIONS = 10
 
 

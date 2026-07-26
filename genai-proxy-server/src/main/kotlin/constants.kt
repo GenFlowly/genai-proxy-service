@@ -56,4 +56,10 @@ object DynamoDBConstants {
     const val VERSION_KEY = "version"
     const val LATEST_VERSION_KEY = "latestVersion"
     const val DELETED_AT_KEY = "deletedAt"
+
+    // Tool credentials — per-customer, per-toolType
+    const val CUSTOMER_TOOL_CREDENTIALS_TABLE = "CustomerToolCredentials"
+    const val TOOL_TYPE_KEY = "toolType"
+    const val TOOL_AUTH_TYPE_KEY = "authType"
+    const val TOOL_CREDENTIALS_KEY = "credentials"
 }
