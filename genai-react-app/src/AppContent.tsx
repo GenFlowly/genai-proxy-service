@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage/SettingsPage'
 import MemoryPage from './pages/MemoryPage/MemoryPage'
+import AgentsPage from './pages/AgentsPage/AgentsPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 
 import { AIProvider } from './context/AIContext'
@@ -34,6 +35,7 @@ export default function AppContent(): React.ReactElement {
                             />
                             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                             <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
+                            <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
                         </Routes>
                     </ConversationProvider>
                 </AIProvider>

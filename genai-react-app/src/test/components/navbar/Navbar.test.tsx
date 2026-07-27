@@ -194,7 +194,7 @@ describe('Navbar Component', () => {
 
         // Tab to login button
         // Due to potential sidebar toggles (visible in JSDOM) and logo link, we tab until we reach the button
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 15; i++) {
             if (document.activeElement === loginBtn) break;
             await userEvent.tab();
         }
@@ -218,11 +218,12 @@ describe('Navbar Component', () => {
         const avatarBtn = screen.getByTestId('user-avatar-button');
 
         // Focus avatar
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 15; i++) {
             if (document.activeElement === avatarBtn) break;
             await userEvent.tab();
         }
         expect(avatarBtn).toHaveFocus();
+
 
         // Open menu with enter or space (simulating keyboard interaction if button supports it, or just click)
         await userEvent.click(avatarBtn);

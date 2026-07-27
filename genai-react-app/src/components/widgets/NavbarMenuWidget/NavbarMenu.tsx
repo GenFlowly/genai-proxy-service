@@ -5,6 +5,7 @@ import styles from './NavbarMenu.module.scss';
 export const NAV_ITEMS = [
     { id: 'chat', label: 'Chat', path: '/chat' },
     { id: 'memory', label: 'Memory', path: '/memory' },
+    { id: 'agents', label: 'Agents', path: '/agents' },
 ];
 
 export const NavbarMenu: React.FC = () => {

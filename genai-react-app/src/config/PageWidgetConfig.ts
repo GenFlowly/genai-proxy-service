@@ -1,4 +1,4 @@
-export type PageId = 'CHAT_PAGE' | 'MEMORY_PAGE' | 'SETTINGS_PAGE'
+export type PageId = 'CHAT_PAGE' | 'MEMORY_PAGE' | 'SETTINGS_PAGE' | 'AGENTS_PAGE'
 
 export interface PageConfig {
     pageId: PageId
@@ -25,6 +25,12 @@ export const PAGE_WIDGET_CONFIG: PageConfig[] = [
         leftSidebar: ['SIDEBAR_MENU'],
         rightSidebar: [],
         centerSection: ['CONFIGURE_AI_VENDOR_SETTINGS', 'DATABASE_CONNECTIONS_SETTINGS'],
+    },
+    {
+        pageId: 'AGENTS_PAGE',
+        leftSidebar: [],
+        rightSidebar: [],
+        centerSection: [],
     },
 ]
 
