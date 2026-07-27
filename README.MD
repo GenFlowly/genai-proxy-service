@@ -80,7 +80,10 @@ Common abstractions related to embeddings in Python.
 1. Create an Auth0 account and set up a Single Page Application (SPA).
 2. Set Allowed Callback, Logout, Web Origins, and CORS URLs to your stage frontend URLs (e.g., `https://development.genflowly.com`).
 3. Create an API identifier matching your backend endpoint (e.g., `https://api-development.genflowly.com`).
-4. Note down the API Audience, Client ID, and Domain for GitHub Actions secrets.
+4. **Authorize Client Access**: In your Auth0 Dashboard > **Applications > APIs** > select your API > click **Machine to Machine Applications** (or **Application Access** tab) > find your SPA Application and toggle it **Authorized (ON)**.
+5. **Enable Refresh Tokens**: In your API Settings tab, scroll down to **Access Settings** and check **Allow Offline Access** (required for `offline_access` scope).
+6. Note down the API Audience, Client ID, and Domain for GitHub Actions secrets.
+
 
 ### 6. Github Actions CI/CD Setup
 Go to your GitHub Repository > **Settings** > **Secrets and variables** > **Actions** and add the following repository secrets:
