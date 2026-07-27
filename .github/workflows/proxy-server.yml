@@ -99,12 +99,14 @@ jobs:
           APP_NAME="genai-proxy-server-${{ env.STAGE }}"
           RETRIEVAL_APP="genai-retrieval-server-${{ env.STAGE }}"
           
-          # Fetch AWS credentials from CDK outputs using distinct variable names
+          # Fetch AWS credentials and KMS key from CDK outputs using distinct variable names
           FLY_AWS_ACCESS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsAccessKeyId'].OutputValue" --output text)
           FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsSecretAccessKey'].OutputValue" --output text)
+          KMS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-KmsStack --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArnOutput'].OutputValue" --output text)
           
           # Set secrets and deploy
-          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.internal:5001"
+          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.internal:5001"
           
           flyctl deploy --app $APP_NAME --yes
+
 
