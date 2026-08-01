@@ -108,6 +108,52 @@ When you push to the `development` branch, GitHub Actions will automatically:
 1. Create a Zilliz Cloud account and get your endpoint and API token (`ZILLIZ_ENDPOINT`, `ZILLIZ_TOKEN`).
 
 
+## Section 3: Deploying to Production
+
+When you are ready to launch to Production, you must bootstrap and pre-provision the environment just like you did for Development, but using production parameters.
+
+### 1. Bootstrap & Pre-provision AWS CDK for Production
+If you are running this from AWS CloudShell (where you are already authenticated), you can dynamically fetch your account details to bootstrap the environment:
+1. Fetch your Account ID and Region in CloudShell:
+   ```bash
+   export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+   export AWS_REGION=$AWS_REGION
+   ```
+2. Run the AWS CDK Bootstrap command for the production environment:
+   ```bash
+   STAGE=production npx aws-cdk@latest bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION
+   ```
+3. (Optional but recommended) Run a manual initial deploy to verify table creation:
+   ```bash
+   STAGE=production npx aws-cdk@latest deploy --all
+   ```
+
+### 2. Pre-provision Fly.io Apps
+Create the empty shells for your production compute instances:
+```bash
+flyctl apps create genai-proxy-server-production
+flyctl apps create genai-retrieval-server-production
+
+flyctl ips allocate-v4 -a genai-proxy-server-production
+flyctl ips allocate-v6 -a genai-proxy-server-production
+
+flyctl certs add api.genflowly.com -a genai-proxy-server-production
+```
+
+### 3. Update Cloudflare DNS & Auth0
+1. **Cloudflare**: Add your Fly.io IPv4 and IPv6 addresses as **Proxied** A and AAAA records for `api` (`api.genflowly.com`). Ensure SSL is set to **Full (Strict)**.
+2. **Auth0**: Ensure your Auth0 Application allows `https://genflowly.com` and `https://www.genflowly.com` as Allowed Callback, Logout, and Web Origins URLs. The Production API Audience must be `https://api.genflowly.com`.
+
+### 4. Set GitHub Production Environment Secrets
+Go to your GitHub Repository > **Settings** > **Environments** > **production** (or global repository secrets) and ensure all secrets are updated for production:
+- `AUTH0_SPA_CLIENT_ID` (Production Client ID)
+- `AUTH0_API_AUDIENCE` (`https://api.genflowly.com`)
+- `AWS_ACCESS_KEY_ID` & `AWS_SECRET_ACCESS_KEY` (Production AWS User)
+- `NETLIFY_SITE_ID` (Production Netlify site ID)
+
+### 5. Trigger CI/CD
+Open a Pull Request against the `main` branch. When it merges, the `.github/workflows/prod-pipeline.yml` will automatically deploy your frontend to Netlify, sync your AWS CDK infrastructure, and push your backend containers to Fly.io Production!
+
 
 ## Gotchas 
 1. Deleting DDB Cloudformation stack doesn't delete the tables created.
