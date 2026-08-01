@@ -16,15 +16,15 @@
   "license": "ISC",
   "dependencies": {
     "@genflowly/cdk-commons": "^0.1.22",
-    "aws-cdk-lib": "2.189.1",
+    "aws-cdk-lib": "2.263.0",
     "constructs": "^10.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.5.4",
-    "@typescript-eslint/eslint-plugin": "^8.5.0",
-    "@typescript-eslint/parser": "^8.5.0",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
     "aws-cdk": "^2.152.0",
-    "eslint": "^9.38.0",
+    "eslint": "^10.8.0",
     "husky": "^9.1.6",
     "prettier": "^3.3.3",
     "ts-node": "^10.9.2",
