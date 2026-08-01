@@ -123,10 +123,6 @@ If you are running this from AWS CloudShell (where you are already authenticated
    ```bash
    STAGE=production npx aws-cdk@latest bootstrap aws://$AWS_ACCOUNT_ID/$AWS_REGION
    ```
-3. (Optional but recommended) Run a manual initial deploy to verify table creation:
-   ```bash
-   STAGE=production npx aws-cdk@latest deploy --all
-   ```
 
 ### 2. Pre-provision Fly.io Apps
 Create the empty shells for your production compute instances:
