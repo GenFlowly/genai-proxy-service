@@ -140,6 +140,83 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Versioned graph nodes. PK=nodeId, SK=version (Number).
+        // version=0 is always the current/live item and includes customerId for GSI indexing.
+        // version=1,2,... are immutable history snapshots and omit customerId (sparse GSI).
+        // This means the GSI only surfaces current-state items, never history.
+        const customerGraphNodesTableProps: CreateTableProps = {
+            tableName: 'CustomerGraphNodes',
+            partitionKey: {
+                name: 'nodeId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'version',
+                type: dynamodb.AttributeType.NUMBER,
+            },
+            globalSecondaryIndexes: [
+                {
+                    // Lists current-state nodes for a customer (sparse: only v=0 items have customerId).
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
+        // Versioned graphs. Same PK=graphId, SK=version pattern as CustomerGraphNodes.
+        const customerGraphsTableProps: CreateTableProps = {
+            tableName: 'CustomerGraphs',
+            partitionKey: {
+                name: 'graphId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'version',
+                type: dynamodb.AttributeType.NUMBER,
+            },
+            globalSecondaryIndexes: [
+                {
+                    // Lists current-state graphs for a customer (sparse: only v=0 items have customerId).
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
+        // Per-customer tool credentials.
+        // PK=customerId, SK=toolType ("WEB_SEARCH", "CODE_EXECUTOR", "DATABASE_QUERY",
+        //   "FILE_READER", "EMAIL", "CALENDAR").
+        // credentials: KMS-encrypted JSON blob (shape is tool-specific).
+        // authType: "api_key" | "oauth2" — determines how the proxy handles token refresh.
+        // For oauth2 tools the blob also contains refresh_token, access_token, access_token_expiry.
+        const customerToolCredentialsTableProps: CreateTableProps = {
+            tableName: 'CustomerToolCredentials',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'toolType',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
@@ -149,7 +226,16 @@ export class DynamoDBStack extends cdk.Stack {
         const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
         const customerSupabaseConfigTable = createDefaultDynamoDbTable(this, customerSupabaseConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
+        const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
+        const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
+        const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
 
-        this.dynamoDbTableList.push(customerTable, customerApiKeyTable, customerApiUsageTable, conversationTable, messageTable, customerPreferencesTable, customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable)
+        this.dynamoDbTableList.push(
+            customerTable, customerApiKeyTable, customerApiUsageTable,
+            conversationTable, messageTable, customerPreferencesTable,
+            customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
+            customerGraphNodesTable, customerGraphsTable,
+            customerToolCredentialsTable,
+        );
     }
 }

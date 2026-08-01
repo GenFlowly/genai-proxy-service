@@ -13,6 +13,12 @@ on:
         required: false
       GH_PAT_TOKEN_FOR_FREE_ACCOUNT:
         required: false
+      AUTH0_SPA_DOMAIN:
+        required: false
+      AUTH0_SPA_CLIENT_ID:
+        required: false
+      AUTH0_API_AUDIENCE:
+        required: false
 
 jobs:
   deploy:
@@ -22,6 +28,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: development
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -38,8 +46,13 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          REACT_APP_AUTH0_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+          REACT_APP_AUTH0_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
+          REACT_APP_AUTH0_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
+          REACT_APP_BACKEND_URL: "https://api-development.genflowly.com"
         working-directory: genai-react-app
         run: |
           npm install
           npm run build
           npx netlify-cli deploy --prod --dir=build --site=$NETLIFY_SITE_ID
+

@@ -33,4 +33,33 @@ object DynamoDBConstants {
     const val INSTRUCTION_CONTENT_KEY = "instructions"
     const val INSTRUCTION_VERSION_KEY = "version"
     const val INSTRUCTION_CREATOR_GSI_KEY = "creatorIndexV2"
+
+    const val CUSTOMER_GRAPH_NODES_TABLE = "CustomerGraphNodes"
+    const val NODE_ID_KEY = "nodeId"
+    const val NODE_TYPE_KEY = "nodeType"
+    const val NODE_NAME_KEY = "name"
+    const val NODE_CONFIG_KEY = "config"
+    const val CUSTOMER_GRAPH_NODES_GSI_KEY = "customerIdIndex"
+
+    const val CUSTOMER_GRAPHS_TABLE = "CustomerGraphs"
+    const val GRAPH_ID_KEY = "graphId"
+    const val GRAPH_NAME_KEY = "name"
+    const val GRAPH_IS_DEFAULT_KEY = "isDefault"
+    const val GRAPH_NODE_IDS_KEY = "nodeIds"
+    const val GRAPH_EDGES_KEY = "edges"
+    const val GRAPH_ENTRY_POINT_KEY = "entryPoint"
+    const val GRAPH_MAX_ITERATIONS_KEY = "maxIterations"
+    const val CUSTOMER_GRAPHS_GSI_KEY = "customerIdIndex"
+
+    // Shared versioning keys used by both CustomerGraphNodes and CustomerGraphs.
+    // version=0 is always the current/live record; version=1,2,... are immutable history.
+    const val VERSION_KEY = "version"
+    const val LATEST_VERSION_KEY = "latestVersion"
+    const val DELETED_AT_KEY = "deletedAt"
+
+    // Tool credentials — per-customer, per-toolType
+    const val CUSTOMER_TOOL_CREDENTIALS_TABLE = "CustomerToolCredentials"
+    const val TOOL_TYPE_KEY = "toolType"
+    const val TOOL_AUTH_TYPE_KEY = "authType"
+    const val TOOL_CREDENTIALS_KEY = "credentials"
 }

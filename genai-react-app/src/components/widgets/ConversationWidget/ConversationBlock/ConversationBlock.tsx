@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import Response from '../ResponseWidget/Response'
+import ResponseThinking from '../ResponseThinkingWidget/ResponseThinking'
 import Request from '../RequestWidget/Request'
 import { useConversation } from '../../../../context/ConversationContext'
 import styles from './ConversationBlock.module.scss'
@@ -134,6 +135,13 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
     return (
         <div className={`${styles.conversationBlock} conversation-block-item`} data-block-id={id} data-testid={testId}>
             <Request blockId={id} />
+
+            {conversationBlock.responseMessages.length > 0 && (
+                <ResponseThinking
+                    blockId={id}
+                    responseMessages={conversationBlock.responseMessages}
+                />
+            )}
 
             {((conversationBlock.status === 'resolved') || (conversationBlock.responseMessages.length > 0)) && (
                 <div ref={responseRef} style={{ width: '100%' }}>

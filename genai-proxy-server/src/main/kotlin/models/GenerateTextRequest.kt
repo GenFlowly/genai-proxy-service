@@ -15,7 +15,8 @@ data class GenerateTextRequest(
 @Serializable
 data class AIConfig(
     val aiVendor: AIVendor,
-    val model: String
+    val model: String,
+    val maxTokens: Int? = null
 )
 
 

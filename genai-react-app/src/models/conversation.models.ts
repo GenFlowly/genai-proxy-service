@@ -9,6 +9,7 @@ export interface Message {
     messageId: string
     previousMessageId?: string
     isLoading?: boolean
+    thinkingSteps?: string[]
     inputTokens?: number | null
     outputTokens?: number | null
     totalTokens?: number | null
@@ -54,6 +55,10 @@ export interface IConversationContext {
     selectedResponseByBlock: Record<string, string | null>
     setSelectedResponseForBlock: (blockId: string, responseId: string) => void
     getSelectedResponseForBlock: (blockId: string) => string | null
+
+    /** Per-block vendor visibility (which vendors are toggled on) */
+    getVendorSelectionForBlock: (blockId: string) => string[]
+    setVendorSelectionForBlock: (blockId: string, vendors: string[]) => void
     loadConversation: (id: string) => Promise<void>
     resetConversation: () => void
 

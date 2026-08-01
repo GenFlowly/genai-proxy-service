@@ -153,6 +153,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         }
     }, [isAuthenticated, auth0User, getAccessTokenSilently, logout])
 
+    // Proactive session check: when the user returns to the tab after being idle,
+    // verify the refresh token is still valid. If not, logout immediately so the
+    // UI shows the Login button instead of appearing to be logged in.
+    useEffect(() => {
+        if (!isAuthenticated) return
+
+        const checkSession = async () => {
+            if (document.visibilityState !== 'visible') return
+            try {
+                await getAccessTokenSilently()
+            } catch (error: any) {
+                if (
+                    error?.error === 'login_required' ||
+                    error?.error === 'consent_required' ||
+                    error?.message?.includes('Login required')
+                ) {
+                    logout({ returnTo: window.location.origin })
+                }
+            }
+        }
+
+        document.addEventListener('visibilitychange', checkSession)
+        return () => document.removeEventListener('visibilitychange', checkSession)
+    }, [isAuthenticated, getAccessTokenSilently, logout])
+
 
 
     // Map Auth0 User to our User type
