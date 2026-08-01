@@ -1,0 +1,46 @@
+name: Fast Forward Dev to Main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge main -> development
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Checkout the development branch
+          git checkout development
+          
+          # Check if main is ahead of development
+          AHEAD_COUNT=$(git rev-list --count development..origin/main)
+          
+          if [ "$AHEAD_COUNT" -gt 0 ]; then
+            echo "Main is ahead by $AHEAD_COUNT commits. Syncing..."
+            
+            # Merge main into development
+            if git merge origin/main --no-edit; then
+              echo "Successfully merged main into development."
+              git push origin development
+            else
+              echo "🚨 MERGE CONFLICT DETECTED! 🚨"
+              echo "The changes in main conflict with new features in development."
+              echo "Please pull main into development locally, resolve the conflicts, and push."
+              
+              # Abort the merge to clean up the workspace
+              git merge --abort
+              exit 1 # Fail the action
+            fi
+          else
+            echo "Main is not ahead of development. Nothing to do."
+          fi
