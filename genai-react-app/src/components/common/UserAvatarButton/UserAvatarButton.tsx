@@ -29,6 +29,7 @@ export const UserAvatarButton: React.FC<UserAvatarButtonProps> = ({
                     alt={displayName}
                     className={styles.avatarImage}
                     data-testid={testId ? `${testId}-image` : 'user-avatar-image'}
+                    referrerPolicy="no-referrer"
                 />
             ) : (
                 <Icon src={ICONS.USER_CIRCLE} size={40} data-testid={testId ? `${testId}-icon` : undefined} />
