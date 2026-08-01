@@ -21,8 +21,12 @@ import com.genflowly.activity.registerGetCustomerInstructionListRoutes
 import com.genflowly.activity.registerGetInstructionVersionRoutes
 import com.genflowly.activity.registerCreateConversationTitleRoutes
 import com.genflowly.activity.registerGetCustomerConversationsPaginatedRoutes
+import com.genflowly.activity.registerGraphNodeRoutes
+import com.genflowly.activity.registerCustomerGraphRoutes
+import com.genflowly.activity.registerToolCredentialsRoutes
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
+import com.genflowly.service.GraphService
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -43,6 +47,19 @@ object Routes {
     const val CREATE_CONVERSATION_TITLE = "$API_V1/conversation/title"
     const val GET_AI_USAGE = "$API_V1/message/usage"
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
+
+    const val GRAPH_NODES = "$API_V1/graph-nodes"
+    const val GRAPH_NODE = "$API_V1/graph-nodes/{nodeId}"
+    const val GRAPH_NODE_VERSIONS = "$API_V1/graph-nodes/{nodeId}/versions"
+    const val GRAPH_NODE_ROLLBACK = "$API_V1/graph-nodes/{nodeId}/rollback/{version}"
+
+    const val GRAPHS = "$API_V1/graphs"
+    const val GRAPH = "$API_V1/graphs/{graphId}"
+    const val GRAPH_VERSIONS = "$API_V1/graphs/{graphId}/versions"
+    const val GRAPH_ROLLBACK = "$API_V1/graphs/{graphId}/rollback/{version}"
+
+    const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
+    const val TOOL_CREDENTIAL = "$API_V1/tool-credentials/{toolType}"
 }
 
 
@@ -53,7 +70,8 @@ fun Application.configureRouting(
     aiRequestManager: AIRequestManager,
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService,
-    aiModelsService: AIModelsService
+    aiModelsService: AIModelsService,
+    graphService: GraphService,
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -76,5 +94,8 @@ fun Application.configureRouting(
         registerCreateConversationTitleRoutes(aiRequestManager, customerProfileService)
         registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)
+        registerGraphNodeRoutes(graphService, customerProfileService)
+        registerCustomerGraphRoutes(graphService, customerProfileService)
+        registerToolCredentialsRoutes(customerProfileService)
     }
 }

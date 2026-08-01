@@ -20,7 +20,7 @@ import { createConversationTitle } from '../services/createConversationTitleServ
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
 
 export const ConversationProvider = ({ children }: { children: ReactNode }) => {
-    const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
+    const { customerId, getAccessTokenSilently, isAuthenticated, logout } = useAuth()
     const { showToast } = useToast()
 
     const {
@@ -68,6 +68,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     ])
 
     const [selectedResponseByBlock, setSelectedResponseByBlock] = useState<Record<string, string | null>>({})
+    const [vendorSelectionByBlock, setVendorSelectionByBlock] = useState<Record<string, string[]>>({})
 
     const getSelectedResponseForBlock = useCallback((blockId: string) => {
         return selectedResponseByBlock[blockId] ?? null
@@ -119,6 +120,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const setSelectedResponseForBlock = (blockId: string, responseId: string) => {
         setSelectedResponseByBlock(prev => ({ ...prev, [blockId]: responseId }))
     }
+
+    const getVendorSelectionForBlock = useCallback((blockId: string): string[] => {
+        return vendorSelectionByBlock[blockId] ?? []
+    }, [vendorSelectionByBlock])
+
+    const setVendorSelectionForBlock = useCallback((blockId: string, vendors: string[]) => {
+        setVendorSelectionByBlock(prev => ({ ...prev, [blockId]: vendors }))
+    }, [])
 
     // --- API Calls ---
     const fetchVendorResponses = async (
@@ -189,6 +198,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         onMetadata?: (metadata: StreamMetadata) => void,
         // Added idOverride to support explicit conversation targeting (parallel streams)
         idOverride?: string,
+        onThinking?: (step: string) => void,
         signal?: AbortSignal
     ): Promise<void> => {
         await generateTextStream(token, {
@@ -201,7 +211,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta, onMetadata, signal)
+        }, onDelta, onMetadata, onThinking, signal)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -294,14 +304,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         const index = conversationBlockList.findIndex(c => c.conversationBlockId === id)
         let parentResponseId = ''
 
-        // Should use the selected response from the PREVIOUS block as the parent
+        // Should use the selected response from the PREVIOUS block as the parent.
+        // handleFollowUp stores the selection on the current (new) block, so check there first.
         if (index > 0) {
             const prevBlock = conversationBlockList[index - 1]
-            const prevSelectedId = getSelectedResponseForBlock(prevBlock.conversationBlockId)
+            const currentBlockSelectedId = getSelectedResponseForBlock(id)
+            const prevBlockSelectedId = getSelectedResponseForBlock(prevBlock.conversationBlockId)
 
-            // If explicit selection exists, use it. Otherwise default to first response.
-            if (prevSelectedId) {
-                parentResponseId = prevSelectedId
+            if (currentBlockSelectedId) {
+                parentResponseId = currentBlockSelectedId
+            } else if (prevBlockSelectedId) {
+                parentResponseId = prevBlockSelectedId
             } else if (prevBlock.responseMessages.length > 0) {
                 parentResponseId = prevBlock.responseMessages[0].messageId
             }
@@ -444,6 +457,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 const instructionVersion = instruction ? instruction.version.toString() : ""
                 const instructionId = selectedInstructionId || ""
 
+                const handleThinking = (step: string) => {
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, thinkingSteps: [...(m.thinkingSteps ?? []), step] }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
                 await fetchVendorResponseStream(
                     token,
                     conf,
@@ -519,6 +543,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         if (onIdResolved && newConversationId) onIdResolved(newConversationId)
                     },
                     idToUse,
+                    handleThinking,
                     controller.signal
                 )
 
@@ -538,7 +563,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                                             inputTokens: metrics.inputTokens,
                                             outputTokens: metrics.outputTokens,
                                             totalTokens: metrics.totalTokens,
-                                            tokensReadFromCache: metrics.tokensReadFromCache
+                                            tokensReadFromCache: metrics.tokensReadFromCache ?? 0
                                         }
                                     }
                                     return { ...block, responseMessages: newMsgs }
@@ -647,6 +672,16 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     isLoading: false,
                     status: 'resolved',
                 })
+            } else if (
+                err?.error === 'login_required' ||
+                err?.error === 'consent_required' ||
+                err?.message?.includes('Login required')
+            ) {
+                // Session expired mid-use. Draft is already persisted to localStorage by the
+                // editor (Request.tsx). Reset block state then logout so the Login button appears.
+                updateConversationBlock(id, { isLoading: false, status: 'draft' })
+                showToast('Session expired. Your draft is saved — log in to continue.')
+                logout({ returnTo: window.location.origin })
             } else {
                 updateConversationBlock(id, {
                     responseMessages: [
@@ -696,11 +731,13 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 selectedResponseByBlock,
                 setSelectedResponseForBlock,
                 getSelectedResponseForBlock,
-                loadConversation, // Expose this
+                loadConversation,
                 resetConversation,
                 editorPrompt,
                 setEditorPrompt,
                 conversationTitle,
+                getVendorSelectionForBlock,
+                setVendorSelectionForBlock,
 
             }}
         >

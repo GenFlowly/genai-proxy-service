@@ -14,6 +14,8 @@ jest.mock('../../../../../components/widgets/ConversationWidget/RequestWidget/Re
     <div data-testid={`mock-request-${blockId}`}>Request: {blockId}</div>
 ));
 
+jest.mock('../../../../../components/widgets/ConversationWidget/ResponseThinkingWidget/ResponseThinking', () => () => null);
+
 jest.mock('../../../../../components/widgets/ConversationWidget/ResponseWidget/Response', () => ({
     blockId,
     onFollowUp,

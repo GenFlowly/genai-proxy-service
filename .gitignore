@@ -53,7 +53,7 @@ out/
 cdk.out/
 **/cdk.out/
 cdk.out/**
-!**/cdk.out/**
+
 
 # Python cache
 __pycache__/
