@@ -88,3 +88,41 @@ export const NAV_ITEMS = [
 ```
 
 The Navbar will automatically detect if the user is on that path (or a sub-path) and highlight the tab appropriately.
+
+## 4. Add a New Page in the Settings Page
+
+The application uses a dynamic **Widget Registry System** to render pages and sidebars inside the Settings page. You do not need to manually add new routes in `AppContent.tsx` for settings sub-pages.
+
+1. **Create the Component (`src/components/widgets/`)**
+   Create a new widget folder and component, for example: `ProfileSettingsWidget/ProfileSettingsWidget.tsx`.
+
+2. **Register the Widget (`src/registry/WidgetRegistry.tsx`)**
+   Add your new widget to the `WIDGET_REGISTRY`. You'll provide an ID (like `PROFILE_SETTINGS`), a display name, and lazy-load the React component.
+   ```tsx
+   PROFILE_SETTINGS: {
+       id: 'PROFILE_SETTINGS',
+       name: 'Profile Settings',
+       component: lazy(() => import('../components/widgets/ProfileSettingsWidget/ProfileSettingsWidget'))
+   },
+   ```
+
+3. **Add to the Settings Sidebar (`src/config/SidebarMenuConfig.ts`)**
+   Find the `SIDEBAR_MENU_REGISTRY` array. Inside the object where `pageId: 'SETTINGS_PAGE'`, add your new widget to the `items` list so it appears in the sidebar menu:
+   ```typescript
+   items: [
+       { widgetId: 'PROFILE_SETTINGS', label: 'Profile' },
+       // ... existing items
+   ]
+   ```
+
+4. **Add to the Center Section Config (`src/config/PageWidgetConfig.ts`)**
+   In order for the Center Section to successfully switch to your widget when selected, it must be whitelisted in the page configuration. Locate the `SETTINGS_PAGE` object and append your new widget ID to the `centerSection` array:
+   ```typescript
+   centerSection: ['PROFILE_SETTINGS', 'CONFIGURE_AI_VENDOR_SETTINGS', 'DATABASE_CONNECTIONS_SETTINGS'],
+   ```
+
+5. **Set the Page Title (`src/hooks/usePageTitle.ts`)** *(Optional but recommended)*
+   Update the title map so that the browser tab reflects the new settings page:
+   ```typescript
+   'PROFILE_SETTINGS': 'Profile Settings',
+   ```

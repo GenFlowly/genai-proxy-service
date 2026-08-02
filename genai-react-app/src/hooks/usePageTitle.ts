@@ -12,6 +12,7 @@ const ROUTE_TITLES: Record<string, string> = {
 
 const WIDGET_TITLES: Record<string, string> = {
     'CONFIGURE_AI_VENDOR_SETTINGS': `AI Vendor API Keys Settings`,
+    'PROFILE_SETTINGS': `Profile Settings`,
     'DATABASE_CONNECTIONS_SETTINGS': `Database Settings`,
 }
 

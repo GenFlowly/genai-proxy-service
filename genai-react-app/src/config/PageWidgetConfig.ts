@@ -24,7 +24,7 @@ export const PAGE_WIDGET_CONFIG: PageConfig[] = [
         pageId: 'SETTINGS_PAGE',
         leftSidebar: ['SIDEBAR_MENU'],
         rightSidebar: [],
-        centerSection: ['CONFIGURE_AI_VENDOR_SETTINGS', 'DATABASE_CONNECTIONS_SETTINGS'],
+        centerSection: ['PROFILE_SETTINGS', 'CONFIGURE_AI_VENDOR_SETTINGS', 'DATABASE_CONNECTIONS_SETTINGS'],
     },
     {
         pageId: 'AGENTS_PAGE',

@@ -1,0 +1,136 @@
+@import '../../../styles/mixins.scss';
+
+.card {
+  @include card-base;
+  margin: 0 0.5rem;
+}
+
+.title {
+  @include title-base;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.section {
+  background: $color-background;
+  padding: 1.5rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sectionTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+.profileInfo {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.profilePic {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid $color-border;
+}
+
+.profileDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  
+  strong {
+    font-size: 1.125rem;
+    color: $color-text-primary;
+  }
+  
+  span {
+    color: $color-text-secondary;
+    font-size: 0.875rem;
+  }
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  
+  input {
+    padding: 0.75rem;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    font-size: 1rem;
+    background: $color-background;
+    color: $color-text-primary;
+    
+    &:focus {
+      outline: none;
+      border-color: $color-primary;
+    }
+  }
+}
+
+.inputLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: $color-text-primary;
+}
+
+.toggleGroup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggleLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  strong {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $color-text-primary;
+  }
+  
+  span {
+    font-size: 0.75rem;
+    color: $color-text-secondary;
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.message {
+  padding: 0.75rem;
+  border-radius: $radius-md;
+  font-size: 0.875rem;
+  
+  &.success {
+    background-color: rgba(34, 197, 94, 0.1);
+    color: #16a34a;
+    border: 1px solid rgba(34, 197, 94, 0.2);
+  }
+  
+  &.error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+}

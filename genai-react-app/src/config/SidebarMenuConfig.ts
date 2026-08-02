@@ -16,6 +16,7 @@ export const SIDEBAR_MENU_REGISTRY: SidebarMenuObject[] = [
         pageId: 'SETTINGS_PAGE',
         header: '',
         items: [
+            { widgetId: 'PROFILE_SETTINGS', label: 'Profile' },
             { widgetId: 'CONFIGURE_AI_VENDOR_SETTINGS', label: 'AI Vendor API Keys' },
             { widgetId: 'DATABASE_CONNECTIONS_SETTINGS', label: 'Database Settings' }
         ]

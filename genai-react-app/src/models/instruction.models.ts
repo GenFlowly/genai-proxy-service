@@ -9,6 +9,7 @@ export interface InstructionResponse {
     version: number;
     name: string;
     instruction: string;
+    role?: 'OWNER' | 'EDIT' | 'VIEW';
 }
 
 export interface GetCustomerInstructionListResponse {
