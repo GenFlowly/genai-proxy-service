@@ -67,7 +67,7 @@ export class DynamoDBStack extends cdk.Stack {
                 {
                     // Enables paginated listing of all conversations for a customer,
                     // sorted newest-first by createdAt.
-                    indexName: 'customerIdIndex',
+                    indexName: 'customerIdIndexV2',
                     partitionKey: {
                         name: 'customerId',
                         type: dynamodb.AttributeType.STRING,
