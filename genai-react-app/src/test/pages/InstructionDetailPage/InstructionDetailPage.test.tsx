@@ -40,6 +40,24 @@ jest.mock('../../../components/widgets/PromptEditorWidget/PromptEditor', () => {
     };
 });
 
+jest.mock('../../../components/common/ShareModal/ShareModal', () => {
+    const React = require('react');
+    return function MockShareModal(props: any) {
+        if (!props.isOpen) return null;
+        return (
+            <div data-testid="mock-share-modal">
+                <button onClick={() => props.onSave('PUBLIC', [], [])}>Make public to everyone</button>
+                <button 
+                    data-testid="mock-share-save" 
+                    onClick={() => props.onSave('SPECIFIC', [{ customerId: 'c1', role: 'VIEW' }], [{ customerId: 'c2' }])}
+                >
+                    Save
+                </button>
+            </div>
+        );
+    };
+});
+
 describe('InstructionDetailPage', () => {
     const mockGetToken = jest.fn().mockResolvedValue('mock-token');
     const mockRefresh = jest.fn();
@@ -50,7 +68,7 @@ describe('InstructionDetailPage', () => {
 
         (useAuth as jest.Mock).mockReturnValue({
             customerInstructions: [
-                { id: 'inst-1', name: 'Existing', instruction: 'Original text', version: 1 }
+                { id: 'inst-1', name: 'Existing', instruction: 'Original text', version: 1, role: 'OWNER' }
             ],
             refreshInstructions: mockRefresh,
             updateInstruction: mockUpdate
@@ -127,7 +145,7 @@ describe('InstructionDetailPage', () => {
         const shareButton = screen.getByText('Share');
         await userEvent.click(shareButton);
 
-        expect(screen.getByText('Share Options')).toBeInTheDocument();
+        expect(screen.getByTestId('mock-share-modal')).toBeInTheDocument();
     });
 
     test('deletes instruction and navigates away', async () => {
@@ -141,6 +159,88 @@ describe('InstructionDetailPage', () => {
             expect(instructionService.deleteInstruction).toHaveBeenCalledWith('mock-token', 'inst-1');
             expect(mockRefresh).toHaveBeenCalled();
             expect(mockNavigate).toHaveBeenCalledWith('/instructions');
+        });
+    });
+
+    test('handles save instruction failure', async () => {
+        jest.spyOn(instructionService, 'createInstruction').mockRejectedValueOnce(new Error('Save failed'));
+        renderWithRoute('/instructions/new');
+        
+        const editor = screen.getByTestId('mock-prompt-editor');
+        await userEvent.type(editor, 'My new prompt');
+        
+        const saveButton = screen.getByText('Save');
+        await userEvent.click(saveButton);
+        
+        await waitFor(() => {
+            expect(window.alert).toHaveBeenCalledWith('Failed to save instruction');
+        });
+    });
+
+    test('handles delete instruction failure', async () => {
+        jest.spyOn(instructionService, 'deleteInstruction').mockRejectedValueOnce(new Error('Delete failed'));
+        renderWithRoute('/instructions/inst-1');
+        
+        const deleteButton = screen.getByText('Delete');
+        await userEvent.click(deleteButton);
+        
+        await waitFor(() => {
+            expect(window.alert).toHaveBeenCalledWith('Failed to delete instruction. You can only delete instructions you own.');
+        });
+    });
+
+    test('back button navigates to instructions list', async () => {
+        renderWithRoute('/instructions/inst-1');
+        
+        const backButton = screen.getByText('← Back');
+        await userEvent.click(backButton);
+        
+        expect(mockNavigate).toHaveBeenCalledWith('/instructions');
+    });
+
+    test('ShareModal PUBLIC/PRIVATE mode shows alert', async () => {
+        renderWithRoute('/instructions/inst-1');
+        
+        const shareButton = screen.getByText('Share');
+        await userEvent.click(shareButton);
+        
+        const publicButton = screen.getByText('Make public to everyone');
+        await userEvent.click(publicButton);
+        
+        expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("Backend currently doesn't support PUBLIC mode"));
+    });
+
+    test('ShareModal SPECIFIC mode saves successfully', async () => {
+        jest.spyOn(instructionService, 'shareInstruction').mockResolvedValue(undefined);
+        jest.spyOn(instructionService, 'unshareInstruction').mockResolvedValue(undefined);
+        renderWithRoute('/instructions/inst-1');
+        
+        const shareButton = screen.getByText('Share');
+        await userEvent.click(shareButton);
+        
+        // Find the mocked ShareModal and its save trigger
+        const mockSaveButton = screen.getByTestId('mock-share-save');
+        await userEvent.click(mockSaveButton);
+        
+        await waitFor(() => {
+            expect(instructionService.shareInstruction).toHaveBeenCalledWith('mock-token', 'inst-1', 'c1', 'VIEW');
+            expect(instructionService.unshareInstruction).toHaveBeenCalledWith('mock-token', 'inst-1', 'c2');
+            expect(window.alert).toHaveBeenCalledWith('Instruction share settings updated successfully!');
+        });
+    });
+
+    test('ShareModal SPECIFIC mode handles save failure', async () => {
+        jest.spyOn(instructionService, 'shareInstruction').mockRejectedValue(new Error('Failed'));
+        renderWithRoute('/instructions/inst-1');
+        
+        const shareButton = screen.getByText('Share');
+        await userEvent.click(shareButton);
+        
+        const mockSaveButton = screen.getByTestId('mock-share-save');
+        await userEvent.click(mockSaveButton);
+        
+        await waitFor(() => {
+            expect(window.alert).toHaveBeenCalledWith('Failed to share instruction. Make sure you own it.');
         });
     });
 });

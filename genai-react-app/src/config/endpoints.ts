@@ -20,4 +20,7 @@ export const endpoints = {
     getCustomerConversations: `${BASE}${API_PREFIX}/conversations`,
     getAIUsage: `${BASE}${API_PREFIX}/message/usage`,
     searchUsers: `${BASE}${API_PREFIX}/users/search`,
+    getProfile: `${BASE}${API_PREFIX}/profile`,
+    updateUsername: `${BASE}${API_PREFIX}/profile/username`,
+    updateDiscoverability: `${BASE}${API_PREFIX}/profile/discoverability`,
 };

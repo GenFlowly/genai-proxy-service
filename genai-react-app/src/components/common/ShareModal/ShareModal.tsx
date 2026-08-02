@@ -11,26 +11,51 @@ export type VisibilityMode = 'PRIVATE' | 'PUBLIC' | 'SPECIFIC';
 interface ShareModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (mode: VisibilityMode, users: SearchUserResponse[]) => Promise<void>;
+    onSave: (mode: VisibilityMode, users: SearchUserResponse[], removedUsers: SearchUserResponse[]) => Promise<void>;
+    entityId?: string;
+    fetchSharedUsers?: (entityId: string) => Promise<SearchUserResponse[]>;
 }
 
-const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave }) => {
+const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entityId, fetchSharedUsers }) => {
     const { getAccessTokenSilently } = useAuth0();
     const [mode, setMode] = useState<VisibilityMode>('PRIVATE');
     const [searchTerm, setSearchTerm] = useState('');
-    const [searchResult, setSearchResult] = useState<SearchUserResponse | null>(null);
+    const [searchResults, setSearchResults] = useState<SearchUserResponse[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [selectedUsers, setSelectedUsers] = useState<SearchUserResponse[]>([]);
+    const [initialUsers, setInitialUsers] = useState<SearchUserResponse[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoadingInitial, setIsLoadingInitial] = useState(false);
 
     useEffect(() => {
         if (!isOpen) {
             setMode('PRIVATE');
             setSearchTerm('');
-            setSearchResult(null);
+            setSearchResults([]);
             setSelectedUsers([]);
+            setInitialUsers([]);
+        } else if (entityId && fetchSharedUsers) {
+            setIsLoadingInitial(true);
+            fetchSharedUsers(entityId)
+                .then(users => {
+                    if (users.length > 0) {
+                        setMode('SPECIFIC');
+                        setSelectedUsers(users);
+                        setInitialUsers(users);
+                    } else {
+                        setMode('PRIVATE');
+                        setInitialUsers([]);
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to fetch shared users', err);
+                    setMode('PRIVATE');
+                })
+                .finally(() => {
+                    setIsLoadingInitial(false);
+                });
         }
-    }, [isOpen]);
+    }, [isOpen, entityId, fetchSharedUsers]);
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(async () => {
@@ -39,26 +64,26 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave }) => {
                 try {
                     const token = await getAccessTokenSilently();
                     const result = await searchUserByUsername(token, searchTerm);
-                    setSearchResult(result);
+                    setSearchResults(result || []);
                 } catch (err) {
                     console.error(err);
-                    setSearchResult(null);
+                    setSearchResults([]);
                 } finally {
                     setIsSearching(false);
                 }
             } else {
-                setSearchResult(null);
+                setSearchResults([]);
             }
         }, 500);
 
         return () => clearTimeout(delayDebounceFn);
     }, [searchTerm, getAccessTokenSilently]);
 
-    const handleAddUser = () => {
-        if (searchResult && !selectedUsers.some(u => u.customerId === searchResult.customerId)) {
-            setSelectedUsers(prev => [...prev, searchResult]);
+    const handleAddUser = (user: SearchUserResponse) => {
+        if (!selectedUsers.some(u => u.customerId === user.customerId)) {
+            setSelectedUsers(prev => [...prev, { ...user, role: 'VIEW' }]);
             setSearchTerm('');
-            setSearchResult(null);
+            setSearchResults([]);
         }
     };
 
@@ -66,10 +91,19 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave }) => {
         setSelectedUsers(prev => prev.filter(u => u.customerId !== customerId));
     };
 
+    const handleRoleChange = (customerId: string, role: 'VIEW' | 'EDIT') => {
+        setSelectedUsers(prev => prev.map(u => u.customerId === customerId ? { ...u, role } : u));
+    };
+
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            await onSave(mode, selectedUsers);
+            const finalUsers = mode === 'SPECIFIC' ? selectedUsers : [];
+            const removedUsers = initialUsers.filter(initialUser => 
+                !finalUsers.some(finalUser => finalUser.customerId === initialUser.customerId)
+            );
+            
+            await onSave(mode, finalUsers, removedUsers);
             onClose();
         } catch (err) {
             console.error(err);
@@ -80,6 +114,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave }) => {
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Share Options">
+            {isLoadingInitial ? (
+                <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
+            ) : (
             <div className={styles.container}>
                 <div className={styles.optionsGroup}>
                     <label className={styles.radioLabel}>
@@ -113,26 +150,29 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave }) => {
                         <div className={styles.searchRow}>
                             <input
                                 type="text"
-                                placeholder="Search exact username..."
+                                placeholder="Search username..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className={styles.searchInput}
                             />
-                            <PillButton
-                                label={isSearching ? "Searching..." : "Add"}
-                                variant="primary"
-                                onClick={handleAddUser}
-                                disabled={!searchResult || isSearching}
-                            />
                         </div>
-                        {searchResult && (
-                            <div className={styles.searchHit}>
-                                Found: <strong>{searchResult.username}</strong> {searchResult.name ? `(${searchResult.name})` : ''}
+                        {isSearching && <div className={styles.searchingText}>Searching...</div>}
+                        {searchResults.length > 0 && (
+                            <div className={styles.suggestionsList}>
+                                {searchResults.map(user => (
+                                    <div 
+                                        key={user.customerId} 
+                                        className={styles.suggestionItem}
+                                        onClick={() => handleAddUser(user)}
+                                    >
+                                        <strong>{user.username}</strong> {user.name ? `(${user.name})` : ''}
+                                    </div>
+                                ))}
                             </div>
                         )}
-                        {!searchResult && searchTerm.length >= 3 && !isSearching && (
+                        {searchResults.length === 0 && searchTerm.length >= 3 && !isSearching && (
                             <div className={styles.searchMiss}>
-                                No user found matching "{searchTerm}" exactly.
+                                No users found matching "{searchTerm}".
                             </div>
                         )}
                         
@@ -143,6 +183,14 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave }) => {
                                     {selectedUsers.map(user => (
                                         <div key={user.customerId} className={styles.tag}>
                                             <span>{user.username}</span>
+                                            <select 
+                                                value={user.role || 'VIEW'} 
+                                                onChange={(e) => handleRoleChange(user.customerId, e.target.value as 'VIEW' | 'EDIT')}
+                                                className={styles.roleSelect}
+                                            >
+                                                <option value="VIEW">View</option>
+                                                <option value="EDIT">Edit</option>
+                                            </select>
                                             <button onClick={() => handleRemoveUser(user.customerId)}>&times;</button>
                                         </div>
                                     ))}
@@ -167,6 +215,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave }) => {
                     />
                 </div>
             </div>
+            )}
         </Modal>
     );
 };

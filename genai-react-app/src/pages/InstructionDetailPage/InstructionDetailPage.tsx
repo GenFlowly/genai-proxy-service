@@ -5,7 +5,9 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { 
     createInstruction, 
     shareInstruction, 
-    deleteInstruction 
+    unshareInstruction,
+    deleteInstruction,
+    getInstructionSharedUsers
 } from '../../services/instructionService';
 import PromptEditor from '../../components/widgets/PromptEditorWidget/PromptEditor';
 import PillButton from '../../components/common/PillButton/PillButton';
@@ -27,6 +29,7 @@ export default function InstructionDetailPage() {
     const [instructionText, setInstructionText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [role, setRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER');
 
     useEffect(() => {
         if (!isNew && instructionId) {
@@ -37,10 +40,10 @@ export default function InstructionDetailPage() {
             if (latest) {
                 setName(latest.name || '');
                 setInstructionText(latest.instruction || '');
-                // Basic ownership check (if creator field is available on the model, otherwise assume false for safety or true if we rely on backend)
-                // Actually the frontend InstructionResponse doesn't have `creator`. 
-                // We will rely on backend to throw an error if they try to delete something they don't own.
+                setRole(latest.role || 'VIEW');
             }
+        } else {
+            setRole('OWNER');
         }
     }, [instructionId, isNew, customerInstructions]);
 
@@ -74,7 +77,7 @@ export default function InstructionDetailPage() {
         setIsShareModalOpen(true);
     };
 
-    const handleShareSave = async (mode: VisibilityMode, users: SearchUserResponse[]) => {
+    const handleShareSave = async (mode: VisibilityMode, users: SearchUserResponse[], removedUsers: SearchUserResponse[]) => {
         if (mode === 'PRIVATE' || mode === 'PUBLIC') {
             alert(`Backend currently doesn't support ${mode} mode. Only SPECIFIC mode works.`);
             return;
@@ -84,9 +87,12 @@ export default function InstructionDetailPage() {
         try {
             const token = await getAccessTokenSilently();
             for (const user of users) {
-                await shareInstruction(token, instructionId!, user.customerId);
+                await shareInstruction(token, instructionId!, user.customerId, user.role || 'VIEW');
             }
-            alert(`Instruction shared successfully with ${users.length} users!`);
+            for (const user of removedUsers) {
+                await unshareInstruction(token, instructionId!, user.customerId);
+            }
+            alert(`Instruction share settings updated successfully!`);
         } catch (error) {
             console.error("Failed to share instruction", error);
             alert("Failed to share instruction. Make sure you own it.");
@@ -125,7 +131,7 @@ export default function InstructionDetailPage() {
                 </div>
                 
                 <div className={styles.actions}>
-                    {!isNew && (
+                    {role !== 'VIEW' && !isNew && (
                         <>
                             <PillButton 
                                 label="Share" 
@@ -133,30 +139,40 @@ export default function InstructionDetailPage() {
                                 onClick={handleShareClick} 
                                 disabled={isLoading}
                             />
-                            <PillButton 
-                                label="Delete" 
-                                variant="danger" 
-                                onClick={handleDelete} 
-                                disabled={isLoading}
-                            />
+                            {role === 'OWNER' && (
+                                <PillButton 
+                                    label="Delete" 
+                                    variant="danger" 
+                                    onClick={handleDelete} 
+                                    disabled={isLoading}
+                                />
+                            )}
                         </>
                     )}
-                    <PillButton 
-                        label={isLoading ? 'Saving...' : 'Save'} 
-                        variant="primary" 
-                        onClick={handleSave} 
-                        disabled={isLoading || !instructionText.trim()}
-                    />
+                    {role !== 'VIEW' && (
+                        <PillButton 
+                            label={isLoading ? 'Saving...' : 'Save'} 
+                            variant="primary" 
+                            onClick={handleSave} 
+                            disabled={isLoading || !instructionText.trim()}
+                        />
+                    )}
                 </div>
             </div>
 
             <div className={styles.content}>
+                {role === 'VIEW' && (
+                    <div className={styles.readonlyBanner}>
+                        You are viewing a shared instruction. You cannot make changes.
+                    </div>
+                )}
                 <div className={styles.inputGroup}>
                     <InputTextWithHint
                         hint="Name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="e.g., Code Reviewer Persona"
+                        disabled={role === 'VIEW'}
                     />
                 </div>
                 
@@ -176,6 +192,11 @@ export default function InstructionDetailPage() {
                 isOpen={isShareModalOpen}
                 onClose={() => setIsShareModalOpen(false)}
                 onSave={handleShareSave}
+                entityId={!isNew ? instructionId : undefined}
+                fetchSharedUsers={async (id) => {
+                    const token = await getAccessTokenSilently();
+                    return getInstructionSharedUsers(token, id);
+                }}
             />
         </div>
         </div>

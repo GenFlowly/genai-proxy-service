@@ -7,6 +7,7 @@ import {
 } from "../models/instruction.models";
 
 import { fetchWithRetry } from "../utils/apiUtils";
+import { SearchUserResponse } from "../models/user.models";
 
 export async function getCustomerInstructions(token: string): Promise<GetCustomerInstructionListResponse> {
     const response = await fetchWithRetry(endpoints.getCustomerInstructions, {
@@ -75,7 +76,8 @@ export async function getInstructionVersion(
 export async function shareInstruction(
     token: string,
     instructionId: string,
-    targetCustomerId: string
+    targetCustomerId: string,
+    role: 'VIEW' | 'EDIT' = 'VIEW'
 ): Promise<void> {
     const response = await fetchWithRetry(`${endpoints.createInstruction}/share`, {
         method: HttpMethod.POST,
@@ -83,11 +85,29 @@ export async function shareInstruction(
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ instructionId, targetCustomerId }),
+        body: JSON.stringify({ instructionId, targetCustomerId, role }),
     })
 
     if (!response.ok) {
         throw new Error(`Share Instruction failed: ${response.status} ${response.statusText}`)
+    }
+}
+
+export async function unshareInstruction(
+    token: string,
+    instructionId: string,
+    targetCustomerId: string
+): Promise<void> {
+    const response = await fetchWithRetry(`${endpoints.createInstruction}/share?instructionId=${instructionId}&targetCustomerId=${targetCustomerId}`, {
+        method: HttpMethod.DELETE,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Unshare Instruction failed: ${response.status} ${response.statusText}`)
     }
 }
 
@@ -106,4 +126,23 @@ export async function deleteInstruction(
     if (!response.ok) {
         throw new Error(`Delete Instruction failed: ${response.status} ${response.statusText}`)
     }
+}
+
+export async function getInstructionSharedUsers(
+    token: string,
+    instructionId: string
+): Promise<SearchUserResponse[]> {
+    const response = await fetchWithRetry(`${endpoints.createInstruction}/${instructionId}/shared`, {
+        method: HttpMethod.GET,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Get Shared Users failed: ${response.status} ${response.statusText}`)
+    }
+
+    return (await response.json()) as SearchUserResponse[]
 }
