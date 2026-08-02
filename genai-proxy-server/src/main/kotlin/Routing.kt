@@ -24,6 +24,8 @@ import com.genflowly.activity.registerGetCustomerConversationsPaginatedRoutes
 import com.genflowly.activity.registerGraphNodeRoutes
 import com.genflowly.activity.registerCustomerGraphRoutes
 import com.genflowly.activity.registerToolCredentialsRoutes
+import com.genflowly.activity.registerCustomerProfileSettingsRoutes
+import com.genflowly.activity.registerSearchRoutes
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
@@ -40,6 +42,9 @@ object Routes {
     const val STORE_VECTOR_DB_CONFIG = "$API_V1/store-vector-db-config"
     const val STORE_SUPABASE_CONFIG = "$API_V1/store-supabase-config"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
+    const val UPDATE_USERNAME = "$API_V1/profile/username"
+    const val UPDATE_DISCOVERABILITY = "$API_V1/profile/discoverability"
+    const val SEARCH_USERS = "$API_V1/users/search"
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
     const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
     const val GET_CONVERSATION = "$API_V1/chat"

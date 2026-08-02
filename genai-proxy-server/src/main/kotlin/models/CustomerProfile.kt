@@ -9,5 +9,7 @@ data class CustomerProfile(
     val client: String,
     val email: String? = null,
     val name: String? = null,
-    val picture: String? = null
+    val picture: String? = null,
+    val username: String? = null,
+    val isDiscoverable: Boolean = false
 )
