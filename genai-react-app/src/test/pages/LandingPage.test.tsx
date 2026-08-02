@@ -9,6 +9,7 @@ jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar
 jest.mock('../../components/sections/LeftSidebar/LeftSidebar', () => ({ widgetIds }: any) => <div data-testid="left-sidebar" data-widget-ids={JSON.stringify(widgetIds)}>LeftSidebar</div>);
 jest.mock('../../components/sections/RightSidebar/RightSidebar', () => ({ widgetIds }: any) => <div data-testid="right-sidebar" data-widget-ids={JSON.stringify(widgetIds)}>RightSidebar</div>);
 jest.mock('../../components/sections/CenterSection/CenterSection', () => ({ widgetIds }: any) => <div data-testid="center-section" data-widget-ids={JSON.stringify(widgetIds)}>CenterSection</div>);
+jest.mock('../../components/widgets/ConversationHeader/ConversationHeader', () => () => <div data-testid="conversation-header">ConversationHeader</div>);
 
 // Mock Config
 jest.mock('../../config/PageWidgetConfig', () => ({

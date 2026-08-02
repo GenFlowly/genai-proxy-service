@@ -3,6 +3,7 @@ import { useParams, useLocation } from 'react-router-dom'
 import Navbar from '../components/navbar/Navbar'
 import LeftSidebar from '../components/sections/LeftSidebar/LeftSidebar'
 import ConversationHistoryComponent from '../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent'
+import ConversationHeader from '../components/widgets/ConversationHeader/ConversationHeader'
 import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
 import CenterSection from '../components/sections/CenterSection/CenterSection'
 import { useConversation } from '../context/ConversationContext'
@@ -64,6 +65,7 @@ export default function LandingPage() {
     return (
         <div className={styles.page}>
             <Navbar />
+            <ConversationHeader />
             <LandingPageContent />
         </div>
     )
