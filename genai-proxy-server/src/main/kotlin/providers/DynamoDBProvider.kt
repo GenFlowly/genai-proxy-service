@@ -1133,6 +1133,20 @@ class DynamoDBProvider(
             val customerId = item[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
             val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
             
+            if (customerId == "PUBLIC") {
+                return@mapNotNull models.CustomerProfile(
+                    customerId = "PUBLIC",
+                    sub = "",
+                    client = "",
+                    email = null,
+                    name = "Public",
+                    picture = null,
+                    username = "Public",
+                    isDiscoverable = true,
+                    role = role
+                )
+            }
+            
             val profileItem = getCustomerProfileByCustomerId(customerId)
             if (profileItem != null) {
                 models.CustomerProfile(
