@@ -71,3 +71,39 @@ export async function getInstructionVersion(
 
     return (await response.json()) as InstructionResponse
 }
+
+export async function shareInstruction(
+    token: string,
+    instructionId: string,
+    targetCustomerId: string
+): Promise<void> {
+    const response = await fetchWithRetry(`${endpoints.createInstruction}/share`, {
+        method: HttpMethod.POST,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ instructionId, targetCustomerId }),
+    })
+
+    if (!response.ok) {
+        throw new Error(`Share Instruction failed: ${response.status} ${response.statusText}`)
+    }
+}
+
+export async function deleteInstruction(
+    token: string,
+    instructionId: string
+): Promise<void> {
+    const response = await fetchWithRetry(`${endpoints.createInstruction}/${instructionId}`, {
+        method: HttpMethod.DELETE,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Delete Instruction failed: ${response.status} ${response.statusText}`)
+    }
+}

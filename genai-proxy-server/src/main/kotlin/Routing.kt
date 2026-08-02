@@ -25,8 +25,8 @@ import com.genflowly.activity.registerGraphNodeRoutes
 import com.genflowly.activity.registerCustomerGraphRoutes
 import com.genflowly.activity.registerToolCredentialsRoutes
 import com.genflowly.service.ConversationService
-import com.genflowly.service.AIModelsService
-import com.genflowly.service.GraphService
+import com.genflowly.activity.registerCreateInstructionShareRoutes
+import com.genflowly.activity.registerDeleteInstructionRoutes
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -42,6 +42,8 @@ object Routes {
     const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
     const val GET_CONVERSATION = "$API_V1/chat"
     const val CREATE_INSTRUCTION = "$API_V1/instruction"
+    const val CREATE_INSTRUCTION_SHARE = "$API_V1/instruction/share"
+    const val DELETE_INSTRUCTION = "$API_V1/instruction/{instructionId}"
     const val GET_CUSTOMER_INSTRUCTIONS = "$API_V1/instructions"
     const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction"
     const val CREATE_CONVERSATION_TITLE = "$API_V1/conversation/title"
@@ -87,8 +89,9 @@ fun Application.configureRouting(
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
-        registerCreateInstructionRoutes(aiRequestManager,
-            customerProfileService)
+        registerCreateInstructionRoutes(aiRequestManager, customerProfileService)
+        registerCreateInstructionShareRoutes(customerProfileService)
+        registerDeleteInstructionRoutes(customerProfileService)
         registerGetCustomerInstructionListRoutes(customerProfileService)
         registerGetInstructionVersionRoutes(customerProfileService)
         registerCreateConversationTitleRoutes(aiRequestManager, customerProfileService)

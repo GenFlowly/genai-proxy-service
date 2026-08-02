@@ -62,4 +62,8 @@ object DynamoDBConstants {
     const val TOOL_TYPE_KEY = "toolType"
     const val TOOL_AUTH_TYPE_KEY = "authType"
     const val TOOL_CREDENTIALS_KEY = "credentials"
+
+    const val SHARED_INSTRUCTIONS_TABLE = "SharedInstructions"
+    const val SHARED_WITH_CUSTOMER_ID_KEY = "sharedWithCustomerId"
+    const val SHARED_BY_CUSTOMER_ID_KEY = "sharedByCustomerId"
 }
