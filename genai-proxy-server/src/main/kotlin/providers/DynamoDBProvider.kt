@@ -621,21 +621,13 @@ class DynamoDBProvider(
         }
     }
 
-    suspend fun onboardCustomer(
-        sub: String,
-        client: String,
-        customerId: String,
-        email: String?,
-        name: String?,
-        picture: String?
-    ): String = withContext(Dispatchers.IO) {
-        var generatedUsername = ""
+    private suspend fun generateAndReserveUsername(sub: String, client: String, customerId: String, name: String?): String {
         var attempt = 0
         val baseUsername = name?.lowercase()?.replace(Regex("[^a-z0-9]"), "")?.takeIf { it.isNotBlank() } ?: "user"
         
         while(attempt < 3) {
             val hash = java.util.UUID.randomUUID().toString().substring(0, 6)
-            generatedUsername = "$baseUsername-$hash"
+            val generatedUsername = "$baseUsername-$hash"
             
             try {
                 val putUsernameReq = PutItemRequest.builder()
@@ -649,12 +641,23 @@ class DynamoDBProvider(
                     .conditionExpression("attribute_not_exists(username)")
                     .build()
                 dynamoDbClient.putItem(putUsernameReq)
-                break
+                return generatedUsername
             } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
                 attempt++
-                if (attempt == 3) throw IllegalStateException("Failed to generate unique username after 3 attempts")
             }
         }
+        throw IllegalStateException("Failed to generate unique username after 3 attempts")
+    }
+
+    suspend fun onboardCustomer(
+        sub: String,
+        client: String,
+        customerId: String,
+        email: String?,
+        name: String?,
+        picture: String?
+    ): String = withContext(Dispatchers.IO) {
+        val generatedUsername = generateAndReserveUsername(sub, client, customerId, name)
 
         val baseItem = buildMap {
             put(SUB_PARTITION_KEY, AttributeValue.builder().s(sub).build())
@@ -694,7 +697,40 @@ class DynamoDBProvider(
                 .build()
 
             val response = dynamoDbClient.getItem(request)
-            return@withContext response.item().takeIf { it.isNotEmpty() }
+            var item = response.item().takeIf { it.isNotEmpty() } ?: return@withContext null
+
+            if (!item.containsKey("username") || item["username"]?.s().isNullOrBlank()) {
+                val customerId = item["customerId"]?.s() ?: return@withContext item
+                val name = item["name"]?.s()
+                
+                try {
+                    val generatedUsername = generateAndReserveUsername(sub, client, customerId, name)
+                    val updateReq = UpdateItemRequest.builder()
+                        .tableName(CUSTOMER_PROFILE_TABLE)
+                        .key(mapOf(
+                            SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                            CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+                        ))
+                        .updateExpression("SET username = :u, isDiscoverable = if_not_exists(isDiscoverable, :d)")
+                        .expressionAttributeValues(mapOf(
+                            ":u" to AttributeValue.builder().s(generatedUsername).build(),
+                            ":d" to AttributeValue.builder().bool(false).build()
+                        ))
+                        .build()
+                    dynamoDbClient.updateItem(updateReq)
+                    
+                    val updatedItem = item.toMutableMap()
+                    updatedItem["username"] = AttributeValue.builder().s(generatedUsername).build()
+                    if (!updatedItem.containsKey("isDiscoverable")) {
+                        updatedItem["isDiscoverable"] = AttributeValue.builder().bool(false).build()
+                    }
+                    item = updatedItem
+                } catch (e: Exception) {
+                    logger.error("Failed to lazy generate username for $sub", e)
+                }
+            }
+
+            return@withContext item
         }
 
     suspend fun updateUsername(
