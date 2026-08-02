@@ -15,6 +15,8 @@ jest.mock('react-router-dom', () => ({
     useNavigate: () => mockNavigate,
 }));
 
+jest.mock('../../../components/navbar/Navbar', () => () => <div data-testid="mock-navbar" />);
+
 jest.mock('../../../context/AuthContext', () => ({
     useAuth: jest.fn(),
 }));
@@ -125,10 +127,7 @@ describe('InstructionDetailPage', () => {
         const shareButton = screen.getByText('Share');
         await userEvent.click(shareButton);
 
-        expect(window.prompt).toHaveBeenCalled();
-        await waitFor(() => {
-            expect(instructionService.shareInstruction).toHaveBeenCalledWith('mock-token', 'inst-1', 'target-123');
-        });
+        expect(screen.getByText('Share Options')).toBeInTheDocument();
     });
 
     test('deletes instruction and navigates away', async () => {

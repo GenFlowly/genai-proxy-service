@@ -13,6 +13,8 @@ jest.mock('react-router-dom', () => ({
     useNavigate: () => mockNavigate,
 }));
 
+jest.mock('../../../components/navbar/Navbar', () => () => <div data-testid="mock-navbar" />);
+
 jest.mock('../../../context/AuthContext', () => ({
     useAuth: jest.fn(),
 }));

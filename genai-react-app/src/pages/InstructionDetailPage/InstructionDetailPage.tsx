@@ -10,7 +10,10 @@ import {
 import PromptEditor from '../../components/widgets/PromptEditorWidget/PromptEditor';
 import PillButton from '../../components/common/PillButton/PillButton';
 import { InputTextWithHint } from '../../components/common/InputTextWithHint/InputTextWithHint';
+import ShareModal, { VisibilityMode } from '../../components/common/ShareModal/ShareModal';
+import { SearchUserResponse } from '../../models/user.models';
 import styles from './InstructionDetailPage.module.scss';
+import Navbar from '../../components/navbar/Navbar';
 
 export default function InstructionDetailPage() {
     const { instructionId } = useParams<{ instructionId: string }>();
@@ -23,6 +26,7 @@ export default function InstructionDetailPage() {
     const [name, setName] = useState('');
     const [instructionText, setInstructionText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
     useEffect(() => {
         if (!isNew && instructionId) {
@@ -66,15 +70,23 @@ export default function InstructionDetailPage() {
         }
     };
 
-    const handleShare = async () => {
-        const targetId = window.prompt("Enter the Customer ID to share this instruction with:");
-        if (!targetId || !targetId.trim()) return;
-        
+    const handleShareClick = () => {
+        setIsShareModalOpen(true);
+    };
+
+    const handleShareSave = async (mode: VisibilityMode, users: SearchUserResponse[]) => {
+        if (mode === 'PRIVATE' || mode === 'PUBLIC') {
+            alert(`Backend currently doesn't support ${mode} mode. Only SPECIFIC mode works.`);
+            return;
+        }
+
         setIsLoading(true);
         try {
             const token = await getAccessTokenSilently();
-            await shareInstruction(token, instructionId!, targetId.trim());
-            alert("Instruction shared successfully!");
+            for (const user of users) {
+                await shareInstruction(token, instructionId!, user.customerId);
+            }
+            alert(`Instruction shared successfully with ${users.length} users!`);
         } catch (error) {
             console.error("Failed to share instruction", error);
             alert("Failed to share instruction. Make sure you own it.");
@@ -101,8 +113,10 @@ export default function InstructionDetailPage() {
     };
 
     return (
-        <div className={styles.pageContainer}>
-            <div className={styles.header}>
+        <div className={styles.page}>
+            <Navbar />
+            <div className={styles.pageContainer}>
+                <div className={styles.header}>
                 <div className={styles.titleGroup}>
                     <button className={styles.backButton} onClick={() => navigate('/instructions')}>
                         &larr; Back
@@ -116,7 +130,7 @@ export default function InstructionDetailPage() {
                             <PillButton 
                                 label="Share" 
                                 variant="secondary" 
-                                onClick={handleShare} 
+                                onClick={handleShareClick} 
                                 disabled={isLoading}
                             />
                             <PillButton 
@@ -157,6 +171,13 @@ export default function InstructionDetailPage() {
                     />
                 </div>
             </div>
+
+            <ShareModal
+                isOpen={isShareModalOpen}
+                onClose={() => setIsShareModalOpen(false)}
+                onSave={handleShareSave}
+            />
+        </div>
         </div>
     );
 }

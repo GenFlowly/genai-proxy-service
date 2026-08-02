@@ -4,6 +4,7 @@ import { InstructionTile } from '../../components/common/InstructionTile/Instruc
 import styles from './InstructionsPage.module.scss';
 import PillButton from '../../components/common/PillButton/PillButton';
 import { useNavigate } from 'react-router-dom';
+import Navbar from '../../components/navbar/Navbar';
 
 export default function InstructionsPage() {
     const { customerInstructions } = useAuth();
@@ -23,8 +24,10 @@ export default function InstructionsPage() {
     }, [customerInstructions]);
 
     return (
-        <div className={styles.pageContainer}>
-            <div className={styles.header}>
+        <div className={styles.page}>
+            <Navbar />
+            <div className={styles.pageContainer}>
+                <div className={styles.header}>
                 <h1 className={styles.title}>Instructions Hub</h1>
                 <PillButton 
                     label="Create Instruction" 
@@ -44,6 +47,7 @@ export default function InstructionsPage() {
                     ))}
                 </div>
             )}
+        </div>
         </div>
     );
 }
