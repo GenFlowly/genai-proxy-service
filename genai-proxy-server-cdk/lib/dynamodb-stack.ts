@@ -234,7 +234,21 @@ export class DynamoDBStack extends cdk.Stack {
             partitionKey: {
                 name: 'username',
                 type: dynamodb.AttributeType.STRING,
-            }
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'recordTypeIndex',
+                    partitionKey: {
+                        name: 'recordType',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'username',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
         };
 
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);

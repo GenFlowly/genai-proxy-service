@@ -24,11 +24,7 @@ fun Route.registerSearchRoutes(
             
             try {
                 val response = dynamoDBProvider.searchByUsername(username)
-                if (response == null) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "User not found or not discoverable"))
-                } else {
-                    call.respond(HttpStatusCode.OK, response)
-                }
+                call.respond(HttpStatusCode.OK, response)
             } catch (e: Exception) {
                 logger.error("Failed to search by username", e)
                 call.respond(HttpStatusCode.InternalServerError)

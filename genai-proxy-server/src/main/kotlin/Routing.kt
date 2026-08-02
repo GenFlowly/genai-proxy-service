@@ -31,6 +31,8 @@ import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
 import com.genflowly.activity.registerCreateInstructionShareRoutes
 import com.genflowly.activity.registerDeleteInstructionRoutes
+import com.genflowly.activity.registerGetProfileRoutes
+import com.genflowly.providers.DynamoDBProvider
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -56,6 +58,7 @@ object Routes {
     const val CREATE_CONVERSATION_TITLE = "$API_V1/conversation/title"
     const val GET_AI_USAGE = "$API_V1/message/usage"
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
+    const val GET_PROFILE = "$API_V1/profile"
 
     const val GRAPH_NODES = "$API_V1/graph-nodes"
     const val GRAPH_NODE = "$API_V1/graph-nodes/{nodeId}"
@@ -81,6 +84,7 @@ fun Application.configureRouting(
     conversationService: ConversationService,
     aiModelsService: AIModelsService,
     graphService: GraphService,
+    dynamoDBProvider: DynamoDBProvider,
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -107,5 +111,9 @@ fun Application.configureRouting(
         registerGraphNodeRoutes(graphService, customerProfileService)
         registerCustomerGraphRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerProfileService)
+        
+        registerCustomerProfileSettingsRoutes(dynamoDBProvider)
+        registerSearchRoutes(dynamoDBProvider)
+        registerGetProfileRoutes(dynamoDBProvider)
     }
 }
