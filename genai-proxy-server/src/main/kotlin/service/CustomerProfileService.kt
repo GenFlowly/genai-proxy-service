@@ -212,7 +212,18 @@ class CustomerProfileService(
 
         if (instructionId != null) {
             val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId) ?: 0
-            version = latestVersion + 1
+            if (latestVersion > 0) {
+                val existingInstruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+                if (existingInstruction != null && existingInstruction.creator != customerId) {
+                    // Branch off into a private copy
+                    instructionId = "INS-${UUID.randomUUID()}"
+                    version = 1
+                } else {
+                    version = latestVersion + 1
+                }
+            } else {
+                version = 1
+            }
         } else {
             instructionId = "INS-${UUID.randomUUID()}"
             version = 1
@@ -237,10 +248,20 @@ class CustomerProfileService(
     }
 
     suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse {
-        val instructions = dynamoDBProvider.getInstructionsByCreator(customerId)
+        val ownedInstructions = dynamoDBProvider.getInstructionsByCreator(customerId)
+        
+        val sharedInstructionIds = dynamoDBProvider.getSharedInstructionIdsForCustomer(customerId)
+        val sharedInstructions = sharedInstructionIds.mapNotNull { id ->
+            val latestVersion = dynamoDBProvider.getLatestInstructionVersion(id)
+            if (latestVersion != null) {
+                dynamoDBProvider.getInstruction(id, latestVersion)
+            } else null
+        }
+
+        val allInstructions = (ownedInstructions + sharedInstructions).distinctBy { it.id to it.version }
         
         // Return all versions, sorted by ID and version desc
-        val responseItems = instructions.sortedWith(
+        val responseItems = allInstructions.sortedWith(
             compareBy<models.Instruction> { it.id }.thenByDescending { it.version }
         ).map { instruction ->
             InstructionResponse(
@@ -254,6 +275,25 @@ class CustomerProfileService(
         return GetCustomerInstructionListResponse(
             instructions = responseItems
         )
+    }
+
+    suspend fun shareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String) {
+        dynamoDBProvider.shareInstructionWithCustomer(instructionId, targetCustomerId, sharedByCustomerId)
+    }
+
+    suspend fun deleteInstruction(customerId: String, instructionId: String) {
+        // Optional: verify ownership before deleting.
+        // If the instruction is shared with them, they can't delete it globally, maybe only un-share it.
+        // For now, we will verify they own the latest version.
+        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
+        if (latestVersion != null) {
+            val instruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+            if (instruction != null && instruction.creator == customerId) {
+                dynamoDBProvider.deleteInstruction(instructionId)
+            } else {
+                throw SecurityException("Customer $customerId does not own instruction $instructionId or it does not exist")
+            }
+        }
     }
 
     suspend fun getLatestCustomerInstructions(customerId: String): List<InstructionResponse> {

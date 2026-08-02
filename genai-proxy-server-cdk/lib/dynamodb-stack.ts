@@ -217,6 +217,18 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        const sharedInstructionsTableProps: CreateTableProps = {
+            tableName: 'SharedInstructions',
+            partitionKey: {
+                name: 'sharedWithCustomerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'instructionId',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
@@ -229,13 +241,14 @@ export class DynamoDBStack extends cdk.Stack {
         const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
         const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
         const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
+        const sharedInstructionsTable = createDefaultDynamoDbTable(this, sharedInstructionsTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
-            customerToolCredentialsTable,
+            customerToolCredentialsTable, sharedInstructionsTable
         );
     }
 }

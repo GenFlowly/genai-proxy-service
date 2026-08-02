@@ -863,6 +863,72 @@ class DynamoDBProvider(
         )
     }
 
+    suspend fun shareInstructionWithCustomer(instructionId: String, sharedWithCustomerId: String, sharedByCustomerId: String) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
+                INSTRUCTION_ID_KEY to AttributeValue.builder().s(instructionId).build(),
+                com.genflowly.DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedByCustomerId).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Shared instruction $instructionId with $sharedWithCustomerId (by $sharedByCustomerId)")
+        } catch (e: Exception) {
+            logger.error("Failed to share instruction", e)
+            throw e
+        }
+    }
+
+    suspend fun getSharedInstructionIdsForCustomer(customerId: String): List<String> = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
+            .keyConditionExpression("${com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY} = :cid")
+            .expressionAttributeValues(
+                mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        response.items().mapNotNull { it[INSTRUCTION_ID_KEY]?.s() }
+    }
+
+    suspend fun deleteInstruction(instructionId: String) = withContext(Dispatchers.IO) {
+        try {
+            // Get all versions of this instruction to delete them
+            val request = QueryRequest.builder()
+                .tableName(INSTRUCTION_TABLE)
+                .keyConditionExpression("$INSTRUCTION_ID_KEY = :id")
+                .expressionAttributeValues(
+                    mapOf(":id" to AttributeValue.builder().s(instructionId).build())
+                )
+                .build()
+
+            val response = dynamoDbClient.query(request)
+            val items = response.items()
+            
+            for (item in items) {
+                val version = item[INSTRUCTION_VERSION_KEY]?.n() ?: continue
+                val deleteReq = software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest.builder()
+                    .tableName(INSTRUCTION_TABLE)
+                    .key(mapOf(
+                        INSTRUCTION_ID_KEY to AttributeValue.builder().s(instructionId).build(),
+                        INSTRUCTION_VERSION_KEY to AttributeValue.builder().n(version).build()
+                    ))
+                    .build()
+                dynamoDbClient.deleteItem(deleteReq)
+            }
+            logger.info("Deleted ${items.size} versions of instruction $instructionId")
+        } catch (e: Exception) {
+            logger.error("Failed to delete instruction $instructionId", e)
+            throw e
+        }
+    }
+
     /**
      * Fetches up to [pageSize] conversations for the given customer, newest first,
      * using a GSI on the Conversation table keyed by customerId.

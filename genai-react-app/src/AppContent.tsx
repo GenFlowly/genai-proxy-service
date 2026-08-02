@@ -5,6 +5,8 @@ import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage/SettingsPage'
 import MemoryPage from './pages/MemoryPage/MemoryPage'
 import AgentsPage from './pages/AgentsPage/AgentsPage'
+import InstructionsPage from './pages/InstructionsPage/InstructionsPage'
+import InstructionDetailPage from './pages/InstructionDetailPage/InstructionDetailPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 
 import { AIProvider } from './context/AIContext'
@@ -36,6 +38,8 @@ export default function AppContent(): React.ReactElement {
                             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                             <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
                             <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
+                            <Route path="/instructions" element={<ProtectedRoute><InstructionsPage /></ProtectedRoute>} />
+                            <Route path="/instructions/:instructionId" element={<ProtectedRoute><InstructionDetailPage /></ProtectedRoute>} />
                         </Routes>
                     </ConversationProvider>
                 </AIProvider>
