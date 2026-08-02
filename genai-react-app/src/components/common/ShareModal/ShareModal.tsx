@@ -26,6 +26,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
     const [initialUsers, setInitialUsers] = useState<SearchUserResponse[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isLoadingInitial, setIsLoadingInitial] = useState(false);
+    const [publicRole, setPublicRole] = useState<'VIEW' | 'EDIT'>('VIEW');
 
     useEffect(() => {
         if (!isOpen) {
@@ -38,7 +39,14 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
             setIsLoadingInitial(true);
             fetchSharedUsers(entityId)
                 .then(users => {
-                    if (users.length > 0) {
+                    const publicUser = users.find(u => u.customerId === 'PUBLIC');
+                    if (publicUser) {
+                        setMode('PUBLIC');
+                        setPublicRole(publicUser.role as 'VIEW' | 'EDIT' || 'VIEW');
+                        const specificUsers = users.filter(u => u.customerId !== 'PUBLIC');
+                        setSelectedUsers(specificUsers);
+                        setInitialUsers(users);
+                    } else if (users.length > 0) {
                         setMode('SPECIFIC');
                         setSelectedUsers(users);
                         setInitialUsers(users);
@@ -98,7 +106,17 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            const finalUsers = mode === 'SPECIFIC' ? selectedUsers : [];
+            let finalUsers: SearchUserResponse[] = [];
+            if (mode === 'SPECIFIC') {
+                finalUsers = selectedUsers;
+            } else if (mode === 'PUBLIC') {
+                finalUsers = [{
+                    customerId: 'PUBLIC',
+                    username: 'Public',
+                    role: publicRole
+                }];
+            }
+            
             const removedUsers = initialUsers.filter(initialUser => 
                 !finalUsers.some(finalUser => finalUser.customerId === initialUser.customerId)
             );
@@ -144,6 +162,20 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                         <span>Share with only some users</span>
                     </label>
                 </div>
+
+                {mode === 'PUBLIC' && (
+                    <div className={styles.publicSection} style={{ padding: '15px 0', borderBottom: '1px solid #eaeaea', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span>Role for everyone:</span>
+                        <select 
+                            value={publicRole} 
+                            onChange={(e) => setPublicRole(e.target.value as 'VIEW' | 'EDIT')}
+                            className={styles.roleSelect}
+                        >
+                            <option value="VIEW">View</option>
+                            <option value="EDIT">Edit</option>
+                        </select>
+                    </div>
+                )}
 
                 {mode === 'SPECIFIC' && (
                     <div className={styles.specificSection}>

@@ -78,11 +78,6 @@ export default function InstructionDetailPage() {
     };
 
     const handleShareSave = async (mode: VisibilityMode, users: SearchUserResponse[], removedUsers: SearchUserResponse[]) => {
-        if (mode === 'PRIVATE' || mode === 'PUBLIC') {
-            alert(`Backend currently doesn't support ${mode} mode. Only SPECIFIC mode works.`);
-            return;
-        }
-
         setIsLoading(true);
         try {
             const token = await getAccessTokenSilently();
