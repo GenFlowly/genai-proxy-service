@@ -23,6 +23,16 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'client',
                 type: dynamodb.AttributeType.STRING
             },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
         };
 
         const createCustomerApiKeyTableProps: CreateTableProps = {
