@@ -39,6 +39,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     const [conversationId, setConversationId] = useState<string>('')
     const [activeBlockId, setActiveBlockId] = useState<string>('')
     const [conversationTitle, setConversationTitle] = useState<string | null>(null)
+    const [conversationRole, setConversationRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER')
     
     // Manage aborted streams natively
     const abortControllers = useRef<Map<string, AbortController>>(new Map())
@@ -224,6 +225,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             if (data && data.blocks) {
                 setConversationId(data.conversationId)
                 setConversationBlockList(data.blocks)
+                setConversationRole(data.role)
 
                 // Restore the page title from the saved conversation title
                 if (data.title) {
@@ -269,6 +271,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         ])
         setSelectedResponseByBlock({})
         setConversationTitle(null)
+        setConversationRole('OWNER')
     }, [navigate, customerId])
 
     // --- Core Actions ---
@@ -736,6 +739,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 editorPrompt,
                 setEditorPrompt,
                 conversationTitle,
+                conversationRole,
                 getVendorSelectionForBlock,
                 setVendorSelectionForBlock,
 

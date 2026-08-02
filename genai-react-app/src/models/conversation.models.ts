@@ -70,4 +70,7 @@ export interface IConversationContext {
     setEditorPrompt: (prompt: string) => void
 
     conversationTitle: string | null
+
+    /** Caller's role on the loaded conversation. Defaults to OWNER for new/unloaded state. */
+    conversationRole: 'OWNER' | 'EDIT' | 'VIEW'
 }

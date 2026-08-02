@@ -1,7 +1,12 @@
 import { fetchWithRetry } from "../utils/apiUtils";
 import { config } from '../config/env';
+import { endpoints } from '../config/endpoints';
+import { HttpMethod } from '../constants/http';
 import { ConversationBlock, Message } from '../models/conversation.models';
 import { AIVendor } from '../constants/vendors';
+import { SearchUserResponse } from '../models/user.models';
+
+export type ConversationRole = 'OWNER' | 'EDIT' | 'VIEW';
 
 // Backend types matching Kotlin data classes
 interface BackendPrompt {
@@ -29,6 +34,7 @@ interface BackendPromptAndResponse {
 interface BackendGetConversationResponse {
     promptAndResponseList: BackendPromptAndResponse[];
     title?: string | null;
+    role?: ConversationRole;
 }
 
 export interface GetConversationResponse {
@@ -36,6 +42,7 @@ export interface GetConversationResponse {
     blocks: ConversationBlock[];
     title?: string | null;
     instructionId?: string | null;
+    role: ConversationRole;
 }
 
 export async function getConversation(
@@ -103,5 +110,64 @@ export async function getConversation(
         blocks,
         title: data.title ?? null,
         instructionId: data.promptAndResponseList[0]?.prompt.instructionId ?? null,
+        role: data.role ?? 'OWNER',
     };
+}
+
+export async function shareConversation(
+    token: string,
+    conversationId: string,
+    targetCustomerId: string,
+    role: 'VIEW' | 'EDIT' = 'VIEW'
+): Promise<void> {
+    const response = await fetchWithRetry(endpoints.conversationShare, {
+        method: HttpMethod.POST,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ conversationId, targetCustomerId, role }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Share Conversation failed: ${response.status} ${response.statusText}`);
+    }
+}
+
+export async function unshareConversation(
+    token: string,
+    conversationId: string,
+    targetCustomerId: string
+): Promise<void> {
+    const url = `${endpoints.conversationShare}?conversationId=${encodeURIComponent(conversationId)}&targetCustomerId=${encodeURIComponent(targetCustomerId)}`;
+    const response = await fetchWithRetry(url, {
+        method: HttpMethod.DELETE,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Unshare Conversation failed: ${response.status} ${response.statusText}`);
+    }
+}
+
+export async function getConversationSharedUsers(
+    token: string,
+    conversationId: string
+): Promise<SearchUserResponse[]> {
+    const response = await fetchWithRetry(endpoints.conversationSharedUsers(conversationId), {
+        method: HttpMethod.GET,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Get Conversation Shared Users failed: ${response.status} ${response.statusText}`);
+    }
+
+    return (await response.json()) as SearchUserResponse[];
 }

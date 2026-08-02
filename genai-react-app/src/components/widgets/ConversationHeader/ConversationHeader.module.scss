@@ -1,0 +1,29 @@
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--color-border, #eaeaea);
+    background-color: var(--color-background-primary, #ffffff);
+    gap: 1rem;
+    min-height: 3rem;
+    flex: 0 0 auto;
+}
+
+.title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--color-text-primary, #333);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
