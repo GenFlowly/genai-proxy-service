@@ -1067,6 +1067,41 @@ class DynamoDBProvider(
         response.items().mapNotNull { it[INSTRUCTION_ID_KEY]?.s() }
     }
 
+    suspend fun getUsersWithSharedInstruction(instructionId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
+            .indexName("instructionIdIndex")
+            .keyConditionExpression("$INSTRUCTION_ID_KEY = :id")
+            .expressionAttributeValues(
+                mapOf(":id" to AttributeValue.builder().s(instructionId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        val customerIds = response.items().mapNotNull { it[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() }
+        
+        customerIds.mapNotNull { customerId ->
+            val parts = customerId.split("|")
+            if (parts.size == 2) {
+                val client = parts[0]
+                val sub = parts[1]
+                val profileItem = getCustomerProfile(sub, client)
+                if (profileItem != null) {
+                    models.CustomerProfile(
+                        customerId = customerId,
+                        sub = sub,
+                        client = client,
+                        email = profileItem["email"]?.s(),
+                        name = profileItem["name"]?.s(),
+                        picture = profileItem["picture"]?.s(),
+                        username = profileItem["username"]?.s(),
+                        isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
+                    )
+                } else null
+            } else null
+        }
+    }
+
     suspend fun deleteInstruction(instructionId: String) = withContext(Dispatchers.IO) {
         try {
             // Get all versions of this instruction to delete them

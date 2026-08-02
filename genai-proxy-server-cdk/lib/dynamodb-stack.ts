@@ -227,6 +227,20 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'instructionId',
                 type: dynamodb.AttributeType.STRING,
             },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'instructionIdIndex',
+                    partitionKey: {
+                        name: 'instructionId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'sharedWithCustomerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
         };
 
         const usernameLookupTableProps: CreateTableProps = {

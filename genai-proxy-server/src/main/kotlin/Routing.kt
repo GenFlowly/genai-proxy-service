@@ -19,6 +19,7 @@ import com.genflowly.activity.registerGetAIUsageActivityRoutes
 import com.genflowly.activity.registerGetConversationRoutes
 import com.genflowly.activity.registerGetCustomerInstructionListRoutes
 import com.genflowly.activity.registerGetInstructionVersionRoutes
+import com.genflowly.activity.registerGetInstructionSharedUsersRoutes
 import com.genflowly.activity.registerCreateConversationTitleRoutes
 import com.genflowly.activity.registerGetCustomerConversationsPaginatedRoutes
 import com.genflowly.activity.registerGraphNodeRoutes
@@ -52,6 +53,7 @@ object Routes {
     const val GET_CONVERSATION = "$API_V1/chat"
     const val CREATE_INSTRUCTION = "$API_V1/instruction"
     const val CREATE_INSTRUCTION_SHARE = "$API_V1/instruction/share"
+    const val GET_INSTRUCTION_SHARED_USERS = "$API_V1/instruction/{instructionId}/shared"
     const val DELETE_INSTRUCTION = "$API_V1/instruction/{instructionId}"
     const val GET_CUSTOMER_INSTRUCTIONS = "$API_V1/instructions"
     const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction"
@@ -105,6 +107,7 @@ fun Application.configureRouting(
         registerDeleteInstructionRoutes(customerProfileService)
         registerGetCustomerInstructionListRoutes(customerProfileService)
         registerGetInstructionVersionRoutes(customerProfileService)
+        registerGetInstructionSharedUsersRoutes(customerProfileService)
         registerCreateConversationTitleRoutes(aiRequestManager, customerProfileService)
         registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)

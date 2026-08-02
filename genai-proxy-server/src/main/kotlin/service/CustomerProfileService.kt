@@ -285,6 +285,19 @@ class CustomerProfileService(
         dynamoDBProvider.shareInstructionWithCustomer(instructionId, targetCustomerId, sharedByCustomerId)
     }
 
+    suspend fun getSharedUsersForInstruction(customerId: String, instructionId: String): List<models.CustomerProfile> {
+        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
+        if (latestVersion != null) {
+            val instruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+            if (instruction != null && instruction.creator == customerId) {
+                return dynamoDBProvider.getUsersWithSharedInstruction(instructionId)
+            } else {
+                throw SecurityException("Customer $customerId does not own instruction $instructionId")
+            }
+        }
+        return emptyList()
+    }
+
     suspend fun deleteInstruction(customerId: String, instructionId: String) {
         // Optional: verify ownership before deleting.
         // If the instruction is shared with them, they can't delete it globally, maybe only un-share it.
