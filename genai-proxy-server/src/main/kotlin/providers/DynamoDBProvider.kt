@@ -635,9 +635,7 @@ class DynamoDBProvider(
                     .item(mapOf(
                         "username" to AttributeValue.builder().s(generatedUsername).build(),
                         "recordType" to AttributeValue.builder().s("USER").build(),
-                        "customerId" to AttributeValue.builder().s(customerId).build(),
-                        "sub" to AttributeValue.builder().s(sub).build(),
-                        "client" to AttributeValue.builder().s(client).build()
+                        "customerId" to AttributeValue.builder().s(customerId).build()
                     ))
                     .conditionExpression("attribute_not_exists(username)")
                     .build()
@@ -684,6 +682,36 @@ class DynamoDBProvider(
         logger.info { "Onboarded user $sub in DynamoDB with customerId: $customerId" }
         generatedUsername
     }
+
+    suspend fun getCustomerProfileByCustomerId(customerId: String): Map<String, AttributeValue>? =
+        withContext(Dispatchers.IO) {
+            val queryReq = QueryRequest.builder()
+                .tableName(CUSTOMER_PROFILE_TABLE)
+                .indexName("customerIdIndex")
+                .keyConditionExpression("customerId = :cid")
+                .expressionAttributeValues(
+                    mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+                )
+                .limit(1)
+                .build()
+                
+            val response = dynamoDbClient.query(queryReq)
+            val item = response.items().firstOrNull() ?: return@withContext null
+            
+            // Re-use logic to ensure username is populated? 
+            // In getCustomerProfile we check if username exists. Let's just return the item here.
+            // If they need username generation, it should happen at onboarding.
+            if (!item.containsKey("username") || item["username"]?.s().isNullOrBlank()) {
+                // If it doesn't have a username, we shouldn't really be doing generateAndReserveUsername here since we don't have sub/client easily without parsing them from the item.
+                // But the item HAS sub and client. We can defer to getCustomerProfile to handle it.
+                val sub = item["sub"]?.s()
+                val client = item["client"]?.s()
+                if (sub != null && client != null) {
+                    return@withContext getCustomerProfile(sub, client)
+                }
+            }
+            item
+        }
 
     suspend fun getCustomerProfile(sub: String, client: String): Map<String, AttributeValue>? =
         withContext(Dispatchers.IO) {
@@ -747,9 +775,7 @@ class DynamoDBProvider(
             .item(mapOf(
                 "username" to AttributeValue.builder().s(newUsername).build(),
                 "recordType" to AttributeValue.builder().s("USER").build(),
-                "customerId" to AttributeValue.builder().s(customerId).build(),
-                "sub" to AttributeValue.builder().s(sub).build(),
-                "client" to AttributeValue.builder().s(client).build()
+                "customerId" to AttributeValue.builder().s(customerId).build()
             ))
             .conditionExpression("attribute_not_exists(username)")
             .build()
@@ -815,11 +841,10 @@ class DynamoDBProvider(
         val results = mutableListOf<com.genflowly.models.api.SearchCustomerResponse>()
         
         for (item in response.items()) {
-            val sub = item["sub"]?.s() ?: continue
-            val client = item["client"]?.s() ?: continue
+            val customerId = item["customerId"]?.s() ?: continue
             val username = item["username"]?.s() ?: continue
             
-            val profileItem = getCustomerProfile(sub, client) ?: continue
+            val profileItem = getCustomerProfileByCustomerId(customerId) ?: continue
             val isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
             if (!isDiscoverable) continue
             
@@ -1081,23 +1106,18 @@ class DynamoDBProvider(
         val customerIds = response.items().mapNotNull { it[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() }
         
         customerIds.mapNotNull { customerId ->
-            val parts = customerId.split("|")
-            if (parts.size == 2) {
-                val client = parts[0]
-                val sub = parts[1]
-                val profileItem = getCustomerProfile(sub, client)
-                if (profileItem != null) {
-                    models.CustomerProfile(
-                        customerId = customerId,
-                        sub = sub,
-                        client = client,
-                        email = profileItem["email"]?.s(),
-                        name = profileItem["name"]?.s(),
-                        picture = profileItem["picture"]?.s(),
-                        username = profileItem["username"]?.s(),
-                        isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
-                    )
-                } else null
+            val profileItem = getCustomerProfileByCustomerId(customerId)
+            if (profileItem != null) {
+                models.CustomerProfile(
+                    customerId = customerId,
+                    sub = profileItem["sub"]?.s() ?: "",
+                    client = profileItem["client"]?.s() ?: "",
+                    email = profileItem["email"]?.s(),
+                    name = profileItem["name"]?.s(),
+                    picture = profileItem["picture"]?.s(),
+                    username = profileItem["username"]?.s(),
+                    isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
+                )
             } else null
         }
     }
