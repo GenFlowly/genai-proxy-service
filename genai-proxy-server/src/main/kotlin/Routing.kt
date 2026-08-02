@@ -31,6 +31,8 @@ import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
 import com.genflowly.activity.registerCreateInstructionShareRoutes
+import com.genflowly.activity.registerCreateConversationShareRoutes
+import com.genflowly.activity.registerGetConversationSharedUsersRoutes
 import com.genflowly.activity.registerDeleteInstructionRoutes
 import com.genflowly.activity.registerGetProfileRoutes
 import com.genflowly.providers.DynamoDBProvider
@@ -58,6 +60,8 @@ object Routes {
     const val GET_CUSTOMER_INSTRUCTIONS = "$API_V1/instructions"
     const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction"
     const val CREATE_CONVERSATION_TITLE = "$API_V1/conversation/title"
+    const val CREATE_CONVERSATION_SHARE = "$API_V1/conversation/share"
+    const val GET_CONVERSATION_SHARED_USERS = "$API_V1/conversation/{conversationId}/shared"
     const val GET_AI_USAGE = "$API_V1/message/usage"
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
     const val GET_PROFILE = "$API_V1/profile"
@@ -104,6 +108,8 @@ fun Application.configureRouting(
         registerGetConversationRoutes(customerProfileService, conversationService)
         registerCreateInstructionRoutes(aiRequestManager, customerProfileService)
         registerCreateInstructionShareRoutes(customerProfileService)
+        registerCreateConversationShareRoutes(customerProfileService, conversationService)
+        registerGetConversationSharedUsersRoutes(customerProfileService, conversationService)
         registerDeleteInstructionRoutes(customerProfileService)
         registerGetCustomerInstructionListRoutes(customerProfileService)
         registerGetInstructionVersionRoutes(customerProfileService)

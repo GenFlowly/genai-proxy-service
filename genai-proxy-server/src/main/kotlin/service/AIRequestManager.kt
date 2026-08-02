@@ -6,6 +6,7 @@ import com.genflowly.aicallerlib.models.claude.ClaudeUsageMetadata
 import com.genflowly.aicallerlib.models.gemini.GeminiUsageMetadata
 import com.genflowly.aicallerlib.models.openai.OpenAIUsageMetadata
 import com.genflowly.service.AIRequestService
+import com.genflowly.service.ConversationAccessDeniedException
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.PromptGenerationService
@@ -89,6 +90,13 @@ class AIRequestManager(
                 client
             )
         } else {
+            // Enforce that the caller can write to this conversation. New conversations
+            // just created above have no shares yet, so this check only applies when
+            // continuing an existing one.
+            val role = conversationService.getConversationRole(conversationId, customerId)
+            if (role != "OWNER" && role != "EDIT") {
+                throw ConversationAccessDeniedException("Customer $customerId cannot write to conversation $conversationId")
+            }
             conversationId
         }
         return activeConversationId
