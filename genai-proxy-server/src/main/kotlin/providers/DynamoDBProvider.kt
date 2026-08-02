@@ -628,7 +628,34 @@ class DynamoDBProvider(
         email: String?,
         name: String?,
         picture: String?
-    ) = withContext(Dispatchers.IO) {
+    ): String = withContext(Dispatchers.IO) {
+        var generatedUsername = ""
+        var attempt = 0
+        val baseUsername = name?.lowercase()?.replace(Regex("[^a-z0-9]"), "")?.takeIf { it.isNotBlank() } ?: "user"
+        
+        while(attempt < 3) {
+            val hash = java.util.UUID.randomUUID().toString().substring(0, 6)
+            generatedUsername = "$baseUsername-$hash"
+            
+            try {
+                val putUsernameReq = PutItemRequest.builder()
+                    .tableName("UsernameLookup")
+                    .item(mapOf(
+                        "username" to AttributeValue.builder().s(generatedUsername).build(),
+                        "customerId" to AttributeValue.builder().s(customerId).build(),
+                        "sub" to AttributeValue.builder().s(sub).build(),
+                        "client" to AttributeValue.builder().s(client).build()
+                    ))
+                    .conditionExpression("attribute_not_exists(username)")
+                    .build()
+                dynamoDbClient.putItem(putUsernameReq)
+                break
+            } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
+                attempt++
+                if (attempt == 3) throw IllegalStateException("Failed to generate unique username after 3 attempts")
+            }
+        }
+
         val baseItem = buildMap {
             put(SUB_PARTITION_KEY, AttributeValue.builder().s(sub).build())
             put(CLIENT_SORT_KEY, AttributeValue.builder().s(client).build())
@@ -637,6 +664,9 @@ class DynamoDBProvider(
             email?.let { put("email", AttributeValue.builder().s(it).build()) }
             name?.let { put("name", AttributeValue.builder().s(it).build()) }
             picture?.let { put("picture", AttributeValue.builder().s(it).build()) }
+            
+            put("username", AttributeValue.builder().s(generatedUsername).build())
+            put("isDiscoverable", AttributeValue.builder().bool(false).build())
         }
 
         val item = withTimestamps(baseItem)
@@ -648,23 +678,112 @@ class DynamoDBProvider(
 
         dynamoDbClient.putItem(putReq)
         logger.info { "Onboarded user $sub in DynamoDB with customerId: $customerId" }
+        generatedUsername
     }
 
     suspend fun getCustomerProfile(sub: String, client: String): Map<String, AttributeValue>? =
         withContext(Dispatchers.IO) {
-            val key = mapOf(
-                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
-                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
-            )
-
             val request = GetItemRequest.builder()
                 .tableName(CUSTOMER_PROFILE_TABLE)
-                .key(key)
+                .key(
+                    mapOf(
+                        SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                        CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+                    )
+                )
                 .build()
 
             val response = dynamoDbClient.getItem(request)
-            return@withContext if (response.hasItem()) response.item() else null
+            return@withContext response.item().takeIf { it.isNotEmpty() }
         }
+
+    suspend fun updateUsername(
+        sub: String,
+        client: String,
+        customerId: String,
+        oldUsername: String?,
+        newUsername: String
+    ) = withContext(Dispatchers.IO) {
+        // Reserve new username
+        val putUsernameReq = PutItemRequest.builder()
+            .tableName("UsernameLookup")
+            .item(mapOf(
+                "username" to AttributeValue.builder().s(newUsername).build(),
+                "customerId" to AttributeValue.builder().s(customerId).build(),
+                "sub" to AttributeValue.builder().s(sub).build(),
+                "client" to AttributeValue.builder().s(client).build()
+            ))
+            .conditionExpression("attribute_not_exists(username)")
+            .build()
+        
+        try {
+            dynamoDbClient.putItem(putUsernameReq)
+        } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
+            throw IllegalArgumentException("Username is already taken")
+        }
+        
+        // Update profile
+        val updateReq = UpdateItemRequest.builder()
+            .tableName(CUSTOMER_PROFILE_TABLE)
+            .key(mapOf(
+                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+            ))
+            .updateExpression("SET username = :u")
+            .expressionAttributeValues(mapOf(":u" to AttributeValue.builder().s(newUsername).build()))
+            .build()
+        dynamoDbClient.updateItem(updateReq)
+        
+        // Cleanup old
+        if (!oldUsername.isNullOrBlank()) {
+            val delReq = DeleteItemRequest.builder()
+                .tableName("UsernameLookup")
+                .key(mapOf("username" to AttributeValue.builder().s(oldUsername).build()))
+                .build()
+            dynamoDbClient.deleteItem(delReq)
+        }
+    }
+
+    suspend fun updateDiscoverability(
+        sub: String,
+        client: String,
+        isDiscoverable: Boolean
+    ) = withContext(Dispatchers.IO) {
+        val updateReq = UpdateItemRequest.builder()
+            .tableName(CUSTOMER_PROFILE_TABLE)
+            .key(mapOf(
+                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+            ))
+            .updateExpression("SET isDiscoverable = :d")
+            .expressionAttributeValues(mapOf(":d" to AttributeValue.builder().bool(isDiscoverable).build()))
+            .build()
+        dynamoDbClient.updateItem(updateReq)
+    }
+
+    suspend fun searchByUsername(username: String): com.genflowly.models.api.SearchCustomerResponse? = withContext(Dispatchers.IO) {
+        val getUsernameReq = GetItemRequest.builder()
+            .tableName("UsernameLookup")
+            .key(mapOf("username" to AttributeValue.builder().s(username).build()))
+            .build()
+        
+        val usernameItem = dynamoDbClient.getItem(getUsernameReq).item()
+        if (usernameItem.isNullOrEmpty()) return@withContext null
+        
+        val sub = usernameItem["sub"]?.s() ?: return@withContext null
+        val client = usernameItem["client"]?.s() ?: return@withContext null
+        
+        val profileItem = getCustomerProfile(sub, client) ?: return@withContext null
+        val isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
+        if (!isDiscoverable) return@withContext null
+        
+        com.genflowly.models.api.SearchCustomerResponse(
+            customerId = profileItem["customerId"]?.s() ?: "",
+            name = profileItem["name"]?.s(),
+            username = username,
+            picture = profileItem["picture"]?.s()
+        )
+    }
 
     /**
      * Query customer profile by sub only (partition key)

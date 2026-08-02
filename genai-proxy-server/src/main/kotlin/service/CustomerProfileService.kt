@@ -65,7 +65,9 @@ class CustomerProfileService(
                 client = client,
                 email = existingCustomer["email"]?.s(),
                 name = existingCustomer["name"]?.s(),
-                picture = existingCustomer["picture"]?.s()
+                picture = existingCustomer["picture"]?.s(),
+                username = existingCustomer["username"]?.s(),
+                isDiscoverable = existingCustomer["isDiscoverable"]?.bool() ?: false
             )
         }
 
@@ -81,7 +83,7 @@ class CustomerProfileService(
         picture: String?
     ): models.CustomerProfile {
         val newCustomerId = generateCustomerId()
-        dynamoDBProvider.onboardCustomer(
+        val generatedUsername = dynamoDBProvider.onboardCustomer(
             sub,
             client,
             newCustomerId,
@@ -113,7 +115,9 @@ class CustomerProfileService(
             client = client,
             email = email,
             name = name,
-            picture = picture
+            picture = picture,
+            username = generatedUsername,
+            isDiscoverable = false
         )
     }
 
