@@ -1058,12 +1058,13 @@ class DynamoDBProvider(
         )
     }
 
-    suspend fun shareInstructionWithCustomer(instructionId: String, sharedWithCustomerId: String, sharedByCustomerId: String) = withContext(Dispatchers.IO) {
+    suspend fun shareEntityWithCustomer(entityId: String, sharedWithCustomerId: String, sharedByCustomerId: String, role: String) = withContext(Dispatchers.IO) {
         try {
             val item = withTimestamps(mapOf(
                 com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
-                INSTRUCTION_ID_KEY to AttributeValue.builder().s(instructionId).build(),
-                com.genflowly.DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedByCustomerId).build()
+                INSTRUCTION_ID_KEY to AttributeValue.builder().s(entityId).build(),
+                com.genflowly.DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedByCustomerId).build(),
+                com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY to AttributeValue.builder().s(role).build()
             ))
 
             val putReq = PutItemRequest.builder()
@@ -1072,14 +1073,34 @@ class DynamoDBProvider(
                 .build()
 
             dynamoDbClient.putItem(putReq)
-            logger.info("Shared instruction $instructionId with $sharedWithCustomerId (by $sharedByCustomerId)")
+            logger.info("Shared entity $entityId with $sharedWithCustomerId (by $sharedByCustomerId, role=$role)")
         } catch (e: Exception) {
-            logger.error("Failed to share instruction", e)
+            logger.error("Failed to share entity", e)
             throw e
         }
     }
 
-    suspend fun getSharedInstructionIdsForCustomer(customerId: String): List<String> = withContext(Dispatchers.IO) {
+    suspend fun unshareEntityWithCustomer(entityId: String, sharedWithCustomerId: String) = withContext(Dispatchers.IO) {
+        try {
+            val deleteReq = DeleteItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
+                .key(
+                    mapOf(
+                        com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
+                        INSTRUCTION_ID_KEY to AttributeValue.builder().s(entityId).build()
+                    )
+                )
+                .build()
+
+            dynamoDbClient.deleteItem(deleteReq)
+            logger.info("Unshared entity $entityId with $sharedWithCustomerId")
+        } catch (e: Exception) {
+            logger.error("Failed to unshare entity", e)
+            throw e
+        }
+    }
+
+    suspend fun getSharedEntityIdsForCustomer(customerId: String, prefix: String? = null): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
             .keyConditionExpression("${com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY} = :cid")
@@ -1089,23 +1110,29 @@ class DynamoDBProvider(
             .build()
 
         val response = dynamoDbClient.query(request)
-        response.items().mapNotNull { it[INSTRUCTION_ID_KEY]?.s() }
+        response.items().mapNotNull { item ->
+            val id = item[INSTRUCTION_ID_KEY]?.s()
+            val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+            if (id != null) id to role else null
+        }.filter { prefix == null || it.first.startsWith(prefix) }
     }
 
-    suspend fun getUsersWithSharedInstruction(instructionId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
+    suspend fun getUsersWithSharedEntity(entityId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
             .indexName("instructionIdIndex")
             .keyConditionExpression("$INSTRUCTION_ID_KEY = :id")
             .expressionAttributeValues(
-                mapOf(":id" to AttributeValue.builder().s(instructionId).build())
+                mapOf(":id" to AttributeValue.builder().s(entityId).build())
             )
             .build()
 
         val response = dynamoDbClient.query(request)
-        val customerIds = response.items().mapNotNull { it[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() }
         
-        customerIds.mapNotNull { customerId ->
+        response.items().mapNotNull { item ->
+            val customerId = item[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
+            val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+            
             val profileItem = getCustomerProfileByCustomerId(customerId)
             if (profileItem != null) {
                 models.CustomerProfile(
@@ -1116,7 +1143,8 @@ class DynamoDBProvider(
                     name = profileItem["name"]?.s(),
                     picture = profileItem["picture"]?.s(),
                     username = profileItem["username"]?.s(),
-                    isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
+                    isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false,
+                    role = role
                 )
             } else null
         }

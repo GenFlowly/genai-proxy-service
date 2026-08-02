@@ -66,4 +66,5 @@ object DynamoDBConstants {
     const val SHARED_INSTRUCTIONS_TABLE = "SharedInstructions"
     const val SHARED_WITH_CUSTOMER_ID_KEY = "sharedWithCustomerId"
     const val SHARED_BY_CUSTOMER_ID_KEY = "sharedByCustomerId"
+    const val ENTITY_ROLE_KEY = "role"
 }
