@@ -634,6 +634,7 @@ class DynamoDBProvider(
                     .tableName("UsernameLookup")
                     .item(mapOf(
                         "username" to AttributeValue.builder().s(generatedUsername).build(),
+                        "recordType" to AttributeValue.builder().s("USER").build(),
                         "customerId" to AttributeValue.builder().s(customerId).build(),
                         "sub" to AttributeValue.builder().s(sub).build(),
                         "client" to AttributeValue.builder().s(client).build()
@@ -745,6 +746,7 @@ class DynamoDBProvider(
             .tableName("UsernameLookup")
             .item(mapOf(
                 "username" to AttributeValue.builder().s(newUsername).build(),
+                "recordType" to AttributeValue.builder().s("USER").build(),
                 "customerId" to AttributeValue.builder().s(customerId).build(),
                 "sub" to AttributeValue.builder().s(sub).build(),
                 "client" to AttributeValue.builder().s(client).build()
@@ -797,28 +799,41 @@ class DynamoDBProvider(
         dynamoDbClient.updateItem(updateReq)
     }
 
-    suspend fun searchByUsername(username: String): com.genflowly.models.api.SearchCustomerResponse? = withContext(Dispatchers.IO) {
-        val getUsernameReq = GetItemRequest.builder()
+    suspend fun searchByUsername(usernamePrefix: String): List<com.genflowly.models.api.SearchCustomerResponse> = withContext(Dispatchers.IO) {
+        val queryReq = QueryRequest.builder()
             .tableName("UsernameLookup")
-            .key(mapOf("username" to AttributeValue.builder().s(username).build()))
+            .indexName("recordTypeIndex")
+            .keyConditionExpression("recordType = :type AND begins_with(username, :prefix)")
+            .expressionAttributeValues(mapOf(
+                ":type" to AttributeValue.builder().s("USER").build(),
+                ":prefix" to AttributeValue.builder().s(usernamePrefix).build()
+            ))
+            .limit(5)
             .build()
         
-        val usernameItem = dynamoDbClient.getItem(getUsernameReq).item()
-        if (usernameItem.isNullOrEmpty()) return@withContext null
+        val response = dynamoDbClient.query(queryReq)
+        val results = mutableListOf<com.genflowly.models.api.SearchCustomerResponse>()
         
-        val sub = usernameItem["sub"]?.s() ?: return@withContext null
-        val client = usernameItem["client"]?.s() ?: return@withContext null
+        for (item in response.items()) {
+            val sub = item["sub"]?.s() ?: continue
+            val client = item["client"]?.s() ?: continue
+            val username = item["username"]?.s() ?: continue
+            
+            val profileItem = getCustomerProfile(sub, client) ?: continue
+            val isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
+            if (!isDiscoverable) continue
+            
+            results.add(
+                com.genflowly.models.api.SearchCustomerResponse(
+                    customerId = profileItem["customerId"]?.s() ?: "",
+                    name = profileItem["name"]?.s(),
+                    username = username,
+                    picture = profileItem["picture"]?.s()
+                )
+            )
+        }
         
-        val profileItem = getCustomerProfile(sub, client) ?: return@withContext null
-        val isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
-        if (!isDiscoverable) return@withContext null
-        
-        com.genflowly.models.api.SearchCustomerResponse(
-            customerId = profileItem["customerId"]?.s() ?: "",
-            name = profileItem["name"]?.s(),
-            username = username,
-            picture = profileItem["picture"]?.s()
-        )
+        results
     }
 
     /**

@@ -23,7 +23,7 @@ fun Route.registerCustomerProfileSettingsRoutes(
         post(Routes.UPDATE_USERNAME) {
             val principal = call.principal<JWTPrincipal>()
             val sub = principal?.payload?.subject ?: return@post call.respond(HttpStatusCode.Unauthorized)
-            val client = "auth0" // For simplicity, assuming auth0
+            val client = "REACT_APP"
             
             val request = call.receive<UpdateUsernameRequest>()
             
@@ -50,7 +50,7 @@ fun Route.registerCustomerProfileSettingsRoutes(
         post(Routes.UPDATE_DISCOVERABILITY) {
             val principal = call.principal<JWTPrincipal>()
             val sub = principal?.payload?.subject ?: return@post call.respond(HttpStatusCode.Unauthorized)
-            val client = "auth0"
+            val client = "REACT_APP"
             
             val request = call.receive<UpdateDiscoverabilityRequest>()
             

@@ -115,6 +115,7 @@ fun Application.module() {
     val conversationService = get<ConversationService>()
     val aiModelsService = get<AIModelsService>()
     val graphService = get<GraphService>()
+    val dynamoDBProvider = get<com.genflowly.providers.DynamoDBProvider>()
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService)
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider)
 }
