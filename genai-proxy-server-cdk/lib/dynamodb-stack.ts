@@ -77,7 +77,7 @@ export class DynamoDBStack extends cdk.Stack {
                         type: dynamodb.AttributeType.STRING,
                     },
                     projectionType: dynamodb.ProjectionType.INCLUDE,
-                    nonKeyAttributes: ['conversationId', 'title', 'updatedAt'],
+                    nonKeyAttributes: ['conversationId', 'title', 'updatedAt', 'archivedAt'],
                 },
                 {
                     // Lookup a conversation by id alone, needed to serve requests
