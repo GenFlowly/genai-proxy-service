@@ -79,6 +79,17 @@ export class DynamoDBStack extends cdk.Stack {
                     projectionType: dynamodb.ProjectionType.INCLUDE,
                     nonKeyAttributes: ['conversationId', 'title', 'updatedAt'],
                 },
+                {
+                    // Lookup a conversation by id alone, needed to serve requests
+                    // from users who have the conversation shared with them and
+                    // therefore don't know the owner's customerId.
+                    indexName: 'conversationIdIndex',
+                    partitionKey: {
+                        name: 'conversationId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
             ],
         };
 
@@ -253,6 +264,32 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        const sharedConversationsTableProps: CreateTableProps = {
+            tableName: 'SharedConversations',
+            partitionKey: {
+                name: 'sharedWithCustomerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'conversationId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'conversationIdIndex',
+                    partitionKey: {
+                        name: 'conversationId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'sharedWithCustomerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
         const usernameLookupTableProps: CreateTableProps = {
             tableName: 'UsernameLookup',
             partitionKey: {
@@ -288,6 +325,7 @@ export class DynamoDBStack extends cdk.Stack {
         const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
         const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
         const sharedInstructionsTable = createDefaultDynamoDbTable(this, sharedInstructionsTableProps);
+        const sharedConversationsTable = createDefaultDynamoDbTable(this, sharedConversationsTableProps);
         const usernameLookupTable = createDefaultDynamoDbTable(this, usernameLookupTableProps);
 
         this.dynamoDbTableList.push(
@@ -295,7 +333,8 @@ export class DynamoDBStack extends cdk.Stack {
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
-            customerToolCredentialsTable, sharedInstructionsTable, usernameLookupTable
+            customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
+            usernameLookupTable
         );
     }
 }

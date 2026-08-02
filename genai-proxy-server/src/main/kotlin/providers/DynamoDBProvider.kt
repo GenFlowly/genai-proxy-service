@@ -1164,6 +1164,169 @@ class DynamoDBProvider(
         }
     }
 
+    /**
+     * Looks up a Conversation row by conversationId alone via the [CONVERSATION_ID_GSI_KEY] GSI.
+     * Needed for users who have a conversation shared with them and therefore don't
+     * know the owner's customerId.
+     */
+    suspend fun getConversationById(conversationId: String): Conversation? = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(CONVERSATION_TABLE)
+            .indexName(com.genflowly.DynamoDBConstants.CONVERSATION_ID_GSI_KEY)
+            .keyConditionExpression("$CONVERSATION_ID_KEY = :cid")
+            .expressionAttributeValues(mapOf(
+                ":cid" to AttributeValue.builder().s(conversationId).build()
+            ))
+            .limit(1)
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        val item = response.items().firstOrNull() ?: return@withContext null
+        val ownerCustomerId = item[CUSTOMER_ID_KEY]?.s() ?: return@withContext null
+        val client = item["client"]?.s() ?: return@withContext null
+        Conversation(
+            conversationId = conversationId,
+            customerId = ownerCustomerId,
+            client = client
+        )
+    }
+
+    suspend fun shareConversationWithCustomer(
+        conversationId: String,
+        sharedWithCustomerId: String,
+        sharedByCustomerId: String,
+        role: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
+                CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build(),
+                com.genflowly.DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedByCustomerId).build(),
+                com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY to AttributeValue.builder().s(role).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Shared conversation $conversationId with $sharedWithCustomerId (by $sharedByCustomerId, role=$role)")
+        } catch (e: Exception) {
+            logger.error("Failed to share conversation", e)
+            throw e
+        }
+    }
+
+    suspend fun unshareConversationWithCustomer(
+        conversationId: String,
+        sharedWithCustomerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val deleteReq = DeleteItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+                .key(
+                    mapOf(
+                        com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    )
+                )
+                .build()
+
+            dynamoDbClient.deleteItem(deleteReq)
+            logger.info("Unshared conversation $conversationId with $sharedWithCustomerId")
+        } catch (e: Exception) {
+            logger.error("Failed to unshare conversation", e)
+            throw e
+        }
+    }
+
+    /**
+     * Returns (conversationId, role) pairs for every conversation shared with [customerId],
+     * including any PUBLIC entries the customer inherits.
+     */
+    suspend fun getSharedConversationIdsForCustomer(customerId: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+            .keyConditionExpression("${com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY} = :cid")
+            .expressionAttributeValues(
+                mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        response.items().mapNotNull { item ->
+            val id = item[CONVERSATION_ID_KEY]?.s()
+            val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+            if (id != null) id to role else null
+        }
+    }
+
+    /**
+     * Returns the effective share role for [customerId] on [conversationId] via a direct
+     * SharedConversations lookup, or null if no share exists. Does NOT consider PUBLIC —
+     * callers should check PUBLIC separately.
+     */
+    suspend fun getConversationShare(conversationId: String, customerId: String): String? = withContext(Dispatchers.IO) {
+        val request = GetItemRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+            .key(mapOf(
+                com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+            ))
+            .build()
+        val item = dynamoDbClient.getItem(request).item()
+        if (item.isNullOrEmpty()) null
+        else item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s()
+    }
+
+    suspend fun getUsersWithSharedConversation(conversationId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+            .indexName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_GSI_KEY)
+            .keyConditionExpression("$CONVERSATION_ID_KEY = :id")
+            .expressionAttributeValues(
+                mapOf(":id" to AttributeValue.builder().s(conversationId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+
+        response.items().mapNotNull { item ->
+            val customerId = item[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
+            val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+
+            if (customerId == "PUBLIC") {
+                return@mapNotNull models.CustomerProfile(
+                    customerId = "PUBLIC",
+                    sub = "",
+                    client = "",
+                    email = null,
+                    name = "Public",
+                    picture = null,
+                    username = "Public",
+                    isDiscoverable = true,
+                    role = role
+                )
+            }
+
+            val profileItem = getCustomerProfileByCustomerId(customerId)
+            if (profileItem != null) {
+                models.CustomerProfile(
+                    customerId = customerId,
+                    sub = profileItem["sub"]?.s() ?: "",
+                    client = profileItem["client"]?.s() ?: "",
+                    email = profileItem["email"]?.s(),
+                    name = profileItem["name"]?.s(),
+                    picture = profileItem["picture"]?.s(),
+                    username = profileItem["username"]?.s(),
+                    isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false,
+                    role = role
+                )
+            } else null
+        }
+    }
+
     suspend fun deleteInstruction(instructionId: String) = withContext(Dispatchers.IO) {
         try {
             // Get all versions of this instruction to delete them

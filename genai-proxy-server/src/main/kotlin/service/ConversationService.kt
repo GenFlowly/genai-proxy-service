@@ -17,9 +17,27 @@ class ConversationService(
     private val dynamoDBProvider: DynamoDBProvider
 ) {
 
+    /**
+     * Returns the effective role [callerCustomerId] has on [conversationId]:
+     * "OWNER" if they own it, otherwise the role from a direct share, otherwise
+     * the PUBLIC role if one exists, otherwise null (no access).
+     */
+    suspend fun getConversationRole(conversationId: String, callerCustomerId: String): String? {
+        val conversation = dynamoDBProvider.getConversationById(conversationId) ?: return null
+        if (conversation.customerId == callerCustomerId) return "OWNER"
+
+        val directShareRole = dynamoDBProvider.getConversationShare(conversationId, callerCustomerId)
+        if (directShareRole != null) return directShareRole
+
+        return dynamoDBProvider.getConversationShare(conversationId, "PUBLIC")
+    }
+
     suspend fun getConversationHistory(conversationId: String, customerId: String): GetConversationResponse {
-        dynamoDBProvider.getConversation(conversationId, customerId)
+        val role = getConversationRole(conversationId, customerId)
             ?: throw ConversationAccessDeniedException("Conversation not found or access denied")
+
+        val owner = dynamoDBProvider.getConversationById(conversationId)
+            ?: throw ConversationAccessDeniedException("Conversation not found")
 
         val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
             .sortedBy { it.sequence }
@@ -30,7 +48,7 @@ class ConversationService(
             val msg = messages[i]
             if (msg.role == "user") {
                 val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text)
-                
+
                 val responses = mutableListOf<GenerateTextResponse>()
                 while (i + 1 < messages.size) {
                     val nextMsg = messages[i + 1]
@@ -53,15 +71,49 @@ class ConversationService(
                         break
                     }
                 }
-                
+
                 pairs.add(PromptAndResponse(prompt, responses))
             }
             i++
         }
 
-        val title = dynamoDBProvider.getConversationTitle(conversationId, customerId)
+        val title = dynamoDBProvider.getConversationTitle(conversationId, owner.customerId)
 
-        return GetConversationResponse(pairs, title)
+        return GetConversationResponse(pairs, title, role)
+    }
+
+    suspend fun shareConversation(
+        conversationId: String,
+        targetCustomerId: String,
+        sharedByCustomerId: String,
+        role: String
+    ) {
+        requireEditOrOwner(conversationId, sharedByCustomerId, action = "share")
+        dynamoDBProvider.shareConversationWithCustomer(conversationId, targetCustomerId, sharedByCustomerId, role)
+    }
+
+    suspend fun unshareConversation(
+        conversationId: String,
+        targetCustomerId: String,
+        sharedByCustomerId: String
+    ) {
+        requireEditOrOwner(conversationId, sharedByCustomerId, action = "unshare")
+        dynamoDBProvider.unshareConversationWithCustomer(conversationId, targetCustomerId)
+    }
+
+    suspend fun getSharedUsersForConversation(
+        conversationId: String,
+        callerCustomerId: String
+    ): List<models.CustomerProfile> {
+        requireEditOrOwner(conversationId, callerCustomerId, action = "list-shares")
+        return dynamoDBProvider.getUsersWithSharedConversation(conversationId)
+    }
+
+    private suspend fun requireEditOrOwner(conversationId: String, callerCustomerId: String, action: String) {
+        val role = getConversationRole(conversationId, callerCustomerId)
+        if (role != "OWNER" && role != "EDIT") {
+            throw SecurityException("Customer $callerCustomerId cannot $action conversation $conversationId")
+        }
     }
 
     suspend fun createConversation(
@@ -81,7 +133,11 @@ class ConversationService(
         customerId: String,
         title: String
     ) {
-        dynamoDBProvider.updateConversationTitle(conversationId, customerId, title)
+        // Title update must be authorized by role, then persisted against the true owner
+        // (the underlying row is keyed by owner customerId).
+        requireEditOrOwner(conversationId, customerId, action = "rename")
+        val owner = dynamoDBProvider.getConversationById(conversationId) ?: return
+        dynamoDBProvider.updateConversationTitle(conversationId, owner.customerId, title)
     }
 
     suspend fun getCustomerConversationsPaginated(

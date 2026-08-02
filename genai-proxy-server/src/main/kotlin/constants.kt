@@ -67,4 +67,11 @@ object DynamoDBConstants {
     const val SHARED_WITH_CUSTOMER_ID_KEY = "sharedWithCustomerId"
     const val SHARED_BY_CUSTOMER_ID_KEY = "sharedByCustomerId"
     const val ENTITY_ROLE_KEY = "role"
+
+    const val SHARED_CONVERSATIONS_TABLE = "SharedConversations"
+    const val SHARED_CONVERSATIONS_GSI_KEY = "conversationIdIndex"
+
+    // GSI on Conversation table keyed by conversationId only, enabling lookup
+    // of a conversation without knowing its owner (needed for shared conversations).
+    const val CONVERSATION_ID_GSI_KEY = "conversationIdIndex"
 }
