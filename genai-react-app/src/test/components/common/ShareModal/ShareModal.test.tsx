@@ -159,4 +159,37 @@ describe('ShareModal Component', () => {
         fireEvent.click(screen.getByLabelText('Not shared (Private)'));
         expect(screen.getByLabelText('Not shared (Private)')).toBeChecked();
     });
+
+    it('shows role selector and saves correctly in PUBLIC mode', async () => {
+        const handleSave = jest.fn();
+        render(<ShareModal isOpen={true} onClose={jest.fn()} onSave={handleSave} />);
+        
+        fireEvent.click(screen.getByLabelText('Make public to everyone'));
+        
+        const select = screen.getByRole('combobox');
+        expect(select).toBeInTheDocument();
+        
+        fireEvent.change(select, { target: { value: 'EDIT' } });
+        
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        
+        await waitFor(() => {
+            expect(handleSave).toHaveBeenCalledWith('PUBLIC', [{ customerId: 'PUBLIC', username: 'Public', role: 'EDIT' }], []);
+        });
+    });
+
+    it('loads PUBLIC mode correctly when PUBLIC user is in fetched users', async () => {
+        const fetchSharedUsers = jest.fn().mockResolvedValue([
+            { customerId: 'PUBLIC', username: 'Public', role: 'EDIT' },
+            { customerId: 'c2', username: 'user2', role: 'VIEW' }
+        ]);
+        render(<ShareModal isOpen={true} onClose={jest.fn()} onSave={jest.fn()} entityId="inst-1" fetchSharedUsers={fetchSharedUsers} />);
+        
+        await waitFor(() => {
+            expect(fetchSharedUsers).toHaveBeenCalledWith('inst-1');
+            expect(screen.getByLabelText('Make public to everyone')).toBeChecked();
+            const select = screen.getByRole('combobox') as HTMLSelectElement;
+            expect(select.value).toBe('EDIT');
+        });
+    });
 });

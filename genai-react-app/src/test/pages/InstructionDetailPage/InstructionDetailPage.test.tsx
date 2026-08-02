@@ -46,7 +46,7 @@ jest.mock('../../../components/common/ShareModal/ShareModal', () => {
         if (!props.isOpen) return null;
         return (
             <div data-testid="mock-share-modal">
-                <button onClick={() => props.onSave('PUBLIC', [], [])}>Make public to everyone</button>
+                <button onClick={() => props.onSave('PUBLIC', [{ customerId: 'PUBLIC', role: 'VIEW' }], [])}>Make public to everyone</button>
                 <button 
                     data-testid="mock-share-save" 
                     onClick={() => props.onSave('SPECIFIC', [{ customerId: 'c1', role: 'VIEW' }], [{ customerId: 'c2' }])}
@@ -198,7 +198,8 @@ describe('InstructionDetailPage', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/instructions');
     });
 
-    test('ShareModal PUBLIC/PRIVATE mode shows alert', async () => {
+    test('ShareModal PUBLIC mode saves successfully', async () => {
+        jest.spyOn(instructionService, 'shareInstruction').mockResolvedValue(undefined);
         renderWithRoute('/instructions/inst-1');
         
         const shareButton = screen.getByText('Share');
@@ -207,7 +208,10 @@ describe('InstructionDetailPage', () => {
         const publicButton = screen.getByText('Make public to everyone');
         await userEvent.click(publicButton);
         
-        expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("Backend currently doesn't support PUBLIC mode"));
+        await waitFor(() => {
+            expect(instructionService.shareInstruction).toHaveBeenCalledWith('mock-token', 'inst-1', 'PUBLIC', 'VIEW');
+            expect(window.alert).toHaveBeenCalledWith('Instruction share settings updated successfully!');
+        });
     });
 
     test('ShareModal SPECIFIC mode saves successfully', async () => {
