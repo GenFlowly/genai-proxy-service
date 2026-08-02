@@ -17,7 +17,8 @@ data class SearchCustomerResponse(
     val customerId: String,
     val name: String?,
     val username: String,
-    val picture: String?
+    val picture: String?,
+    val role: String? = null
 )
 
 @Serializable

@@ -7,6 +7,8 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.principal
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -22,9 +24,18 @@ fun Route.registerSearchRoutes(
                 return@get
             }
             
+            val principal = call.principal<JWTPrincipal>()
+            val sub = principal?.payload?.subject ?: return@get call.respond(HttpStatusCode.Unauthorized)
+            val client = "REACT_APP"
+            
             try {
+                val currentUserProfile = dynamoDBProvider.getCustomerProfile(sub, client)
+                val currentCustomerId = currentUserProfile?.get("customerId")?.s()
+                
                 val response = dynamoDBProvider.searchByUsername(username)
-                call.respond(HttpStatusCode.OK, response)
+                val filteredResponse = response.filter { it.customerId != currentCustomerId }
+                
+                call.respond(HttpStatusCode.OK, filteredResponse)
             } catch (e: Exception) {
                 logger.error("Failed to search by username", e)
                 call.respond(HttpStatusCode.InternalServerError)

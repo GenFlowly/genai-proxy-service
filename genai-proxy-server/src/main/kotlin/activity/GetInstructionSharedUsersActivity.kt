@@ -30,7 +30,8 @@ fun Route.registerGetInstructionSharedUsersRoutes(
                         customerId = it.customerId,
                         name = it.name,
                         username = it.username ?: "",
-                        picture = it.picture
+                        picture = it.picture,
+                        role = it.role
                     )
                 }
 
