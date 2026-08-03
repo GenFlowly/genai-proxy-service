@@ -337,9 +337,8 @@ export class DynamoDBStack extends cdk.Stack {
         const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
         const customerSupabaseConfigTable = createDefaultDynamoDbTable(this, customerSupabaseConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
-        // TEMPORARILY COMMENTED OUT TO SYNC CLOUDFORMATION STATE
-        // const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
-        // const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
+        const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
+        const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
         const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
         const sharedInstructionsTable = createDefaultDynamoDbTable(this, sharedInstructionsTableProps);
         const sharedConversationsTable = createDefaultDynamoDbTable(this, sharedConversationsTableProps);
@@ -349,7 +348,7 @@ export class DynamoDBStack extends cdk.Stack {
             customerTable, customerApiKeyTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
-            // customerGraphNodesTable, customerGraphsTable,
+            customerGraphNodesTable, customerGraphsTable,
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
             usernameLookupTable
         );
