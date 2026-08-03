@@ -1,7 +1,8 @@
 name: Production Pipeline
 
 on:
-
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
     types: [closed]
@@ -65,27 +66,27 @@ jobs:
   proxy-server-production:
     name: Proxy Service
     needs: detect-changes
-    if: needs.detect-changes.outputs.proxy-server == 'true' && github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    if: needs.detect-changes.outputs.proxy-server == 'true' && ((github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'push')
     uses: ./.github/workflows/prod-proxy-server.yml
     secrets: inherit
 
   encoding-server-production:
     name: Encoding Service
     needs: detect-changes
-    if: needs.detect-changes.outputs.encoding-server == 'true' && github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    if: needs.detect-changes.outputs.encoding-server == 'true' && ((github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'push')
     uses: ./.github/workflows/prod-encoding-server.yml
     secrets: inherit
 
   encoding-library-production:
     name: Encoding Library
     needs: detect-changes
-    if: needs.detect-changes.outputs.encoding-library == 'true' && github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    if: needs.detect-changes.outputs.encoding-library == 'true' && ((github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'push')
     uses: ./.github/workflows/prod-publish-encoding-library.yml
     secrets: inherit
 
   react-app-production:
     name: React App
     needs: detect-changes
-    if: (needs.detect-changes.outputs.react-app == 'true' && github.event_name == 'workflow_dispatch') || github.event_name == 'schedule'
+    if: (needs.detect-changes.outputs.react-app == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')) || github.event_name == 'schedule'
     uses: ./.github/workflows/prod-react-app-deploy.yml
     secrets: inherit
