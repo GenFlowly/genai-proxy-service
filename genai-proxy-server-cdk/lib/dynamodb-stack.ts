@@ -92,6 +92,8 @@ export class DynamoDBStack extends cdk.Stack {
                     projectionType: dynamodb.ProjectionType.INCLUDE,
                     nonKeyAttributes: ['conversationId', 'title', 'updatedAt', 'archivedAt'],
                 },
+                // TEMPORARILY COMMENTED OUT FOR STAGED PROD DEPLOYMENT (DYNAMODB ALLOWS 1 GSI OP PER DEPLOY)
+                /*
                 {
                     // Lookup a conversation by id alone, needed to serve requests
                     // from users who have the conversation shared with them and
@@ -103,6 +105,7 @@ export class DynamoDBStack extends cdk.Stack {
                     },
                     projectionType: dynamodb.ProjectionType.ALL,
                 },
+                */
             ],
         };
 
