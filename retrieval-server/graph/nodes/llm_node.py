@@ -155,9 +155,16 @@ def make_llm_node(agent_type: str):
                 agent_type, usage["cache_read_tokens"], usage["cache_creation_tokens"], provider,
             )
 
+        def _get_text(content) -> str:
+            if isinstance(content, str):
+                return content
+            elif isinstance(content, list):
+                return "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+            return str(content)
+
         if response_format == "json":
             try:
-                content = response.content.strip()
+                content = _get_text(response.content).strip()
                 if content.startswith("```"):
                     content = re.sub(r"^```[a-z]*\n?", "", content)
                     content = re.sub(r"\n?```$", "", content).strip()
@@ -166,13 +173,13 @@ def make_llm_node(agent_type: str):
                 result["usage"] = usage
                 return result
             except json.JSONDecodeError:
-                logger.error("Node %s: expected JSON, got: %s", agent_type, response.content[:200])
+                logger.error("Node %s: expected JSON, got: %s", agent_type, _get_text(response.content)[:200])
                 return {"usage": usage}
 
         if response_format == "json_indices":
             source = state.get(json_indices_source_key, [])
             try:
-                content = response.content.strip()
+                content = _get_text(response.content).strip()
                 if content.startswith("```"):
                     content = re.sub(r"^```[a-z]*\n?", "", content)
                     content = re.sub(r"\n?```$", "", content).strip()
@@ -180,11 +187,11 @@ def make_llm_node(agent_type: str):
                 reordered = [source[i] for i in indices if i < len(source)]
                 return {output_key: reordered, "usage": usage}
             except (json.JSONDecodeError, TypeError, ValueError):
-                logger.error("Node %s: expected index array, got: %s — using original order", agent_type, response.content[:200])
+                logger.error("Node %s: expected index array, got: %s — using original order", agent_type, _get_text(response.content)[:200])
                 return {output_key: source, "usage": usage}
 
         # response_format == "text"
-        return {output_key: response.content, "usage": usage}
+        return {output_key: _get_text(response.content), "usage": usage}
 
     node.__name__ = f"llm_node_{agent_type.lower()}"
     return node
