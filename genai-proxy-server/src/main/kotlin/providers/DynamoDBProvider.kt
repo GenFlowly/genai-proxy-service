@@ -1500,7 +1500,17 @@ class DynamoDBProvider(
             val title     = item["title"]?.s()
             val createdAt = item["createdAt"]?.s()
             val updatedAt = item["updatedAt"]?.s()
-            ConversationSummary(conversationId = convId, title = title, createdAt = createdAt, updatedAt = updatedAt)
+            
+            val messages = getMessagesForConversation(convId)
+            val vendors = messages.flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+            
+            ConversationSummary(
+                conversationId = convId, 
+                title = title, 
+                createdAt = createdAt, 
+                updatedAt = updatedAt,
+                vendors = vendors
+            )
         }
 
         // Serialise LastEvaluatedKey as a simple JSON string so it is safe to round-trip through the API

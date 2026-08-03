@@ -17,7 +17,7 @@
     --color-background: #f5f5f5;
     --color-background-secondary: #ffffff;
     --color-background-tertiary: #ececec;
-    --color-background-hover: #ececec;
+    --color-background-hover: #f4f4f4; // Lighter than #ececec for better contrast against sidebar
     --color-background-selected: #e6f3ff;
     --color-response-container-background: #ffffff;
 
@@ -46,6 +46,10 @@
     // Navbar
     --color-navbar-background: #252526;
     --color-navbar-text: #ffffff;
+
+    // Conversation Header
+    --color-conversation-header-bg: #687077;
+    --color-conversation-header-text: #ffffff;
 
     // Disabled
     --color-disabled: #dedede;
@@ -160,6 +164,9 @@ $color-sidebar-button-hover: var(--color-sidebar-button-hover);
 
 $color-navbar-background: var(--color-navbar-background);
 $color-navbar-text: var(--color-navbar-text);
+
+$color-conversation-header-bg: var(--color-conversation-header-bg);
+$color-conversation-header-text: var(--color-conversation-header-text);
 
 $color-disabled: var(--color-disabled);
 $color-disabled-text: var(--color-disabled-text);

@@ -11,7 +11,7 @@
   background-color: $color-background;
   scroll-behavior: smooth;
   padding-bottom: 3rem; // Ensure content is accessible globally
-  padding-right: 3.5rem; // Reserve space for collapsed RightSidebar (3.5rem + buffer)
+  padding-right: 3rem; // Reserve space for collapsed RightSidebar (3.5rem + buffer)
 }
 
 .contentWrapper {

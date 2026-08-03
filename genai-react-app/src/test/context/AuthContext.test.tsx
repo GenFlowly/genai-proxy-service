@@ -7,6 +7,10 @@ import { MemoryRouter } from 'react-router-dom';
 import Navbar from '../../components/navbar/Navbar';
 import { mockOnboardResponse } from '../fixtures/customerProfile'; // Import here to be available in scope
 import { onboardCustomer } from '../../services/onboardUserService';
+
+// Mock ThemeToggle to avoid useTheme provider requirement
+jest.mock('../../components/common/ThemeToggle/ThemeToggle', () => () => <div data-testid="theme-toggle-mock" />);
+
 // We need to mock useAuth0 to control returned values per test
 const mockUseAuth0 = jest.fn();
 
