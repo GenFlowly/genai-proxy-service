@@ -4,26 +4,11 @@ import { useAuth } from '../../../context/AuthContext'
 import { useConversation } from '../../../context/ConversationContext'
 import { getCustomerConversations, archiveConversation } from '../../../services/conversationHistoryService'
 import { ConversationSummary } from '../../../models/conversationHistory.models'
+import { CollapsedOpenAIBrandName, CollapsedClaudeBrandName, CollapsedGeminiBrandName } from '../../common/BrandName/BrandName'
+import { AIVendor } from '../../../constants/vendors'
 import styles from './ConversationHistory.module.scss'
 
 const PAGE_SIZE = 15
-
-function MessageIcon({ className }: { className?: string }) {
-    return (
-        <svg
-            className={className}
-            viewBox="0 0 16 16"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-        >
-            <path
-                d="M2 3.5A1.5 1.5 0 013.5 2h9A1.5 1.5 0 0114 3.5v7a1.5 1.5 0 01-1.5 1.5H9l-3 2.5V12H3.5A1.5 1.5 0 012 10.5v-7z"
-                fill="currentColor"
-            />
-        </svg>
-    )
-}
 
 function ArchiveIcon({ className }: { className?: string }) {
     return (
@@ -120,7 +105,6 @@ export default function ConversationHistoryComponent() {
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                <MessageIcon className={styles.itemIcon} />
                 History
             </div>
 
@@ -152,8 +136,32 @@ export default function ConversationHistoryComponent() {
                                     aria-current={isActive ? 'page' : undefined}
                                     data-testid={`conv-history-item-${conv.conversationId}`}
                                 >
-                                    <MessageIcon className={styles.itemIcon} />
-                                    <span className={styles.itemLabel}>{label}</span>
+                                    <div className={styles.itemContent}>
+                                        <div className={styles.itemHeader}>
+                                            <div className={styles.vendorIcons}>
+                                                {[...(conv.vendors || [])].sort().map((v, idx) => {
+                                                    if (v === AIVendor.OPENAI) return <CollapsedOpenAIBrandName key={idx} size={11} className={styles.vendorIcon} />
+                                                    if (v === AIVendor.CLAUDE) return <CollapsedClaudeBrandName key={idx} size={11} className={styles.vendorIcon} />
+                                                    if (v === AIVendor.GEMINI) return <CollapsedGeminiBrandName key={idx} size={11} className={styles.vendorIcon} />
+                                                    return null
+                                                })}
+                                            </div>
+                                            <span className={styles.itemLabel}>{label}</span>
+                                        </div>
+                                        <div className={styles.itemDetails}>
+                                            {conv.updatedAt && (
+                                                <span className={styles.timestamp}>
+                                                    {new Date(conv.updatedAt).toLocaleString([], {
+                                                        year: 'numeric',
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </button>
                                 <button
                                     className={styles.archiveBtn}
