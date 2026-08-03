@@ -9,6 +9,7 @@ import '@testing-library/jest-dom';
 
 // Mock usages
 jest.mock('../../../context/AuthContext');
+jest.mock('../../../components/common/ThemeToggle/ThemeToggle', () => () => <div data-testid="theme-toggle-mock" />);
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
     ...jest.requireActual('react-router-dom'),

@@ -1,72 +1,71 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 
-type Theme = 'light' | 'dark'
+export type ThemeMode = 'light' | 'dark' | 'system'
+export type EffectiveTheme = 'light' | 'dark'
 
 interface ThemeContextType {
-    theme: Theme
-    setTheme: (theme: Theme) => void
+    theme: EffectiveTheme
+    themeMode: ThemeMode
+    setThemeMode: (mode: ThemeMode) => void
+    cycleTheme: () => void
+    // Keep for backward compatibility in tests
+    setTheme: (theme: EffectiveTheme) => void
     toggleTheme: () => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+const getInitialThemeMode = (): ThemeMode => {
+    return (localStorage.getItem('theme') as ThemeMode | null) || 'system'
+}
+
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-    const [theme, setThemeState] = useState<Theme>('light')
+    const [themeMode, setThemeModeState] = useState<ThemeMode>(getInitialThemeMode)
+    const [theme, setThemeState] = useState<EffectiveTheme>('light')
 
-    // Initialize theme on mount
     useEffect(() => {
-        // Check if user has a saved preference
-        const savedTheme = localStorage.getItem('theme') as Theme | null
+        const prefersDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
+        const effective: EffectiveTheme = themeMode === 'system' ? (prefersDark ? 'dark' : 'light') : themeMode
 
-        if (savedTheme) {
-            setThemeState(savedTheme)
-            document.documentElement.setAttribute('data-theme', savedTheme)
-        } else {
-            // Use system preference
-            const prefersDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
-            const systemTheme = prefersDark ? 'dark' : 'light'
-            setThemeState(systemTheme)
-            document.documentElement.setAttribute('data-theme', systemTheme)
-        }
+        setThemeState(effective)
+        document.documentElement.setAttribute('data-theme', effective)
 
-        // Listen for system theme changes
-        let mediaQuery: MediaQueryList | null = null
-        if (window.matchMedia) {
-            mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-        }
-
-        const handleChange = (e: MediaQueryListEvent) => {
-            // Only update if user hasn't set a preference
-            if (!localStorage.getItem('theme')) {
+        if (themeMode === 'system') {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+            const handleChange = (e: MediaQueryListEvent) => {
                 const newTheme = e.matches ? 'dark' : 'light'
                 setThemeState(newTheme)
                 document.documentElement.setAttribute('data-theme', newTheme)
             }
-        }
-
-        if (mediaQuery) {
-            mediaQuery.addEventListener('change', handleChange)
-        }
-        return () => {
-            if (mediaQuery) {
-                mediaQuery.removeEventListener('change', handleChange)
+            if (mediaQuery.addEventListener) {
+                mediaQuery.addEventListener('change', handleChange)
+                return () => mediaQuery.removeEventListener('change', handleChange)
             }
         }
-    }, [])
+    }, [themeMode])
 
-    const setTheme = (newTheme: Theme) => {
-        setThemeState(newTheme)
-        document.documentElement.setAttribute('data-theme', newTheme)
-        localStorage.setItem('theme', newTheme)
+    const setThemeMode = (mode: ThemeMode) => {
+        setThemeModeState(mode)
+        localStorage.setItem('theme', mode)
+    }
+
+    const cycleTheme = () => {
+        if (themeMode === 'system') setThemeMode('light')
+        else if (themeMode === 'light') setThemeMode('dark')
+        else setThemeMode('system')
+    }
+
+    const setTheme = (newTheme: EffectiveTheme) => {
+        setThemeMode(newTheme)
     }
 
     const toggleTheme = () => {
         const newTheme = theme === 'light' ? 'dark' : 'light'
-        setTheme(newTheme)
+        setThemeMode(newTheme)
     }
 
     return (
-        <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+        <ThemeContext.Provider value={{ theme, themeMode, setThemeMode, cycleTheme, setTheme, toggleTheme }}>
             {children}
         </ThemeContext.Provider>
     )
