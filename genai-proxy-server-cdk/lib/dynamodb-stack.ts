@@ -23,6 +23,16 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'client',
                 type: dynamodb.AttributeType.STRING
             },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
         };
 
         const createCustomerApiKeyTableProps: CreateTableProps = {
@@ -57,7 +67,7 @@ export class DynamoDBStack extends cdk.Stack {
                 {
                     // Enables paginated listing of all conversations for a customer,
                     // sorted newest-first by createdAt.
-                    indexName: 'customerIdIndex',
+                    indexName: 'customerIdIndexV2',
                     partitionKey: {
                         name: 'customerId',
                         type: dynamodb.AttributeType.STRING,
@@ -67,7 +77,18 @@ export class DynamoDBStack extends cdk.Stack {
                         type: dynamodb.AttributeType.STRING,
                     },
                     projectionType: dynamodb.ProjectionType.INCLUDE,
-                    nonKeyAttributes: ['conversationId', 'title', 'updatedAt'],
+                    nonKeyAttributes: ['conversationId', 'title', 'updatedAt', 'archivedAt'],
+                },
+                {
+                    // Lookup a conversation by id alone, needed to serve requests
+                    // from users who have the conversation shared with them and
+                    // therefore don't know the owner's customerId.
+                    indexName: 'conversationIdIndex',
+                    partitionKey: {
+                        name: 'conversationId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
                 },
             ],
         };
@@ -217,6 +238,80 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        const sharedInstructionsTableProps: CreateTableProps = {
+            tableName: 'SharedInstructions',
+            partitionKey: {
+                name: 'sharedWithCustomerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'instructionId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'instructionIdIndex',
+                    partitionKey: {
+                        name: 'instructionId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'sharedWithCustomerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
+        const sharedConversationsTableProps: CreateTableProps = {
+            tableName: 'SharedConversations',
+            partitionKey: {
+                name: 'sharedWithCustomerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'conversationId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'conversationIdIndex',
+                    partitionKey: {
+                        name: 'conversationId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'sharedWithCustomerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
+        const usernameLookupTableProps: CreateTableProps = {
+            tableName: 'UsernameLookup',
+            partitionKey: {
+                name: 'username',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'recordTypeIndex',
+                    partitionKey: {
+                        name: 'recordType',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'username',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
@@ -229,13 +324,17 @@ export class DynamoDBStack extends cdk.Stack {
         const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
         const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
         const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
+        const sharedInstructionsTable = createDefaultDynamoDbTable(this, sharedInstructionsTableProps);
+        const sharedConversationsTable = createDefaultDynamoDbTable(this, sharedConversationsTableProps);
+        const usernameLookupTable = createDefaultDynamoDbTable(this, usernameLookupTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
-            customerToolCredentialsTable,
+            customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
+            usernameLookupTable
         );
     }
 }

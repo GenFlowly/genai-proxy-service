@@ -21,9 +21,36 @@ export class FlyioIamStack extends cdk.Stack {
             userName: `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-flyio-user`,
         });
 
-        // Grant access to DynamoDB tables
-        props.dynamoDbTableList.forEach((table) => {
-            table.grantReadWriteData(flyioUser);
+        // Grant DynamoDB read/write via a customer-managed policy attached to the user.
+        // We used to call table.grantReadWriteData(flyioUser) per table, which appended
+        // statements to the user's inline default policy. Inline user policies cap at
+        // 2048 chars and we hit that ceiling as we added tables. Managed policies cap
+        // at 6144 chars, so we consolidate every table + its indexes into one statement.
+        const dynamoDbResources = props.dynamoDbTableList.flatMap((table) => [
+            table.tableArn,
+            `${table.tableArn}/index/*`,
+        ]);
+        new iam.ManagedPolicy(this, 'FlyioDynamoDbAccess', {
+            users: [flyioUser],
+            statements: [
+                new iam.PolicyStatement({
+                    actions: [
+                        'dynamodb:BatchGetItem',
+                        'dynamodb:GetRecords',
+                        'dynamodb:GetShardIterator',
+                        'dynamodb:Query',
+                        'dynamodb:GetItem',
+                        'dynamodb:Scan',
+                        'dynamodb:ConditionCheckItem',
+                        'dynamodb:BatchWriteItem',
+                        'dynamodb:PutItem',
+                        'dynamodb:UpdateItem',
+                        'dynamodb:DeleteItem',
+                        'dynamodb:DescribeTable',
+                    ],
+                    resources: dynamoDbResources,
+                }),
+            ],
         });
 
         // Grant access to KMS key

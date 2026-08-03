@@ -23,8 +23,10 @@ export default function Navbar(): React.ReactElement {
     const displayName = customerName || user?.name || 'Account'
 
     const handleSettingsClick = () => {
-        navigate('/settings')
-        setShowDropdown(false)
+        React.startTransition(() => {
+            navigate('/settings')
+            setShowDropdown(false)
+        })
     }
 
     const handleLogout = () => {

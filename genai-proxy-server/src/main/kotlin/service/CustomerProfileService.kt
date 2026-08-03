@@ -65,7 +65,9 @@ class CustomerProfileService(
                 client = client,
                 email = existingCustomer["email"]?.s(),
                 name = existingCustomer["name"]?.s(),
-                picture = existingCustomer["picture"]?.s()
+                picture = existingCustomer["picture"]?.s(),
+                username = existingCustomer["username"]?.s(),
+                isDiscoverable = existingCustomer["isDiscoverable"]?.bool() ?: false
             )
         }
 
@@ -81,7 +83,7 @@ class CustomerProfileService(
         picture: String?
     ): models.CustomerProfile {
         val newCustomerId = generateCustomerId()
-        dynamoDBProvider.onboardCustomer(
+        val generatedUsername = dynamoDBProvider.onboardCustomer(
             sub,
             client,
             newCustomerId,
@@ -113,7 +115,9 @@ class CustomerProfileService(
             client = client,
             email = email,
             name = name,
-            picture = picture
+            picture = picture,
+            username = generatedUsername,
+            isDiscoverable = false
         )
     }
 
@@ -210,9 +214,34 @@ class CustomerProfileService(
         var instructionId = existingInstructionId
         var version = 1
 
+        var creator = customerId
+        var role = "OWNER"
+
         if (instructionId != null) {
             val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId) ?: 0
-            version = latestVersion + 1
+            if (latestVersion > 0) {
+                val existingInstruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+                if (existingInstruction != null && existingInstruction.creator != customerId) {
+                    // Check if they have EDIT role
+                    val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+                    val specificShare = sharedUsers.find { it.customerId == customerId }
+                    val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
+                    val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
+                    if (hasEdit) {
+                        version = latestVersion + 1
+                        creator = existingInstruction.creator
+                        role = "EDIT"
+                    } else {
+                        // Branch off into a private copy if they only have VIEW or no access
+                        instructionId = "INS-${UUID.randomUUID()}"
+                        version = 1
+                    }
+                } else {
+                    version = latestVersion + 1
+                }
+            } else {
+                version = 1
+            }
         } else {
             instructionId = "INS-${UUID.randomUUID()}"
             version = 1
@@ -220,7 +249,7 @@ class CustomerProfileService(
 
         val newInstruction = models.Instruction(
             id = instructionId!!,
-            creator = customerId,
+            creator = creator,
             name = instructionName,
             instructions = instruction,
             version = version
@@ -232,28 +261,124 @@ class CustomerProfileService(
             id = instructionId,
             version = version,
             name = instructionName,
-            instruction = instruction
+            instruction = instruction,
+            role = role
         )
     }
 
     suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse {
-        val instructions = dynamoDBProvider.getInstructionsByCreator(customerId)
+        val ownedInstructions = dynamoDBProvider.getInstructionsByCreator(customerId)
+        
+        val sharedInstructionIds = dynamoDBProvider.getSharedEntityIdsForCustomer(customerId, "INS-")
+        val publicInstructionIds = dynamoDBProvider.getSharedEntityIdsForCustomer("PUBLIC", "INS-")
+
+        val roleMap = mutableMapOf<String, String>()
+        publicInstructionIds.forEach { (id, role) -> roleMap[id] = role }
+        sharedInstructionIds.forEach { (id, role) ->
+            if (role == "EDIT" || !roleMap.containsKey(id)) {
+                roleMap[id] = role
+            }
+        }
+        
+        val sharedInstructions = mutableListOf<models.Instruction>()
+        for (id in roleMap.keys) {
+            val latestVersion = dynamoDBProvider.getLatestInstructionVersion(id)
+            if (latestVersion != null) {
+                val instruction = dynamoDBProvider.getInstruction(id, latestVersion)
+                if (instruction != null) {
+                    sharedInstructions.add(instruction)
+                }
+            }
+        }
+
+        val allInstructions = (ownedInstructions + sharedInstructions).distinctBy { it.id to it.version }
         
         // Return all versions, sorted by ID and version desc
-        val responseItems = instructions.sortedWith(
+        val responseItems = allInstructions.sortedWith(
             compareBy<models.Instruction> { it.id }.thenByDescending { it.version }
         ).map { instruction ->
+            val role = if (instruction.creator == customerId) "OWNER" else roleMap[instruction.id] ?: "VIEW"
             InstructionResponse(
                 id = instruction.id,
                 name = instruction.name,
                 version = instruction.version ?: 1,
-                instruction = instruction.instructions
+                instruction = instruction.instructions,
+                role = role
             )
         }
         
         return GetCustomerInstructionListResponse(
             instructions = responseItems
         )
+    }
+
+    suspend fun shareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String, role: String) {
+        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
+        val instruction = if (latestVersion != null) dynamoDBProvider.getInstruction(instructionId, latestVersion) else null
+
+        if (instruction?.creator != sharedByCustomerId) {
+            val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+            val specificShare = sharedUsers.find { it.customerId == sharedByCustomerId }
+            val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
+            val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
+            if (!hasEdit) {
+                throw SecurityException("Customer $sharedByCustomerId does not own or have EDIT rights to instruction $instructionId")
+            }
+        }
+        dynamoDBProvider.shareEntityWithCustomer(instructionId, targetCustomerId, sharedByCustomerId, role)
+    }
+
+    suspend fun unshareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String) {
+        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
+        val instruction = if (latestVersion != null) dynamoDBProvider.getInstruction(instructionId, latestVersion) else null
+
+        if (instruction?.creator != sharedByCustomerId) {
+            val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+            val specificShare = sharedUsers.find { it.customerId == sharedByCustomerId }
+            val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
+            val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
+            if (!hasEdit) {
+                throw SecurityException("Customer $sharedByCustomerId does not own or have EDIT rights to instruction $instructionId")
+            }
+        }
+        dynamoDBProvider.unshareEntityWithCustomer(instructionId, targetCustomerId)
+    }
+
+    suspend fun getSharedUsersForInstruction(customerId: String, instructionId: String): List<models.CustomerProfile> {
+        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
+        if (latestVersion != null) {
+            val instruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+            
+            val isOwner = instruction != null && instruction.creator == customerId
+            if (!isOwner) {
+                val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+                val specificShare = sharedUsers.find { it.customerId == customerId }
+                val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
+                val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
+                if (!hasEdit) {
+                    throw SecurityException("Customer $customerId does not own or have EDIT rights to instruction $instructionId")
+                }
+                return sharedUsers
+            }
+            
+            return dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+        }
+        return emptyList()
+    }
+
+    suspend fun deleteInstruction(customerId: String, instructionId: String) {
+        // Optional: verify ownership before deleting.
+        // If the instruction is shared with them, they can't delete it globally, maybe only un-share it.
+        // For now, we will verify they own the latest version.
+        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
+        if (latestVersion != null) {
+            val instruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+            if (instruction != null && instruction.creator == customerId) {
+                dynamoDBProvider.deleteInstruction(instructionId)
+            } else {
+                throw SecurityException("Customer $customerId does not own instruction $instructionId or it does not exist")
+            }
+        }
     }
 
     suspend fun getLatestCustomerInstructions(customerId: String): List<InstructionResponse> {
@@ -313,16 +438,28 @@ class CustomerProfileService(
     ): InstructionResponse? {
         val instruction = dynamoDBProvider.getInstruction(instructionId, version)
         
-        // Ensure the instruction belongs to the customer
-        if (instruction == null || instruction.creator != customerId) {
-            return null
+        if (instruction == null) return null
+
+        var role = "OWNER"
+        if (instruction.creator != customerId) {
+            val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+            val specificShare = sharedUsers.find { it.customerId == customerId }
+            val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
+            
+            val share = specificShare ?: publicShare
+            if (share == null) return null // Not shared with this customer
+            
+            val specificRole = specificShare?.role
+            val publicRole = publicShare?.role
+            role = if (specificRole == "EDIT" || publicRole == "EDIT") "EDIT" else "VIEW"
         }
 
         return InstructionResponse(
             id = instruction.id,
             version = instruction.version ?: 1,
             name = instruction.name,
-            instruction = instruction.instructions // Add this locally to models
+            instruction = instruction.instructions,
+            role = role
         )
     }
 

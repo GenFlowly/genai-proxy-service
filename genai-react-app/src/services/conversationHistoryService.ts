@@ -29,3 +29,41 @@ export const getCustomerConversations = async (
 
     return response.json();
 };
+
+export const archiveConversation = async (
+    token: string,
+    conversationId: string
+): Promise<void> => {
+    const response = await fetchWithRetry(
+        endpoints.deleteConversation(conversationId),
+        {
+            method: HttpMethod.DELETE,
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to archive conversation: ${response.statusText}`);
+    }
+};
+
+export const unarchiveConversation = async (
+    token: string,
+    conversationId: string
+): Promise<void> => {
+    const response = await fetchWithRetry(
+        endpoints.unarchiveConversation(conversationId),
+        {
+            method: HttpMethod.POST,
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to unarchive conversation: ${response.statusText}`);
+    }
+};
