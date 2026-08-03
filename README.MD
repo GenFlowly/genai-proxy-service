@@ -101,8 +101,8 @@ Go to your GitHub Repository > **Settings** > **Secrets and variables** > **Acti
 
 When you push to the `development` branch, GitHub Actions will automatically:
 - Deploy any DynamoDB/KMS schema updates via AWS CDK.
-- Fetch runtime AWS credentials from `FlyioIamStack` and inject them securely as Fly.io secrets.
-- Build and deploy both `genai-proxy-server-development` and `genai-retrieval-server-development` to Fly.io!
+- Fetch runtime AWS credentials from `FlyioIamStack` and inject them securely as Fly.io secrets into both `genai-proxy-server-<stage>` and `genai-retrieval-server-<stage>`.
+- Build and deploy both backend applications to Fly.io!
 
 ### 7. Milvus Setup
 1. Create a Zilliz Cloud account and get your endpoint and API token (`ZILLIZ_ENDPOINT`, `ZILLIZ_TOKEN`).
