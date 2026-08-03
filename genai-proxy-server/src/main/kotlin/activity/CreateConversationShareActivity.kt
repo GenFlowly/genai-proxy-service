@@ -37,6 +37,9 @@ fun Route.registerCreateConversationShareRoutes(
             } catch (e: SecurityException) {
                 logger.warn("Unauthorized conversation share attempt: {}", e.message)
                 call.respond(HttpStatusCode.Forbidden, mapOf("error" to (e.message ?: "Forbidden")))
+            } catch (e: com.genflowly.service.ConversationArchivedException) {
+                logger.warn("Attempted to share archived conversation: {}", e.message)
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Cannot share archived conversation")))
             } catch (e: Exception) {
                 logger.error("Unexpected error in Create Conversation Share controller: {}", e.message, e)
                 call.respond(

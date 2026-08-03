@@ -22,6 +22,8 @@ import com.genflowly.activity.registerGetInstructionVersionRoutes
 import com.genflowly.activity.registerGetInstructionSharedUsersRoutes
 import com.genflowly.activity.registerCreateConversationTitleRoutes
 import com.genflowly.activity.registerGetCustomerConversationsPaginatedRoutes
+import com.genflowly.activity.registerDeleteConversationRoutes
+import com.genflowly.activity.registerUnarchiveConversationRoutes
 import com.genflowly.activity.registerGraphNodeRoutes
 import com.genflowly.activity.registerCustomerGraphRoutes
 import com.genflowly.activity.registerToolCredentialsRoutes
@@ -64,6 +66,8 @@ object Routes {
     const val GET_CONVERSATION_SHARED_USERS = "$API_V1/conversation/{conversationId}/shared"
     const val GET_AI_USAGE = "$API_V1/message/usage"
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
+    const val DELETE_CONVERSATION = "$API_V1/conversation/{conversationId}"
+    const val UNARCHIVE_CONVERSATION = "$API_V1/conversation/{conversationId}/unarchive"
     const val GET_PROFILE = "$API_V1/profile"
 
     const val GRAPH_NODES = "$API_V1/graph-nodes"
@@ -117,6 +121,8 @@ fun Application.configureRouting(
         registerCreateConversationTitleRoutes(aiRequestManager, customerProfileService)
         registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)
+        registerDeleteConversationRoutes(customerProfileService, conversationService)
+        registerUnarchiveConversationRoutes(customerProfileService, conversationService)
         registerGraphNodeRoutes(graphService, customerProfileService)
         registerCustomerGraphRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerProfileService)

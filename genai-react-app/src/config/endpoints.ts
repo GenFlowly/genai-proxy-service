@@ -20,6 +20,8 @@ export const endpoints = {
     conversationShare: `${BASE}${API_PREFIX}/conversation/share`,
     conversationSharedUsers: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}/shared`,
     getCustomerConversations: `${BASE}${API_PREFIX}/conversations`,
+    deleteConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}`,
+    unarchiveConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}/unarchive`,
     getAIUsage: `${BASE}${API_PREFIX}/message/usage`,
     searchUsers: `${BASE}${API_PREFIX}/users/search`,
     getProfile: `${BASE}${API_PREFIX}/profile`,
