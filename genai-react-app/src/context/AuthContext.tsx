@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         isLoading: auth0Loading,
         loginWithRedirect,
         logout: auth0Logout,
-        getAccessTokenSilently,
+        getAccessTokenSilently: originalGetAccessTokenSilently,
     } = useAuth0()
 
     const [customerId, setCustomerId] = useState<string | null>(() =>
@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         }
     }, [customerId])
 
-    const logout = useCallback(({ returnTo }: { returnTo: string }): void => {
+    const logout = useCallback(({ returnTo, localOnly }: { returnTo: string; localOnly?: boolean }): void => {
         setCustomerId(null)
         setAiVendorAPIKeyStatusList([])
         setAiConfigPreferences(null)
@@ -73,9 +73,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         localStorage.removeItem('customerId')
 
         auth0Logout({
-            logoutParams: { returnTo }
+            logoutParams: { returnTo },
+            ...(localOnly ? { openUrl: false } : {})
         })
     }, [auth0Logout])
+
+    const getAccessTokenSilently = useCallback(async (): Promise<string> => {
+        try {
+            return await originalGetAccessTokenSilently()
+        } catch (error: any) {
+            if (
+                error?.error === 'login_required' ||
+                error?.error === 'consent_required' ||
+                error?.message?.includes('Login required')
+            ) {
+                logout({ returnTo: window.location.origin, localOnly: true })
+            }
+            throw error
+        }
+    }, [originalGetAccessTokenSilently, logout])
 
     // Onboard/Sync user when authenticated
     useEffect(() => {
@@ -134,12 +150,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                     // despite isAuthenticated being true (stale cache).
                     if (error?.error === 'login_required' || error?.error === 'consent_required' || error?.message?.includes('Login required')) {
                         console.log('Session invalid, logging out...')
-                        logout({ returnTo: window.location.origin })
+                        logout({ returnTo: window.location.origin, localOnly: true })
                     } else {
                         // For other errors (e.g. 500), we must ALSO logout to ensure no sensitive Auth0 data 
                         // (like ID tokens) remains in localStorage, as per strict security requirements.
                         console.error('Onboarding failed, clearing session...', error)
-                        logout({ returnTo: window.location.origin })
+                        logout({ returnTo: window.location.origin, localOnly: true })
                     }
                 } finally {
                     setIsInternalLoading(false)
@@ -169,7 +185,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                     error?.error === 'consent_required' ||
                     error?.message?.includes('Login required')
                 ) {
-                    logout({ returnTo: window.location.origin })
+                    logout({ returnTo: window.location.origin, localOnly: true })
                 }
             }
         }
