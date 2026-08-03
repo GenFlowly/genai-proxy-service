@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { useConversation } from '../../../context/ConversationContext'
@@ -9,6 +9,44 @@ import { AIVendor } from '../../../constants/vendors'
 import styles from './ConversationHistory.module.scss'
 
 const PAGE_SIZE = 15
+
+interface GroupedConversations {
+    label: string;
+    items: ConversationSummary[];
+}
+
+const groupConversations = (conversations: ConversationSummary[]): GroupedConversations[] => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const last7Days = new Date(today);
+    last7Days.setDate(last7Days.getDate() - 7);
+
+    const groups = [
+        { label: 'Today', items: [] as ConversationSummary[] },
+        { label: 'Yesterday', items: [] as ConversationSummary[] },
+        { label: 'Last 7 days', items: [] as ConversationSummary[] },
+        { label: 'Older', items: [] as ConversationSummary[] }
+    ];
+
+    conversations.forEach(conv => {
+        const d = new Date(conv.updatedAt || conv.createdAt || Date.now());
+        if (d >= today) {
+            groups[0].items.push(conv);
+        } else if (d >= yesterday) {
+            groups[1].items.push(conv);
+        } else if (d >= last7Days) {
+            groups[2].items.push(conv);
+        } else {
+            groups[3].items.push(conv);
+        }
+    });
+
+    return groups.filter(g => g.items.length > 0);
+};
 
 function ArchiveIcon({ className }: { className?: string }) {
     return (
@@ -102,6 +140,8 @@ export default function ConversationHistoryComponent() {
         }
     }
 
+    const groupedItems = useMemo(() => groupConversations(items), [items])
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
@@ -123,59 +163,66 @@ export default function ConversationHistoryComponent() {
             ) : items.length === 0 ? (
                 <div className={styles.emptyState}>No conversations yet</div>
             ) : (
-                <ul className={styles.list} aria-label="Conversation history">
-                    {items.map(conv => {
-                        const label = conv.title?.trim() || conv.conversationId
-                        const isActive = conv.conversationId === activeId
-                        return (
-                            <li key={conv.conversationId} className={styles.itemRow}>
-                                <button
-                                    className={`${styles.item} ${isActive ? styles.active : ''}`}
-                                    onClick={() => handleNavigate(conv.conversationId)}
-                                    title={label}
-                                    aria-current={isActive ? 'page' : undefined}
-                                    data-testid={`conv-history-item-${conv.conversationId}`}
-                                >
-                                    <div className={styles.itemContent}>
-                                        <div className={styles.itemHeader}>
-                                            <div className={styles.vendorIcons}>
-                                                {[...(conv.vendors || [])].sort().map((v, idx) => {
-                                                    if (v === AIVendor.OPENAI) return <CollapsedOpenAIBrandName key={idx} size={11} className={styles.vendorIcon} />
-                                                    if (v === AIVendor.CLAUDE) return <CollapsedClaudeBrandName key={idx} size={11} className={styles.vendorIcon} />
-                                                    if (v === AIVendor.GEMINI) return <CollapsedGeminiBrandName key={idx} size={11} className={styles.vendorIcon} />
-                                                    return null
-                                                })}
-                                            </div>
-                                            <span className={styles.itemLabel}>{label}</span>
-                                        </div>
-                                        <div className={styles.itemDetails}>
-                                            {conv.updatedAt && (
-                                                <span className={styles.timestamp}>
-                                                    {new Date(conv.updatedAt).toLocaleString([], {
-                                                        year: 'numeric',
-                                                        month: 'short',
-                                                        day: 'numeric',
-                                                        hour: '2-digit',
-                                                        minute: '2-digit'
-                                                    })}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </button>
-                                <button
-                                    className={styles.archiveBtn}
-                                    onClick={(e) => handleArchive(e, conv.conversationId)}
-                                    title="Archive conversation"
-                                    aria-label="Archive conversation"
-                                    data-testid={`conv-archive-btn-${conv.conversationId}`}
-                                >
-                                    <ArchiveIcon className={styles.archiveIcon} />
-                                </button>
-                            </li>
-                        )
-                    })}
-                </ul>
+                <div className={styles.list} aria-label="Conversation history">
+                    {groupedItems.map(group => (
+                        <div key={group.label} className={styles.group}>
+                            <div className={styles.groupHeader}>{group.label}</div>
+                            <ul className={styles.groupList}>
+                                {group.items.map(conv => {
+                                    const label = conv.title?.trim() || conv.conversationId
+                                    const isActive = conv.conversationId === activeId
+                                    return (
+                                        <li key={conv.conversationId} className={styles.itemRow}>
+                                            <button
+                                                className={`${styles.item} ${isActive ? styles.active : ''}`}
+                                                onClick={() => handleNavigate(conv.conversationId)}
+                                                title={label}
+                                                aria-current={isActive ? 'page' : undefined}
+                                                data-testid={`conv-history-item-${conv.conversationId}`}
+                                            >
+                                                <div className={styles.itemContent}>
+                                                    <div className={styles.itemHeader}>
+                                                        <div className={styles.vendorIcons}>
+                                                            {[...(conv.vendors || [])].sort().map((v, idx) => {
+                                                                if (v === AIVendor.OPENAI) return <CollapsedOpenAIBrandName key={idx} size={11} className={styles.vendorIcon} />
+                                                                if (v === AIVendor.CLAUDE) return <CollapsedClaudeBrandName key={idx} size={11} className={styles.vendorIcon} />
+                                                                if (v === AIVendor.GEMINI) return <CollapsedGeminiBrandName key={idx} size={11} className={styles.vendorIcon} />
+                                                                return null
+                                                            })}
+                                                        </div>
+                                                        <span className={styles.itemLabel}>{label}</span>
+                                                    </div>
+                                                    <div className={styles.itemDetails}>
+                                                        {conv.updatedAt && (
+                                                            <span className={styles.timestamp}>
+                                                                {new Date(conv.updatedAt).toLocaleString([], {
+                                                                    year: 'numeric',
+                                                                    month: 'short',
+                                                                    day: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                            <button
+                                                className={styles.archiveBtn}
+                                                onClick={(e) => handleArchive(e, conv.conversationId)}
+                                                title="Archive conversation"
+                                                aria-label="Archive conversation"
+                                                data-testid={`conv-archive-btn-${conv.conversationId}`}
+                                            >
+                                                <ArchiveIcon className={styles.archiveIcon} />
+                                            </button>
+                                        </li>
+                                    )
+                                })}
+                            </ul>
+                        </div>
+                    ))}
+                </div>
             )}
 
             {hasMore && (
