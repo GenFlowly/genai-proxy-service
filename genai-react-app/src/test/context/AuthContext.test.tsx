@@ -166,7 +166,7 @@ describe('AuthContext Integration with Navbar', () => {
         // 3. Verify Logout is called to clear Auth0 session/localStorage
         // We wait for this side effect since the onboard call is async
         await waitFor(() => {
-            expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });
+            expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin }, openUrl: false });
         });
 
     });
@@ -521,7 +521,7 @@ test('Logs out for login_required error', async () => {
 
     await waitFor(() => {
         // Should log message "Session invalid..." and logout
-        expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });
+        expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin }, openUrl: false });
     });
 });
 

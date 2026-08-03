@@ -684,7 +684,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 // editor (Request.tsx). Reset block state then logout so the Login button appears.
                 updateConversationBlock(id, { isLoading: false, status: 'draft' })
                 showToast('Session expired. Your draft is saved — log in to continue.')
-                logout({ returnTo: window.location.origin })
+                logout({ returnTo: window.location.origin, localOnly: true })
             } else {
                 updateConversationBlock(id, {
                     responseMessages: [
