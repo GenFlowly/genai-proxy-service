@@ -47,6 +47,35 @@
     }
 }
 
+.group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0.5rem;
+}
+
+.groupHeader {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: $color-text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.25rem;
+
+    .group:first-child & {
+        margin-top: 0;
+    }
+}
+
+.groupList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
 .item {
     display: flex;
     align-items: flex-start;
