@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
-import PillButton from '../../common/PillButton/PillButton'
 import ShareModal, { VisibilityMode } from '../../common/ShareModal/ShareModal'
+import PillButton from '../../common/PillButton/PillButton'
 import { useConversation } from '../../../context/ConversationContext'
 import { useToast } from '../../../context/ToastContext'
 import {
@@ -51,7 +51,7 @@ export default function ConversationHeader(): React.ReactElement | null {
                 {canShare && (
                     <PillButton
                         label="Share"
-                        variant="secondary"
+                        className={styles.shareButton}
                         onClick={() => setShareModalOpen(true)}
                         data-testid="conversation-share-button"
                     />

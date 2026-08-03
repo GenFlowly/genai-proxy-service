@@ -9,7 +9,8 @@ data class ConversationSummary(
     val createdAt: String?,
     val updatedAt: String?,
     val role: String = "OWNER",
-    val archivedAt: String? = null
+    val archivedAt: String? = null,
+    val vendors: List<String>? = null
 )
 
 @Serializable

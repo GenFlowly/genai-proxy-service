@@ -12,64 +12,48 @@ jest.mock('../../../../context/ThemeContext', () => ({
 
 describe('ThemeToggle Component', () => {
     const mockUseTheme = ThemeContext.useTheme as jest.Mock;
-    const mockToggleTheme = jest.fn();
+    const mockSetThemeMode = jest.fn();
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    test('renders light theme state correctly', () => {
+    test('renders all theme options', () => {
         mockUseTheme.mockReturnValue({
-            theme: 'light',
-            toggleTheme: mockToggleTheme
+            themeMode: 'system',
+            setThemeMode: mockSetThemeMode
         });
 
         render(<ThemeToggle />);
 
-        const button = screen.getByTestId('theme-toggle');
-        expect(button).toBeInTheDocument();
-        expect(button).toHaveTextContent('🌙'); // Moon icon for switching TO dark
-        expect(button).toHaveAttribute('aria-label', 'Switch to dark theme');
-        expect(button).toHaveAttribute('title', 'Switch to dark theme');
+        expect(screen.getByTestId('theme-toggle-light')).toBeInTheDocument();
+        expect(screen.getByTestId('theme-toggle-system')).toBeInTheDocument();
+        expect(screen.getByTestId('theme-toggle-dark')).toBeInTheDocument();
     });
 
-    test('renders dark theme state correctly', () => {
+    test('calls setThemeMode on click', async () => {
         mockUseTheme.mockReturnValue({
-            theme: 'dark',
-            toggleTheme: mockToggleTheme
+            themeMode: 'system',
+            setThemeMode: mockSetThemeMode
         });
 
         render(<ThemeToggle />);
+        
+        await userEvent.click(screen.getByTestId('theme-toggle-dark'));
+        expect(mockSetThemeMode).toHaveBeenCalledWith('dark');
 
-        const button = screen.getByTestId('theme-toggle');
-        expect(button).toBeInTheDocument();
-        expect(button).toHaveTextContent('☀️'); // Sun icon for switching TO light
-        expect(button).toHaveAttribute('aria-label', 'Switch to light theme');
-        expect(button).toHaveAttribute('title', 'Switch to light theme');
-    });
-
-    test('calls toggleTheme on click', async () => {
-        mockUseTheme.mockReturnValue({
-            theme: 'light',
-            toggleTheme: mockToggleTheme
-        });
-
-        render(<ThemeToggle />);
-        const button = screen.getByTestId('theme-toggle');
-
-        await userEvent.click(button);
-
-        expect(mockToggleTheme).toHaveBeenCalledTimes(1);
+        await userEvent.click(screen.getByTestId('theme-toggle-light'));
+        expect(mockSetThemeMode).toHaveBeenCalledWith('light');
     });
 
     test('applies custom className', () => {
         mockUseTheme.mockReturnValue({
-            theme: 'light',
-            toggleTheme: mockToggleTheme
+            themeMode: 'light',
+            setThemeMode: mockSetThemeMode
         });
 
         render(<ThemeToggle className="custom-class" />);
-        const button = screen.getByTestId('theme-toggle');
-        expect(button).toHaveClass('custom-class');
+        const container = screen.getByTestId('theme-toggle');
+        expect(container).toHaveClass('custom-class');
     });
 });
