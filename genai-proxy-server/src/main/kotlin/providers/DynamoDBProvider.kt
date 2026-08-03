@@ -27,6 +27,7 @@ import com.genflowly.DynamoDBConstants.VENDOR_KEY
 import com.genflowly.DynamoDBConstants.VERSION_KEY
 import com.genflowly.DynamoDBConstants.LATEST_VERSION_KEY
 import com.genflowly.DynamoDBConstants.DELETED_AT_KEY
+import com.genflowly.DynamoDBConstants.ARCHIVED_AT_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_GRAPH_NODES_GSI_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_GRAPHS_GSI_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_CONTENT_KEY
@@ -166,6 +167,74 @@ class DynamoDBProvider(
             logger.info("Updated title for conversation $conversationId to '$title'")
         } catch (e: Exception) {
             logger.error("Failed to update conversation title in DynamoDB", e)
+        }
+    }
+
+    suspend fun archiveConversation(
+        conversationId: String,
+        customerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("SET #aa = :now")
+                    .expressionAttributeNames(mapOf("#aa" to ARCHIVED_AT_KEY))
+                    .expressionAttributeValues(mapOf(":now" to AttributeValue.builder().s(Instant.now().toString()).build()))
+                    .build()
+            )
+            logger.info("Archived conversation $conversationId for customer $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to archive conversation $conversationId", e)
+            throw e
+        }
+    }
+
+    suspend fun unarchiveConversation(
+        conversationId: String,
+        customerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("REMOVE #aa")
+                    .expressionAttributeNames(mapOf("#aa" to ARCHIVED_AT_KEY))
+                    .build()
+            )
+            logger.info("Unarchived conversation $conversationId for customer $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to unarchive conversation $conversationId", e)
+            throw e
+        }
+    }
+
+    suspend fun isConversationArchived(
+        conversationId: String,
+        customerId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val getReq = GetItemRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                ))
+                .projectionExpression(ARCHIVED_AT_KEY)
+                .build()
+            val response = dynamoDbClient.getItem(getReq)
+            response.item()?.containsKey(ARCHIVED_AT_KEY) == true
+        } catch (e: Exception) {
+            logger.error("Failed to check archive status for conversation $conversationId", e)
+            false
         }
     }
 
@@ -1241,6 +1310,34 @@ class DynamoDBProvider(
         }
     }
 
+    suspend fun unshareAllConversationWithCustomer(
+        conversationId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val request = QueryRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+                .indexName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_GSI_KEY)
+                .keyConditionExpression("$CONVERSATION_ID_KEY = :id")
+                .expressionAttributeValues(
+                    mapOf(":id" to AttributeValue.builder().s(conversationId).build())
+                )
+                .build()
+
+            val response = dynamoDbClient.query(request)
+            
+            response.items().forEach { item ->
+                val sharedWithCustomerId = item[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s()
+                if (sharedWithCustomerId != null) {
+                    unshareConversationWithCustomer(conversationId, sharedWithCustomerId)
+                }
+            }
+            logger.info("Unshared all for conversation $conversationId")
+        } catch (e: Exception) {
+            logger.error("Failed to unshare all for conversation $conversationId", e)
+            throw e
+        }
+    }
+
     /**
      * Returns (conversationId, role) pairs for every conversation shared with [customerId],
      * including any PUBLIC entries the customer inherits.
@@ -1377,7 +1474,8 @@ class DynamoDBProvider(
             .tableName(CONVERSATION_TABLE)
             .indexName(CONVERSATION_CUSTOMER_GSI_KEY)
             .keyConditionExpression("#cid = :cid")
-            .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+            .filterExpression("attribute_not_exists(#aa)")
+            .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY, "#aa" to ARCHIVED_AT_KEY))
             .expressionAttributeValues(mapOf(
                 ":cid" to AttributeValue.builder().s(customerId).build()
             ))

@@ -4,14 +4,16 @@ import '@testing-library/jest-dom'
 import ConversationHistoryComponent from '../../../../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent'
 import { useAuth } from '../../../../context/AuthContext'
 import { useConversation } from '../../../../context/ConversationContext'
-import { getCustomerConversations } from '../../../../services/conversationHistoryService'
+import { getCustomerConversations, archiveConversation } from '../../../../services/conversationHistoryService'
 
 jest.mock('../../../../context/AuthContext')
 jest.mock('../../../../context/ConversationContext')
 jest.mock('../../../../services/conversationHistoryService')
+let mockParams = { conversationId: undefined as string | undefined }
+
 jest.mock('react-router-dom', () => ({
     useNavigate: () => mockNavigate,
-    useParams: () => ({ conversationId: undefined }),
+    useParams: () => mockParams,
 }))
 jest.mock('../../../../components/widgets/ConversationHistoryWidget/ConversationHistory.module.scss', () => ({}), { virtual: true })
 
@@ -28,7 +30,10 @@ function setupMocks({
     isAuthenticated = true,
     conversationId = '',
     conversationTitle = null as string | null,
+    activeId = undefined as string | undefined,
 } = {}) {
+    mockParams = { conversationId: activeId }
+    mockGetAccessTokenSilently.mockResolvedValue('mock-token')
     ;(useAuth as jest.Mock).mockReturnValue({
         isAuthenticated,
         getAccessTokenSilently: mockGetAccessTokenSilently,
@@ -229,5 +234,73 @@ describe('ConversationHistoryComponent', () => {
 
         // No new item should have been prepended
         expect(screen.queryByText('Some Title')).not.toBeInTheDocument()
+    })
+
+    test('archives a conversation when archive button is clicked', async () => {
+        ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
+
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        })
+
+        const archiveBtn = screen.getByTestId('conv-archive-btn-conv-1')
+        fireEvent.click(archiveBtn)
+
+        await waitFor(() => {
+            expect(archiveConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+        })
+
+        // Wait for it to be removed from the list
+        await waitFor(() => {
+            expect(screen.queryByTestId('conv-history-item-conv-1')).not.toBeInTheDocument()
+        })
+    })
+
+    test('navigates to / if the archived conversation is the active one', async () => {
+        setupMocks({ conversationId: 'conv-1', conversationTitle: null, activeId: 'conv-1' })
+        ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
+
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        })
+
+        const archiveBtn = screen.getByTestId('conv-archive-btn-conv-1')
+        fireEvent.click(archiveBtn)
+
+        await waitFor(() => {
+            expect(archiveConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+        })
+
+        await waitFor(() => {
+            expect(mockNavigate).toHaveBeenCalledWith('/')
+        })
+    })
+
+    test('does not navigate to / if the archived conversation is not the active one', async () => {
+        setupMocks({ conversationId: 'conv-2', conversationTitle: null, activeId: 'conv-2' })
+        ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
+
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        })
+
+        const archiveBtn = screen.getByTestId('conv-archive-btn-conv-1')
+        fireEvent.click(archiveBtn)
+
+        await waitFor(() => {
+            expect(archiveConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+        })
+
+        await waitFor(() => {
+            expect(screen.queryByTestId('conv-history-item-conv-1')).not.toBeInTheDocument()
+        })
+
+        expect(mockNavigate).not.toHaveBeenCalledWith('/')
     })
 })

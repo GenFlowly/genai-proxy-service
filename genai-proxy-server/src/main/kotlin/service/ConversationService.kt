@@ -11,6 +11,7 @@ import models.Message
 import models.Prompt
 
 class ConversationAccessDeniedException(message: String) : Exception(message)
+class ConversationArchivedException(message: String) : Exception(message)
 
 class ConversationService(
     private val kmsProvider: KMSProvider,
@@ -89,6 +90,11 @@ class ConversationService(
         role: String
     ) {
         requireEditOrOwner(conversationId, sharedByCustomerId, action = "share")
+        val owner = dynamoDBProvider.getConversationById(conversationId)
+            ?: throw ConversationAccessDeniedException("Conversation not found")
+        if (dynamoDBProvider.isConversationArchived(conversationId, owner.customerId)) {
+            throw ConversationArchivedException("Cannot share an archived conversation")
+        }
         dynamoDBProvider.shareConversationWithCustomer(conversationId, targetCustomerId, sharedByCustomerId, role)
     }
 
@@ -138,6 +144,27 @@ class ConversationService(
         requireEditOrOwner(conversationId, customerId, action = "rename")
         val owner = dynamoDBProvider.getConversationById(conversationId) ?: return
         dynamoDBProvider.updateConversationTitle(conversationId, owner.customerId, title)
+    }
+
+    suspend fun archiveConversation(
+        conversationId: String,
+        customerId: String
+    ) {
+        requireEditOrOwner(conversationId, customerId, action = "archive")
+        val owner = dynamoDBProvider.getConversationById(conversationId)
+            ?: throw ConversationAccessDeniedException("Conversation not found")
+        dynamoDBProvider.archiveConversation(conversationId, owner.customerId)
+        dynamoDBProvider.unshareAllConversationWithCustomer(conversationId)
+    }
+
+    suspend fun unarchiveConversation(
+        conversationId: String,
+        customerId: String
+    ) {
+        requireEditOrOwner(conversationId, customerId, action = "unarchive")
+        val owner = dynamoDBProvider.getConversationById(conversationId)
+            ?: throw ConversationAccessDeniedException("Conversation not found")
+        dynamoDBProvider.unarchiveConversation(conversationId, owner.customerId)
     }
 
     suspend fun getCustomerConversationsPaginated(

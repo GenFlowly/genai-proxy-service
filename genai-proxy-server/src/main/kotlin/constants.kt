@@ -14,7 +14,7 @@ object DynamoDBConstants {
 
     const val CONVERSATION_TABLE = "Conversation"
     const val CONVERSATION_ID_KEY = "conversationId"
-    const val CONVERSATION_CUSTOMER_GSI_KEY = "customerIdIndex"
+    const val CONVERSATION_CUSTOMER_GSI_KEY = "customerIdIndexV2"
 
     const val MESSAGE_TABLE = "Message"
     const val MESSAGE_ID_SORT_KEY = "messageId"
@@ -56,6 +56,7 @@ object DynamoDBConstants {
     const val VERSION_KEY = "version"
     const val LATEST_VERSION_KEY = "latestVersion"
     const val DELETED_AT_KEY = "deletedAt"
+    const val ARCHIVED_AT_KEY = "archivedAt"
 
     // Tool credentials — per-customer, per-toolType
     const val CUSTOMER_TOOL_CREDENTIALS_TABLE = "CustomerToolCredentials"

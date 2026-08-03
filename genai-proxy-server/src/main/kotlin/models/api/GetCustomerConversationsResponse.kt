@@ -8,7 +8,8 @@ data class ConversationSummary(
     val title: String?,
     val createdAt: String?,
     val updatedAt: String?,
-    val role: String = "OWNER"
+    val role: String = "OWNER",
+    val archivedAt: String? = null
 )
 
 @Serializable
