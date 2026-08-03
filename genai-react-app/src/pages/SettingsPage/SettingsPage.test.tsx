@@ -45,7 +45,7 @@ describe('SettingsPage', () => {
 
         expect(screen.getByTestId('navbar')).toBeInTheDocument();
         expect(screen.getByTestId('left-sidebar')).toHaveAttribute('data-widget-ids', '["SIDEBAR_MENU"]');
-        expect(screen.getByTestId('center-section')).toHaveAttribute('data-widget-ids', '["CONFIGURE_AI_VENDOR_SETTINGS","DATABASE_CONNECTIONS_SETTINGS"]');
+        expect(screen.getByTestId('center-section')).toHaveAttribute('data-widget-ids', '["PROFILE_SETTINGS","CONFIGURE_AI_VENDOR_SETTINGS","DATABASE_CONNECTIONS_SETTINGS"]');
 
         expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(true);
     });

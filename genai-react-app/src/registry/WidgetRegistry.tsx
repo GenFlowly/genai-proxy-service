@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { lazy } from 'react'
 
 import InstructionSidebarWidget from '../components/widgets/SidebarWidgets/InstructionSidebarWidget/InstructionSidebarWidget'
 import ConversationHistorySidebarWidget from '../components/widgets/SidebarWidgets/ConversationHistorySidebarWidget/ConversationHistorySidebarWidget'
@@ -73,6 +73,11 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
         id: 'CONFIGURE_AI_VENDOR_SETTINGS',
         component: ConfigureAIVendorSettingsWidget,
         name: 'AI Vendor API Keys',
+    },
+    'PROFILE_SETTINGS': {
+        id: 'PROFILE_SETTINGS',
+        name: 'Profile Settings',
+        component: lazy(() => import('../components/widgets/ProfileSettingsWidget/ProfileSettingsWidget'))
     },
     'DATABASE_CONNECTIONS_SETTINGS': {
         id: 'DATABASE_CONNECTIONS_SETTINGS',

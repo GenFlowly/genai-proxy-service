@@ -7,5 +7,6 @@ data class InstructionResponse(
     val id: String,
     val version: Int,
     val name: String,
-    val instruction: String
+    val instruction: String,
+    val role: String = "OWNER"
 )

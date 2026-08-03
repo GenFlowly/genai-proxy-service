@@ -3,6 +3,7 @@ import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
 import MarkdownEditor, { fullscreen, preview } from '@uiw/react-markdown-editor'
 import { EditorView } from '@codemirror/view'
+import { EditorState } from '@codemirror/state'
 import styles from './PromptEditor.module.scss'
 import { addStepsCommand, addExamplesCommand, addCopyCommand } from './CustomToolbarCommands'
 
@@ -14,9 +15,10 @@ interface PromptEditorCoreProps {
     height?: string
     className?: string
     'data-testid'?: string
+    readOnly?: boolean
 }
 
-export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "40.25rem", className = '', 'data-testid': testId }: PromptEditorCoreProps): React.ReactElement {
+export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "40.25rem", className = '', 'data-testid': testId, readOnly = false }: PromptEditorCoreProps): React.ReactElement {
 
     return (
         <div className={`${styles.container} ${className}`} data-testid={testId} style={height === '100%' ? { height: '100%' } : {}}>
@@ -41,7 +43,10 @@ export default function PromptEditorCore({ id, value, onChange, disableCache = f
                                 fullscreen,
                                 addCopyCommand,
                             ]}
-                            extensions={[EditorView.lineWrapping]}
+                            extensions={[
+                                EditorView.lineWrapping,
+                                ...(readOnly ? [EditorView.editable.of(false), EditorState.readOnly.of(true)] : [])
+                            ]}
                         />
                     </div>
                     <div className={styles.controlsRow}>

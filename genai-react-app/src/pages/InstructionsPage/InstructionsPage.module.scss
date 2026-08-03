@@ -1,0 +1,51 @@
+@import '../../styles/variables.scss';
+@import '../../styles/mixins.scss';
+
+.page {
+    height: 100vh;
+    overflow: hidden;
+    background-color: var(--color-background-primary, #ffffff);
+    display: flex;
+    flex-direction: column;
+}
+
+.pageContainer {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+    overflow-y: auto;
+    width: 100%;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--theme-text-color, #111827);
+    margin: 0;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.emptyState {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 300px;
+    background-color: var(--theme-surface-color, #ffffff);
+    border: 1px dashed var(--theme-border-color, #d1d5db);
+    border-radius: 12px;
+    color: var(--theme-text-muted-color, #6b7280);
+    font-size: 1.1rem;
+}

@@ -146,3 +146,42 @@
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
+
+.itemRow {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    &:hover .archiveBtn {
+        opacity: 1;
+    }
+}
+
+.archiveBtn {
+    position: absolute;
+    right: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary, #888);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+    z-index: 1;
+
+    &:hover {
+        background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+        color: var(--text-primary, #fff);
+    }
+}
+
+.archiveIcon {
+    width: 14px;
+    height: 14px;
+}

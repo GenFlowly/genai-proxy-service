@@ -27,6 +27,7 @@ import com.genflowly.DynamoDBConstants.VENDOR_KEY
 import com.genflowly.DynamoDBConstants.VERSION_KEY
 import com.genflowly.DynamoDBConstants.LATEST_VERSION_KEY
 import com.genflowly.DynamoDBConstants.DELETED_AT_KEY
+import com.genflowly.DynamoDBConstants.ARCHIVED_AT_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_GRAPH_NODES_GSI_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_GRAPHS_GSI_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_CONTENT_KEY
@@ -166,6 +167,74 @@ class DynamoDBProvider(
             logger.info("Updated title for conversation $conversationId to '$title'")
         } catch (e: Exception) {
             logger.error("Failed to update conversation title in DynamoDB", e)
+        }
+    }
+
+    suspend fun archiveConversation(
+        conversationId: String,
+        customerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("SET #aa = :now")
+                    .expressionAttributeNames(mapOf("#aa" to ARCHIVED_AT_KEY))
+                    .expressionAttributeValues(mapOf(":now" to AttributeValue.builder().s(Instant.now().toString()).build()))
+                    .build()
+            )
+            logger.info("Archived conversation $conversationId for customer $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to archive conversation $conversationId", e)
+            throw e
+        }
+    }
+
+    suspend fun unarchiveConversation(
+        conversationId: String,
+        customerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("REMOVE #aa")
+                    .expressionAttributeNames(mapOf("#aa" to ARCHIVED_AT_KEY))
+                    .build()
+            )
+            logger.info("Unarchived conversation $conversationId for customer $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to unarchive conversation $conversationId", e)
+            throw e
+        }
+    }
+
+    suspend fun isConversationArchived(
+        conversationId: String,
+        customerId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val getReq = GetItemRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                ))
+                .projectionExpression(ARCHIVED_AT_KEY)
+                .build()
+            val response = dynamoDbClient.getItem(getReq)
+            response.item()?.containsKey(ARCHIVED_AT_KEY) == true
+        } catch (e: Exception) {
+            logger.error("Failed to check archive status for conversation $conversationId", e)
+            false
         }
     }
 
@@ -621,6 +690,33 @@ class DynamoDBProvider(
         }
     }
 
+    private suspend fun generateAndReserveUsername(sub: String, client: String, customerId: String, name: String?): String {
+        var attempt = 0
+        val baseUsername = name?.lowercase()?.replace(Regex("[^a-z0-9]"), "")?.takeIf { it.isNotBlank() } ?: "user"
+        
+        while(attempt < 3) {
+            val hash = java.util.UUID.randomUUID().toString().substring(0, 6)
+            val generatedUsername = "$baseUsername-$hash"
+            
+            try {
+                val putUsernameReq = PutItemRequest.builder()
+                    .tableName("UsernameLookup")
+                    .item(mapOf(
+                        "username" to AttributeValue.builder().s(generatedUsername).build(),
+                        "recordType" to AttributeValue.builder().s("USER").build(),
+                        "customerId" to AttributeValue.builder().s(customerId).build()
+                    ))
+                    .conditionExpression("attribute_not_exists(username)")
+                    .build()
+                dynamoDbClient.putItem(putUsernameReq)
+                return generatedUsername
+            } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
+                attempt++
+            }
+        }
+        throw IllegalStateException("Failed to generate unique username after 3 attempts")
+    }
+
     suspend fun onboardCustomer(
         sub: String,
         client: String,
@@ -628,7 +724,9 @@ class DynamoDBProvider(
         email: String?,
         name: String?,
         picture: String?
-    ) = withContext(Dispatchers.IO) {
+    ): String = withContext(Dispatchers.IO) {
+        val generatedUsername = generateAndReserveUsername(sub, client, customerId, name)
+
         val baseItem = buildMap {
             put(SUB_PARTITION_KEY, AttributeValue.builder().s(sub).build())
             put(CLIENT_SORT_KEY, AttributeValue.builder().s(client).build())
@@ -637,6 +735,9 @@ class DynamoDBProvider(
             email?.let { put("email", AttributeValue.builder().s(it).build()) }
             name?.let { put("name", AttributeValue.builder().s(it).build()) }
             picture?.let { put("picture", AttributeValue.builder().s(it).build()) }
+            
+            put("username", AttributeValue.builder().s(generatedUsername).build())
+            put("isDiscoverable", AttributeValue.builder().bool(false).build())
         }
 
         val item = withTimestamps(baseItem)
@@ -648,23 +749,186 @@ class DynamoDBProvider(
 
         dynamoDbClient.putItem(putReq)
         logger.info { "Onboarded user $sub in DynamoDB with customerId: $customerId" }
+        generatedUsername
     }
+
+    suspend fun getCustomerProfileByCustomerId(customerId: String): Map<String, AttributeValue>? =
+        withContext(Dispatchers.IO) {
+            val queryReq = QueryRequest.builder()
+                .tableName(CUSTOMER_PROFILE_TABLE)
+                .indexName("customerIdIndex")
+                .keyConditionExpression("customerId = :cid")
+                .expressionAttributeValues(
+                    mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+                )
+                .limit(1)
+                .build()
+                
+            val response = dynamoDbClient.query(queryReq)
+            val item = response.items().firstOrNull() ?: return@withContext null
+            
+            // Re-use logic to ensure username is populated? 
+            // In getCustomerProfile we check if username exists. Let's just return the item here.
+            // If they need username generation, it should happen at onboarding.
+            if (!item.containsKey("username") || item["username"]?.s().isNullOrBlank()) {
+                // If it doesn't have a username, we shouldn't really be doing generateAndReserveUsername here since we don't have sub/client easily without parsing them from the item.
+                // But the item HAS sub and client. We can defer to getCustomerProfile to handle it.
+                val sub = item["sub"]?.s()
+                val client = item["client"]?.s()
+                if (sub != null && client != null) {
+                    return@withContext getCustomerProfile(sub, client)
+                }
+            }
+            item
+        }
 
     suspend fun getCustomerProfile(sub: String, client: String): Map<String, AttributeValue>? =
         withContext(Dispatchers.IO) {
-            val key = mapOf(
-                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
-                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
-            )
-
             val request = GetItemRequest.builder()
                 .tableName(CUSTOMER_PROFILE_TABLE)
-                .key(key)
+                .key(
+                    mapOf(
+                        SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                        CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+                    )
+                )
                 .build()
 
             val response = dynamoDbClient.getItem(request)
-            return@withContext if (response.hasItem()) response.item() else null
+            var item = response.item().takeIf { it.isNotEmpty() } ?: return@withContext null
+
+            if (!item.containsKey("username") || item["username"]?.s().isNullOrBlank()) {
+                val customerId = item["customerId"]?.s() ?: return@withContext item
+                val name = item["name"]?.s()
+                
+                try {
+                    val generatedUsername = generateAndReserveUsername(sub, client, customerId, name)
+                    val updateReq = UpdateItemRequest.builder()
+                        .tableName(CUSTOMER_PROFILE_TABLE)
+                        .key(mapOf(
+                            SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                            CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+                        ))
+                        .updateExpression("SET username = :u, isDiscoverable = if_not_exists(isDiscoverable, :d)")
+                        .expressionAttributeValues(mapOf(
+                            ":u" to AttributeValue.builder().s(generatedUsername).build(),
+                            ":d" to AttributeValue.builder().bool(false).build()
+                        ))
+                        .build()
+                    dynamoDbClient.updateItem(updateReq)
+                    
+                    val updatedItem = item.toMutableMap()
+                    updatedItem["username"] = AttributeValue.builder().s(generatedUsername).build()
+                    if (!updatedItem.containsKey("isDiscoverable")) {
+                        updatedItem["isDiscoverable"] = AttributeValue.builder().bool(false).build()
+                    }
+                    item = updatedItem
+                } catch (e: Exception) {
+                    logger.error("Failed to lazy generate username for $sub", e)
+                }
+            }
+
+            return@withContext item
         }
+
+    suspend fun updateUsername(
+        sub: String,
+        client: String,
+        customerId: String,
+        oldUsername: String?,
+        newUsername: String
+    ) = withContext(Dispatchers.IO) {
+        // Reserve new username
+        val putUsernameReq = PutItemRequest.builder()
+            .tableName("UsernameLookup")
+            .item(mapOf(
+                "username" to AttributeValue.builder().s(newUsername).build(),
+                "recordType" to AttributeValue.builder().s("USER").build(),
+                "customerId" to AttributeValue.builder().s(customerId).build()
+            ))
+            .conditionExpression("attribute_not_exists(username)")
+            .build()
+        
+        try {
+            dynamoDbClient.putItem(putUsernameReq)
+        } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
+            throw IllegalArgumentException("Username is already taken")
+        }
+        
+        // Update profile
+        val updateReq = UpdateItemRequest.builder()
+            .tableName(CUSTOMER_PROFILE_TABLE)
+            .key(mapOf(
+                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+            ))
+            .updateExpression("SET username = :u")
+            .expressionAttributeValues(mapOf(":u" to AttributeValue.builder().s(newUsername).build()))
+            .build()
+        dynamoDbClient.updateItem(updateReq)
+        
+        // Cleanup old
+        if (!oldUsername.isNullOrBlank()) {
+            val delReq = DeleteItemRequest.builder()
+                .tableName("UsernameLookup")
+                .key(mapOf("username" to AttributeValue.builder().s(oldUsername).build()))
+                .build()
+            dynamoDbClient.deleteItem(delReq)
+        }
+    }
+
+    suspend fun updateDiscoverability(
+        sub: String,
+        client: String,
+        isDiscoverable: Boolean
+    ) = withContext(Dispatchers.IO) {
+        val updateReq = UpdateItemRequest.builder()
+            .tableName(CUSTOMER_PROFILE_TABLE)
+            .key(mapOf(
+                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+            ))
+            .updateExpression("SET isDiscoverable = :d")
+            .expressionAttributeValues(mapOf(":d" to AttributeValue.builder().bool(isDiscoverable).build()))
+            .build()
+        dynamoDbClient.updateItem(updateReq)
+    }
+
+    suspend fun searchByUsername(usernamePrefix: String): List<com.genflowly.models.api.SearchCustomerResponse> = withContext(Dispatchers.IO) {
+        val queryReq = QueryRequest.builder()
+            .tableName("UsernameLookup")
+            .indexName("recordTypeIndex")
+            .keyConditionExpression("recordType = :type AND begins_with(username, :prefix)")
+            .expressionAttributeValues(mapOf(
+                ":type" to AttributeValue.builder().s("USER").build(),
+                ":prefix" to AttributeValue.builder().s(usernamePrefix).build()
+            ))
+            .limit(5)
+            .build()
+        
+        val response = dynamoDbClient.query(queryReq)
+        val results = mutableListOf<com.genflowly.models.api.SearchCustomerResponse>()
+        
+        for (item in response.items()) {
+            val customerId = item["customerId"]?.s() ?: continue
+            val username = item["username"]?.s() ?: continue
+            
+            val profileItem = getCustomerProfileByCustomerId(customerId) ?: continue
+            val isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false
+            if (!isDiscoverable) continue
+            
+            results.add(
+                com.genflowly.models.api.SearchCustomerResponse(
+                    customerId = profileItem["customerId"]?.s() ?: "",
+                    name = profileItem["name"]?.s(),
+                    username = username,
+                    picture = profileItem["picture"]?.s()
+                )
+            )
+        }
+        
+        results
+    }
 
     /**
      * Query customer profile by sub only (partition key)
@@ -863,6 +1127,335 @@ class DynamoDBProvider(
         )
     }
 
+    suspend fun shareEntityWithCustomer(entityId: String, sharedWithCustomerId: String, sharedByCustomerId: String, role: String) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
+                INSTRUCTION_ID_KEY to AttributeValue.builder().s(entityId).build(),
+                com.genflowly.DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedByCustomerId).build(),
+                com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY to AttributeValue.builder().s(role).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Shared entity $entityId with $sharedWithCustomerId (by $sharedByCustomerId, role=$role)")
+        } catch (e: Exception) {
+            logger.error("Failed to share entity", e)
+            throw e
+        }
+    }
+
+    suspend fun unshareEntityWithCustomer(entityId: String, sharedWithCustomerId: String) = withContext(Dispatchers.IO) {
+        try {
+            val deleteReq = DeleteItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
+                .key(
+                    mapOf(
+                        com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
+                        INSTRUCTION_ID_KEY to AttributeValue.builder().s(entityId).build()
+                    )
+                )
+                .build()
+
+            dynamoDbClient.deleteItem(deleteReq)
+            logger.info("Unshared entity $entityId with $sharedWithCustomerId")
+        } catch (e: Exception) {
+            logger.error("Failed to unshare entity", e)
+            throw e
+        }
+    }
+
+    suspend fun getSharedEntityIdsForCustomer(customerId: String, prefix: String? = null): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
+            .keyConditionExpression("${com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY} = :cid")
+            .expressionAttributeValues(
+                mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        response.items().mapNotNull { item ->
+            val id = item[INSTRUCTION_ID_KEY]?.s()
+            val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+            if (id != null) id to role else null
+        }.filter { prefix == null || it.first.startsWith(prefix) }
+    }
+
+    suspend fun getUsersWithSharedEntity(entityId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
+            .indexName("instructionIdIndex")
+            .keyConditionExpression("$INSTRUCTION_ID_KEY = :id")
+            .expressionAttributeValues(
+                mapOf(":id" to AttributeValue.builder().s(entityId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        
+        response.items().mapNotNull { item ->
+            val customerId = item[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
+            val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+            
+            if (customerId == "PUBLIC") {
+                return@mapNotNull models.CustomerProfile(
+                    customerId = "PUBLIC",
+                    sub = "",
+                    client = "",
+                    email = null,
+                    name = "Public",
+                    picture = null,
+                    username = "Public",
+                    isDiscoverable = true,
+                    role = role
+                )
+            }
+            
+            val profileItem = getCustomerProfileByCustomerId(customerId)
+            if (profileItem != null) {
+                models.CustomerProfile(
+                    customerId = customerId,
+                    sub = profileItem["sub"]?.s() ?: "",
+                    client = profileItem["client"]?.s() ?: "",
+                    email = profileItem["email"]?.s(),
+                    name = profileItem["name"]?.s(),
+                    picture = profileItem["picture"]?.s(),
+                    username = profileItem["username"]?.s(),
+                    isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false,
+                    role = role
+                )
+            } else null
+        }
+    }
+
+    /**
+     * Looks up a Conversation row by conversationId alone via the [CONVERSATION_ID_GSI_KEY] GSI.
+     * Needed for users who have a conversation shared with them and therefore don't
+     * know the owner's customerId.
+     */
+    suspend fun getConversationById(conversationId: String): Conversation? = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(CONVERSATION_TABLE)
+            .indexName(com.genflowly.DynamoDBConstants.CONVERSATION_ID_GSI_KEY)
+            .keyConditionExpression("$CONVERSATION_ID_KEY = :cid")
+            .expressionAttributeValues(mapOf(
+                ":cid" to AttributeValue.builder().s(conversationId).build()
+            ))
+            .limit(1)
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        val item = response.items().firstOrNull() ?: return@withContext null
+        val ownerCustomerId = item[CUSTOMER_ID_KEY]?.s() ?: return@withContext null
+        val client = item["client"]?.s() ?: return@withContext null
+        Conversation(
+            conversationId = conversationId,
+            customerId = ownerCustomerId,
+            client = client
+        )
+    }
+
+    suspend fun shareConversationWithCustomer(
+        conversationId: String,
+        sharedWithCustomerId: String,
+        sharedByCustomerId: String,
+        role: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
+                CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build(),
+                com.genflowly.DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedByCustomerId).build(),
+                com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY to AttributeValue.builder().s(role).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Shared conversation $conversationId with $sharedWithCustomerId (by $sharedByCustomerId, role=$role)")
+        } catch (e: Exception) {
+            logger.error("Failed to share conversation", e)
+            throw e
+        }
+    }
+
+    suspend fun unshareConversationWithCustomer(
+        conversationId: String,
+        sharedWithCustomerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val deleteReq = DeleteItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+                .key(
+                    mapOf(
+                        com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    )
+                )
+                .build()
+
+            dynamoDbClient.deleteItem(deleteReq)
+            logger.info("Unshared conversation $conversationId with $sharedWithCustomerId")
+        } catch (e: Exception) {
+            logger.error("Failed to unshare conversation", e)
+            throw e
+        }
+    }
+
+    suspend fun unshareAllConversationWithCustomer(
+        conversationId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val request = QueryRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+                .indexName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_GSI_KEY)
+                .keyConditionExpression("$CONVERSATION_ID_KEY = :id")
+                .expressionAttributeValues(
+                    mapOf(":id" to AttributeValue.builder().s(conversationId).build())
+                )
+                .build()
+
+            val response = dynamoDbClient.query(request)
+            
+            response.items().forEach { item ->
+                val sharedWithCustomerId = item[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s()
+                if (sharedWithCustomerId != null) {
+                    unshareConversationWithCustomer(conversationId, sharedWithCustomerId)
+                }
+            }
+            logger.info("Unshared all for conversation $conversationId")
+        } catch (e: Exception) {
+            logger.error("Failed to unshare all for conversation $conversationId", e)
+            throw e
+        }
+    }
+
+    /**
+     * Returns (conversationId, role) pairs for every conversation shared with [customerId],
+     * including any PUBLIC entries the customer inherits.
+     */
+    suspend fun getSharedConversationIdsForCustomer(customerId: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+            .keyConditionExpression("${com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY} = :cid")
+            .expressionAttributeValues(
+                mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+        response.items().mapNotNull { item ->
+            val id = item[CONVERSATION_ID_KEY]?.s()
+            val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+            if (id != null) id to role else null
+        }
+    }
+
+    /**
+     * Returns the effective share role for [customerId] on [conversationId] via a direct
+     * SharedConversations lookup, or null if no share exists. Does NOT consider PUBLIC —
+     * callers should check PUBLIC separately.
+     */
+    suspend fun getConversationShare(conversationId: String, customerId: String): String? = withContext(Dispatchers.IO) {
+        val request = GetItemRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+            .key(mapOf(
+                com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+            ))
+            .build()
+        val item = dynamoDbClient.getItem(request).item()
+        if (item.isNullOrEmpty()) null
+        else item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s()
+    }
+
+    suspend fun getUsersWithSharedConversation(conversationId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
+        val request = QueryRequest.builder()
+            .tableName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
+            .indexName(com.genflowly.DynamoDBConstants.SHARED_CONVERSATIONS_GSI_KEY)
+            .keyConditionExpression("$CONVERSATION_ID_KEY = :id")
+            .expressionAttributeValues(
+                mapOf(":id" to AttributeValue.builder().s(conversationId).build())
+            )
+            .build()
+
+        val response = dynamoDbClient.query(request)
+
+        response.items().mapNotNull { item ->
+            val customerId = item[com.genflowly.DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
+            val role = item[com.genflowly.DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+
+            if (customerId == "PUBLIC") {
+                return@mapNotNull models.CustomerProfile(
+                    customerId = "PUBLIC",
+                    sub = "",
+                    client = "",
+                    email = null,
+                    name = "Public",
+                    picture = null,
+                    username = "Public",
+                    isDiscoverable = true,
+                    role = role
+                )
+            }
+
+            val profileItem = getCustomerProfileByCustomerId(customerId)
+            if (profileItem != null) {
+                models.CustomerProfile(
+                    customerId = customerId,
+                    sub = profileItem["sub"]?.s() ?: "",
+                    client = profileItem["client"]?.s() ?: "",
+                    email = profileItem["email"]?.s(),
+                    name = profileItem["name"]?.s(),
+                    picture = profileItem["picture"]?.s(),
+                    username = profileItem["username"]?.s(),
+                    isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false,
+                    role = role
+                )
+            } else null
+        }
+    }
+
+    suspend fun deleteInstruction(instructionId: String) = withContext(Dispatchers.IO) {
+        try {
+            // Get all versions of this instruction to delete them
+            val request = QueryRequest.builder()
+                .tableName(INSTRUCTION_TABLE)
+                .keyConditionExpression("$INSTRUCTION_ID_KEY = :id")
+                .expressionAttributeValues(
+                    mapOf(":id" to AttributeValue.builder().s(instructionId).build())
+                )
+                .build()
+
+            val response = dynamoDbClient.query(request)
+            val items = response.items()
+            
+            for (item in items) {
+                val version = item[INSTRUCTION_VERSION_KEY]?.n() ?: continue
+                val deleteReq = software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest.builder()
+                    .tableName(INSTRUCTION_TABLE)
+                    .key(mapOf(
+                        INSTRUCTION_ID_KEY to AttributeValue.builder().s(instructionId).build(),
+                        INSTRUCTION_VERSION_KEY to AttributeValue.builder().n(version).build()
+                    ))
+                    .build()
+                dynamoDbClient.deleteItem(deleteReq)
+            }
+            logger.info("Deleted ${items.size} versions of instruction $instructionId")
+        } catch (e: Exception) {
+            logger.error("Failed to delete instruction $instructionId", e)
+            throw e
+        }
+    }
+
     /**
      * Fetches up to [pageSize] conversations for the given customer, newest first,
      * using a GSI on the Conversation table keyed by customerId.
@@ -881,7 +1474,8 @@ class DynamoDBProvider(
             .tableName(CONVERSATION_TABLE)
             .indexName(CONVERSATION_CUSTOMER_GSI_KEY)
             .keyConditionExpression("#cid = :cid")
-            .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+            .filterExpression("attribute_not_exists(#aa)")
+            .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY, "#aa" to ARCHIVED_AT_KEY))
             .expressionAttributeValues(mapOf(
                 ":cid" to AttributeValue.builder().s(customerId).build()
             ))
