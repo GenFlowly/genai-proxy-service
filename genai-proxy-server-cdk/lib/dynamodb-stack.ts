@@ -65,19 +65,6 @@ export class DynamoDBStack extends cdk.Stack {
             },
             globalSecondaryIndexes: [
                 {
-                    indexName: 'customerIdIndex',
-                    partitionKey: {
-                        name: 'customerId',
-                        type: dynamodb.AttributeType.STRING,
-                    },
-                    sortKey: {
-                        name: 'createdAt',
-                        type: dynamodb.AttributeType.STRING,
-                    },
-                    projectionType: dynamodb.ProjectionType.INCLUDE,
-                    nonKeyAttributes: ['conversationId', 'title', 'updatedAt'],
-                },
-                {
                     // Enables paginated listing of all conversations for a customer,
                     // sorted newest-first by createdAt.
                     indexName: 'customerIdIndexV2',
