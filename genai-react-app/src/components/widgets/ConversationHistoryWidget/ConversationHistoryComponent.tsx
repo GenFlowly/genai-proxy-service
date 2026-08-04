@@ -142,6 +142,23 @@ export default function ConversationHistoryComponent() {
 
     const groupedItems = useMemo(() => groupConversations(items), [items])
 
+    const [isScrolling, setIsScrolling] = useState(false)
+    const scrollTimeout = React.useRef<NodeJS.Timeout | null>(null)
+
+    const handleScroll = useCallback(() => {
+        setIsScrolling(true)
+        if (scrollTimeout.current) clearTimeout(scrollTimeout.current)
+        scrollTimeout.current = setTimeout(() => {
+            setIsScrolling(false)
+        }, 800)
+    }, [])
+
+    useEffect(() => {
+        return () => {
+            if (scrollTimeout.current) clearTimeout(scrollTimeout.current)
+        }
+    }, [])
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
@@ -163,7 +180,11 @@ export default function ConversationHistoryComponent() {
             ) : items.length === 0 ? (
                 <div className={styles.emptyState}>No conversations yet</div>
             ) : (
-                <div className={styles.list} aria-label="Conversation history">
+                <div 
+                    className={`${styles.list} ${isScrolling ? styles.scrolling : ''}`} 
+                    aria-label="Conversation history"
+                    onScroll={handleScroll}
+                >
                     {groupedItems.map(group => (
                         <div key={group.label} className={styles.group}>
                             <div className={styles.groupHeader}>{group.label}</div>
