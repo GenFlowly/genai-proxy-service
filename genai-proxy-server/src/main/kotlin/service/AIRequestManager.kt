@@ -403,6 +403,7 @@ class AIRequestManager(
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
+            var success = false
             try {
                 retrievalService.retrieveAndGenerateStream(
                     customerId = customerId,
@@ -426,6 +427,7 @@ class AIRequestManager(
                         is StreamChunk.Usage -> capturedUsage = chunk
                     }
                 }
+                success = true
             } catch (e: java.io.IOException) {
                 logger.warn("Stream disrupted (client likely disconnected): {}", e.message)
                 throw e
@@ -440,7 +442,7 @@ class AIRequestManager(
                     message.conversationId, responseText.length,
                     capturedUsage?.inputTokens, capturedUsage?.outputTokens, capturedUsage?.totalTokens
                 )
-                if (responseText.isNotEmpty()) {
+                if (success && responseText.isNotEmpty()) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
                         conversationId = message.conversationId,
