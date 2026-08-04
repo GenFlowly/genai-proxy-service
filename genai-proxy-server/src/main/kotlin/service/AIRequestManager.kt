@@ -119,17 +119,22 @@ class AIRequestManager(
         val systemPrompt = instructionResp?.instruction ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
-        val conversationId =
+        val activeConversationId =
             getConversationId(customerId, client, conversationId)
+
+        var actualPreviousMessageId = selectedResponseId
+        if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
+            actualPreviousMessageId = conversationService.getLatestMessageId(activeConversationId)
+        }
 
         // Step 2 - Create message object (retrieval-server handles RAG during generation)
         val message = Message(
-            conversationId = conversationId,
+            conversationId = activeConversationId,
             customerId = customerId,
             client = client,
             role = "user",
             text = userRequestRawPrompt,
-            previousMessageId = selectedResponseId,
+            previousMessageId = actualPreviousMessageId,
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
             instructionId = instructionId.takeIf { it.isNotBlank() },
@@ -344,9 +349,14 @@ class AIRequestManager(
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId = getConversationId(customerId, client, conversationId)
 
+        var actualPreviousMessageId = selectedResponseId
+        if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
+            actualPreviousMessageId = conversationService.getLatestMessageId(activeConversationId)
+        }
+
         // Step 2 - Create message object (retrieval-server handles RAG during generation)
         // Use deterministic ID to prevent duplication in DDB on retries.
-        val uniqueContent = "${activeConversationId}-${userRequestRawPrompt}-${selectedResponseId ?: ""}-user"
+        val uniqueContent = "${activeConversationId}-${userRequestRawPrompt}-${actualPreviousMessageId ?: ""}-user"
         val deterministicId = java.util.UUID.nameUUIDFromBytes(uniqueContent.toByteArray()).toString()
 
         val message = Message(
@@ -356,7 +366,7 @@ class AIRequestManager(
             client = client,
             role = "user",
             text = userRequestRawPrompt,
-            previousMessageId = selectedResponseId,
+            previousMessageId = actualPreviousMessageId,
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
             instructionId = instructionId.takeIf { it.isNotBlank() },

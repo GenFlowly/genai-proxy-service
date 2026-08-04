@@ -232,4 +232,9 @@ class ConversationService(
         }
         return message
     }
+
+    suspend fun getLatestMessageId(conversationId: String): String? {
+        val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
+        return messages.maxByOrNull { it.sequence ?: 0 }?.messageId
+    }
 }
