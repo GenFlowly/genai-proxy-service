@@ -123,12 +123,9 @@ describe('AppContent', () => {
         expect(screen.getByTestId('memory-page')).toBeInTheDocument()
     })
 
-    test('/chat/:conversationId redirects to login when unauthenticated', async () => {
+    test('/chat/:conversationId renders LandingPage when unauthenticated', () => {
         renderAt('/chat/some-id')
-        await screen.findByText('Loading...').catch(() => {})
-        expect(mockLoginWithRedirect).toHaveBeenCalledWith({
-            appState: { returnTo: expect.any(String) }
-        })
+        expect(screen.getByTestId('landing-page')).toBeInTheDocument()
     })
 
     test('/chat/:conversationId renders LandingPage when authenticated', () => {

@@ -21,7 +21,7 @@ export default function InstructionDetailPage() {
     const { instructionId } = useParams<{ instructionId: string }>();
     const navigate = useNavigate();
     const { getAccessTokenSilently } = useAuth0();
-    const { customerInstructions, refreshInstructions, updateInstruction } = useAuth();
+    const { customerInstructions, refreshInstructions, updateInstruction, isAuthenticated, isInstructionsLoaded, loginWithRedirect } = useAuth();
 
     const isNew = instructionId === 'new';
     
@@ -30,6 +30,10 @@ export default function InstructionDetailPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [role, setRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER');
+
+    useEffect(() => {
+        refreshInstructions();
+    }, [refreshInstructions]);
 
     useEffect(() => {
         if (!isNew && instructionId) {
@@ -41,11 +45,21 @@ export default function InstructionDetailPage() {
                 setName(latest.name || '');
                 setInstructionText(latest.instruction || '');
                 setRole(latest.role || 'VIEW');
+            } else if (isInstructionsLoaded) {
+                if (!isAuthenticated) {
+                    loginWithRedirect({ appState: { returnTo: window.location.pathname } });
+                } else {
+                    alert("You do not have access to this instruction or it doesn't exist.");
+                    navigate('/instructions');
+                }
             }
-        } else {
+        } else if (isNew) {
+            if (isInstructionsLoaded && !isAuthenticated) {
+                loginWithRedirect({ appState: { returnTo: window.location.pathname } });
+            }
             setRole('OWNER');
         }
-    }, [instructionId, isNew, customerInstructions]);
+    }, [instructionId, isNew, customerInstructions, isInstructionsLoaded, isAuthenticated, loginWithRedirect, navigate]);
 
     const handleSave = async () => {
         if (!instructionText.trim()) return;
