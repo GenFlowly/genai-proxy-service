@@ -94,3 +94,4 @@ describe('fetchWithRetry', () => {
         expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 });
+// Trigger coverage run

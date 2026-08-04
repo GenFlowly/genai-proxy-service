@@ -26,13 +26,10 @@ export default function AppContent(): React.ReactElement {
                     <ConversationProvider>
                         <Routes>
                             <Route path="/" element={<Navigate to="/chat" replace />} />
-                            <Route path="/chat" element={<LandingPage />} />
-                            <Route
-                                path="/chat/:conversationId"
-                                element={
-                                    <LandingPage />
-                                }
-                            />
+                            <Route path="/chat">
+                                <Route index element={<LandingPage />} />
+                                <Route path=":conversationId" element={<LandingPage />} />
+                            </Route>
                             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                             <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
                             <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />

@@ -24,6 +24,11 @@ jest.mock('../../services/generateTextService', () => ({
 import * as generateTextStreamService from '../../services/generateTextStreamService';
 import * as conversationService from '../../services/conversationService';
 import * as generateTextService from '../../services/generateTextService';
+import * as getAIUsageService from '../../services/getAIUsageService';
+
+jest.mock('../../services/getAIUsageService', () => ({
+    getAIUsageActivity: jest.fn()
+}));
 
 jest.mock('../../components/widgets/PromptEditorWidget/PromptEditor', () => (props: any) => (
     <div data-testid={`${props['data-testid']}-container`}>
@@ -168,7 +173,7 @@ describe('ConversationContext UI Integration', () => {
         });
     });
 
-    test('Flow: Enter Prompt -> Generate Stream -> Receive Response', async () => {
+    test('Flow: Enter Prompt -> Generate Stream -> Receive Response and fetch metrics', async () => {
         (generateTextStreamService.generateTextStream as jest.Mock).mockImplementation(
             async (token, payload, onDelta, onMetadata) => {
                 onDelta('Hello! ');
@@ -177,6 +182,12 @@ describe('ConversationContext UI Integration', () => {
                 onMetadata({ conversationId: 'conv-1', responseMessageId: 'resp-1' });
             }
         );
+        (getAIUsageService.getAIUsageActivity as jest.Mock).mockResolvedValueOnce({
+            inputTokens: 10,
+            outputTokens: 20,
+            totalTokens: 30,
+            tokensReadFromCache: 0
+        });
 
         customRender(<TestConversationUI />);
         const editor = await screen.findByTestId('prompt-editor');
