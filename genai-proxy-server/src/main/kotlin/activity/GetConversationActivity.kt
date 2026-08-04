@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.ConversationAccessDeniedException
-import com.genflowly.utils.requireAuthenticatedCustomerId
+import com.genflowly.utils.getAuthenticatedCustomerId
 
 private val logger = LoggerFactory.getLogger("GetConversationRoute")
 
@@ -20,7 +20,7 @@ fun Route.registerGetConversationRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", optional = true) {
         get("${Routes.GET_CONVERSATION}/{conversationId}") {
             try {
                 val conversationId = call.parameters["conversationId"]
@@ -31,7 +31,7 @@ fun Route.registerGetConversationRoutes(
                     return@get
                 }
 
-                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                val customerId = call.getAuthenticatedCustomerId(customerProfileService) ?: "PUBLIC"
 
                 val response = conversationService.getConversationHistory(conversationId, customerId)
                 call.respond(response)

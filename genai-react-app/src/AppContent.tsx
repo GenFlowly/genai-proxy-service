@@ -30,16 +30,14 @@ export default function AppContent(): React.ReactElement {
                             <Route
                                 path="/chat/:conversationId"
                                 element={
-                                    <ProtectedRoute>
-                                        <LandingPage />
-                                    </ProtectedRoute>
+                                    <LandingPage />
                                 }
                             />
                             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                             <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
                             <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
-                            <Route path="/instructions" element={<ProtectedRoute><InstructionsPage /></ProtectedRoute>} />
-                            <Route path="/instructions/:instructionId" element={<ProtectedRoute><InstructionDetailPage /></ProtectedRoute>} />
+                            <Route path="/instructions" element={<InstructionsPage />} />
+                            <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
                         </Routes>
                     </ConversationProvider>
                 </AIProvider>

@@ -1,7 +1,7 @@
 package com.genflowly.activity
 
 import com.genflowly.Routes
-import com.genflowly.utils.requireAuthenticatedCustomerId
+import com.genflowly.utils.getAuthenticatedCustomerId
 import com.genflowly.service.CustomerProfileService
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -15,10 +15,10 @@ private val logger = LoggerFactory.getLogger("GetCustomerInstructionListRoute")
 fun Route.registerGetCustomerInstructionListRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", optional = true) {
         get(Routes.GET_CUSTOMER_INSTRUCTIONS) {
             try {
-                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                val customerId = call.getAuthenticatedCustomerId(customerProfileService) ?: "PUBLIC"
 
                 val response = customerProfileService.getCustomerInstructions(customerId)
                 call.respond(response)

@@ -36,6 +36,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     const [customerName, setCustomerName] = useState<string | undefined>(undefined)
     const [customerPicture, setCustomerPicture] = useState<string | undefined>(undefined)
     const [isInternalLoading, setIsInternalLoading] = useState(true)
+    const [isInstructionsLoaded, setIsInstructionsLoaded] = useState(false)
 
     // ✅ Effect 0: Handle Unauthenticated State to clear loading
     useEffect(() => {
@@ -205,17 +206,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         picture: customerPicture, // Strictly prefer backend picture; undefined if missing
     } : null
 
-    const refreshInstructions = async () => {
-        if (!isAuthenticated || !auth0User) return
+    const refreshInstructions = useCallback(async () => {
         try {
-            const token = await getAccessTokenSilently()
+            let token = ""
+            if (isAuthenticated && auth0User) {
+                token = await getAccessTokenSilently().catch(() => "")
+            }
             const { getCustomerInstructions } = await import('../services/instructionService')
             const response = await getCustomerInstructions(token)
             setCustomerInstructions(response.instructions)
         } catch (error) {
             console.error('Failed to refresh instructions', error)
+        } finally {
+            setIsInstructionsLoaded(true)
         }
-    }
+    }, [isAuthenticated, auth0User, getAccessTokenSilently])
 
     const updateInstruction = (instruction: InstructionResponse) => {
         setCustomerInstructions(prev => {
@@ -269,6 +274,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         user,
         isAuthenticated: isStrictlyAuthenticated,
         isLoading: auth0Loading || isInternalLoading,
+        isInstructionsLoaded,
         customerId,
         setCustomerId,
         loginWithRedirect,

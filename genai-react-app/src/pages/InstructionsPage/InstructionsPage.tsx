@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { InstructionTile } from '../../components/common/InstructionTile/InstructionTile';
 import styles from './InstructionsPage.module.scss';
@@ -7,8 +7,12 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/navbar/Navbar';
 
 export default function InstructionsPage() {
-    const { customerInstructions } = useAuth();
+    const { customerInstructions, refreshInstructions } = useAuth();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        refreshInstructions();
+    }, [refreshInstructions]);
 
     // Filter instructions to show only the latest version for each ID
     const uniqueInstructions = useMemo(() => {
