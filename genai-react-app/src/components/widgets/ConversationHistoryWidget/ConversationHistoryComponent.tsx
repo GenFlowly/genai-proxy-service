@@ -133,7 +133,7 @@ export default function ConversationHistoryComponent() {
             setItems(prev => prev.filter(c => c.conversationId !== convId))
             // If the archived conversation is currently active, navigate away
             if (convId === activeId) {
-                navigate('/')
+                navigate('/chat')
             }
         } catch (err) {
             console.error('Failed to archive conversation:', err)

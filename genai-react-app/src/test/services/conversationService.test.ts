@@ -237,3 +237,4 @@ describe('conversationService', () => {
         expect(result?.blocks[0].responseMessages[0].aiVendor).toBe(AIVendor.OPENAI);
     });
 });
+// Trigger coverage run
