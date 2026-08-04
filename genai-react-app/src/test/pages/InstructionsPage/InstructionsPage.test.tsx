@@ -26,7 +26,8 @@ describe('InstructionsPage', () => {
 
     test('renders empty state when there are no instructions', () => {
         (useAuth as jest.Mock).mockReturnValue({
-            customerInstructions: []
+            customerInstructions: [],
+            refreshInstructions: jest.fn(),
         });
 
         render(
@@ -47,7 +48,8 @@ describe('InstructionsPage', () => {
         ];
 
         (useAuth as jest.Mock).mockReturnValue({
-            customerInstructions: mockInstructions
+            customerInstructions: mockInstructions,
+            refreshInstructions: jest.fn(),
         });
 
         render(
@@ -64,7 +66,7 @@ describe('InstructionsPage', () => {
     });
 
     test('navigates to create new instruction when button clicked', async () => {
-        (useAuth as jest.Mock).mockReturnValue({ customerInstructions: [] });
+        (useAuth as jest.Mock).mockReturnValue({ customerInstructions: [], refreshInstructions: jest.fn() });
 
         render(
             <MemoryRouter>

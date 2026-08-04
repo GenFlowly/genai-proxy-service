@@ -15,7 +15,8 @@ export interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    loginWithRedirect: () => void;
+    isInstructionsLoaded: boolean;
+    loginWithRedirect: (options?: any) => Promise<void>;
     logout: (options: { returnTo: string; localOnly?: boolean }) => void;
     getAccessTokenSilently: () => Promise<string>;
     customerId: string | null;
