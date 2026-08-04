@@ -48,7 +48,7 @@ def make_reflection_node(node_type: str):
         system_prompt = config.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)
         input_template = config.get("input_template", _DEFAULT_INPUT_TEMPLATE)
         output_key = config.get("output_key", "generated_response")
-        include_history: bool = config.get("include_conversation_history", False)
+        include_history: bool = config.get("include_conversation_history", True)
         model_override: str | None = config.get("model_override")
 
         # Customer instruction from the request: replace the persona portion but keep the
@@ -69,17 +69,36 @@ def make_reflection_node(node_type: str):
 
         messages: list[Any] = [SystemMessage(content=system_prompt)]
 
+        is_response_node = (output_key == "generated_response")
+        rendered_input = _render_template(input_template, state)
+
         if include_history:
             history = state.get("conversation_history", [])
-            for turn in (history[:-1] if history else []):
-                role = turn.get("role", "user")
-                content = turn.get("content", "")
-                messages.append(HumanMessage(content=content) if role == "user" else AIMessage(content=content))
-
-        messages.append(HumanMessage(content=_render_template(input_template, state)))
+            turns = history[:-1] if history else []
+            
+            if not turns:
+                messages.append(HumanMessage(content=rendered_input))
+            elif is_response_node:
+                # For response generation, pass as actual chat turns
+                for turn in turns:
+                    role = turn.get("role", "user")
+                    content = turn.get("content", "")
+                    messages.append(HumanMessage(content=content) if role == "user" else AIMessage(content=content))
+                messages.append(HumanMessage(content=rendered_input))
+            else:
+                # For extraction/classification, Anthropic expects context in XML tags
+                history_text = "\n".join(f"{t.get('role', 'user').capitalize()}: {t.get('content', '')}" for t in turns)
+                combined = f"<conversation_context>\n{history_text}\n</conversation_context>\n\n{rendered_input}"
+                messages.append(HumanMessage(content=combined))
+        else:
+            messages.append(HumanMessage(content=rendered_input))
 
         logger.info("Node %s (reflection): calling LLM model=%s", node_type, effective_model)
+        for idx, m in enumerate(messages):
+            logger.info("Node %s - Message %d [%s]:\n%s\n---", node_type, idx, type(m).__name__, m.content)
+
         response = await llm.ainvoke(messages)
+        logger.info("Node %s - Received Response:\n%s\n---", node_type, response.content)
 
         meta = getattr(response, "usage_metadata", None) or {}
         usage = {

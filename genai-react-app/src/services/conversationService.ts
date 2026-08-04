@@ -52,12 +52,17 @@ export async function getConversation(
 
     const url = `${config.backend.baseUrl}/api/v1/chat/${conversationId}`;
 
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+    };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetchWithRetry(url, { // Changed to fetchWithRetry
         method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
+        headers,
     });
 
     if (!response.ok) {

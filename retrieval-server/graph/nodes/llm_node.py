@@ -95,7 +95,7 @@ def make_llm_node(agent_type: str):
         response_format = config.get("response_format", "text")
         json_output_mapping: dict = config.get("json_output_mapping", {})
         json_indices_source_key: str = config.get("json_indices_source_key", "retrieval_results")
-        include_history: bool = config.get("include_conversation_history", False)
+        include_history: bool = config.get("include_conversation_history", True)
         model_override: str | None = config.get("model_override")
 
         # Short-circuit: skip LLM call if source list for json_indices is empty
@@ -121,24 +121,42 @@ def make_llm_node(agent_type: str):
 
         messages: list[Any] = [_make_system(system_prompt, cache_anthropic)]
 
+        is_response_node = (output_key == "generated_response")
+        rendered_input = _render_template(input_template, state)
+
         if include_history:
             history = state.get("conversation_history", [])
             turns = history[:-1] if history else []
-            last_idx = len(turns) - 1
-            for i, turn in enumerate(turns):
-                role = turn.get("role", "user")
-                content = turn.get("content", "")
-                is_last = (i == last_idx)
-                cache_this = cache_anthropic and is_last
-                if role == "user":
-                    messages.append(_make_human(content, cache_this))
-                else:
-                    messages.append(_make_ai(content, cache_this))
-
-        messages.append(HumanMessage(content=_render_template(input_template, state)))
+            
+            if not turns:
+                messages.append(HumanMessage(content=rendered_input))
+            elif is_response_node:
+                # For response generation, pass as actual chat turns
+                last_idx = len(turns) - 1
+                for i, turn in enumerate(turns):
+                    role = turn.get("role", "user")
+                    content = turn.get("content", "")
+                    is_last = (i == last_idx)
+                    cache_this = cache_anthropic and is_last
+                    if role == "user":
+                        messages.append(_make_human(content, cache_this))
+                    else:
+                        messages.append(_make_ai(content, cache_this))
+                messages.append(HumanMessage(content=rendered_input))
+            else:
+                # For extraction/classification, Anthropic expects context in XML tags
+                history_text = "\n".join(f"{t.get('role', 'user').capitalize()}: {t.get('content', '')}" for t in turns)
+                combined = f"<conversation_context>\n{history_text}\n</conversation_context>\n\n{rendered_input}"
+                messages.append(HumanMessage(content=combined))
+        else:
+            messages.append(HumanMessage(content=rendered_input))
 
         logger.info("Node %s: calling LLM, format=%s model=%s caching=%s", agent_type, response_format, effective_model, cache_anthropic)
+        for idx, m in enumerate(messages):
+            logger.info("Node %s - Message %d [%s]:\n%s\n---", agent_type, idx, type(m).__name__, m.content)
+
         response = await llm.ainvoke(messages)
+        logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
 
         meta = getattr(response, "usage_metadata", None) or {}
         details = meta.get("input_token_details") or {}

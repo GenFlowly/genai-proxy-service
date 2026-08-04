@@ -20,7 +20,7 @@ import { createConversationTitle } from '../services/createConversationTitleServ
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
 
 export const ConversationProvider = ({ children }: { children: ReactNode }) => {
-    const { customerId, getAccessTokenSilently, isAuthenticated, logout } = useAuth()
+    const { customerId, getAccessTokenSilently, isAuthenticated, logout, loginWithRedirect } = useAuth()
     const { showToast } = useToast()
 
     const {
@@ -216,10 +216,15 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const loadConversation = useCallback(async (id: string) => {
-        if (!isAuthenticated || !customerId) return
-
         try {
-            const token = await getAccessTokenSilently()
+            let token = ''
+            if (isAuthenticated) {
+                try {
+                    token = await getAccessTokenSilently()
+                } catch (e) {
+                    console.warn("Could not get access token", e)
+                }
+            }
             const data = await getConversation(token, id)
 
             if (data && data.blocks) {
@@ -240,13 +245,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (err: any) {
             if (err?.status === 403) {
-                showToast('You do not have access to this conversation')
-                navigate('/chat')
+                if (!isAuthenticated) {
+                    loginWithRedirect({ appState: { returnTo: window.location.pathname } })
+                } else {
+                    showToast('You do not have access to this conversation')
+                    navigate('/chat')
+                }
             } else {
                 console.error("Failed to load conversation", err)
             }
         }
-    }, [isAuthenticated, customerId, getAccessTokenSilently, showToast, navigate, setSelectedInstructionId])
+    }, [isAuthenticated, getAccessTokenSilently, showToast, navigate, setSelectedInstructionId, loginWithRedirect])
 
     const resetConversation = useCallback(() => {
         navigate('/chat')
