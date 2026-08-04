@@ -116,8 +116,8 @@ def make_llm_node(agent_type: str):
         provider = state["llm_provider"]
         # Cache stable prefixes (system prompt + conversation history) on the response
         # generator. Anthropic requires explicit cache_control blocks; OpenAI caches
-        # automatically for prefixes ≥1024 tokens.
-        cache_anthropic = (output_key == "generated_response" and provider == "anthropic")
+        # automatically for prefixes >=1024 tokens.
+        cache_anthropic = (provider == "anthropic")
 
         messages: list[Any] = [_make_system(system_prompt, cache_anthropic)]
 

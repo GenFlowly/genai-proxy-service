@@ -23,7 +23,7 @@ services:
       AWS_SECRET_ACCESS_KEY: "***REDACTED***"
       AWS_ACCESS_KEY_ID: "***REDACTED***"
       KMS_KEY_ID: "arn:aws:kms:us-east-1:571600870493:key/ab8af0c5-169f-442b-b2bf-8b417bd33f7e"
-      AUTH0_SPA_DOMAIN: "genflowly.us.auth0.com"
+      AUTH0_SPA_DOMAIN: "auth.genflowly.com"
       AUTH0_SPA_CLIENT_ID: "VSKaAyEXLKM0LuZzJVhvH6RTT11LiNgE"
       AUTH0_API_AUDIENCE: "https://api-development.genflowly.com"
       RETRIEVAL_SERVER_URL: "http://retrieval-server:5001"

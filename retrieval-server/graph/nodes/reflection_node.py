@@ -5,7 +5,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from graph.llm_factory import get_llm
-from graph.nodes.llm_node import _render_template
+from graph.nodes.llm_node import _make_ai, _make_human, _make_system, _render_template
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,9 @@ def make_reflection_node(node_type: str):
             state.get("llm_max_tokens", 4096),
         )
 
-        messages: list[Any] = [SystemMessage(content=system_prompt)]
+        provider = state["llm_provider"]
+        cache_anthropic = (provider == "anthropic")
+        messages: list[Any] = [_make_system(system_prompt, cache_anthropic)]
 
         is_response_node = (output_key == "generated_response")
         rendered_input = _render_template(input_template, state)
@@ -80,10 +82,16 @@ def make_reflection_node(node_type: str):
                 messages.append(HumanMessage(content=rendered_input))
             elif is_response_node:
                 # For response generation, pass as actual chat turns
-                for turn in turns:
+                last_idx = len(turns) - 1
+                for i, turn in enumerate(turns):
                     role = turn.get("role", "user")
                     content = turn.get("content", "")
-                    messages.append(HumanMessage(content=content) if role == "user" else AIMessage(content=content))
+                    is_last = (i == last_idx)
+                    cache_this = cache_anthropic and is_last
+                    if role == "user":
+                        messages.append(_make_human(content, cache_this))
+                    else:
+                        messages.append(_make_ai(content, cache_this))
                 messages.append(HumanMessage(content=rendered_input))
             else:
                 # For extraction/classification, Anthropic expects context in XML tags
