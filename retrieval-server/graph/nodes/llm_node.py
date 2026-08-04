@@ -95,7 +95,7 @@ def make_llm_node(agent_type: str):
         response_format = config.get("response_format", "text")
         json_output_mapping: dict = config.get("json_output_mapping", {})
         json_indices_source_key: str = config.get("json_indices_source_key", "retrieval_results")
-        include_history: bool = config.get("include_conversation_history", False)
+        include_history: bool = config.get("include_conversation_history", True)
         model_override: str | None = config.get("model_override")
 
         # Short-circuit: skip LLM call if source list for json_indices is empty
