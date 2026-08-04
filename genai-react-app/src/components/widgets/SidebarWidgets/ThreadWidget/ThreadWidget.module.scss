@@ -50,6 +50,12 @@
 .threadBlock {
     display: flex;
     flex-direction: column;
+    width: 100%;
+
+    &:not(:last-child) {
+        border-bottom: 1px solid $color-border;
+        padding-bottom: 0.25rem;
+    }
 }
 
 .emptyState {

@@ -38,6 +38,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const [conversationId, setConversationId] = useState<string>('')
     const [activeBlockId, setActiveBlockId] = useState<string>('')
+    const [activeViewportItem, setActiveViewportItem] = useState<{ blockId: string, type: 'request' | 'response' } | null>(null)
     const [conversationTitle, setConversationTitle] = useState<string | null>(null)
     const [conversationRole, setConversationRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER')
     
@@ -730,6 +731,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 conversationId,
                 activeBlockId,
                 setActiveBlockId,
+                activeViewportItem,
+                setActiveViewportItem,
                 systemPrompt,
                 setSystemPrompt,
                 selectedInstructionId,
