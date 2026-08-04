@@ -134,7 +134,9 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
 
     return (
         <div className={`${styles.conversationBlock} conversation-block-item`} data-block-id={id} data-testid={testId}>
-            <Request blockId={id} />
+            <div data-scroll-item="true" data-block-id={id} data-item-type="request" style={{ width: '100%' }}>
+                <Request blockId={id} />
+            </div>
 
             {conversationBlock.responseMessages.length > 0 && (
                 <ResponseThinking
@@ -144,7 +146,7 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
             )}
 
             {((conversationBlock.status === 'resolved') || (conversationBlock.responseMessages.length > 0)) && (
-                <div ref={responseRef} style={{ width: '100%' }}>
+                <div ref={responseRef} style={{ width: '100%' }} data-scroll-item="true" data-block-id={id} data-item-type="response">
                     <Response
                         blockId={id}
                         responseMessages={conversationBlock.responseMessages}

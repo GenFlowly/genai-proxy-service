@@ -15,7 +15,8 @@
     color: $color-text-primary;
     font-size: 0.9rem;
 
-    &:hover {
+    &:hover,
+    &.activeViewport {
         background: $color-background-hover;
         border-left-color: $color-primary;
     }
@@ -33,7 +34,8 @@
             font-size: 1.4rem;
         }
 
-        &:hover {
+        &:hover,
+        &.activeViewport {
             border-bottom-color: $color-primary;
         }
     }

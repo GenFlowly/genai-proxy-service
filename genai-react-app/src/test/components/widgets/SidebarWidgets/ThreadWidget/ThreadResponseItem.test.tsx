@@ -1,9 +1,13 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ThreadResponseItem from '../../../../../components/widgets/SidebarWidgets/ThreadWidget/ThreadResponseItem';
+import { useConversation } from '../../../../../context/ConversationContext';
 import '@testing-library/jest-dom';
 
+jest.mock('../../../../../context/ConversationContext');
+
 describe('ThreadResponseItem', () => {
+    const mockUseConversation = useConversation as jest.Mock;
     const defaultProps = {
         conversationBlockId: 'block-1',
         responseCount: 1
@@ -16,6 +20,9 @@ describe('ThreadResponseItem', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockUseConversation.mockReturnValue({
+            activeViewportItem: null
+        });
     });
 
     test('renders expanded state correctly (Single Response)', () => {
@@ -52,5 +59,15 @@ describe('ThreadResponseItem', () => {
         // Logic uses [data-response-block-id]
         expect(document.querySelector).toHaveBeenCalledWith('[data-response-block-id="block-1"]');
         expect(mockScrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    });
+
+    test('adds activeViewport class and scrolls when active', () => {
+        mockUseConversation.mockReturnValue({
+            activeViewportItem: { blockId: 'block-1', type: 'response' }
+        });
+        render(<ThreadResponseItem {...defaultProps} />);
+        
+        const button = screen.getByTestId('thread-response-item');
+        expect(button).toHaveClass('activeViewport');
     });
 });
