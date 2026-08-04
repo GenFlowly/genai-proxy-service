@@ -169,7 +169,11 @@ class AIRequestManager(
         val apiKey = fetchApiKey(aiVendor, message.customerId, customerProfileService)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
-        val thread = getThreadContext(message.conversationId, message.messageId)
+        val thread = if (message.previousMessageId.isNullOrBlank()) {
+            listOf(message)
+        } else {
+            getThreadContext(message.conversationId, message.previousMessageId) + message
+        }
         val conversationHistory = thread.map { ConversationMessage(role = it.role, content = it.text) }
 
         val result = retrievalService.retrieveAndGenerate(
@@ -375,7 +379,11 @@ class AIRequestManager(
         val llmProvider = vendorToProviderString(config.aiVendor)
 
         // Fetch conversation thread so the LLM sees full history (message is already saved above)
-        val thread = getThreadContext(activeConversationId, deterministicId)
+        val thread = if (message.previousMessageId.isNullOrBlank()) {
+            listOf(message)
+        } else {
+            getThreadContext(activeConversationId, message.previousMessageId) + message
+        }
         val conversationHistory = thread.map { ConversationMessage(role = it.role, content = it.text) }
 
         // Pre-calculate the deterministic response ID to send as a response header immediately

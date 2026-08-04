@@ -48,7 +48,7 @@ def make_reflection_node(node_type: str):
         system_prompt = config.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)
         input_template = config.get("input_template", _DEFAULT_INPUT_TEMPLATE)
         output_key = config.get("output_key", "generated_response")
-        include_history: bool = config.get("include_conversation_history", False)
+        include_history: bool = config.get("include_conversation_history", True)
         model_override: str | None = config.get("model_override")
 
         # Customer instruction from the request: replace the persona portion but keep the
