@@ -30,7 +30,7 @@ export default function AppContent(): React.ReactElement {
                                 <Route index element={<LandingPage />} />
                                 <Route path=":conversationId" element={<LandingPage />} />
                             </Route>
-                            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                            <Route path="/settings/*" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                             <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
                             <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
                             <Route path="/instructions" element={<InstructionsPage />} />

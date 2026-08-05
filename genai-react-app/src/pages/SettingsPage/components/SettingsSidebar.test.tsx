@@ -3,14 +3,20 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsSidebar } from './SettingsSidebar';
 import { useAuth } from '../../../context/AuthContext';
+import { MemoryRouter } from 'react-router-dom';
 
 jest.mock('../../../context/AuthContext');
 
 const mockUseAuth = useAuth as jest.Mock;
 
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+    ...jest.requireActual('react-router-dom'),
+    useNavigate: () => mockNavigate
+}));
+
 describe('SettingsSidebar', () => {
     const mockLogout = jest.fn();
-    const mockOnTabChange = jest.fn();
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -20,7 +26,11 @@ describe('SettingsSidebar', () => {
     });
 
     test('renders tabs and logout button', () => {
-        render(<SettingsSidebar activeTab="profile" onTabChange={mockOnTabChange} />);
+        render(
+            <MemoryRouter initialEntries={['/settings/profile']}>
+                <SettingsSidebar />
+            </MemoryRouter>
+        );
         
         expect(screen.getByText('Profile')).toBeInTheDocument();
         expect(screen.getByText('AI Settings')).toBeInTheDocument();
@@ -28,21 +38,40 @@ describe('SettingsSidebar', () => {
         expect(screen.getByText('Logout')).toBeInTheDocument();
     });
 
-    test('calls onTabChange when clicking a tab', async () => {
-        render(<SettingsSidebar activeTab="ai" onTabChange={mockOnTabChange} />);
+    test('calls navigate when clicking a tab', async () => {
+        render(
+            <MemoryRouter initialEntries={['/settings/ai']}>
+                <SettingsSidebar />
+            </MemoryRouter>
+        );
         
         const profileTab = screen.getByText('Profile');
         await userEvent.click(profileTab);
         
-        expect(mockOnTabChange).toHaveBeenCalledWith('profile');
+        expect(mockNavigate).toHaveBeenCalledWith('/settings/profile');
     });
 
     test('calls logout when clicking logout button', async () => {
-        render(<SettingsSidebar activeTab="profile" onTabChange={mockOnTabChange} />);
+        render(
+            <MemoryRouter initialEntries={['/settings/profile']}>
+                <SettingsSidebar />
+            </MemoryRouter>
+        );
         
         const logoutButton = screen.getByText('Logout');
         await userEvent.click(logoutButton);
         
         expect(mockLogout).toHaveBeenCalledWith({ returnTo: window.location.origin });
+    });
+
+    test('defaults activeTab to profile when location pathname is /', () => {
+        render(
+            <MemoryRouter initialEntries={['/']}>
+                <SettingsSidebar />
+            </MemoryRouter>
+        );
+        
+        const profileTab = screen.getByText('Profile').closest('button');
+        expect(profileTab).toHaveClass('active');
     });
 });
