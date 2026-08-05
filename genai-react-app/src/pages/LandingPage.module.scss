@@ -20,7 +20,7 @@
 
 .historySidebar {
   @include sidebar-base(right);
-  width: 14rem; // Slightly wider than default 10rem
+  width: 10rem; // Slightly wider than default 10rem
   background-color: var(--color-background-tertiary); // slightly distinct background
   z-index: 15;
 }
