@@ -26,6 +26,8 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
     const setLeftSidebarExpanded = (visible: boolean) => setIsLeftSidebarExpanded(visible)
     const setRightSidebarExpanded = (visible: boolean) => setIsRightSidebarExpanded(visible)
 
+    const [isLeftSidebarMinimized, setLeftSidebarMinimized] = useState(false)
+
     return (
         <LayoutContext.Provider
             value={{
@@ -39,6 +41,8 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
                 setInstructionWidgetExpanded,
                 isHistoryWidgetExpanded,
                 setHistoryWidgetExpanded,
+                isLeftSidebarMinimized,
+                setLeftSidebarMinimized,
             }}
         >
             {children}

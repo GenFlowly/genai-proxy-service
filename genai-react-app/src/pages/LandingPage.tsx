@@ -37,12 +37,30 @@ function LandingPageContent() {
 export default function LandingPage() {
     const { conversationId: routeId } = useParams<{ conversationId: string }>()
     const { loadConversation, conversationId: contextId, resetConversation } = useConversation()
-    const { setLeftSidebarExpanded } = useLayout()
+    const { 
+        setLeftSidebarExpanded, 
+        setRightSidebarExpanded, 
+        setLeftSidebarMinimized, 
+        setHistoryWidgetExpanded 
+    } = useLayout()
     const location = useLocation()
 
+    // Orchestrate Sidebar and History states based on active conversation
     useEffect(() => {
-        setLeftSidebarExpanded(false)
-    }, [setLeftSidebarExpanded])
+        if (contextId) {
+            // Active conversation: both collapsed, history hidden
+            setRightSidebarExpanded(false)
+            setLeftSidebarMinimized(false)
+            setLeftSidebarExpanded(false)
+            setHistoryWidgetExpanded(false)
+        } else {
+            // No conversation (New Chat): right expanded, left fully minimized/hidden, history expanded
+            setRightSidebarExpanded(true)
+            setLeftSidebarMinimized(true)
+            setLeftSidebarExpanded(false)
+            setHistoryWidgetExpanded(true)
+        }
+    }, [contextId, setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, setHistoryWidgetExpanded])
 
     useEffect(() => {
         if (routeId) {

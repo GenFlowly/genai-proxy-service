@@ -26,7 +26,8 @@ describe('LeftSidebar', () => {
 
     test('renders correctly (Expanded) with widgets', () => {
         mockUseLayout.mockReturnValue({
-            isLeftSidebarExpanded: true
+            isLeftSidebarExpanded: true,
+            isLeftSidebarMinimized: false
         });
 
         render(<LeftSidebar widgetIds={['MOCK_1', 'MOCK_2']} />);
@@ -42,7 +43,8 @@ describe('LeftSidebar', () => {
 
     test('renders correctly (Collapsed)', () => {
         mockUseLayout.mockReturnValue({
-            isLeftSidebarExpanded: false
+            isLeftSidebarExpanded: false,
+            isLeftSidebarMinimized: false
         });
 
         // Even collapsed, typically content might exist but hidden, or logic renders it.

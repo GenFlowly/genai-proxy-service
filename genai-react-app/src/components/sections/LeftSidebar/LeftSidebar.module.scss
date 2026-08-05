@@ -22,6 +22,14 @@
     }
   }
 
+  &.minimized {
+    width: 0;
+    border-width: 0;
+    .sidebarContent {
+      display: none;
+    }
+  }
+
   /* 📱 Responsive layout: Mobile Overlay */
   @media (max-width: 768px) {
     position: absolute;

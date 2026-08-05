@@ -12,4 +12,6 @@ export interface LayoutContextType {
     setInstructionWidgetExpanded: (expanded: boolean) => void
     isHistoryWidgetExpanded: boolean
     setHistoryWidgetExpanded: (expanded: boolean) => void
+    isLeftSidebarMinimized: boolean
+    setLeftSidebarMinimized: (minimized: boolean) => void
 }
