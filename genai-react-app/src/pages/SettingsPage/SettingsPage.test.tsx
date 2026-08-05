@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import SettingsPage from './SettingsPage';
 
 // Mocks
@@ -22,8 +22,10 @@ describe('SettingsPage', () => {
 
     test('renders correctly and defaults to profile tab', () => {
         render(
-            <MemoryRouter>
-                <SettingsPage />
+            <MemoryRouter initialEntries={['/settings']}>
+                <Routes>
+                    <Route path="/settings/*" element={<SettingsPage />} />
+                </Routes>
             </MemoryRouter>
         );
 
@@ -35,8 +37,10 @@ describe('SettingsPage', () => {
 
     test('switches tabs correctly', () => {
         render(
-            <MemoryRouter>
-                <SettingsPage />
+            <MemoryRouter initialEntries={['/settings/profile']}>
+                <Routes>
+                    <Route path="/settings/*" element={<SettingsPage />} />
+                </Routes>
             </MemoryRouter>
         );
 

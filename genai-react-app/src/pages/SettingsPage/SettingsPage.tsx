@@ -1,26 +1,30 @@
-import React, { useState } from 'react'
+import React from 'react'
 import Navbar from '../../components/navbar/Navbar'
 import styles from './SettingsPage.module.scss'
-import { SettingsSidebar, SettingsTab } from './components/SettingsSidebar'
+import { SettingsSidebar } from './components/SettingsSidebar'
 import { ProfileSettings } from './components/ProfileSettings'
 import { AISettings } from './components/AISettings'
 import { MemorySettings } from './components/MemorySettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 
+import { Routes, Route, Navigate } from 'react-router-dom'
+
 export default function SettingsPage(): React.ReactElement {
     usePageTitle()
-    const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
 
     return (
         <div className={styles.page}>
             <Navbar />
             <div className={styles.layout}>
-                <SettingsSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+                <SettingsSidebar />
                 <div className={styles.content}>
                     <div className={styles.contentInner}>
-                        {activeTab === 'profile' && <ProfileSettings />}
-                        {activeTab === 'ai' && <AISettings />}
-                        {activeTab === 'memory' && <MemorySettings />}
+                        <Routes>
+                            <Route path="/" element={<Navigate to="profile" replace />} />
+                            <Route path="profile" element={<ProfileSettings />} />
+                            <Route path="ai" element={<AISettings />} />
+                            <Route path="memory" element={<MemorySettings />} />
+                        </Routes>
                     </div>
                 </div>
             </div>

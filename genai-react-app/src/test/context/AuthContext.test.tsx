@@ -28,12 +28,6 @@ jest.mock('../../services/instructionService', () => ({
     getCustomerInstructions: jest.fn()
 }));
 
-
-jest.mock('../../services/instructionService', () => ({
-    getCustomerInstructions: jest.fn()
-}));
-
-
 describe('AuthContext Integration with Navbar', () => {
     beforeEach(() => {
         mockUseAuth0.mockReset();
@@ -205,9 +199,6 @@ describe('AuthContext Integration with Navbar', () => {
         expect(avatarBtn).not.toHaveAttribute('title', 'Alice');
 
         // Verify Avatar image source (UserAvatarButton uses displayPicture)
-        // Note: checking src might be tricky if Avatar component handles it internally,
-        // but we can check checking the prop passed if we mocked it, or check the img tag if strictly rendered.
-        // UserAvatarButton renders an img if displayPicture is present.
         // UserAvatarButton renders an img if displayPicture is present.
         const img = screen.getByTestId('user-avatar-button-image');
         expect(img).toHaveAttribute('src', 'bob.jpg');
@@ -566,6 +557,74 @@ test('Logs out for login_required error', async () => {
     });
 });
 
-// Coverage refresh
-// trigger coverage run
-// Trigger coverage run
+test('getAccessTokenSilently handles login_required error correctly', async () => {
+    const mockLogout = jest.fn();
+    const mockGetToken = jest.fn().mockRejectedValue({ error: 'login_required' });
+    
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: mockGetToken,
+        logout: mockLogout,
+    });
+
+    const TestTokenError = () => {
+        const { getAccessTokenSilently } = useAuth();
+        return (
+            <button onClick={() => getAccessTokenSilently().catch(() => {})} data-testid="trigger-error">
+                Trigger Error
+            </button>
+        );
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider><TestTokenError /></AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    act(() => { screen.getByTestId('trigger-error').click(); });
+
+    await waitFor(() => {
+        expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin }, openUrl: false });
+    });
+});
+
+test('checkSession logs out on visibilitychange with login_required', async () => {
+    const mockLogout = jest.fn();
+    const mockGetToken = jest.fn().mockRejectedValue({ error: 'login_required' });
+
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: mockGetToken,
+        logout: mockLogout,
+    });
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider><Navbar /></AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    // Mock document.visibilityState to 'visible'
+    Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+    });
+
+    await act(async () => {
+        const event = new Event('visibilitychange');
+        document.dispatchEvent(event);
+    });
+
+    await waitFor(() => {
+        expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin }, openUrl: false });
+    });
+});
