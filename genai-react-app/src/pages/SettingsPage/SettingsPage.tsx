@@ -1,43 +1,29 @@
-import React, { useEffect } from 'react'
+import React, { useState } from 'react'
 import Navbar from '../../components/navbar/Navbar'
 import styles from './SettingsPage.module.scss'
-import { useLayout } from '../../context/LayoutContext'
-import LeftSidebar from '../../components/sections/LeftSidebar/LeftSidebar'
-import CenterSection from '../../components/sections/CenterSection/CenterSection'
-import { getPageConfig } from '../../config/PageWidgetConfig'
-import { SidebarMenuProvider } from '../../context/SidebarMenuContext'
-import { SIDEBAR_MENU_REGISTRY } from '../../config/SidebarMenuConfig'
+import { SettingsSidebar, SettingsTab } from './components/SettingsSidebar'
+import { ProfileSettings } from './components/ProfileSettings'
+import { AISettings } from './components/AISettings'
+import { MemorySettings } from './components/MemorySettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 
-function SettingsPageInner({ config }: { config: ReturnType<typeof getPageConfig> }): React.ReactElement {
+export default function SettingsPage(): React.ReactElement {
     usePageTitle()
+    const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+
     return (
-        <div className={styles.layout}>
-            <LeftSidebar widgetIds={config.leftSidebar} />
-            <div className={styles.content}>
-                <CenterSection widgetIds={config.centerSection} />
+        <div className={styles.page}>
+            <Navbar />
+            <div className={styles.layout}>
+                <SettingsSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+                <div className={styles.content}>
+                    <div className={styles.contentInner}>
+                        {activeTab === 'profile' && <ProfileSettings />}
+                        {activeTab === 'ai' && <AISettings />}
+                        {activeTab === 'memory' && <MemorySettings />}
+                    </div>
+                </div>
             </div>
         </div>
-    )
-}
-
-export default function SettingsPage(): React.ReactElement {
-    const { setLeftSidebarExpanded } = useLayout()
-
-    useEffect(() => {
-        setLeftSidebarExpanded(true)
-    }, [setLeftSidebarExpanded])
-
-    const config = getPageConfig('SETTINGS_PAGE')
-    const sidebarConfig = SIDEBAR_MENU_REGISTRY.find(m => m.pageId === 'SETTINGS_PAGE')
-    const initialWidgetId = sidebarConfig?.items[0]?.widgetId || null
-
-    return (
-        <SidebarMenuProvider pageId="SETTINGS_PAGE" initialWidgetId={initialWidgetId}>
-            <div className={styles.page}>
-                <Navbar />
-                <SettingsPageInner config={config} />
-            </div>
-        </SidebarMenuProvider>
     )
 }

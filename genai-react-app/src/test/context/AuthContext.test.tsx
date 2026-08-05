@@ -96,14 +96,8 @@ describe('AuthContext Integration with Navbar', () => {
         expect(avatarBtn).toBeInTheDocument();
         expect(screen.queryByTestId('login-button')).not.toBeInTheDocument();
 
-        // 2. Open Dropdown
-        act(() => {
-            avatarBtn.click();
-        });
-
-        // 3. Verify User Name
-        const userNameDisplay = await screen.findByTestId('user-name-display');
-        expect(userNameDisplay).toHaveTextContent(`Hello ${MOCK_USER.name}`);
+        // 2. Verify User Name in Title
+        expect(avatarBtn).toHaveAttribute('title', MOCK_USER.name);
 
         // 4. Verify Token Fetch (AuthContext internal behavior)
         // This confirms AuthContext did its initialization
@@ -205,16 +199,10 @@ describe('AuthContext Integration with Navbar', () => {
             </MemoryRouter>
         );
 
-        // 3. Open Profile Dropdown
+        // 3. Verify Display Name is from Backend ("Bob"), NOT Auth0 ("Alice")
         const avatarBtn = await screen.findByTestId('user-avatar-button');
-        act(() => {
-            avatarBtn.click();
-        });
-
-        // 4. Verify Display Name is from Backend ("Bob"), NOT Auth0 ("Alice")
-        const userNameDisplay = await screen.findByTestId('user-name-display');
-        expect(userNameDisplay).toHaveTextContent('Hello Bob');
-        expect(userNameDisplay).not.toHaveTextContent('Alice');
+        expect(avatarBtn).toHaveAttribute('title', 'Bob');
+        expect(avatarBtn).not.toHaveAttribute('title', 'Alice');
 
         // Verify Avatar image source (UserAvatarButton uses displayPicture)
         // Note: checking src might be tricky if Avatar component handles it internally,
@@ -500,6 +488,55 @@ test('updateVectorDBConfigStatus updates existing and adds new', async () => {
         screen.getByTestId('add-new').click();
     });
     expect(screen.getByTestId('db-list')).toHaveTextContent('Milvus');
+});
+
+test('updateSupabaseConfigStatus updates existing and adds new', async () => {
+    (onboardCustomer as jest.Mock).mockResolvedValue({
+        customerId: '123',
+        customerInstructions: [],
+        aiVendorAPIKeyStatusList: [],
+        vectorDBConfigStatusList: [],
+        supabaseConfigStatus: { status: 'NOT_SET' },
+        aiConfigPreferences: null
+    });
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        logout: jest.fn(),
+    });
+
+    const TestSupabase = () => {
+        const { updateSupabaseConfigStatus, supabaseConfigStatus } = useAuth();
+        return (
+            <div>
+                <button onClick={() => updateSupabaseConfigStatus({ status: 'PRESENT' })} data-testid="update">Update</button>
+                <div data-testid="db-status">{supabaseConfigStatus?.status}</div>
+            </div>
+        );
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestSupabase />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    // 1. Wait for Onboard
+    await waitFor(() => {
+        expect(screen.getByTestId('db-status')).toHaveTextContent('NOT_SET');
+    });
+
+    // 2. Update
+    await act(async () => {
+        screen.getByTestId('update').click();
+    });
+    expect(screen.getByTestId('db-status')).toHaveTextContent('PRESENT');
 });
 
 test('Logs out for login_required error', async () => {
