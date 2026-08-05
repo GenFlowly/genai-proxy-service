@@ -32,7 +32,12 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         setSelectedInstructionId,
         customerInstructions,
     } = useAI()
-    const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
+    const { 
+        setLeftSidebarExpanded, 
+        setRightSidebarExpanded, 
+        setLeftSidebarMinimized, 
+        setHistoryWidgetExpanded 
+    } = useLayout()
     const navigate = useNavigate()
 
 
@@ -353,6 +358,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         updateConversationBlock(id, { isLoading: true, responseMessages: [] })
         setLeftSidebarExpanded(false)
         setRightSidebarExpanded(false)
+        setLeftSidebarMinimized(false)
+        setHistoryWidgetExpanded(false)
 
         try {
             const token = await getAccessTokenSilently()
@@ -452,6 +459,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         setLeftSidebarExpanded(false)
         setRightSidebarExpanded(false)
+        setLeftSidebarMinimized(false)
+        setHistoryWidgetExpanded(false)
 
         try {
             const token = await getAccessTokenSilently()

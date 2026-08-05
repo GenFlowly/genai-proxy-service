@@ -29,8 +29,10 @@ jest.mock('../../context/AIContext', () => ({
 jest.mock('../../context/LayoutContext', () => ({
     useLayout: () => ({
         setLeftSidebarExpanded: jest.fn(),
-        setRightSidebarExpanded: jest.fn()
-    })
+        setRightSidebarExpanded: jest.fn(),
+        setLeftSidebarMinimized: jest.fn(),
+        setHistoryWidgetExpanded: jest.fn(),
+    }),
 }));
 
 jest.mock('../../context/ToastContext', () => ({
