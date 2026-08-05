@@ -33,7 +33,7 @@ export default function PromptEditorCore({ id, value, onChange, disableCache = f
                             height={height}
                             visible={false}
                             enablePreview={true}
-                            hideToolbar={true}
+                            showToolbar={false}
                             className={styles.markdownEditor}
                             extensions={[
                                 EditorView.lineWrapping,
