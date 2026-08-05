@@ -18,7 +18,7 @@ interface PromptEditorCoreProps {
     readOnly?: boolean
 }
 
-export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "40.25rem", className = '', 'data-testid': testId, readOnly = false }: PromptEditorCoreProps): React.ReactElement {
+export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false }: PromptEditorCoreProps): React.ReactElement {
 
     return (
         <div className={`${styles.container} ${className}`} data-testid={testId} style={height === '100%' ? { height: '100%' } : {}}>
@@ -33,16 +33,8 @@ export default function PromptEditorCore({ id, value, onChange, disableCache = f
                             height={height}
                             visible={false}
                             enablePreview={true}
+                            hideToolbar={true}
                             className={styles.markdownEditor}
-                            toolbars={[
-                                addStepsCommand,
-                                addExamplesCommand,
-                            ]}
-                            toolbarsMode={[
-                                preview,
-                                fullscreen,
-                                addCopyCommand,
-                            ]}
                             extensions={[
                                 EditorView.lineWrapping,
                                 ...(readOnly ? [EditorView.editable.of(false), EditorState.readOnly.of(true)] : [])
