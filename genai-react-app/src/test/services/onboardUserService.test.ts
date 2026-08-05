@@ -62,3 +62,4 @@ describe('onboardUserService', () => {
             .rejects.toThrow('Backend sync failed: 500 Internal Server Error');
     });
 });
+// Trigger coverage run

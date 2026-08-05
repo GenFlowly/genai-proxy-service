@@ -147,3 +147,4 @@ describe('AuthContext Functions', () => {
     }, 15000);
 
 });
+// Trigger coverage run

@@ -26,11 +26,20 @@
     gap: 0.25rem;
     flex: 1; // Take remaining height
     overflow-y: auto;
+    overflow-x: hidden;
     // max-height: 60vh; // Removed constant height
 
-    // Custom scrollbar
+    scrollbar-width: none; // Hide gutter completely in Firefox
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s;
+
+    &.scrolling {
+        scrollbar-width: thin; // Show gutter only when scrolling
+        scrollbar-color: var(--color-border) transparent;
+    }
+
     &::-webkit-scrollbar {
-        width: 4px;
+        width: 3px; // very thin scrollbar
     }
 
     &::-webkit-scrollbar-track {
@@ -38,11 +47,15 @@
     }
 
     &::-webkit-scrollbar-thumb {
-        background: $color-border;
-        border-radius: 4px;
+        background: transparent;
+        border-radius: 2px;
     }
 
-    &::-webkit-scrollbar-thumb:hover {
+    &.scrolling::-webkit-scrollbar-thumb {
+        background: $color-border;
+    }
+
+    &.scrolling::-webkit-scrollbar-thumb:hover {
         background: $color-text-muted;
     }
 }
@@ -50,7 +63,6 @@
 .threadBlock {
     display: flex;
     flex-direction: column;
-    width: 100%;
 
     &:not(:last-child) {
         border-bottom: 1px solid $color-border;
