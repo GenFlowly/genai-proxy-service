@@ -1,11 +1,11 @@
 import React from 'react'
 import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
-import MarkdownEditor, { fullscreen, preview } from '@uiw/react-markdown-editor'
+import MarkdownEditor from '@uiw/react-markdown-editor'
 import { EditorView } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import styles from './PromptEditor.module.scss'
-import { addStepsCommand, addExamplesCommand, addCopyCommand } from './CustomToolbarCommands'
+
 
 interface PromptEditorCoreProps {
     id: string
@@ -32,7 +32,7 @@ export default function PromptEditorCore({ id, value, onChange, disableCache = f
                             onChange={onChange}
                             height={height}
                             visible={false}
-                            enablePreview={true}
+                            enablePreview={false}
                             showToolbar={false}
                             className={styles.markdownEditor}
                             extensions={[
