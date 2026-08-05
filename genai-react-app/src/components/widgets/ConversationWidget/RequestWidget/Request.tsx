@@ -127,7 +127,7 @@ export default function Request({
     const displayPicture = customerPicture || user?.picture
 
     // Only lock Request when actively streaming/resolved AND not being edited
-    if (conversationBlock.status === 'resolved' && !conversationBlock.isLoading) {
+    if (conversationBlock.status === 'resolved' || conversationBlock.isLoading) {
         return (
             <div className={styles.resolvedRequestContainer}
                  data-testid={testId || "resolved-request-wrapper"}>
@@ -139,6 +139,18 @@ export default function Request({
                     showCopyButton={true}
                     data-testid={testId || "resolved-request-wrapper"}
                 />
+                {conversationBlock.isLoading && (
+                    <div className={styles.buttonWrapper}
+                         data-testid="generate-button-wrapper"
+                         style={{ marginTop: '1rem' }}>
+                        <MultiPurposeButton
+                            onClick={() => stopGenerating(blockId)}
+                            label="Stop Generating"
+                            disabled={false}
+                            data-testid="generate-button"
+                        />
+                    </div>
+                )}
             </div>
         )
     }
@@ -164,17 +176,13 @@ export default function Request({
                         style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
                         <MultiPurposeButton
                             onClick={() => {
-                                if (conversationBlock.isLoading) {
-                                    stopGenerating(blockId)
-                                } else {
-                                    if (!hasAnyValidApiKey) return
-                                    const selectedId = getSelectedResponseForBlock(blockId)
-                                    generateResponsesStream(blockId, draftPrompt, selectedId)
-                                }
+                                if (!hasAnyValidApiKey) return
+                                const selectedId = getSelectedResponseForBlock(blockId)
+                                generateResponsesStream(blockId, draftPrompt, selectedId)
                             }}
-                            label={conversationBlock.isLoading ? 'Stop Generating' : 'Generate'}
-                            disabled={!conversationBlock.isLoading && !hasAnyValidApiKey}
-                            icon={conversationBlock.isLoading ? undefined : ICONS.SEND}
+                            label="Generate"
+                            disabled={!hasAnyValidApiKey}
+                            icon={ICONS.SEND}
                             data-testid="generate-button"
                         />
                     </div>
