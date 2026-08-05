@@ -1,57 +1,49 @@
-import { storeCustomerVectorDBConfig } from '../../../src/services/storeCustomerVectorDBConfigService';
-import { endpoints } from '../../../src/config/endpoints';
-import { HttpMethod } from '../../../src/constants/http';
+import { storeCustomerVectorDBConfig } from '../../services/storeCustomerVectorDBConfigService';
+import { fetchWithRetry } from '../../utils/apiUtils';
+import { endpoints } from '../../config/endpoints';
 
-// Mock matchers and fetch mapping
-global.fetch = jest.fn();
+jest.mock('../../utils/apiUtils');
 
-describe('storeCustomerVectorDBConfig Service', () => {
+describe('storeCustomerVectorDBConfigService', () => {
+    const mockToken = 'test-token';
+    const mockRequest = { vendor: 'ZILLIZ', zillizEndpoint: 'url', zillizToken: 'token' };
+
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    it('should successfully call the storeCustomerVectorDBConfig endpoint and return data', async () => {
-        const mockToken = 'mock-jwt-token';
-        const mockPayload = { vendor: 'Zilliz', endpoint: 'https://test-endpoint.zillizcloud.com', token: 'mock-token' };
-
-        const mockResponse = {
-            configStatus: {
-                vendor: 'Zilliz',
-                isConfigValid: true,
-                status: 'PRESENT',
-                updateSuccessful: true
-            }
-        };
-
-        (global.fetch as jest.Mock).mockResolvedValue({
+    test('successfully stores vector db config', async () => {
+        const mockResponse = { configStatus: { vendor: 'Zilliz', status: 'PRESENT' } };
+        const mockFetchWithRetry = fetchWithRetry as jest.Mock;
+        mockFetchWithRetry.mockResolvedValue({
             ok: true,
             json: jest.fn().mockResolvedValue(mockResponse),
         });
 
-        const result = await storeCustomerVectorDBConfig(mockToken, mockPayload);
+        const result = await storeCustomerVectorDBConfig(mockToken, mockRequest);
 
-        expect(global.fetch).toHaveBeenCalledWith(endpoints.storeCustomerVectorDBConfig, {
-            method: HttpMethod.POST,
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${mockToken}`,
-            },
-            body: JSON.stringify(mockPayload),
-        });
+        expect(fetchWithRetry).toHaveBeenCalledWith(
+            endpoints.storeCustomerVectorDBConfig,
+            expect.objectContaining({
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${mockToken}`
+                },
+                body: JSON.stringify(mockRequest)
+            })
+        );
         expect(result).toEqual(mockResponse);
     });
 
-    it('should throw an error if the request fails', async () => {
-        const mockToken = 'mock-jwt-token';
-        const mockPayload = { vendor: 'Zilliz', endpoint: 'https://fail.zillizcloud.com', token: 'bad-token' };
-
-        (global.fetch as jest.Mock).mockResolvedValue({
+    test('throws error when response is not ok', async () => {
+        const mockFetchWithRetry = fetchWithRetry as jest.Mock;
+        mockFetchWithRetry.mockResolvedValue({
             ok: false,
-            statusText: 'Internal Server Error',
+            statusText: 'Bad Request'
         });
 
-        await expect(storeCustomerVectorDBConfig(mockToken, mockPayload)).rejects.toThrow(
-            'Failed to save Vector DB config: Internal Server Error'
-        );
+        await expect(storeCustomerVectorDBConfig(mockToken, mockRequest))
+            .rejects.toThrow('Failed to save Vector DB config: Bad Request');
     });
 });

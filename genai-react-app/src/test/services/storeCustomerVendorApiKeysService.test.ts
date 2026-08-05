@@ -1,53 +1,49 @@
 import { storeCustomerVendorApiKey } from '../../services/storeCustomerVendorApiKeysService';
 import { fetchWithRetry } from '../../utils/apiUtils';
 import { endpoints } from '../../config/endpoints';
-import { HttpMethod } from '../../constants/http';
-import { mockStoreApiKeyRequest, mockStoreApiKeyResponse } from '../fixtures/apiKey';
 
-// Mock dependencies
 jest.mock('../../utils/apiUtils');
 
-const mockFetchWithRetry = fetchWithRetry as jest.Mock;
-
 describe('storeCustomerVendorApiKeysService', () => {
-    const mockToken = 'mock-auth-token';
+    const mockToken = 'test-token';
+    const mockRequest = { aiVendor: 'OpenAI', apiKey: 'test-key' };
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    test('storeCustomerVendorApiKey calls POST with correct data', async () => {
-        // Arrange
+    test('successfully stores vendor api key', async () => {
+        const mockResponse = { aiVendorAPIKeyStatus: { aiVendor: 'OpenAI', status: 'valid' } };
+        const mockFetchWithRetry = fetchWithRetry as jest.Mock;
         mockFetchWithRetry.mockResolvedValue({
             ok: true,
-            json: jest.fn().mockResolvedValue(mockStoreApiKeyResponse)
+            json: jest.fn().mockResolvedValue(mockResponse),
         });
 
-        // Act
-        const result = await storeCustomerVendorApiKey(mockToken, mockStoreApiKeyRequest);
+        const result = await storeCustomerVendorApiKey(mockToken, mockRequest);
 
-        // Assert
-        expect(mockFetchWithRetry).toHaveBeenCalledWith(endpoints.storeCustomerVendorApiKey, {
-            method: HttpMethod.POST,
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${mockToken}`,
-            },
-            body: JSON.stringify(mockStoreApiKeyRequest),
-        });
-
-        expect(result).toEqual(mockStoreApiKeyResponse);
+        expect(fetchWithRetry).toHaveBeenCalledWith(
+            endpoints.storeCustomerVendorApiKey,
+            expect.objectContaining({
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${mockToken}`
+                },
+                body: JSON.stringify(mockRequest)
+            })
+        );
+        expect(result).toEqual(mockResponse);
     });
 
-    test('storeCustomerVendorApiKey throws error on failure', async () => {
-        // Arrange
+    test('throws error when response is not ok', async () => {
+        const mockFetchWithRetry = fetchWithRetry as jest.Mock;
         mockFetchWithRetry.mockResolvedValue({
             ok: false,
-            statusText: 'Internal Server Error'
+            statusText: 'Bad Request'
         });
 
-        // Act & Assert
-        await expect(storeCustomerVendorApiKey(mockToken, mockStoreApiKeyRequest))
-            .rejects.toThrow('Failed to save key for OPENAI: Internal Server Error');
+        await expect(storeCustomerVendorApiKey(mockToken, mockRequest))
+            .rejects.toThrow('Failed to save key for OpenAI: Bad Request');
     });
 });
