@@ -86,3 +86,4 @@ describe('ToastContext', () => {
 
         expect(screen.getByTestId('toast-item')).toBeInTheDocument()
     })
+// Trigger coverage run

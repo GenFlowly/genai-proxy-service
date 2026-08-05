@@ -663,3 +663,4 @@ describe('InstructionWidget Component', () => {
 });
 
 // Coverage refresh
+// Trigger coverage run

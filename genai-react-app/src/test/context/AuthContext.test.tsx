@@ -531,3 +531,4 @@ test('Logs out for login_required error', async () => {
 
 // Coverage refresh
 // trigger coverage run
+// Trigger coverage run

@@ -240,3 +240,4 @@ describe('Navbar Component', () => {
         expect(logoutBtn).toHaveFocus();
     });
 });
+// Trigger coverage run

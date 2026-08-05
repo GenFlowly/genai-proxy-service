@@ -18,15 +18,17 @@ export default function ConversationHeader(): React.ReactElement | null {
     const { showToast } = useToast()
     const [isShareModalOpen, setShareModalOpen] = useState(false)
 
-    if (!conversationId) return null
-
+    const isNewChat = !conversationId
     const canShare = conversationRole === 'OWNER' || conversationRole === 'EDIT'
+    const showShare = isNewChat || canShare
+    const displayTitle = isNewChat ? 'New Chat' : (conversationTitle ?? 'Untitled conversation')
 
     const handleShareSave = async (
         _mode: VisibilityMode,
         users: SearchUserResponse[],
         removedUsers: SearchUserResponse[]
     ) => {
+        if (isNewChat) return
         try {
             const token = await getAccessTokenSilently()
             for (const user of users) {
@@ -44,16 +46,17 @@ export default function ConversationHeader(): React.ReactElement | null {
 
     return (
         <div className={styles.header}>
-            <div className={styles.title} title={conversationTitle ?? undefined}>
-                {conversationTitle ?? 'Untitled conversation'}
+            <div className={styles.title} title={displayTitle}>
+                {displayTitle}
             </div>
             <div className={styles.actions}>
-                {canShare && (
+                {showShare && (
                     <PillButton
                         label="Share"
                         className={styles.shareButton}
-                        onClick={() => setShareModalOpen(true)}
+                        onClick={() => !isNewChat && setShareModalOpen(true)}
                         data-testid="conversation-share-button"
+                        disabled={isNewChat}
                     />
                 )}
             </div>
