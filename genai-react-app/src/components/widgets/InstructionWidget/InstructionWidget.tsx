@@ -157,6 +157,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                 data-testid={testId || "instruction-widget-collapsed"}>
                 <div className={styles.instructionsCTAWrapper}
                     data-testid="instructions-cta-wrapper">
+                    <div className={styles.spacer} />
                     <div style={{
                         flex: 1,
                     }}>
