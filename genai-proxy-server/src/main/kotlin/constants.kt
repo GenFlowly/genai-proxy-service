@@ -75,4 +75,14 @@ object DynamoDBConstants {
     // GSI on Conversation table keyed by conversationId only, enabling lookup
     // of a conversation without knowing its owner (needed for shared conversations).
     const val CONVERSATION_ID_GSI_KEY = "conversationIdIndex"
+
+    // Instruction usage tracking
+    const val INSTRUCTION_USAGE_TABLE = "InstructionUsage"
+    const val INSTRUCTION_USAGE_COUNT_KEY = "usageCount"
+    const val INSTRUCTION_LAST_USED_KEY = "lastUsedAt"
+
+    // Deduplication set — ensures each (conversationId, instructionId) pair is
+    // counted at most once per customer.
+    const val INSTRUCTION_USAGE_SEEN_TABLE = "InstructionUsageSeen"
+    const val INSTRUCTION_USAGE_SEEN_SORT_KEY = "convInstKey" // "<conversationId>#<instructionId>"
 }

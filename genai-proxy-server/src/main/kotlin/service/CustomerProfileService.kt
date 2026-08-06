@@ -503,7 +503,38 @@ class CustomerProfileService(
     suspend fun removeToolCredentials(customerId: String, toolType: String) {
         dynamoDBProvider.deleteCustomerToolCredentials(customerId, toolType)
     }
+
+    /**
+     * Tracks instruction (persona) usage strictly per (customerId, instructionId) pair,
+     * counting each unique (conversationId, instructionId) combination at most once.
+     *
+     * Steps:
+     *  1. Conditionally write to InstructionUsageSeen to mark this pair as seen.
+     *  2. If it was new (first time), atomically increment the counter and update lastUsedAt
+     *     in InstructionUsage.
+     *  3. If it was already seen, skip — avoids double-counting messages in the same conversation.
+     *
+     * Any failure is swallowed with a warning so it never disrupts the generate-text flow.
+     */
+    suspend fun trackInstructionUsage(
+        customerId: String,
+        conversationId: String,
+        instructionId: String
+    ) {
+        try {
+            val isNew = dynamoDBProvider.markInstructionUsageSeenIfNew(
+                customerId, conversationId, instructionId
+            )
+            if (isNew) {
+                val now = java.time.Instant.now().toString()
+                dynamoDBProvider.incrementInstructionUsage(customerId, instructionId, now)
+            }
+        } catch (e: Exception) {
+            logger.warn { "Failed to track instruction usage for instructionId=$instructionId customerId=$customerId: ${e.message}" }
+        }
+    }
 }
+
 
 fun generateCustomerId(): String {
     val uuid =

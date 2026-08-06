@@ -146,7 +146,10 @@ class AIRequestManager(
 
         logger.info("Added Message id {} to conversation", message.messageId)
 
-        // Step 5 - Handle request for each AI vendor in loop
+        // Step 5 - Track instruction usage (strict: counts each unique conversation+instruction once)
+        if (instructionId.isNotBlank()) {
+            customerProfileService.trackInstructionUsage(customerId, activeConversationId, instructionId)
+        }
         val responseMessageList = coroutineScope {
             message.aiConfig.map { aiConfig ->
                 async {
@@ -377,6 +380,11 @@ class AIRequestManager(
         conversationService.addMessageInConversation(message)
         logger.info("Added Message id {} to conversation", message.messageId)
 
+        // Step 4 - Track instruction usage (strict: counts each unique conversation+instruction once)
+        if (instructionId.isNotBlank()) {
+            customerProfileService.trackInstructionUsage(customerId, activeConversationId, instructionId)
+        }
+
         val config = aiConfig.firstOrNull() ?: run {
             logger.warn("No AI config provided in request")
             return StreamExecutionResult(activeConversationId, deterministicId, kotlinx.coroutines.flow.emptyFlow(), "")
@@ -385,6 +393,7 @@ class AIRequestManager(
         // Fetch API key before building the flow so auth errors surface immediately
         val apiKey = fetchApiKey(config.aiVendor, customerId, customerProfileService)
             ?: throw IllegalArgumentException("API key not found for vendor: ${config.aiVendor}")
+
         val llmCredentials = mapOf(vendorToCredentialKey(config.aiVendor) to apiKey)
         val llmProvider = vendorToProviderString(config.aiVendor)
 
