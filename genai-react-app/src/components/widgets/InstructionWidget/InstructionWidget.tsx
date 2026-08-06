@@ -161,7 +161,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                         flex: 1,
                     }}>
                         <InputSelectWithHint
-                            hint="Instructions"
+                            hint="Persona"
                             icon={ICONS.USER_ROLE}
                             placeholder="Select a persona"
                             className={styles.roleInput}

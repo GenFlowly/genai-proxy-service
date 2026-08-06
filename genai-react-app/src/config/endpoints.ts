@@ -27,4 +27,5 @@ export const endpoints = {
     getProfile: `${BASE}${API_PREFIX}/profile`,
     updateUsername: `${BASE}${API_PREFIX}/profile/username`,
     updateDiscoverability: `${BASE}${API_PREFIX}/profile/discoverability`,
+    getCustomerAgents: `${BASE}${API_PREFIX}/agents`,
 };
