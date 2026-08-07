@@ -16,8 +16,8 @@ else:
     load_dotenv()
 
 # Auth0 Configuration
-AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "dev-abh5z7416lwy3xhv.us.auth0.com")
-AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "QgQ45wDqkvY9x4iQsgZYzw226fjro1hX")
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "auth.genflowly.com")
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "VSKaAyEXLKM0LuZzJVhvH6RTT11LiNgE")
 AUTH0_CALLBACK_URL = os.getenv("AUTH0_CALLBACK_URL", "http://localhost:8080/callback")
 AUTH0_SCOPES = os.getenv("AUTH0_SCOPES", "openid profile email")
 

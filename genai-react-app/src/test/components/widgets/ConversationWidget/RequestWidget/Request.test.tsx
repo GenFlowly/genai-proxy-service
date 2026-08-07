@@ -146,7 +146,7 @@ describe('Request Widget Component', () => {
         expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', 'Ready Prompt', 'selected-res-id');
     });
 
-    test('renders in Editor mode with Stop Generating button when loading', () => {
+    test('renders as TextContainer with Stop Generating button when loading', () => {
         mockUseConversation.mockReturnValue({
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
@@ -163,8 +163,9 @@ describe('Request Widget Component', () => {
         });
 
         render(<Request blockId="block-1" />);
-        // Editor should be visible
-        expect(screen.getByTestId('prompt-editor')).toBeInTheDocument();
+        // Editor should NOT be visible, TextContainer should be visible
+        expect(screen.queryByTestId('prompt-editor')).not.toBeInTheDocument();
+        expect(screen.getByTestId('resolved-request-wrapper')).toBeInTheDocument();
         
         // Button should exist
         const btn = screen.getByTestId('generate-button');

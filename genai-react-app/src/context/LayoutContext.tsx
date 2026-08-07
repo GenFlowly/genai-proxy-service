@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { LayoutContextType } from '../models/layout.models'
 
 /* ---------- Context ---------- */
@@ -20,11 +20,13 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
     const [isInstructionWidgetExpanded, setInstructionWidgetExpanded] = useState(false)
     const [isHistoryWidgetExpanded, setHistoryWidgetExpanded] = useState(true)
 
-    const toggleLeftSidebar = () => setIsLeftSidebarExpanded(prev => !prev)
-    const toggleRightSidebar = () => setIsRightSidebarExpanded(prev => !prev)
+    const toggleLeftSidebar = useCallback(() => setIsLeftSidebarExpanded(prev => !prev), [])
+    const toggleRightSidebar = useCallback(() => setIsRightSidebarExpanded(prev => !prev), [])
 
-    const setLeftSidebarExpanded = (visible: boolean) => setIsLeftSidebarExpanded(visible)
-    const setRightSidebarExpanded = (visible: boolean) => setIsRightSidebarExpanded(visible)
+    const setLeftSidebarExpanded = useCallback((visible: boolean) => setIsLeftSidebarExpanded(visible), [])
+    const setRightSidebarExpanded = useCallback((visible: boolean) => setIsRightSidebarExpanded(visible), [])
+
+    const [isLeftSidebarMinimized, setLeftSidebarMinimized] = useState(false)
 
     return (
         <LayoutContext.Provider
@@ -39,6 +41,8 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
                 setInstructionWidgetExpanded,
                 isHistoryWidgetExpanded,
                 setHistoryWidgetExpanded,
+                isLeftSidebarMinimized,
+                setLeftSidebarMinimized,
             }}
         >
             {children}

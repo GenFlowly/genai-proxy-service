@@ -42,6 +42,8 @@ export interface IConversationContext {
     conversationId: string
     activeBlockId: string
     setActiveBlockId: (id: string) => void
+    activeViewportItem: { blockId: string, type: 'request' | 'response' } | null
+    setActiveViewportItem: (item: { blockId: string, type: 'request' | 'response' } | null) => void
     systemPrompt: string
     setSystemPrompt: (prompt: string) => void
     addNewConversationBlock: () => void

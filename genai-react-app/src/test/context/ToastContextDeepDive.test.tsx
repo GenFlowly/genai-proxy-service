@@ -35,3 +35,4 @@ describe('ToastContext Deep Dive', () => {
         // If we had a close button in the Toast component, we would click it here.
     });
 });
+// Trigger coverage run

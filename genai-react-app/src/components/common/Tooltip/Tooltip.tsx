@@ -6,10 +6,11 @@ interface TooltipProps {
     content: string
     children: ReactNode
     position?: 'top' | 'bottom' | 'left' | 'right'
+    fullWidth?: boolean
     'data-testid'?: string
 }
 
-export default function Tooltip({ content, children, position = 'right', 'data-testid': testId }: TooltipProps) {
+export default function Tooltip({ content, children, position = 'right', fullWidth = false, 'data-testid': testId }: TooltipProps) {
     const [isVisible, setIsVisible] = useState(false)
     const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
     const [placement, setPlacement] = useState<'right' | 'left' | 'top' | 'bottom'>(position)
@@ -69,7 +70,7 @@ export default function Tooltip({ content, children, position = 'right', 'data-t
         <>
             <div
                 ref={containerRef}
-                className={styles.tooltipContainer}
+                className={`${styles.tooltipContainer} ${fullWidth ? styles.fullWidth : ''}`}
                 onMouseEnter={() => setIsVisible(true)}
                 onMouseLeave={() => setIsVisible(false)}
                 onFocus={() => setIsVisible(true)}

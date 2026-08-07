@@ -9,12 +9,12 @@ interface LeftSidebarProps {
 }
 
 export default function LeftSidebar({ widgetIds, 'data-testid': testId }: LeftSidebarProps): React.ReactElement {
-    const { isLeftSidebarExpanded } = useLayout()
+    const { isLeftSidebarExpanded, isLeftSidebarMinimized } = useLayout()
     const collapsed = !isLeftSidebarExpanded
     const widgets = useWidgetResolver(widgetIds)
 
     return (
-        <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`} data-testid={testId || "left-sidebar"}>
+        <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''} ${isLeftSidebarMinimized ? styles.minimized : ''}`} data-testid={testId || "left-sidebar"}>
 
 
             <div className={styles.sidebarContent}>

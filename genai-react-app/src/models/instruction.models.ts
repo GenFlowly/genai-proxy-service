@@ -9,6 +9,10 @@ export interface InstructionResponse {
     version: number;
     name: string;
     instruction: string;
+    icon?: string | null;
+    color?: string | null;
+    category?: string | null;
+    tags?: string[] | null;
     role?: 'OWNER' | 'EDIT' | 'VIEW';
 }
 

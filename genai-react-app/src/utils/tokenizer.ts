@@ -24,9 +24,14 @@ export async function getTokenizer(model: string): Promise<Tiktoken> {
 
     tokenizerCache[key] = (async () => {
         // Dynamically import to reduce bundle size
-        const { encodingForModel } = await import("js-tiktoken");
-        // Cast to TiktokenModel — caller is responsible for providing a valid model
-        return encodingForModel(key as TiktokenModel);
+        const { encodingForModel, getEncoding } = await import("js-tiktoken");
+        try {
+            // Cast to TiktokenModel — caller is responsible for providing a valid model
+            return encodingForModel(key as TiktokenModel);
+        } catch (error) {
+            console.warn(`Model '${key}' not found in js-tiktoken. Falling back to 'cl100k_base'.`);
+            return getEncoding("cl100k_base");
+        }
     })();
 
     return tokenizerCache[key]!;
@@ -37,7 +42,6 @@ export async function getTokenizer(model: string): Promise<Tiktoken> {
  * May throw if model is unsupported.
  */
 export async function countTokens(text: string, model: string): Promise<number> {
-    console.log("COUNT TOKENS", text, model)
     if (!text) return 0;
     if (!model) throw new Error("No model selected");
     let tokens = []

@@ -46,9 +46,15 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
 
     const selectedVendors = getVendorSelectionForBlock(blockId)
     const effectiveSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
-    const filteredResponseList = visibleMessages.filter(msg =>
-        msg.aiVendor && effectiveSelectedVendors.includes(msg.aiVendor)
-    )
+    const filteredResponseList = useMemo(() => {
+        const vendorMap = new Map<string, Message>()
+        for (const msg of visibleMessages) {
+            if (msg.aiVendor && effectiveSelectedVendors.includes(msg.aiVendor)) {
+                vendorMap.set(msg.aiVendor, msg) // This will overwrite older messages, keeping the latest one
+            }
+        }
+        return Array.from(vendorMap.values())
+    }, [visibleMessages, effectiveSelectedVendors])
 
     if (!visibleMessages || visibleMessages.length === 0) {
         return (

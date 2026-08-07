@@ -1,0 +1,105 @@
+@import '../../../styles/themes.scss';
+
+.sidebar {
+    width: 260px;
+    background-color: transparent;
+    border-right: 1px solid $color-border-light;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 1.5rem 1rem;
+    flex-shrink: 0;
+}
+
+.header {
+    padding-bottom: 1.5rem;
+    
+    h2 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: $color-text-muted;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin: 0;
+        padding-left: 0.5rem;
+    }
+}
+
+.nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+}
+
+.tabButton {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: $color-text-secondary;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+
+    &:hover {
+        color: $color-text-primary;
+        background-color: $color-background-hover;
+    }
+
+    &.active {
+        color: $color-text-primary;
+        font-weight: 600;
+        background-color: $color-background-selected;
+        
+        &::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 20%;
+            bottom: 20%;
+            width: 3px;
+            background-color: $color-primary;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .icon {
+            color: $color-primary;
+        }
+    }
+
+    .icon {
+        color: $color-text-muted;
+        transition: color 0.2s ease;
+    }
+}
+
+.footer {
+    margin-top: auto;
+    padding-top: 1.5rem;
+}
+
+.logoutButton {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    color: #dc2626;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s ease;
+
+    &:hover {
+        background-color: rgba(220, 38, 38, 0.1);
+        border-color: rgba(220, 38, 38, 0.5);
+    }
+}

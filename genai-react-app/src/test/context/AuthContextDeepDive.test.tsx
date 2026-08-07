@@ -97,3 +97,4 @@ describe('AuthContext Deep Dive', () => {
         });
     });
 });
+// Trigger coverage run

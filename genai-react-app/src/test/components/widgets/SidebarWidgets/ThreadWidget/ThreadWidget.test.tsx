@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import ThreadWidget from '../../../../../components/widgets/SidebarWidgets/ThreadWidget/ThreadWidget';
 import { useConversation } from '../../../../../context/ConversationContext';
 import { useLayout } from '../../../../../context/LayoutContext';
@@ -25,6 +25,11 @@ describe('ThreadWidget', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
     });
 
     test('renders empty state correctly (Expanded)', () => {
@@ -113,5 +118,86 @@ describe('ThreadWidget', () => {
 
         // Items should receive collapsed prop
         expect(screen.getByTestId('prompt-item-block-1')).toHaveTextContent('(Collapsed)');
+    });
+
+    test('handles scroll events and sets isScrolling state', () => {
+        mockUseConversation.mockReturnValue({
+            conversationBlockList: [
+                {
+                    conversationBlockId: 'block-1',
+                    prompt: 'Prompt',
+                    responseMessages: [],
+                    status: 'resolved'
+                }
+            ]
+        });
+        mockUseLayout.mockReturnValue({
+            isLeftSidebarExpanded: true
+        });
+
+        render(<ThreadWidget />);
+
+        // The thread list container is the one rendered when blocks exist
+        // We can find it by getting the parent of the prompt-item, or testid if we had one.
+        // Let's add a testid to it or find it by class
+        // It has className styles.threadList. Since styles are mocked, we can just find it by traversing up.
+        const promptItem = screen.getByTestId('prompt-item-block-1');
+        const threadBlock = promptItem.parentElement;
+        const threadList = threadBlock?.parentElement;
+        
+        expect(threadList).toBeInTheDocument();
+        
+        // Initial state should not have scrolling class
+        expect(threadList?.className).not.toMatch(/scrolling/);
+
+        // Fire scroll event
+        act(() => {
+            fireEvent.scroll(threadList!);
+        });
+
+        // Should have scrolling class
+        expect(threadList?.className).toMatch(/scrolling/);
+
+        // Fast forward 800ms
+        act(() => {
+            jest.advanceTimersByTime(800);
+        });
+
+        // Scrolling class should be removed
+        expect(threadList?.className).not.toMatch(/scrolling/);
+    });
+
+    test('cleans up timeout on unmount', () => {
+        mockUseConversation.mockReturnValue({
+            conversationBlockList: [
+                {
+                    conversationBlockId: 'block-1',
+                    prompt: 'Prompt',
+                    responseMessages: [],
+                    status: 'resolved'
+                }
+            ]
+        });
+        mockUseLayout.mockReturnValue({
+            isLeftSidebarExpanded: true
+        });
+
+        const { unmount } = render(<ThreadWidget />);
+
+        const promptItem = screen.getByTestId('prompt-item-block-1');
+        const threadList = promptItem.parentElement?.parentElement;
+
+        act(() => {
+            fireEvent.scroll(threadList!);
+        });
+
+        // Unmount the component while timer is active
+        unmount();
+
+        // If it throws an error or warns about act(), it means the state was updated after unmount
+        // Since we clean it up, advancing timers shouldn't cause React state update warnings
+        act(() => {
+            jest.advanceTimersByTime(800);
+        });
     });
 });

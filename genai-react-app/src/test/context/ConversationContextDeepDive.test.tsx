@@ -25,6 +25,8 @@ jest.mock('../../context/LayoutContext', () => ({
     useLayout: () => ({
         setLeftSidebarExpanded: jest.fn(),
         setRightSidebarExpanded: jest.fn(),
+        setLeftSidebarMinimized: jest.fn(),
+        setHistoryWidgetExpanded: jest.fn(),
     }),
 }));
 

@@ -24,6 +24,11 @@ jest.mock('../../services/generateTextService', () => ({
 import * as generateTextStreamService from '../../services/generateTextStreamService';
 import * as conversationService from '../../services/conversationService';
 import * as generateTextService from '../../services/generateTextService';
+import * as getAIUsageService from '../../services/getAIUsageService';
+
+jest.mock('../../services/getAIUsageService', () => ({
+    getAIUsageActivity: jest.fn()
+}));
 
 jest.mock('../../components/widgets/PromptEditorWidget/PromptEditor', () => (props: any) => (
     <div data-testid={`${props['data-testid']}-container`}>
@@ -84,6 +89,8 @@ const TestConversationUI = () => {
         setActiveBlockId,
         generateResponses, // Expose for testing
         conversationTitle,
+        activeViewportItem,
+        setActiveViewportItem,
     } = useConversation();
 
     // Auto-add a block if empty for testing
@@ -116,6 +123,15 @@ const TestConversationUI = () => {
                 </div>
             ))}
             <div data-testid="conversation-title">{conversationTitle ?? ''}</div>
+            <div data-testid="active-viewport-item">
+                {activeViewportItem ? `${activeViewportItem.blockId}:${activeViewportItem.type}` : 'none'}
+            </div>
+            <button 
+                onClick={() => setActiveViewportItem({ blockId: 'test-block-1', type: 'request' })} 
+                data-testid="set-viewport-btn"
+            >
+                Set Viewport
+            </button>
             <button onClick={() => loadConversation('conv-123')} data-testid="load-btn">Load</button>
             <button onClick={() => resetConversation()} data-testid="reset-btn">Reset</button>
             <button onClick={() => addNewConversationBlock()} data-testid="add-block-btn">Add Block</button>
@@ -168,7 +184,7 @@ describe('ConversationContext UI Integration', () => {
         });
     });
 
-    test('Flow: Enter Prompt -> Generate Stream -> Receive Response', async () => {
+    test('Flow: Enter Prompt -> Generate Stream -> Receive Response and fetch metrics', async () => {
         (generateTextStreamService.generateTextStream as jest.Mock).mockImplementation(
             async (token, payload, onDelta, onMetadata) => {
                 onDelta('Hello! ');
@@ -177,6 +193,12 @@ describe('ConversationContext UI Integration', () => {
                 onMetadata({ conversationId: 'conv-1', responseMessageId: 'resp-1' });
             }
         );
+        (getAIUsageService.getAIUsageActivity as jest.Mock).mockResolvedValueOnce({
+            inputTokens: 10,
+            outputTokens: 20,
+            totalTokens: 30,
+            tokensReadFromCache: 0
+        });
 
         customRender(<TestConversationUI />);
         const editor = await screen.findByTestId('prompt-editor');
@@ -507,4 +529,18 @@ describe('ConversationContext UI Integration', () => {
             expect(mockSetSelectedInstructionId).toHaveBeenCalledWith(null);
         });
     });
+
+    test('Flow: activeViewportItem is initially null', async () => {
+        customRender(<TestConversationUI />);
+        expect(screen.getByTestId('active-viewport-item')).toHaveTextContent('none');
+    });
+
+    test('Flow: can update activeViewportItem', async () => {
+        customRender(<TestConversationUI />);
+        fireEvent.click(screen.getByTestId('set-viewport-btn'));
+        await waitFor(() => {
+            expect(screen.getByTestId('active-viewport-item')).toHaveTextContent('test-block-1:request');
+        });
+    });
 });
+

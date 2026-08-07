@@ -32,12 +32,18 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         setSelectedInstructionId,
         customerInstructions,
     } = useAI()
-    const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
+    const { 
+        setLeftSidebarExpanded, 
+        setRightSidebarExpanded, 
+        setLeftSidebarMinimized, 
+        setHistoryWidgetExpanded 
+    } = useLayout()
     const navigate = useNavigate()
 
 
     const [conversationId, setConversationId] = useState<string>('')
     const [activeBlockId, setActiveBlockId] = useState<string>('')
+    const [activeViewportItem, setActiveViewportItem] = useState<{ blockId: string, type: 'request' | 'response' } | null>(null)
     const [conversationTitle, setConversationTitle] = useState<string | null>(null)
     const [conversationRole, setConversationRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER')
     
@@ -352,6 +358,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         updateConversationBlock(id, { isLoading: true, responseMessages: [] })
         setLeftSidebarExpanded(false)
         setRightSidebarExpanded(false)
+        setLeftSidebarMinimized(false)
+        setHistoryWidgetExpanded(false)
 
         try {
             const token = await getAccessTokenSilently()
@@ -451,6 +459,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         setLeftSidebarExpanded(false)
         setRightSidebarExpanded(false)
+        setLeftSidebarMinimized(false)
+        setHistoryWidgetExpanded(false)
 
         try {
             const token = await getAccessTokenSilently()
@@ -730,6 +740,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 conversationId,
                 activeBlockId,
                 setActiveBlockId,
+                activeViewportItem,
+                setActiveViewportItem,
                 systemPrompt,
                 setSystemPrompt,
                 selectedInstructionId,

@@ -1,0 +1,570 @@
+@import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
+
+// ── Page shell ────────────────────────────────────────────────────────────────
+
+.page {
+    height: 100vh;
+    overflow: hidden;
+    background-color: $color-background;
+    display: flex;
+    flex-direction: column;
+}
+
+.body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+// ── Top bar ───────────────────────────────────────────────────────────────────
+
+.topBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 0.875rem 2rem;
+    background: $color-background-secondary;
+    border-bottom: 1px solid $color-border;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+
+    @media (max-width: 768px) {
+        padding: 0.75rem 1rem;
+    }
+}
+
+.topBarLeft {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    min-width: 0;
+}
+
+.backBtn {
+    @include interactive-base;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: none;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    padding: 0.375rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $color-text-muted;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    &:hover {
+        background: $color-background-tertiary;
+        border-color: $color-border-focus;
+        color: $color-text-primary;
+    }
+}
+
+.topBarTitle {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.topBarIcon {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.topBarName {
+    font-size: 1rem;
+    font-weight: 700;
+    color: $color-text-primary;
+    margin: 0 0 0.1rem 0;
+    @include ellipsis;
+}
+
+.topBarMeta {
+    font-size: 0.8rem;
+    color: $color-text-muted;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.defaultBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    border: 1px solid var(--color-primary);
+}
+
+.topBarActions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.savedBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(46, 204, 113, 0.12);
+    border: 1px solid rgba(46, 204, 113, 0.4);
+    color: #1a8a4a;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    animation: fadeIn 0.2s ease;
+
+    [data-theme="dark"] & {
+        color: #4ade80;
+        background: rgba(74, 222, 128, 0.1);
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.errorBadge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    color: #c0392b;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: help;
+}
+
+.cancelBtn {
+    @include interactive-base;
+    padding: 0.4375rem 1rem;
+    background: none;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $color-text-secondary;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        background: $color-background-tertiary;
+        border-color: $color-border-focus;
+    }
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.saveBtn {
+    @include interactive-base;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4375rem 1.25rem;
+    background: $color-primary;
+    color: #fff;
+    border: none;
+    border-radius: $radius-md;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        background: $color-primary-hover-alt;
+        box-shadow: $shadow-md;
+    }
+
+    &:active:not(:disabled) { background: $color-primary-pressed; }
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.savingSpinner {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+// ── State containers (loading / error) ────────────────────────────────────────
+
+.stateContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 4rem 2rem;
+    text-align: center;
+}
+
+.spinner {
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 3px solid $color-border;
+    border-top-color: $color-primary;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+}
+
+.stateIcon { font-size: 2.5rem; line-height: 1; }
+.stateText {
+    font-size: 1rem;
+    font-weight: 600;
+    color: $color-text-primary;
+    margin: 0;
+}
+
+// ── Two-column edit layout ────────────────────────────────────────────────────
+
+.editLayout {
+    flex: 1;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 22rem 1fr;
+    gap: 0;
+
+    @media (max-width: 900px) {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+}
+
+// ── Sidebar (agent-level settings) ───────────────────────────────────────────
+
+.sidebar {
+    overflow-y: auto;
+    border-right: 1px solid $color-border;
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+
+    @media (max-width: 900px) {
+        border-right: none;
+        border-bottom: 1px solid $color-border;
+    }
+}
+
+.sidebarCard {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+// ── Main (node pipeline) ──────────────────────────────────────────────────────
+
+.main {
+    overflow-y: auto;
+    padding: 1.75rem 2rem;
+
+    @media (max-width: 768px) {
+        padding: 1.25rem;
+    }
+}
+
+.mainCard {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 860px;
+}
+
+.mainCardHeader {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+// ── Shared card styles ────────────────────────────────────────────────────────
+
+.cardTitle {
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $color-text-primary;
+    margin: 0;
+    padding-bottom: 0.625rem;
+    border-bottom: 1px solid $color-border-light;
+}
+
+.cardSubtitle {
+    font-size: 0.8125rem;
+    color: $color-text-muted;
+    margin: 0;
+    line-height: 1.5;
+}
+
+// ── Form fields ───────────────────────────────────────────────────────────────
+
+.fieldGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.fieldRow {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+.fieldRow2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+
+    @media (max-width: 700px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+.fieldLabel {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $color-text-muted;
+}
+
+.fieldHintInline {
+    font-weight: 400;
+    font-size: 0.75rem;
+}
+
+.fieldInput {
+    @include input-field;
+    height: 2.5rem;
+    font-size: 0.9375rem;
+}
+
+.fieldTextarea {
+    @include input-field;
+    resize: vertical;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    padding: 0.625rem 0.875rem;
+}
+
+.monoFont {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+    font-size: 0.8125rem;
+}
+
+.fieldError {
+    border-color: #e74c3c !important;
+    &:focus { box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2) !important; }
+}
+
+.fieldHint {
+    font-size: 0.75rem;
+    color: $color-text-muted;
+    margin: 0;
+    line-height: 1.4;
+
+    code {
+        background: $color-background-tertiary;
+        padding: 0.1em 0.35em;
+        border-radius: 3px;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.75rem;
+    }
+}
+
+.optional {
+    font-weight: 400;
+    color: $color-text-muted;
+    font-size: 0.75rem;
+}
+
+.jsonError {
+    color: #e74c3c;
+    font-weight: 500;
+}
+
+// ── Error box ─────────────────────────────────────────────────────────────────
+
+.errorBox {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.625rem 0.875rem;
+    background: rgba(231, 76, 60, 0.07);
+    border: 1px solid rgba(231, 76, 60, 0.25);
+    border-radius: $radius-md;
+    font-size: 0.8125rem;
+    color: #c0392b;
+    line-height: 1.4;
+
+    p { margin: 0; }
+}
+
+// ── Graph metadata (read-only) ────────────────────────────────────────────────
+
+.graphMeta {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.875rem;
+    background: $color-background-tertiary;
+    border: 1px solid $color-border-light;
+    border-radius: $radius-md;
+}
+
+.graphMetaRow {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.graphMetaLabel {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: $color-text-muted;
+}
+
+.graphMetaValue {
+    font-size: 0.8125rem;
+    color: $color-text-primary;
+    word-break: break-all;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+// ── Node list ─────────────────────────────────────────────────────────────────
+
+.nodeList {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+// ── Pipeline connectors ───────────────────────────────────────────────────────
+
+.pipelineConnector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 0.25rem 0;
+    flex-direction: column;
+}
+
+.pipelineConnectorLine {
+    display: block;
+    width: 2px;
+    height: 10px;
+    background: $color-border;
+}
+
+.pipelineConnectorArrow {
+    color: $color-text-muted;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+// ── Node editor (accordion) ───────────────────────────────────────────────────
+
+.nodeEditor {
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    overflow: hidden;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+
+    &:focus-within {
+        border-color: $color-border-focus;
+        box-shadow: 0 0 0 2px rgba(0, 107, 232, 0.12);
+    }
+}
+
+.nodeEditorHeader {
+    @include interactive-base;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: $color-background-tertiary;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+
+    &:hover { background: $color-background-hover; }
+}
+
+.nodeEditorIcon {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-sm;
+    font-size: 1rem;
+    flex-shrink: 0;
+    border: 1px solid transparent;
+}
+
+.nodeEditorTitle {
+    flex: 1;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: $color-text-primary;
+    @include ellipsis;
+}
+
+.nodeEditorType {
+    font-size: 0.75rem;
+    color: $color-text-muted;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.nodeEditorBadgeError {
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(231, 76, 60, 0.12);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    color: #c0392b;
+    font-size: 0.7rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.nodeEditorChevron {
+    font-size: 0.75rem;
+    color: $color-text-muted;
+    flex-shrink: 0;
+}
+
+.nodeEditorBody {
+    padding: 1.25rem 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    border-top: 1px solid $color-border-light;
+    background: $color-background-secondary;
+    animation: slideDown 0.15s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}

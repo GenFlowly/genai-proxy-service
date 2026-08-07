@@ -11,9 +11,10 @@ jest.mock('../../../../../context/ConversationContext');
 jest.mock('../../../../../context/LayoutContext');
 
 // Mock child components
-jest.mock('../../../../../components/common/TextContainer/TextContainer', () => ({ children, title, 'data-testid': testId }: any) => (
+jest.mock('../../../../../components/common/TextContainer/TextContainer', () => ({ children, title, content, 'data-testid': testId }: any) => (
     <div data-testid={testId || 'text-container'}>
         <div data-testid="tc-title">{title}</div>
+        <div data-testid="tc-content">{content}</div>
         {children}
     </div>
 ));
@@ -158,4 +159,48 @@ describe('Response Widget Component', () => {
         expect(screen.queryByTitle('Input tokens')).not.toBeInTheDocument();
         expect(screen.queryByTitle('Output tokens')).not.toBeInTheDocument();
     });
+
+    test('handles Regenerate click', () => {
+        const mockGenerateResponsesStream = jest.fn();
+        mockUseConversation.mockReturnValue({
+            setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
+            getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
+            getVendorSelectionForBlock: jest.fn().mockReturnValue([]),
+            generateResponsesStream: mockGenerateResponsesStream
+        });
+
+        render(<Response blockId="block-1" responseMessages={mockMessages} onFollowUp={jest.fn()} />);
+
+        const regenerateBtns = screen.getAllByTestId('regenerate-button');
+        expect(regenerateBtns).toHaveLength(2); // Should show for all responses
+        fireEvent.click(regenerateBtns[0]); // Click the first one (msg-1 / OpenAI)
+
+        expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', undefined, undefined, AIVendor.OPENAI);
+    });
+
+    test('Regenerate button disabled if props.disabled is true', () => {
+        render(<Response blockId="block-1" responseMessages={mockMessages} onFollowUp={jest.fn()} disabled={true} />);
+
+        const regenerateBtns = screen.getAllByTestId('regenerate-button');
+        expect(regenerateBtns[0]).toBeDisabled();
+        expect(regenerateBtns[1]).toBeDisabled();
+    });
+
+    test('only renders the latest message per vendor', () => {
+        const messagesWithDuplicates = [
+            { messageId: 'msg-1', text: 'Response 1', aiVendor: AIVendor.OPENAI, isLoading: false, timestamp: 0 },
+            { messageId: 'msg-2', text: 'Response 2', aiVendor: AIVendor.CLAUDE, isLoading: false, timestamp: 0 },
+            { messageId: 'msg-3', text: 'Response 3 (Latest)', aiVendor: AIVendor.OPENAI, isLoading: false, timestamp: 0 }
+        ];
+
+        render(<Response blockId="block-1" responseMessages={messagesWithDuplicates} data-testid="res-comp" />);
+        
+        // Should only render 2 messages (one for OpenAI, one for Claude)
+        expect(screen.getAllByTestId('response-message')).toHaveLength(2);
+        
+        // Ensure the latest OpenAI message text is what's rendered, not the first
+        expect(screen.getByText('Response 3 (Latest)')).toBeInTheDocument();
+        expect(screen.queryByText('Response 1')).not.toBeInTheDocument();
+    });
 });
+

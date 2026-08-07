@@ -258,7 +258,7 @@ describe('ConversationHistoryComponent', () => {
         })
     })
 
-    test('navigates to / if the archived conversation is the active one', async () => {
+    test('navigates to /chat if the archived conversation is the active one', async () => {
         setupMocks({ conversationId: 'conv-1', conversationTitle: null, activeId: 'conv-1' })
         ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
 
@@ -276,7 +276,7 @@ describe('ConversationHistoryComponent', () => {
         })
 
         await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/')
+            expect(mockNavigate).toHaveBeenCalledWith('/chat')
         })
     })
 

@@ -1,53 +1,57 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import SettingsPage from './SettingsPage';
-import { useLayout } from '../../context/LayoutContext';
 
 // Mocks
 jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar">Navbar</div>);
-jest.mock('../../components/sections/LeftSidebar/LeftSidebar', () => ({ widgetIds }: any) => (
-    <div data-testid="left-sidebar" data-widget-ids={JSON.stringify(widgetIds)}>LeftSidebar</div>
-));
-jest.mock('../../components/sections/CenterSection/CenterSection', () => ({ widgetIds }: any) => (
-    <div data-testid="center-section" data-widget-ids={JSON.stringify(widgetIds)}>CenterSection</div>
-));
+jest.mock('./components/ProfileSettings', () => ({ ProfileSettings: () => <div data-testid="profile-settings">Profile Settings</div> }));
+jest.mock('./components/AISettings', () => ({ AISettings: () => <div data-testid="ai-settings">AI Settings</div> }));
+jest.mock('./components/MemorySettings', () => ({ MemorySettings: () => <div data-testid="memory-settings">Memory Settings</div> }));
 
-jest.mock('../../context/LayoutContext', () => ({
-    useLayout: jest.fn()
+jest.mock('../../context/AuthContext', () => ({
+    useAuth: () => ({
+        logout: jest.fn()
+    })
 }));
 
-const mockGetPageConfig = jest.requireMock('../../config/PageWidgetConfig').getPageConfig;
-
 describe('SettingsPage', () => {
-    const mockSetLeftSidebarExpanded = jest.fn();
-
     beforeEach(() => {
         jest.clearAllMocks();
-        (useLayout as jest.Mock).mockReturnValue({
-            setLeftSidebarExpanded: mockSetLeftSidebarExpanded
-        });
-        mockGetPageConfig.mockReturnValue({
-            pageId: 'SETTINGS_PAGE',
-            leftSidebar: ['SIDEBAR_MENU'],
-            centerSection: ['VENDOR_WIDGET', 'DB_WIDGET'],
-            rightSidebar: []
-        });
     });
 
-
-    test('renders correctly and initializes layout', () => {
+    test('renders correctly and defaults to profile tab', () => {
         render(
-            <MemoryRouter>
-                <SettingsPage />
+            <MemoryRouter initialEntries={['/settings']}>
+                <Routes>
+                    <Route path="/settings/*" element={<SettingsPage />} />
+                </Routes>
             </MemoryRouter>
         );
 
         expect(screen.getByTestId('navbar')).toBeInTheDocument();
-        expect(screen.getByTestId('left-sidebar')).toHaveAttribute('data-widget-ids', '["SIDEBAR_MENU"]');
-        expect(screen.getByTestId('center-section')).toHaveAttribute('data-widget-ids', '["PROFILE_SETTINGS","CONFIGURE_AI_VENDOR_SETTINGS","DATABASE_CONNECTIONS_SETTINGS"]');
-
-        expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(true);
+        expect(screen.getByText('Settings')).toBeInTheDocument(); // Sidebar header
+        expect(screen.getByTestId('profile-settings')).toBeInTheDocument();
+        expect(screen.queryByTestId('ai-settings')).not.toBeInTheDocument();
     });
 
+    test('switches tabs correctly', () => {
+        render(
+            <MemoryRouter initialEntries={['/settings/profile']}>
+                <Routes>
+                    <Route path="/settings/*" element={<SettingsPage />} />
+                </Routes>
+            </MemoryRouter>
+        );
+
+        // Click AI Settings tab
+        fireEvent.click(screen.getByText('AI Settings'));
+        expect(screen.getByTestId('ai-settings')).toBeInTheDocument();
+        expect(screen.queryByTestId('profile-settings')).not.toBeInTheDocument();
+
+        // Click Memory Settings tab
+        fireEvent.click(screen.getByText('Memory Settings'));
+        expect(screen.getByTestId('memory-settings')).toBeInTheDocument();
+        expect(screen.queryByTestId('ai-settings')).not.toBeInTheDocument();
+    });
 });

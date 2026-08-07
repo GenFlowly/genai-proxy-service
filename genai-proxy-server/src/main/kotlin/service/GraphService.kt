@@ -15,12 +15,17 @@ import com.genflowly.DynamoDBConstants.NODE_NAME_KEY
 import com.genflowly.DynamoDBConstants.NODE_TYPE_KEY
 import com.genflowly.DynamoDBConstants.VERSION_KEY
 import com.genflowly.providers.DynamoDBProvider
+import models.api.AgentNodeResponse
+import models.api.AgentResponse
 import models.api.CreateCustomerGraphRequest
 import models.api.CreateGraphNodeRequest
 import models.api.CustomerGraphResponse
 import models.api.CustomerGraphVersionResponse
+import models.api.GetCustomerAgentsResponse
 import models.api.GraphNodeResponse
 import models.api.GraphNodeVersionResponse
+import models.api.UpdateAgentNodePatch
+import models.api.UpdateAgentRequest
 import models.api.UpdateCustomerGraphRequest
 import models.api.UpdateGraphNodeRequest
 import mu.KotlinLogging
@@ -188,6 +193,170 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
         requireOwnership(current, customerId, "graph", graphId)
         val updated = dynamoDBProvider.rollbackCustomerGraph(graphId, toVersion)
         return graphItemToResponse(updated)
+    }
+
+    // ─── Agents (hydrated graph + nodes view) ────────────────────────────────
+
+    /**
+     * Returns all of the customer's graphs, each with its nodes fully hydrated.
+     * A single [listCustomerGraphNodes] call fetches all the customer's nodes and
+     * they are then grouped per graph in memory — efficient for the typical case
+     * of customers owning a small number of graphs and nodes.
+     */
+    suspend fun getCustomerAgents(customerId: String): GetCustomerAgentsResponse {
+        val graphs = dynamoDBProvider.listCustomerGraphs(customerId)
+        // One round-trip to fetch all nodes for this customer.
+        val allNodes = dynamoDBProvider.listCustomerGraphNodes(customerId)
+        val nodeById = allNodes.associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+
+        val agents = graphs.map { graphItem ->
+            val nodeIds = graphItem[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
+            val hydratedNodes = nodeIds.mapNotNull { nid ->
+                nodeById[nid]?.let { nodeItem ->
+                    AgentNodeResponse(
+                        nodeId = nodeItem[NODE_ID_KEY]?.s() ?: nid,
+                        nodeType = nodeItem[NODE_TYPE_KEY]?.s() ?: "",
+                        name = nodeItem[NODE_NAME_KEY]?.s() ?: "",
+                        config = nodeItem[NODE_CONFIG_KEY]?.s() ?: "{}",
+                    )
+                }
+            }
+            AgentResponse(
+                graphId = graphItem[GRAPH_ID_KEY]?.s() ?: "",
+                name = graphItem[GRAPH_NAME_KEY]?.s() ?: "",
+                isDefault = graphItem[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false,
+                entryPoint = graphItem[GRAPH_ENTRY_POINT_KEY]?.s() ?: "",
+                maxIterations = graphItem[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10,
+                edges = graphItem[GRAPH_EDGES_KEY]?.s() ?: "{}",
+                nodes = hydratedNodes,
+                createdAt = graphItem["createdAt"]?.s(),
+                updatedAt = graphItem["updatedAt"]?.s(),
+            )
+        }
+        logger.info { "Fetched ${agents.size} agent(s) for customer $customerId" }
+        return GetCustomerAgentsResponse(agents = agents)
+    }
+
+    // ─── Update Agent (graph + nodes, with structural validation) ─────────────
+
+    /**
+     * Atomically edit an agent's graph-level fields and/or per-node configs.
+     *
+     * Applies a partial (PATCH-style) update:
+     *  - Graph fields absent from [req] keep their current DDB values.
+     *  - Only nodes listed in [req.nodes] are updated; others are untouched.
+     *
+     * All structural invariants (entryPoint, edge references, reachability,
+     * cycle safety, valid JSON configs, etc.) are validated BEFORE any write.
+     *
+     * @throws IllegalArgumentException on structural validation failure → mapped to HTTP 400.
+     * @throws IllegalStateException    if the graph is not found or not owned → mapped to HTTP 404.
+     */
+    suspend fun updateAgent(
+        customerId: String,
+        graphId: String,
+        req: UpdateAgentRequest,
+    ): AgentResponse {
+        // ── 1. Load current graph ─────────────────────────────────────────────
+        val currentGraph = dynamoDBProvider.getCustomerGraph(graphId)
+            ?: throw IllegalStateException("Agent (graph) '$graphId' not found.")
+        requireOwnership(currentGraph, customerId, "graph", graphId)
+
+        val nodeIds = currentGraph[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
+
+        // ── 2. Load all nodes belonging to this graph ─────────────────────────
+        val allCustomerNodes = dynamoDBProvider.listCustomerGraphNodes(customerId)
+        val nodeById = allCustomerNodes
+            .filter { it[NODE_ID_KEY]?.s() in nodeIds }
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+
+        val nodeTypeById: Map<String, String> = nodeById.mapValues { (_, item) ->
+            item[NODE_TYPE_KEY]?.s() ?: ""
+        }
+
+        // ── 3. Merge request over current values ──────────────────────────────
+        val mergedName        = req.name        ?: currentGraph[GRAPH_NAME_KEY]?.s() ?: ""
+        val mergedIsDefault   = req.isDefault   ?: currentGraph[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false
+        val mergedMaxIter     = req.maxIterations ?: currentGraph[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10
+        val mergedEntryPoint  = req.entryPoint  ?: currentGraph[GRAPH_ENTRY_POINT_KEY]?.s() ?: ""
+        val mergedEdges       = req.edges       ?: currentGraph[GRAPH_EDGES_KEY]?.s() ?: "{}"
+
+        // Collect per-node config patches for validation.
+        val nodePatchConfigs: Map<String, String> = req.nodes
+            ?.mapNotNull { patch -> patch.config?.let { patch.nodeId to it } }
+            ?.toMap() ?: emptyMap()
+
+        // Determine whether this is the customer's only graph (for isDefault guard).
+        val allGraphs = dynamoDBProvider.listCustomerGraphs(customerId)
+        val isOnlyGraph = allGraphs.size == 1
+
+        // ── 4. Validate merged state ──────────────────────────────────────────
+        GraphValidationService.validateAgentUpdate(
+            nodeIds          = nodeIds,
+            nodeTypeById     = nodeTypeById,
+            entryPoint       = mergedEntryPoint,
+            edgesJson        = mergedEdges,
+            maxIterations    = mergedMaxIter,
+            name             = req.name,
+            isDefault        = req.isDefault,
+            isOnlyGraph      = isOnlyGraph,
+            nodePatchConfigs = nodePatchConfigs,
+        )
+
+        // ── 5. Apply node patches ─────────────────────────────────────────────
+        req.nodes?.forEach { patch ->
+            val existingNode = nodeById[patch.nodeId]
+                ?: throw IllegalArgumentException("Node '${patch.nodeId}' is not part of graph '$graphId'.")
+            if (patch.name != null || patch.config != null) {
+                dynamoDBProvider.updateCustomerGraphNode(
+                    nodeId   = patch.nodeId,
+                    nodeType = existingNode[NODE_TYPE_KEY]?.s() ?: "",
+                    name     = patch.name   ?: existingNode[NODE_NAME_KEY]?.s()   ?: "",
+                    config   = patch.config ?: existingNode[NODE_CONFIG_KEY]?.s() ?: "{}",
+                )
+                logger.info { "Updated node ${patch.nodeId} for agent $graphId" }
+            }
+        }
+
+        // ── 6. Apply graph patch ──────────────────────────────────────────────
+        val updatedGraph = dynamoDBProvider.updateCustomerGraph(
+            graphId       = graphId,
+            name          = mergedName,
+            isDefault     = mergedIsDefault,
+            nodeIds       = nodeIds,       // nodeIds are immutable via this endpoint
+            edges         = mergedEdges,
+            entryPoint    = mergedEntryPoint,
+            maxIterations = mergedMaxIter,
+        )
+        logger.info { "Updated agent $graphId for customer $customerId" }
+
+        // ── 7. Re-fetch updated nodes and build hydrated response ─────────────
+        val refreshedNodes = dynamoDBProvider.listCustomerGraphNodes(customerId)
+            .filter { it[NODE_ID_KEY]?.s() in nodeIds }
+        val refreshedById = refreshedNodes.associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+
+        val hydratedNodes = nodeIds.mapNotNull { nid ->
+            refreshedById[nid]?.let { item ->
+                AgentNodeResponse(
+                    nodeId   = item[NODE_ID_KEY]?.s()   ?: nid,
+                    nodeType = item[NODE_TYPE_KEY]?.s() ?: "",
+                    name     = item[NODE_NAME_KEY]?.s() ?: "",
+                    config   = item[NODE_CONFIG_KEY]?.s() ?: "{}",
+                )
+            }
+        }
+
+        return AgentResponse(
+            graphId       = updatedGraph[GRAPH_ID_KEY]?.s()                    ?: graphId,
+            name          = updatedGraph[GRAPH_NAME_KEY]?.s()                  ?: "",
+            isDefault     = updatedGraph[GRAPH_IS_DEFAULT_KEY]?.bool()         ?: false,
+            entryPoint    = updatedGraph[GRAPH_ENTRY_POINT_KEY]?.s()           ?: "",
+            maxIterations = updatedGraph[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10,
+            edges         = updatedGraph[GRAPH_EDGES_KEY]?.s()                 ?: "{}",
+            nodes         = hydratedNodes,
+            createdAt     = updatedGraph["createdAt"]?.s(),
+            updatedAt     = updatedGraph["updatedAt"]?.s(),
+        )
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

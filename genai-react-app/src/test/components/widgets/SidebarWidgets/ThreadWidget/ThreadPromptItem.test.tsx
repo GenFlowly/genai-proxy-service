@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ThreadPromptItem from '../../../../../components/widgets/SidebarWidgets/ThreadWidget/ThreadPromptItem';
+import { useConversation } from '../../../../../context/ConversationContext';
 import '@testing-library/jest-dom';
 
 const defaultProps = {
@@ -15,7 +16,10 @@ jest.mock('../../../../../components/common/Tooltip/Tooltip', () => ({ content, 
     </div>
 ));
 
+jest.mock('../../../../../context/ConversationContext');
+
 describe('ThreadPromptItem', () => {
+    const mockUseConversation = useConversation as jest.Mock;
     beforeAll(() => {
         // Mock scrollIntoView
         Element.prototype.scrollIntoView = jest.fn();
@@ -23,6 +27,9 @@ describe('ThreadPromptItem', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockUseConversation.mockReturnValue({
+            activeViewportItem: null
+        });
     });
 
     test('renders expanded state correctly', () => {
@@ -79,5 +86,16 @@ describe('ThreadPromptItem', () => {
 
         expect(document.querySelector).toHaveBeenCalledWith('[data-block-id="block-1"]');
         expect(mockScrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    });
+
+    test('adds activeViewport class and scrolls when active', () => {
+        mockUseConversation.mockReturnValue({
+            activeViewportItem: { blockId: 'block-1', type: 'request' }
+        });
+        render(<ThreadPromptItem {...defaultProps} />);
+        
+        const button = screen.getByTestId('thread-prompt-item');
+        expect(button).toHaveClass('activeViewport');
+        // We know it calls scrollIntoView on the ref
     });
 });

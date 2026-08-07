@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import styles from './ThreadResponseItem.module.scss'
 import { Icon } from '../../../common/Icon/Icon'
 import { ICONS } from '../../../../constants/icons'
+import { useConversation } from '../../../../context/ConversationContext'
 
 interface ThreadResponseItemProps {
     conversationBlockId: string
@@ -11,6 +12,8 @@ interface ThreadResponseItemProps {
 }
 
 export default function ThreadResponseItem({ conversationBlockId, responseCount, collapsed = false, 'data-testid': testId }: ThreadResponseItemProps) {
+    const { activeViewportItem } = useConversation()
+
     const handleClick = () => {
         // Scroll to the response section, not the conversation block
         const element = document.querySelector(`[data-response-block-id="${conversationBlockId}"]`)
@@ -19,9 +22,18 @@ export default function ThreadResponseItem({ conversationBlockId, responseCount,
     // Show 'No Responses' for 0, 'Response' for 1, 'Responses' for > 1
     const label = responseCount === 0 ? 'No Responses' : responseCount === 1 ? 'Response' : 'Responses'
 
+    const isActive = activeViewportItem?.blockId === conversationBlockId && activeViewportItem?.type === 'response'
+    const itemRef = useRef<HTMLButtonElement>(null)
+
+    useEffect(() => {
+        if (isActive && itemRef.current) {
+            itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }
+    }, [isActive])
+
     if (collapsed) {
         return (
-            <button className={`${styles.responseItem} ${styles.collapsed}`} onClick={handleClick} title={label} data-testid={testId || "thread-response-item-collapsed"}>
+            <button ref={itemRef} className={`${styles.responseItem} ${styles.collapsed} ${isActive ? styles.activeViewport : ''}`} onClick={handleClick} title={label} data-testid={testId || "thread-response-item-collapsed"}>
                 <span className={styles.icon}>
                     <Icon src={ICONS.RESPONSE_ICON} />
                 </span>
@@ -30,7 +42,7 @@ export default function ThreadResponseItem({ conversationBlockId, responseCount,
     }
 
     return (
-        <button className={styles.responseItem} onClick={handleClick} data-testid={testId || "thread-response-item"}>
+        <button ref={itemRef} className={`${styles.responseItem} ${isActive ? styles.activeViewport : ''}`} onClick={handleClick} data-testid={testId || "thread-response-item"}>
             <span className={styles.icon}>
                 <Icon src={ICONS.RESPONSE_ICON} />
             </span>
