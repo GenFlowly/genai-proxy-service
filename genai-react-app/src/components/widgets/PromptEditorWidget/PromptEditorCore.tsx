@@ -1,11 +1,11 @@
 import React from 'react'
 import '@uiw/react-markdown-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
-import MarkdownEditor, { fullscreen, preview } from '@uiw/react-markdown-editor'
+import MarkdownEditor from '@uiw/react-markdown-editor'
 import { EditorView } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import styles from './PromptEditor.module.scss'
-import { addStepsCommand, addExamplesCommand, addCopyCommand } from './CustomToolbarCommands'
+
 
 interface PromptEditorCoreProps {
     id: string
@@ -18,7 +18,7 @@ interface PromptEditorCoreProps {
     readOnly?: boolean
 }
 
-export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "40.25rem", className = '', 'data-testid': testId, readOnly = false }: PromptEditorCoreProps): React.ReactElement {
+export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false }: PromptEditorCoreProps): React.ReactElement {
 
     return (
         <div className={`${styles.container} ${className}`} data-testid={testId} style={height === '100%' ? { height: '100%' } : {}}>
@@ -32,17 +32,9 @@ export default function PromptEditorCore({ id, value, onChange, disableCache = f
                             onChange={onChange}
                             height={height}
                             visible={false}
-                            enablePreview={true}
+                            enablePreview={false}
+                            showToolbar={false}
                             className={styles.markdownEditor}
-                            toolbars={[
-                                addStepsCommand,
-                                addExamplesCommand,
-                            ]}
-                            toolbarsMode={[
-                                preview,
-                                fullscreen,
-                                addCopyCommand,
-                            ]}
                             extensions={[
                                 EditorView.lineWrapping,
                                 ...(readOnly ? [EditorView.editable.of(false), EditorState.readOnly.of(true)] : [])

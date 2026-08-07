@@ -25,7 +25,8 @@ describe('storeCustomerSupabaseConfigService', () => {
     });
 
     test('successfully stores supabase config', async () => {
-        (global.fetch as jest.Mock).mockResolvedValue({
+        const mockFetch = global.fetch as jest.Mock;
+        mockFetch.mockResolvedValue({
             ok: true,
             json: jest.fn().mockResolvedValue(mockResponse),
         });
@@ -47,7 +48,8 @@ describe('storeCustomerSupabaseConfigService', () => {
     });
 
     test('throws error when response is not ok', async () => {
-        (global.fetch as jest.Mock).mockResolvedValue({
+        const mockFetch = global.fetch as jest.Mock;
+        mockFetch.mockResolvedValue({
             ok: false,
             status: 400,
             statusText: 'Bad Request',
@@ -61,7 +63,8 @@ describe('storeCustomerSupabaseConfigService', () => {
     test('logs and rethrows error on network failure', async () => {
         const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         const networkError = new Error('Network Error');
-        (global.fetch as jest.Mock).mockRejectedValue(networkError);
+        const mockFetch = global.fetch as jest.Mock;
+        mockFetch.mockRejectedValue(networkError);
 
         await expect(storeCustomerSupabaseConfig(mockToken, mockRequest))
             .rejects.toThrow('Network Error');

@@ -63,3 +63,5 @@ describe('generateTextService', () => {
             .rejects.toThrow('Text generation failed: 403 Forbidden');
     });
 });
+// Trigger coverage run
+// Trigger coverage run

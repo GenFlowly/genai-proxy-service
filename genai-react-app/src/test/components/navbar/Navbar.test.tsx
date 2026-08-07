@@ -79,7 +79,7 @@ describe('Navbar Component', () => {
         expect(avatarBtn).toBeInTheDocument();
     });
 
-    test('toggles dropdown menu on avatar click', async () => {
+    test('navigates to settings on avatar click', async () => {
         mockUseAuth.mockReturnValue({
             ...defaultAuthValues,
             isAuthenticated: true,
@@ -92,94 +92,9 @@ describe('Navbar Component', () => {
             </MemoryRouter>
         );
 
-        const avatarBtn = screen.getByTestId('user-avatar-button');
-
-        // Initial state: closed
-        expect(screen.queryByTestId('settings-button')).not.toBeInTheDocument();
-
-        // Click to open
-        await userEvent.click(avatarBtn);
-        expect(screen.getByTestId('settings-button')).toBeInTheDocument();
-        expect(screen.getByTestId('user-name-display')).toHaveTextContent('Hello Test User 👋');
-
-        // Click to close
-        await userEvent.click(avatarBtn);
-        expect(screen.queryByTestId('settings-button')).not.toBeInTheDocument();
-    });
-
-    test('navigates to settings and closes dropdown', async () => {
-        mockUseAuth.mockReturnValue({
-            ...defaultAuthValues,
-            isAuthenticated: true,
-            user: { name: 'Test User' },
-        });
-
-        render(
-            <MemoryRouter>
-                <LayoutProvider><Navbar /></LayoutProvider>
-            </MemoryRouter>
-        );
-
-        // Open menu
+        // Click avatar
         await userEvent.click(screen.getByTestId('user-avatar-button'));
-
-        // Click settings
-        await userEvent.click(screen.getByTestId('settings-button'));
-
         expect(mockNavigate).toHaveBeenCalledWith('/settings');
-        expect(screen.queryByTestId('settings-button')).not.toBeInTheDocument();
-    });
-
-    test('calls logout', async () => {
-        const origin = 'http://localhost';
-        Object.defineProperty(window, 'location', {
-            value: { origin },
-            writable: true
-        });
-
-        mockUseAuth.mockReturnValue({
-            ...defaultAuthValues,
-            isAuthenticated: true,
-            user: { name: 'Test User' },
-        });
-
-        render(
-            <MemoryRouter>
-                <LayoutProvider><Navbar /></LayoutProvider>
-            </MemoryRouter>
-        );
-
-        // Open menu
-        await userEvent.click(screen.getByTestId('user-avatar-button'));
-
-        // Click logout
-        await userEvent.click(screen.getByTestId('logout-button'));
-
-        expect(mockLogout).toHaveBeenCalledWith({ returnTo: origin });
-    });
-
-    test('closes dropdown when clicking outside', async () => {
-        mockUseAuth.mockReturnValue({
-            ...defaultAuthValues,
-            isAuthenticated: true,
-            user: { name: 'Test User' },
-        });
-
-        render(
-            <MemoryRouter>
-                <div data-testid="outside">Outside</div>
-                <LayoutProvider><Navbar /></LayoutProvider>
-            </MemoryRouter>
-        );
-
-        // Open menu
-        await userEvent.click(screen.getByTestId('user-avatar-button'));
-        expect(screen.getByTestId('settings-button')).toBeInTheDocument();
-
-        // Click outside
-        await userEvent.click(screen.getByTestId('outside'));
-
-        expect(screen.queryByTestId('settings-button')).not.toBeInTheDocument();
     });
 
     test('handles focus navigation (unauthenticated)', async () => {
@@ -224,19 +139,6 @@ describe('Navbar Component', () => {
             await userEvent.tab();
         }
         expect(avatarBtn).toHaveFocus();
-
-
-        // Open menu with enter or space (simulating keyboard interaction if button supports it, or just click)
-        await userEvent.click(avatarBtn);
-
-        // Tab to Settings
-        await userEvent.tab();
-        const settingsBtn = screen.getByTestId('settings-button');
-        expect(settingsBtn).toHaveFocus();
-
-        // Tab to Logout
-        await userEvent.tab();
-        const logoutBtn = screen.getByTestId('logout-button');
-        expect(logoutBtn).toHaveFocus();
     });
 });
+// Trigger coverage run

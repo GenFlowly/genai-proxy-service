@@ -76,3 +76,5 @@ describe('getAIUsageActivity', () => {
         consoleErrorSpy.mockRestore();
     });
 });
+// Trigger coverage run
+// Trigger coverage run

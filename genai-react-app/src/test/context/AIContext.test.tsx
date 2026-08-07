@@ -226,3 +226,4 @@ describe('AIContext UI Integration', () => {
 });
 
 // Coverage refresh
+// Trigger coverage run

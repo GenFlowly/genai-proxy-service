@@ -20,9 +20,16 @@ const mockGetPageConfig = jest.requireMock('../../config/PageWidgetConfig').getP
 
 // Mock LayoutContext
 const mockSetLeftSidebarExpanded = jest.fn();
+const mockSetRightSidebarExpanded = jest.fn();
+const mockSetLeftSidebarMinimized = jest.fn();
+const mockSetHistoryWidgetExpanded = jest.fn();
+
 jest.mock('../../context/LayoutContext', () => ({
     useLayout: () => ({
-        setLeftSidebarExpanded: mockSetLeftSidebarExpanded
+        setLeftSidebarExpanded: mockSetLeftSidebarExpanded,
+        setRightSidebarExpanded: mockSetRightSidebarExpanded,
+        setLeftSidebarMinimized: mockSetLeftSidebarMinimized,
+        setHistoryWidgetExpanded: mockSetHistoryWidgetExpanded,
     })
 }));
 

@@ -28,12 +28,6 @@ jest.mock('../../services/instructionService', () => ({
     getCustomerInstructions: jest.fn()
 }));
 
-
-jest.mock('../../services/instructionService', () => ({
-    getCustomerInstructions: jest.fn()
-}));
-
-
 describe('AuthContext Integration with Navbar', () => {
     beforeEach(() => {
         mockUseAuth0.mockReset();
@@ -96,14 +90,8 @@ describe('AuthContext Integration with Navbar', () => {
         expect(avatarBtn).toBeInTheDocument();
         expect(screen.queryByTestId('login-button')).not.toBeInTheDocument();
 
-        // 2. Open Dropdown
-        act(() => {
-            avatarBtn.click();
-        });
-
-        // 3. Verify User Name
-        const userNameDisplay = await screen.findByTestId('user-name-display');
-        expect(userNameDisplay).toHaveTextContent(`Hello ${MOCK_USER.name}`);
+        // 2. Verify User Name in Title
+        expect(avatarBtn).toHaveAttribute('title', MOCK_USER.name);
 
         // 4. Verify Token Fetch (AuthContext internal behavior)
         // This confirms AuthContext did its initialization
@@ -205,21 +193,12 @@ describe('AuthContext Integration with Navbar', () => {
             </MemoryRouter>
         );
 
-        // 3. Open Profile Dropdown
+        // 3. Verify Display Name is from Backend ("Bob"), NOT Auth0 ("Alice")
         const avatarBtn = await screen.findByTestId('user-avatar-button');
-        act(() => {
-            avatarBtn.click();
-        });
-
-        // 4. Verify Display Name is from Backend ("Bob"), NOT Auth0 ("Alice")
-        const userNameDisplay = await screen.findByTestId('user-name-display');
-        expect(userNameDisplay).toHaveTextContent('Hello Bob');
-        expect(userNameDisplay).not.toHaveTextContent('Alice');
+        expect(avatarBtn).toHaveAttribute('title', 'Bob');
+        expect(avatarBtn).not.toHaveAttribute('title', 'Alice');
 
         // Verify Avatar image source (UserAvatarButton uses displayPicture)
-        // Note: checking src might be tricky if Avatar component handles it internally,
-        // but we can check checking the prop passed if we mocked it, or check the img tag if strictly rendered.
-        // UserAvatarButton renders an img if displayPicture is present.
         // UserAvatarButton renders an img if displayPicture is present.
         const img = screen.getByTestId('user-avatar-button-image');
         expect(img).toHaveAttribute('src', 'bob.jpg');
@@ -502,6 +481,55 @@ test('updateVectorDBConfigStatus updates existing and adds new', async () => {
     expect(screen.getByTestId('db-list')).toHaveTextContent('Milvus');
 });
 
+test('updateSupabaseConfigStatus updates existing and adds new', async () => {
+    (onboardCustomer as jest.Mock).mockResolvedValue({
+        customerId: '123',
+        customerInstructions: [],
+        aiVendorAPIKeyStatusList: [],
+        vectorDBConfigStatusList: [],
+        supabaseConfigStatus: { status: 'NOT_SET' },
+        aiConfigPreferences: null
+    });
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        logout: jest.fn(),
+    });
+
+    const TestSupabase = () => {
+        const { updateSupabaseConfigStatus, supabaseConfigStatus } = useAuth();
+        return (
+            <div>
+                <button onClick={() => updateSupabaseConfigStatus({ status: 'PRESENT' })} data-testid="update">Update</button>
+                <div data-testid="db-status">{supabaseConfigStatus?.status}</div>
+            </div>
+        );
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestSupabase />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    // 1. Wait for Onboard
+    await waitFor(() => {
+        expect(screen.getByTestId('db-status')).toHaveTextContent('NOT_SET');
+    });
+
+    // 2. Update
+    await act(async () => {
+        screen.getByTestId('update').click();
+    });
+    expect(screen.getByTestId('db-status')).toHaveTextContent('PRESENT');
+});
+
 test('Logs out for login_required error', async () => {
     const mockLogout = jest.fn();
     const loginReqError = { error: 'login_required' };
@@ -529,5 +557,74 @@ test('Logs out for login_required error', async () => {
     });
 });
 
-// Coverage refresh
-// trigger coverage run
+test('getAccessTokenSilently handles login_required error correctly', async () => {
+    const mockLogout = jest.fn();
+    const mockGetToken = jest.fn().mockRejectedValue({ error: 'login_required' });
+    
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: mockGetToken,
+        logout: mockLogout,
+    });
+
+    const TestTokenError = () => {
+        const { getAccessTokenSilently } = useAuth();
+        return (
+            <button onClick={() => getAccessTokenSilently().catch(() => {})} data-testid="trigger-error">
+                Trigger Error
+            </button>
+        );
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider><TestTokenError /></AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    act(() => { screen.getByTestId('trigger-error').click(); });
+
+    await waitFor(() => {
+        expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin }, openUrl: false });
+    });
+});
+
+test('checkSession logs out on visibilitychange with login_required', async () => {
+    const mockLogout = jest.fn();
+    const mockGetToken = jest.fn().mockRejectedValue({ error: 'login_required' });
+
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: mockGetToken,
+        logout: mockLogout,
+    });
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider><Navbar /></AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    // Mock document.visibilityState to 'visible'
+    Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+    });
+
+    await act(async () => {
+        const event = new Event('visibilitychange');
+        document.dispatchEvent(event);
+    });
+
+    await waitFor(() => {
+        expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin }, openUrl: false });
+    });
+});

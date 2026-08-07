@@ -26,6 +26,8 @@ import com.genflowly.activity.registerDeleteConversationRoutes
 import com.genflowly.activity.registerUnarchiveConversationRoutes
 import com.genflowly.activity.registerGraphNodeRoutes
 import com.genflowly.activity.registerCustomerGraphRoutes
+import com.genflowly.activity.registerGetCustomerAgentsRoutes
+import com.genflowly.activity.registerUpdateAgentRoutes
 import com.genflowly.activity.registerToolCredentialsRoutes
 import com.genflowly.activity.registerCustomerProfileSettingsRoutes
 import com.genflowly.activity.registerSearchRoutes
@@ -82,6 +84,9 @@ object Routes {
 
     const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
     const val TOOL_CREDENTIAL = "$API_V1/tool-credentials/{toolType}"
+
+    const val GET_CUSTOMER_AGENTS = "$API_V1/agents"
+    const val UPDATE_AGENT = "$API_V1/agents/{graphId}"
 }
 
 
@@ -125,6 +130,8 @@ fun Application.configureRouting(
         registerUnarchiveConversationRoutes(customerProfileService, conversationService)
         registerGraphNodeRoutes(graphService, customerProfileService)
         registerCustomerGraphRoutes(graphService, customerProfileService)
+        registerGetCustomerAgentsRoutes(graphService, customerProfileService)
+        registerUpdateAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerProfileService)
         
         registerCustomerProfileSettingsRoutes(dynamoDBProvider)

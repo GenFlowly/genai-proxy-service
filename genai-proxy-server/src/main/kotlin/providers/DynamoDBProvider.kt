@@ -59,6 +59,7 @@ import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import kotlinx.serialization.json.Json
@@ -1082,13 +1083,29 @@ class DynamoDBProvider(
 
     suspend fun saveInstruction(instruction: models.Instruction) = withContext(Dispatchers.IO) {
         try {
-            val item = withTimestamps(mapOf(
+            val itemMap = mutableMapOf(
                 INSTRUCTION_ID_KEY to AttributeValue.builder().s(instruction.id).build(),
                 INSTRUCTION_CREATOR_KEY to AttributeValue.builder().s(instruction.creator).build(),
                 INSTRUCTION_NAME_KEY to AttributeValue.builder().s(instruction.name).build(),
                 INSTRUCTION_CONTENT_KEY to AttributeValue.builder().s(instruction.instructions).build(),
                 INSTRUCTION_VERSION_KEY to AttributeValue.builder().n(instruction.version.toString()).build()
-            ))
+            )
+
+            instruction.icon?.let {
+                itemMap[com.genflowly.DynamoDBConstants.INSTRUCTION_ICON_KEY] = AttributeValue.builder().s(it).build()
+            }
+            instruction.color?.let {
+                itemMap[com.genflowly.DynamoDBConstants.INSTRUCTION_COLOR_KEY] = AttributeValue.builder().s(it).build()
+            }
+            instruction.category?.let {
+                itemMap[com.genflowly.DynamoDBConstants.INSTRUCTION_CATEGORY_KEY] = AttributeValue.builder().s(it).build()
+            }
+            if (!instruction.tags.isNullOrEmpty()) {
+                val tagList = instruction.tags.map { AttributeValue.builder().s(it).build() }
+                itemMap[com.genflowly.DynamoDBConstants.INSTRUCTION_TAGS_KEY] = AttributeValue.builder().l(tagList).build()
+            }
+
+            val item = withTimestamps(itemMap)
 
             val putReq = PutItemRequest.builder()
                 .tableName(INSTRUCTION_TABLE)
@@ -1123,7 +1140,11 @@ class DynamoDBProvider(
             creator = item[INSTRUCTION_CREATOR_KEY]?.s() ?: return null,
             name = item[INSTRUCTION_NAME_KEY]?.s() ?: "",
             instructions = item[INSTRUCTION_CONTENT_KEY]?.s() ?: "",
-            version = item[INSTRUCTION_VERSION_KEY]?.n()?.toInt() ?: 1
+            version = item[INSTRUCTION_VERSION_KEY]?.n()?.toInt() ?: 1,
+            icon = item[com.genflowly.DynamoDBConstants.INSTRUCTION_ICON_KEY]?.s(),
+            color = item[com.genflowly.DynamoDBConstants.INSTRUCTION_COLOR_KEY]?.s(),
+            category = item[com.genflowly.DynamoDBConstants.INSTRUCTION_CATEGORY_KEY]?.s(),
+            tags = item[com.genflowly.DynamoDBConstants.INSTRUCTION_TAGS_KEY]?.l()?.mapNotNull { it.s() }
         )
     }
 
@@ -2032,4 +2053,65 @@ class DynamoDBProvider(
                 throw e
             }
         }
+
+    /**
+     * Tries to mark the (conversationId, instructionId) pair as "seen" for this customer
+     * using a conditional put (attribute_not_exists). Returns true if this is the first
+     * time this pair has been seen (i.e. the write succeeded), false if it was already
+     * recorded (ConditionalCheckFailedException).
+     */
+    suspend fun markInstructionUsageSeenIfNew(
+        customerId: String,
+        conversationId: String,
+        instructionId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        val convInstKey = "${conversationId}#${instructionId}"
+        try {
+            val item = mapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                com.genflowly.DynamoDBConstants.INSTRUCTION_USAGE_SEEN_SORT_KEY
+                    to AttributeValue.builder().s(convInstKey).build()
+            )
+            dynamoDbClient.putItem(
+                PutItemRequest.builder()
+                    .tableName(com.genflowly.DynamoDBConstants.INSTRUCTION_USAGE_SEEN_TABLE)
+                    .item(item)
+                    .conditionExpression("attribute_not_exists(${CUSTOMER_ID_KEY})")
+                    .build()
+            )
+            true // first occurrence
+        } catch (e: ConditionalCheckFailedException) {
+            false // already counted
+        }
+    }
+
+    /**
+     * Atomically increments usageCount and updates lastUsedAt for the
+     * (customerId, instructionId) pair in the InstructionUsage table.
+     * Call this only after [markInstructionUsageSeenIfNew] returns true.
+     */
+    suspend fun incrementInstructionUsage(
+        customerId: String,
+        instructionId: String,
+        lastUsedAt: String
+    ) = withContext(Dispatchers.IO) {
+        dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.INSTRUCTION_USAGE_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    INSTRUCTION_ID_KEY to AttributeValue.builder().s(instructionId).build()
+                ))
+                .updateExpression(
+                    "SET ${com.genflowly.DynamoDBConstants.INSTRUCTION_LAST_USED_KEY} = :ts " +
+                    "ADD ${com.genflowly.DynamoDBConstants.INSTRUCTION_USAGE_COUNT_KEY} :one"
+                )
+                .expressionAttributeValues(mapOf(
+                    ":ts"  to AttributeValue.builder().s(lastUsedAt).build(),
+                    ":one" to AttributeValue.builder().n("1").build()
+                ))
+                .build()
+        )
+        logger.info("Incremented usage count for instruction $instructionId / customer $customerId")
+    }
 }

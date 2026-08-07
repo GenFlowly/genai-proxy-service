@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import LoginIcon from '../icons/LoginIcon'
-import SettingsIcon from '../icons/SettingsIcon'
 import styles from './Navbar.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { ICONS } from '../../constants/icons'
@@ -14,11 +13,9 @@ import { NavbarMenu } from '../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../common/ThemeToggle/ThemeToggle'
 
 export default function Navbar(): React.ReactElement {
-    const { loginWithRedirect, logout, isAuthenticated, user, customerPicture, customerName } = useAuth()
+    const { loginWithRedirect, isAuthenticated, user, customerPicture, customerName } = useAuth()
     const { toggleLeftSidebar, toggleRightSidebar } = useLayout()
-    const [showDropdown, setShowDropdown] = useState<boolean>(false)
     const navigate = useNavigate()
-    const menuRef = useRef<HTMLDivElement>(null)
 
     const displayPicture = customerPicture || user?.picture
     const displayName = customerName || user?.name || 'Account'
@@ -26,29 +23,8 @@ export default function Navbar(): React.ReactElement {
     const handleSettingsClick = () => {
         React.startTransition(() => {
             navigate('/settings')
-            setShowDropdown(false)
         })
     }
-
-    const handleLogout = () => {
-        logout({ returnTo: window.location.origin })
-    }
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setShowDropdown(false)
-            }
-        }
-
-        if (showDropdown) {
-            document.addEventListener('mousedown', handleClickOutside)
-        }
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside)
-        }
-    }, [showDropdown])
 
     return (
         <nav className={styles.navbar}>
@@ -79,36 +55,13 @@ export default function Navbar(): React.ReactElement {
                                 <span>Login</span>
                             </button>
                         ) : (
-                            <div className={styles.accountMenu} ref={menuRef}>
+                            <div className={styles.accountMenu}>
                                 <UserAvatarButton
-                                    onClick={() => setShowDropdown(!showDropdown)}
+                                    onClick={handleSettingsClick}
                                     displayName={displayName}
                                     displayPicture={displayPicture}
                                     data-testid="user-avatar-button"
                                 />
-
-                                {showDropdown && (
-                                    <div className={styles.dropdownMenu}>
-                                        <div className={styles.dropdownHeader}>
-                                            <p className={styles.dropdownLabel} data-testid="user-name-display">Hello {user?.name} 👋</p>
-                                        </div>
-                                        <button
-                                            onClick={handleSettingsClick}
-                                            className={styles.dropdownItem}
-                                            data-testid="settings-button"
-                                        >
-                                            <SettingsIcon />
-                                            <span>Settings</span>
-                                        </button>
-                                        <button
-                                            onClick={handleLogout}
-                                            className={styles.dropdownItem}
-                                            data-testid="logout-button"
-                                        >
-                                            Logout
-                                        </button>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>

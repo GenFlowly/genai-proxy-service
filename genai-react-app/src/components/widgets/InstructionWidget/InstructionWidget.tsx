@@ -157,11 +157,12 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                 data-testid={testId || "instruction-widget-collapsed"}>
                 <div className={styles.instructionsCTAWrapper}
                     data-testid="instructions-cta-wrapper">
+                    <div className={styles.spacer} />
                     <div style={{
                         flex: 1,
                     }}>
                         <InputSelectWithHint
-                            hint="Instructions"
+                            hint="Persona"
                             icon={ICONS.USER_ROLE}
                             placeholder="Select a persona"
                             className={styles.roleInput}

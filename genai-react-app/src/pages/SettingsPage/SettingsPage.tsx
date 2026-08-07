@@ -1,43 +1,33 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import Navbar from '../../components/navbar/Navbar'
 import styles from './SettingsPage.module.scss'
-import { useLayout } from '../../context/LayoutContext'
-import LeftSidebar from '../../components/sections/LeftSidebar/LeftSidebar'
-import CenterSection from '../../components/sections/CenterSection/CenterSection'
-import { getPageConfig } from '../../config/PageWidgetConfig'
-import { SidebarMenuProvider } from '../../context/SidebarMenuContext'
-import { SIDEBAR_MENU_REGISTRY } from '../../config/SidebarMenuConfig'
+import { SettingsSidebar } from './components/SettingsSidebar'
+import { ProfileSettings } from './components/ProfileSettings'
+import { AISettings } from './components/AISettings'
+import { MemorySettings } from './components/MemorySettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 
-function SettingsPageInner({ config }: { config: ReturnType<typeof getPageConfig> }): React.ReactElement {
-    usePageTitle()
-    return (
-        <div className={styles.layout}>
-            <LeftSidebar widgetIds={config.leftSidebar} />
-            <div className={styles.content}>
-                <CenterSection widgetIds={config.centerSection} />
-            </div>
-        </div>
-    )
-}
+import { Routes, Route, Navigate } from 'react-router-dom'
 
 export default function SettingsPage(): React.ReactElement {
-    const { setLeftSidebarExpanded } = useLayout()
-
-    useEffect(() => {
-        setLeftSidebarExpanded(true)
-    }, [setLeftSidebarExpanded])
-
-    const config = getPageConfig('SETTINGS_PAGE')
-    const sidebarConfig = SIDEBAR_MENU_REGISTRY.find(m => m.pageId === 'SETTINGS_PAGE')
-    const initialWidgetId = sidebarConfig?.items[0]?.widgetId || null
+    usePageTitle()
 
     return (
-        <SidebarMenuProvider pageId="SETTINGS_PAGE" initialWidgetId={initialWidgetId}>
-            <div className={styles.page}>
-                <Navbar />
-                <SettingsPageInner config={config} />
+        <div className={styles.page}>
+            <Navbar />
+            <div className={styles.layout}>
+                <SettingsSidebar />
+                <div className={styles.content}>
+                    <div className={styles.contentInner}>
+                        <Routes>
+                            <Route path="/" element={<Navigate to="profile" replace />} />
+                            <Route path="profile" element={<ProfileSettings />} />
+                            <Route path="ai" element={<AISettings />} />
+                            <Route path="memory" element={<MemorySettings />} />
+                        </Routes>
+                    </div>
+                </div>
             </div>
-        </SidebarMenuProvider>
+        </div>
     )
 }

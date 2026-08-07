@@ -15,7 +15,7 @@ interface PromptEditorProps {
     readOnly?: boolean
 }
 
-export default function PromptEditor({ id, value, onChange, disableCache = false, height = "40.25rem", className = '', 'data-testid': testId, readOnly = false }: PromptEditorProps): React.ReactElement {
+export default function PromptEditor({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false }: PromptEditorProps): React.ReactElement {
 
     return (
         <Suspense fallback={

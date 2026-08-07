@@ -291,6 +291,37 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Tracks how many distinct conversations each (customerId, instructionId) pair
+        // has been used in, plus the timestamp of the most recent use.
+        // PK=customerId, SK=instructionId.
+        const instructionUsageTableProps: CreateTableProps = {
+            tableName: 'InstructionUsage',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'instructionId',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
+        // Deduplication set — records which (conversationId, instructionId) pairs have
+        // already been counted for a given customer, preventing double-counting when
+        // a user sends multiple messages in the same conversation with the same persona.
+        // PK=customerId, SK=convInstKey ("<conversationId>#<instructionId>").
+        const instructionUsageSeenTableProps: CreateTableProps = {
+            tableName: 'InstructionUsageSeen',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'convInstKey',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         const usernameLookupTableProps: CreateTableProps = {
             tableName: 'UsernameLookup',
             partitionKey: {
@@ -327,6 +358,8 @@ export class DynamoDBStack extends cdk.Stack {
         const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
         const sharedInstructionsTable = createDefaultDynamoDbTable(this, sharedInstructionsTableProps);
         const sharedConversationsTable = createDefaultDynamoDbTable(this, sharedConversationsTableProps);
+        const instructionUsageTable = createDefaultDynamoDbTable(this, instructionUsageTableProps);
+        const instructionUsageSeenTable = createDefaultDynamoDbTable(this, instructionUsageSeenTableProps);
         const usernameLookupTable = createDefaultDynamoDbTable(this, usernameLookupTableProps);
 
         this.dynamoDbTableList.push(
@@ -335,6 +368,7 @@ export class DynamoDBStack extends cdk.Stack {
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
+            instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable
         );
     }
