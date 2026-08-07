@@ -29,14 +29,26 @@ fun Route.registerCreateInstructionRoutes(
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val request = call.receive<CreateInstructionRequest>()
 
+                // Always generate the persona metadata (icon, color, tags) via AI
+                val generatedPersona = aiRequestManager.generateInstructionPersona(request.instruction, customerId)
+
+                // Use user-provided name if available, otherwise use AI-generated name
                 val instructionName = if (!request.instructionName.isNullOrBlank()) {
                     request.instructionName
                 } else {
-                    aiRequestManager.generateInstructionPersona(request.instruction, customerId)
+                    generatedPersona.name
                 }
+
                 val response = customerProfileService.createInstruction(
-                    customerId, instructionName, request.instruction,
-                    request.existingInstructionId)
+                    customerId = customerId, 
+                    instructionName = instructionName, 
+                    instruction = request.instruction,
+                    existingInstructionId = request.existingInstructionId,
+                    icon = generatedPersona.icon,
+                    color = generatedPersona.color,
+                    tags = generatedPersona.tags,
+                    category = generatedPersona.category
+                )
 
                 call.respond(response)
 

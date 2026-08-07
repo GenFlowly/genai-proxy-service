@@ -1,5 +1,7 @@
 package com.genflowly
 
+import kotlinx.serialization.Serializable
+
 object DynamoDBConstants {
     const val CUSTOMER_PROFILE_TABLE = "CustomerProfile"
     const val SUB_PARTITION_KEY = "sub"
@@ -32,6 +34,10 @@ object DynamoDBConstants {
     const val INSTRUCTION_NAME_KEY = "name"
     const val INSTRUCTION_CONTENT_KEY = "instructions"
     const val INSTRUCTION_VERSION_KEY = "version"
+    const val INSTRUCTION_ICON_KEY = "icon"
+    const val INSTRUCTION_COLOR_KEY = "color"
+    const val INSTRUCTION_TAGS_KEY = "tags"
+    const val INSTRUCTION_CATEGORY_KEY = "category"
     const val INSTRUCTION_CREATOR_GSI_KEY = "creatorIndexV2"
 
     const val CUSTOMER_GRAPH_NODES_TABLE = "CustomerGraphNodes"
@@ -86,3 +92,22 @@ object DynamoDBConstants {
     const val INSTRUCTION_USAGE_SEEN_TABLE = "InstructionUsageSeen"
     const val INSTRUCTION_USAGE_SEEN_SORT_KEY = "convInstKey" // "<conversationId>#<instructionId>"
 }
+@Serializable
+data class PersonaCategory(
+    val categoryName: String,
+    val baseIcon: String,
+    val baseColor: String
+)
+
+val PERSONA_CATEGORIES = listOf(
+    PersonaCategory("Writing/editing", "🖊️", "#4F46E5"), // Indigo
+    PersonaCategory("Research", "🔍", "#059669"), // Emerald
+    PersonaCategory("Coding", "💻", "#2563EB"), // Blue
+    PersonaCategory("Planning", "📅", "#D97706"), // Amber
+    PersonaCategory("Analysis", "📊", "#7C3AED"), // Violet
+    PersonaCategory("Teaching", "📚", "#0891B2"), // Cyan
+    PersonaCategory("Creative ideation", "✨", "#DB2777"), // Pink
+    PersonaCategory("Security/compliance", "🛡️", "#DC2626"), // Red
+    PersonaCategory("Customer support", "🎧", "#65A30D"), // Lime
+    PersonaCategory("Data work", "🗄️", "#475569")  // Slate
+)

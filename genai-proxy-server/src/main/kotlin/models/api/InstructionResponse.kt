@@ -8,5 +8,9 @@ data class InstructionResponse(
     val version: Int,
     val name: String,
     val instruction: String,
+    val icon: String? = null,
+    val color: String? = null,
+    val tags: List<String>? = null,
+    val category: String? = null,
     val role: String = "OWNER"
 )
