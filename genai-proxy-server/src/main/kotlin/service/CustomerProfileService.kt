@@ -210,6 +210,10 @@ class CustomerProfileService(
         instructionName: String,
         instruction: String,
         existingInstructionId: String?,
+        icon: String? = null,
+        color: String? = null,
+        tags: List<String>? = null,
+        category: String? = null
     ): InstructionResponse {
         var instructionId = existingInstructionId
         var version = 1
@@ -252,16 +256,24 @@ class CustomerProfileService(
             creator = creator,
             name = instructionName,
             instructions = instruction,
-            version = version
+            version = version,
+            icon = icon,
+            color = color,
+            tags = tags,
+            category = category
         )
 
         dynamoDBProvider.saveInstruction(newInstruction)
 
         return InstructionResponse(
-            id = instructionId,
-            version = version,
-            name = instructionName,
-            instruction = instruction,
+            id = newInstruction.id,
+            name = newInstruction.name,
+            version = newInstruction.version ?: 1,
+            instruction = newInstruction.instructions,
+            icon = newInstruction.icon,
+            color = newInstruction.color,
+            tags = newInstruction.tags,
+            category = newInstruction.category,
             role = role
         )
     }

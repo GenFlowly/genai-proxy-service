@@ -29,6 +29,19 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+
+@Serializable
+data class GeneratedPersona(
+    val name: String,
+    val icon: String,
+    val color: String,
+    val category: String,
+    val tags: List<String>
+)
+
 
 class AIRequestManager(
     private val aiRequestService: AIRequestService,
@@ -632,9 +645,27 @@ class AIRequestManager(
     suspend fun generateInstructionPersona(
         instructionText: String,
         customerId: String
-    ): String {
+    ): GeneratedPersona {
 
-        return generateText(
+        val categoryJson = Json.encodeToString(com.genflowly.PERSONA_CATEGORIES)
+        
+        val prompt = """
+            Create a persona for these system instructions.
+            You must return a valid JSON object with exactly these five keys: "name", "icon", "color", "category", and "tags". Do not include any other text or markdown formatting.
+
+            1. "category": You MUST pick exactly one categoryName from the following JSON list of allowed categories. Do not invent a new category.
+            $categoryJson
+            
+            2. "icon": You MUST use the exact 'baseIcon' for the category you picked, but you may append a secondary emoji to differentiate it (e.g. 💻🚀).
+            
+            3. "color": You MUST use the exact 'baseColor' for the category you picked.
+            
+            4. "name": A 2-3 word display name. Make names scannable. Put the distinguishing word first (e.g., "Security Risk Reviewer", not "Reviewer for Security Risks"). Use the naming formula: Domain + Role (e.g., "Python Debugging Coach").
+
+            5. "tags": An array of 3-5 string metadata tags to support searching/filtering in large collections. Include tags for domain, task, tone, or tool (e.g., ["coding", "python", "debugging", "helpful"]).
+        """.trimIndent()
+
+        val responseText = generateText(
             defaultAIVendor,
             defaultAIModel,
             listOf(
@@ -649,14 +680,16 @@ class AIRequestManager(
                     previousMessageId = null
                 )
             ),
-            "Create a persona for this system instructions.\n" +
-                    "\n" +
-                    "The role should be generic enough to be understood what are it's key technical skills but also specific enough to not make it a broad term.\n" +
-                    "\n" +
-                    "\n" +
-                    "Return only the name of Role, nothing else",
+            prompt,
             customerId
         ).text
+        
+        val jsonString = responseText.substringAfter("{").substringBeforeLast("}")
+        return jsonParser.decodeFromString<GeneratedPersona>("{$jsonString}")
+    }
+
+    companion object {
+        private val jsonParser = Json { ignoreUnknownKeys = true }
     }
 }
 

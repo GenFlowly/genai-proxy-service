@@ -1083,13 +1083,29 @@ class DynamoDBProvider(
 
     suspend fun saveInstruction(instruction: models.Instruction) = withContext(Dispatchers.IO) {
         try {
-            val item = withTimestamps(mapOf(
+            val itemMap = mutableMapOf(
                 INSTRUCTION_ID_KEY to AttributeValue.builder().s(instruction.id).build(),
                 INSTRUCTION_CREATOR_KEY to AttributeValue.builder().s(instruction.creator).build(),
                 INSTRUCTION_NAME_KEY to AttributeValue.builder().s(instruction.name).build(),
                 INSTRUCTION_CONTENT_KEY to AttributeValue.builder().s(instruction.instructions).build(),
                 INSTRUCTION_VERSION_KEY to AttributeValue.builder().n(instruction.version.toString()).build()
-            ))
+            )
+
+            instruction.icon?.let {
+                itemMap[com.genflowly.DynamoDBConstants.INSTRUCTION_ICON_KEY] = AttributeValue.builder().s(it).build()
+            }
+            instruction.color?.let {
+                itemMap[com.genflowly.DynamoDBConstants.INSTRUCTION_COLOR_KEY] = AttributeValue.builder().s(it).build()
+            }
+            instruction.category?.let {
+                itemMap[com.genflowly.DynamoDBConstants.INSTRUCTION_CATEGORY_KEY] = AttributeValue.builder().s(it).build()
+            }
+            if (!instruction.tags.isNullOrEmpty()) {
+                val tagList = instruction.tags.map { AttributeValue.builder().s(it).build() }
+                itemMap[com.genflowly.DynamoDBConstants.INSTRUCTION_TAGS_KEY] = AttributeValue.builder().l(tagList).build()
+            }
+
+            val item = withTimestamps(itemMap)
 
             val putReq = PutItemRequest.builder()
                 .tableName(INSTRUCTION_TABLE)
@@ -1124,7 +1140,11 @@ class DynamoDBProvider(
             creator = item[INSTRUCTION_CREATOR_KEY]?.s() ?: return null,
             name = item[INSTRUCTION_NAME_KEY]?.s() ?: "",
             instructions = item[INSTRUCTION_CONTENT_KEY]?.s() ?: "",
-            version = item[INSTRUCTION_VERSION_KEY]?.n()?.toInt() ?: 1
+            version = item[INSTRUCTION_VERSION_KEY]?.n()?.toInt() ?: 1,
+            icon = item[com.genflowly.DynamoDBConstants.INSTRUCTION_ICON_KEY]?.s(),
+            color = item[com.genflowly.DynamoDBConstants.INSTRUCTION_COLOR_KEY]?.s(),
+            category = item[com.genflowly.DynamoDBConstants.INSTRUCTION_CATEGORY_KEY]?.s(),
+            tags = item[com.genflowly.DynamoDBConstants.INSTRUCTION_TAGS_KEY]?.l()?.mapNotNull { it.s() }
         )
     }
 
