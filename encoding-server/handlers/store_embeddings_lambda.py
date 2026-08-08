@@ -10,19 +10,6 @@ from encoding_library.utils.vector_db import get_milvus_client
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-def ensure_collection_exists(client, collection_name: str, processor: Any):
-    """Dynamically securely constructs target collections structurally on Zilliz natively."""
-    if client.has_collection(collection_name):
-        return
-        
-    logger.info(f"Collection '{collection_name}' natively absent securely. Generating dynamically...")
-    schema, index_params = processor.get_collection_schema()
-    client.create_collection(
-        collection_name=collection_name,
-        schema=schema,
-        index_params=index_params
-    )
-
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -47,7 +34,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         processor = ProcessorFactory.get_processor(memory_request_internal_state)
         collection_name = processor.get_collection_name(memory_request_internal_state)
 
-        ensure_collection_exists(milvus_client, collection_name, processor)
+
 
         records = processor.prepare_for_vector_db(memory_request_internal_state, vectors)
         result = milvus_client.insert(collection_name=collection_name, data=records)

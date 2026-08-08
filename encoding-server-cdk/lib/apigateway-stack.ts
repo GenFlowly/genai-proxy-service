@@ -12,6 +12,8 @@ export interface ApiGatewayStackProps extends cdk.StackProps {
     stage: STAGES;
     ingestEmailLambda: lambda.IFunction;
     ingestNotesLambda: lambda.IFunction;
+    createCollectionsLambda: lambda.IFunction;
+    checkCollectionsLambda: lambda.IFunction;
     auth0Domain: string;
 }
 
@@ -90,6 +92,30 @@ export class ApiGatewayStack extends cdk.Stack {
             path: '/encode-notes',
             methods: [apigatewayv2.HttpMethod.POST],
             integration: ingestNotesIntegration,
+            authorizer: authorizer,
+        });
+
+        const createCollectionsIntegration = new HttpLambdaIntegration(
+            'CreateCollectionsIntegration',
+            props.createCollectionsLambda
+        );
+
+        this.api.addRoutes({
+            path: '/create-collections',
+            methods: [apigatewayv2.HttpMethod.POST],
+            integration: createCollectionsIntegration,
+            authorizer: authorizer,
+        });
+
+        const checkCollectionsIntegration = new HttpLambdaIntegration(
+            'CheckCollectionsIntegration',
+            props.checkCollectionsLambda
+        );
+
+        this.api.addRoutes({
+            path: '/check-collections',
+            methods: [apigatewayv2.HttpMethod.POST, apigatewayv2.HttpMethod.GET],
+            integration: checkCollectionsIntegration,
             authorizer: authorizer,
         });
 
