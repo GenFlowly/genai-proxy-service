@@ -25,7 +25,7 @@ describe('saveNotesService', () => {
         await saveNote(mockNote, mockToken);
 
         expect(global.fetch).toHaveBeenCalledWith(
-            'https://pzf0twaaq5.execute-api.us-east-1.amazonaws.com/development/encode',
+            'https://pzf0twaaq5.execute-api.us-east-1.amazonaws.com/development/encode-notes',
             expect.objectContaining({
                 method: HttpMethod.POST,
                 headers: {
@@ -33,7 +33,6 @@ describe('saveNotesService', () => {
                     Authorization: `Bearer ${mockToken}`,
                 },
                 body: JSON.stringify({
-                    dataType: 'NOTE',
                     client: 'genai-react-app',
                     data: {
                         note_key: mockNote.noteKey,

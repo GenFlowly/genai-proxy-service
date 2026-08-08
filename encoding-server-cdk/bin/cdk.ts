@@ -50,7 +50,7 @@ const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENC
 
 const apiGatewayStack = new ApiGatewayStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-ApiGatewayStack`, {
     stage,
-    ingestionLambda: lambdaStack.ingestionLambda,
+    ingestEmailLambda: lambdaStack.ingestEmailLambda,
     ingestNotesLambda: lambdaStack.ingestNotesLambda,
     auth0Domain: process.env.AUTH0_SPA_DOMAIN || 'dummy.auth0.com',
 });

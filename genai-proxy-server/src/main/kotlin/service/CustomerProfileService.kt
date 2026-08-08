@@ -14,6 +14,8 @@ import java.util.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import models.AIConfig
 import mu.KotlinLogging
 
@@ -315,6 +317,10 @@ class CustomerProfileService(
                 name = instruction.name,
                 version = instruction.version ?: 1,
                 instruction = instruction.instructions,
+                icon = instruction.icon,
+                color = instruction.color,
+                category = instruction.category,
+                tags = instruction.tags,
                 role = role
             )
         }
@@ -471,6 +477,10 @@ class CustomerProfileService(
             version = instruction.version ?: 1,
             name = instruction.name,
             instruction = instruction.instructions,
+            icon = instruction.icon,
+            color = instruction.color,
+            category = instruction.category,
+            tags = instruction.tags,
             role = role
         )
     }
@@ -543,6 +553,35 @@ class CustomerProfileService(
             }
         } catch (e: Exception) {
             logger.warn { "Failed to track instruction usage for instructionId=$instructionId customerId=$customerId: ${e.message}" }
+        }
+    }
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+    fun backfillInstructionsAsync(
+        customerId: String, 
+        instructionsToCheck: List<InstructionResponse>,
+        aiRequestManager: service.AIRequestManager
+    ) {
+        GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                for (instructionRes in instructionsToCheck) {
+                    if (instructionRes.icon == null || instructionRes.category == null) {
+                        val existing = dynamoDBProvider.getInstruction(instructionRes.id, instructionRes.version)
+                        if (existing != null) {
+                            val generatedPersona = aiRequestManager.generateInstructionPersona(existing.instructions, customerId)
+                            val backfilled = existing.copy(
+                                category = generatedPersona.category,
+                                icon = generatedPersona.icon,
+                                color = generatedPersona.color,
+                                tags = generatedPersona.tags
+                            )
+                            dynamoDBProvider.saveInstruction(backfilled)
+                            logger.info { "AI backfilled instruction ${existing.id} for $customerId" }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed AI backfill for customer $customerId" }
+            }
         }
     }
 }

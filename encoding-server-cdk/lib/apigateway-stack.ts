@@ -10,7 +10,7 @@ import { RESOURCE_NAMES } from './constants';
 
 export interface ApiGatewayStackProps extends cdk.StackProps {
     stage: STAGES;
-    ingestionLambda: lambda.IFunction;
+    ingestEmailLambda: lambda.IFunction;
     ingestNotesLambda: lambda.IFunction;
     auth0Domain: string;
 }
@@ -68,16 +68,16 @@ export class ApiGatewayStack extends cdk.Stack {
         });
 
         // Create Lambda integration
-        const integration = new HttpLambdaIntegration(
-            'IngestionIntegration',
-            props.ingestionLambda
+        const emailIntegration = new HttpLambdaIntegration(
+            'IngestEmailIntegration',
+            props.ingestEmailLambda
         );
 
         // Add route with JWT authorization
         this.api.addRoutes({
-            path: '/encode',
+            path: '/encode-email',
             methods: [apigatewayv2.HttpMethod.POST],
-            integration: integration,
+            integration: emailIntegration,
             authorizer: authorizer,
         });
 
@@ -87,7 +87,7 @@ export class ApiGatewayStack extends cdk.Stack {
         );
 
         this.api.addRoutes({
-            path: '/notes',
+            path: '/encode-notes',
             methods: [apigatewayv2.HttpMethod.POST],
             integration: ingestNotesIntegration,
             authorizer: authorizer,

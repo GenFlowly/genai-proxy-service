@@ -111,7 +111,7 @@ fun Application.configureRouting(
         registerStoreApiKeyRoutes(customerProfileService, aiModelsService)
         registerStoreVectorDBConfigRoutes(customerProfileService)
         registerStoreSupabaseConfigRoutes(customerProfileService)
-        registerOnboardCustomerRoutes(customerProfileService)
+        registerOnboardCustomerRoutes(customerProfileService, aiRequestManager)
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
