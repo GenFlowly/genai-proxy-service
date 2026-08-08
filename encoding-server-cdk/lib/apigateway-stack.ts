@@ -66,7 +66,12 @@ export class ApiGatewayStack extends cdk.Stack {
 
         // Create JWT Authorizer for Auth0
         const authorizer = new HttpJwtAuthorizer('Auth0Authorizer', auth0Issuer, {
-            jwtAudience: [auth0Audience, 'https://genflowly-beta'],
+            jwtAudience: [
+                auth0Audience, 
+                'https://genflowly-beta',
+                'https://api-development.genflowly.com',
+                'https://api-production.genflowly.com'
+            ],
         });
 
         // Create Lambda integration
