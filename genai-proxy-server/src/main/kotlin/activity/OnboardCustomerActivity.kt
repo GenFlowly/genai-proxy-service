@@ -9,6 +9,7 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
+import io.ktor.http.HttpHeaders
 import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
@@ -30,12 +31,15 @@ fun Route.registerOnboardCustomerRoutes(
                 request.picture ?: "not provided",
             )
 
+            val authHeader = call.request.headers[HttpHeaders.Authorization]
+
             val customerProfile = customerProfileService.onboardCustomer(
                 sub = request.sub,
                 client = request.client,
                 email = request.email,
                 name = request.name,
-                picture = request.picture
+                picture = request.picture,
+                authHeader = authHeader
             )
 
             // Fetch additional details

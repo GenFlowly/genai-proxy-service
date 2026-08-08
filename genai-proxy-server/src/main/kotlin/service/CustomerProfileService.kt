@@ -16,6 +16,14 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.post
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
+import io.ktor.serialization.kotlinx.json.json as clientJson
 import models.AIConfig
 import mu.KotlinLogging
 
@@ -25,6 +33,11 @@ class CustomerProfileService(
     private val kmsProvider: KMSProvider,
     private val dynamoDBProvider: DynamoDBProvider
 ) {
+    private val httpClient = HttpClient(CIO) {
+        install(ClientContentNegotiation) {
+            clientJson()
+        }
+    }
 
     suspend fun savePreferences(
         customerId: String,
@@ -45,7 +58,8 @@ class CustomerProfileService(
         client: String,
         email: String?,
         name: String?,
-        picture: String?
+        picture: String?,
+        authHeader: String? = null
     ): models.CustomerProfile {
         // Check if customer exists
         val existingCustomer = dynamoDBProvider.getCustomerProfile(sub, client)
@@ -61,6 +75,8 @@ class CustomerProfileService(
                 seedDefaultGraph(existingCustomerId)
             }
 
+            ensureCollectionsExistAsync(existingCustomerId, authHeader)
+
             return models.CustomerProfile(
                 customerId = existingCustomerId,
                 sub = sub,
@@ -74,7 +90,47 @@ class CustomerProfileService(
         }
 
         // New user path
-        return handleNewUserOnboarding(sub, client, email, name, picture)
+        return handleNewUserOnboarding(sub, client, email, name, picture, authHeader)
+    }
+
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+    private fun ensureCollectionsExistAsync(customerId: String, authHeader: String?) {
+        if (authHeader != null) {
+            val encodingServerUrl = System.getenv("ENCODING_SERVER_URL")
+            if (!encodingServerUrl.isNullOrBlank()) {
+                GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        logger.info { "Checking if collections exist for customerId=$customerId on encoding server $encodingServerUrl" }
+                        val checkRes = httpClient.post("$encodingServerUrl/check-collections") {
+                            header("Authorization", authHeader)
+                        }
+                        val checkBody = checkRes.bodyAsText()
+                        logger.info { "Check collections API returned status ${checkRes.status}" }
+                        
+                        if (!checkRes.status.isSuccess()) {
+                            logger.error { "Check collections failed with ${checkRes.status}. Body: $checkBody" }
+                            return@launch
+                        }
+                        
+                        // Parse JSON string to see if missing == true
+                        val missing = checkBody.contains("\"missing\":true") || checkBody.contains("\"missing\": true")
+                        if (missing) {
+                            logger.info { "Collections are missing for customerId=$customerId, triggering creation..." }
+                            val createRes = httpClient.post("$encodingServerUrl/create-collections") {
+                                header("Authorization", authHeader)
+                            }
+                            logger.info { "Collection creation API returned status ${createRes.status}" }
+                        } else {
+                            logger.info { "Collections already exist for customerId=$customerId. Skipping creation." }
+                        }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to ensure collection creation for customer $customerId" }
+                    }
+                }
+            } else {
+                logger.warn { "ENCODING_SERVER_URL is not set. Skipping collection check/creation." }
+            }
+        }
     }
 
     private suspend fun handleNewUserOnboarding(
@@ -82,7 +138,8 @@ class CustomerProfileService(
         client: String,
         email: String?,
         name: String?,
-        picture: String?
+        picture: String?,
+        authHeader: String?
     ): models.CustomerProfile {
         val newCustomerId = generateCustomerId()
         val generatedUsername = dynamoDBProvider.onboardCustomer(
@@ -111,6 +168,9 @@ class CustomerProfileService(
         seedDefaultGraph(newCustomerId)
 
         logger.info { "New user onboarded with customerId=$newCustomerId" }
+        
+        ensureCollectionsExistAsync(newCustomerId, authHeader)
+
         return models.CustomerProfile(
             customerId = newCustomerId,
             sub = sub,

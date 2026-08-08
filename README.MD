@@ -108,6 +108,51 @@ When you push to the `development` branch, GitHub Actions will automatically:
 1. Create a Zilliz Cloud account and get your endpoint and API token (`ZILLIZ_ENDPOINT`, `ZILLIZ_TOKEN`).
 
 
+### 8. API Gateway & Custom Domain Setup (AWS to Cloudflare)
+*Note: You will be creating two separate CNAME records in Cloudflare during this process. The first is a validation record to prove domain ownership to AWS (must be DNS Only / Gray Cloud). The second is the permanent routing record for live traffic (should be Proxied / Orange Cloud).*
+
+To connect your AWS API Gateway URLs to your custom domain DNS in Cloudflare, follow these steps:
+
+1. **Request an SSL Certificate in AWS (ACM):**
+   - Go to AWS Certificate Manager (ACM) in your deployment region.
+   - Click "Request a certificate", select "Public certificate", and enter your subdomain (e.g., `api-encode.genflowly.com`).
+   - Select "DNS validation" and confirm.
+   - Copy the CNAME name and CNAME value provided by ACM.
+
+2. **Record 1: Validate Certificate in Cloudflare (Ownership Proof):**
+   - Go to Cloudflare DNS settings for your domain.
+   - Add a new **CNAME record** using the details copied from ACM:
+     - **Name:** The CNAME Name provided by ACM (e.g., `_xxxxxxxxxxxxxxxxxxxx.api-encode`).
+     - **Target:** The CNAME Value provided by ACM (e.g., `_xxxxxxxxxxxxxxxxxxxx.xxxxxxxxxx.acm-validations.aws.`).
+   - **Crucial Setting - DNS Only (Gray Cloud):** You MUST set the Proxy status to **DNS only** (Gray Cloud). If Proxied, Cloudflare will hide the validation string and AWS will fail to verify ownership.
+   - Wait a few minutes until the certificate status in ACM changes to "Issued".
+
+3. **Create Custom Domain in API Gateway (TLS & Security Policies):**
+   - Go to the API Gateway console in AWS.
+   - Navigate to **Custom domain names** and click **Create**.
+   - Enter your domain name (e.g., `api-encode.genflowly.com`).
+   - Select **Regional** for the endpoint type (HTTP APIs only support Regional endpoints).
+   - **Certificate:** Choose the ACM certificate you just validated.
+   - **Security Policy:** Select **TLS_1_2** (this is the recommended minimum for modern security and supports both TLS 1.2 and TLS 1.3). HTTP APIs strictly require this minimum policy.
+   - **Mutual TLS (mTLS) Authentication (Optional):** If your architecture demands that the client strictly authenticates itself via a certificate (e.g., service-to-service communication), you can enable mTLS here. You will need to provide an S3 URI pointing to your Truststore `.pem` file containing your trusted root Certificate Authorities. *Note: If enabling mTLS, Cloudflare proxying may interfere unless properly configured to pass client certificates, so you may need to set Cloudflare to DNS Only (Gray Cloud).*
+   - Click Create.
+
+4. **Configure API Mappings:**
+   - In the Custom domain details, go to the **API mappings** tab.
+   - Click **Configure API mappings** -> **Add new mapping**.
+   - Select your deployed HTTP API (e.g., `encoding-service-development-apigw`) and the corresponding Stage.
+   - Click Save.
+
+5. **Record 2: Route Cloudflare DNS to API Gateway (Live Traffic):**
+   - On the Custom Domain details page in AWS, copy the **API Gateway domain name** (looks like `d-xxxxxxxxxx.execute-api.<region>.amazonaws.com`).
+   - Go back to Cloudflare DNS settings.
+   - Add a new **CNAME record** for your actual API traffic:
+     - **Name:** `api-encode` (or your chosen subdomain)
+     - **Target:** The copied API Gateway domain name.
+   - **Crucial Setting - Proxied (Orange Cloud ☁️):** Set the Proxy status to **Proxied**. This routes live traffic through Cloudflare first, granting you DDoS protection and WAF capabilities before hitting AWS. 
+   - *(Note: Ensure your overall SSL/TLS encryption mode in Cloudflare is set to **Full (Strict)** so the connection between Cloudflare and AWS is encrypted!)*
+
+
 ## Section 3: Deploying to Production
 
 When you are ready to launch to Production, you must bootstrap and pre-provision the environment just like you did for Development, but using production parameters.
