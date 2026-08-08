@@ -52,5 +52,7 @@ const apiGatewayStack = new ApiGatewayStack(app, `${RESOURCE_NAMES.ENCODING_SERV
     stage,
     ingestEmailLambda: lambdaStack.ingestEmailLambda,
     ingestNotesLambda: lambdaStack.ingestNotesLambda,
+    createCollectionsLambda: lambdaStack.createCollectionsLambda,
+    checkCollectionsLambda: lambdaStack.checkCollectionsLambda,
     auth0Domain: process.env.AUTH0_SPA_DOMAIN || 'dummy.auth0.com',
 });
