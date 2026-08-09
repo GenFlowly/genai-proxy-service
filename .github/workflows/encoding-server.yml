@@ -72,6 +72,8 @@ jobs:
           PARSE_AND_CHUNK_IMAGE_TAG: "placeholder"
           CREATE_EMBEDDINGS_IMAGE_TAG: "placeholder"
           STORE_EMBEDDINGS_IMAGE_TAG: "placeholder"
+          CHECK_COLLECTIONS_IMAGE_TAG: "placeholder"
+          CREATE_COLLECTIONS_IMAGE_TAG: "placeholder"
 
       - name: Get ECR Repository URIs
         id: get-ecr-uri
@@ -107,6 +109,23 @@ jobs:
           echo "STORE_EMBEDDINGS_ECR_URI=$STORE_EMBEDDINGS_ECR_URI" >> $GITHUB_ENV
           echo "STORE_EMBEDDINGS_ECR_REPO=$(basename $STORE_EMBEDDINGS_ECR_URI)" >> $GITHUB_ENV
           echo "Using Store Embeddings Lambda ECR: $STORE_EMBEDDINGS_ECR_URI"
+
+          CHECK_COLLECTIONS_ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name encoding-service-EcrStack \
+            --query "Stacks[0].Outputs[?OutputKey=='CheckCollectionsRepoUri'].OutputValue" \
+            --output text)
+          echo "CHECK_COLLECTIONS_ECR_URI=$CHECK_COLLECTIONS_ECR_URI" >> $GITHUB_ENV
+          echo "CHECK_COLLECTIONS_ECR_REPO=$(basename $CHECK_COLLECTIONS_ECR_URI)" >> $GITHUB_ENV
+          echo "Using Check Collections Lambda ECR: $CHECK_COLLECTIONS_ECR_URI"
+
+          CREATE_COLLECTIONS_ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name encoding-service-EcrStack \
+            --query "Stacks[0].Outputs[?OutputKey=='CreateCollectionsRepoUri'].OutputValue" \
+            --output text)
+          echo "CREATE_COLLECTIONS_ECR_URI=$CREATE_COLLECTIONS_ECR_URI" >> $GITHUB_ENV
+          echo "CREATE_COLLECTIONS_ECR_REPO=$(basename $CREATE_COLLECTIONS_ECR_URI)" >> $GITHUB_ENV
+          echo "Using Create Collections Lambda ECR: $CREATE_COLLECTIONS_ECR_URI"
+
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -195,6 +214,11 @@ jobs:
           docker rmi create-embeddings-lambda:${GITHUB_SHA::7}
           docker system prune -f
 
+      - name: Build Zilliz Base Docker image
+        working-directory: encoding-server
+        run: |
+          docker build -f Dockerfile.milvus_base -t milvus-base:latest .
+
       - name: Build Store Embeddings Lambda Docker image
         working-directory: encoding-server
         env:
@@ -219,6 +243,54 @@ jobs:
           docker rmi store-embeddings-lambda:${GITHUB_SHA::7}
           docker system prune -f
 
+      - name: Build Check Collections Lambda Docker image
+        working-directory: encoding-server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -f Dockerfile.check_collections -t check-collections-lambda:$IMAGE_TAG .
+          docker tag check-collections-lambda:$IMAGE_TAG $ECR_REGISTRY/$CHECK_COLLECTIONS_ECR_REPO:check-collections-$IMAGE_TAG
+          docker tag check-collections-lambda:$IMAGE_TAG $ECR_REGISTRY/$CHECK_COLLECTIONS_ECR_REPO:check-collections-latest
+          echo "CHECK_COLLECTIONS_IMAGE_URI=$ECR_REGISTRY/$CHECK_COLLECTIONS_ECR_REPO:check-collections-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "CHECK_COLLECTIONS_IMAGE_TAG=check-collections-$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Push Check Collections Lambda Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push $CHECK_COLLECTIONS_IMAGE_URI
+          docker push $ECR_REGISTRY/$CHECK_COLLECTIONS_ECR_REPO:check-collections-latest
+          echo "Pushed Check Collections Lambda: $CHECK_COLLECTIONS_IMAGE_URI and check-collections-latest"
+          docker rmi $CHECK_COLLECTIONS_IMAGE_URI
+          docker rmi $ECR_REGISTRY/$CHECK_COLLECTIONS_ECR_REPO:check-collections-latest
+          docker rmi check-collections-lambda:${GITHUB_SHA::7}
+          docker system prune -f
+
+      - name: Build Create Collections Lambda Docker image
+        working-directory: encoding-server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -f Dockerfile.create_collections -t create-collections-lambda:$IMAGE_TAG .
+          docker tag create-collections-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_COLLECTIONS_ECR_REPO:create-collections-$IMAGE_TAG
+          docker tag create-collections-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_COLLECTIONS_ECR_REPO:create-collections-latest
+          echo "CREATE_COLLECTIONS_IMAGE_URI=$ECR_REGISTRY/$CREATE_COLLECTIONS_ECR_REPO:create-collections-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "CREATE_COLLECTIONS_IMAGE_TAG=create-collections-$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Push Create Collections Lambda Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push $CREATE_COLLECTIONS_IMAGE_URI
+          docker push $ECR_REGISTRY/$CREATE_COLLECTIONS_ECR_REPO:create-collections-latest
+          echo "Pushed Create Collections Lambda: $CREATE_COLLECTIONS_IMAGE_URI and create-collections-latest"
+          docker rmi $CREATE_COLLECTIONS_IMAGE_URI
+          docker rmi $ECR_REGISTRY/$CREATE_COLLECTIONS_ECR_REPO:create-collections-latest
+          docker rmi create-collections-lambda:${GITHUB_SHA::7}
+          docker system prune -f
+
       - name: Deploy S3Stack, SqsStack, LambdaStack, StepFunctionsV2Stack, ApiGatewayStack
         working-directory: ${{ env.ENCODING_CDK_PATH }}
         env:
@@ -226,6 +298,8 @@ jobs:
           PARSE_AND_CHUNK_IMAGE_TAG: ${{ env.PARSE_AND_CHUNK_IMAGE_TAG }}
           CREATE_EMBEDDINGS_IMAGE_TAG: ${{ env.CREATE_EMBEDDINGS_IMAGE_TAG }}
           STORE_EMBEDDINGS_IMAGE_TAG: ${{ env.STORE_EMBEDDINGS_IMAGE_TAG }}
+          CHECK_COLLECTIONS_IMAGE_TAG: ${{ env.CHECK_COLLECTIONS_IMAGE_TAG }}
+          CREATE_COLLECTIONS_IMAGE_TAG: ${{ env.CREATE_COLLECTIONS_IMAGE_TAG }}
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}

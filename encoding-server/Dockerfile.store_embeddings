@@ -1,24 +1,7 @@
-# Build stage
-FROM public.ecr.aws/lambda/python:3.11 AS builder
-
-# Install build dependencies
-RUN yum install -y gcc gcc-c++ make cmake
-
-# Copy and install dependencies
-COPY requirements.txt /tmp/
-COPY requirements-store-embeddings.txt /tmp/
-RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements-store-embeddings.txt --target /tmp/python
-
-# Runtime stage
-FROM public.ecr.aws/lambda/python:3.11
-
-# Copy installed dependencies to Lambda task directory
-COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
+FROM milvus-base:latest
 
 # Copy application code
 COPY handlers/store_embeddings_lambda.py ${LAMBDA_TASK_ROOT}/handlers/store_embeddings_lambda.py
-COPY handlers/check_collections_lambda.py ${LAMBDA_TASK_ROOT}/handlers/check_collections_lambda.py
-COPY services/ ${LAMBDA_TASK_ROOT}/services/
 
 # Set the handler
 CMD [ "handlers.store_embeddings_lambda.handler" ]

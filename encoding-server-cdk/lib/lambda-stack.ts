@@ -18,10 +18,14 @@ export interface LambdaStackProps extends cdk.StackProps {
     parseAndChunkRepo: ecr.IRepository;
     embedRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
+    checkCollectionsRepo: ecr.IRepository;
+    createCollectionsRepo: ecr.IRepository;
     ingestionImageTag?: string;
     parseAndChunkImageTag?: string;
     embedImageTag?: string;
     storeEmbeddingsImageTag?: string;
+    checkCollectionsImageTag?: string;
+    createCollectionsImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
     customerProfileTableName: string;
@@ -154,8 +158,8 @@ export class LambdaStack extends cdk.Stack {
          */
         this.createCollectionsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collections-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collections-lambda`,
-            code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
-                tagOrDigest: props.storeEmbeddingsImageTag || 'store-embeddings-latest',
+            code: DockerImageCode.fromEcr(props.createCollectionsRepo, {
+                tagOrDigest: props.createCollectionsImageTag || 'create-collections-latest',
                 cmd: ['handlers.create_collections_lambda.handler'],
             }),
             memorySize: 512,
@@ -182,8 +186,8 @@ export class LambdaStack extends cdk.Stack {
          */
         this.checkCollectionsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-check-collections-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-check-collections-lambda`,
-            code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
-                tagOrDigest: props.storeEmbeddingsImageTag || 'store-embeddings-latest',
+            code: DockerImageCode.fromEcr(props.checkCollectionsRepo, {
+                tagOrDigest: props.checkCollectionsImageTag || 'check-collections-latest',
                 cmd: ['handlers.check_collections_lambda.handler'],
             }),
             memorySize: 512,
