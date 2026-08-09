@@ -103,28 +103,16 @@ class CustomerProfileService(
             if (!encodingServerUrl.isNullOrBlank()) {
                 GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        logger.info { "Checking if collections exist for customerId=$customerId on encoding server $encodingServerUrl" }
-                        val checkRes = httpClient.post("$encodingServerUrl/check-collections") {
+                        logger.info { "Ensuring collections exist for customerId=$customerId on encoding server $encodingServerUrl" }
+                        val createRes = httpClient.post("$encodingServerUrl/create-collections") {
                             header("Authorization", authHeader)
                         }
-                        val checkBody = checkRes.bodyAsText()
-                        logger.info { "Check collections API returned status ${checkRes.status}" }
+                        val createBody = createRes.bodyAsText()
                         
-                        if (!checkRes.status.isSuccess()) {
-                            logger.error { "Check collections failed with ${checkRes.status}. Body: $checkBody" }
-                            return@launch
-                        }
-                        
-                        // Parse JSON string to see if missing == true
-                        val missing = checkBody.contains("\"missing\":true") || checkBody.contains("\"missing\": true")
-                        if (missing) {
-                            logger.info { "Collections are missing for customerId=$customerId, triggering creation..." }
-                            val createRes = httpClient.post("$encodingServerUrl/create-collections") {
-                                header("Authorization", authHeader)
-                            }
-                            logger.info { "Collection creation API returned status ${createRes.status}" }
+                        if (!createRes.status.isSuccess()) {
+                            logger.error { "Collection creation/check failed with status ${createRes.status}. Body: $createBody" }
                         } else {
-                            logger.info { "Collections already exist for customerId=$customerId. Skipping creation." }
+                            logger.info { "Collections successfully verified/created for customerId=$customerId" }
                         }
                     } catch (e: Exception) {
                         logger.error(e) { "Failed to ensure collection creation for customer $customerId" }

@@ -18,13 +18,11 @@ export interface LambdaStackProps extends cdk.StackProps {
     parseAndChunkRepo: ecr.IRepository;
     embedRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
-    checkCollectionsRepo: ecr.IRepository;
     createCollectionsRepo: ecr.IRepository;
     ingestionImageTag?: string;
     parseAndChunkImageTag?: string;
     embedImageTag?: string;
     storeEmbeddingsImageTag?: string;
-    checkCollectionsImageTag?: string;
     createCollectionsImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
@@ -40,7 +38,6 @@ export class LambdaStack extends cdk.Stack {
     public readonly embedLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly createCollectionsLambda: DockerImageFunction;
-    public readonly checkCollectionsLambda: DockerImageFunction;
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
@@ -176,34 +173,6 @@ export class LambdaStack extends cdk.Stack {
         customerProfileTable.grantReadData(this.createCollectionsLambda);
         customerVectorDBConfigTable.grantReadData(this.createCollectionsLambda);
         this.createCollectionsLambda.addToRolePolicy(new iam.PolicyStatement({
-            actions: ['kms:Decrypt'],
-            resources: ['*'], 
-        }));
-
-        /**
-         * Check Collections Lambda
-         * Explicit API endpoint handler for checking Zilliz collections
-         */
-        this.checkCollectionsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-check-collections-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-check-collections-lambda`,
-            code: DockerImageCode.fromEcr(props.checkCollectionsRepo, {
-                tagOrDigest: props.checkCollectionsImageTag || 'check-collections-latest',
-                cmd: ['handlers.check_collections_lambda.handler'],
-            }),
-            memorySize: 512,
-            timeout: cdk.Duration.seconds(30),
-            architecture: lambda.Architecture.X86_64,
-            environment: {
-                ZILLIZ_ENDPOINT: props.zillizEndpoint,
-                ZILLIZ_TOKEN: props.zillizToken,
-                CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
-                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
-            },
-        });
-
-        customerProfileTable.grantReadData(this.checkCollectionsLambda);
-        customerVectorDBConfigTable.grantReadData(this.checkCollectionsLambda);
-        this.checkCollectionsLambda.addToRolePolicy(new iam.PolicyStatement({
             actions: ['kms:Decrypt'],
             resources: ['*'], 
         }));
