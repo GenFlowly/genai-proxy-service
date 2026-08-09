@@ -1,0 +1,8 @@
+FROM milvus-base:latest
+
+# Copy application code
+COPY handlers/check_collections_lambda.py ${LAMBDA_TASK_ROOT}/handlers/check_collections_lambda.py
+COPY services/ ${LAMBDA_TASK_ROOT}/services/
+
+# Set the handler
+CMD [ "handlers.check_collections_lambda.handler" ]

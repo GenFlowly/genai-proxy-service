@@ -34,6 +34,9 @@ class CustomerProfileService(
     private val dynamoDBProvider: DynamoDBProvider
 ) {
     private val httpClient = HttpClient(CIO) {
+        engine {
+            requestTimeout = 60_000 // 60 seconds
+        }
         install(ClientContentNegotiation) {
             clientJson()
         }

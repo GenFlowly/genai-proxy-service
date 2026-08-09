@@ -38,7 +38,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         body = {}
         if 'body' in event and event['body']:
             if isinstance(event['body'], str):
-                body = json.loads(event['body'])
+                try:
+                    body = json.loads(event['body'])
+                except json.JSONDecodeError:
+                    pass
             else:
                 body = event['body']
                 
