@@ -139,6 +139,6 @@ fun Application.configureRouting(
         registerCustomerProfileSettingsRoutes(dynamoDBProvider)
         registerSearchRoutes(dynamoDBProvider)
         registerGetProfileRoutes(dynamoDBProvider)
-        registerSaveNotesRoutes(notesService)
+        registerSaveNotesRoutes(notesService, customerProfileService)
     }
 }

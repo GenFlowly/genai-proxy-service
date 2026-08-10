@@ -72,11 +72,12 @@
   margin-top: auto;
   margin-left: -2rem;
   margin-right: -2rem;
+  margin-bottom: -2rem; // Cancel the card's bottom padding so the bar sits on its bottom edge
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  
+
   position: sticky;
   bottom: 0;
   background-color: color-mix(in srgb, $color-background 20%, transparent);
@@ -85,10 +86,12 @@
   padding: 0.75rem 0;
   z-index: 10;
   width: calc(100% + 4rem);
+  border-radius: 0 0 8px 8px; // Match the card's rounded bottom corners
 
   @include respond-to-tablet {
     margin-left: -1rem; // Matches $spacing-lg
     margin-right: -1rem;
+    margin-bottom: -0.75rem; // Matches $spacing-md (tablet vertical padding)
     width: calc(100% + 2rem);
   }
 
