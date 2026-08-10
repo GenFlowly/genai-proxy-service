@@ -5,7 +5,8 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background-color: $color-background;
+    background-color: $color-navbar-background;
+    color: $color-navbar-text;
     padding: 1.5rem 1rem;
     gap: 1rem;
 }
@@ -20,13 +21,13 @@
     h2 {
         margin: 0;
         font-size: 1.25rem;
-        color: $color-text-primary;
+        color: $color-navbar-text;
     }
 
     .closeButton {
         background: transparent;
         border: none;
-        color: $color-text-muted;
+        color: $color-navbar-text;
         cursor: pointer;
         padding: 0.5rem;
         display: flex;
@@ -34,7 +35,7 @@
         justify-content: center;
 
         &:hover {
-            color: $color-text-primary;
+            color: $color-primary;
         }
     }
 }
@@ -52,16 +53,22 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
-    background-color: $color-background-secondary;
+    background-color: transparent;
     border: 1px solid $color-border;
     border-radius: $radius-md;
-    color: $color-text-primary;
+    width: 100%;
+    color: $color-navbar-text;
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
 
     &:hover {
         background-color: $color-background-hover;
+    }
+
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: -2px;
     }
 }
 
@@ -70,11 +77,26 @@
     flex-direction: column;
     
     // Override NavbarMenu to stack vertically
-    :global(.navbar-menu) { // Assuming there is some class we can target, or we will style the child directly
+    :global([data-testid="navbar-menu"]) { 
         flex-direction: column;
         align-items: flex-start;
         width: 100%;
         gap: 0.5rem;
+        
+        a, button {
+            width: 100%;
+            text-align: left;
+            display: block; // Ensures full width for inline elements like a
+            padding: 0.75rem 1rem; // Touch target size for a11y
+            font-size: 1rem; // Readable font size for a11y
+            border-radius: $radius-md;
+            box-sizing: border-box; // Ensures padding doesn't overflow width
+            
+            &:focus-visible {
+                outline: 2px solid $color-primary;
+                outline-offset: -2px;
+            }
+        }
     }
 }
 
@@ -113,6 +135,11 @@
     &:hover {
         background-color: $color-primary-hover;
     }
+
+    &:focus-visible {
+        outline: 2px solid $color-text-primary;
+        outline-offset: 2px;
+    }
 }
 
 .accountButton {
@@ -130,8 +157,13 @@
         background-color: $color-background-hover;
     }
 
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: -2px;
+    }
+
     .accountName {
-        color: $color-text-primary;
+        color: $color-navbar-text;
         font-weight: 500;
         font-size: 1rem;
     }
