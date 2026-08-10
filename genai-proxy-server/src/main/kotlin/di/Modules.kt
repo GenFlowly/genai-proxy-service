@@ -12,6 +12,11 @@ import org.koin.dsl.module
 import service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
@@ -23,6 +28,26 @@ import com.genflowly.service.RetrievalService
 fun appModule(): Module = module {
     single { provideJson() }
     single<KLogger> { logger("Logger") }
+    
+    single { 
+        HttpClient(CIO) {
+            engine {
+                requestTimeout = 60_000 // 60 seconds
+            }
+            install(HttpRequestRetry) {
+                retryOnServerErrors(maxRetries = 3)
+                exponentialDelay()
+            }
+            install(HttpTimeout) {
+                requestTimeoutMillis = 60_000L
+                connectTimeoutMillis = 30_000L
+                socketTimeoutMillis = 60_000L
+            }
+            install(ContentNegotiation) {
+                json(get<Json>())
+            }
+        }
+    }
 
     single {
         DynamoDbClient.builder()
@@ -45,13 +70,14 @@ fun appModule(): Module = module {
     single { DynamoDBProvider(get(), get()) }
     single { KMSProvider(get(), get()) }
     single { AIRequestService(get()) }
-    single { CustomerProfileService(get(), get()) }
+    single { CustomerProfileService(get(), get(), get()) }
     single { ConversationService(get(), get()) }
     single { AIRequestManager(get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
-    single { RetrievalService(get(), get()) }
+    single { RetrievalService(get(), get(), get()) }
     single { PromptGenerationService() }
     single { GraphService(get()) }
+    single { com.genflowly.service.NotesService(get(), get()) }
 
 }
 
