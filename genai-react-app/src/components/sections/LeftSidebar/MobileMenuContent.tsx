@@ -12,7 +12,7 @@ import styles from './MobileMenuContent.module.scss'
 
 export const MobileMenuContent: React.FC = () => {
     const { loginWithRedirect, isAuthenticated, user, customerPicture, customerName } = useAuth()
-    const { setHistoryWidgetExpanded, toggleLeftSidebar } = useLayout()
+    const { toggleLeftSidebar } = useLayout()
     const navigate = useNavigate()
 
     const displayPicture = customerPicture || user?.picture
@@ -26,8 +26,10 @@ export const MobileMenuContent: React.FC = () => {
     }
 
     const handleHistoryClick = () => {
-        setHistoryWidgetExpanded(true)
-        toggleLeftSidebar() // Close the left menu so history can take over
+        toggleLeftSidebar() // Close the menu before navigating
+        React.startTransition(() => {
+            navigate('/history') // On mobile, history opens as its own page
+        })
     }
 
     const handleCloseMenu = () => {

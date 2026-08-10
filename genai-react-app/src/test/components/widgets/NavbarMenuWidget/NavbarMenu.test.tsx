@@ -3,13 +3,14 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { NavbarMenu, NAV_ITEMS } from '../../../../components/widgets/NavbarMenuWidget/NavbarMenu';
+import { LayoutProvider } from '../../../../context/LayoutContext';
 import '@testing-library/jest-dom';
 
 describe('NavbarMenu Component', () => {
     test('renders all navigation items', () => {
         render(
             <MemoryRouter initialEntries={['/']}>
-                <NavbarMenu />
+                <LayoutProvider><NavbarMenu /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -24,7 +25,7 @@ describe('NavbarMenu Component', () => {
     test('applies active class to current route', () => {
         render(
             <MemoryRouter initialEntries={['/memory']}>
-                <NavbarMenu />
+                <LayoutProvider><NavbarMenu /></LayoutProvider>
             </MemoryRouter>
         );
 
@@ -43,7 +44,7 @@ describe('NavbarMenu Component', () => {
 
         render(
             <MemoryRouter initialEntries={['/chat']}>
-                <NavbarMenu />
+                <LayoutProvider><NavbarMenu /></LayoutProvider>
                 <Routes>
                     <Route path="*" element={<LocationDisplay />} />
                 </Routes>
