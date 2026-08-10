@@ -64,8 +64,8 @@ class NoteProcessor(DataProcessor):
 
 
         records = []
-        for chunk_data in embeddings:
-            data_id = str(uuid.uuid4())
+        for i, chunk_data in enumerate(embeddings):
+            data_id = f"{notes_model.note_key}_{i}"
             record = {
                 "id": data_id,
                 "vector": chunk_data['vector'],
@@ -74,6 +74,7 @@ class NoteProcessor(DataProcessor):
                 "note_key": (notes_model.note_key or "")[:256],
                 "client": state.client[:100],
                 "created_at": notes_model.created_at,
+                "s3_key": f"notes/{state.client}/{data_id}.json",
             }
             records.append(record)
 
