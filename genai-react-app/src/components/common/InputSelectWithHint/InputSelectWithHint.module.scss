@@ -14,6 +14,24 @@
     background-color: #0064B6 !important;
 }
 
+.hintText {
+    white-space: nowrap;
+}
+
+// Opt-in: collapse the hint area to just the icon on mobile
+@include respond-to-mobile {
+    .iconOnlyHintOnMobile {
+        .hintText {
+            display: none;
+        }
+
+        .prefixArea {
+            gap: 0;
+            padding: 0 0.75rem;
+        }
+    }
+}
+
 .inputElement {
     @include input-with-hint-element;
     width: 100%; // Keeping component specific override if any
