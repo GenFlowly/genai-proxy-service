@@ -216,6 +216,37 @@ $editor-width: 75rem;
   }
 }
 
+// Seamless variant: no border, shadow, or focus ring; grows with content
+// instead of scrolling internally (used on the Memory page)
+.seamless {
+  .mdxEditorRoot {
+    border: none;
+    box-shadow: none;
+
+    &:focus-within {
+      border-color: transparent;
+    }
+
+    :global(.md-editor) {
+      box-shadow: none !important;
+    }
+
+    :global(.cm-editor.cm-focused) {
+      outline: none !important;
+    }
+
+    // Comfortable writing area when the note is still short
+    :global(.cm-editor) {
+      min-height: 60vh;
+    }
+
+    // The page scrolls, not the editor
+    :global(.cm-scroller) {
+      overflow: visible !important;
+    }
+  }
+}
+
 .markdownEditor {
   width: 100%;
   border: none !important;

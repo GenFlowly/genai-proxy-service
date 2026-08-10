@@ -36,8 +36,9 @@ export default function PlainNotes() {
                     id="notes-widget-editor"
                     value={prompt}
                     onChange={setPrompt}
-                    height="100%"
+                    height="auto"
                     maxLength={400000}
+                    variant="seamless"
                 />
             </div>
 
