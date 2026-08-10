@@ -26,6 +26,7 @@ export default function App(): React.ReactElement {
       onRedirectCallback={onRedirectCallback}
       cacheLocation="localstorage"
       useRefreshTokens={true}
+      useRefreshTokensFallback={true}
     >
       <ThemeProvider>
         <AuthProvider>

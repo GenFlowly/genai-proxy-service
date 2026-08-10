@@ -81,8 +81,17 @@ Common abstractions related to embeddings in Python.
 2. Set Allowed Callback, Logout, Web Origins, and CORS URLs to your stage frontend URLs (e.g., `https://development.genflowly.com`).
 3. Create an API identifier matching your backend endpoint (e.g., `https://api-development.genflowly.com`).
 4. **Authorize Client Access**: In your Auth0 Dashboard > **Applications > APIs** > select your API > click **Machine to Machine Applications** (or **Application Access** tab) > find your SPA Application and toggle it **Authorized (ON)**.
-5. **Enable Refresh Tokens**: In your API Settings tab, scroll down to **Access Settings** and check **Allow Offline Access** (required for `offline_access` scope).
-6. Note down the API Audience, Client ID, and Domain for GitHub Actions secrets.
+5. **Enable Refresh Tokens**: In your API Settings tab, scroll down to **Access Settings** and check **Allow Offline Access** (required for `offline_access` scope). Without this, no refresh token is issued and users are logged out as soon as the access token expires.
+6. **Configure Session Persistence** (users stay logged in for 30 days when idle, indefinitely while active). In **Applications** > your SPA Application > **Settings**:
+   1. **Refresh Token Rotation**: enable rotation and set **Rotation Overlap Period** to `30` seconds. The overlap prevents a network retry or multi-tab race (which reuses a just-rotated token) from being flagged as token theft, which would revoke the whole session.
+   2. **Refresh Token Expiration** — order matters, since the Idle lifetime must be less than the Maximum:
+      1. First, disable **Maximum Refresh Token Lifetime** (allowed once rotation is enabled — Auth0 requires SPAs to have rotation or expiration, but not both). If your plan does not allow disabling it, set it to `31557600` (1 year).
+      2. Then set **Idle Refresh Token Lifetime** to `2592000` (30 days).
+   3. With rotation enabled, every silent token refresh issues a new refresh token and resets the idle clock — so active users are never logged out, and idle users keep their session for 30 days.
+   4. Repeat for both the development and production SPA Applications (and **Allow Offline Access** on both APIs).
+
+   Note: Access Token lifetime (API > **Token Expiration**) and **ID Token Expiration** (Application Settings) only control how often the SDK performs a silent refresh; they do not affect how long users stay logged in.
+7. Note down the API Audience, Client ID, and Domain for GitHub Actions secrets.
 
 
 ### 6. Github Actions CI/CD Setup
