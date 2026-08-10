@@ -20,7 +20,7 @@ export function SettingsSidebar(): React.ReactElement {
             <div className={styles.header}>
                 <h2>Settings</h2>
             </div>
-            
+
             <nav className={styles.nav}>
                 <button
                     className={`${styles.tabButton} ${activeTab === 'profile' ? styles.active : ''}`}
