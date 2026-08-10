@@ -17,9 +17,10 @@ interface PromptEditorCoreProps {
     'data-testid'?: string
     readOnly?: boolean
     maxLength?: number
+    variant?: 'default' | 'seamless'
 }
 
-export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false, maxLength }: PromptEditorCoreProps): React.ReactElement {
+export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false, maxLength, variant = 'default' }: PromptEditorCoreProps): React.ReactElement {
 
     const handleChange = (newValue: string) => {
         if (maxLength && newValue.length > maxLength) {
@@ -30,7 +31,7 @@ export default function PromptEditorCore({ id, value, onChange, disableCache = f
     }
 
     return (
-        <div className={`${styles.container} ${className}`} data-testid={testId} style={height === '100%' ? { height: '100%' } : {}}>
+        <div className={`${styles.container} ${variant === 'seamless' ? styles.seamless : ''} ${className}`} data-testid={testId} style={height === '100%' ? { height: '100%' } : {}}>
             <div className={styles.editorWrapper} style={height === '100%' ? { height: '100%' } : {}}>
                 <div className={styles.innerContainer} style={height === '100%' ? { height: '100%' } : {}}>
                     {/* Ghost spacer for perfect centering */}
