@@ -26,7 +26,10 @@ data class NoteData(
 @Serializable
 data class SaveNoteRequest(
     val client: String,
-    val data: NoteData
+    val data: NoteData,
+    // Autosaves send encode=false to skip the embedding pipeline; only the
+    // final save of an editing session (idle/blur/tab close) encodes.
+    val encode: Boolean = true
 )
 
 @Serializable
@@ -94,7 +97,10 @@ class NotesService(
             createdAt = request.data.created_at
         )
 
-        // 2. Async call to encoding server
+        // 2. Async call to encoding server, skipped for intermediate autosaves
+        if (!request.encode) {
+            return
+        }
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = "$encodingServerUrl/encode-notes"

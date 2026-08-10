@@ -29,12 +29,22 @@ export async function getNotes(token: string): Promise<SavedNote[]> {
     return data.notes ?? []
 }
 
+export interface SaveNoteOptions {
+    // false skips the embedding pipeline on the server (intermediate autosaves);
+    // the final save of an editing session sends true
+    encode?: boolean
+    // true lets the request outlive the page (flush on tab close)
+    keepalive?: boolean
+}
+
 export async function saveNote(
     note: NotesModel,
-    token: string
+    token: string,
+    options: SaveNoteOptions = {}
 ): Promise<void> {
     const payload = {
         client: 'genai-react-app',
+        encode: options.encode ?? true,
         data: {
             note_key: note.noteKey,
             note_value: note.noteValue,
@@ -50,6 +60,7 @@ export async function saveNote(
             Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
+        keepalive: options.keepalive ?? false,
     })
 
     if (!response.ok) {
