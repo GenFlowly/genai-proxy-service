@@ -11,8 +11,15 @@ import com.genflowly.models.api.AIMode
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import java.util.*
-import kotlinx.serialization.encodeToString
+import io.ktor.client.HttpClient
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import models.AIConfig
 import mu.KotlinLogging
@@ -21,7 +28,8 @@ private val logger = KotlinLogging.logger {}
 
 class CustomerProfileService(
     private val kmsProvider: KMSProvider,
-    private val dynamoDBProvider: DynamoDBProvider
+    private val dynamoDBProvider: DynamoDBProvider,
+    private val httpClient: HttpClient
 ) {
 
     suspend fun savePreferences(
@@ -43,7 +51,8 @@ class CustomerProfileService(
         client: String,
         email: String?,
         name: String?,
-        picture: String?
+        picture: String?,
+        authHeader: String? = null
     ): models.CustomerProfile {
         // Check if customer exists
         val existingCustomer = dynamoDBProvider.getCustomerProfile(sub, client)
@@ -59,6 +68,8 @@ class CustomerProfileService(
                 seedDefaultGraph(existingCustomerId)
             }
 
+            ensureCollectionsExistAsync(existingCustomerId, authHeader)
+
             return models.CustomerProfile(
                 customerId = existingCustomerId,
                 sub = sub,
@@ -72,7 +83,35 @@ class CustomerProfileService(
         }
 
         // New user path
-        return handleNewUserOnboarding(sub, client, email, name, picture)
+        return handleNewUserOnboarding(sub, client, email, name, picture, authHeader)
+    }
+
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+    private fun ensureCollectionsExistAsync(customerId: String, authHeader: String?) {
+        if (authHeader != null) {
+            val encodingServerUrl = System.getenv("ENCODING_SERVER_URL")
+            if (!encodingServerUrl.isNullOrBlank()) {
+                GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        logger.info { "Ensuring collections exist for customerId=$customerId on encoding server $encodingServerUrl" }
+                        val createRes = httpClient.post("$encodingServerUrl/create-collections") {
+                            header("Authorization", authHeader)
+                        }
+                        val createBody = createRes.bodyAsText()
+                        
+                        if (!createRes.status.isSuccess()) {
+                            logger.error { "Collection creation/check failed with status ${createRes.status}. Body: $createBody" }
+                        } else {
+                            logger.info { "Collections successfully verified/created for customerId=$customerId" }
+                        }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to ensure collection creation for customer $customerId" }
+                    }
+                }
+            } else {
+                logger.warn { "ENCODING_SERVER_URL is not set. Skipping collection check/creation." }
+            }
+        }
     }
 
     private suspend fun handleNewUserOnboarding(
@@ -80,7 +119,8 @@ class CustomerProfileService(
         client: String,
         email: String?,
         name: String?,
-        picture: String?
+        picture: String?,
+        authHeader: String?
     ): models.CustomerProfile {
         val newCustomerId = generateCustomerId()
         val generatedUsername = dynamoDBProvider.onboardCustomer(
@@ -109,6 +149,9 @@ class CustomerProfileService(
         seedDefaultGraph(newCustomerId)
 
         logger.info { "New user onboarded with customerId=$newCustomerId" }
+        
+        ensureCollectionsExistAsync(newCustomerId, authHeader)
+
         return models.CustomerProfile(
             customerId = newCustomerId,
             sub = sub,
@@ -315,6 +358,10 @@ class CustomerProfileService(
                 name = instruction.name,
                 version = instruction.version ?: 1,
                 instruction = instruction.instructions,
+                icon = instruction.icon,
+                color = instruction.color,
+                category = instruction.category,
+                tags = instruction.tags,
                 role = role
             )
         }
@@ -471,6 +518,10 @@ class CustomerProfileService(
             version = instruction.version ?: 1,
             name = instruction.name,
             instruction = instruction.instructions,
+            icon = instruction.icon,
+            color = instruction.color,
+            category = instruction.category,
+            tags = instruction.tags,
             role = role
         )
     }
@@ -543,6 +594,35 @@ class CustomerProfileService(
             }
         } catch (e: Exception) {
             logger.warn { "Failed to track instruction usage for instructionId=$instructionId customerId=$customerId: ${e.message}" }
+        }
+    }
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+    fun backfillInstructionsAsync(
+        customerId: String, 
+        instructionsToCheck: List<InstructionResponse>,
+        aiRequestManager: service.AIRequestManager
+    ) {
+        GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                for (instructionRes in instructionsToCheck) {
+                    if (instructionRes.icon == null || instructionRes.category == null) {
+                        val existing = dynamoDBProvider.getInstruction(instructionRes.id, instructionRes.version)
+                        if (existing != null) {
+                            val generatedPersona = aiRequestManager.generateInstructionPersona(existing.instructions, customerId)
+                            val backfilled = existing.copy(
+                                category = generatedPersona.category,
+                                icon = generatedPersona.icon,
+                                color = generatedPersona.color,
+                                tags = generatedPersona.tags
+                            )
+                            dynamoDBProvider.saveInstruction(backfilled)
+                            logger.info { "AI backfilled instruction ${existing.id} for $customerId" }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed AI backfill for customer $customerId" }
+            }
         }
     }
 }

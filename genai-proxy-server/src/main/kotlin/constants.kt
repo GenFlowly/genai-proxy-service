@@ -91,6 +91,9 @@ object DynamoDBConstants {
     // counted at most once per customer.
     const val INSTRUCTION_USAGE_SEEN_TABLE = "InstructionUsageSeen"
     const val INSTRUCTION_USAGE_SEEN_SORT_KEY = "convInstKey" // "<conversationId>#<instructionId>"
+
+    const val CUSTOMER_NOTES_TABLE = "CustomerNotes"
+    const val NOTE_KEY = "noteKey"
 }
 @Serializable
 data class PersonaCategory(

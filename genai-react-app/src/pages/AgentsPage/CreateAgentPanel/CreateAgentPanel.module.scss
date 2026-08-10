@@ -292,7 +292,7 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 0.625rem;
 
-    @media (max-width: 600px) {
+    @include respond-to-mobile {
         grid-template-columns: repeat(2, 1fr);
     }
 }

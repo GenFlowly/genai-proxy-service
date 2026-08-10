@@ -13,9 +13,10 @@ interface PromptEditorProps {
     className?: string
     'data-testid'?: string
     readOnly?: boolean
+    maxLength?: number
 }
 
-export default function PromptEditor({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false }: PromptEditorProps): React.ReactElement {
+export default function PromptEditor({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false, maxLength }: PromptEditorProps): React.ReactElement {
 
     return (
         <Suspense fallback={
@@ -34,6 +35,7 @@ export default function PromptEditor({ id, value, onChange, disableCache = false
                 className={className}
                 data-testid={testId}
                 readOnly={readOnly}
+                maxLength={maxLength}
             />
         </Suspense>
     )

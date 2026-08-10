@@ -632,6 +632,35 @@ class DynamoDBProvider(
         }
     }
 
+    suspend fun saveNote(
+        customerId: String,
+        noteKey: String,
+        noteValue: String,
+        title: String,
+        createdAt: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val item = withTimestamps(mapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                com.genflowly.DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build(),
+                "noteValue" to AttributeValue.builder().s(noteValue).build(),
+                "title" to AttributeValue.builder().s(title).build(),
+                "noteCreatedAt" to AttributeValue.builder().s(createdAt).build()
+            ))
+
+            val putReq = PutItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_NOTES_TABLE)
+                .item(item)
+                .build()
+
+            dynamoDbClient.putItem(putReq)
+            logger.info("Saved Note $noteKey for $customerId to DynamoDB")
+        } catch (e: Exception) {
+            logger.error("Failed to save note to DynamoDB", e)
+            throw e
+        }
+    }
+
     suspend fun getCustomerSupabaseConfigStatus(customerId: String): models.SupabaseConfigStatus? = withContext(Dispatchers.IO) {
         try {
             val getReq = GetItemRequest.builder()

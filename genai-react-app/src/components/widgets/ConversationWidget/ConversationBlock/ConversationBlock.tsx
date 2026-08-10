@@ -130,7 +130,7 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
         }
     }
 
-    const isLastResponseBlock = [...conversationBlockList].reverse().find(b => b.status === 'resolved')?.conversationBlockId === id
+    const isLastResponseBlock = [...conversationBlockList].reverse().find(b => b.responseMessages.length > 0)?.conversationBlockId === id
 
     return (
         <div className={`${styles.conversationBlock} conversation-block-item`} data-block-id={id} data-testid={testId}>

@@ -50,11 +50,23 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     // Manage aborted streams natively
     const abortControllers = useRef<Map<string, AbortController>>(new Map())
 
-    const stopGenerating = useCallback((blockId?: string) => {
+    const stopGenerating = useCallback((blockId?: string, vendor?: string) => {
         const idToAbort = blockId || activeBlockId;
-        if (idToAbort && abortControllers.current.has(idToAbort)) {
-             abortControllers.current.get(idToAbort)?.abort()
-             abortControllers.current.delete(idToAbort)
+        if (!idToAbort) return;
+
+        if (vendor) {
+            const key = `${idToAbort}-${vendor}`
+            if (abortControllers.current.has(key)) {
+                abortControllers.current.get(key)?.abort()
+                abortControllers.current.delete(key)
+            }
+        } else {
+            Array.from(abortControllers.current.entries()).forEach(([key, controller]) => {
+                if (key.startsWith(`${idToAbort}-`) || key === idToAbort) {
+                    controller.abort()
+                    abortControllers.current.delete(key)
+                }
+            })
         }
     }, [activeBlockId])
 
@@ -405,11 +417,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         if (!prep) return
 
         let { aiConfigs, finalSelectedResponseId, promptToUse } = prep
-        const controller = new AbortController()
         
-        let targetIdForAbort = id
         if (vendorToRegenerate) {
-             targetIdForAbort = `${id}-${vendorToRegenerate}`
              aiConfigs = aiConfigs.filter(c => c.aiVendor === vendorToRegenerate)
              if (aiConfigs.length === 0) {
                  showToast(`Please select a valid model for ${vendorToRegenerate} first.`)
@@ -417,7 +426,10 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
              }
         }
         
-        abortControllers.current.set(targetIdForAbort, controller)
+        aiConfigs.forEach(c => {
+             const controller = new AbortController()
+             abortControllers.current.set(`${id}-${c.aiVendor}`, controller)
+        })
 
         const timestamp = Date.now()
         
@@ -566,7 +578,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     },
                     idToUse,
                     handleThinking,
-                    controller.signal
+                    abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal
                 )
 
                 const finalConversationId = explicitConversationId || conversationIdRef.current
@@ -718,7 +730,9 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 })
             }
         } finally {
-            abortControllers.current.delete(vendorToRegenerate ? `${id}-${vendorToRegenerate}` : id)
+            aiConfigs.forEach(c => {
+                abortControllers.current.delete(`${id}-${c.aiVendor}`)
+            })
         }
     }
 

@@ -10,14 +10,23 @@ import '@testing-library/jest-dom';
 jest.mock('../../../../../context/ConversationContext');
 jest.mock('../../../../../context/LayoutContext');
 
+// JSDOM's window is 1024px wide, which would cap rendering to 1 vendor.
+// Mock the responsive hook so all vendors render deterministically.
+jest.mock('../../../../../hooks/useMaxVendors', () => ({
+    useMaxVendors: () => 3
+}));
+
 // Mock child components
-jest.mock('../../../../../components/common/TextContainer/TextContainer', () => ({ children, title, content, 'data-testid': testId }: any) => (
-    <div data-testid={testId || 'text-container'}>
-        <div data-testid="tc-title">{title}</div>
-        <div data-testid="tc-content">{content}</div>
-        {children}
-    </div>
-));
+jest.mock('../../../../../components/common/TextContainer/TextContainer', () => (props) => {
+    const { children, title, content, 'data-testid': testId } = props;
+    return (
+        <div data-testid={testId || 'text-container'}>
+            <div data-testid="tc-title">{title}</div>
+            <div data-testid="tc-content">{content}</div>
+            {children}
+        </div>
+    );
+});
 
 
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
@@ -26,11 +35,14 @@ jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
     GeminiBrandName: () => <span>Gemini</span>
 }));
 
-jest.mock('../../../../../components/common/MultiPurposeButton/MultiPurposeButton', () => ({ label, onClick, disabled, 'data-testid': testId }: any) => (
-    <button data-testid={testId} onClick={onClick} disabled={disabled}>
-        {label}
-    </button>
-));
+jest.mock('../../../../../components/common/MultiPurposeButton/MultiPurposeButton', () => (props) => {
+    const { label, onClick, disabled, 'data-testid': testId } = props;
+    return (
+        <button data-testid={testId} onClick={onClick} disabled={disabled}>
+            {label}
+        </button>
+    );
+});
 
 describe('Response Widget Component', () => {
     const mockUseConversation = useConversation as jest.Mock;
@@ -44,7 +56,8 @@ describe('Response Widget Component', () => {
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
             getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
             getVendorSelectionForBlock: jest.fn().mockReturnValue([]),
-            generateResponsesStream: jest.fn()
+            generateResponsesStream: jest.fn(),
+            stopGenerating: jest.fn()
         });
         mockUseLayout.mockReturnValue({
             isLeftSidebarExpanded: true,
@@ -111,14 +124,15 @@ describe('Response Widget Component', () => {
         expect(btns[0]).not.toHaveTextContent('Selected');
         expect(btns[0]).not.toBeDisabled();
     });
-    test('does NOT show Follow Up button if content is loading', () => {
+    test('shows Stop button and NO follow up button if content is loading', () => {
         const loadingMsgs = [
             { messageId: 'msg-loading', text: 'Generating...', aiVendor: AIVendor.OPENAI, isLoading: true, timestamp: 0 }
         ];
         render(<Response blockId="block-1" responseMessages={loadingMsgs} onFollowUp={jest.fn()} data-testid="res-comp" />);
 
-        // Should render content but NO follow up button
+        // Should render content and stop button, but NO follow up button
         expect(screen.getByTestId('res-comp')).toBeInTheDocument();
+        expect(screen.getByTestId('stop-button')).toBeInTheDocument();
         expect(screen.queryByTestId('follow-up-button')).not.toBeInTheDocument();
     });
 
@@ -166,7 +180,8 @@ describe('Response Widget Component', () => {
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
             getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
             getVendorSelectionForBlock: jest.fn().mockReturnValue([]),
-            generateResponsesStream: mockGenerateResponsesStream
+            generateResponsesStream: mockGenerateResponsesStream,
+            stopGenerating: jest.fn()
         });
 
         render(<Response blockId="block-1" responseMessages={mockMessages} onFollowUp={jest.fn()} />);

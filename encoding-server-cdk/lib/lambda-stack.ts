@@ -18,10 +18,12 @@ export interface LambdaStackProps extends cdk.StackProps {
     parseAndChunkRepo: ecr.IRepository;
     embedRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
+    createCollectionsRepo: ecr.IRepository;
     ingestionImageTag?: string;
     parseAndChunkImageTag?: string;
     embedImageTag?: string;
     storeEmbeddingsImageTag?: string;
+    createCollectionsImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
     customerProfileTableName: string;
@@ -30,11 +32,12 @@ export interface LambdaStackProps extends cdk.StackProps {
 
 export class LambdaStack extends cdk.Stack {
 
-    public readonly ingestionLambda: lambda.Function;
+    public readonly ingestEmailLambda: lambda.Function;
     public readonly ingestNotesLambda: lambda.Function;
     public readonly parseAndChunkLambda: DockerImageFunction;
     public readonly embedLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
+    public readonly createCollectionsLambda: DockerImageFunction;
 
     constructor(scope: Construct, id: string, props: LambdaStackProps) {
         super(scope, id, props);
@@ -44,16 +47,15 @@ export class LambdaStack extends cdk.Stack {
         const customerVectorDBConfigTable = dynamodb.Table.fromTableName(this, 'CustomerVectorDBConfigTable', props.customerVectorDBConfigTableName);
 
         /**
-         * Ingestion Lambda
+         * Ingest Email Lambda
          * Validates payloads and pushes to SQS
          */
-        const ingestionLambdaCode = DockerImageCode.fromEcr(props.ingestionRepo, {
-            tagOrDigest: props.ingestionImageTag || 'ingestion-latest',
-        });
-
-        this.ingestionLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-lambda`,
-            code: ingestionLambdaCode,
+        this.ingestEmailLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingest-email-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingest-email-lambda`,
+            code: DockerImageCode.fromEcr(props.ingestionRepo, {
+                tagOrDigest: props.ingestionImageTag || 'ingestion-latest',
+                cmd: ['handlers.ingest_email_lambda.handler'],
+            }),
             memorySize: 512,
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
@@ -63,8 +65,8 @@ export class LambdaStack extends cdk.Stack {
             },
         });
 
-        props.ingestionQueue.grantSendMessages(this.ingestionLambda);
-        customerProfileTable.grantReadData(this.ingestionLambda);
+        props.ingestionQueue.grantSendMessages(this.ingestEmailLambda);
+        customerProfileTable.grantReadData(this.ingestEmailLambda);
 
         /**
          * Ingest Notes Lambda
@@ -72,7 +74,10 @@ export class LambdaStack extends cdk.Stack {
          */
         this.ingestNotesLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingest-notes-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingest-notes-lambda`,
-            code: ingestionLambdaCode,
+            code: DockerImageCode.fromEcr(props.ingestionRepo, {
+                tagOrDigest: props.ingestionImageTag || 'ingestion-latest',
+                cmd: ['handlers.ingest_notes_lambda.handler'],
+            }),
             memorySize: 512,
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
@@ -140,6 +145,34 @@ export class LambdaStack extends cdk.Stack {
         // Expose cryptographic arrays perfectly mapping AWS natively safely
         customerVectorDBConfigTable.grantReadData(this.storeEmbeddingsLambda);
         this.storeEmbeddingsLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'], 
+        }));
+
+        /**
+         * Create Collections Lambda
+         * Explicit API endpoint handler for Zilliz collection generation
+         */
+        this.createCollectionsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collections-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collections-lambda`,
+            code: DockerImageCode.fromEcr(props.createCollectionsRepo, {
+                tagOrDigest: props.createCollectionsImageTag || 'create-collections-latest',
+                cmd: ['handlers.create_collections_lambda.handler'],
+            }),
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ZILLIZ_ENDPOINT: props.zillizEndpoint,
+                ZILLIZ_TOKEN: props.zillizToken,
+                CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
+                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
+            },
+        });
+
+        customerProfileTable.grantReadData(this.createCollectionsLambda);
+        customerVectorDBConfigTable.grantReadData(this.createCollectionsLambda);
+        this.createCollectionsLambda.addToRolePolicy(new iam.PolicyStatement({
             actions: ['kms:Decrypt'],
             resources: ['*'], 
         }));

@@ -18,19 +18,49 @@
   }
 
   /* 📱 Responsive layout: Mobile Overlay */
-  @media (max-width: 768px) {
+  @include respond-to-mobile {
     display: flex; // Ensure it shows when not collapsed
     position: absolute;
     top: 0;
     right: 0;
     height: 100%;
     z-index: 100;
-    width: 80%;
-    max-width: 18rem;
+    width: 100%;
+    max-width: 100%;
     box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
 
     &.collapsed {
       display: none;
+    }
+
+    .mobileHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem 0 1.5rem;
+      border-bottom: 1px solid $color-border;
+      padding-bottom: 1rem;
+
+      h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        color: $color-text-primary;
+      }
+    }
+
+    .mobileCloseButton {
+      background: transparent;
+      border: none;
+      color: $color-text-muted;
+      cursor: pointer;
+      padding: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &:hover {
+        color: $color-text-primary;
+      }
     }
   }
 }

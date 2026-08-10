@@ -344,6 +344,18 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        const customerNotesTableProps: CreateTableProps = {
+            tableName: 'CustomerNotes',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING
+            },
+            sortKey: { 
+                name: 'noteKey', 
+                type: dynamodb.AttributeType.STRING 
+            },
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
@@ -361,6 +373,7 @@ export class DynamoDBStack extends cdk.Stack {
         const instructionUsageTable = createDefaultDynamoDbTable(this, instructionUsageTableProps);
         const instructionUsageSeenTable = createDefaultDynamoDbTable(this, instructionUsageSeenTableProps);
         const usernameLookupTable = createDefaultDynamoDbTable(this, usernameLookupTableProps);
+        const customerNotesTable = createDefaultDynamoDbTable(this, customerNotesTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, customerApiUsageTable,
@@ -369,7 +382,7 @@ export class DynamoDBStack extends cdk.Stack {
             customerGraphNodesTable, customerGraphsTable,
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
-            usernameLookupTable
+            usernameLookupTable, customerNotesTable
         );
     }
 }

@@ -27,10 +27,12 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
     embedRepo: ecrStack.createEmbeddingsRepo,
     storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
+    createCollectionsRepo: ecrStack.createCollectionsRepo,
     ingestionImageTag: process.env.INGESTION_IMAGE_TAG || 'latest',
     parseAndChunkImageTag: process.env.PARSE_AND_CHUNK_IMAGE_TAG || 'latest',
     embedImageTag: process.env.CREATE_EMBEDDINGS_IMAGE_TAG || 'latest',
     storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG || 'latest',
+    createCollectionsImageTag: process.env.CREATE_COLLECTIONS_IMAGE_TAG || 'latest',
     zillizEndpoint: process.env.ZILLIZ_ENDPOINT || 'dummy_zilliz_endpoint',
     zillizToken: process.env.ZILLIZ_TOKEN || 'dummy_zilliz_token',
     customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
@@ -50,7 +52,8 @@ const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENC
 
 const apiGatewayStack = new ApiGatewayStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-ApiGatewayStack`, {
     stage,
-    ingestionLambda: lambdaStack.ingestionLambda,
+    ingestEmailLambda: lambdaStack.ingestEmailLambda,
     ingestNotesLambda: lambdaStack.ingestNotesLambda,
+    createCollectionsLambda: lambdaStack.createCollectionsLambda,
     auth0Domain: process.env.AUTH0_SPA_DOMAIN || 'dummy.auth0.com',
 });

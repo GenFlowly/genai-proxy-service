@@ -27,6 +27,7 @@ services:
       AUTH0_SPA_CLIENT_ID: "VSKaAyEXLKM0LuZzJVhvH6RTT11LiNgE"
       AUTH0_API_AUDIENCE: "https://api-development.genflowly.com"
       RETRIEVAL_SERVER_URL: "http://retrieval-server:5001"
+      ENCODING_SERVER_URL: "${ENCODING_SERVER_URL:-}"
       IMAGE_TAG: "local-dev"   # For local builds; in CI this is set from GITHUB_SHA
       # Google OAuth — required for Gmail/Calendar tool nodes.
       # Set actual values in .env (never commit them).

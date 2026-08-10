@@ -1,10 +1,11 @@
 @import '../../styles/themes.scss';
+@import '../../styles/mixins.scss';
 
 .navbar {
   background-color: $color-navbar-background;
   color: $color-navbar-text;
   box-shadow: $shadow-md;
-  z-index: 30; // Above sidebar (20)
+  z-index: 1000; // Ensure navbar is always on top of sidebars and other content
   position: relative;
 }
 
@@ -89,6 +90,16 @@
   border-bottom: 1px solid $color-border;
 }
 
+.mobileMenuOverlay {
+  @include respond-to-mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+  }
+}
 .dropdownLabel {
   font-size: 0.875rem;
   color: $color-text-muted;
@@ -130,7 +141,7 @@
   padding-left: 0;
 
   /* 📱 Mobile: reduce min-width */
-  @media (max-width: 768px) {
+  @include respond-to-mobile {
     min-width: auto;
     gap: 0.5rem;
   }
@@ -144,8 +155,8 @@
   padding: 0 0.2rem;
   min-width: 0; // Prevent flex item overflow
 
-  @media (max-width: 768px) {
-    padding: 0 0.5rem;
+  @include respond-to-mobile {
+    display: none;
   }
 }
 
@@ -163,9 +174,12 @@
   min-width: 1rem; // Fixed minimum width
 
   /* 📱 Mobile: Allow shrinking and fit toggle */
-  @media (max-width: 768px) {
+  @include respond-to-mobile {
     min-width: auto;
     padding-left: 0.5rem;
+    > :not(.mobileToggle) {
+      display: none;
+    }
   }
 }
 
@@ -178,7 +192,7 @@
   padding: 0.5rem;
   margin-right: 0.5rem;
 
-  @media (max-width: 768px) {
+  @include respond-to-mobile {
     display: flex;
     align-items: center;
     justify-content: center;

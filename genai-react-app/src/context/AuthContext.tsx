@@ -270,9 +270,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     // Strict Authentication: Considered authenticated ONLY if Auth0 says so AND we have a customerId (onboard success).
     const isStrictlyAuthenticated = isAuthenticated && !!customerId
 
+    // Central entitlements: single source of truth for what the customer may do.
+    // Sharing requires a logged-in (onboarded) customer.
+    const entitlements = {
+        canShare: isStrictlyAuthenticated,
+    }
+
     const contextValue: AuthContextType = {
         user,
         isAuthenticated: isStrictlyAuthenticated,
+        entitlements,
         isLoading: auth0Loading || isInternalLoading,
         isInstructionsLoaded,
         customerId,

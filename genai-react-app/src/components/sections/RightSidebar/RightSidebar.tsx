@@ -4,6 +4,7 @@ import { Icon } from '../../common/Icon/Icon'
 import { ICONS } from '../../../constants/icons'
 import styles from './RightSidebar.module.scss'
 import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
+import { useWindowSize } from '../../../hooks/useWindowSize'
 
 interface RightSidebarProps {
     widgetIds: string[]
@@ -14,6 +15,8 @@ export default function RightSidebar({ widgetIds, 'data-testid': testId }: Right
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()
     const collapsed = !isRightSidebarExpanded
     const widgets = useWidgetResolver(widgetIds)
+    const { width } = useWindowSize()
+    const isMobile = width <= 768
 
     return (
         <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`} data-testid={testId || "right-sidebar"}>
@@ -29,6 +32,15 @@ export default function RightSidebar({ widgetIds, 'data-testid': testId }: Right
                     <Icon src={ICONS.ALT_ARROW_LEFT} size={15} />
                 )}
             </button>
+
+            {isMobile && (
+                <div className={styles.mobileHeader}>
+                    <h2>AI Settings</h2>
+                    <button onClick={toggleRightSidebar} className={styles.mobileCloseButton}>
+                        <Icon src={ICONS.ALT_ARROW_RIGHT} size={20} />
+                    </button>
+                </div>
+            )}
 
             <div className={styles.sidebarContent}>
                 {widgets.map(widget => (

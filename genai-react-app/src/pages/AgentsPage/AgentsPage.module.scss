@@ -19,7 +19,7 @@
     flex-direction: column;
     gap: 2rem;
 
-    @media (max-width: 768px) {
+    @include respond-to-mobile {
         padding: 1.25rem;
     }
 }
@@ -55,7 +55,7 @@
     grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
     gap: 1.5rem;
 
-    @media (max-width: 600px) {
+    @include respond-to-mobile {
         grid-template-columns: 1fr;
     }
 }
