@@ -24,6 +24,7 @@
   z-index: 100; // Above page content and headers, below the navbar (z=1000)
   display: flex;
   flex-direction: column;
+  padding-top: 1rem;
   background-color: $color-sidebar-background;
 
   .sidebarContent {
