@@ -77,6 +77,16 @@
     // Breakpoints
     --breakpoint-tablet: 1024px;
     --breakpoint-mobile: 768px;
+
+    // Mobile content sizing — the prompt editor's mobile geometry (0.5rem side
+    // inset), reused by other content that must match its width (e.g. the
+    // request widget's text container)
+    --mobile-content-inset: 0.5rem;
+    --mobile-content-width: calc(100vw - (2 * var(--mobile-content-inset)));
+
+    // Vertical padding for request/response widgets — identical top & bottom,
+    // desktop & mobile
+    --widget-padding-y: 0.5rem;
 }
 
 // Dark Theme
@@ -219,3 +229,8 @@ $white: #ffffff;
 // Breakpoints
 $breakpoint-tablet: 1024px;
 $breakpoint-mobile: 768px;
+
+// Mobile content sizing (see :root definitions above)
+$mobile-content-inset: var(--mobile-content-inset);
+$mobile-content-width: var(--mobile-content-width);
+$widget-padding-y: var(--widget-padding-y);

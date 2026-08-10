@@ -225,7 +225,9 @@ $editor-width: 75rem;
 
 @include respond-to-tablet {
   .container {
-    padding: 0.5rem !important;
+    // $mobile-content-inset is the global source of truth for the editor's
+    // side inset — content matching the editor's width derives from it
+    padding: $mobile-content-inset !important;
   }
 
   .innerContainer {
