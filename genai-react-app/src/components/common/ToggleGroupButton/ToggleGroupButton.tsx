@@ -14,6 +14,7 @@ interface ToggleGroupButtonProps {
     onChange: (selectedValues: string[]) => void
     allowEmpty?: boolean
     singleSelection?: boolean
+    maxSelection?: number
     className?: string
     'data-testid'?: string
 }
@@ -24,6 +25,7 @@ export default function ToggleGroupButton({
     onChange,
     allowEmpty = false,
     singleSelection = false,
+    maxSelection,
     className = '',
     'data-testid': testId
 }: ToggleGroupButtonProps): React.ReactElement {
@@ -69,14 +71,19 @@ export default function ToggleGroupButton({
         <div className={`${styles.toggleGroup} ${className}`} data-testid={testId}>
             {options.map((option) => {
                 const isActive = selectedValues.includes(option.id)
+                const isMaxReached = maxSelection !== undefined && selectedValues.length >= maxSelection
+                const isDisabled = !isActive && isMaxReached
+
                 return (
                     <button
                         key={option.id}
-                        className={`${styles.toggleButton} ${isActive ? styles.active : ''}`}
-                        onClick={() => handleToggle(option.id)}
+                        className={`${styles.toggleButton} ${isActive ? styles.active : ''} ${isDisabled ? styles.disabled : ''}`}
+                        onClick={() => !isDisabled && handleToggle(option.id)}
                         type="button"
                         aria-pressed={isActive}
                         aria-label={`Toggle ${option.label}`}
+                        aria-disabled={isDisabled}
+                        disabled={isDisabled}
                         data-testid={testId ? `${testId}-option-${option.id}` : undefined}
                     >
                         {option.icon && <Icon src={option.icon} size={16} data-testid={testId ? `${testId}-option-${option.id}-icon` : undefined} />}

@@ -9,13 +9,16 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
+import io.ktor.http.HttpHeaders
 import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
+import service.AIRequestManager
 
 private val logger = LoggerFactory.getLogger("OnboardCustomerRoute")
 
 fun Route.registerOnboardCustomerRoutes(
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    aiRequestManager: AIRequestManager
 ) {
     authenticate("auth0") {
         post(Routes.ONBOARD_CUSTOMER) {
@@ -28,12 +31,15 @@ fun Route.registerOnboardCustomerRoutes(
                 request.picture ?: "not provided",
             )
 
+            val authHeader = call.request.headers[HttpHeaders.Authorization]
+
             val customerProfile = customerProfileService.onboardCustomer(
                 sub = request.sub,
                 client = request.client,
                 email = request.email,
                 name = request.name,
-                picture = request.picture
+                picture = request.picture,
+                authHeader = authHeader
             )
 
             // Fetch additional details
@@ -46,13 +52,18 @@ fun Route.registerOnboardCustomerRoutes(
             
             val supabaseConfigStatus = customerProfileService.getCustomerSupabaseConfigStatus(customerProfile.customerId)
 
+            val customerInstructions = customerProfileService.getLatestCustomerInstructions(customerProfile.customerId)
+            
+            // Fire and forget backfill missing categories/icons using AI
+            customerProfileService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions, aiRequestManager)
+
             val response = OnboardCustomerResponse(
                 customerId = customerProfile.customerId,
                 aiConfigPreferences = aiConfigPreferences,
                 aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList,
                 customerName = customerProfile.name ?: "User",
                 customerPicture = customerProfile.picture,
-                customerInstructions = customerProfileService.getLatestCustomerInstructions(customerProfile.customerId),
+                customerInstructions = customerInstructions,
                 vectorDBConfigStatusList = vectorDBConfigStatusList,
                 supabaseConfigStatus = supabaseConfigStatus
             )

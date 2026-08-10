@@ -12,6 +12,7 @@ import { useLayout } from '../context/LayoutContext'
 
 import { getPageConfig } from '../config/PageWidgetConfig'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { useWindowSize } from '../hooks/useWindowSize'
 
 function LandingPageContent() {
     // Current Chat Page uses the 'CHAT_PAGE' config
@@ -19,10 +20,13 @@ function LandingPageContent() {
     usePageTitle()
     const config = getPageConfig('CHAT_PAGE')
     const { isHistoryWidgetExpanded } = useLayout()
+    const { width } = useWindowSize()
+    const isMobile = width <= 768
 
     return (
         <div className={styles.layout}>
-            {isHistoryWidgetExpanded && config.pageId === 'CHAT_PAGE' && (
+            {/* On mobile, history is a dedicated page (/history) instead of a sidebar widget */}
+            {!isMobile && isHistoryWidgetExpanded && config.pageId === 'CHAT_PAGE' && (
                 <div className={styles.historySidebar}>
                     <ConversationHistoryComponent />
                 </div>
@@ -44,6 +48,8 @@ export default function LandingPage() {
         setHistoryWidgetExpanded 
     } = useLayout()
     const location = useLocation()
+    const { width } = useWindowSize()
+    const isMobile = width <= 768
 
     // Orchestrate Sidebar and History states based on active conversation
     useEffect(() => {
@@ -54,13 +60,13 @@ export default function LandingPage() {
             setLeftSidebarExpanded(false)
             setHistoryWidgetExpanded(false)
         } else {
-            // No conversation (New Chat): right expanded, left fully minimized/hidden, history expanded
-            setRightSidebarExpanded(true)
+            // No conversation (New Chat): right expanded (desktop), left fully minimized/hidden, history expanded (desktop)
+            setRightSidebarExpanded(!isMobile)
             setLeftSidebarMinimized(true)
             setLeftSidebarExpanded(false)
-            setHistoryWidgetExpanded(true)
+            setHistoryWidgetExpanded(!isMobile)
         }
-    }, [contextId, setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, setHistoryWidgetExpanded])
+    }, [contextId, setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, setHistoryWidgetExpanded, isMobile])
 
     useEffect(() => {
         if (routeId) {

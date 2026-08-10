@@ -1,15 +1,15 @@
 import { NotesModel } from '../models/encoding.models'
 import { HttpMethod } from '../constants/http'
 
-// TODO remove Hardcoded API URL as requested
-const API_URL = 'https://pzf0twaaq5.execute-api.us-east-1.amazonaws.com/development/encode'
+import { config } from '../config/env'
+
+const API_URL = `${config.backend.baseUrl}/api/v1/notes`;
 
 export async function saveNote(
     note: NotesModel,
     token: string
 ): Promise<void> {
     const payload = {
-        dataType: 'NOTE',
         client: 'genai-react-app',
         data: {
             note_key: note.noteKey,

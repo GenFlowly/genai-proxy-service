@@ -31,7 +31,7 @@
     flex-shrink: 0;
     flex-wrap: wrap;
 
-    @media (max-width: 768px) {
+    @include respond-to-mobile {
         padding: 0.75rem 1rem;
     }
 }
@@ -259,7 +259,7 @@
     flex-direction: column;
     gap: 1.25rem;
 
-    @media (max-width: 900px) {
+    @include respond-to-tablet {
         border-right: none;
         border-bottom: 1px solid $color-border;
     }
@@ -334,7 +334,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
 
-    @media (max-width: 700px) {
+    @include respond-to-mobile {
         grid-template-columns: 1fr;
     }
 }

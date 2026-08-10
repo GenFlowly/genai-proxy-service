@@ -71,7 +71,9 @@ describe('InstructionDetailPage', () => {
                 { id: 'inst-1', name: 'Existing', instruction: 'Original text', version: 1, role: 'OWNER' }
             ],
             refreshInstructions: mockRefresh,
-            updateInstruction: mockUpdate
+            updateInstruction: mockUpdate,
+            isAuthenticated: true,
+            entitlements: { canShare: true }
         });
 
         jest.spyOn(instructionService, 'createInstruction').mockResolvedValue({
@@ -137,6 +139,23 @@ describe('InstructionDetailPage', () => {
             expect(mockUpdate).toHaveBeenCalled();
             expect(mockRefresh).toHaveBeenCalled();
         });
+    });
+
+    test('hides share button when customer is not logged in', () => {
+        (useAuth as jest.Mock).mockReturnValue({
+            customerInstructions: [
+                { id: 'inst-1', name: 'Existing', instruction: 'Original text', version: 1, role: 'OWNER' }
+            ],
+            refreshInstructions: mockRefresh,
+            updateInstruction: mockUpdate,
+            isAuthenticated: false,
+            entitlements: { canShare: false }
+        });
+
+        renderWithRoute('/instructions/inst-1');
+
+        expect(screen.getByText('Edit Instruction')).toBeInTheDocument();
+        expect(screen.queryByText('Share')).not.toBeInTheDocument();
     });
 
     test('shares instruction when share button clicked', async () => {

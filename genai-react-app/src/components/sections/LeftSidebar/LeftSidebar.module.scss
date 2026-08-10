@@ -31,19 +31,23 @@
   }
 
   /* 📱 Responsive layout: Mobile Overlay */
-  @media (max-width: 768px) {
+  @include respond-to-mobile {
     position: absolute;
     top: 0;
     left: 0;
     height: 100%;
     z-index: 100;
-    width: 80%;
-    max-width: 18rem; // Reasonable max width
+    width: 100%;
+    max-width: 100%;
     box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
     background-color: $color-sidebar-background; // Ensure opacity
 
     &.collapsed {
       display: none;
+    }
+
+    &.minimized {
+      width: 100%;
     }
   }
 }

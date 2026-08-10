@@ -15,6 +15,7 @@ import {
 } from '../../../common/BrandName/BrandName'
 import { AIVendor } from '../../../../constants/vendors'
 import { useMemo } from 'react'
+import { useMaxVendors } from '../../../../hooks/useMaxVendors'
 
 interface ResponseProps {
     blockId: string
@@ -26,7 +27,7 @@ interface ResponseProps {
 
 export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
-    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock } = useConversation()
+    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, stopGenerating } = useConversation()
 
     const selectedResponseId = getSelectedResponseForBlock(blockId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
@@ -45,7 +46,9 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
     }, [visibleMessages])
 
     const selectedVendors = getVendorSelectionForBlock(blockId)
-    const effectiveSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
+    const maxVendors = useMaxVendors()
+    const rawSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
+    const effectiveSelectedVendors = rawSelectedVendors.slice(0, maxVendors)
     const filteredResponseList = useMemo(() => {
         const vendorMap = new Map<string, Message>()
         for (const msg of visibleMessages) {
@@ -145,32 +148,44 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                         )}
                                     </div>
                                 )}
-                                {onFollowUp && !isLoading && isLastResponseBlock && (
-                                    <div className={styles.followUpButtonWrapper}>
+                                {(isLoading || isLastResponseBlock) && (
+                                    <div className={styles.responseActionButtonsWrapper}>
                                         <div style={{ display: 'flex', gap: '8px' }}>
-                                            <Tooltip content={disabled ? "No API keys set" : ""}>
-                                                <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                                    <MultiPurposeButton
-                                                        label="Regenerate"
-                                                        onClick={() => handleRegenerate(aiVendor as AIVendor)}
-                                                        disabled={disabled}
-                                                        icon={ICONS.REFRESH_ICON}
-                                                        data-testid="regenerate-button"
-                                                    />
-                                                </div>
-                                            </Tooltip>
+                                            {isLoading ? (
+                                                <MultiPurposeButton
+                                                    label="Stop"
+                                                    onClick={() => stopGenerating(blockId, aiVendor as AIVendor)}
+                                                    data-testid="stop-button"
+                                                />
+                                            ) : (
+                                                <>
+                                                    <Tooltip content={disabled ? "No API keys set" : ""}>
+                                                        <div style={disabled ? { cursor: 'not-allowed' } : {}}>
+                                                            <MultiPurposeButton
+                                                                label="Regenerate"
+                                                                onClick={() => handleRegenerate(aiVendor as AIVendor)}
+                                                                disabled={disabled}
+                                                                icon={ICONS.REFRESH_ICON}
+                                                                data-testid="regenerate-button"
+                                                            />
+                                                        </div>
+                                                    </Tooltip>
 
-                                            <Tooltip content={disabled ? "No API keys set" : ""}>
-                                                <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                                    <MultiPurposeButton
-                                                        label={isSelected ? 'Selected' : 'Follow up'}
-                                                        onClick={() => handleFollowUp(messageId)}
-                                                        disabled={isSelected || disabled}
-                                                        icon={isSelected ? undefined : ICONS.SEND}
-                                                        data-testid="follow-up-button"
-                                                    />
-                                                </div>
-                                            </Tooltip>
+                                                    {onFollowUp && text.trim().length > 0 && (
+                                                        <Tooltip content={disabled ? "No API keys set" : ""}>
+                                                            <div style={disabled ? { cursor: 'not-allowed' } : {}}>
+                                                                <MultiPurposeButton
+                                                                    label={isSelected ? 'Selected' : 'Follow up'}
+                                                                    onClick={() => handleFollowUp(messageId)}
+                                                                    disabled={isSelected || disabled}
+                                                                    icon={isSelected ? undefined : ICONS.SEND}
+                                                                    data-testid="follow-up-button"
+                                                                />
+                                                            </div>
+                                                        </Tooltip>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 )}

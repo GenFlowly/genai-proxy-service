@@ -23,4 +23,10 @@
   width: 10rem; // Slightly wider than default 10rem
   background-color: var(--color-background-tertiary); // slightly distinct background
   z-index: 15;
+  
+  @include respond-to-mobile {
+    width: 100%;
+    position: absolute;
+    z-index: 200;
+  }
 }

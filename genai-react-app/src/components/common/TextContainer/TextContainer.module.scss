@@ -14,6 +14,7 @@
   justify-content: flex-start;
   width: 100%;
   height: 100%;
+  flex: 1;
   box-sizing: border-box;
 
   h1,
@@ -85,7 +86,7 @@
   transform: translateY(-50%);
 }
 
-@media (max-width: 1024px) {
+@include respond-to-tablet {
   .article {
     // padding is handled by message-card-base or can be adjusted here if specific inner padding needed
     padding: $spacing-md $spacing-lg;

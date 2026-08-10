@@ -9,7 +9,6 @@
     margin-top: 0;
     background-color: $color-response-container-background;
     padding: 0;
-    overflow-x: auto;
 }
 
 .inner {
@@ -22,7 +21,7 @@
     padding-bottom: 1rem; // Increased to ensure scrollbar visibility
     width: 100%;
 
-    overflow-y: hidden; // Prevent vertical scrollbar
+    overflow-y: visible; // Prevent vertical scrollbar
     justify-content: flex-start; // Avoid center clipping for overflow content
 
 
@@ -51,7 +50,11 @@
 .thinkingWrapper {
     // Common card styling is now handled by TextContainer's own CSS module
 
-    flex: 1 0 30rem; // Grow but don't shrink - triggers horizontal scroll when space limited
+    flex: 1 1 0; // Grow and shrink equally to fit the container
+    min-width: 0; // Allow shrinking below min-content
+
+    display: flex;
+    flex-direction: column;
 
     // Fix for single response rendering issue
     &:only-child {

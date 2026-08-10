@@ -76,12 +76,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         for idx, item_data in enumerate(items_to_process):
             try:
-                if not all(k in item_data for k in ('dataType', 'client', 'data')):
-                    raise ValueError(f"Payload must contain 'dataType', 'client', and 'data'. Got keys: {list(item_data.keys())}")
+                if not all(k in item_data for k in ('client', 'data')):
+                    raise ValueError(f"Payload must contain 'client' and 'data'. Got keys: {list(item_data.keys())}")
 
                 # Build typed internal state directly from the envelope — no flattening
                 internal_state = MemoryRequestInternalState(
-                    data_type=item_data['dataType'],
+                    data_type='NOTE',
                     customer_id=customer_id,
                     client=item_data['client'],
                     raw_data=item_data['data'],

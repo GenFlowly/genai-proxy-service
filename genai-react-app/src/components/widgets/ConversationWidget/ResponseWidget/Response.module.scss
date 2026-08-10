@@ -9,7 +9,6 @@
   margin-top: 0;
   background-color: $color-response-container-background;
   padding: 0;
-  overflow-x: auto;
 }
 
 .inner {
@@ -19,10 +18,10 @@
   margin-top: 0.5rem;
   padding-left: 1rem;
   padding-right: 1rem;
-  padding-bottom: 1rem; // Increased to ensure scrollbar visibility
+  padding-bottom: 1rem;
   width: 100%;
 
-  overflow-y: hidden; // Prevent vertical scrollbar
+  overflow-y: visible;
   justify-content: flex-start; // Avoid center clipping for overflow content
 
 
@@ -51,7 +50,11 @@
 .responseWrapper {
   // Common card styling is now handled by TextContainer's own CSS module
   
-  flex: 1 0 30rem; // Grow but don't shrink - triggers horizontal scroll when space limited
+  flex: 1 1 0; // Grow and shrink equally to fit the container
+  min-width: 0; // Allow shrinking below min-content
+  
+  display: flex;
+  flex-direction: column;
 
   // Fix for single response rendering issue
   &:only-child {
@@ -59,19 +62,44 @@
   }
 
   border: 1px solid transparent;
-
 }
 
 .selected {
   background-color: $color-background-selected;
 }
 
-.followUpButtonWrapper {
-  margin-top: 0.75rem;
+.responseActionButtonsWrapper {
+  margin-top: auto;
+  margin-left: -2rem;
+  margin-right: -2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
+  
+  position: sticky;
+  bottom: 0;
+  background-color: color-mix(in srgb, $color-background 20%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 0.75rem 0;
+  z-index: 10;
+  width: calc(100% + 4rem);
+
+  @include respond-to-tablet {
+    margin-left: -1rem; // Matches $spacing-lg
+    margin-right: -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  button {
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
 }
 
 .tokenBadge {

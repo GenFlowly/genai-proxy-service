@@ -11,11 +11,15 @@ import logo from '../../assets/icons/logo.png'
 import { UserAvatarButton } from '../common/UserAvatarButton/UserAvatarButton'
 import { NavbarMenu } from '../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../common/ThemeToggle/ThemeToggle'
+import { useWindowSize } from '../../hooks/useWindowSize'
+import { MobileMenuContent } from '../sections/LeftSidebar/MobileMenuContent'
 
 export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, isAuthenticated, user, customerPicture, customerName } = useAuth()
-    const { toggleLeftSidebar, toggleRightSidebar } = useLayout()
+    const { toggleLeftSidebar, toggleRightSidebar, isLeftSidebarExpanded } = useLayout()
     const navigate = useNavigate()
+    const { width } = useWindowSize()
+    const isMobile = width <= 768
 
     const displayPicture = customerPicture || user?.picture
     const displayName = customerName || user?.name || 'Account'
@@ -27,6 +31,7 @@ export default function Navbar(): React.ReactElement {
     }
 
     return (
+        <>
         <nav className={styles.navbar}>
             <div className={styles.container}>
                 <div className={styles.leftControls}>
@@ -71,5 +76,11 @@ export default function Navbar(): React.ReactElement {
                 </div>
             </div>
         </nav>
+        {isMobile && isLeftSidebarExpanded && (
+            <div className={styles.mobileMenuOverlay}>
+                <MobileMenuContent />
+            </div>
+        )}
+        </>
     )
 }
