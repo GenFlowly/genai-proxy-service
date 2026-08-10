@@ -8,7 +8,12 @@ import { useNavigate, useLocation } from 'react-router-dom'
 
 export type SettingsTab = 'profile' | 'ai' | 'memory'
 
-export function SettingsSidebar(): React.ReactElement {
+interface SettingsSidebarProps {
+    // Renders the menu as a full page (mobile) instead of a side column
+    fullPage?: boolean
+}
+
+export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {}): React.ReactElement {
     const { logout } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
@@ -16,7 +21,7 @@ export function SettingsSidebar(): React.ReactElement {
     const activeTab = location.pathname.split('/').pop() || 'profile'
 
     return (
-        <aside className={styles.sidebar}>
+        <aside className={`${styles.sidebar} ${fullPage ? styles.fullPage : ''}`}>
             <div className={styles.header}>
                 <h2>Settings</h2>
             </div>
