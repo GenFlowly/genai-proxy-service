@@ -176,5 +176,10 @@ export class LambdaStack extends cdk.Stack {
             actions: ['kms:Decrypt'],
             resources: ['*'], 
         }));
+
+        new cdk.CfnOutput(this, 'DummyOldCheckCollectionsLambdaArn', {
+            value: `arn:aws:lambda:${this.region}:${this.account}:function:${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-check-collections-lambda`,
+            exportName: 'encoding-service-LambdaStack:ExportsOutputFnGetAttencodingservicedevelopmentcheckcollectionslambda261C1051Arn28EE57A9',
+        });
     }
 }
