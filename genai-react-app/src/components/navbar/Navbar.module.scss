@@ -21,6 +21,14 @@
 .logoLink {
   display: flex;
   align-items: center;
+
+  /* 📱 Mobile: center the logo in the navbar (nav tabs are hidden, so the center is free) */
+  @include respond-to-mobile {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
 }
 
 .logoImage {

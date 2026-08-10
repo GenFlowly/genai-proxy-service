@@ -1,0 +1,45 @@
+@import '../../../styles/themes.scss';
+
+.breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.crumb {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: $color-text-muted;
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+
+    // Only buttons (clickable crumbs) get pointer affordances
+    &:is(button) {
+        cursor: pointer;
+
+        &:hover {
+            color: $color-primary;
+            text-decoration: underline;
+        }
+
+        &:focus-visible {
+            outline: 2px solid $color-primary;
+            outline-offset: 2px;
+        }
+    }
+}
+
+.current {
+    color: $color-text-primary;
+    font-weight: 600;
+}
+
+.separator {
+    color: $color-text-muted;
+    font-size: 0.9rem;
+    user-select: none;
+}

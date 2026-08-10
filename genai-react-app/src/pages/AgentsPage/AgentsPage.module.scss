@@ -14,6 +14,8 @@
 .content {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden; // Never allow horizontal scrolling
+    min-width: 0;
     padding: 2rem 2.5rem;
     display: flex;
     flex-direction: column;
@@ -72,10 +74,14 @@
     gap: 1.25rem;
     box-shadow: $shadow-sm;
     transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    min-width: 0; // Grid items must be allowed to shrink below content width
 
-    &:hover {
-        box-shadow: $shadow-md;
-        transform: translateY(-2px);
+    // Hover lift only on devices that actually hover (avoids sticky-hover jumps on touch)
+    @media (hover: hover) {
+        &:hover {
+            box-shadow: $shadow-md;
+            transform: translateY(-2px);
+        }
     }
 }
 
@@ -95,12 +101,21 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.75rem;
+
+    @include respond-to-mobile {
+        flex-wrap: wrap; // Actions drop below the title instead of overflowing
+    }
 }
 
 .cardTitleRow {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    min-width: 0; // Allow the title block to shrink
+
+    > div {
+        min-width: 0;
+    }
 }
 
 .cardIcon {
@@ -115,11 +130,13 @@
     color: $color-text-primary;
     margin: 0 0 0.2rem 0;
     line-height: 1.3;
+    overflow-wrap: anywhere; // Long agent names wrap instead of overflowing
 }
 
 .cardMeta {
     font-size: 0.8125rem;
     color: $color-text-muted;
+    overflow-wrap: anywhere;
 }
 
 .defaultBadge {
@@ -158,6 +175,10 @@
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
+
+    @include respond-to-mobile {
+        padding: 0.5rem 1rem; // Comfortable touch target
+    }
 
     &:hover {
         background: $color-background-hover;
@@ -219,6 +240,10 @@
     color: $color-text-muted;
     white-space: nowrap;
     flex-shrink: 0;
+
+    @include respond-to-mobile {
+        display: none; // On narrow screens the icon already conveys the type; keep the name readable
+    }
 }
 
 .pipelineArrow {
@@ -242,6 +267,12 @@
     border: none;
     padding: 0;
     cursor: pointer;
+
+    @include respond-to-mobile {
+        padding: 0.5rem 0; // Comfortable touch target
+        align-self: stretch;
+        text-align: left;
+    }
 
     &:hover {
         color: $color-text-primary;
@@ -302,6 +333,10 @@
     gap: 1rem;
     padding: 4rem 2rem;
     text-align: center;
+
+    @include respond-to-mobile {
+        padding: 2.5rem 1rem;
+    }
 }
 
 .spinner {
