@@ -153,10 +153,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                         console.log('Session invalid, logging out...')
                         logout({ returnTo: window.location.origin, localOnly: true })
                     } else {
-                        // For other errors (e.g. 500), we must ALSO logout to ensure no sensitive Auth0 data 
-                        // (like ID tokens) remains in localStorage, as per strict security requirements.
-                        console.error('Onboarding failed, clearing session...', error)
-                        logout({ returnTo: window.location.origin, localOnly: true })
+                        // Transient failures (backend 500, network) must not destroy the Auth0
+                        // session — the user stays logged in and onboarding retries on next load.
+                        console.error('Onboarding failed, keeping session for retry', error)
                     }
                 } finally {
                     setIsInternalLoading(false)
