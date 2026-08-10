@@ -10,57 +10,37 @@
   right: 0;
   height: 100%;
 
-
-
-
   .collapseButton {
     background-color: $color-sidebar-background;
   }
+}
 
-  /* 📱 Responsive layout: Mobile Overlay */
-  @include respond-to-mobile {
-    display: flex; // Ensure it shows when not collapsed
-    position: absolute;
-    top: 0;
-    right: 0;
-    height: 100%;
-    z-index: 100;
+/* 📱 Mobile view: modal covering everything below the navbar (see RightSidebarMobileModal) */
+.mobileModal {
+  position: fixed; // Viewport-pinned; `top` is set inline to the navbar's measured bottom edge
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100; // Above page content and headers, below the navbar (z=1000)
+  display: flex;
+  flex-direction: column;
+  background-color: $color-sidebar-background;
+
+  .sidebarContent {
+    @include sidebar-content;
+    flex: 1;
+    height: auto; // Header takes its share; content fills the rest
+  }
+
+  .mobileFooter {
+    flex-shrink: 0;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid $color-border;
+    display: flex;
+  }
+
+  .closeSettingsButton {
     width: 100%;
-    max-width: 100%;
-    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
-
-    &.collapsed {
-      display: none;
-    }
-
-    .mobileHeader {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem 1.5rem 0 1.5rem;
-      border-bottom: 1px solid $color-border;
-      padding-bottom: 1rem;
-
-      h2 {
-        margin: 0;
-        font-size: 1.25rem;
-        color: $color-text-primary;
-      }
-    }
-
-    .mobileCloseButton {
-      background: transparent;
-      border: none;
-      color: $color-text-muted;
-      cursor: pointer;
-      padding: 0.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      &:hover {
-        color: $color-text-primary;
-      }
-    }
+    justify-content: center;
   }
 }

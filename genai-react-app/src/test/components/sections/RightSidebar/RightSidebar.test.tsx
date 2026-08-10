@@ -5,11 +5,14 @@ import { useLayout } from '../../../../context/LayoutContext';
 import '@testing-library/jest-dom';
 
 // Mocks
-// Mocks
 jest.mock('../../../../context/LayoutContext');
 jest.mock('../../../../hooks/useWidgetResolver', () => ({
     useWidgetResolver: jest.fn()
 }));
+jest.mock('../../../../hooks/useWindowSize', () => ({
+    useWindowSize: jest.fn(() => ({ width: 1280, height: 800 }))
+}));
+const mockUseWindowSize = jest.requireMock('../../../../hooks/useWindowSize').useWindowSize;
 
 describe('RightSidebar', () => {
     const mockUseLayout = useLayout as jest.Mock;
@@ -18,6 +21,7 @@ describe('RightSidebar', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockUseWindowSize.mockReturnValue({ width: 1280, height: 800 });
         mockUseLayout.mockReturnValue({
             isRightSidebarExpanded: true,
             toggleRightSidebar: mockToggleRightSidebar
@@ -60,5 +64,43 @@ describe('RightSidebar', () => {
         const toggleBtn = screen.getByTestId('right-sidebar-toggle');
         fireEvent.click(toggleBtn);
         expect(mockToggleRightSidebar).toHaveBeenCalledTimes(1);
+    });
+
+    describe('mobile view (full-screen modal)', () => {
+        beforeEach(() => {
+            mockUseWindowSize.mockReturnValue({ width: 375, height: 812 });
+        });
+
+        test('renders as a full-screen modal with the widgets when expanded', () => {
+            render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
+
+            expect(screen.getByTestId('right-sidebar-mobile-modal')).toBeInTheDocument();
+            expect(screen.getByTestId('mock-widget')).toBeInTheDocument();
+            // No title header and no desktop collapse button in the modal
+            expect(screen.queryByText('AI Settings')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('right-sidebar-toggle')).not.toBeInTheDocument();
+        });
+
+        test('renders nothing when collapsed', () => {
+            mockUseLayout.mockReturnValue({
+                isRightSidebarExpanded: false,
+                toggleRightSidebar: mockToggleRightSidebar
+            });
+
+            render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
+
+            expect(screen.queryByTestId('right-sidebar-mobile-modal')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('mock-widget')).not.toBeInTheDocument();
+        });
+
+        test('Close Settings button at the bottom closes the modal', () => {
+            render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
+
+            const closeBtn = screen.getByTestId('right-sidebar-close');
+            expect(closeBtn).toHaveTextContent('Close Settings');
+            fireEvent.click(closeBtn);
+
+            expect(mockToggleRightSidebar).toHaveBeenCalledTimes(1);
+        });
     });
 });
