@@ -16,9 +16,18 @@ interface PromptEditorCoreProps {
     className?: string
     'data-testid'?: string
     readOnly?: boolean
+    maxLength?: number
 }
 
-export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false }: PromptEditorCoreProps): React.ReactElement {
+export default function PromptEditorCore({ id, value, onChange, disableCache = false, height = "50vh", className = '', 'data-testid': testId, readOnly = false, maxLength }: PromptEditorCoreProps): React.ReactElement {
+
+    const handleChange = (newValue: string) => {
+        if (maxLength && newValue.length > maxLength) {
+            onChange(newValue.slice(0, maxLength))
+        } else {
+            onChange(newValue)
+        }
+    }
 
     return (
         <div className={`${styles.container} ${className}`} data-testid={testId} style={height === '100%' ? { height: '100%' } : {}}>
@@ -29,7 +38,7 @@ export default function PromptEditorCore({ id, value, onChange, disableCache = f
                     <div className={styles.mdxEditorRoot} style={height === '100%' ? { height: '100%', display: 'flex', flexDirection: 'column' } : {}}>
                         <MarkdownEditor
                             value={value}
-                            onChange={onChange}
+                            onChange={handleChange}
                             height={height}
                             visible={false}
                             enablePreview={false}

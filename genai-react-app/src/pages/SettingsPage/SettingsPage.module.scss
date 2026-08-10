@@ -14,6 +14,10 @@
   height: 100%;
   overflow: hidden;
   position: relative;
+  
+  @include respond-to-tablet {
+    flex-direction: column;
+  }
 }
 
 .content {
@@ -24,7 +28,9 @@
   justify-content: flex-start;
   background-color: $color-background; 
   
-  /* Modern soft inset shadow or border can go here if needed, but keeping it clean for now */
+  @include respond-to-tablet {
+    padding: 1.25rem;
+  }
 }
 
 .contentInner {

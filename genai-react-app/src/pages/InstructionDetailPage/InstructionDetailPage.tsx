@@ -21,7 +21,7 @@ export default function InstructionDetailPage() {
     const { instructionId } = useParams<{ instructionId: string }>();
     const navigate = useNavigate();
     const { getAccessTokenSilently } = useAuth0();
-    const { customerInstructions, refreshInstructions, updateInstruction, isAuthenticated, isInstructionsLoaded, loginWithRedirect } = useAuth();
+    const { customerInstructions, refreshInstructions, updateInstruction, isAuthenticated, isInstructionsLoaded, loginWithRedirect, entitlements } = useAuth();
 
     const isNew = instructionId === 'new';
     
@@ -142,12 +142,14 @@ export default function InstructionDetailPage() {
                 <div className={styles.actions}>
                     {role !== 'VIEW' && !isNew && (
                         <>
-                            <PillButton 
-                                label="Share" 
-                                variant="secondary" 
-                                onClick={handleShareClick} 
-                                disabled={isLoading}
-                            />
+                            {entitlements.canShare && (
+                                <PillButton
+                                    label="Share"
+                                    variant="secondary"
+                                    onClick={handleShareClick}
+                                    disabled={isLoading}
+                                />
+                            )}
                             {role === 'OWNER' && (
                                 <PillButton 
                                     label="Delete" 

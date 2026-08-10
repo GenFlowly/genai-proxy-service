@@ -11,9 +11,16 @@ export interface User {
     picture?: string;
 }
 
+// Central place for feature entitlements. Derived from auth state so
+// components never gate features on ad-hoc checks.
+export interface Entitlements {
+    canShare: boolean;
+}
+
 export interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
+    entitlements: Entitlements;
     isLoading: boolean;
     isInstructionsLoaded: boolean;
     loginWithRedirect: (options?: any) => Promise<void>;

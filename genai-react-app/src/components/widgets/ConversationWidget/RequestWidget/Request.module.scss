@@ -16,7 +16,7 @@
 
     @include prompt-editor-container;
 
-    @media (max-width: 1024px) {
+    @include respond-to-tablet {
         // Width/Radius handled by mixin
         margin: 0;
         padding-top: 0;
@@ -35,7 +35,7 @@
     justify-content: center;
     background-color: $color-request-container-background;
 
-    @media (max-width: 1024px) {
+    @include respond-to-tablet {
         width: 100% !important;
         max-width: 100% !important;
         border-radius: 0;

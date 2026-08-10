@@ -39,6 +39,7 @@ export default function KeyValueNotes() {
                     value={keyPrompt}
                     onChange={setKeyPrompt}
                     height="100%"
+                    maxLength={400000}
                 />
             </div>
             <div className={styles.valueEditorWrapper}>
@@ -47,6 +48,7 @@ export default function KeyValueNotes() {
                     value={valuePrompt}
                     onChange={setValuePrompt}
                     height="100%"
+                    maxLength={400000}
                 />
             </div>
 

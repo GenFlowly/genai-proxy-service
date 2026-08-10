@@ -237,6 +237,72 @@ test('Handles corrupted localStorage for AI preferences gracefully', () => {
     consoleSpy.mockRestore();
 });
 
+test('entitlements.canShare is false when unauthenticated', () => {
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        getAccessTokenSilently: jest.fn(),
+        logout: jest.fn(),
+    });
+
+    Storage.prototype.getItem = jest.fn(() => null);
+
+    const TestEntitlements = () => {
+        const { entitlements } = useAuth();
+        return <div data-testid="can-share">{String(entitlements.canShare)}</div>;
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestEntitlements />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('can-share')).toHaveTextContent('false');
+});
+
+test('entitlements.canShare is true once authenticated and onboarded', async () => {
+    const mockGetToken = jest.fn().mockResolvedValue('token');
+    mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: MOCK_USER,
+        getAccessTokenSilently: mockGetToken,
+        logout: jest.fn(),
+    });
+
+    (onboardCustomer as jest.Mock).mockResolvedValue({
+        customerId: '123',
+        customerInstructions: [],
+        aiVendorAPIKeyStatusList: [],
+        aiConfigPreferences: null
+    });
+
+    const TestEntitlements = () => {
+        const { entitlements } = useAuth();
+        return <div data-testid="can-share">{String(entitlements.canShare)}</div>;
+    };
+
+    render(
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestEntitlements />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    await waitFor(() => {
+        expect(screen.getByTestId('can-share')).toHaveTextContent('true');
+    });
+});
+
 test('refreshInstructions calls service and updates state', async () => {
     const { getCustomerInstructions } = require('../../services/instructionService');
     const mockInstructions = [{ id: '1', version: 1, content: 'test' }];
