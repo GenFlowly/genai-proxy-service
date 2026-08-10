@@ -15,6 +15,7 @@ export default function PlainNotes() {
             setIsLoading(true)
             const token = await getAccessTokenSilently()
             await saveNote({
+                noteKey: crypto.randomUUID(),
                 noteValue: prompt,
                 createdAt: new Date().toISOString(),
                 client: 'REACT_APP',
