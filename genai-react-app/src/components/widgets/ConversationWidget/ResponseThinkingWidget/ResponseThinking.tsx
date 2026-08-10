@@ -7,7 +7,9 @@ import { useLayout } from '../../../../context/LayoutContext'
 import { useConversation } from '../../../../context/ConversationContext'
 import { Icon } from '../../../common/Icon/Icon'
 import { ICONS } from '../../../../constants/icons'
-import ToggleGroupButton, { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
+import { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
+import RadioButtonGroup from '../../../common/ToggleGroupButton/RadioButtonGroup'
+import CheckboxButtonGroup from '../../../common/ToggleGroupButton/CheckboxButtonGroup'
 import { useMaxVendors } from '../../../../hooks/useMaxVendors'
 import styles from './ResponseThinking.module.scss'
 
@@ -81,13 +83,26 @@ export default function ResponseThinking({ blockId, responseMessages }: Response
         <div className={styles.container} data-response-block-id={blockId}>
             {availableVendors.length > 1 && (
                 <div className={styles.toggleWrapper}>
-                    <ToggleGroupButton
-                        options={toggleOptions}
-                        selectedValues={effectiveSelectedVendors}
-                        onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
-                        allowEmpty={false}
-                        maxSelection={maxVendors}
-                    />
+                    {availableVendors.length > maxVendors ? (
+                        // More vendors than columns fit on this screen: pick one at a time
+                        <RadioButtonGroup
+                            options={toggleOptions}
+                            selectedValues={effectiveSelectedVendors}
+                            onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
+                            allowEmpty={false}
+                            data-testid="vendor-radio-group"
+                        />
+                    ) : (
+                        // All vendors fit: toggle freely up to the column limit
+                        <CheckboxButtonGroup
+                            options={toggleOptions}
+                            selectedValues={effectiveSelectedVendors}
+                            onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
+                            allowEmpty={false}
+                            maxSelection={maxVendors}
+                            data-testid="vendor-checkbox-group"
+                        />
+                    )}
                 </div>
             )}
 

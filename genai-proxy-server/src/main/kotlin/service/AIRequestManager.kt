@@ -366,14 +366,24 @@ class AIRequestManager(
         val activeConversationId = getConversationId(customerId, client, conversationId)
 
         var actualPreviousMessageId = selectedResponseId
+        // A parallel per-vendor stream call for the same turn may have already
+        // persisted this turn's user message — reuse it instead of chaining a
+        // duplicate off it (which fragments history into per-vendor pairs).
+        var existingUserMessage: Message? = null
         if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
-            actualPreviousMessageId = conversationService.getLatestMessageId(activeConversationId)
+            existingUserMessage = conversationService.findActiveTurnUserMessage(activeConversationId, userRequestRawPrompt)
+            actualPreviousMessageId = if (existingUserMessage != null) {
+                existingUserMessage.previousMessageId
+            } else {
+                conversationService.getLatestMessageId(activeConversationId)
+            }
         }
 
         // Step 2 - Create message object (retrieval-server handles RAG during generation)
         // Use deterministic ID to prevent duplication in DDB on retries.
         val uniqueContent = "${activeConversationId}-${userRequestRawPrompt}-${actualPreviousMessageId ?: ""}-user"
-        val deterministicId = java.util.UUID.nameUUIDFromBytes(uniqueContent.toByteArray()).toString()
+        val deterministicId = existingUserMessage?.messageId
+            ?: java.util.UUID.nameUUIDFromBytes(uniqueContent.toByteArray()).toString()
 
         val message = Message(
             messageId = deterministicId,
@@ -389,9 +399,14 @@ class AIRequestManager(
             instructionVersion = instructionVersion.takeIf { it.isNotBlank() }
         )
 
-        // Step 3 - Add message request to conversation
-        conversationService.addMessageInConversation(message)
-        logger.info("Added Message id {} to conversation", message.messageId)
+        // Step 3 - Add message request to conversation (skip when a parallel
+        // vendor stream already persisted this turn's user message)
+        if (existingUserMessage == null) {
+            conversationService.addMessageInConversation(message)
+            logger.info("Added Message id {} to conversation", message.messageId)
+        } else {
+            logger.info("Reusing user message id {} for parallel vendor stream", message.messageId)
+        }
 
         // Step 4 - Track instruction usage (strict: counts each unique conversation+instruction once)
         if (instructionId.isNotBlank()) {

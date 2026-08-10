@@ -15,6 +15,9 @@ interface ToggleGroupButtonProps {
     allowEmpty?: boolean
     singleSelection?: boolean
     maxSelection?: number
+    // When the max is reached, selecting a new option drops the oldest
+    // selection instead of disabling the remaining buttons
+    replaceOldestAtMax?: boolean
     className?: string
     'data-testid'?: string
 }
@@ -26,6 +29,7 @@ export default function ToggleGroupButton({
     allowEmpty = false,
     singleSelection = false,
     maxSelection,
+    replaceOldestAtMax = false,
     className = '',
     'data-testid': testId
 }: ToggleGroupButtonProps): React.ReactElement {
@@ -52,6 +56,9 @@ export default function ToggleGroupButton({
             // Multi-selection mode logic (default)
             if (isSelected) {
                 newSelection = selectedValues.filter(id => id !== optionId)
+            } else if (replaceOldestAtMax && maxSelection !== undefined && selectedValues.length >= maxSelection) {
+                // At capacity: drop the oldest selection to make room
+                newSelection = [...selectedValues.slice(selectedValues.length - (maxSelection - 1)), optionId]
             } else {
                 newSelection = [...selectedValues, optionId]
             }
@@ -72,7 +79,7 @@ export default function ToggleGroupButton({
             {options.map((option) => {
                 const isActive = selectedValues.includes(option.id)
                 const isMaxReached = maxSelection !== undefined && selectedValues.length >= maxSelection
-                const isDisabled = !isActive && isMaxReached
+                const isDisabled = !isActive && isMaxReached && !replaceOldestAtMax
 
                 return (
                     <button
