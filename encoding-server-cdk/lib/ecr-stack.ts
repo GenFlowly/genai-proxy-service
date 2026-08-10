@@ -80,5 +80,11 @@ export class EcrStack extends cdk.Stack {
             value: this.createCollectionsRepo.repositoryUri,
         });
 
+
+        new cdk.CfnOutput(this, 'DummyOldCheckCollectionsRepoArn', {
+            value: `arn:aws:ecr:${this.region}:${this.account}:repository/${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-check-collections-repo`,
+            exportName: 'encoding-service-EcrStack:ExportsOutputFnGetAttCheckCollectionsLambdaRepo271555B2Arn6E2357CA',
+        });
     }
 }
+
