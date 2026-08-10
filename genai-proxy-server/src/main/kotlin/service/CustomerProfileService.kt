@@ -11,19 +11,16 @@ import com.genflowly.models.api.AIMode
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import java.util.*
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.request.post
 import io.ktor.client.request.header
+import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
-import io.ktor.serialization.kotlinx.json.json as clientJson
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import models.AIConfig
 import mu.KotlinLogging
 
@@ -31,16 +28,9 @@ private val logger = KotlinLogging.logger {}
 
 class CustomerProfileService(
     private val kmsProvider: KMSProvider,
-    private val dynamoDBProvider: DynamoDBProvider
+    private val dynamoDBProvider: DynamoDBProvider,
+    private val httpClient: HttpClient
 ) {
-    private val httpClient = HttpClient(CIO) {
-        engine {
-            requestTimeout = 60_000 // 60 seconds
-        }
-        install(ClientContentNegotiation) {
-            clientJson()
-        }
-    }
 
     suspend fun savePreferences(
         customerId: String,

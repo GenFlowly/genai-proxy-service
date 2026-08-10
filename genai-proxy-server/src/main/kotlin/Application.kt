@@ -24,6 +24,7 @@ import service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
+import com.genflowly.service.NotesService
 
 
 fun main(args: Array<String>) {
@@ -116,6 +117,7 @@ fun Application.module() {
     val aiModelsService = get<AIModelsService>()
     val graphService = get<GraphService>()
     val dynamoDBProvider = get<com.genflowly.providers.DynamoDBProvider>()
+    val notesService = get<NotesService>()
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider)
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, notesService)
 }

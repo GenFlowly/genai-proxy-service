@@ -40,6 +40,7 @@ import com.genflowly.activity.registerGetConversationSharedUsersRoutes
 import com.genflowly.activity.registerDeleteInstructionRoutes
 import com.genflowly.activity.registerGetProfileRoutes
 import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.activity.registerSaveNotesRoutes
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -100,6 +101,7 @@ fun Application.configureRouting(
     aiModelsService: AIModelsService,
     graphService: GraphService,
     dynamoDBProvider: DynamoDBProvider,
+    notesService: com.genflowly.service.NotesService,
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -137,5 +139,6 @@ fun Application.configureRouting(
         registerCustomerProfileSettingsRoutes(dynamoDBProvider)
         registerSearchRoutes(dynamoDBProvider)
         registerGetProfileRoutes(dynamoDBProvider)
+        registerSaveNotesRoutes(notesService)
     }
 }

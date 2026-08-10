@@ -1,8 +1,8 @@
 package com.genflowly.service
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -61,17 +61,10 @@ private data class AgentRawData(
 
 class RetrievalService(
     private val logger: KLogger,
-    private val json: Json
+    private val json: Json,
+    private val httpClient: HttpClient
 ) {
     private val retrievalServerUrl: String = System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001"
-
-    private val httpClient = HttpClient(CIO) {
-        install(HttpTimeout) {
-            requestTimeoutMillis = 300_000L
-            connectTimeoutMillis = 30_000L
-            socketTimeoutMillis = 300_000L
-        }
-    }
 
     private fun buildPayload(
         customerId: String,
@@ -117,6 +110,10 @@ class RetrievalService(
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
                 setBody(payload)
+                timeout {
+                    requestTimeoutMillis = 300_000L
+                    socketTimeoutMillis = 300_000L
+                }
             }
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
@@ -156,6 +153,10 @@ class RetrievalService(
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
                 setBody(payload)
+                timeout {
+                    requestTimeoutMillis = 300_000L
+                    socketTimeoutMillis = 300_000L
+                }
             }.execute { response ->
                 if (!response.status.isSuccess()) {
                     logger.error { "Retrieval server error ${response.status}" }
