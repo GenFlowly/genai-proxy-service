@@ -167,4 +167,11 @@
     &:focus-visible {
         z-index: 3;
     }
+
+    &.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background-color: transparent;
+        color: $color-text-muted;
+    }
 }

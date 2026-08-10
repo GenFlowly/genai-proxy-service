@@ -36,6 +36,7 @@ export default function PlainNotes() {
                     value={prompt}
                     onChange={setPrompt}
                     height="100%"
+                    maxLength={400000}
                 />
             </div>
 

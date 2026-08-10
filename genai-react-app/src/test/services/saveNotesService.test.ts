@@ -1,6 +1,7 @@
 import { saveNote } from '../../services/saveNotesService';
 import { HttpMethod } from '../../constants/http';
 import { NotesModel } from '../../models/encoding.models';
+import { config } from '../../config/env';
 
 describe('saveNotesService', () => {
     const mockToken = 'mock-token';
@@ -25,7 +26,7 @@ describe('saveNotesService', () => {
         await saveNote(mockNote, mockToken);
 
         expect(global.fetch).toHaveBeenCalledWith(
-            'https://pzf0twaaq5.execute-api.us-east-1.amazonaws.com/development/encode-notes',
+            `${config.backend.baseUrl}/api/v1/notes`,
             expect.objectContaining({
                 method: HttpMethod.POST,
                 headers: {

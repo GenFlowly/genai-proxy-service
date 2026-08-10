@@ -8,6 +8,7 @@ import { useConversation } from '../../../../context/ConversationContext'
 import { Icon } from '../../../common/Icon/Icon'
 import { ICONS } from '../../../../constants/icons'
 import ToggleGroupButton, { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
+import { useMaxVendors } from '../../../../hooks/useMaxVendors'
 import styles from './ResponseThinking.module.scss'
 
 interface ResponseThinkingProps {
@@ -45,7 +46,9 @@ export default function ResponseThinking({ blockId, responseMessages }: Response
     }, [availableVendors, blockId, setVendorSelectionForBlock])
 
     const selectedVendors = getVendorSelectionForBlock(blockId)
-    const effectiveSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
+    const maxVendors = useMaxVendors()
+    const rawSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
+    const effectiveSelectedVendors = rawSelectedVendors.slice(0, maxVendors)
 
     const toggleOptions: ToggleOption[] = useMemo(() => availableVendors.map(vendor => ({
         id: vendor,
@@ -83,6 +86,7 @@ export default function ResponseThinking({ blockId, responseMessages }: Response
                         selectedValues={effectiveSelectedVendors}
                         onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
                         allowEmpty={false}
+                        maxSelection={maxVendors}
                     />
                 </div>
             )}

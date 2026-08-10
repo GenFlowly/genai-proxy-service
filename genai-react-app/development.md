@@ -1,3 +1,10 @@
+# Development Guide
+
+## Table of Contents
+
+1. [Adding a New Page](#development-guide-adding-a-new-page)
+2. [Gating Features with Entitlements](#gating-features-with-entitlements)
+
 # Development Guide: Adding a New Page
 
 This guide outlines the exact steps required to create a new page in the application, map it to a URL route, add it to the navigation bar, and ensure the UI layout (like the Navbar) displays correctly.
@@ -126,3 +133,95 @@ The application uses a dynamic **Widget Registry System** to render pages and si
    ```typescript
    'PROFILE_SETTINGS': 'Profile Settings',
    ```
+
+# Gating Features with Entitlements
+
+Entitlements are the **single source of truth** for what the current customer is allowed to do in the UI (e.g., seeing the "Share" button). They live in `AuthContext` — do **not** gate features with ad-hoc auth checks (`isAuthenticated`, `customerId`, role checks scattered in components). Use the central `entitlements` object instead.
+
+## Where They Live
+
+- **Type definition:** `src/types/auth.types.ts` — the `Entitlements` interface.
+- **Derivation:** `src/context/AuthContext.tsx` — the `entitlements` object is computed inside `AuthProvider` from strict auth state (`isAuthenticated` from Auth0 **and** a successful onboard, i.e. a non-null `customerId`).
+
+```typescript
+// src/types/auth.types.ts
+export interface Entitlements {
+    canShare: boolean;
+}
+```
+
+```tsx
+// src/context/AuthContext.tsx
+const entitlements = {
+    canShare: isStrictlyAuthenticated,
+}
+```
+
+## Using an Entitlement in a Component
+
+Read `entitlements` from `useAuth()` and gate the UI on the specific capability:
+
+```tsx
+import { useAuth } from '../../context/AuthContext';
+
+export default function MyWidget() {
+    const { entitlements } = useAuth();
+
+    return (
+        <div>
+            {entitlements.canShare && (
+                <PillButton label="Share" onClick={handleShareClick} />
+            )}
+        </div>
+    );
+}
+```
+
+Entitlements compose with entity-level permissions (e.g., a conversation's `role`). The entitlement answers "may this customer use this feature at all?"; the role answers "may they use it on this entity?". Check both:
+
+```tsx
+// ConversationHeader.tsx
+const canShare = conversationRole === 'OWNER' || conversationRole === 'EDIT'
+const showShare = entitlements.canShare && (isNewChat || canShare)
+```
+
+## Adding a New Entitlement
+
+1. Add the flag to the `Entitlements` interface in `src/types/auth.types.ts`:
+   ```typescript
+   export interface Entitlements {
+       canShare: boolean;
+       canDoNewThing: boolean; // <-- new
+   }
+   ```
+2. Derive it in `AuthProvider` (`src/context/AuthContext.tsx`) from auth state, onboarding data, or backend flags:
+   ```tsx
+   const entitlements = {
+       canShare: isStrictlyAuthenticated,
+       canDoNewThing: isStrictlyAuthenticated && someBackendFlag,
+   }
+   ```
+3. Gate the UI with `useAuth().entitlements.canDoNewThing`.
+
+## Testing
+
+Components that read entitlements will crash in tests that stub `useAuth` without them. When mocking `AuthContext`, always include an `entitlements` object:
+
+```tsx
+jest.mock('../../context/AuthContext', () => ({
+    useAuth: () => ({
+        entitlements: { canShare: true },
+        // ...other fields your component reads
+    }),
+}));
+```
+
+To test the logged-out experience, set the relevant flags to `false` and assert the gated UI is absent:
+
+```tsx
+expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument();
+```
+
+## Important Caveat
+
+Entitlements are **UI gating only** — they hide affordances from users who can't use them. They are not a security boundary. The backend must always enforce authorization on its endpoints (it does, via token auth); never rely on an entitlement check alone to protect an operation.

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import ShareModal, { VisibilityMode } from '../../common/ShareModal/ShareModal'
 import PillButton from '../../common/PillButton/PillButton'
+import { useAuth } from '../../../context/AuthContext'
 import { useConversation } from '../../../context/ConversationContext'
 import { useToast } from '../../../context/ToastContext'
 import {
@@ -15,12 +16,13 @@ import styles from './ConversationHeader.module.scss'
 export default function ConversationHeader(): React.ReactElement | null {
     const { conversationId, conversationTitle, conversationRole } = useConversation()
     const { getAccessTokenSilently } = useAuth0()
+    const { entitlements } = useAuth()
     const { showToast } = useToast()
     const [isShareModalOpen, setShareModalOpen] = useState(false)
 
     const isNewChat = !conversationId
     const canShare = conversationRole === 'OWNER' || conversationRole === 'EDIT'
-    const showShare = isNewChat || canShare
+    const showShare = entitlements.canShare && (isNewChat || canShare)
     const displayTitle = isNewChat ? 'New Chat' : (conversationTitle ?? 'Untitled conversation')
 
     const handleShareSave = async (

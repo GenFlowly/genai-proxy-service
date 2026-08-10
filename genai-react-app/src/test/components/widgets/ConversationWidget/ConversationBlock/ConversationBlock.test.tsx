@@ -10,26 +10,30 @@ jest.mock('../../../../../context/ConversationContext');
 jest.mock('../../../../../context/AuthContext');
 
 // Mock child components to verify props and existence
-jest.mock('../../../../../components/widgets/ConversationWidget/RequestWidget/Request', () => ({ blockId }: { blockId: string }) => (
-    <div data-testid={`mock-request-${blockId}`}>Request: {blockId}</div>
-));
+jest.mock('../../../../../components/widgets/ConversationWidget/RequestWidget/Request', () => (props) => {
+    const { blockId } = props;
+    return (
+        <div data-testid={`mock-request-${blockId}`}>Request: {blockId}</div>
+    );
+});
 
 jest.mock('../../../../../components/widgets/ConversationWidget/ResponseThinkingWidget/ResponseThinking', () => () => null);
 
-jest.mock('../../../../../components/widgets/ConversationWidget/ResponseWidget/Response', () => ({
-    blockId,
-    onFollowUp,
-    disabled
-}: {
-    blockId: string,
-    onFollowUp: (id: string) => void,
-    disabled: boolean
-}) => (
-    <div data-testid={`mock-response-${blockId}`}>
-        Response: {blockId}
-        <button data-testid="follow-up-btn" onClick={() => onFollowUp('msg-1')} disabled={disabled}>Follow Up</button>
-    </div>
-));
+jest.mock('../../../../../components/widgets/ConversationWidget/ResponseWidget/Response', () => (props) => {
+    const { blockId, onFollowUp, disabled, isLastResponseBlock } = props;
+    return (
+        <div data-testid={`mock-response-${blockId}`}>
+            <button
+                data-testid={`followup-${blockId}`}
+                onClick={() => onFollowUp('msg-1')}
+            >
+                Follow Up
+            </button>
+            <div data-testid={`disabled-${blockId}`}>{String(disabled)}</div>
+            <div data-testid={`last-block-${blockId}`}>{String(isLastResponseBlock)}</div>
+        </div>
+    );
+});
 
 describe('ConversationBlock Component', () => {
     const mockUseConversation = useConversation as jest.Mock;
@@ -104,8 +108,7 @@ describe('ConversationBlock Component', () => {
         });
 
         render(<ConversationBlock id="block-1" />);
-        const btn = screen.getByTestId('follow-up-btn');
-        expect(btn).toBeDisabled();
+        expect(screen.getByTestId('disabled-block-1')).toHaveTextContent('true');
     });
 
     test('handleFollowUp reuses last empty block', async () => {
@@ -120,7 +123,7 @@ describe('ConversationBlock Component', () => {
 
         render(<ConversationBlock id="block-1" />);
 
-        const btn = screen.getByTestId('follow-up-btn');
+        const btn = screen.getByTestId('followup-block-1');
         act(() => {
             btn.click();
         });
@@ -140,7 +143,7 @@ describe('ConversationBlock Component', () => {
 
         render(<ConversationBlock id="block-1" />);
 
-        const btn = screen.getByTestId('follow-up-btn');
+        const btn = screen.getByTestId('followup-block-1');
         act(() => {
             btn.click();
         });
