@@ -9,12 +9,4 @@
     gap: 1rem;
 }
 
-.toggleWrapper {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    max-width: 75rem; // Match editor width constraint
-    padding: 0 3rem; // Match editor padding
-}
-
 // Editor and actions styles moved to PlainNotes.module.scss
