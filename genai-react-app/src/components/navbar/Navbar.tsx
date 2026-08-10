@@ -1,5 +1,5 @@
 import React from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import LoginIcon from '../icons/LoginIcon'
 import styles from './Navbar.module.scss'
@@ -18,8 +18,11 @@ export default function Navbar(): React.ReactElement {
     const { loginWithRedirect, isAuthenticated, user, customerPicture, customerName } = useAuth()
     const { toggleLeftSidebar, toggleRightSidebar, isLeftSidebarExpanded } = useLayout()
     const navigate = useNavigate()
+    const location = useLocation()
     const { width } = useWindowSize()
     const isMobile = width <= 768
+    // The right sidebar (AI settings) only exists on the chat page
+    const isChatPage = location.pathname === '/' || location.pathname.startsWith('/chat')
 
     const displayPicture = customerPicture || user?.picture
     const displayName = customerName || user?.name || 'Account'
@@ -29,6 +32,7 @@ export default function Navbar(): React.ReactElement {
             navigate('/settings')
         })
     }
+
 
     return (
         <>
@@ -70,9 +74,11 @@ export default function Navbar(): React.ReactElement {
                             </div>
                         )}
                     </div>
-                    <button onClick={toggleRightSidebar} className={styles.mobileToggle} data-testid="mobile-right-sidebar-toggle">
-                        <Icon src={ICONS.MODELS} size={24} />
-                    </button>
+                    {isChatPage && (
+                        <button onClick={toggleRightSidebar} className={styles.mobileToggle} data-testid="mobile-right-sidebar-toggle">
+                            <Icon src={ICONS.MODELS} size={24} />
+                        </button>
+                    )}
                 </div>
             </div>
         </nav>
