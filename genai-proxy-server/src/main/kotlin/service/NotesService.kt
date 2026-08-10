@@ -30,6 +30,20 @@ data class SaveNoteRequest(
 )
 
 @Serializable
+data class CustomerNote(
+    val noteKey: String,
+    val noteValue: String,
+    val title: String,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class GetNotesResponse(
+    val notes: List<CustomerNote>
+)
+
+@Serializable
 data class EncodingNoteData(
     val note_key: String,
     val noteKey: String,
@@ -54,6 +68,21 @@ class NotesService(
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
     private val encodingServerUrl = System.getenv("ENCODING_SERVER_URL") ?: "https://api-encode-development.genflowly.com"
+
+    suspend fun getNotes(customerId: String): GetNotesResponse {
+        val items = dynamoDBProvider.getNotes(customerId)
+        val notes = items.map { item ->
+            CustomerNote(
+                noteKey = item["noteKey"]?.s() ?: "",
+                noteValue = item["noteValue"]?.s() ?: "",
+                title = item["title"]?.s() ?: "Untitled",
+                // noteCreatedAt is the client-supplied creation time; createdAt is the DDB write time
+                createdAt = item["noteCreatedAt"]?.s() ?: item["createdAt"]?.s() ?: "",
+                updatedAt = item["updatedAt"]?.s() ?: ""
+            )
+        }.sortedByDescending { it.createdAt }
+        return GetNotesResponse(notes = notes)
+    }
 
     suspend fun saveNoteAsync(customerId: String, request: SaveNoteRequest, token: String) {
         // 1. Save to DynamoDB

@@ -5,6 +5,30 @@ import { config } from '../config/env'
 
 const API_URL = `${config.backend.baseUrl}/api/v1/notes`;
 
+export interface SavedNote {
+    noteKey: string
+    noteValue: string
+    title: string
+    createdAt: string
+    updatedAt: string
+}
+
+export async function getNotes(token: string): Promise<SavedNote[]> {
+    const response = await fetch(API_URL, {
+        method: HttpMethod.GET,
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch notes: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    return data.notes ?? []
+}
+
 export async function saveNote(
     note: NotesModel,
     token: string
