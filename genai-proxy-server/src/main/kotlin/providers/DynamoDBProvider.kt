@@ -645,7 +645,9 @@ class DynamoDBProvider(
                 com.genflowly.DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build(),
                 "noteValue" to AttributeValue.builder().s(noteValue).build(),
                 "title" to AttributeValue.builder().s(title).build(),
-                "noteCreatedAt" to AttributeValue.builder().s(createdAt).build()
+                "noteCreatedAt" to AttributeValue.builder().s(createdAt).build(),
+                "is_synced_with_milvus" to AttributeValue.builder().bool(false).build(),
+                "milvus_ids" to AttributeValue.builder().l(emptyList()).build()
             ))
 
             val putReq = PutItemRequest.builder()

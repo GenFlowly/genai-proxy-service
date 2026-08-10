@@ -30,6 +30,7 @@ jest.mock('../../services/instructionService', () => ({
 
 describe('AuthContext Integration with Navbar', () => {
     beforeEach(() => {
+        localStorage.clear();
         mockUseAuth0.mockReset();
         mockUseAuth0.mockReturnValue({
             isLoading: false,
@@ -129,8 +130,8 @@ describe('AuthContext Integration with Navbar', () => {
         expect(mockLogin).toHaveBeenCalled();
     });
 
-    test('Logs out if Auth0 succeeds and onboard API fails', async () => {
-        // 1. Setup mocks for failure
+    test('Keeps session if Auth0 succeeds and onboard API fails with a non-auth error', async () => {
+        // 1. Setup mocks for a transient failure (e.g. backend 500)
         const mockError = new Error('API Error');
         (onboardCustomer as jest.Mock).mockRejectedValue(mockError);
 
@@ -155,12 +156,15 @@ describe('AuthContext Integration with Navbar', () => {
             </MemoryRouter>
         );
 
-        // 3. Verify Logout is called to clear Auth0 session/localStorage
-        // We wait for this side effect since the onboard call is async
+        // 3. Wait for the onboard attempt to complete
         await waitFor(() => {
-            expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin }, openUrl: false });
+            expect(onboardCustomer).toHaveBeenCalled();
         });
+        await act(async () => { });
 
+        // 4. Transient failures must NOT destroy the Auth0 session —
+        // the user stays logged in and onboarding retries on next load.
+        expect(mockLogout).not.toHaveBeenCalled();
     });
 
     test('Strictly uses Backend Profile data over Auth0 data', async () => {
