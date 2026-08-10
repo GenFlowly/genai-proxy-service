@@ -35,6 +35,7 @@ describe('saveNotesService', () => {
                 },
                 body: JSON.stringify({
                     client: 'genai-react-app',
+                    encode: true,
                     data: {
                         note_key: mockNote.noteKey,
                         note_value: mockNote.noteValue,
@@ -42,8 +43,21 @@ describe('saveNotesService', () => {
                         created_at: mockNote.createdAt,
                     },
                 }),
+                keepalive: false,
             })
         );
+    });
+
+    test('saveNote forwards encode=false and keepalive for autosaves', async () => {
+        (global.fetch as jest.Mock).mockResolvedValue({
+            ok: true,
+        });
+
+        await saveNote(mockNote, mockToken, { encode: false, keepalive: true });
+
+        const [, options] = (global.fetch as jest.Mock).mock.calls[0];
+        expect(JSON.parse(options.body).encode).toBe(false);
+        expect(options.keepalive).toBe(true);
     });
 
     test('saveNote throws error when response is not ok', async () => {

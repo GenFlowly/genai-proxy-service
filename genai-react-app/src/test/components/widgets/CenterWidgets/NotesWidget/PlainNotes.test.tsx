@@ -1,9 +1,13 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import PlainNotes from '../../../../../components/widgets/CenterWidgets/NotesWidget/PlainNotes';
+import { saveNote } from '../../../../../services/saveNotesService';
 
 jest.mock('../../../../../context/AuthContext', () => ({
     useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token') })
+}));
+jest.mock('../../../../../services/saveNotesService', () => ({
+    saveNote: jest.fn().mockResolvedValue(undefined)
 }));
 
 Object.defineProperty(global, 'crypto', {
@@ -27,100 +31,113 @@ jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', (
 
 describe('PlainNotes', () => {
     beforeEach(() => {
-        global.fetch = jest.fn().mockResolvedValue({ ok: true });
+        jest.useFakeTimers();
     });
 
     afterEach(() => {
+        jest.useRealTimers();
         jest.clearAllMocks();
     });
 
-    test('renders editor and save button', () => {
+    const typeAndSettle = async (editor: HTMLElement, value: string, ms = 1500) => {
+        fireEvent.change(editor, { target: { value } });
+        await act(async () => {
+            jest.advanceTimersByTime(ms);
+        });
+    };
+
+    test('renders the editor without a save button', () => {
         render(<PlainNotes />);
         expect(screen.getByTestId('notes-widget-editor')).toBeInTheDocument();
-        expect(screen.getByText('Save')).toBeInTheDocument();
+        expect(screen.queryByText('Save')).not.toBeInTheDocument();
     });
 
-    test('initializes with empty prompt', () => {
+    test('initializes with empty prompt and does not autosave it', async () => {
         render(<PlainNotes />);
         const editor = screen.getByTestId('notes-widget-editor') as HTMLTextAreaElement;
         expect(editor.value).toBe('');
+
+        await act(async () => {
+            jest.advanceTimersByTime(20000);
+        });
+        expect(saveNote).not.toHaveBeenCalled();
     });
 
-    test('updates prompt state when editor changes', () => {
+    test('autosaves after typing stops, without encoding', async () => {
+        render(<PlainNotes />);
+        const editor = screen.getByTestId('notes-widget-editor');
+
+        await typeAndSettle(editor, 'My note content');
+
+        expect(saveNote).toHaveBeenCalledTimes(1);
+        expect(saveNote).toHaveBeenCalledWith(
+            expect.objectContaining({
+                noteKey: 'mock-uuid',
+                noteValue: 'My note content',
+                client: 'REACT_APP',
+            }),
+            'mock-token',
+            { encode: false, keepalive: false }
+        );
+        // Content stays in the editor after saving
+        expect(editor).toHaveValue('My note content');
+    });
+
+    test('reuses the same noteKey across autosaves instead of duplicating notes', async () => {
+        render(<PlainNotes />);
+        const editor = screen.getByTestId('notes-widget-editor');
+
+        await typeAndSettle(editor, 'first');
+        await typeAndSettle(editor, 'first second');
+
+        expect(saveNote).toHaveBeenCalledTimes(2);
+        const keys = (saveNote as jest.Mock).mock.calls.map(([note]) => note.noteKey);
+        expect(keys).toEqual(['mock-uuid', 'mock-uuid']);
+    });
+
+    test('saves with encoding once typing goes idle', async () => {
+        render(<PlainNotes />);
+        const editor = screen.getByTestId('notes-widget-editor');
+
+        await typeAndSettle(editor, 'My note content', 10000);
+
+        const options = (saveNote as jest.Mock).mock.calls.map(([, , opts]) => opts);
+        expect(options[0]).toEqual({ encode: false, keepalive: false });
+        expect(options[options.length - 1]).toEqual({ encode: true, keepalive: false });
+    });
+
+    test('flushes with encoding on blur', async () => {
         render(<PlainNotes />);
         const editor = screen.getByTestId('notes-widget-editor');
 
         fireEvent.change(editor, { target: { value: 'My note content' } });
-
-        expect(editor).toHaveValue('My note content');
-    });
-
-    test('calls handleSave with empty prompt initially', async () => {
-        render(<PlainNotes />);
-
-        const saveBtn = screen.getByText('Save');
-        fireEvent.click(saveBtn);
-
-        await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            fireEvent.blur(editor);
         });
 
-        const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
-        expect(url).toContain('/api/v1/notes');
-        expect(JSON.parse(options.body).data.note_value).toBe('');
+        expect(saveNote).toHaveBeenCalledTimes(1);
+        expect(saveNote).toHaveBeenCalledWith(
+            expect.objectContaining({ noteValue: 'My note content' }),
+            'mock-token',
+            { encode: true, keepalive: false }
+        );
     });
 
-    test('saves the note through the notes API with the entered prompt', async () => {
-        render(<PlainNotes />);
+    test('keeps the content in the editor when a save fails', async () => {
+        (saveNote as jest.Mock).mockRejectedValueOnce(new Error('boom'));
 
+        render(<PlainNotes />);
         const editor = screen.getByTestId('notes-widget-editor');
-        fireEvent.change(editor, { target: { value: 'Test content' } });
 
-        const saveBtn = screen.getByText('Save');
-        fireEvent.click(saveBtn);
+        await typeAndSettle(editor, 'Doomed note');
 
-        await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledTimes(1);
-        });
-
-        const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
-        expect(url).toContain('/api/v1/notes');
-        expect(options.method).toBe('POST');
-        expect(options.headers).toEqual(expect.objectContaining({
-            Authorization: 'Bearer mock-token',
-        }));
-
-        const body = JSON.parse(options.body);
-        expect(body.data.note_value).toBe('Test content');
-        expect(body.data.note_key).toBe('mock-uuid');
-
-        // Editor clears after a successful save
-        await waitFor(() => {
-            expect(editor).toHaveValue('');
-        });
-    });
-
-    test('logs an error when the save request fails', async () => {
-        (global.fetch as jest.Mock).mockResolvedValue({
-            ok: false,
-            status: 500,
-            statusText: 'Internal Server Error',
-        });
-        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-        render(<PlainNotes />);
-
-        const editor = screen.getByTestId('notes-widget-editor');
-        fireEvent.change(editor, { target: { value: 'Doomed note' } });
-        fireEvent.click(screen.getByText('Save'));
-
-        await waitFor(() => {
-            expect(errorSpy).toHaveBeenCalledWith('Failed to save plain note:', expect.any(Error));
-        });
-
-        // Prompt is kept so the user can retry
+        expect(saveNote).toHaveBeenCalledTimes(1);
         expect(editor).toHaveValue('Doomed note');
 
-        errorSpy.mockRestore();
+        // The failed save is retried
+        await act(async () => {
+            jest.advanceTimersByTime(5000);
+        });
+        expect(saveNote).toHaveBeenCalledTimes(2);
     });
 });
