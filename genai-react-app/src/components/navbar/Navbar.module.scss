@@ -5,7 +5,7 @@
   background-color: $color-navbar-background;
   color: $color-navbar-text;
   box-shadow: $shadow-md;
-  z-index: 30; // Above sidebar (20)
+  z-index: 1000; // Ensure navbar is always on top of sidebars and other content
   position: relative;
 }
 
