@@ -19,6 +19,7 @@ interface InputSelectWithHintProps {
     options: SelectOption[]
     className?: string
     placeholder?: string
+    iconOnlyHintOnMobile?: boolean
     'data-testid'?: string
 }
 
@@ -30,6 +31,7 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
     options,
     className = '',
     placeholder = 'Select an option',
+    iconOnlyHintOnMobile = false,
     'data-testid': testId
 }) => {
 
@@ -46,7 +48,7 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
     }
 
     return (
-        <div className={`${styles.container} ${className}`} data-testid={testId ? `${testId}-container` : undefined}>
+        <div className={`${styles.container} ${iconOnlyHintOnMobile && icon ? styles.iconOnlyHintOnMobile : ''} ${className}`} data-testid={testId ? `${testId}-container` : undefined}>
             <div className={styles.prefixArea}>
                 {icon && <Icon src={icon} size={16} className={styles.icon} data-testid={testId ? `${testId}-icon` : undefined} />}
                 <span className={styles.hintText} data-testid={testId ? `${testId}-hint` : undefined}>{hint}</span>

@@ -40,6 +40,9 @@
     z-index: 10 !important;
     // sticky handled inline for testing enforcement
 
+    @include respond-to-mobile {
+        padding: 0;
+    }
 }
 
 
@@ -196,6 +199,15 @@
     justify-content: space-between;
     align-items: center;
     width: 100%;
+
+    @include respond-to-mobile {
+        justify-content: center;
+
+        // The name wrapper is a flex:1 div (inline-styled); center its content
+        >div {
+            justify-content: center;
+        }
+    }
 }
 
 .buttonCommandRow {
@@ -215,4 +227,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+
+    @include respond-to-mobile {
+        justify-content: center;
+        gap: 1rem;
+    }
 }
