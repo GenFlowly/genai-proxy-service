@@ -3,6 +3,7 @@ import { useLayout } from '../../../context/LayoutContext'
 import { Icon } from '../../common/Icon/Icon'
 import { ICONS } from '../../../constants/icons'
 import styles from './RightSidebar.module.scss'
+import RightSidebarMobileModal from './RightSidebarMobileModal'
 import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
 import { useWindowSize } from '../../../hooks/useWindowSize'
 
@@ -11,12 +12,27 @@ interface RightSidebarProps {
     'data-testid'?: string
 }
 
-export default function RightSidebar({ widgetIds, 'data-testid': testId }: RightSidebarProps): React.ReactElement {
+export default function RightSidebar({ widgetIds, 'data-testid': testId }: RightSidebarProps): React.ReactElement | null {
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()
     const collapsed = !isRightSidebarExpanded
     const widgets = useWidgetResolver(widgetIds)
     const { width } = useWindowSize()
     const isMobile = width <= 768
+
+    const widgetContent = widgets.map(widget => (
+        <widget.component key={widget.id} />
+    ))
+
+    // 📱 Mobile: the sidebar is a full-screen modal on the same page,
+    // so widgets keep access to the page's contexts and state.
+    if (isMobile) {
+        if (collapsed) return null
+        return (
+            <RightSidebarMobileModal onClose={toggleRightSidebar} data-testid={testId}>
+                {widgetContent}
+            </RightSidebarMobileModal>
+        )
+    }
 
     return (
         <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`} data-testid={testId || "right-sidebar"}>
@@ -33,19 +49,8 @@ export default function RightSidebar({ widgetIds, 'data-testid': testId }: Right
                 )}
             </button>
 
-            {isMobile && (
-                <div className={styles.mobileHeader}>
-                    <h2>AI Settings</h2>
-                    <button onClick={toggleRightSidebar} className={styles.mobileCloseButton}>
-                        <Icon src={ICONS.ALT_ARROW_RIGHT} size={20} />
-                    </button>
-                </div>
-            )}
-
             <div className={styles.sidebarContent}>
-                {widgets.map(widget => (
-                    <widget.component key={widget.id} />
-                ))}
+                {widgetContent}
             </div>
         </div>
     )
