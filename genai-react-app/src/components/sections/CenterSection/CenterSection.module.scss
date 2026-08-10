@@ -11,7 +11,8 @@
   overflow-x: hidden; // Prevent horizontal scroll on center section
   background-color: $color-background;
   scroll-behavior: smooth;
-  padding-bottom: 3rem; // Ensure content is accessible globally
+  // Bottom spacing lives on .contentWrapper, not here: padding on the scroll
+  // container insets sticky descendants (response action bar) from its bottom edge
   padding-right: 3rem; // Reserve space for collapsed RightSidebar (3.5rem + buffer)
 }
 
@@ -21,6 +22,7 @@
   flex-direction: column;
   align-items: center;
   gap: 0;
+  padding-bottom: 3rem; // Ensure content is accessible globally
 }
 
 .submitButton {
@@ -48,11 +50,11 @@
 @include respond-to-mobile {
   .centerSection {
     padding: 0;
-    padding-bottom: 3rem; // Ensure content is accessible above browser bottom bar
     padding-right: 0; // Remove desktop sidebar buffer
   }
 
   .contentWrapper {
     gap: 0;
+    padding-bottom: 3rem; // Ensure content is accessible above browser bottom bar
   }
 }
