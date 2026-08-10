@@ -44,11 +44,19 @@ class ConversationService(
             .sortedBy { it.sequence }
 
         val pairs = mutableListOf<PromptAndResponse>()
+        // User-message ids of the turn currently being accumulated. A turn can
+        // span several persisted user-message copies when parallel per-vendor
+        // streams raced each other — those copies chain off this turn's ids and
+        // repeat the same prompt, and must merge into a single pair.
+        var currentTurnUserIds = mutableSetOf<String>()
+        var currentTurnPrompt: String? = null
         var i = 0
         while (i < messages.size) {
             val msg = messages[i]
             if (msg.role == "user") {
-                val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text)
+                val isParallelDuplicate = pairs.isNotEmpty() &&
+                    msg.text == currentTurnPrompt &&
+                    currentTurnUserIds.contains(msg.previousMessageId)
 
                 val responses = mutableListOf<GenerateTextResponse>()
                 while (i + 1 < messages.size) {
@@ -73,7 +81,16 @@ class ConversationService(
                     }
                 }
 
-                pairs.add(PromptAndResponse(prompt, responses))
+                if (isParallelDuplicate) {
+                    currentTurnUserIds.add(msg.messageId)
+                    val last = pairs.removeAt(pairs.size - 1)
+                    pairs.add(PromptAndResponse(last.prompt, (last.responses ?: emptyList()) + responses))
+                } else {
+                    val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text)
+                    currentTurnUserIds = mutableSetOf(msg.messageId)
+                    currentTurnPrompt = msg.text
+                    pairs.add(PromptAndResponse(prompt, responses))
+                }
             }
             i++
         }
@@ -236,5 +253,18 @@ class ConversationService(
     suspend fun getLatestMessageId(conversationId: String): String? {
         val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
         return messages.maxByOrNull { it.sequence ?: 0 }?.messageId
+    }
+
+    /**
+     * Returns the user message of the turn currently being generated, if the
+     * latest message in the conversation is a user message with the given
+     * prompt text. Parallel per-vendor stream calls for the same turn must
+     * attach to that message instead of each persisting its own copy —
+     * otherwise history fragments into one request/response pair per vendor.
+     */
+    suspend fun findActiveTurnUserMessage(conversationId: String, promptText: String): Message? {
+        val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
+        val latest = messages.maxByOrNull { it.sequence ?: 0 } ?: return null
+        return latest.takeIf { it.role == "user" && it.text == promptText }
     }
 }

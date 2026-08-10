@@ -39,6 +39,7 @@ data class EncodingNoteData(
 
 @Serializable
 data class EncodingSaveNoteRequest(
+    val dataType: String,
     val client: String,
     val data: EncodingNoteData
 )
@@ -67,6 +68,7 @@ class NotesService(
                 logger.info("Sending note to encoding server asynchronously: $url")
                 
                 val encodingRequest = EncodingSaveNoteRequest(
+                    dataType = "NOTE",
                     client = request.client,
                     data = EncodingNoteData(
                         note_key = request.data.note_key,
