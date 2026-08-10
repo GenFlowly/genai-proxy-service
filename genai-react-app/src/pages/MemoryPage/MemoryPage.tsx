@@ -12,13 +12,16 @@ import { NotesProvider } from '../../context/NotesContext'
 
 export default function MemoryPage() {
     const config = getPageConfig('MEMORY_PAGE')
-    const { setRightSidebarExpanded, setLeftSidebarExpanded } = useLayout()
+    const { setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized } = useLayout()
     usePageTitle()
 
     useEffect(() => {
         setRightSidebarExpanded(false)
+        // Un-minimize as well: the chat page hides the left sidebar via the
+        // minimized flag (width 0), which would otherwise persist here
+        setLeftSidebarMinimized(false)
         setLeftSidebarExpanded(true)
-    }, [setRightSidebarExpanded, setLeftSidebarExpanded])
+    }, [setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized])
 
     return (
         <NotesProvider>

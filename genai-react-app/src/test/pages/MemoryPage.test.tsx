@@ -25,6 +25,7 @@ import { MemoryRouter } from 'react-router-dom';
 describe('MemoryPage', () => {
     const mockSetRightSidebarExpanded = jest.fn();
     const mockSetLeftSidebarExpanded = jest.fn();
+    const mockSetLeftSidebarMinimized = jest.fn();
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -36,7 +37,8 @@ describe('MemoryPage', () => {
         });
         useLayout.mockReturnValue({
             setRightSidebarExpanded: mockSetRightSidebarExpanded,
-            setLeftSidebarExpanded: mockSetLeftSidebarExpanded
+            setLeftSidebarExpanded: mockSetLeftSidebarExpanded,
+            setLeftSidebarMinimized: mockSetLeftSidebarMinimized
         });
     });
 
@@ -82,5 +84,16 @@ describe('MemoryPage', () => {
 
         expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(true);
         expect(mockSetLeftSidebarExpanded).toHaveBeenCalledTimes(1);
+    });
+
+    test('un-minimizes left sidebar on mount so it is visible after arriving from chat', () => {
+        render(
+            <MemoryRouter>
+                <MemoryPage />
+            </MemoryRouter>
+        );
+
+        expect(mockSetLeftSidebarMinimized).toHaveBeenCalledWith(false);
+        expect(mockSetLeftSidebarMinimized).toHaveBeenCalledTimes(1);
     });
 });
