@@ -1,4 +1,4 @@
-package com.genflowly.activity
+package com.genflowly.activity.generation
 
 import com.genflowly.Routes
 import com.genflowly.utils.requireAuthenticatedCustomerId
