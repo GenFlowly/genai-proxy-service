@@ -1,4 +1,4 @@
-package com.genflowly.activity
+package com.genflowly.activity.customer
 
 import com.genflowly.Routes
 import com.genflowly.models.api.StoreToolCredentialsRequest

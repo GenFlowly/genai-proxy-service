@@ -1,4 +1,4 @@
-package com.genflowly.activity
+package com.genflowly.activity.conversation
 
 import com.genflowly.Routes
 import com.genflowly.service.ConversationService
