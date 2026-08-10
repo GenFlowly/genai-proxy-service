@@ -15,10 +15,10 @@
   display: flex;
   flex-direction: row;
   gap: 0.75rem;
-  margin-top: 0.5rem;
+  padding-top: $widget-padding-y;
+  padding-bottom: $widget-padding-y;
   padding-left: 1rem;
   padding-right: 1rem;
-  padding-bottom: 1rem;
   width: 100%;
 
   overflow-y: visible;
@@ -45,6 +45,12 @@
   &::-webkit-scrollbar-thumb:hover {
     background: $color-text-muted;
   }
+
+  @include respond-to-mobile {
+    // Match the prompt editor's mobile geometry
+    padding-left: $mobile-content-inset;
+    padding-right: $mobile-content-inset;
+  }
 }
 
 .responseWrapper {
@@ -62,6 +68,18 @@
   }
 
   border: 1px solid transparent;
+
+  @include respond-to-mobile {
+    // The transparent side borders would offset the card by 1px
+    border-left: none;
+    border-right: none;
+
+    // The TextContainer card — match the prompt editor's mobile width
+    article {
+      width: $mobile-content-width !important;
+      max-width: $mobile-content-width !important;
+    }
+  }
 }
 
 .selected {

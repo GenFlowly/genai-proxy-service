@@ -4,6 +4,7 @@ import com.genflowly.providers.DynamoDBProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.request.header
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +29,20 @@ data class SaveNoteRequest(
     val data: NoteData
 )
 
+@Serializable
+data class EncodingNoteData(
+    val note_key: String,
+    val note_value: String,
+    val title: String,
+    val created_at: String
+)
+
+@Serializable
+data class EncodingSaveNoteRequest(
+    val client: String,
+    val data: EncodingNoteData
+)
+
 class NotesService(
     private val httpClient: HttpClient,
     private val dynamoDBProvider: DynamoDBProvider
@@ -35,7 +50,7 @@ class NotesService(
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
     private val encodingServerUrl = System.getenv("ENCODING_SERVER_URL") ?: "https://api-encode-development.genflowly.com"
 
-    suspend fun saveNoteAsync(customerId: String, request: SaveNoteRequest) {
+    suspend fun saveNoteAsync(customerId: String, request: SaveNoteRequest, token: String) {
         // 1. Save to DynamoDB
         dynamoDBProvider.saveNote(
             customerId = customerId,
@@ -51,9 +66,20 @@ class NotesService(
                 val url = "$encodingServerUrl/encode-notes"
                 logger.info("Sending note to encoding server asynchronously: $url")
                 
+                val encodingRequest = EncodingSaveNoteRequest(
+                    client = request.client,
+                    data = EncodingNoteData(
+                        note_key = request.data.note_key,
+                        note_value = request.data.note_value,
+                        title = request.data.title,
+                        created_at = request.data.created_at
+                    )
+                )
+
                 val response = httpClient.post(url) {
                     contentType(ContentType.Application.Json)
-                    setBody(request)
+                    header("Authorization", "Bearer $token")
+                    setBody(encodingRequest)
                 }
 
                 if (response.status.isSuccess()) {

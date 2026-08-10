@@ -26,9 +26,15 @@ fun Route.registerSaveNotesRoutes(
         post("/api/v1/notes") {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                
+                val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+                if (token == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing authentication token"))
+                    return@post
+                }
 
                 val request = call.receive<SaveNoteRequest>()
-                notesService.saveNoteAsync(customerId, request)
+                notesService.saveNoteAsync(customerId, request, token)
 
                 call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
             } catch (e: Exception) {
