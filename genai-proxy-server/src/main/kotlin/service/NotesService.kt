@@ -16,9 +16,9 @@ import io.ktor.http.isSuccess
 
 @Serializable
 data class NoteData(
-    val note_key: String,
+    val note_key: String = "default_key",
     val note_value: String,
-    val title: String,
+    val title: String = "Untitled",
     val created_at: String
 )
 

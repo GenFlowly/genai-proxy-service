@@ -44,3 +44,36 @@ fun appModule(): Module = module {
 ```
 
 By following this pattern, all network calls across the backend remain highly resilient and centrally manageable.
+
+## Authentication (API / Activities)
+
+When creating new authenticated routes in Ktor (`Activity` files), you must ensure that the incoming requests are properly authenticated and that you correctly retrieve the user's `customerId`.
+
+### Retrieving `customerId`
+
+Do **NOT** attempt to parse the `customerId` directly as a custom claim from the Auth0 JWT. The JWT typically only contains the user's Auth0 `sub` (subject), and the actual `customerId` must be looked up in DynamoDB.
+
+To simplify this, use the `requireAuthenticatedCustomerId` extension function on `ApplicationCall`, which handles extracting the `sub` and calling the `CustomerProfileService` dynamically.
+
+**1. Inject `CustomerProfileService` into your Route:**
+```kotlin
+fun Route.registerMyNewRoutes(customerProfileService: CustomerProfileService) {
+    // Protect the route with Auth0
+    authenticate("auth0") {
+        post("/api/v1/my-new-endpoint") {
+            // This safely retrieves the customerId, or responds with 401/403 if invalid
+            val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+            
+            // Proceed with your logic using customerId
+            call.respond(HttpStatusCode.OK)
+        }
+    }
+}
+```
+
+**2. Don't forget to import the utility:**
+```kotlin
+import com.genflowly.utils.requireAuthenticatedCustomerId
+```
+
+If you only need to check if a user is authenticated without forcing an error response, you can use `call.getAuthenticatedCustomerId(customerProfileService)` which returns a nullable `String?`.

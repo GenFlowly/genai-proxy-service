@@ -164,6 +164,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                         <InputSelectWithHint
                             hint="Persona"
                             icon={ICONS.USER_ROLE}
+                            iconOnlyHintOnMobile
                             placeholder="Select a persona"
                             className={styles.roleInput}
                             value={(() => {
@@ -292,6 +293,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                     <InputSelectWithHint
                                         hint="Persona"
                                         icon={ICONS.USER_ROLE}
+                                        iconOnlyHintOnMobile
                                         placeholder="Select a persona"
                                         className={styles.roleInput}
                                         value={selectedInstructionId || ''}
