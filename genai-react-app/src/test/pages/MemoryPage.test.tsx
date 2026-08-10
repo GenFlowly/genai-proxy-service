@@ -24,6 +24,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 describe('MemoryPage', () => {
     const mockSetRightSidebarExpanded = jest.fn();
+    const mockSetLeftSidebarExpanded = jest.fn();
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -34,7 +35,8 @@ describe('MemoryPage', () => {
             centerSection: ['MOCK_CENTER']
         });
         useLayout.mockReturnValue({
-            setRightSidebarExpanded: mockSetRightSidebarExpanded
+            setRightSidebarExpanded: mockSetRightSidebarExpanded,
+            setLeftSidebarExpanded: mockSetLeftSidebarExpanded
         });
     });
 
@@ -69,5 +71,16 @@ describe('MemoryPage', () => {
 
         expect(mockSetRightSidebarExpanded).toHaveBeenCalledWith(false);
         expect(mockSetRightSidebarExpanded).toHaveBeenCalledTimes(1);
+    });
+
+    test('expands left sidebar on mount', () => {
+        render(
+            <MemoryRouter>
+                <MemoryPage />
+            </MemoryRouter>
+        );
+
+        expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(true);
+        expect(mockSetLeftSidebarExpanded).toHaveBeenCalledTimes(1);
     });
 });

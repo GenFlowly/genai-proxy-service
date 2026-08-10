@@ -13,16 +13,29 @@ import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("NotesActivity")
 
-fun Route.registerSaveNotesRoutes(
+fun Route.registerNotesRoutes(
     notesService: NotesService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
+        get("/api/v1/notes") {
+            try {
+                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+
+                val response = notesService.getNotes(customerId)
+                call.respond(HttpStatusCode.OK, response)
+            } catch (e: Exception) {
+                logger.error("Error fetching notes", e)
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to fetch notes"))
+            }
+        }
+
         post("/api/v1/notes") {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
