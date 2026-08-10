@@ -64,4 +64,29 @@ describe('NavbarMenu Component', () => {
         // Active class should have updated
         expect(memoryLink.className).toMatch(/activeNavLink/);
     });
+
+    test('keeps left sidebar expanded for Memory, collapses it for other links', async () => {
+        const SidebarProbe = () => {
+            const { useLayout } = require('../../../../context/LayoutContext');
+            const { isLeftSidebarExpanded } = useLayout();
+            return <div data-testid="sidebar-state">{isLeftSidebarExpanded ? 'EXPANDED' : 'COLLAPSED'}</div>;
+        };
+
+        render(
+            <MemoryRouter initialEntries={['/memory']}>
+                <LayoutProvider>
+                    <NavbarMenu />
+                    <SidebarProbe />
+                </LayoutProvider>
+            </MemoryRouter>
+        );
+
+        // Clicking Memory (even when already on /memory) must keep the sidebar expanded
+        await userEvent.click(screen.getByTestId('navbar-item-memory'));
+        expect(screen.getByTestId('sidebar-state')).toHaveTextContent('EXPANDED');
+
+        // Clicking any other link collapses it
+        await userEvent.click(screen.getByTestId('navbar-item-chat'));
+        expect(screen.getByTestId('sidebar-state')).toHaveTextContent('COLLAPSED');
+    });
 });
