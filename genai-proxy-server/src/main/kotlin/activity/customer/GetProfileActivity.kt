@@ -2,14 +2,15 @@ package com.genflowly.activity.customer
 
 import com.genflowly.Routes
 import com.genflowly.models.api.CustomerProfileResponse
+import com.genflowly.models.api.ErrorResponse
 import com.genflowly.providers.DynamoDBProvider
+import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -18,7 +19,23 @@ fun Route.registerGetProfileRoutes(
     dynamoDBProvider: DynamoDBProvider
 ) {
     authenticate("auth0") {
-        get(Routes.GET_PROFILE) {
+        get(Routes.GET_PROFILE, {
+            tags("Customer")
+            summary = "Get the authenticated user's profile"
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "The customer profile"
+                    body<CustomerProfileResponse>()
+                }
+                code(HttpStatusCode.NotFound) {
+                    description = "Customer profile not found"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                }
+            }
+        }) {
             val principal = call.principal<JWTPrincipal>()
             val sub = principal?.payload?.subject ?: return@get call.respond(HttpStatusCode.Unauthorized)
             val client = "REACT_APP"

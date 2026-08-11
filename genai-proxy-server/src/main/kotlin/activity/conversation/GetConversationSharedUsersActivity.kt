@@ -1,15 +1,16 @@
 package com.genflowly.activity.conversation
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.SearchCustomerResponse
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("GetConversationSharedUsersActivity")
@@ -19,7 +20,33 @@ fun Route.registerGetConversationSharedUsersRoutes(
     conversationService: ConversationService
 ) {
     authenticate("auth0") {
-        get(Routes.GET_CONVERSATION_SHARED_USERS) {
+        get(Routes.GET_CONVERSATION_SHARED_USERS, {
+            tags("Conversations")
+            summary = "List users a conversation is shared with"
+            request {
+                pathParameter<String>("conversationId") {
+                    description = "Conversation to inspect"
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Users the conversation is shared with"
+                    body<List<SearchCustomerResponse>>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Missing conversationId"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.Forbidden) {
+                    description = "Caller does not own this conversation"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val conversationId = call.parameters["conversationId"]

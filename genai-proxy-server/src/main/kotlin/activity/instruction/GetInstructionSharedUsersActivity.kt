@@ -1,13 +1,14 @@
 package com.genflowly.activity.instruction
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.SearchCustomerResponse
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerProfileService
 
@@ -17,7 +18,33 @@ fun Route.registerGetInstructionSharedUsersRoutes(
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
-        get(Routes.GET_INSTRUCTION_SHARED_USERS) {
+        get(Routes.GET_INSTRUCTION_SHARED_USERS, {
+            tags("Instructions")
+            summary = "List users an instruction is shared with"
+            request {
+                pathParameter<String>("instructionId") {
+                    description = "Instruction to inspect"
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Users the instruction is shared with"
+                    body<List<SearchCustomerResponse>>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Missing instructionId"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.Forbidden) {
+                    description = "Caller does not own this instruction"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val instructionId = call.parameters["instructionId"]

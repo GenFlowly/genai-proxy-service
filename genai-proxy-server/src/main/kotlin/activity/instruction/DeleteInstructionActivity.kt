@@ -1,12 +1,14 @@
 package com.genflowly.activity.instruction
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
+import com.genflowly.models.api.StatusResponse
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.delete
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.delete
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerProfileService
 
@@ -16,7 +18,33 @@ fun Route.registerDeleteInstructionRoutes(
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
-        delete(Routes.DELETE_INSTRUCTION) {
+        delete(Routes.DELETE_INSTRUCTION, {
+            tags("Instructions")
+            summary = "Delete an instruction"
+            request {
+                pathParameter<String>("instructionId") {
+                    description = "Instruction to delete"
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Instruction deleted"
+                    body<StatusResponse>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Missing instructionId"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.Forbidden) {
+                    description = "Caller does not have permission to delete this instruction"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val instructionId = call.parameters["instructionId"]
