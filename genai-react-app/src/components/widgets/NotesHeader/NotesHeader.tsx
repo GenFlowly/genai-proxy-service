@@ -7,24 +7,47 @@ function formatSavedAt(savedAt: Date): string {
     return savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-function statusLabel(status: SaveStatus, lastSavedAt: Date | null): string | null {
+function formatUpdatedAt(updatedAt: Date): string {
+    const now = new Date()
+    const sameDay = updatedAt.toDateString() === now.toDateString()
+    if (sameDay) return `at ${formatSavedAt(updatedAt)}`
+
+    const date = updatedAt.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+        ...(updatedAt.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
+    })
+    return `${date} at ${formatSavedAt(updatedAt)}`
+}
+
+function statusLabel(status: SaveStatus, lastSavedAt: Date | null, noteUpdatedAt: string | null): string | null {
     switch (status) {
         case 'saving':
             return 'Saving…'
         case 'error':
             return "Couldn't save. Retrying…"
         default:
-            return lastSavedAt ? `Saved at ${formatSavedAt(lastSavedAt)}` : null
+            if (lastSavedAt) return `Saved at ${formatSavedAt(lastSavedAt)}`
+            // No save this session yet: fall back to the note's stored timestamp
+            if (noteUpdatedAt) {
+                const updatedAt = new Date(noteUpdatedAt)
+                if (!isNaN(updatedAt.getTime())) return `Updated ${formatUpdatedAt(updatedAt)}`
+            }
+            return null
     }
 }
 
 export default function NotesHeader(): React.ReactElement {
-    const { saveStatus, lastSavedAt, noteTitle } = useNotes()
-    const label = statusLabel(saveStatus, lastSavedAt)
+    const { saveStatus, lastSavedAt, noteTitle, activeNote } = useNotes()
+    const label = statusLabel(saveStatus, lastSavedAt, activeNote?.updatedAt ?? null)
+
+    // No title yet: a fresh editor session is a "New Note"; an opened note
+    // whose stored title is missing is an "Untitled Note"
+    const title = noteTitle ?? (activeNote ? 'Untitled Note' : 'New Note')
 
     return (
         <PageHeader
-            title={noteTitle ?? 'Memory'}
+            title={title}
             data-testid="notes-header"
             actions={
                 label && (

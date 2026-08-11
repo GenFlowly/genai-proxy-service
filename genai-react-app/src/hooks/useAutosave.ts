@@ -136,6 +136,9 @@ export function useAutosave({
         lastSavedContentRef.current = newContent
         lastEncodedContentRef.current = newContent
         setStatus('idle')
+        // The timestamp belongs to the previous baseline (e.g. the note that
+        // was open before); the newly loaded content hasn't been saved here
+        setLastSavedAt(null)
     }, [])
 
     useEffect(() => {
