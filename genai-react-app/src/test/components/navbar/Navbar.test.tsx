@@ -48,6 +48,25 @@ describe('Navbar Component', () => {
         expect(screen.queryByTestId('user-avatar-button')).not.toBeInTheDocument();
     });
 
+    test('shows a placeholder instead of the login button while onboarding', () => {
+        mockUseAuth.mockReturnValue({
+            ...defaultAuthValues,
+            isAuthenticated: false,
+            isOnboarding: true,
+            user: { name: 'Test User' },
+        });
+
+        render(
+            <MemoryRouter>
+                <LayoutProvider><Navbar /></LayoutProvider>
+            </MemoryRouter>
+        );
+
+        expect(screen.getByTestId('auth-onboarding-placeholder')).toBeInTheDocument();
+        expect(screen.queryByTestId('login-button')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('user-avatar-button')).not.toBeInTheDocument();
+    });
+
     test('calls loginWithRedirect when login button is clicked', async () => {
         mockUseAuth.mockReturnValue(defaultAuthValues);
 

@@ -12,6 +12,9 @@ export async function onboardCustomer(
 ): Promise<OnboardCustomerResponse> {
     const response = await fetchWithRetry(endpoints.onboardCustomer, {
         method: HttpMethod.POST,
+        // Background sync — fail fast instead of a long backoff ladder;
+        // AuthContext schedules deferred re-attempts (timer/tab-visibility)
+        retries: 1,
         headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,

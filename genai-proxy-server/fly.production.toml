@@ -1,5 +1,6 @@
 app = "genai-proxy-server-production"
-primary_region = "sjc"
+# Co-located with the data plane (DynamoDB/KMS/encoding server in us-east-1)
+primary_region = "iad"
 
 [build]
   dockerfile = "Dockerfile"

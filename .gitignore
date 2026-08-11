@@ -64,4 +64,4 @@ __pycache__/
 **/milvus*
 
 # Kotlin
-genai-proxy-server/.kotlin/
+.kotlin/
