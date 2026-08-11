@@ -19,12 +19,12 @@ function statusLabel(status: SaveStatus, lastSavedAt: Date | null): string | nul
 }
 
 export default function NotesHeader(): React.ReactElement {
-    const { saveStatus, lastSavedAt } = useNotes()
+    const { saveStatus, lastSavedAt, noteTitle } = useNotes()
     const label = statusLabel(saveStatus, lastSavedAt)
 
     return (
         <PageHeader
-            title="Memory"
+            title={noteTitle ?? 'Memory'}
             data-testid="notes-header"
             actions={
                 label && (

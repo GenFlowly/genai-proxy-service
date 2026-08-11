@@ -48,6 +48,25 @@ describe('saveNotesService', () => {
         );
     });
 
+    test('saveNote returns the title from the response body', async () => {
+        (global.fetch as jest.Mock).mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({ status: 'success', title: 'Generated Title' }),
+        });
+
+        const result = await saveNote(mockNote, mockToken);
+
+        expect(result).toEqual({ title: 'Generated Title' });
+    });
+
+    test('saveNote returns a null title when the response has no body', async () => {
+        (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+
+        const result = await saveNote(mockNote, mockToken);
+
+        expect(result).toEqual({ title: null });
+    });
+
     test('saveNote forwards encode=false and keepalive for autosaves', async () => {
         (global.fetch as jest.Mock).mockResolvedValue({
             ok: true,

@@ -47,6 +47,14 @@ data class GetNotesResponse(
 )
 
 @Serializable
+data class SaveNoteResponse(
+    val status: String,
+    // The note's effective title: the one sent by the client, or the one
+    // generated during this save; null when the note has no real title yet
+    val title: String? = null
+)
+
+@Serializable
 data class EncodingNoteData(
     val note_key: String,
     val noteKey: String,
@@ -67,7 +75,8 @@ data class EncodingSaveNoteRequest(
 
 class NotesService(
     private val httpClient: HttpClient,
-    private val dynamoDBProvider: DynamoDBProvider
+    private val dynamoDBProvider: DynamoDBProvider,
+    private val aiRequestManager: service.AIRequestManager
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
     private val encodingServerUrl = System.getenv("ENCODING_SERVER_URL") ?: "https://api-encode-development.genflowly.com"
@@ -87,7 +96,14 @@ class NotesService(
         return GetNotesResponse(notes = notes)
     }
 
-    suspend fun saveNoteAsync(customerId: String, request: SaveNoteRequest, token: String) {
+    // Generate a title only for notes still on the default title and with
+    // enough content to say something meaningful about
+    private fun shouldGenerateTitle(title: String, content: String): Boolean =
+        (title.isBlank() || title == "Untitled") && content.trim().length >= 15
+
+    suspend fun saveNoteAsync(customerId: String, request: SaveNoteRequest, token: String): String? {
+        val requestTitle = request.data.title.takeIf { it.isNotBlank() && it != "Untitled" }
+
         // 1. Save to DynamoDB
         dynamoDBProvider.saveNote(
             customerId = customerId,
@@ -97,10 +113,30 @@ class NotesService(
             createdAt = request.data.created_at
         )
 
-        // 2. Async call to encoding server, skipped for intermediate autosaves
+        // Intermediate autosaves stop here; encoding and title generation only
+        // run on the final save of an editing session (idle/blur/tab close)
         if (!request.encode) {
-            return
+            return requestTitle
         }
+
+        // 2. Title generation via the retrieval server, only while the note
+        // still has no real title. Awaited so the response carries the title
+        // back to the client, which updates its header and sidebar from it.
+        var effectiveTitle = requestTitle
+        if (shouldGenerateTitle(request.data.title, request.data.note_value)) {
+            try {
+                val title = aiRequestManager.createNoteTitle(customerId, request.data.note_value)
+                if (!title.isNullOrBlank()) {
+                    dynamoDBProvider.updateNoteTitle(customerId, request.data.note_key, title)
+                    logger.info("Generated title for note ${request.data.note_key}: '$title'")
+                    effectiveTitle = title
+                }
+            } catch (e: Exception) {
+                logger.error("Error generating note title for ${request.data.note_key}", e)
+            }
+        }
+
+        // 3. Async call to encoding server
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = "$encodingServerUrl/encode-notes"
@@ -115,7 +151,7 @@ class NotesService(
                         note_id = request.data.note_key,
                         note_value = request.data.note_value,
                         noteValue = request.data.note_value,
-                        title = request.data.title,
+                        title = effectiveTitle ?: request.data.title,
                         created_at = request.data.created_at,
                         createdAt = request.data.created_at
                     )
@@ -136,5 +172,7 @@ class NotesService(
                 logger.error("Error sending note to encoding server asynchronously", e)
             }
         }
+
+        return effectiveTitle
     }
 }

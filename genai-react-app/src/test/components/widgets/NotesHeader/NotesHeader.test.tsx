@@ -13,6 +13,14 @@ function SetSaveState({ status, savedAt }: { status: SaveStatus; savedAt: Date |
     return null
 }
 
+function SetNoteTitle({ title }: { title: string | null }) {
+    const { setNoteTitle } = useNotes()
+    React.useEffect(() => {
+        setNoteTitle(title)
+    }, [title, setNoteTitle])
+    return null
+}
+
 describe('NotesHeader', () => {
     test('renders the Memory title without any context providers', () => {
         render(<NotesHeader />)
@@ -43,6 +51,25 @@ describe('NotesHeader', () => {
         )
 
         expect(screen.getByTestId('notes-save-status')).toHaveTextContent(/Saved at/)
+    })
+
+    test('shows the note title once one is set, falling back to Memory', () => {
+        const { rerender } = render(
+            <NotesProvider>
+                <NotesHeader />
+                <SetNoteTitle title={null} />
+            </NotesProvider>
+        )
+        expect(screen.getByText('Memory')).toBeInTheDocument()
+
+        rerender(
+            <NotesProvider>
+                <NotesHeader />
+                <SetNoteTitle title="Grocery List Ideas" />
+            </NotesProvider>
+        )
+        expect(screen.getByText('Grocery List Ideas')).toBeInTheDocument()
+        expect(screen.queryByText('Memory')).not.toBeInTheDocument()
     })
 
     test('shows an error message when saving fails', () => {
