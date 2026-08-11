@@ -26,7 +26,24 @@ data class NoteData(
 @Serializable
 data class SaveNoteRequest(
     val client: String,
-    val data: NoteData
+    val data: NoteData,
+    // Autosaves send encode=false to skip the embedding pipeline; only the
+    // final save of an editing session (idle/blur/tab close) encodes.
+    val encode: Boolean = true
+)
+
+@Serializable
+data class CustomerNote(
+    val noteKey: String,
+    val noteValue: String,
+    val title: String,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class GetNotesResponse(
+    val notes: List<CustomerNote>
 )
 
 @Serializable
@@ -55,6 +72,21 @@ class NotesService(
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
     private val encodingServerUrl = System.getenv("ENCODING_SERVER_URL") ?: "https://api-encode-development.genflowly.com"
 
+    suspend fun getNotes(customerId: String): GetNotesResponse {
+        val items = dynamoDBProvider.getNotes(customerId)
+        val notes = items.map { item ->
+            CustomerNote(
+                noteKey = item["noteKey"]?.s() ?: "",
+                noteValue = item["noteValue"]?.s() ?: "",
+                title = item["title"]?.s() ?: "Untitled",
+                // noteCreatedAt is the client-supplied creation time; createdAt is the DDB write time
+                createdAt = item["noteCreatedAt"]?.s() ?: item["createdAt"]?.s() ?: "",
+                updatedAt = item["updatedAt"]?.s() ?: ""
+            )
+        }.sortedByDescending { it.createdAt }
+        return GetNotesResponse(notes = notes)
+    }
+
     suspend fun saveNoteAsync(customerId: String, request: SaveNoteRequest, token: String) {
         // 1. Save to DynamoDB
         dynamoDBProvider.saveNote(
@@ -65,7 +97,10 @@ class NotesService(
             createdAt = request.data.created_at
         )
 
-        // 2. Async call to encoding server
+        // 2. Async call to encoding server, skipped for intermediate autosaves
+        if (!request.encode) {
+            return
+        }
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = "$encodingServerUrl/encode-notes"

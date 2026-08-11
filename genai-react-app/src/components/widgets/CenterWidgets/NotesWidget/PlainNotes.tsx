@@ -1,53 +1,74 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import PromptEditor from '../../PromptEditorWidget/PromptEditor'
-import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
 import styles from './PlainNotes.module.scss'
 import { useAuth } from '../../../../context/AuthContext'
+import { useNotes } from '../../../../context/NotesContext'
 import { saveNote } from '../../../../services/saveNotesService'
+import { useAutosave, AutosaveSaveOptions } from '../../../../hooks/useAutosave'
+
+// crypto is unavailable in some test environments (older jsdom)
+const newNoteKey = (): string =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `note-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export default function PlainNotes() {
     const { getAccessTokenSilently } = useAuth()
+    const { activeNote, setSaveState } = useNotes()
     const [prompt, setPrompt] = useState('')
-    const [isLoading, setIsLoading] = useState(false)
 
-    const handleSave = async () => {
-        try {
-            setIsLoading(true)
-            const token = await getAccessTokenSilently()
-            await saveNote({
-                noteKey: crypto.randomUUID(),
-                noteValue: prompt,
-                createdAt: new Date().toISOString(),
-                client: 'REACT_APP',
-            }, token)
-            console.log('Plain Note saved successfully')
-            setPrompt('') // Optional: clear after save
-        } catch (error) {
-            console.error('Failed to save plain note:', error)
-        } finally {
-            setIsLoading(false)
+    // Stable identity for the whole editing session so every autosave updates
+    // the same note instead of creating a new one per save
+    const noteKeyRef = useRef<string>(newNoteKey())
+    const createdAtRef = useRef<string>(new Date().toISOString())
+    const titleRef = useRef<string | undefined>(undefined)
+
+    const save = useCallback(async (content: string, options: AutosaveSaveOptions) => {
+        // Capture the note identity before any await: flushing right before a
+        // different note is opened must save under the note being flushed
+        const note = {
+            noteKey: noteKeyRef.current,
+            noteValue: content,
+            title: titleRef.current,
+            createdAt: createdAtRef.current,
+            client: 'REACT_APP',
         }
-    }
+        const token = await getAccessTokenSilently()
+        await saveNote(note, token, options)
+    }, [getAccessTokenSilently])
+
+    const { status, lastSavedAt, flush, reset } = useAutosave({ content: prompt, save })
+
+    // Surface save progress in the notes header
+    useEffect(() => {
+        setSaveState(status, lastSavedAt)
+    }, [status, lastSavedAt, setSaveState])
+
+    // Load the note selected in the Saved Notes sidebar into the editor
+    useEffect(() => {
+        if (activeNote) {
+            flush()
+            noteKeyRef.current = activeNote.noteKey
+            createdAtRef.current = activeNote.createdAt
+            titleRef.current = activeNote.title
+            setPrompt(activeNote.noteValue)
+            reset(activeNote.noteValue)
+        }
+    }, [activeNote, flush, reset])
 
     return (
-        <>
-            <div className={styles.editorWrapper}>
-                <PromptEditor
-                    id="notes-widget-editor"
-                    value={prompt}
-                    onChange={setPrompt}
-                    height="100%"
-                    maxLength={400000}
-                />
-            </div>
-
-            <div className={styles.actions}>
-                <MultiPurposeButton
-                    label="Save"
-                    onClick={handleSave}
-                    disabled={isLoading}
-                />
-            </div>
-        </>
+        <div
+            className={styles.editorWrapper}
+            onBlur={() => flush()}
+        >
+            <PromptEditor
+                id="notes-widget-editor"
+                value={prompt}
+                onChange={setPrompt}
+                height="auto"
+                maxLength={400000}
+                variant="seamless"
+            />
+        </div>
     )
 }

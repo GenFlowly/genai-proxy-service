@@ -1,35 +1,44 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import PromptEditor from '../../PromptEditorWidget/PromptEditor'
-import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
 import styles from './KeyValueNotes.module.scss'
 import { useAuth } from '../../../../context/AuthContext'
+import { useNotes } from '../../../../context/NotesContext'
 import { saveNote } from '../../../../services/saveNotesService'
+import { useAutosave, AutosaveSaveOptions } from '../../../../hooks/useAutosave'
 
 export default function KeyValueNotes() {
     const { getAccessTokenSilently } = useAuth()
+    const { setSaveState } = useNotes()
     const [keyPrompt, setKeyPrompt] = useState('')
     const [valuePrompt, setValuePrompt] = useState('')
-    const [isLoading, setIsLoading] = useState(false)
 
-    const handleSave = async () => {
-        try {
-            setIsLoading(true)
-            const token = await getAccessTokenSilently()
-            await saveNote({
-                noteKey: keyPrompt,
-                noteValue: valuePrompt,
-                createdAt: new Date().toISOString(),
-                client: 'REACT_APP',
-            }, token)
-            console.log('Key Value Note saved successfully')
-            setKeyPrompt('')
-            setValuePrompt('')
-        } catch (error) {
-            console.error('Failed to save key value note:', error)
-        } finally {
-            setIsLoading(false)
+    // Only the value field drives autosave; the key is read at save time so
+    // typing in the key field never fires half-typed keys at the backend
+    const keyPromptRef = useRef(keyPrompt)
+    keyPromptRef.current = keyPrompt
+    const createdAtRef = useRef<string>(new Date().toISOString())
+
+    const save = useCallback(async (content: string, options: AutosaveSaveOptions) => {
+        const note = {
+            noteKey: keyPromptRef.current,
+            noteValue: content,
+            createdAt: createdAtRef.current,
+            client: 'REACT_APP',
         }
-    }
+        const token = await getAccessTokenSilently()
+        await saveNote(note, token, options)
+    }, [getAccessTokenSilently])
+
+    const { status, lastSavedAt, flush } = useAutosave({
+        content: valuePrompt,
+        save,
+        enabled: keyPrompt.trim() !== '',
+    })
+
+    // Surface save progress in the notes header
+    useEffect(() => {
+        setSaveState(status, lastSavedAt)
+    }, [status, lastSavedAt, setSaveState])
 
     return (
         <>
@@ -42,21 +51,13 @@ export default function KeyValueNotes() {
                     maxLength={400000}
                 />
             </div>
-            <div className={styles.valueEditorWrapper}>
+            <div className={styles.valueEditorWrapper} onBlur={() => flush()}>
                 <PromptEditor
                     id="notes-widget-value-editor"
                     value={valuePrompt}
                     onChange={setValuePrompt}
                     height="100%"
                     maxLength={400000}
-                />
-            </div>
-
-            <div className={styles.actions}>
-                <MultiPurposeButton
-                    label="Save"
-                    onClick={handleSave}
-                    disabled={isLoading}
                 />
             </div>
         </>

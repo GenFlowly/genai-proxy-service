@@ -5,12 +5,46 @@ import { config } from '../config/env'
 
 const API_URL = `${config.backend.baseUrl}/api/v1/notes`;
 
+export interface SavedNote {
+    noteKey: string
+    noteValue: string
+    title: string
+    createdAt: string
+    updatedAt: string
+}
+
+export async function getNotes(token: string): Promise<SavedNote[]> {
+    const response = await fetch(API_URL, {
+        method: HttpMethod.GET,
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch notes: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    return data.notes ?? []
+}
+
+export interface SaveNoteOptions {
+    // false skips the embedding pipeline on the server (intermediate autosaves);
+    // the final save of an editing session sends true
+    encode?: boolean
+    // true lets the request outlive the page (flush on tab close)
+    keepalive?: boolean
+}
+
 export async function saveNote(
     note: NotesModel,
-    token: string
+    token: string,
+    options: SaveNoteOptions = {}
 ): Promise<void> {
     const payload = {
         client: 'genai-react-app',
+        encode: options.encode ?? true,
         data: {
             note_key: note.noteKey,
             note_value: note.noteValue,
@@ -26,6 +60,7 @@ export async function saveNote(
             Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
+        keepalive: options.keepalive ?? false,
     })
 
     if (!response.ok) {
