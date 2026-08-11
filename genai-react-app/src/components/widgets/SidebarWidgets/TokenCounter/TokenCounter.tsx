@@ -4,47 +4,26 @@ import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/Sideb
 import { Icon } from '../../../common/Icon/Icon'
 import { ICONS } from '../../../../constants/icons'
 import Tooltip from '../../../common/Tooltip/Tooltip'
-import { countTokens } from '../../../../utils/tokenizer'
-import { AIVendor } from '../../../../constants/vendors'
+import { estimateTokens } from '../../../../utils/tokenEstimate'
 
 export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
-    const { conversation, ai } = useSidebarWidget()
+    const { conversation } = useSidebarWidget()
     const { editorPrompt, activeBlockId, conversationBlockList } = conversation
-    const { config } = ai
 
     // PromptEditor is only rendered when the active block is not yet resolved
     const activeBlock = conversationBlockList.find(b => b.conversationBlockId === activeBlockId)
     const promptEditorVisible = !!activeBlock && !(activeBlock.status === 'resolved' && !activeBlock.isLoading)
 
     const [tokenCount, setTokenCount] = useState(0)
-    const [isTokenLoading, setIsTokenLoading] = useState(false)
 
     useEffect(() => {
-        const calculateTokens = async () => {
+        // Estimation is cheap; the debounce only throttles re-renders while typing
+        const timeout = setTimeout(() => {
             const text = promptEditorVisible ? (editorPrompt || '') : ''
-            if (!text.trim()) {
-                setTokenCount(0)
-                return
-            }
-
-            const openaiConfig = config.find(c => c.aiVendor === AIVendor.OPENAI && !!c.model?.trim())
-            const model = openaiConfig?.model || 'gpt-4o'
-
-            setIsTokenLoading(true)
-            try {
-                const count = await countTokens(text, model)
-                setTokenCount(count)
-            } catch (err) {
-                console.error('Token counting failed:', err)
-                setTokenCount(0)
-            } finally {
-                setIsTokenLoading(false)
-            }
-        }
-
-        const timeout = setTimeout(calculateTokens, 500)
+            setTokenCount(text.trim() ? estimateTokens(text) : 0)
+        }, 500)
         return () => clearTimeout(timeout)
-    }, [editorPrompt, promptEditorVisible, config])
+    }, [editorPrompt, promptEditorVisible])
 
     // Collapsed Content
     const headerCollapsed = (
@@ -67,7 +46,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
             style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textAlign: 'center', width: '100%' }}
             data-testid="token-count-collapsed"
         >
-            {isTokenLoading ? '...' : tokenCount}
+            {tokenCount}
         </div>
     )
 
@@ -88,7 +67,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
         >
             <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0.25rem' }}>
                 <div className="text-xs text-gray-500" data-testid="token-count-display">
-                    {isTokenLoading ? 'Counting tokens…' : `Estimated: ${tokenCount}`}
+                    {`Estimated: ${tokenCount}`}
                 </div>
             </div>
         </SidebarWidgetContainer>
