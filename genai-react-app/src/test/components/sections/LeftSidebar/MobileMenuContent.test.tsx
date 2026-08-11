@@ -44,6 +44,24 @@ describe('MobileMenuContent', () => {
         });
     });
 
+    test('shows a placeholder instead of the login button while onboarding', () => {
+        (useAuth as jest.Mock).mockReturnValue({
+            loginWithRedirect: jest.fn(),
+            isAuthenticated: false,
+            isOnboarding: true,
+            user: { name: 'Test User' },
+        });
+
+        render(
+            <MemoryRouter>
+                <MobileMenuContent />
+            </MemoryRouter>
+        );
+
+        expect(screen.getByTestId('auth-onboarding-placeholder-mobile')).toBeInTheDocument();
+        expect(screen.queryByText('Login')).not.toBeInTheDocument();
+    });
+
     test('tapping Conversation History closes the menu and opens the history page', () => {
         render(
             <MemoryRouter>
