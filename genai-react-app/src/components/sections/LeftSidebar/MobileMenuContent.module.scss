@@ -172,3 +172,17 @@
 .avatarButton {
     pointer-events: none; // Let the wrapper button handle the click
 }
+
+// Mirrors Navbar: placeholder while first-time onboarding completes
+.authPlaceholder {
+    width: 1.3rem;
+    height: 1.3rem;
+    border-radius: 50%;
+    background-color: var(--color-background-tertiary);
+    animation: authPlaceholderPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes authPlaceholderPulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}

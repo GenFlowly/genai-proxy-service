@@ -3,6 +3,7 @@ import React, {
     useCallback,
     useContext,
     useEffect,
+    useRef,
     useState,
 } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
@@ -14,6 +15,34 @@ import { InstructionResponse } from '../models/instruction.models'
 import { StoreCustomerVectorDBConfigResponse } from '../models/storeCustomerVectorDBConfig.models'
 
 const AuthContext = createContext<AuthContextType | null>(null)
+
+// Stale-while-revalidate caches: the last known server data per customer is
+// shown immediately on reload, then overwritten when the background /onboard
+// sync answers. Only display data belongs here — never auth state.
+const vendorKeysCacheKey = (customerId: string) => `${customerId}_vendor_api_key_statuses`
+const instructionsCacheKey = (customerId: string) => `${customerId}_instructions`
+
+function readCache<T>(key: string): T | null {
+    try {
+        const raw = localStorage.getItem(key)
+        return raw ? (JSON.parse(raw) as T) : null
+    } catch {
+        return null
+    }
+}
+
+// Delay before a failed background onboard is re-attempted (also re-attempted
+// sooner if the tab regains visibility)
+const ONBOARD_RETRY_DELAY_MS = 45_000
+
+function writeCache(key: string, value: unknown): void {
+    try {
+        localStorage.setItem(key, JSON.stringify(value))
+    } catch (e) {
+        // Best-effort (e.g. quota exceeded) — next load just starts empty
+        console.warn(`Failed to write cache '${key}'`, e)
+    }
+}
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }): React.ReactElement => {
     const {
@@ -37,6 +66,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     const [customerPicture, setCustomerPicture] = useState<string | undefined>(undefined)
     const [isInternalLoading, setIsInternalLoading] = useState(true)
     const [isInstructionsLoaded, setIsInstructionsLoaded] = useState(false)
+    // Deferred re-attempt for a failed background onboard: bumping the counter
+    // re-runs the onboard effect; the ref marks that a retry is warranted
+    const [onboardAttempt, setOnboardAttempt] = useState(0)
+    const onboardFailedRef = useRef(false)
 
     // ✅ Effect 0: Handle Unauthenticated State to clear loading
     useEffect(() => {
@@ -57,6 +90,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                     console.error('Failed to parse cached ai preferences', e)
                 }
             }
+            const cachedVendorStatuses = readCache<AIVendorAPIKeyStatus[]>(vendorKeysCacheKey(customerId))
+            if (cachedVendorStatuses) setAiVendorAPIKeyStatusList(cachedVendorStatuses)
+            const cachedInstructions = readCache<InstructionResponse[]>(instructionsCacheKey(customerId))
+            if (cachedInstructions) setCustomerInstructions(cachedInstructions)
         } else {
             localStorage.removeItem('customerId')
             setAiConfigPreferences(null)
@@ -96,6 +133,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
 
     // Onboard/Sync user when authenticated
     useEffect(() => {
+        let retryTimer: ReturnType<typeof setTimeout> | null = null
+
         const onboard = async () => {
             if (isAuthenticated && auth0User) {
                 // Ensure we are loading (matches initial state, but safe to set)
@@ -117,9 +156,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                         }
                         if (onboardData.aiVendorAPIKeyStatusList) {
                             setAiVendorAPIKeyStatusList(onboardData.aiVendorAPIKeyStatusList)
+                            if (onboardData.customerId) {
+                                writeCache(vendorKeysCacheKey(onboardData.customerId), onboardData.aiVendorAPIKeyStatusList)
+                            }
                         }
                         if (onboardData.customerInstructions) {
                             setCustomerInstructions(onboardData.customerInstructions)
+                            if (onboardData.customerId) {
+                                writeCache(instructionsCacheKey(onboardData.customerId), onboardData.customerInstructions)
+                            }
                         }
                         if (onboardData.customerName) setCustomerName(onboardData.customerName)
                         if (onboardData.customerPicture) setCustomerPicture(onboardData.customerPicture)
@@ -133,10 +178,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                                 )
                             }
                         }
-                        // Set customer instructions and vectorDBConfigStatusList if present in onboardData
-                        if (onboardData.customerInstructions) {
-                            setCustomerInstructions(onboardData.customerInstructions || []);
-                        }
                         if (onboardData.vectorDBConfigStatusList) {
                             setVectorDBConfigStatusList(onboardData.vectorDBConfigStatusList);
                         }
@@ -144,6 +185,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             setSupabaseConfigStatus(onboardData.supabaseConfigStatus);
                         }
                     }
+                    onboardFailedRef.current = false
                     console.log('User onboarded successfully');
                 } catch (error: any) {
                     console.error('Failed to onboard user:', error)
@@ -153,9 +195,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                         console.log('Session invalid, logging out...')
                         logout({ returnTo: window.location.origin, localOnly: true })
                     } else {
-                        // Transient failures (backend 500, network) must not destroy the Auth0
-                        // session — the user stays logged in and onboarding retries on next load.
-                        console.error('Onboarding failed, keeping session for retry', error)
+                        // Transient failures (backend 500, network) must not destroy the
+                        // Auth0 session — the user stays logged in on cached data and the
+                        // sync heals itself: re-attempt after a delay (or sooner, when the
+                        // tab regains visibility). Each failed attempt schedules exactly
+                        // one deferred retry.
+                        console.error('Onboarding failed, scheduling deferred re-attempt', error)
+                        onboardFailedRef.current = true
+                        retryTimer = setTimeout(() => {
+                            setOnboardAttempt(attempt => attempt + 1)
+                        }, ONBOARD_RETRY_DELAY_MS)
                     }
                 } finally {
                     setIsInternalLoading(false)
@@ -167,7 +216,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         if (isAuthenticated && auth0User) {
             onboard()
         }
-    }, [isAuthenticated, auth0User, getAccessTokenSilently, logout])
+
+        return () => {
+            if (retryTimer) clearTimeout(retryTimer)
+        }
+    }, [isAuthenticated, auth0User, getAccessTokenSilently, logout, onboardAttempt])
 
     // Proactive session check: when the user returns to the tab after being idle,
     // verify the refresh token is still valid. If not, logout immediately so the
@@ -177,6 +230,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
 
         const checkSession = async () => {
             if (document.visibilityState !== 'visible') return
+            // A failed background onboard gets re-attempted as soon as the
+            // user comes back to the tab, without waiting out the retry timer
+            if (onboardFailedRef.current) {
+                onboardFailedRef.current = false
+                setOnboardAttempt(attempt => attempt + 1)
+            }
             try {
                 await getAccessTokenSilently()
             } catch (error: any) {
@@ -214,39 +273,45 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
             const { getCustomerInstructions } = await import('../services/instructionService')
             const response = await getCustomerInstructions(token)
             setCustomerInstructions(response.instructions)
+            if (customerId) writeCache(instructionsCacheKey(customerId), response.instructions)
         } catch (error) {
             console.error('Failed to refresh instructions', error)
         } finally {
             setIsInstructionsLoaded(true)
         }
-    }, [isAuthenticated, auth0User, getAccessTokenSilently])
+    }, [isAuthenticated, auth0User, getAccessTokenSilently, customerId])
 
     const updateInstruction = (instruction: InstructionResponse) => {
         setCustomerInstructions(prev => {
             // Check if this specific version already exists
             const index = prev.findIndex(item => item.id === instruction.id && item.version === instruction.version)
 
+            let newList: InstructionResponse[]
             if (index !== -1) {
                 // Update existing version entry
-                const newList = [...prev]
+                newList = [...prev]
                 newList[index] = instruction
-                return newList
             } else {
                 // Add new version (prepend)
-                return [instruction, ...prev]
+                newList = [instruction, ...prev]
             }
+            if (customerId) writeCache(instructionsCacheKey(customerId), newList)
+            return newList
         })
     }
 
     const updateVendorApiKeyStatus = (status: AIVendorAPIKeyStatus) => {
         setAiVendorAPIKeyStatusList(prev => {
             const index = prev.findIndex(s => s.aiVendor === status.aiVendor)
+            let updated: AIVendorAPIKeyStatus[]
             if (index !== -1) {
-                const updated = [...prev]
+                updated = [...prev]
                 updated[index] = status
-                return updated
+            } else {
+                updated = [...prev, status]
             }
-            return [...prev, status]
+            if (customerId) writeCache(vendorKeysCacheKey(customerId), updated)
+            return updated
         })
     }
 
@@ -279,7 +344,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         user,
         isAuthenticated: isStrictlyAuthenticated,
         entitlements,
-        isLoading: auth0Loading || isInternalLoading,
+        // Only Auth0 SDK init gates rendering (fast, localStorage-backed).
+        // The /onboard sync runs in the background — consumers that care use
+        // isOnboarding — so a slow backend never blocks first paint.
+        isLoading: auth0Loading,
+        isOnboarding: isAuthenticated && isInternalLoading,
         isInstructionsLoaded,
         customerId,
         setCustomerId,

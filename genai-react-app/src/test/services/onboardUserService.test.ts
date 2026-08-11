@@ -36,6 +36,7 @@ describe('onboardUserService', () => {
         // Assert
         expect(mockFetchWithRetry).toHaveBeenCalledWith(endpoints.onboardCustomer, {
             method: HttpMethod.POST,
+            retries: 1,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${mockToken}`,

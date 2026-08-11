@@ -11,7 +11,7 @@ import { ICONS } from '../../../constants/icons'
 import styles from './MobileMenuContent.module.scss'
 
 export const MobileMenuContent: React.FC = () => {
-    const { loginWithRedirect, isAuthenticated, user, customerPicture, customerName } = useAuth()
+    const { loginWithRedirect, isAuthenticated, isOnboarding, user, customerPicture, customerName } = useAuth()
     const { toggleLeftSidebar } = useLayout()
     const navigate = useNavigate()
 
@@ -61,7 +61,13 @@ export const MobileMenuContent: React.FC = () => {
                     <ThemeToggle />
                 </div>
                 <div className={styles.authSection}>
-                    {!isAuthenticated || !user ? (
+                    {!isAuthenticated && isOnboarding ? (
+                        <div
+                            className={styles.authPlaceholder}
+                            aria-label="Signing in…"
+                            data-testid="auth-onboarding-placeholder-mobile"
+                        />
+                    ) : !isAuthenticated || !user ? (
                         <button
                             onClick={() => loginWithRedirect()}
                             className={styles.loginButton}

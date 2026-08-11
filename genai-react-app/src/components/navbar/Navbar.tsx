@@ -15,7 +15,7 @@ import { useWindowSize } from '../../hooks/useWindowSize'
 import { MobileMenuContent } from '../sections/LeftSidebar/MobileMenuContent'
 
 export default function Navbar(): React.ReactElement {
-    const { loginWithRedirect, isAuthenticated, user, customerPicture, customerName } = useAuth()
+    const { loginWithRedirect, isAuthenticated, isOnboarding, user, customerPicture, customerName } = useAuth()
     const { toggleLeftSidebar, toggleRightSidebar, isLeftSidebarExpanded } = useLayout()
     const navigate = useNavigate()
     const location = useLocation()
@@ -54,7 +54,15 @@ export default function Navbar(): React.ReactElement {
                 <div className={styles.rightControls}>
                     <ThemeToggle />
                     <div className={styles.auth}>
-                        {!isAuthenticated || !user ? (
+                        {!isAuthenticated && isOnboarding ? (
+                            // First-time login: onboarding hasn't produced a
+                            // customerId yet — don't flash the Login button
+                            <div
+                                className={styles.authPlaceholder}
+                                aria-label="Signing in…"
+                                data-testid="auth-onboarding-placeholder"
+                            />
+                        ) : !isAuthenticated || !user ? (
                             <button
                                 onClick={() => loginWithRedirect()}
                                 className={styles.loginButton}
