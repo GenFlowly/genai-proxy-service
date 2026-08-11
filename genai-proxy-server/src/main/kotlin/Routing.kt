@@ -1,46 +1,44 @@
 package com.genflowly
 
-import activity.registerOnboardCustomerRoutes
-import com.genflowly.activity.registerStoreApiKeyRoutes
-import com.genflowly.activity.registerCreateInstructionRoutes
-import com.genflowly.activity.registerGenerateTextRoutes
-import com.genflowly.activity.registerGenerateTextStreamRoutes
-import com.genflowly.activity.registerGetTextGenerationModelsRoutes
-import com.genflowly.activity.registerSaveAIConfigPreferencesRoutes
-import com.genflowly.activity.registerStoreVectorDBConfigRoutes
-import com.genflowly.activity.registerStoreSupabaseConfigRoutes
+import com.genflowly.activity.agent.registerGetCustomerAgentsRoutes
+import com.genflowly.activity.agent.registerUpdateAgentRoutes
+import com.genflowly.activity.conversation.registerCreateConversationShareRoutes
+import com.genflowly.activity.conversation.registerCreateConversationTitleRoutes
+import com.genflowly.activity.conversation.registerDeleteConversationRoutes
+import com.genflowly.activity.conversation.registerGetConversationRoutes
+import com.genflowly.activity.conversation.registerGetConversationSharedUsersRoutes
+import com.genflowly.activity.conversation.registerGetCustomerConversationsPaginatedRoutes
+import com.genflowly.activity.conversation.registerUnarchiveConversationRoutes
+import com.genflowly.activity.customer.registerCustomerProfileSettingsRoutes
+import com.genflowly.activity.customer.registerGetProfileRoutes
+import com.genflowly.activity.customer.registerOnboardCustomerRoutes
+import com.genflowly.activity.customer.registerSearchRoutes
+import com.genflowly.activity.customer.registerStoreApiKeyRoutes
+import com.genflowly.activity.customer.registerStoreSupabaseConfigRoutes
+import com.genflowly.activity.customer.registerStoreVectorDBConfigRoutes
+import com.genflowly.activity.customer.registerToolCredentialsRoutes
+import com.genflowly.activity.generation.registerGenerateTextRoutes
+import com.genflowly.activity.generation.registerGenerateTextStreamRoutes
+import com.genflowly.activity.generation.registerGetAIUsageActivityRoutes
+import com.genflowly.activity.generation.registerGetTextGenerationModelsRoutes
+import com.genflowly.activity.generation.registerSaveAIConfigPreferencesRoutes
+import com.genflowly.activity.instruction.registerCreateInstructionRoutes
+import com.genflowly.activity.instruction.registerCreateInstructionShareRoutes
+import com.genflowly.activity.instruction.registerDeleteInstructionRoutes
+import com.genflowly.activity.instruction.registerGetCustomerInstructionListRoutes
+import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoutes
+import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
+import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.service.AIRequestService
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
-import com.genflowly.activity.registerGetAIUsageActivityRoutes
-import com.genflowly.activity.registerGetConversationRoutes
-import com.genflowly.activity.registerGetCustomerInstructionListRoutes
-import com.genflowly.activity.registerGetInstructionVersionRoutes
-import com.genflowly.activity.registerGetInstructionSharedUsersRoutes
-import com.genflowly.activity.registerCreateConversationTitleRoutes
-import com.genflowly.activity.registerGetCustomerConversationsPaginatedRoutes
-import com.genflowly.activity.registerDeleteConversationRoutes
-import com.genflowly.activity.registerUnarchiveConversationRoutes
-import com.genflowly.activity.registerGraphNodeRoutes
-import com.genflowly.activity.registerCustomerGraphRoutes
-import com.genflowly.activity.registerGetCustomerAgentsRoutes
-import com.genflowly.activity.registerUpdateAgentRoutes
-import com.genflowly.activity.registerToolCredentialsRoutes
-import com.genflowly.activity.registerCustomerProfileSettingsRoutes
-import com.genflowly.activity.registerSearchRoutes
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
-import com.genflowly.activity.registerCreateInstructionShareRoutes
-import com.genflowly.activity.registerCreateConversationShareRoutes
-import com.genflowly.activity.registerGetConversationSharedUsersRoutes
-import com.genflowly.activity.registerDeleteInstructionRoutes
-import com.genflowly.activity.registerGetProfileRoutes
 import com.genflowly.providers.DynamoDBProvider
-import com.genflowly.activity.registerSaveNotesRoutes
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -72,16 +70,6 @@ object Routes {
     const val DELETE_CONVERSATION = "$API_V1/conversation/{conversationId}"
     const val UNARCHIVE_CONVERSATION = "$API_V1/conversation/{conversationId}/unarchive"
     const val GET_PROFILE = "$API_V1/profile"
-
-    const val GRAPH_NODES = "$API_V1/graph-nodes"
-    const val GRAPH_NODE = "$API_V1/graph-nodes/{nodeId}"
-    const val GRAPH_NODE_VERSIONS = "$API_V1/graph-nodes/{nodeId}/versions"
-    const val GRAPH_NODE_ROLLBACK = "$API_V1/graph-nodes/{nodeId}/rollback/{version}"
-
-    const val GRAPHS = "$API_V1/graphs"
-    const val GRAPH = "$API_V1/graphs/{graphId}"
-    const val GRAPH_VERSIONS = "$API_V1/graphs/{graphId}/versions"
-    const val GRAPH_ROLLBACK = "$API_V1/graphs/{graphId}/rollback/{version}"
 
     const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
     const val TOOL_CREDENTIAL = "$API_V1/tool-credentials/{toolType}"
@@ -130,8 +118,6 @@ fun Application.configureRouting(
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)
         registerDeleteConversationRoutes(customerProfileService, conversationService)
         registerUnarchiveConversationRoutes(customerProfileService, conversationService)
-        registerGraphNodeRoutes(graphService, customerProfileService)
-        registerCustomerGraphRoutes(graphService, customerProfileService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerProfileService)
@@ -139,6 +125,6 @@ fun Application.configureRouting(
         registerCustomerProfileSettingsRoutes(dynamoDBProvider)
         registerSearchRoutes(dynamoDBProvider)
         registerGetProfileRoutes(dynamoDBProvider)
-        registerSaveNotesRoutes(notesService, customerProfileService)
+        registerNotesRoutes(notesService, customerProfileService)
     }
 }

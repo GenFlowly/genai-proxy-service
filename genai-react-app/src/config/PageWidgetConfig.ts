@@ -16,7 +16,7 @@ export const PAGE_WIDGET_CONFIG: PageConfig[] = [
     },
     {
         pageId: 'MEMORY_PAGE',
-        leftSidebar: [],
+        leftSidebar: ['SAVED_NOTES_WIDGET'],
         rightSidebar: [],
         centerSection: ['NOTES_WIDGET'],
     },

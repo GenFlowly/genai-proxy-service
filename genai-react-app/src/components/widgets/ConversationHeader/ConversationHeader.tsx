@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import ShareModal, { VisibilityMode } from '../../common/ShareModal/ShareModal'
 import PillButton from '../../common/PillButton/PillButton'
+import PageHeader, { pageHeaderStyles } from '../../common/PageHeader/PageHeader'
 import { useAuth } from '../../../context/AuthContext'
 import { useConversation } from '../../../context/ConversationContext'
 import { useToast } from '../../../context/ToastContext'
@@ -11,7 +12,6 @@ import {
     getConversationSharedUsers,
 } from '../../../services/conversationService'
 import { SearchUserResponse } from '../../../models/user.models'
-import styles from './ConversationHeader.module.scss'
 
 export default function ConversationHeader(): React.ReactElement | null {
     const { conversationId, conversationTitle, conversationRole } = useConversation()
@@ -47,22 +47,18 @@ export default function ConversationHeader(): React.ReactElement | null {
     }
 
     return (
-        <div className={styles.header}>
-            <div className={styles.title} title={displayTitle}>
-                {displayTitle}
-            </div>
-            <div className={styles.actions}>
-                {showShare && (
-                    <PillButton
-                        label="Share"
-                        className={styles.shareButton}
-                        onClick={() => !isNewChat && setShareModalOpen(true)}
-                        data-testid="conversation-share-button"
-                        disabled={isNewChat}
-                    />
-                )}
-            </div>
-
+        <PageHeader
+            title={displayTitle}
+            actions={showShare && (
+                <PillButton
+                    label="Share"
+                    className={pageHeaderStyles.actionButton}
+                    onClick={() => !isNewChat && setShareModalOpen(true)}
+                    data-testid="conversation-share-button"
+                    disabled={isNewChat}
+                />
+            )}
+        >
             <ShareModal
                 isOpen={isShareModalOpen}
                 onClose={() => setShareModalOpen(false)}
@@ -73,6 +69,6 @@ export default function ConversationHeader(): React.ReactElement | null {
                     return getConversationSharedUsers(token, id)
                 }}
             />
-        </div>
+        </PageHeader>
     )
 }

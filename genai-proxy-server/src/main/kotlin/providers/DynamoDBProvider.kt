@@ -663,6 +663,36 @@ class DynamoDBProvider(
         }
     }
 
+    suspend fun getNotes(customerId: String): List<Map<String, AttributeValue>> = withContext(Dispatchers.IO) {
+        try {
+            val items = mutableListOf<Map<String, AttributeValue>>()
+            var exclusiveStartKey: Map<String, AttributeValue>? = null
+
+            do {
+                val queryBuilder = QueryRequest.builder()
+                    .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_NOTES_TABLE)
+                    .keyConditionExpression("$CUSTOMER_ID_KEY = :cid")
+                    .expressionAttributeValues(
+                        mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+                    )
+
+                if (!exclusiveStartKey.isNullOrEmpty()) {
+                    queryBuilder.exclusiveStartKey(exclusiveStartKey)
+                }
+
+                val response = dynamoDbClient.query(queryBuilder.build())
+                items.addAll(response.items())
+                exclusiveStartKey = if (response.hasLastEvaluatedKey()) response.lastEvaluatedKey() else null
+            } while (!exclusiveStartKey.isNullOrEmpty())
+
+            logger.info("Fetched ${items.size} notes for $customerId from DynamoDB")
+            items
+        } catch (e: Exception) {
+            logger.error("Failed to get notes from DynamoDB", e)
+            throw e
+        }
+    }
+
     suspend fun getCustomerSupabaseConfigStatus(customerId: String): models.SupabaseConfigStatus? = withContext(Dispatchers.IO) {
         try {
             val getReq = GetItemRequest.builder()
