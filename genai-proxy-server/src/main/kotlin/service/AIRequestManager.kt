@@ -657,6 +657,37 @@ class AIRequestManager(
         }
     }
 
+    suspend fun createNoteTitle(customerId: String, noteContent: String): String? {
+        return try {
+            val apiKey = fetchApiKey(defaultAIVendor, customerId, customerProfileService)
+            if (apiKey == null) {
+                logger.warn("No $defaultAIVendor API key for $customerId; skipping note title generation")
+                return null
+            }
+
+            val result = retrievalService.retrieveAndGenerate(
+                customerId = customerId,
+                client = "internal",
+                query = noteContent.take(4000),
+                llmCredentials = mapOf(vendorToCredentialKey(defaultAIVendor) to apiKey),
+                llmProvider = vendorToProviderString(defaultAIVendor),
+                llmModel = defaultAIModel,
+                // Reasoning models (gpt-5) spend completion tokens on internal
+                // reasoning before any visible text; a tight cap yields an
+                // empty response, so keep the same headroom as chat requests
+                llmMaxTokens = 4096,
+                systemPrompt = "Create a short descriptive title (at most 8 words) for the note the user sends. " +
+                        "Respond with the title only - no quotes, no trailing punctuation, no extra text."
+            )
+
+            val title = result.text?.trim()?.removePrefix("\"")?.removeSuffix("\"")?.trim()?.take(200)
+            if (title.isNullOrBlank()) null else title
+        } catch (e: Exception) {
+            logger.warn("Failed to generate note title for customer $customerId: ${e.message}")
+            null
+        }
+    }
+
     suspend fun generateInstructionPersona(
         instructionText: String,
         customerId: String

@@ -35,13 +35,9 @@ dependencies {
     implementation("io.ktor:ktor-server-cors:3.0.0")
     implementation("io.ktor:ktor-server-call-logging:3.0.0")
 
-    // OpenAPI plugin
-    implementation("io.ktor:ktor-server-openapi:3.0.0") {
-        exclude(group = "ch.qos.logback", module = "logback-classic")
-    }
-    implementation("io.ktor:ktor-server-swagger:3.0.0") {
-        exclude(group = "ch.qos.logback", module = "logback-classic")
-    }
+    // OpenAPI spec generation from routes + Swagger UI
+    implementation("io.github.smiley4:ktor-openapi:5.1.0")
+    implementation("io.github.smiley4:ktor-swagger-ui:5.1.0")
     api("io.ktor:ktor-server-content-negotiation:3.0.0")
     api("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
 

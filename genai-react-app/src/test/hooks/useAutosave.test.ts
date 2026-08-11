@@ -184,6 +184,22 @@ describe('useAutosave', () => {
         expect(save).not.toHaveBeenCalled();
     });
 
+    test('reset clears lastSavedAt so it is not attributed to newly loaded content', async () => {
+        const { result, rerender } = renderHook(
+            ({ content }) => useAutosave({ content, save }),
+            { initialProps: { content: '' } }
+        );
+
+        rerender({ content: 'hello' });
+        await advance(1500);
+        expect(result.current.lastSavedAt).not.toBeNull();
+
+        await act(async () => {
+            result.current.reset('other note');
+        });
+        expect(result.current.lastSavedAt).toBeNull();
+    });
+
     test('flushes with keepalive when the tab is hidden', async () => {
         const { rerender } = renderHook(
             ({ content }) => useAutosave({ content, save }),

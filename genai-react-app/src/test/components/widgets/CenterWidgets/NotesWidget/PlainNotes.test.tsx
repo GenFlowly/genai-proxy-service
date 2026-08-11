@@ -7,7 +7,7 @@ jest.mock('../../../../../context/AuthContext', () => ({
     useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token') })
 }));
 jest.mock('../../../../../services/saveNotesService', () => ({
-    saveNote: jest.fn().mockResolvedValue(undefined)
+    saveNote: jest.fn().mockResolvedValue({ title: null })
 }));
 
 Object.defineProperty(global, 'crypto', {
@@ -121,6 +121,21 @@ describe('PlainNotes', () => {
             'mock-token',
             { encode: true, keepalive: false }
         );
+    });
+
+    test('adopts a server-generated title and sends it on later saves', async () => {
+        (saveNote as jest.Mock)
+            .mockResolvedValueOnce({ title: 'Generated Title' })
+            .mockResolvedValue({ title: null });
+
+        render(<PlainNotes />);
+        const editor = screen.getByTestId('notes-widget-editor');
+
+        await typeAndSettle(editor, 'Some note content');
+        expect((saveNote as jest.Mock).mock.calls[0][0].title).toBeUndefined();
+
+        await typeAndSettle(editor, 'Some note content, extended');
+        expect((saveNote as jest.Mock).mock.calls[1][0].title).toBe('Generated Title');
     });
 
     test('keeps the content in the editor when a save fails', async () => {

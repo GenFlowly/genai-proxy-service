@@ -1,13 +1,15 @@
 package com.genflowly.activity.instruction
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
+import com.genflowly.models.api.InstructionResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
 
@@ -17,7 +19,36 @@ fun Route.registerGetInstructionVersionRoutes(
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
-        get("${Routes.GET_CUSTOMER_INSTRUCTION_VERSION}/{instructionId}/{version}") {
+        get("${Routes.GET_CUSTOMER_INSTRUCTION_VERSION}/{instructionId}/{version}", {
+            tags("Instructions")
+            summary = "Get a specific version of an instruction"
+            request {
+                pathParameter<String>("instructionId") {
+                    description = "Instruction to fetch"
+                }
+                pathParameter<Int>("version") {
+                    description = "Version number to fetch"
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "The requested instruction version"
+                    body<InstructionResponse>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Missing or invalid instructionId/version"
+                    body<String>()
+                }
+                code(HttpStatusCode.NotFound) {
+                    description = "Instruction version not found"
+                    body<String>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 

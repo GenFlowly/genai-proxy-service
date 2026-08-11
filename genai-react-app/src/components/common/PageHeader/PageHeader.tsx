@@ -17,9 +17,9 @@ interface PageHeaderProps {
 export default function PageHeader({ title, actions, children, 'data-testid': testId }: PageHeaderProps): React.ReactElement {
     return (
         <div className={styles.header} data-testid={testId}>
-            <div className={styles.title} title={title}>
+            <h1 className={styles.title} title={title}>
                 {title}
-            </div>
+            </h1>
             <div className={styles.actions}>{actions}</div>
             {children}
         </div>

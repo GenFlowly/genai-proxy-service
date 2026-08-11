@@ -13,6 +13,7 @@
 .title {
     font-size: 0.95rem;
     font-weight: 500;
+    margin: 0;
     color: var(--color-conversation-header-text);
     white-space: nowrap;
     overflow: hidden;
@@ -30,12 +31,16 @@
 
 .saveStatus {
     font-size: 0.8rem;
-    color: var(--color-text-secondary);
+    // On the header band; --color-text-secondary fails contrast here in both themes.
+    color: var(--color-conversation-header-text);
     white-space: nowrap;
 }
 
 .saveStatusError {
-    color: var(--color-error, #c62828);
+    // Palest red that still reaches 4.5:1 on the #687077 header band —
+    // saturated reds (--color-error) max out near 1-2:1 there.
+    color: #fff0ee;
+    font-weight: 600;
 }
 
 .actionButton {
@@ -46,7 +51,7 @@
 
     &:hover {
         background-color: var(--color-background-hover) !important;
-        color: var(--color-primary) !important;
+        color: var(--color-text-primary) !important;
         border-color: var(--color-primary) !important;
     }
 }

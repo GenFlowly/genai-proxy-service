@@ -2,8 +2,9 @@ package com.genflowly.activity.customer
 
 import com.genflowly.Routes
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.post
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.routing.post
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -22,7 +23,25 @@ fun Route.registerStoreApiKeyRoutes(
     aiModelsService: AIModelsService
 ) {
     authenticate("auth0") {
-        post(Routes.STORE_API_KEY) {
+        post(Routes.STORE_API_KEY, {
+            tags("Customer")
+            summary = "Store an AI vendor API key"
+            description = "Validates the API key against the vendor (by listing models) and stores " +
+                    "it encrypted if valid. Invalid keys are not stored; the response reports the " +
+                    "validation status either way."
+            request {
+                body<StoreCustomerVendorApiKeyRequest> {
+                    description = "AI vendor name and the API key to store"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Validation and storage status of the key"
+                    body<StoreCustomerVendorApiKeyResponse>()
+                }
+            }
+        }) {
             val request = call.receive<StoreCustomerVendorApiKeyRequest>()
             
             // Extract customerId from JWT token

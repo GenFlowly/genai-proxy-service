@@ -30,6 +30,10 @@ import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoute
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.service.AIRequestService
+import io.github.smiley4.ktoropenapi.get
+import io.github.smiley4.ktoropenapi.openApi
+import io.github.smiley4.ktorswaggerui.swaggerUI
+import io.ktor.http.ContentType
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -94,6 +98,20 @@ fun Application.configureRouting(
     routing {
         get(Routes.API_ROOT) {
             call.respondText("Hello World!")
+        }
+
+        // Generated OpenAPI specification + interactive Swagger UI
+        route("/api.json") {
+            openApi()
+        }
+        route("/swagger") {
+            swaggerUI("/api.json")
+        }
+
+        // Customer-facing API docs (Scalar), reading the generated spec at /api.json
+        val scalarDocsHtml = object {}.javaClass.getResource("/docs/index.html")!!.readText()
+        get("/docs", { hidden = true }) {
+            call.respondText(scalarDocsHtml, ContentType.Text.Html)
         }
 
         registerGenerateTextRoutes(aiRequestManager, customerProfileService)
