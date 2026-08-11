@@ -17,7 +17,7 @@ private val logger = LoggerFactory.getLogger("GetInstructionSharedUsersActivity"
 fun Route.registerGetInstructionSharedUsersRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         get(Routes.GET_INSTRUCTION_SHARED_USERS, {
             tags("Instructions")
             summary = "List users an instruction is shared with"

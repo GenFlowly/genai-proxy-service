@@ -21,7 +21,7 @@ fun Route.registerUpdateAgentRoutes(
     graphService: GraphService,
     customerProfileService: CustomerProfileService,
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         /**
          * PUT /api/v1/agents/{graphId}
          *

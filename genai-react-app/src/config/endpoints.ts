@@ -28,4 +28,6 @@ export const endpoints = {
     updateUsername: `${BASE}${API_PREFIX}/profile/username`,
     updateDiscoverability: `${BASE}${API_PREFIX}/profile/discoverability`,
     getCustomerAgents: `${BASE}${API_PREFIX}/agents`,
+    developerApiKeys: `${BASE}${API_PREFIX}/developer/api-keys`,
+    developerApiKey: (keyId: string) => `${BASE}${API_PREFIX}/developer/api-keys/${keyId}`,
 };

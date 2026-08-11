@@ -28,7 +28,8 @@ fun Route.registerOnboardCustomerRoutes(
             description = "Creates (or returns) the customer profile for the authenticated Auth0 " +
                     "identity. Must be called once before any other endpoint; other endpoints " +
                     "return 403 for identities without a profile. Returns the full bootstrap state: " +
-                    "preferences, API-key statuses, instructions and configuration statuses."
+                    "preferences, API-key statuses, instructions and configuration statuses. " +
+                    "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
             request {
                 body<OnboardCustomerRequest> {
                     description = "Auth0 identity attributes (sub, client, email, name, picture)"

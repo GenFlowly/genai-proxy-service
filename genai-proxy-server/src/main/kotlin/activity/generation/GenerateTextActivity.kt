@@ -24,7 +24,7 @@ fun Route.registerGenerateTextRoutes(
     aiRequestManager: AIRequestManager,
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT, {
             tags("Generation")
             summary = "Generate AI text responses"

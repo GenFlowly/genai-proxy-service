@@ -25,7 +25,8 @@ fun Route.registerCustomerProfileSettingsRoutes(
         post(Routes.UPDATE_USERNAME, {
             tags("Customer")
             summary = "Update username"
-            description = "Sets the customer's unique username. Fails with 409 if already taken."
+            description = "Sets the customer's unique username. Fails with 409 if already taken. " +
+                    "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
             request {
                 body<UpdateUsernameRequest> {
                     description = "The new username"
@@ -79,7 +80,8 @@ fun Route.registerCustomerProfileSettingsRoutes(
         post(Routes.UPDATE_DISCOVERABILITY, {
             tags("Customer")
             summary = "Update discoverability"
-            description = "Controls whether the customer can be found via user search."
+            description = "Controls whether the customer can be found via user search. " +
+                    "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
             request {
                 body<UpdateDiscoverabilityRequest> {
                     description = "Whether the profile is discoverable"

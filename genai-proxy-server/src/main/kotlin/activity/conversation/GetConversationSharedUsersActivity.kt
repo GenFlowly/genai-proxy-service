@@ -19,7 +19,7 @@ fun Route.registerGetConversationSharedUsersRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         get(Routes.GET_CONVERSATION_SHARED_USERS, {
             tags("Conversations")
             summary = "List users a conversation is shared with"

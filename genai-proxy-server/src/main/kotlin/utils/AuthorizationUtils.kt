@@ -5,18 +5,24 @@ import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.http.*
 import io.ktor.server.response.*
+import com.genflowly.service.ApiKeyPrincipal
 import com.genflowly.service.CustomerProfileService
 
 /**
- * Extract sub from JWT and fetch customerId from CustomerProfileService
- * Queries by sub only (partition key) - does not require client
- * 
+ * Resolve the authenticated customerId from either auth method:
+ * - Developer API key: the ApiKeyPrincipal already carries the customerId
+ * - Auth0 JWT: extract sub and fetch customerId from CustomerProfileService
+ *   (queries by sub only, does not require client)
+ *
  * @param customerProfileService Service to fetch customer profile
  * @return customerId if found, null otherwise
  */
 suspend fun ApplicationCall.getAuthenticatedCustomerId(
     customerProfileService: CustomerProfileService
 ): String? {
+    // API-key authenticated requests resolve directly
+    principal<ApiKeyPrincipal>()?.let { return it.customerId }
+
     // Extract JWT principal
     val principal = principal<JWTPrincipal>() ?: return null
     

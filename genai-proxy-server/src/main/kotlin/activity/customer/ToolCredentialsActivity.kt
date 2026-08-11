@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("ToolCredentialsRoute")
 
 fun Route.registerToolCredentialsRoutes(customerProfileService: CustomerProfileService) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
 
         post(Routes.TOOL_CREDENTIALS, {
             tags("Tool Credentials")
