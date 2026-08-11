@@ -36,6 +36,8 @@ const TestComponent = () => {
     return (
         <div>
             <div data-testid="loading">{auth.isLoading ? 'LOADING' : 'READY'}</div>
+            <div data-testid="onboarding">{auth.isOnboarding ? 'ONBOARDING' : 'IDLE'}</div>
+            <div data-testid="strict-auth">{auth.isAuthenticated ? 'AUTHED' : 'ANON'}</div>
             <div data-testid="inst-count">{auth.customerInstructions.length}</div>
             <div data-testid="inst-loaded">{auth.isInstructionsLoaded ? 'YES' : 'NO'}</div>
             <button data-testid="logout-full" onClick={() => auth.logout({ returnTo: 'http://localhost' })}>Logout</button>
@@ -69,6 +71,125 @@ describe('AuthContext session handling', () => {
         localStorage.clear()
         mockGetAccessTokenSilently.mockResolvedValue('token')
         ;mockOnboardCustomer.mockResolvedValue({ customerId: 'cust-1' })
+    })
+
+    test('hydrates vendor statuses and instructions from cache before onboarding resolves', async () => {
+        localStorage.setItem('customerId', 'cust-1')
+        localStorage.setItem(
+            'cust-1_vendor_api_key_statuses',
+            JSON.stringify([{ aiVendor: 'OPENAI', isAPIKeyValid: true }])
+        )
+        localStorage.setItem(
+            'cust-1_instructions',
+            JSON.stringify([{ id: 'i1', version: 1, name: 'cached' }, { id: 'i2', version: 1, name: 'cached2' }])
+        )
+        let resolveOnboard: (value: any) => void
+        mockOnboardCustomer.mockImplementation(
+            () => new Promise(resolve => { resolveOnboard = resolve })
+        )
+
+        renderWithProvider()
+
+        // Cached copies are visible while /onboard is still in flight
+        await waitFor(() => expect(screen.getByTestId('vendor-count')).toHaveTextContent('1'))
+        expect(screen.getByTestId('inst-count')).toHaveTextContent('2')
+
+        // Server truth replaces the cached copies and updates the cache
+        await act(async () => {
+            resolveOnboard!({
+                customerId: 'cust-1',
+                aiVendorAPIKeyStatusList: [],
+                customerInstructions: [{ id: 'i1', version: 2, name: 'fresh' }],
+            })
+        })
+        expect(screen.getByTestId('vendor-count')).toHaveTextContent('0')
+        expect(screen.getByTestId('inst-count')).toHaveTextContent('1')
+        expect(JSON.parse(localStorage.getItem('cust-1_vendor_api_key_statuses')!)).toEqual([])
+        expect(JSON.parse(localStorage.getItem('cust-1_instructions')!)).toEqual([
+            { id: 'i1', version: 2, name: 'fresh' },
+        ])
+    })
+
+    test('in-session updates keep the caches fresh for the next load', async () => {
+        mockOnboardCustomer.mockResolvedValue({ customerId: 'cust-1' })
+        renderWithProvider()
+        await waitFor(() => expect(screen.getByTestId('strict-auth')).toHaveTextContent('AUTHED'))
+
+        fireEvent.click(screen.getByTestId('upd-vendor-new'))
+        expect(JSON.parse(localStorage.getItem('cust-1_vendor_api_key_statuses')!)).toEqual([
+            { aiVendor: 'OPENAI', isAPIKeyValid: true },
+        ])
+
+        fireEvent.click(screen.getByTestId('upd-inst-new'))
+        expect(JSON.parse(localStorage.getItem('cust-1_instructions')!)).toEqual([
+            { id: 'i1', version: 1, name: 'v1' },
+        ])
+    })
+
+    test('does not block rendering while onboarding is in flight', async () => {
+        let resolveOnboard: (value: any) => void
+        mockOnboardCustomer.mockImplementation(
+            () => new Promise(resolve => { resolveOnboard = resolve })
+        )
+
+        renderWithProvider()
+
+        // Auth0 init is done (mocked isLoading: false), so the app is READY
+        // even though /onboard hasn't answered — this is the A1 guarantee
+        expect(screen.getByTestId('loading')).toHaveTextContent('READY')
+        await waitFor(() => expect(screen.getByTestId('onboarding')).toHaveTextContent('ONBOARDING'))
+        expect(screen.getByTestId('strict-auth')).toHaveTextContent('ANON')
+
+        await act(async () => {
+            resolveOnboard!({ customerId: 'cust-1' })
+        })
+
+        expect(screen.getByTestId('onboarding')).toHaveTextContent('IDLE')
+        expect(screen.getByTestId('strict-auth')).toHaveTextContent('AUTHED')
+    })
+
+    test('re-attempts a failed onboard after the deferred retry delay', async () => {
+        jest.useFakeTimers()
+        try {
+            mockOnboardCustomer
+                .mockRejectedValueOnce(new Error('backend down'))
+                .mockResolvedValueOnce({ customerId: 'cust-1' })
+
+            renderWithProvider()
+
+            await act(async () => {}) // flush the failed first attempt
+            expect(mockOnboardCustomer).toHaveBeenCalledTimes(1)
+            expect(screen.getByTestId('strict-auth')).toHaveTextContent('ANON')
+
+            await act(async () => {
+                jest.advanceTimersByTime(45_000)
+            })
+
+            expect(mockOnboardCustomer).toHaveBeenCalledTimes(2)
+            expect(screen.getByTestId('strict-auth')).toHaveTextContent('AUTHED')
+        } finally {
+            jest.useRealTimers()
+        }
+    })
+
+    test('re-attempts a failed onboard when the tab becomes visible', async () => {
+        mockOnboardCustomer
+            .mockRejectedValueOnce(new Error('backend down'))
+            .mockResolvedValueOnce({ customerId: 'cust-1' })
+
+        renderWithProvider()
+
+        await waitFor(() => expect(mockOnboardCustomer).toHaveBeenCalledTimes(1))
+        await waitFor(() => expect(screen.getByTestId('onboarding')).toHaveTextContent('IDLE'))
+        expect(screen.getByTestId('strict-auth')).toHaveTextContent('ANON')
+
+        await act(async () => {
+            Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+            document.dispatchEvent(new Event('visibilitychange'))
+        })
+
+        await waitFor(() => expect(screen.getByTestId('strict-auth')).toHaveTextContent('AUTHED'))
+        expect(mockOnboardCustomer).toHaveBeenCalledTimes(2)
     })
 
     test('logout clears customer state and calls auth0 logout with redirect', async () => {

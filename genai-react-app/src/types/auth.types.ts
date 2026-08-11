@@ -22,6 +22,9 @@ export interface AuthContextType {
     isAuthenticated: boolean;
     entitlements: Entitlements;
     isLoading: boolean;
+    // True while the background /onboard sync is in flight for an
+    // authenticated user; strict isAuthenticated stays false until it succeeds
+    isOnboarding: boolean;
     isInstructionsLoaded: boolean;
     loginWithRedirect: (options?: any) => Promise<void>;
     logout: (options: { returnTo: string; localOnly?: boolean }) => void;

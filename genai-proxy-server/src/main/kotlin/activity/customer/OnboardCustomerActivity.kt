@@ -11,6 +11,8 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.http.HttpHeaders
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
 import service.AIRequestManager
@@ -63,31 +65,29 @@ fun Route.registerOnboardCustomerRoutes(
                 authHeader = authHeader
             )
 
-            // Fetch additional details
-            val aiConfigPreferences = customerProfileService.getAIConfigPreferences(customerProfile.customerId)
-                ?: AIConfigPreferences()
-            
-            val aiVendorAPIKeyStatusList = customerProfileService.getAIVendorAPIKeyStatusList(customerProfile.customerId)
-            
-            val vectorDBConfigStatusList = customerProfileService.getCustomerVectorDBConfigStatusList(customerProfile.customerId)
-            
-            val supabaseConfigStatus = customerProfileService.getCustomerSupabaseConfigStatus(customerProfile.customerId)
+            // Fetch additional details — independent reads keyed only by
+            // customerId, so run them concurrently
+            val response = coroutineScope {
+                val aiConfigPreferences = async { customerProfileService.getAIConfigPreferences(customerProfile.customerId) }
+                val aiVendorAPIKeyStatusList = async { customerProfileService.getAIVendorAPIKeyStatusList(customerProfile.customerId) }
+                val vectorDBConfigStatusList = async { customerProfileService.getCustomerVectorDBConfigStatusList(customerProfile.customerId) }
+                val supabaseConfigStatus = async { customerProfileService.getCustomerSupabaseConfigStatus(customerProfile.customerId) }
+                val customerInstructions = async { customerProfileService.getLatestCustomerInstructions(customerProfile.customerId) }
 
-            val customerInstructions = customerProfileService.getLatestCustomerInstructions(customerProfile.customerId)
-            
-            // Fire and forget backfill missing categories/icons using AI
-            customerProfileService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions, aiRequestManager)
+                // Fire and forget backfill missing categories/icons using AI
+                customerProfileService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await(), aiRequestManager)
 
-            val response = OnboardCustomerResponse(
-                customerId = customerProfile.customerId,
-                aiConfigPreferences = aiConfigPreferences,
-                aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList,
-                customerName = customerProfile.name ?: "User",
-                customerPicture = customerProfile.picture,
-                customerInstructions = customerInstructions,
-                vectorDBConfigStatusList = vectorDBConfigStatusList,
-                supabaseConfigStatus = supabaseConfigStatus
-            )
+                OnboardCustomerResponse(
+                    customerId = customerProfile.customerId,
+                    aiConfigPreferences = aiConfigPreferences.await() ?: AIConfigPreferences(),
+                    aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList.await(),
+                    customerName = customerProfile.name ?: "User",
+                    customerPicture = customerProfile.picture,
+                    customerInstructions = customerInstructions.await(),
+                    vectorDBConfigStatusList = vectorDBConfigStatusList.await(),
+                    supabaseConfigStatus = supabaseConfigStatus.await()
+                )
+            }
 
             call.respond(response)
         }

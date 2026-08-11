@@ -228,3 +228,17 @@
     display: block;
   }
 }
+// Shown in place of the Login/avatar button while first-time onboarding is
+// completing, so a just-logged-in user never sees a Login flash
+.authPlaceholder {
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.35);
+  animation: authPlaceholderPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes authPlaceholderPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
