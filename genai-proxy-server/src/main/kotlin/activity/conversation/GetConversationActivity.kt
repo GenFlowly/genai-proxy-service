@@ -22,7 +22,7 @@ fun Route.registerGetConversationRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService
 ) {
-    authenticate("auth0", optional = true) {
+    authenticate("auth0", "apiKey", optional = true) {
         get("${Routes.GET_CONVERSATION}/{conversationId}", {
             tags("Conversations")
             summary = "Get conversation history"

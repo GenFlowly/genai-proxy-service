@@ -6,6 +6,7 @@ import SettingsMenuPage from './SettingsMenuPage'
 import { ProfileSettings } from './components/ProfileSettings'
 import { AISettings } from './components/AISettings'
 import { MemorySettings } from './components/MemorySettings'
+import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useWindowSize } from '../../hooks/useWindowSize'
 import { useLayout } from '../../context/LayoutContext'
@@ -18,6 +19,7 @@ const SECTION_LABELS: Record<string, string> = {
     profile: 'Profile',
     ai: 'AI Settings',
     memory: 'Memory Settings',
+    developer: 'Developer',
 }
 
 export default function SettingsPage(): React.ReactElement {
@@ -53,6 +55,7 @@ export default function SettingsPage(): React.ReactElement {
                             <Route path="profile" element={<ProfileSettings />} />
                             <Route path="ai" element={<AISettings />} />
                             <Route path="memory" element={<MemorySettings />} />
+                            <Route path="developer" element={<DeveloperSettings />} />
                         </Routes>
                     </div>
                 </div>

@@ -23,7 +23,8 @@ fun Route.registerSearchRoutes(
             tags("Customer")
             summary = "Search users by username"
             description = "Prefix-searches discoverable users by username. The caller is excluded " +
-                    "from the results."
+                    "from the results. Web-app only: requires an Auth0 JWT; not accessible with a " +
+                    "developer API key."
             request {
                 queryParameter<String>("username") {
                     description = "Username prefix to search for"

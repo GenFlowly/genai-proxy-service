@@ -20,7 +20,7 @@ private val logger = LoggerFactory.getLogger("StoreCustomerVectorDBConfigActivit
 fun Route.registerStoreVectorDBConfigRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.STORE_VECTOR_DB_CONFIG, {
             tags("Customer")
             summary = "Store a vector DB configuration"

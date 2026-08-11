@@ -14,6 +14,10 @@ object DynamoDBConstants {
     const val CUSTOMER_ID_KEY = "customerId"
     const val AI_VENDOR_KEY = "aiVendor"
 
+    const val CUSTOMER_DEVELOPER_API_KEY_TABLE = "CustomerDeveloperApiKeys"
+    const val DEVELOPER_API_KEY_HASH_KEY = "keyHash"
+    const val DEVELOPER_API_KEY_CUSTOMER_GSI = "customerIdIndex"
+
     const val CONVERSATION_TABLE = "Conversation"
     const val CONVERSATION_ID_KEY = "conversationId"
     const val CONVERSATION_CUSTOMER_GSI_KEY = "customerIdIndexV2"

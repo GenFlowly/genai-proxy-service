@@ -17,7 +17,7 @@ private val logger = LoggerFactory.getLogger("DeleteInstructionRoute")
 fun Route.registerDeleteInstructionRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         delete(Routes.DELETE_INSTRUCTION, {
             tags("Instructions")
             summary = "Delete an instruction"

@@ -30,6 +30,7 @@ fun Route.registerNotesRoutes(
         get("/api/v1/notes", {
             tags("Notes")
             summary = "List the customer's notes"
+            description = "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
             response {
                 code(HttpStatusCode.OK) {
                     description = "The customer's notes"
@@ -55,7 +56,8 @@ fun Route.registerNotesRoutes(
         post("/api/v1/notes", {
             tags("Notes")
             summary = "Save a note"
-            description = "Saves a note asynchronously and returns its (possibly AI-generated) title."
+            description = "Saves a note asynchronously and returns its (possibly AI-generated) title. " +
+                    "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
             request {
                 body<SaveNoteRequest> {
                     description = "Note content to save"

@@ -6,7 +6,7 @@ import styles from './SettingsSidebar.module.scss'
 
 import { useNavigate, useLocation } from 'react-router-dom'
 
-export type SettingsTab = 'profile' | 'ai' | 'memory'
+export type SettingsTab = 'profile' | 'ai' | 'memory' | 'developer'
 
 interface SettingsSidebarProps {
     // Renders the menu as a full page (mobile) instead of a side column
@@ -47,6 +47,13 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
                 >
                     <Icon src={ICONS.TOKENS} size={20} className={styles.icon} />
                     <span>Memory Settings</span>
+                </button>
+                <button
+                    className={`${styles.tabButton} ${activeTab === 'developer' ? styles.active : ''}`}
+                    onClick={() => navigate('/settings/developer')}
+                >
+                    <Icon src={ICONS.EDIT} size={20} className={styles.icon} />
+                    <span>Developer</span>
                 </button>
             </nav>
 

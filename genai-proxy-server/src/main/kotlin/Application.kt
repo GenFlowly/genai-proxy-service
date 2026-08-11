@@ -26,8 +26,11 @@ import org.slf4j.LoggerFactory
 import service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
+import com.genflowly.service.ApiKeyPrincipal
+import com.genflowly.service.DeveloperApiKeyService
 import com.genflowly.service.GraphService
 import com.genflowly.service.NotesService
+import io.ktor.server.auth.bearer
 
 
 fun main(args: Array<String>) {
@@ -62,22 +65,24 @@ fun Application.module() {
                 REST API for the GenAI proxy service: AI text generation across vendors,
                 conversation and instruction management, customer onboarding and configuration.
 
-                All endpoints (unless marked otherwise) require an Auth0-issued JWT access token
-                passed as `Authorization: Bearer <token>`. The token's audience must match the
-                configured API audience. New identities must call `POST /api/v1/onboard` once
-                before using other endpoints, otherwise requests fail with 403.
+                Authenticate with a developer API key, created in the web app under
+                Settings → Developer. Pass it on every request as
+                `Authorization: Bearer gfy_...`. Keys are shown once at creation and can be
+                revoked at any time from the same page. A few web-app-only endpoints
+                (onboarding, profile, user search, notes) additionally require an Auth0 session
+                and are marked as such in their descriptions.
             """.trimIndent()
         }
         security {
-            securityScheme("auth0") {
+            securityScheme("apiKey") {
                 type = AuthType.HTTP
                 scheme = AuthScheme.BEARER
-                bearerFormat = "JWT"
-                description = "Auth0-issued JWT access token with the configured API audience"
+                description = "Developer API key (format `gfy_...`), created in the web app " +
+                        "under Settings → Developer. Send as `Authorization: Bearer gfy_...`."
             }
-            defaultSecuritySchemeNames("auth0")
+            defaultSecuritySchemeNames("apiKey")
             defaultUnauthorizedResponse {
-                description = "Missing or invalid Auth0 JWT bearer token"
+                description = "Missing, invalid or revoked API key"
             }
         }
         tags {
@@ -91,6 +96,14 @@ fun Application.module() {
         }
     }
 
+    // Koin must start before Authentication: the apiKey provider needs DeveloperApiKeyService
+    startKoin {
+        modules(
+            appModule(),
+            commonModule()
+        )
+    }
+
     val auth0Domain = System.getenv("AUTH0_SPA_DOMAIN")
         ?: error("AUTH0_SPA_DOMAIN not set")
 
@@ -101,11 +114,21 @@ fun Application.module() {
         .rateLimited(10, 1, TimeUnit.MINUTES)
         .build()
 
+    val developerApiKeyService = get<DeveloperApiKeyService>()
+
     install(Authentication) {
         jwt("auth0") {
             logger.info("jwkProvider {}", jwkProvider)
             verifier(jwkProvider, issuer)
             validate { credential -> validateCredentials(credential) }
+        }
+        // Developer API keys (gfy_...) sent as a bearer token; routes opt in via
+        // authenticate("auth0", "apiKey") so both JWTs and API keys are accepted
+        bearer("apiKey") {
+            authenticate { credential ->
+                developerApiKeyService.authenticate(credential.token)
+                    ?.let { customerId -> ApiKeyPrincipal(customerId) }
+            }
         }
     }
 
@@ -141,15 +164,6 @@ fun Application.module() {
     }
 
 
-    startKoin {
-        modules(
-            appModule(),
-            commonModule()
-        )
-    }
-
-
-
     val aiRequestService = get<AIRequestService>()
     val aiRequestManager = get<AIRequestManager>()
     val customerProfileService = get<CustomerProfileService>()
@@ -159,5 +173,5 @@ fun Application.module() {
     val dynamoDBProvider = get<com.genflowly.providers.DynamoDBProvider>()
     val notesService = get<NotesService>()
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, notesService)
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, notesService, developerApiKeyService)
 }

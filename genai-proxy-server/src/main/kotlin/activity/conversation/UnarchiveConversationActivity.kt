@@ -19,7 +19,7 @@ fun Route.registerUnarchiveConversationRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.UNARCHIVE_CONVERSATION, {
             tags("Conversations")
             summary = "Restore an archived conversation"

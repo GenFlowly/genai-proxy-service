@@ -18,7 +18,7 @@ private val logger = LoggerFactory.getLogger("GetInstructionVersionRoute")
 fun Route.registerGetInstructionVersionRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         get("${Routes.GET_CUSTOMER_INSTRUCTION_VERSION}/{instructionId}/{version}", {
             tags("Instructions")
             summary = "Get a specific version of an instruction"

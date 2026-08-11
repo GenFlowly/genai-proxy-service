@@ -22,7 +22,7 @@ fun Route.registerCreateConversationShareRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.CREATE_CONVERSATION_SHARE, {
             tags("Conversations")
             summary = "Share a conversation with another user"
