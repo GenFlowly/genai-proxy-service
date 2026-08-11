@@ -18,7 +18,7 @@ const noteLabel = (note: SavedNote): string => {
 
 export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
     const { getAccessTokenSilently } = useAuth()
-    const { openNote, activeNote } = useNotes()
+    const { openNote, activeNote, updatedNote } = useNotes()
     const [notes, setNotes] = useState<SavedNote[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [hasError, setHasError] = useState(false)
@@ -42,6 +42,19 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
         fetchNotes()
         return () => { cancelled = true }
     }, [getAccessTokenSilently])
+
+    // Keep the list in sync with autosaves published by the editor: update
+    // saved notes in place, and surface brand-new notes at the top
+    useEffect(() => {
+        if (!updatedNote) return
+        setNotes(prev => {
+            const index = prev.findIndex(n => n.noteKey === updatedNote.noteKey)
+            if (index === -1) return [updatedNote, ...prev]
+            const next = [...prev]
+            next[index] = updatedNote
+            return next
+        })
+    }, [updatedNote])
 
     return (
         <div className={styles.savedNotesWidget} data-testid={testId || 'saved-notes-widget'}>

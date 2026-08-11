@@ -640,25 +640,88 @@ class DynamoDBProvider(
         createdAt: String
     ) = withContext(Dispatchers.IO) {
         try {
-            val item = withTimestamps(mapOf(
-                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                com.genflowly.DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build(),
-                "noteValue" to AttributeValue.builder().s(noteValue).build(),
-                "title" to AttributeValue.builder().s(title).build(),
-                "noteCreatedAt" to AttributeValue.builder().s(createdAt).build(),
-                "is_synced_with_milvus" to AttributeValue.builder().bool(false).build(),
-                "milvus_ids" to AttributeValue.builder().l(emptyList()).build()
-            ))
+            val now = Instant.now().toString()
+            val names = mutableMapOf(
+                "#noteValue" to "noteValue",
+                "#title" to "title",
+                "#noteCreatedAt" to "noteCreatedAt",
+                "#createdAt" to "createdAt",
+                "#updatedAt" to "updatedAt",
+                "#synced" to "is_synced_with_milvus",
+                "#milvusIds" to "milvus_ids"
+            )
+            val values = mutableMapOf(
+                ":noteValue" to AttributeValue.builder().s(noteValue).build(),
+                ":noteCreatedAt" to AttributeValue.builder().s(createdAt).build(),
+                ":now" to AttributeValue.builder().s(now).build(),
+                ":synced" to AttributeValue.builder().bool(false).build(),
+                ":milvusIds" to AttributeValue.builder().l(emptyList()).build()
+            )
+            val setParts = mutableListOf(
+                "#noteValue = :noteValue",
+                "#noteCreatedAt = :noteCreatedAt",
+                "#createdAt = if_not_exists(#createdAt, :now)",
+                "#updatedAt = :now",
+                "#synced = :synced",
+                "#milvusIds = :milvusIds"
+            )
+            if (title.isNotBlank() && title != "Untitled") {
+                setParts.add("#title = :title")
+                values[":title"] = AttributeValue.builder().s(title).build()
+            } else {
+                // Autosaves carry no real title; keep an existing (possibly
+                // generated) one instead of resetting it to the default
+                setParts.add("#title = if_not_exists(#title, :defaultTitle)")
+                values[":defaultTitle"] = AttributeValue.builder().s("Untitled").build()
+            }
 
-            val putReq = PutItemRequest.builder()
+            val updateReq = UpdateItemRequest.builder()
                 .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_NOTES_TABLE)
-                .item(item)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    com.genflowly.DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build()
+                ))
+                .updateExpression("SET ${setParts.joinToString(", ")}")
+                .expressionAttributeNames(names)
+                .expressionAttributeValues(values)
                 .build()
 
-            dynamoDbClient.putItem(putReq)
+            dynamoDbClient.updateItem(updateReq)
             logger.info("Saved Note $noteKey for $customerId to DynamoDB")
         } catch (e: Exception) {
             logger.error("Failed to save note to DynamoDB", e)
+            throw e
+        }
+    }
+
+    suspend fun updateNoteTitle(
+        customerId: String,
+        noteKey: String,
+        title: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val updateReq = UpdateItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_NOTES_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    com.genflowly.DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build()
+                ))
+                .updateExpression("SET #title = :title, #updatedAt = :now")
+                .conditionExpression("attribute_exists(${com.genflowly.DynamoDBConstants.NOTE_KEY})")
+                .expressionAttributeNames(mapOf("#title" to "title", "#updatedAt" to "updatedAt"))
+                .expressionAttributeValues(mapOf(
+                    ":title" to AttributeValue.builder().s(title).build(),
+                    ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
+                ))
+                .build()
+
+            dynamoDbClient.updateItem(updateReq)
+            logger.info("Updated title for note $noteKey of $customerId")
+        } catch (e: ConditionalCheckFailedException) {
+            // Note was deleted between the save and the title generation
+            logger.warn("Skipped title update for missing note $noteKey of $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to update note title in DynamoDB", e)
             throw e
         }
     }

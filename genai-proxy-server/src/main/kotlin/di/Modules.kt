@@ -77,7 +77,7 @@ fun appModule(): Module = module {
     single { RetrievalService(get(), get(), get()) }
     single { PromptGenerationService() }
     single { GraphService(get()) }
-    single { com.genflowly.service.NotesService(get(), get()) }
+    single { com.genflowly.service.NotesService(get(), get(), get()) }
 
 }
 

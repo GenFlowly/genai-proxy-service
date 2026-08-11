@@ -3,6 +3,7 @@ package com.genflowly.activity.notes
 import com.genflowly.Routes
 import com.genflowly.service.NotesService
 import com.genflowly.service.SaveNoteRequest
+import com.genflowly.service.SaveNoteResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.http.HttpStatusCode
@@ -47,9 +48,9 @@ fun Route.registerNotesRoutes(
                 }
 
                 val request = call.receive<SaveNoteRequest>()
-                notesService.saveNoteAsync(customerId, request, token)
+                val title = notesService.saveNoteAsync(customerId, request, token)
 
-                call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
+                call.respond(HttpStatusCode.OK, SaveNoteResponse(status = "success", title = title))
             } catch (e: Exception) {
                 logger.error("Error saving note", e)
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to save note"))
