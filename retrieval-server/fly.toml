@@ -1,5 +1,6 @@
 app = "retrieval-server"
-primary_region = "sjc"
+# Co-located with the proxy server and DynamoDB (us-east-1)
+primary_region = "iad"
 
 [build]
   dockerfile = "Dockerfile"
