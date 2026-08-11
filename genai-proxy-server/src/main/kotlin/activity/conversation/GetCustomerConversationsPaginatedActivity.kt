@@ -19,7 +19,7 @@ fun Route.registerGetCustomerConversationsPaginatedRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         get(Routes.GET_CUSTOMER_CONVERSATIONS_PAGINATED, {
             tags("Conversations")
             summary = "List conversations (paginated)"

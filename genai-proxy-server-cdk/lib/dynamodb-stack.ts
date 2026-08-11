@@ -350,10 +350,29 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'customerId',
                 type: dynamodb.AttributeType.STRING
             },
-            sortKey: { 
-                name: 'noteKey', 
-                type: dynamodb.AttributeType.STRING 
+            sortKey: {
+                name: 'noteKey',
+                type: dynamodb.AttributeType.STRING
             },
+        };
+
+        const customerDeveloperApiKeyTableProps: CreateTableProps = {
+            tableName: 'CustomerDeveloperApiKeys',
+            // SHA-256 hash of the key is the lookup key; the key itself is stored KMS-encrypted
+            partitionKey: {
+                name: 'keyHash',
+                type: dynamodb.AttributeType.STRING
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'customerIdIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
         };
 
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
@@ -374,6 +393,7 @@ export class DynamoDBStack extends cdk.Stack {
         const instructionUsageSeenTable = createDefaultDynamoDbTable(this, instructionUsageSeenTableProps);
         const usernameLookupTable = createDefaultDynamoDbTable(this, usernameLookupTableProps);
         const customerNotesTable = createDefaultDynamoDbTable(this, customerNotesTableProps);
+        const customerDeveloperApiKeyTable = createDefaultDynamoDbTable(this, customerDeveloperApiKeyTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, customerApiUsageTable,
@@ -382,7 +402,7 @@ export class DynamoDBStack extends cdk.Stack {
             customerGraphNodesTable, customerGraphsTable,
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
-            usernameLookupTable, customerNotesTable
+            usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable
         );
     }
 }

@@ -25,7 +25,7 @@ fun Route.registerCreateInstructionRoutes(
     aiRequestManager: AIRequestManager,
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.CREATE_INSTRUCTION, {
             tags("Instructions")
             summary = "Create or update an instruction"

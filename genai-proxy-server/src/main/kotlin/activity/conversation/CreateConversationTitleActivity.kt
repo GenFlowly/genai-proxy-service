@@ -22,7 +22,7 @@ fun Route.registerCreateConversationTitleRoutes(
     aiRequestManager: AIRequestManager,
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.CREATE_CONVERSATION_TITLE, {
             tags("Conversations")
             summary = "Generate a conversation title"

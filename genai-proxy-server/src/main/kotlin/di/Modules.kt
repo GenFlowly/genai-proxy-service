@@ -78,6 +78,7 @@ fun appModule(): Module = module {
     single { PromptGenerationService() }
     single { GraphService(get()) }
     single { com.genflowly.service.NotesService(get(), get(), get()) }
+    single { com.genflowly.service.DeveloperApiKeyService(get(), get()) }
 
 }
 

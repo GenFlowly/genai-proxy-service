@@ -18,7 +18,7 @@ fun Route.registerGetAIUsageActivityRoutes(
     conversationService: ConversationService,
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         get(Routes.GET_AI_USAGE, {
             tags("Generation")
             summary = "Get token usage for a message"

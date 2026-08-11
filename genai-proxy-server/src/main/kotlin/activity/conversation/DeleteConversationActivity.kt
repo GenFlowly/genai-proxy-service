@@ -19,7 +19,7 @@ fun Route.registerDeleteConversationRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         delete(Routes.DELETE_CONVERSATION, {
             tags("Conversations")
             summary = "Archive (soft-delete) a conversation"

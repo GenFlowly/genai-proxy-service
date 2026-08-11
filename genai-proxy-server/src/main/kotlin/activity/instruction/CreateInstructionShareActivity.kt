@@ -20,7 +20,7 @@ private val logger = LoggerFactory.getLogger("CreateInstructionShareRoute")
 fun Route.registerCreateInstructionShareRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.CREATE_INSTRUCTION_SHARE, {
             tags("Instructions")
             summary = "Share an instruction with another user"
