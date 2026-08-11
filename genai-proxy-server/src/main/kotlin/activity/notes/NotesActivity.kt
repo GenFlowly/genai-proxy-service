@@ -1,11 +1,15 @@
 package com.genflowly.activity.notes
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
+import com.genflowly.service.GetNotesResponse
 import com.genflowly.service.NotesService
 import com.genflowly.service.SaveNoteRequest
 import com.genflowly.service.SaveNoteResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.get
+import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.auth.authenticate
@@ -14,8 +18,6 @@ import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
-import io.ktor.server.routing.post
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("NotesActivity")
@@ -25,7 +27,20 @@ fun Route.registerNotesRoutes(
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
-        get("/api/v1/notes") {
+        get("/api/v1/notes", {
+            tags("Notes")
+            summary = "List the customer's notes"
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "The customer's notes"
+                    body<GetNotesResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 
@@ -37,7 +52,27 @@ fun Route.registerNotesRoutes(
             }
         }
 
-        post("/api/v1/notes") {
+        post("/api/v1/notes", {
+            tags("Notes")
+            summary = "Save a note"
+            description = "Saves a note asynchronously and returns its (possibly AI-generated) title."
+            request {
+                body<SaveNoteRequest> {
+                    description = "Note content to save"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Note accepted for saving"
+                    body<SaveNoteResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 

@@ -2,8 +2,9 @@ package com.genflowly.activity.customer
 
 import com.genflowly.Routes
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.post
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.routing.post
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -20,7 +21,23 @@ fun Route.registerStoreVectorDBConfigRoutes(
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
-        post(Routes.STORE_VECTOR_DB_CONFIG) {
+        post(Routes.STORE_VECTOR_DB_CONFIG, {
+            tags("Customer")
+            summary = "Store a vector DB configuration"
+            description = "Stores the customer's vector database endpoint and token for the given vendor."
+            request {
+                body<StoreCustomerVectorDBConfigRequest> {
+                    description = "Vector DB vendor, endpoint and token"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Storage status of the configuration"
+                    body<StoreCustomerVectorDBConfigResponse>()
+                }
+            }
+        }) {
             val request = call.receive<StoreCustomerVectorDBConfigRequest>()
             
             // Extract customerId from JWT token

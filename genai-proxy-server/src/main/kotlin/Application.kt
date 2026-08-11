@@ -5,6 +5,9 @@ import com.auth0.jwk.JwkProviderBuilder
 import com.genflowly.aicallerlib.di.commonModule
 import com.genflowly.di.appModule
 import com.genflowly.service.AIRequestService
+import io.github.smiley4.ktoropenapi.OpenApi
+import io.github.smiley4.ktoropenapi.config.AuthScheme
+import io.github.smiley4.ktoropenapi.config.AuthType
 import com.genflowly.service.ConversationService
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -49,6 +52,43 @@ fun validateCredentials(credential: JWTCredential): JWTPrincipal? {
 fun Application.module() {
     install(ContentNegotiation) {
         json()
+    }
+
+    install(OpenApi) {
+        info {
+            title = "GenAI Proxy Service API"
+            version = "1.0.0"
+            description = """
+                REST API for the GenAI proxy service: AI text generation across vendors,
+                conversation and instruction management, customer onboarding and configuration.
+
+                All endpoints (unless marked otherwise) require an Auth0-issued JWT access token
+                passed as `Authorization: Bearer <token>`. The token's audience must match the
+                configured API audience. New identities must call `POST /api/v1/onboard` once
+                before using other endpoints, otherwise requests fail with 403.
+            """.trimIndent()
+        }
+        security {
+            securityScheme("auth0") {
+                type = AuthType.HTTP
+                scheme = AuthScheme.BEARER
+                bearerFormat = "JWT"
+                description = "Auth0-issued JWT access token with the configured API audience"
+            }
+            defaultSecuritySchemeNames("auth0")
+            defaultUnauthorizedResponse {
+                description = "Missing or invalid Auth0 JWT bearer token"
+            }
+        }
+        tags {
+            tag("Generation") { description = "AI text generation, model listing and usage" }
+            tag("Conversations") { description = "Conversation history, sharing and lifecycle" }
+            tag("Instructions") { description = "Instruction (persona) management and sharing" }
+            tag("Customer") { description = "Onboarding, profile and configuration" }
+            tag("Tool Credentials") { description = "Credentials for external tools" }
+            tag("Agents") { description = "Agent graph management" }
+            tag("Notes") { description = "Customer notes" }
+        }
     }
 
     val auth0Domain = System.getenv("AUTH0_SPA_DOMAIN")

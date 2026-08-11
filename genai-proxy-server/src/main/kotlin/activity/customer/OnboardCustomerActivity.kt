@@ -4,11 +4,12 @@ import com.genflowly.Routes
 import com.genflowly.models.api.OnboardCustomerResponse
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.service.CustomerProfileService
+import io.github.smiley4.ktoropenapi.post
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.post
 import io.ktor.http.HttpHeaders
 import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
@@ -21,7 +22,26 @@ fun Route.registerOnboardCustomerRoutes(
     aiRequestManager: AIRequestManager
 ) {
     authenticate("auth0") {
-        post(Routes.ONBOARD_CUSTOMER) {
+        post(Routes.ONBOARD_CUSTOMER, {
+            tags("Customer")
+            summary = "Onboard the authenticated user"
+            description = "Creates (or returns) the customer profile for the authenticated Auth0 " +
+                    "identity. Must be called once before any other endpoint; other endpoints " +
+                    "return 403 for identities without a profile. Returns the full bootstrap state: " +
+                    "preferences, API-key statuses, instructions and configuration statuses."
+            request {
+                body<OnboardCustomerRequest> {
+                    description = "Auth0 identity attributes (sub, client, email, name, picture)"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Customer profile and bootstrap state"
+                    body<OnboardCustomerResponse>()
+                }
+            }
+        }) {
             val request = call.receive<OnboardCustomerRequest>()
             logger.info(
                 "Onboarding user: sub={}, email={}, name={}, picture={}",

@@ -30,6 +30,8 @@ import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoute
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.service.AIRequestService
+import io.github.smiley4.ktoropenapi.openApi
+import io.github.smiley4.ktorswaggerui.swaggerUI
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -94,6 +96,14 @@ fun Application.configureRouting(
     routing {
         get(Routes.API_ROOT) {
             call.respondText("Hello World!")
+        }
+
+        // Generated OpenAPI specification + interactive Swagger UI
+        route("/api.json") {
+            openApi()
+        }
+        route("/swagger") {
+            swaggerUI("/api.json")
         }
 
         registerGenerateTextRoutes(aiRequestManager, customerProfileService)

@@ -1,13 +1,14 @@
 package com.genflowly.activity.generation
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.post
 import kotlinx.serialization.SerializationException
 import models.BatchGenerateTextResponse
 import models.GenerateTextRequest
@@ -24,7 +25,37 @@ fun Route.registerGenerateTextRoutes(
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
-        post(Routes.GENERATE_TEXT) {
+        post(Routes.GENERATE_TEXT, {
+            tags("Generation")
+            summary = "Generate AI text responses"
+            description = "Sends a prompt to one or more configured AI vendors and returns the " +
+                    "generated responses. Creates a new conversation when conversationId is null, " +
+                    "otherwise appends to the existing conversation."
+            request {
+                body<GenerateTextRequest> {
+                    description = "Prompt, AI vendor configuration and conversation context"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "One generated result per requested AI configuration"
+                    body<BatchGenerateTextResponse>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Malformed request body or empty aiConfig list"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.Forbidden) {
+                    description = "Authenticated user has no customer profile (not onboarded)"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val request = call.receive<GenerateTextRequest>()
 
