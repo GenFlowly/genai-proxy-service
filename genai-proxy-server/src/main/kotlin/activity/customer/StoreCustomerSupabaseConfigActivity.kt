@@ -20,7 +20,7 @@ private val logger = LoggerFactory.getLogger("StoreCustomerSupabaseConfigActivit
 fun Route.registerStoreSupabaseConfigRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.STORE_SUPABASE_CONFIG, {
             tags("Customer")
             summary = "Store a Supabase configuration"

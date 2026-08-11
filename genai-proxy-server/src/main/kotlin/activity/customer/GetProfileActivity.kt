@@ -22,6 +22,7 @@ fun Route.registerGetProfileRoutes(
         get(Routes.GET_PROFILE, {
             tags("Customer")
             summary = "Get the authenticated user's profile"
+            description = "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
             response {
                 code(HttpStatusCode.OK) {
                     description = "The customer profile"

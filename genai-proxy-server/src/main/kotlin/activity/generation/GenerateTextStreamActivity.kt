@@ -24,7 +24,7 @@ fun Route.registerGenerateTextStreamRoutes(
     aiRequestManager: AIRequestManager,
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT_STREAM, {
             tags("Generation")
             summary = "Generate an AI text response as a stream"

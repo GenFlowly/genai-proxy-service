@@ -19,7 +19,7 @@ private val logger = LoggerFactory.getLogger("SaveAIConfigPreferences")
 fun Route.registerSaveAIConfigPreferencesRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.SAVE_AI_CONFIG_PREFERENCES, {
             tags("Generation")
             summary = "Save AI configuration preferences"

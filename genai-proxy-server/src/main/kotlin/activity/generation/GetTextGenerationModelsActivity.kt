@@ -28,7 +28,7 @@ fun Route.registerGetTextGenerationModelsRoutes(
     customerProfileService: CustomerProfileService
 ) {
 
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.GET_TEXT_GENERATION_MODELS, {
             tags("Generation")
             summary = "List available text-generation models"

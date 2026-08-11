@@ -28,8 +28,10 @@ import com.genflowly.activity.instruction.registerDeleteInstructionRoutes
 import com.genflowly.activity.instruction.registerGetCustomerInstructionListRoutes
 import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoutes
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
+import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.service.AIRequestService
+import com.genflowly.service.DeveloperApiKeyService
 import io.github.smiley4.ktoropenapi.get
 import io.github.smiley4.ktoropenapi.openApi
 import io.github.smiley4.ktorswaggerui.swaggerUI
@@ -80,6 +82,9 @@ object Routes {
 
     const val GET_CUSTOMER_AGENTS = "$API_V1/agents"
     const val UPDATE_AGENT = "$API_V1/agents/{graphId}"
+
+    const val DEVELOPER_API_KEYS = "$API_V1/developer/api-keys"
+    const val DEVELOPER_API_KEY = "$API_V1/developer/api-keys/{keyId}"
 }
 
 
@@ -94,6 +99,7 @@ fun Application.configureRouting(
     graphService: GraphService,
     dynamoDBProvider: DynamoDBProvider,
     notesService: com.genflowly.service.NotesService,
+    developerApiKeyService: DeveloperApiKeyService,
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -144,5 +150,6 @@ fun Application.configureRouting(
         registerSearchRoutes(dynamoDBProvider)
         registerGetProfileRoutes(dynamoDBProvider)
         registerNotesRoutes(notesService, customerProfileService)
+        registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
     }
 }

@@ -22,7 +22,7 @@ fun Route.registerStoreApiKeyRoutes(
     customerProfileService: CustomerProfileService,
     aiModelsService: AIModelsService
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         post(Routes.STORE_API_KEY, {
             tags("Customer")
             summary = "Store an AI vendor API key"

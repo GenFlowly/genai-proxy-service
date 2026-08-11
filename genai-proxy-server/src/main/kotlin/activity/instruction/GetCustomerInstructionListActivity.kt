@@ -17,7 +17,7 @@ private val logger = LoggerFactory.getLogger("GetCustomerInstructionListRoute")
 fun Route.registerGetCustomerInstructionListRoutes(
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0", optional = true) {
+    authenticate("auth0", "apiKey", optional = true) {
         get(Routes.GET_CUSTOMER_INSTRUCTIONS, {
             tags("Instructions")
             summary = "List instructions"

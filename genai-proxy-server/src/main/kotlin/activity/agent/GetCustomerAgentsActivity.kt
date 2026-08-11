@@ -19,7 +19,7 @@ fun Route.registerGetCustomerAgentsRoutes(
     graphService: GraphService,
     customerProfileService: CustomerProfileService,
 ) {
-    authenticate("auth0") {
+    authenticate("auth0", "apiKey") {
         get(Routes.GET_CUSTOMER_AGENTS, {
             tags("Agents")
             summary = "List the customer's agents"

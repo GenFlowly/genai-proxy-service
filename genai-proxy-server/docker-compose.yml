@@ -22,7 +22,9 @@ services:
       AWS_REGION: us-east-1
       AWS_SECRET_ACCESS_KEY: "1SHfsMDOFADkPVvGgJidpBhOcSUbXxnNdbdQEp83"
       AWS_ACCESS_KEY_ID: "AKIAYKFQRDRO4B3UB67C"
-      KMS_KEY_ID: "arn:aws:kms:us-east-1:571600870493:key/ab8af0c5-169f-442b-b2bf-8b417bd33f7e"
+      # Alias of the KmsStack key (stable across key replacements; encrypt accepts aliases,
+      # decrypt never needs the id). Raw ARN of the current key: a83df245-9722-4eff-b016-1b2816be9ff2
+      KMS_KEY_ID: "alias/gen-ai-proxy-service-development-vendor-api-key-encryption-key"
       AUTH0_SPA_DOMAIN: "auth.genflowly.com"
       AUTH0_SPA_CLIENT_ID: "VSKaAyEXLKM0LuZzJVhvH6RTT11LiNgE"
       AUTH0_API_AUDIENCE: "https://api-development.genflowly.com"
@@ -69,7 +71,7 @@ services:
       AWS_REGION: "us-east-1"
       AWS_SECRET_ACCESS_KEY: "1SHfsMDOFADkPVvGgJidpBhOcSUbXxnNdbdQEp83"
       AWS_ACCESS_KEY_ID: "AKIAYKFQRDRO4B3UB67C"
-      KMS_KEY_ID: "arn:aws:kms:us-east-1:571600870493:key/ab8af0c5-169f-442b-b2bf-8b417bd33f7e"
+      KMS_KEY_ID: "alias/gen-ai-proxy-service-development-vendor-api-key-encryption-key"
       # If using SSO or dynamic credentials, mounting ~/.aws is preferred
       # Or you can inject temporary credentials via .env in the env_file below
     volumes:
