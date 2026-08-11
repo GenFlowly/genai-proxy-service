@@ -1,14 +1,16 @@
 package com.genflowly.activity.conversation
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
+import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("GetCustomerConversationsPaginatedRoute")
@@ -18,7 +20,31 @@ fun Route.registerGetCustomerConversationsPaginatedRoutes(
     conversationService: ConversationService
 ) {
     authenticate("auth0") {
-        get(Routes.GET_CUSTOMER_CONVERSATIONS_PAGINATED) {
+        get(Routes.GET_CUSTOMER_CONVERSATIONS_PAGINATED, {
+            tags("Conversations")
+            summary = "List conversations (paginated)"
+            description = "Returns the customer's conversations, newest first, with cursor-based pagination."
+            request {
+                queryParameter<Int>("pageSize") {
+                    description = "Page size, 1-50 (default 10)"
+                    required = false
+                }
+                queryParameter<String>("lastEvaluatedKey") {
+                    description = "Pagination cursor returned by the previous page"
+                    required = false
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "One page of conversations plus the cursor for the next page"
+                    body<GetCustomerConversationsResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 

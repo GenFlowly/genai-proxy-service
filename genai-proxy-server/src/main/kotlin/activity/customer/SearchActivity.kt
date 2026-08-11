@@ -1,12 +1,14 @@
 package com.genflowly.activity.customer
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
+import com.genflowly.models.api.SearchCustomerResponse
 import com.genflowly.providers.DynamoDBProvider
+import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.get
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import mu.KotlinLogging
@@ -17,7 +19,31 @@ fun Route.registerSearchRoutes(
     dynamoDBProvider: DynamoDBProvider
 ) {
     authenticate("auth0") {
-        get(Routes.SEARCH_USERS) {
+        get(Routes.SEARCH_USERS, {
+            tags("Customer")
+            summary = "Search users by username"
+            description = "Prefix-searches discoverable users by username. The caller is excluded " +
+                    "from the results."
+            request {
+                queryParameter<String>("username") {
+                    description = "Username prefix to search for"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Matching users"
+                    body<List<SearchCustomerResponse>>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Missing username parameter"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                }
+            }
+        }) {
             val username = call.request.queryParameters["username"]
             if (username.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing username parameter"))

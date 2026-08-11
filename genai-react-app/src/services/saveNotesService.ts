@@ -37,11 +37,17 @@ export interface SaveNoteOptions {
     keepalive?: boolean
 }
 
+export interface SaveNoteResult {
+    // The note's effective title: the one already set, or one the server
+    // generated during this save; null while the note has no real title
+    title: string | null
+}
+
 export async function saveNote(
     note: NotesModel,
     token: string,
     options: SaveNoteOptions = {}
-): Promise<void> {
+): Promise<SaveNoteResult> {
     const payload = {
         client: 'genai-react-app',
         encode: options.encode ?? true,
@@ -66,4 +72,13 @@ export async function saveNote(
     if (!response.ok) {
         throw new Error(`Failed to save note: ${response.status} ${response.statusText}`)
     }
+
+    let title: string | null = null
+    try {
+        const data = await response.json()
+        title = data?.title ?? null
+    } catch {
+        // Tolerate empty response bodies
+    }
+    return { title }
 }

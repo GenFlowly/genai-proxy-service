@@ -1,15 +1,17 @@
 package com.genflowly.activity.agent
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.GraphService
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.put
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.put
+import models.api.AgentResponse
 import models.api.UpdateAgentRequest
 import org.slf4j.LoggerFactory
 
@@ -35,7 +37,40 @@ fun Route.registerUpdateAgentRoutes(
          *   404  — graphId not found or not owned by this customer
          *   500  — unexpected server error
          */
-        put(Routes.UPDATE_AGENT) {
+        put(Routes.UPDATE_AGENT, {
+            tags("Agents")
+            summary = "Update an agent"
+            description = "Edits an agent (graph + nodes) in place with full structural validation. " +
+                    "Editable graph fields: name, isDefault, maxIterations, entryPoint, edges. " +
+                    "Editable per-node fields: name, config. nodeType and nodeIds are immutable here."
+            request {
+                pathParameter<String>("graphId") {
+                    description = "Agent graph to update"
+                }
+                body<UpdateAgentRequest> {
+                    description = "Graph and node changes to apply"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "The updated agent (hydrated graph + nodes)"
+                    body<AgentResponse>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Structural validation failure"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.NotFound) {
+                    description = "graphId not found or not owned by this customer"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             val graphId = call.parameters["graphId"] ?: return@put call.respond(
                 HttpStatusCode.BadRequest, mapOf("error" to "Missing graphId")
             )

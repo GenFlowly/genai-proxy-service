@@ -1,14 +1,16 @@
 package com.genflowly.activity.generation
 
 import com.genflowly.Routes
+import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.PreferencesRequest
+import com.genflowly.models.api.StatusResponse
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.post
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerProfileService
 
@@ -18,7 +20,27 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
-        post(Routes.SAVE_AI_CONFIG_PREFERENCES) {
+        post(Routes.SAVE_AI_CONFIG_PREFERENCES, {
+            tags("Generation")
+            summary = "Save AI configuration preferences"
+            description = "Persists the customer's preferred models, generative mode and other preferences."
+            request {
+                body<PreferencesRequest> {
+                    description = "Preferences to store"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Preferences saved"
+                    body<StatusResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
             try {
                 val request = call.receive<PreferencesRequest>()
 

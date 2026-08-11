@@ -14,7 +14,7 @@ const newNoteKey = (): string =>
 
 export default function PlainNotes() {
     const { getAccessTokenSilently } = useAuth()
-    const { activeNote, setSaveState } = useNotes()
+    const { activeNote, setSaveState, setNoteTitle, publishNoteUpdate } = useNotes()
     const [prompt, setPrompt] = useState('')
 
     // Stable identity for the whole editing session so every autosave updates
@@ -34,8 +34,23 @@ export default function PlainNotes() {
             client: 'REACT_APP',
         }
         const token = await getAccessTokenSilently()
-        await saveNote(note, token, options)
-    }, [getAccessTokenSilently])
+        const result = await saveNote(note, token, options)
+
+        // The server generates a title on the first encoded save; adopt it so
+        // the header shows it and later saves carry it
+        const title = result.title ?? note.title
+        if (result.title && noteKeyRef.current === note.noteKey) {
+            titleRef.current = result.title
+            setNoteTitle(result.title)
+        }
+        publishNoteUpdate({
+            noteKey: note.noteKey,
+            noteValue: content,
+            title: title ?? '',
+            createdAt: note.createdAt,
+            updatedAt: new Date().toISOString(),
+        })
+    }, [getAccessTokenSilently, setNoteTitle, publishNoteUpdate])
 
     const { status, lastSavedAt, flush, reset } = useAutosave({ content: prompt, save })
 
@@ -48,13 +63,16 @@ export default function PlainNotes() {
     useEffect(() => {
         if (activeNote) {
             flush()
+            const realTitle =
+                activeNote.title && activeNote.title !== 'Untitled' ? activeNote.title : undefined
             noteKeyRef.current = activeNote.noteKey
             createdAtRef.current = activeNote.createdAt
-            titleRef.current = activeNote.title
+            titleRef.current = realTitle
+            setNoteTitle(realTitle ?? null)
             setPrompt(activeNote.noteValue)
             reset(activeNote.noteValue)
         }
-    }, [activeNote, flush, reset])
+    }, [activeNote, flush, reset, setNoteTitle])
 
     return (
         <div
