@@ -78,6 +78,12 @@
 
   border: 1px solid transparent;
 
+  // Tighter space above h1 headings in the response markdown (TextContainer's
+  // base rule gives all h1-h4 a 1.5rem top margin)
+  article h1 {
+    margin-top: 0.125rem;
+  }
+
   @include respond-to-mobile {
     // The transparent side borders would offset the card by 1px
     border-left: none;
@@ -130,6 +136,29 @@
       opacity: 1;
     }
   }
+}
+
+// Card header title: vendor name + model chip
+.responseCardTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0; // Allow the model chip to ellipsize inside the header
+}
+
+// Model rendered as a modern rounded chip next to the vendor name
+.modelName {
+  @include ellipsis;
+  min-width: 0;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: $color-text-muted;
+  background-color: $color-background-tertiary;
+  border: 1px solid $color-border-light;
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
 }
 
 .toggleWrapper {

@@ -330,6 +330,20 @@ describe('Response Widget Component', () => {
         expect(screen.getByText('step one')).toBeInTheDocument();
     });
 
+    test('shows the model chip in the card header when the model is known', () => {
+        const withModel = [
+            { messageId: 'msg-1', text: 'Answer', aiVendor: AIVendor.OPENAI, model: 'gpt-4o', isLoading: false, timestamp: 0 }
+        ];
+        render(<Response blockId="block-1" responseMessages={withModel} />);
+
+        expect(screen.getByTestId('response-model-name')).toHaveTextContent('gpt-4o');
+    });
+
+    test('omits the model name when unknown', () => {
+        render(<Response blockId="block-1" responseMessages={[mockMessages[0]]} />);
+        expect(screen.queryByTestId('response-model-name')).not.toBeInTheDocument();
+    });
+
     test('only renders the latest message per vendor', () => {
         const messagesWithDuplicates = [
             { messageId: 'msg-1', text: 'Response 1', aiVendor: AIVendor.OPENAI, isLoading: false, timestamp: 0 },

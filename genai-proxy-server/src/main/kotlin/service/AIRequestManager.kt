@@ -224,7 +224,8 @@ class AIRequestManager(
             systemPrompt = message.systemPrompt,
             inputTokens = result.inputTokens,
             outputTokens = result.outputTokens,
-            totalTokens = result.totalTokens
+            totalTokens = result.totalTokens,
+            tokensReadFromCache = result.tokensReadFromCache
         )
 
         conversationService.addMessageInConversation(responseMessage)
@@ -504,6 +505,7 @@ class AIRequestManager(
                         inputTokens = capturedUsage?.inputTokens,
                         outputTokens = capturedUsage?.outputTokens,
                         totalTokens = capturedUsage?.totalTokens,
+                        tokensReadFromCache = capturedUsage?.tokensReadFromCache,
                         thinkingDurationMs = capturedThinkingDurationMs
                     )
                     conversationService.addMessageInConversation(responseMessage)

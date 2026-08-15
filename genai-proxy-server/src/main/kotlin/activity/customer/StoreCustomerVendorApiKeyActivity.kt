@@ -53,10 +53,11 @@ fun Route.registerStoreApiKeyRoutes(
 
             val aiVendor = com.genflowly.aicallerlib.models.AIVendor.valueOf(request.aiVendor)
 
-            // Validate API Key by fetching models
-            val models = aiModelsService.getModelsWithApiKey(aiVendor, request.apiKey)
+            // Validate API Key with a real vendor call (model listing is
+            // catalog-based and would accept any key)
+            val isKeyValid = aiModelsService.validateApiKey(aiVendor, request.apiKey)
 
-            if (models.modelsList.isNotEmpty()) {
+            if (isKeyValid) {
                 // Key is valid -> Store it
                 val stored = customerProfileService.storeApiKey(
                     customerId = customerId,

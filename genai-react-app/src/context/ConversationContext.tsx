@@ -197,6 +197,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         return rawResults.map((r: any) => ({
             aiVendor: r.aiVendor as AIVendor,
+            model: r.model ?? aiConfigs.find(c => c.aiVendor === r.aiVendor)?.model ?? null,
             text: r.text ?? '',
             messageId: r.messageId ?? '',
             inputTokens: r.inputTokens ?? null,
@@ -445,6 +446,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                      const existingIndex = newMsgs.findIndex(m => m.aiVendor === vendorToRegenerate)
                      const newMsg: Message = {
                          aiVendor: vendorToRegenerate,
+                         model: aiConfigs[0]?.model ?? null,
                          text: '',
                          messageId: `resp-${timestamp}-regen`,
                          isLoading: true
@@ -458,6 +460,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                  } else {
                      newMsgs = aiConfigs.map((config, index) => ({
                          aiVendor: config.aiVendor,
+                         model: config.model ?? null,
                          text: '',
                          messageId: `resp-${timestamp}-${index}`,
                          isLoading: true

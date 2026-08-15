@@ -5,6 +5,8 @@ import { AIVendor } from '../constants/vendors'
  */
 export interface Message {
     aiVendor: AIVendor
+    /** Model that generated this response (e.g. "gpt-4o") */
+    model?: string | null
     text: string
     messageId: string
     previousMessageId?: string

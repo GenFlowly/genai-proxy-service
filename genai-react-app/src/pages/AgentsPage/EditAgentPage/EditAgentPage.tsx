@@ -7,6 +7,7 @@ import { useAuth } from '../../../context/AuthContext'
 import { getCustomerAgents, updateAgent } from '../../../services/agentsService'
 import { Agent, AgentNode, UpdateAgentNodePatch, UpdateAgentRequest } from '../../../models/agents.models'
 import styles from './EditAgentPage.module.scss'
+import { formatServerDateTime } from '../../../utils/timeUtils'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -432,7 +433,7 @@ export default function EditAgentPage() {
                                         <div className={styles.graphMetaRow}>
                                             <span className={styles.graphMetaLabel}>Last saved</span>
                                             <span className={styles.graphMetaValue}>
-                                                {new Date(agent.updatedAt).toLocaleString()}
+                                                {formatServerDateTime(agent.updatedAt)}
                                             </span>
                                         </div>
                                     )}

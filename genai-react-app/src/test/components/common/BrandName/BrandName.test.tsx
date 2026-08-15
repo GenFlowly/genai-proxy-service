@@ -9,26 +9,21 @@ import BrandName, {
     CollapsedClaudeBrandName,
     CollapsedGeminiBrandName
 } from '../../../../components/common/BrandName/BrandName';
-import { ICONS } from '../../../../constants/icons';
 import '@testing-library/jest-dom';
 
 describe('BrandName Components', () => {
 
     describe('Generic BrandName', () => {
-        test('renders with icon and name', () => {
-            render(<BrandName icon={ICONS.OPENAI} name="Test Brand" />);
+        test('renders the name as plain text (no logo)', () => {
+            render(<BrandName name="Test Brand" />);
 
             const container = screen.getByTestId('brand-name-container');
             expect(container).toBeInTheDocument();
             expect(screen.getByTestId('brand-name-text')).toHaveTextContent('Test Brand');
-
-            // Icon check - assuming Icon passes down src to an img tag or similar
-            // Since we didn't mock Icon, we check if it renders
-            // (Note: Icon doesn't strictly have a data-testid passed prop yet, so we rely on container scope)
         });
 
         test('renders as a custom element (e.g. h1)', () => {
-            render(<BrandName icon={ICONS.OPENAI} name="Heading Brand" as="h1" />);
+            render(<BrandName name="Heading Brand" as="h1" />);
             const container = screen.getByTestId('brand-name-container');
             expect(container.tagName).toBe('H1');
         });
@@ -51,20 +46,26 @@ describe('BrandName Components', () => {
         });
     });
 
-    describe('Collapsed Brand Variants', () => {
-        test('CollapsedOpenAIBrandName renders correctly', () => {
+    describe('Collapsed Brand Variants (vendor initials)', () => {
+        test('CollapsedOpenAIBrandName renders the "O" initial', () => {
             render(<CollapsedOpenAIBrandName />);
-            expect(screen.getByTestId('collapsed-openai-brand')).toBeInTheDocument();
+            const badge = screen.getByTestId('collapsed-openai-brand');
+            expect(badge).toHaveTextContent('O');
+            expect(badge).toHaveAttribute('aria-label', 'OpenAI');
         });
 
-        test('CollapsedClaudeBrandName renders correctly', () => {
+        test('CollapsedClaudeBrandName renders the "C" initial', () => {
             render(<CollapsedClaudeBrandName />);
-            expect(screen.getByTestId('collapsed-claude-brand')).toBeInTheDocument();
+            const badge = screen.getByTestId('collapsed-claude-brand');
+            expect(badge).toHaveTextContent('C');
+            expect(badge).toHaveAttribute('aria-label', 'Claude');
         });
 
-        test('CollapsedGeminiBrandName renders correctly', () => {
+        test('CollapsedGeminiBrandName renders the "G" initial', () => {
             render(<CollapsedGeminiBrandName />);
-            expect(screen.getByTestId('collapsed-gemini-brand')).toBeInTheDocument();
+            const badge = screen.getByTestId('collapsed-gemini-brand');
+            expect(badge).toHaveTextContent('G');
+            expect(badge).toHaveAttribute('aria-label', 'Gemini');
         });
     });
 

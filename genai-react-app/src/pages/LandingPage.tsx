@@ -18,6 +18,35 @@ import { useWindowSize } from '../hooks/useWindowSize'
 const HISTORY_MIN_WIDTH = 160 // matches the panel's default 10rem
 const HISTORY_MAX_WIDTH = 480
 
+// Persisted width is stored in rem so it stays relative to the root font size
+const HISTORY_WIDTH_STORAGE_KEY = 'conversation_history_width_rem'
+
+const rootFontSizePx = (): number =>
+    parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+
+const clampHistoryWidth = (px: number): number =>
+    Math.min(HISTORY_MAX_WIDTH, Math.max(HISTORY_MIN_WIDTH, px))
+
+const loadSavedHistoryWidth = (): number => {
+    try {
+        const savedRem = parseFloat(localStorage.getItem(HISTORY_WIDTH_STORAGE_KEY) ?? '')
+        if (Number.isFinite(savedRem) && savedRem > 0) {
+            return clampHistoryWidth(savedRem * rootFontSizePx())
+        }
+    } catch {
+        // localStorage unavailable (private mode, etc.) — fall through to default
+    }
+    return HISTORY_MIN_WIDTH
+}
+
+const saveHistoryWidth = (px: number): void => {
+    try {
+        localStorage.setItem(HISTORY_WIDTH_STORAGE_KEY, (px / rootFontSizePx()).toFixed(3))
+    } catch {
+        // Best-effort persistence only
+    }
+}
+
 function LandingPageContent() {
     // Current Chat Page uses the 'CHAT_PAGE' config
     // In future, you could dynamically pick config based on 'useConversation' or 'routeId'
@@ -27,8 +56,9 @@ function LandingPageContent() {
     const { width } = useWindowSize()
     const isMobile = width <= 768
 
-    // Width survives toggling because the state lives here, not on the panel
-    const [historyWidth, setHistoryWidth] = useState(HISTORY_MIN_WIDTH)
+    // Width survives toggling because the state lives here, not on the panel;
+    // it survives reloads via localStorage (stored in rem)
+    const [historyWidth, setHistoryWidth] = useState(loadSavedHistoryWidth)
     const historyRef = useRef<HTMLDivElement>(null)
 
     const handleHistoryResizeStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -38,14 +68,16 @@ function LandingPageContent() {
         const handle = e.currentTarget
         handle.setPointerCapture?.(e.pointerId)
 
+        let latestWidth = startWidth
         const onPointerMove = (ev: PointerEvent) => {
-            const next = Math.min(HISTORY_MAX_WIDTH, Math.max(HISTORY_MIN_WIDTH, startWidth + (ev.clientX - startX)))
-            setHistoryWidth(next)
+            latestWidth = clampHistoryWidth(startWidth + (ev.clientX - startX))
+            setHistoryWidth(latestWidth)
         }
         const onPointerEnd = () => {
             window.removeEventListener('pointermove', onPointerMove)
             window.removeEventListener('pointerup', onPointerEnd)
             window.removeEventListener('pointercancel', onPointerEnd)
+            saveHistoryWidth(latestWidth)
         }
         window.addEventListener('pointermove', onPointerMove)
         window.addEventListener('pointerup', onPointerEnd)

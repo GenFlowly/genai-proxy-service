@@ -5,6 +5,7 @@ import { HttpMethod } from '../constants/http';
 import { ConversationBlock, Message } from '../models/conversation.models';
 import { AIVendor } from '../constants/vendors';
 import { SearchUserResponse } from '../models/user.models';
+import { parseServerDate } from '../utils/timeUtils';
 
 export type ConversationRole = 'OWNER' | 'EDIT' | 'VIEW';
 
@@ -18,6 +19,7 @@ interface BackendPrompt {
 interface BackendResponse {
     text: string | null;
     aiVendor: string | null;
+    model?: string | null;
     conversationId: string | null;
     messageId: string | null;
     inputTokens?: number | null;
@@ -91,6 +93,7 @@ export async function getConversation(
 
                 responses.push({
                     aiVendor: vendor,
+                    model: resp.model ?? null,
                     text: resp.text,
                     messageId: resp.messageId || `msg-${index}-${respIndex}`,
                     inputTokens: resp.inputTokens ?? null,
@@ -102,9 +105,9 @@ export async function getConversation(
             }
         });
 
-        // Backend timestamp of the user message; NaN-guard in case of an
-        // unparseable value from older records
-        const sentAtMs = item.promptCreatedAt ? Date.parse(item.promptCreatedAt) : NaN;
+        // Backend timestamp of the user message (UTC-normalized); NaN-guard in
+        // case of an unparseable value from older records
+        const sentAtMs = parseServerDate(item.promptCreatedAt)?.getTime() ?? NaN;
 
         return {
             // Use messageId for block ID if available to be stable, otherwise index

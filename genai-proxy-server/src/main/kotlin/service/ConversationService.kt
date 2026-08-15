@@ -62,11 +62,13 @@ class ConversationService(
                 while (i + 1 < messages.size) {
                     val nextMsg = messages[i + 1]
                     if (nextMsg.role == "assistant") {
-                        val vendor = nextMsg.aiConfig.firstOrNull()?.aiVendor?.name
+                        val config = nextMsg.aiConfig.firstOrNull()
+                        val vendor = config?.aiVendor?.name
                         responses.add(
                             GenerateTextResponse(
                                 text = nextMsg.text,
                                 aiVendor = vendor,
+                                model = config?.model,
                                 conversationId = conversationId,
                                 messageId = nextMsg.messageId,
                                 inputTokens = nextMsg.inputTokens,

@@ -1,5 +1,7 @@
 import React from 'react'
 import { useTheme } from '../../../context/ThemeContext'
+import { Icon } from '../Icon/Icon'
+import { ICONS } from '../../../constants/icons'
 import styles from './ThemeToggle.module.scss'
 
 interface ThemeToggleProps {
@@ -11,9 +13,9 @@ export default function ThemeToggle({ className = '', 'data-testid': testId }: T
     const { themeMode, setThemeMode } = useTheme()
 
     const options = [
-        { id: 'light', icon: '☀️', label: 'Light Theme' },
-        { id: 'system', icon: '💻', label: 'System Theme' },
-        { id: 'dark', icon: '🌙', label: 'Dark Theme' }
+        { id: 'light', icon: ICONS.SUN, label: 'Light Theme' },
+        { id: 'system', icon: ICONS.LAPTOP, label: 'System Theme' },
+        { id: 'dark', icon: ICONS.MOON, label: 'Dark Theme' }
     ] as const;
 
     return (
@@ -35,7 +37,7 @@ export default function ThemeToggle({ className = '', 'data-testid': testId }: T
                     aria-label={opt.label}
                     data-testid={`theme-toggle-${opt.id}`}
                 >
-                    {opt.icon}
+                    <Icon src={opt.icon} size={14} alt={opt.label} />
                 </button>
             ))}
         </div>

@@ -13,6 +13,7 @@ import { OnboardCustomerResponse } from '../models/onboardUser.models'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { InstructionResponse } from '../models/instruction.models'
 import { StoreCustomerVectorDBConfigResponse } from '../models/storeCustomerVectorDBConfig.models'
+import { clearHistoryCache } from '../components/widgets/ConversationHistoryWidget/historyCache'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
@@ -109,6 +110,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         setVectorDBConfigStatusList([]) // Clear vectorDBConfigStatusList on logout
         setSupabaseConfigStatus(null)
         localStorage.removeItem('customerId')
+        clearHistoryCache() // Cached conversation list is user data — never carry across accounts
 
         auth0Logout({
             logoutParams: { returnTo },

@@ -150,6 +150,37 @@ describe('ConversationBlock Component', () => {
         expect(mockAddNewConversationBlockWithId).toHaveBeenCalled();
     });
 
+    test('handleFollowUp creates a new block while the current block is still generating', () => {
+        // One vendor finished, another still streaming: the block is the last
+        // one, still 'draft' and isLoading — it must NOT be treated as an
+        // empty draft to reuse (that made Follow up a silent no-op)
+        mockUseConversation.mockReturnValue({
+            conversationBlockList: [
+                {
+                    conversationBlockId: 'block-1',
+                    responseMessages: [
+                        { id: 'msg-1', isLoading: false },
+                        { id: 'msg-2', isLoading: true }
+                    ],
+                    isLoading: true,
+                    status: 'draft'
+                }
+            ],
+            addNewConversationBlockWithId: mockAddNewConversationBlockWithId,
+            setSelectedResponseForBlock: mockSetSelectedResponseForBlock
+        });
+
+        render(<ConversationBlock id="block-1" />);
+
+        act(() => {
+            screen.getByTestId('followup-block-1').click();
+        });
+
+        expect(mockAddNewConversationBlockWithId).toHaveBeenCalled();
+        // Selection is set on the newly created block, not the streaming one
+        expect(mockSetSelectedResponseForBlock).toHaveBeenCalledWith(expect.stringMatching(/^conv-/), 'msg-1');
+    });
+
     test('scrolls to response on mount if messages exist', () => {
         jest.useFakeTimers();
         mockUseConversation.mockReturnValue({
