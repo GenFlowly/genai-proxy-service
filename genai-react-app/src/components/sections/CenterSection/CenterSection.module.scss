@@ -4,16 +4,43 @@
 .centerSection {
   flex: 1 1 auto;
   min-width: 0; // Allow shrinking below content size
+  display: flex; // Single child (.scrollContainer) fills the panel
+  background-color: $color-background;
+  border-radius: $widget-radius;
+  // Scrolling happens on .scrollContainer inside; clipping here keeps the
+  // scrollbar from painting square over the rounded right corners
+  overflow: hidden;
+}
+
+.scrollContainer {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   overflow-y: auto;
   overflow-x: hidden; // Prevent horizontal scroll on center section
-  background-color: $color-background;
   scroll-behavior: smooth;
   // Bottom spacing lives on .contentWrapper, not here: padding on the scroll
   // container insets sticky descendants (response action bar) from its bottom edge
-  padding-right: 3rem; // Reserve space for collapsed RightSidebar (3.5rem + buffer)
+
+  // Transparent track — only the thumb is visible, so the panel background
+  // runs uninterrupted to the rounded edge
+  scrollbar-color: $color-border transparent; // Firefox (thumb, track)
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: $color-border;
+    border-radius: 4px;
+  }
 }
 
 .contentWrapper {
@@ -50,7 +77,7 @@
 @include respond-to-mobile {
   .centerSection {
     padding: 0;
-    padding-right: 0; // Remove desktop sidebar buffer
+    border-radius: 0; // Full-bleed on mobile
   }
 
   .contentWrapper {

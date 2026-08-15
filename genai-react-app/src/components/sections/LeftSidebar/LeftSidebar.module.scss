@@ -4,13 +4,15 @@
 .sidebar {
   @include sidebar-base(right);
   z-index: 20; // Ensure it sits above CenterSection content (z=10) but below Navbar (z=30)
-
+  border: none; // The page-background gap separates panels instead
+  border-radius: $widget-radius;
 
   // Specific content overrides if needed
   .sidebarContent {
     gap: 2rem;
     padding-left: 0;
     padding-right: 0;
+    border-radius: inherit; // Keep scrolling content clipped to the rounded corners
   }
 
   &.collapsed {

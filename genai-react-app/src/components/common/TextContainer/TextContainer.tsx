@@ -13,6 +13,8 @@ export interface TextContainerProps {
     children?: React.ReactNode
     'data-testid'?: string
     loadingContent?: React.ReactNode
+    /** Rendered between the header and the markdown content (e.g. a thinking summary) */
+    subheader?: React.ReactNode
 }
 
 export default function TextContainer({
@@ -23,7 +25,8 @@ export default function TextContainer({
     isLoading = false,
     children,
     'data-testid': testId,
-    loadingContent
+    loadingContent,
+    subheader
 }: TextContainerProps) {
 
     // Same fallback UX preserving structural padding layout
@@ -46,6 +49,7 @@ export default function TextContainer({
                 children={children}
                 data-testid={testId}
                 loadingContent={loadingContent}
+                subheader={subheader}
             />
         </Suspense>
     )

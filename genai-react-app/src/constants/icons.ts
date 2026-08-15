@@ -24,6 +24,7 @@ import inputTokensIcon from '../assets/icons/input-tokens.svg'
 import outputTokensIcon from '../assets/icons/output-tokens.svg'
 import totalTokensIcon from '../assets/icons/total-tokens.svg'
 import cacheTokensIcon from '../assets/icons/cache-tokens.svg'
+import shareIcon from '../assets/icons/share-icon.svg'
 
 export const ICONS = {
     EDIT: editIcon,
@@ -50,4 +51,5 @@ export const ICONS = {
     OUTPUT_TOKENS: outputTokensIcon,
     TOTAL_TOKENS: totalTokensIcon,
     CACHE_TOKENS: cacheTokensIcon,
+    SHARE: shareIcon,
 }

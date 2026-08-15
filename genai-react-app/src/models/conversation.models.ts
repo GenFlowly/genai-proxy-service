@@ -10,6 +10,12 @@ export interface Message {
     previousMessageId?: string
     isLoading?: boolean
     thinkingSteps?: string[]
+    /**
+     * Retrieval-server thinking time (request receipt → first generated token),
+     * in ms. Streamed live via the "kd" chunk and persisted in DDB; null for
+     * records predating the feature.
+     */
+    thinkingDurationMs?: number | null
     inputTokens?: number | null
     outputTokens?: number | null
     totalTokens?: number | null
@@ -28,6 +34,13 @@ export interface ConversationBlock {
     responseMessages: Message[]
     isLoading: boolean
     status: 'draft' | 'resolved'
+    /**
+     * Epoch ms of when the prompt was sent to the generation API. Stamped
+     * client-side on send; for conversations loaded from history it comes from
+     * the backend's promptCreatedAt (the user message's DDB createdAt). Absent
+     * only for records predating the timestamp plumbing.
+     */
+    sentAt?: number
 }
 
 /**

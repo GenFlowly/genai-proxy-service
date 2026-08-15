@@ -4,14 +4,40 @@
 .sidebarWrapper {
   @include sidebar-base(left);
   z-index: 20; // Ensure it sits above CenterSection content (z=10) but below Navbar (z=30)
+  border: none; // The page-background gap separates panels instead
+  border-radius: $widget-radius;
+  overflow: hidden; // Clip content and the footer toggle to the rounded corners
 
-  // Desktop Overlay Behavior
-  position: absolute;
-  right: 0;
-  height: 100%;
+  // In-flow flex child: the center section resizes dynamically as this
+  // sidebar expands/collapses instead of being overlapped, and the layout's
+  // gap/padding provide the seams around the panel
+  display: flex;
+  flex-direction: column;
 
+  .sidebarContent {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto; // The footer toggle takes its share; content fills the rest
+  }
+
+  // Footer toggle: lives inside the sidebar at the bottom (in both collapsed
+  // and expanded states), overriding the mixin's outside-hanging absolute button
   .collapseButton {
+    position: static;
+    flex-shrink: 0;
+    width: 100%;
+    padding: 0.5rem;
+    border: none;
+    border-top: 1px solid $color-border;
+    border-radius: 0;
+    box-shadow: none;
     background-color: $color-sidebar-background;
+
+    &:hover {
+      padding: 0.5rem; // Neutralize the mixin's slide effect
+      background-color: $color-background-hover;
+      color: $color-text-primary;
+    }
   }
 }
 

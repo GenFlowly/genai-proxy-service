@@ -24,7 +24,7 @@
 
     // Width constraints
     min-width: 30rem;
-    max-width: 68rem;
+    max-width: $message-card-max-width;
 
     @include respond-to-tablet {
         min-width: 0;

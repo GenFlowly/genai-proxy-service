@@ -14,7 +14,7 @@
 .inner {
   display: flex;
   flex-direction: row;
-  gap: 0.75rem;
+  gap: $response-column-gap;
   padding-top: $widget-padding-y;
   padding-bottom: $widget-padding-y;
   padding-left: 1rem;
@@ -55,16 +55,25 @@
 
 .responseWrapper {
   // Common card styling is now handled by TextContainer's own CSS module
-  
+
   flex: 1 1 0; // Grow and shrink equally to fit the container
   min-width: 0; // Allow shrinking below min-content
-  
+  // Cap the column at the card's max width so the visual gap between cards
+  // always equals the flex gap, regardless of screen width
+  max-width: $message-card-max-width;
+
   display: flex;
   flex-direction: column;
 
-  // Fix for single response rendering issue
-  &:only-child {
-    flex: 0 1 88rem;
+  // Center the column group when the screen is wider than the columns' total
+  // max width. Auto margins collapse to 0 on overflow — unlike
+  // justify-content: center, which would clip the leftmost column
+  &:first-child {
+    margin-left: auto;
+  }
+
+  &:last-child {
+    margin-right: auto;
   }
 
   border: 1px solid transparent;
@@ -120,6 +129,76 @@
     &:hover {
       opacity: 1;
     }
+  }
+}
+
+.toggleWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 1rem 0;
+}
+
+// --- Thinking summary (merged from the former ResponseThinking widget) ---
+// Sits inside each response card between the header and the response text.
+
+.thinkingSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.thinkingToggle {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: $color-text-muted;
+  font-size: 0.8rem;
+  opacity: 0.75;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.thinkingLabel {
+  font-size: 0.8rem;
+  color: $color-text-muted;
+}
+
+.chevron {
+  font-size: 0.65rem;
+}
+
+.pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+  flex-shrink: 0;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.75); }
+}
+
+.thinkingSteps {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: $color-text-muted;
+  font-size: 0.85rem;
+  line-height: 1.5;
+
+  li + li {
+    margin-top: 0.25rem;
   }
 }
 

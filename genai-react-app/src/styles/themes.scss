@@ -73,6 +73,14 @@
     --radius-lg: 10px;
     --radius-xl: 14px;
 
+    // Widget panels (IntelliJ-style floating panels on desktop/tablet).
+    // Every top-level panel (center/conversation widget, sidebars, history)
+    // reads these so radius and spacing stay consistent.
+    --widget-radius: var(--radius-lg);
+    --widget-gap: 0.0625rem; // 1px expressed in rem
+    // Page canvas visible behind/between the panels — matches PageHeader
+    --color-page-background: var(--color-conversation-header-bg);
+
     // Transitions
     --transition-fast: 0.2s ease;
     --transition-normal: 0.3s ease;
@@ -90,6 +98,10 @@
     // Vertical padding for request/response widgets — identical top & bottom,
     // desktop & mobile
     --widget-padding-y: 0.5rem;
+
+    // Message cards (request/response text containers)
+    --message-card-max-width: 68rem; // Max width of a single card / response column
+    --response-column-gap: 0.75rem; // Gap between response columns
 }
 
 // Dark Theme
@@ -208,6 +220,11 @@ $radius-md: var(--radius-md);
 $radius-lg: var(--radius-lg);
 $radius-xl: var(--radius-xl);
 
+// Widget panels
+$widget-radius: var(--widget-radius);
+$widget-gap: var(--widget-gap);
+$color-page-background: var(--color-page-background);
+
 // Transitions
 $transition-fast: var(--transition-fast);
 $transition-normal: var(--transition-normal);
@@ -242,3 +259,5 @@ $breakpoint-mobile: 768px;
 $mobile-content-inset: var(--mobile-content-inset);
 $mobile-content-width: var(--mobile-content-width);
 $widget-padding-y: var(--widget-padding-y);
+$message-card-max-width: var(--message-card-max-width);
+$response-column-gap: var(--response-column-gap);

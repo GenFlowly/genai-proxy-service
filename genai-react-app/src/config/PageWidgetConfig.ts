@@ -11,7 +11,7 @@ export const PAGE_WIDGET_CONFIG: PageConfig[] = [
     {
         pageId: 'CHAT_PAGE',
         leftSidebar: ['CONVERSATION_HISTORY_SIDEBAR_WIDGET', 'THREAD_LIST'],
-        rightSidebar: ['NEW_CHAT', 'AI_VENDOR', 'TOKEN_COUNTER'],
+        rightSidebar: ['AI_VENDOR', 'TOKEN_COUNTER'],
         centerSection: ['INSTRUCTION_WIDGET', 'CONVERSATION_LIST'],
     },
     {

@@ -218,7 +218,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         // Added idOverride to support explicit conversation targeting (parallel streams)
         idOverride?: string,
         onThinking?: (step: string) => void,
-        signal?: AbortSignal
+        signal?: AbortSignal,
+        onThinkingDuration?: (millis: number) => void
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -230,7 +231,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta, onMetadata, onThinking, signal)
+        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -367,7 +368,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         const { aiConfigs, finalSelectedResponseId, promptToUse } = prep
 
-        updateConversationBlock(id, { isLoading: true, responseMessages: [] })
+        updateConversationBlock(id, { isLoading: true, responseMessages: [], sentAt: Date.now() })
         setLeftSidebarExpanded(false)
         setRightSidebarExpanded(false)
         setLeftSidebarMinimized(false)
@@ -464,7 +465,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                      initialResponseMessages = newMsgs
                  }
                  
-                 return { ...block, isLoading: true, prompt: promptToUse, responseMessages: newMsgs }
+                 // Regenerating a single vendor re-uses the original send time
+                 return { ...block, isLoading: true, prompt: promptToUse, responseMessages: newMsgs, sentAt: vendorToRegenerate ? block.sentAt : timestamp }
              }
              return block
         }))
@@ -497,6 +499,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         const msgs = block.responseMessages.map(m => {
                             if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
                             return { ...m, thinkingSteps: [...(m.thinkingSteps ?? []), step] }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
+                const handleThinkingDuration = (millis: number) => {
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, thinkingDurationMs: millis }
                         })
                         return { ...block, responseMessages: msgs }
                     }))
@@ -578,7 +591,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     },
                     idToUse,
                     handleThinking,
-                    abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal
+                    abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal,
+                    handleThinkingDuration
                 )
 
                 const finalConversationId = explicitConversationId || conversationIdRef.current
