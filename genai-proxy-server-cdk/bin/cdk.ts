@@ -8,6 +8,7 @@ import {
     OneTimeDeploymentPerStageStack
 } from "../lib/oneTimeDeploymentPerStage-stack";
 import { KmsStack } from "../lib/kms-stack";
+import { S3Stack } from "../lib/s3-stack";
 import { RESOURCE_NAMES } from "../lib/constants";
 
 const stageEnv = process.env.STAGE;
@@ -19,10 +20,12 @@ new OneTimeDeploymentPerStageStack(app, 'BootstrapStack', { stage })
 
 const dynamoDBStack = new DynamoDBStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-DynamoDBStack`, {});
 const kmsStack = new KmsStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-KmsStack`, { stage })
+const s3Stack = new S3Stack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-S3Stack`, { stage })
 
 new FlyioIamStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-FlyioIamStack`, {
     stage,
     dynamoDbTableList: dynamoDBStack.dynamoDbTableList,
     kmsKey: kmsStack.kmsKey,
+    attachmentsBucket: s3Stack.attachmentsBucket,
 });
 
