@@ -3,6 +3,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { ITable } from 'aws-cdk-lib/aws-dynamodb';
 import { IKey } from 'aws-cdk-lib/aws-kms';
+import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { RESOURCE_NAMES } from './constants';
 import { STAGES } from '@genflowly/cdk-commons';
 
@@ -10,6 +11,7 @@ export interface FlyioIamStackProps extends cdk.StackProps {
     stage: STAGES;
     dynamoDbTableList: ITable[];
     kmsKey: IKey;
+    attachmentsBucket: IBucket;
 }
 
 export class FlyioIamStack extends cdk.Stack {
@@ -49,6 +51,25 @@ export class FlyioIamStack extends cdk.Stack {
                         'dynamodb:DescribeTable',
                     ],
                     resources: dynamoDbResources,
+                }),
+            ],
+        });
+
+        // Attachments bucket access for the Fly.io services. Both the proxy server
+        // (presigns PUT/GET for browser uploads) and the retrieval server (reads
+        // image bytes for LLM calls) authenticate as this same user, so one grant
+        // covers both. ListBucket lets HeadObject distinguish 404 from 403.
+        // Managed policy for the same inline-policy-size reason as DynamoDB above.
+        new iam.ManagedPolicy(this, 'FlyioAttachmentsBucketAccess', {
+            users: [flyioUser],
+            statements: [
+                new iam.PolicyStatement({
+                    actions: ['s3:GetObject', 's3:PutObject'],
+                    resources: [props.attachmentsBucket.arnForObjects('*')],
+                }),
+                new iam.PolicyStatement({
+                    actions: ['s3:ListBucket'],
+                    resources: [props.attachmentsBucket.bucketArn],
                 }),
             ],
         });
