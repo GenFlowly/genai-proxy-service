@@ -203,6 +203,9 @@ export default function ConversationHistoryComponent() {
                                             >
                                                 <div className={styles.itemContent}>
                                                     <div className={styles.itemHeader}>
+                                                        <span className={styles.itemLabel}>{label}</span>
+                                                    </div>
+                                                    <div className={styles.itemDetails}>
                                                         <div className={styles.vendorIcons}>
                                                             {[...(conv.vendors || [])].sort().map((v, idx) => {
                                                                 if (v === AIVendor.OPENAI) return <CollapsedOpenAIBrandName key={idx} size={11} className={styles.vendorIcon} />
@@ -211,9 +214,6 @@ export default function ConversationHistoryComponent() {
                                                                 return null
                                                             })}
                                                         </div>
-                                                        <span className={styles.itemLabel}>{label}</span>
-                                                    </div>
-                                                    <div className={styles.itemDetails}>
                                                         {conv.updatedAt && (
                                                             <span className={styles.timestamp}>
                                                                 {new Date(conv.updatedAt).toLocaleString([], {

@@ -11,17 +11,19 @@ jest.mock('../../../../../context/ConversationContext');
 jest.mock('../../../../../context/LayoutContext');
 
 // JSDOM's window is 1024px wide, which would cap rendering to 1 vendor.
-// Mock the responsive hook so all vendors render deterministically.
+// Mock the responsive hook so vendor count is deterministic and adjustable.
+let mockMaxVendors = 3;
 jest.mock('../../../../../hooks/useMaxVendors', () => ({
-    useMaxVendors: () => 3
+    useMaxVendors: () => mockMaxVendors
 }));
 
 // Mock child components
 jest.mock('../../../../../components/common/TextContainer/TextContainer', () => (props) => {
-    const { children, title, content, 'data-testid': testId } = props;
+    const { children, title, content, subheader, 'data-testid': testId } = props;
     return (
         <div data-testid={testId || 'text-container'}>
             <div data-testid="tc-title">{title}</div>
+            {subheader}
             <div data-testid="tc-content">{content}</div>
             {children}
         </div>
@@ -49,13 +51,18 @@ describe('Response Widget Component', () => {
     const mockUseLayout = useLayout as jest.Mock;
     const mockSetSelectedResponseForBlock = jest.fn();
     const mockGetSelectedResponseForBlock = jest.fn();
+    const mockSetVendorSelectionForBlock = jest.fn();
+    let mockSelection: string[] = [];
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockSelection = [];
+        mockMaxVendors = 3;
         mockUseConversation.mockReturnValue({
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
             getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
-            getVendorSelectionForBlock: jest.fn().mockReturnValue([]),
+            getVendorSelectionForBlock: () => mockSelection,
+            setVendorSelectionForBlock: mockSetVendorSelectionForBlock,
             generateResponsesStream: jest.fn(),
             stopGenerating: jest.fn()
         });
@@ -179,7 +186,8 @@ describe('Response Widget Component', () => {
         mockUseConversation.mockReturnValue({
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
             getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
-            getVendorSelectionForBlock: jest.fn().mockReturnValue([]),
+            getVendorSelectionForBlock: () => mockSelection,
+            setVendorSelectionForBlock: mockSetVendorSelectionForBlock,
             generateResponsesStream: mockGenerateResponsesStream,
             stopGenerating: jest.fn()
         });
@@ -199,6 +207,127 @@ describe('Response Widget Component', () => {
         const regenerateBtns = screen.getAllByTestId('regenerate-button');
         expect(regenerateBtns[0]).toBeDisabled();
         expect(regenerateBtns[1]).toBeDisabled();
+    });
+
+    // --- Vendor toggle + thinking (merged from the former ResponseThinking widget) ---
+
+    test('shows no toggle group for a single vendor', () => {
+        render(<Response blockId="block-1" responseMessages={[mockMessages[0]]} />);
+        expect(screen.queryByTestId('vendor-radio-group')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('vendor-checkbox-group')).not.toBeInTheDocument();
+    });
+
+    test('shows the checkbox group when vendors fit the column limit', () => {
+        mockSelection = [AIVendor.OPENAI, AIVendor.CLAUDE];
+        render(<Response blockId="block-1" responseMessages={mockMessages} />);
+
+        expect(screen.getByTestId('vendor-checkbox-group')).toBeInTheDocument();
+        expect(screen.queryByTestId('vendor-radio-group')).not.toBeInTheDocument();
+    });
+
+    test('shows the radio group when vendors exceed the column limit', () => {
+        mockMaxVendors = 2;
+        mockSelection = [AIVendor.OPENAI, AIVendor.CLAUDE, AIVendor.GEMINI];
+        const threeVendors = [
+            ...mockMessages,
+            { messageId: 'msg-3', text: 'Response 3', aiVendor: AIVendor.GEMINI, isLoading: false, timestamp: 0 }
+        ];
+        render(<Response blockId="block-1" responseMessages={threeVendors} />);
+
+        expect(screen.getByTestId('vendor-radio-group')).toBeInTheDocument();
+        expect(screen.queryByTestId('vendor-checkbox-group')).not.toBeInTheDocument();
+    });
+
+    test('radio group selection replaces the previous vendor selection', () => {
+        mockMaxVendors = 2;
+        mockSelection = [AIVendor.OPENAI, AIVendor.CLAUDE, AIVendor.GEMINI];
+        const threeVendors = [
+            ...mockMessages,
+            { messageId: 'msg-3', text: 'Response 3', aiVendor: AIVendor.GEMINI, isLoading: false, timestamp: 0 }
+        ];
+        render(<Response blockId="block-1" responseMessages={threeVendors} />);
+
+        fireEvent.click(screen.getByTestId(`vendor-radio-group-option-${AIVendor.GEMINI}`));
+
+        expect(mockSetVendorSelectionForBlock).toHaveBeenCalledWith('block-1', [AIVendor.GEMINI]);
+    });
+
+    test('checkbox group keeps other selections when below the limit', () => {
+        mockSelection = [AIVendor.OPENAI];
+        render(<Response blockId="block-1" responseMessages={mockMessages} />);
+
+        fireEvent.click(screen.getByTestId(`vendor-checkbox-group-option-${AIVendor.CLAUDE}`));
+
+        expect(mockSetVendorSelectionForBlock).toHaveBeenCalledWith('block-1', [AIVendor.OPENAI, AIVendor.CLAUDE]);
+    });
+
+    test('auto-selects vendors that appear for the first time', () => {
+        mockSelection = [];
+        render(<Response blockId="block-1" responseMessages={[mockMessages[0]]} />);
+
+        expect(mockSetVendorSelectionForBlock).toHaveBeenCalledWith('block-1', [AIVendor.OPENAI]);
+    });
+
+    test('renders the thinking section inside the response card for messages with steps', () => {
+        mockSelection = [AIVendor.OPENAI];
+        const withThinking = [
+            { messageId: 'msg-1', text: 'Answer', aiVendor: AIVendor.OPENAI, isLoading: false, thinkingSteps: ['pondering deeply'], timestamp: 0 }
+        ];
+        render(<Response blockId="block-1" responseMessages={withThinking} />);
+
+        expect(screen.getByTestId('thinking-section')).toBeInTheDocument();
+        expect(screen.getByText('Thinking')).toBeInTheDocument();
+    });
+
+    test('omits the thinking section for messages without steps', () => {
+        render(<Response blockId="block-1" responseMessages={mockMessages} />);
+        expect(screen.queryByTestId('thinking-section')).not.toBeInTheDocument();
+    });
+
+    test('shows a single "Thinking" label (no placeholder) while steps have not arrived', () => {
+        mockSelection = [AIVendor.OPENAI];
+        const thinkingMsg = [
+            { messageId: 'msg-1', text: '', aiVendor: AIVendor.OPENAI, isLoading: true, thinkingSteps: [], timestamp: 0 }
+        ];
+        render(<Response blockId="block-1" responseMessages={thinkingMsg} />);
+
+        expect(screen.getAllByText('Thinking')).toHaveLength(1);
+        expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
+    test('shows "Thought for x seconds" once thinking is complete', () => {
+        mockSelection = [AIVendor.OPENAI];
+        const withDuration = [
+            { messageId: 'msg-1', text: 'Answer', aiVendor: AIVendor.OPENAI, isLoading: false, thinkingSteps: ['step one'], thinkingDurationMs: 4321, timestamp: 0 }
+        ];
+        render(<Response blockId="block-1" responseMessages={withDuration} />);
+
+        expect(screen.getByText('Thought for 4 seconds')).toBeInTheDocument();
+        expect(screen.queryByText('Thinking')).not.toBeInTheDocument();
+    });
+
+    test('keeps the "Thinking" label while still thinking, even if duration is unset', () => {
+        mockSelection = [AIVendor.OPENAI];
+        const stillThinking = [
+            { messageId: 'msg-1', text: '', aiVendor: AIVendor.OPENAI, isLoading: true, thinkingSteps: ['step one'], timestamp: 0 }
+        ];
+        render(<Response blockId="block-1" responseMessages={stillThinking} />);
+
+        expect(screen.getByText('Thinking')).toBeInTheDocument();
+    });
+
+    test('thinking section collapses and expands via its toggle', () => {
+        mockSelection = [AIVendor.OPENAI];
+        const withThinking = [
+            { messageId: 'msg-1', text: 'Answer', aiVendor: AIVendor.OPENAI, isLoading: false, thinkingSteps: ['step one'], timestamp: 0 }
+        ];
+        render(<Response blockId="block-1" responseMessages={withThinking} />);
+
+        // Not thinking anymore → starts collapsed (auto-collapse on completion)
+        expect(screen.queryByText('step one')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /Thinking/ }));
+        expect(screen.getByText('step one')).toBeInTheDocument();
     });
 
     test('only renders the latest message per vendor', () => {

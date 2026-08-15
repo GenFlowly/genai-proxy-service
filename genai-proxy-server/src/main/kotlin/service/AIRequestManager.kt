@@ -445,6 +445,7 @@ class AIRequestManager(
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
+            var capturedThinkingDurationMs: Long? = null
             var success = false
             try {
                 retrievalService.retrieveAndGenerateStream(
@@ -466,6 +467,10 @@ class AIRequestManager(
                         }
                         is StreamChunk.Thinking -> {
                             emit("{\"t\":\"k\",\"v\":${chunk.text.toJsonStringValue()}}\n")
+                        }
+                        is StreamChunk.ThinkingDuration -> {
+                            capturedThinkingDurationMs = chunk.millis
+                            emit("{\"t\":\"kd\",\"v\":${chunk.millis}}\n")
                         }
                         is StreamChunk.Usage -> capturedUsage = chunk
                     }
@@ -498,7 +503,8 @@ class AIRequestManager(
                         systemPrompt = message.systemPrompt,
                         inputTokens = capturedUsage?.inputTokens,
                         outputTokens = capturedUsage?.outputTokens,
-                        totalTokens = capturedUsage?.totalTokens
+                        totalTokens = capturedUsage?.totalTokens,
+                        thinkingDurationMs = capturedThinkingDurationMs
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }

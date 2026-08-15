@@ -17,7 +17,6 @@ jest.mock('../../../../../components/widgets/ConversationWidget/RequestWidget/Re
     );
 });
 
-jest.mock('../../../../../components/widgets/ConversationWidget/ResponseThinkingWidget/ResponseThinking', () => () => null);
 
 jest.mock('../../../../../components/widgets/ConversationWidget/ResponseWidget/Response', () => (props) => {
     const { blockId, onFollowUp, disabled, isLastResponseBlock } = props;

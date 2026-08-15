@@ -12,9 +12,10 @@ import {
     getConversationSharedUsers,
 } from '../../../services/conversationService'
 import { SearchUserResponse } from '../../../models/user.models'
+import { ICONS } from '../../../constants/icons'
 
 export default function ConversationHeader(): React.ReactElement | null {
-    const { conversationId, conversationTitle, conversationRole } = useConversation()
+    const { conversationId, conversationTitle, conversationRole, resetConversation } = useConversation()
     const { getAccessTokenSilently } = useAuth0()
     const { entitlements } = useAuth()
     const { showToast } = useToast()
@@ -49,14 +50,26 @@ export default function ConversationHeader(): React.ReactElement | null {
     return (
         <PageHeader
             title={displayTitle}
-            actions={showShare && (
-                <PillButton
-                    label="Share"
-                    className={pageHeaderStyles.actionButton}
-                    onClick={() => !isNewChat && setShareModalOpen(true)}
-                    data-testid="conversation-share-button"
-                    disabled={isNewChat}
-                />
+            actions={(
+                <>
+                    <PillButton
+                        label="New Chat"
+                        icon={ICONS.PLUS}
+                        className={pageHeaderStyles.actionButton}
+                        onClick={resetConversation}
+                        data-testid="new-chat-button"
+                    />
+                    {showShare && (
+                        <PillButton
+                            label="Share"
+                            icon={ICONS.SHARE}
+                            className={pageHeaderStyles.actionButton}
+                            onClick={() => !isNewChat && setShareModalOpen(true)}
+                            data-testid="conversation-share-button"
+                            disabled={isNewChat}
+                        />
+                    )}
+                </>
             )}
         >
             <ShareModal

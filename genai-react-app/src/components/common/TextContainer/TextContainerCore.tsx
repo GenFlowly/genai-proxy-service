@@ -62,6 +62,8 @@ export interface TextContainerCoreProps {
     children?: React.ReactNode
     'data-testid'?: string
     loadingContent?: React.ReactNode
+    /** Rendered between the header and the markdown content (e.g. a thinking summary) */
+    subheader?: React.ReactNode
 }
 
 export default function TextContainerCore({
@@ -72,7 +74,8 @@ export default function TextContainerCore({
     isLoading = false,
     children,
     'data-testid': testId,
-    loadingContent
+    loadingContent,
+    subheader
 }: TextContainerCoreProps) {
 
     const headerContent = (typeof title === 'string') ? <h2>{title}</h2> : title
@@ -100,6 +103,8 @@ export default function TextContainerCore({
                     </div>
                 </header>
             )}
+
+            {subheader}
 
             {isLoading ? loadingContent : (
                 <ReactMarkdown

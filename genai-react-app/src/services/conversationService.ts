@@ -24,11 +24,14 @@ interface BackendResponse {
     outputTokens?: number | null;
     totalTokens?: number | null;
     tokensReadFromCache?: number | null;
+    thinkingDurationMs?: number | null;
 }
 
 interface BackendPromptAndResponse {
     prompt: BackendPrompt;
     responses?: BackendResponse[];
+    /** ISO-8601 createdAt of the user message that carried this prompt */
+    promptCreatedAt?: string | null;
 }
 
 interface BackendGetConversationResponse {
@@ -94,19 +97,25 @@ export async function getConversation(
                     outputTokens: resp.outputTokens ?? null,
                     totalTokens: resp.totalTokens ?? null,
                     tokensReadFromCache: resp.tokensReadFromCache ?? null,
+                    thinkingDurationMs: resp.thinkingDurationMs ?? null,
                 });
             }
         });
 
+        // Backend timestamp of the user message; NaN-guard in case of an
+        // unparseable value from older records
+        const sentAtMs = item.promptCreatedAt ? Date.parse(item.promptCreatedAt) : NaN;
+
         return {
             // Use messageId for block ID if available to be stable, otherwise index
-            conversationBlockId: item.responses && item.responses.length > 0 && item.responses[0].messageId 
-                ? `block-${item.responses[0].messageId}` 
+            conversationBlockId: item.responses && item.responses.length > 0 && item.responses[0].messageId
+                ? `block-${item.responses[0].messageId}`
                 : `block-${index}-${Date.now()}`,
             prompt: item.prompt.prompt,
             responseMessages: responses,
             isLoading: false,
-            status: 'resolved'
+            status: 'resolved',
+            ...(Number.isFinite(sentAtMs) ? { sentAt: sentAtMs } : {})
         };
     });
 

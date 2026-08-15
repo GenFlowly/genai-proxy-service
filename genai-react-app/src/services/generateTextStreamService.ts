@@ -24,7 +24,8 @@ export async function generateTextStream(
     onDelta: (chunk: string) => void,
     onMetadata?: (metadata: StreamMetadata) => void,
     onThinking?: (step: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onThinkingDuration?: (millis: number) => void
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -80,6 +81,10 @@ export async function generateTextStream(
             const msg = JSON.parse(trimmed);
             if (msg.t === "c") onDelta(msg.v);
             else if (msg.t === "k") onThinking?.(msg.v);
+            else if (msg.t === "kd") {
+                const millis = Number(msg.v);
+                if (Number.isFinite(millis)) onThinkingDuration?.(millis);
+            }
             // other types (heartbeat, etc.) are silently ignored
         } catch {
             // Not JSON — treat as raw content (error messages, legacy format)

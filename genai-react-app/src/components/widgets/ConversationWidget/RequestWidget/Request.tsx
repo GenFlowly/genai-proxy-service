@@ -23,7 +23,6 @@ export default function Request({
     const {
         conversationBlockList,
         generateResponsesStream,
-        stopGenerating,
         getSelectedResponseForBlock,
         setEditorPrompt,
         setActiveBlockId
@@ -122,14 +121,18 @@ export default function Request({
     if (!conversationBlock) return null
 
     // If we have responses AND loading is finished, this block is "resolved" -> Show static text
-    // We keep the editor visible during loading so the user sees the "Stop Generating" button state.
+    // (Stopping an in-flight generation is done per-vendor from the Response widget.)
     const displayName = customerName || user?.name || ''
     const displayPicture = customerPicture || user?.picture
 
     // Only lock Request when actively streaming/resolved AND not being edited
     if (conversationBlock.status === 'resolved' || conversationBlock.isLoading) {
+        // The request card spans the total max allowed width of the response
+        // columns below it (N columns + the gaps between them)
+        const responseColumnCount = Math.max(1, conversationBlock.responseMessages.length)
         return (
             <div className={styles.resolvedRequestContainer}
+                 style={{ '--response-column-count': responseColumnCount } as React.CSSProperties}
                  data-testid={testId || "resolved-request-wrapper"}>
                 <TextContainer
                     className={styles.requestWrapper}
@@ -138,19 +141,20 @@ export default function Request({
                                           picture={displayPicture} as="span"/>}
                     showCopyButton={true}
                     data-testid={testId || "resolved-request-wrapper"}
-                />
-                {conversationBlock.isLoading && (
-                    <div className={styles.buttonWrapper}
-                         data-testid="generate-button-wrapper"
-                         style={{ marginTop: '1rem' }}>
-                        <MultiPurposeButton
-                            onClick={() => stopGenerating(blockId)}
-                            label="Stop Generating"
-                            disabled={false}
-                            data-testid="generate-button"
-                        />
-                    </div>
-                )}
+                >
+                    {conversationBlock.sentAt && (
+                        <div className={styles.sentTimestamp}
+                             data-testid="request-sent-timestamp">
+                            {new Date(conversationBlock.sentAt).toLocaleString([], {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            })}
+                        </div>
+                    )}
+                </TextContainer>
             </div>
         )
     }

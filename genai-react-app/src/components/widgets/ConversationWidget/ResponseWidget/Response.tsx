@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { ICONS } from '../../../../constants/icons'
 import styles from './Response.module.scss'
 import { useLayout } from '../../../../context/LayoutContext'
@@ -14,8 +14,10 @@ import {
     GeminiBrandName
 } from '../../../common/BrandName/BrandName'
 import { AIVendor } from '../../../../constants/vendors'
-import { useMemo } from 'react'
 import { useMaxVendors } from '../../../../hooks/useMaxVendors'
+import { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
+import RadioButtonGroup from '../../../common/ToggleGroupButton/RadioButtonGroup'
+import CheckboxButtonGroup from '../../../common/ToggleGroupButton/CheckboxButtonGroup'
 
 interface ResponseProps {
     blockId: string
@@ -25,9 +27,53 @@ interface ResponseProps {
     isLastResponseBlock?: boolean
 }
 
+/**
+ * Collapsible thinking summary shown inside each response card, between the
+ * header and the response text (formerly the separate ResponseThinking widget).
+ */
+function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], isThinking: boolean, durationMs?: number | null }) {
+    const [isExpanded, setIsExpanded] = useState(true)
+
+    // Auto-collapse once the answer starts streaming
+    useEffect(() => {
+        if (!isThinking) setIsExpanded(false)
+    }, [isThinking])
+
+    if (steps.length === 0 && !isThinking) return null
+
+    // Once thinking completes, show how long it took (measured by the
+    // retrieval server: request receipt → first generated token)
+    let label = 'Thinking'
+    if (!isThinking && durationMs != null) {
+        const seconds = Math.max(1, Math.round(durationMs / 1000))
+        label = `Thought for ${seconds} second${seconds === 1 ? '' : 's'}`
+    }
+
+    return (
+        <div className={styles.thinkingSection} data-testid="thinking-section">
+            <button
+                className={styles.thinkingToggle}
+                onClick={() => setIsExpanded(prev => !prev)}
+                aria-expanded={isExpanded}
+            >
+                {isThinking && <span className={styles.pulse} />}
+                <span className={styles.thinkingLabel}>{label}</span>
+                <span className={styles.chevron}>{isExpanded ? '▼' : '▶'}</span>
+            </button>
+            {/* No placeholder when steps haven't arrived yet — the toggle's
+                "Thinking" label plus pulse already says it */}
+            {isExpanded && steps.length > 0 && (
+                <ul className={styles.thinkingSteps}>
+                    {steps.map((step, i) => <li key={i}>{step}</li>)}
+                </ul>
+            )}
+        </div>
+    )
+}
+
 export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
-    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, stopGenerating } = useConversation()
+    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, setVendorSelectionForBlock, stopGenerating } = useConversation()
 
     const selectedResponseId = getSelectedResponseForBlock(blockId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
@@ -45,8 +91,30 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         return Array.from(vendors)
     }, [visibleMessages])
 
+    // Keep a ref to the latest context selection to avoid stale closure in the effect below
+    const selectionRef = useRef<string[]>([])
+    selectionRef.current = getVendorSelectionForBlock(blockId)
+
+    // Auto-select any vendor that appears for the first time in this block
+    useEffect(() => {
+        const newVendors = availableVendors.filter(v => !selectionRef.current.includes(v))
+        if (newVendors.length > 0) {
+            setVendorSelectionForBlock(blockId, [...selectionRef.current, ...newVendors])
+        }
+    }, [availableVendors, blockId, setVendorSelectionForBlock])
+
     const selectedVendors = getVendorSelectionForBlock(blockId)
     const maxVendors = useMaxVendors()
+
+    const toggleOptions: ToggleOption[] = useMemo(() => availableVendors.map(vendor => ({
+        id: vendor,
+        label: vendor === AIVendor.OPENAI ? 'OpenAI' :
+            vendor === AIVendor.CLAUDE ? 'Claude' :
+                vendor === AIVendor.GEMINI ? 'Gemini' : vendor,
+        icon: vendor === AIVendor.OPENAI ? ICONS.OPENAI :
+            vendor === AIVendor.CLAUDE ? ICONS.CLAUDE :
+                vendor === AIVendor.GEMINI ? ICONS.GEMINI : undefined
+    })), [availableVendors])
     const rawSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
     const effectiveSelectedVendors = rawSelectedVendors.slice(0, maxVendors)
     const filteredResponseList = useMemo(() => {
@@ -90,9 +158,35 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             data-response-block-id={blockId}
             data-testid={testId}
         >
+            {availableVendors.length > 1 && (
+                <div className={styles.toggleWrapper}>
+                    {availableVendors.length > maxVendors ? (
+                        // More vendors than columns fit on this screen: pick one at a time
+                        <RadioButtonGroup
+                            options={toggleOptions}
+                            selectedValues={effectiveSelectedVendors}
+                            onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
+                            allowEmpty={false}
+                            data-testid="vendor-radio-group"
+                        />
+                    ) : (
+                        // All vendors fit: toggle freely up to the column limit
+                        <CheckboxButtonGroup
+                            options={toggleOptions}
+                            selectedValues={effectiveSelectedVendors}
+                            onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
+                            allowEmpty={false}
+                            maxSelection={maxVendors}
+                            data-testid="vendor-checkbox-group"
+                        />
+                    )}
+                </div>
+            )}
+
             <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
-                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
+                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, thinkingSteps, thinkingDurationMs, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
                     const isSelected = selectedResponseId === messageId
+                    const isThinkingPhase = !!isLoading && text.trim().length === 0
 
                     let HeaderComponent: React.ReactNode = null
                     if (aiVendor) {
@@ -107,7 +201,14 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             <TextContainer
                                 title={HeaderComponent}
                                 content={text}
-                                isLoading={isLoading && text.trim().length === 0}
+                                subheader={
+                                    <ThinkingSection
+                                        steps={thinkingSteps ?? []}
+                                        isThinking={isThinkingPhase}
+                                        durationMs={thinkingDurationMs}
+                                    />
+                                }
+                                isLoading={isThinkingPhase}
                                 loadingContent={null}
                                 data-testid="response-message"
                                 aria-label={`Response from ${aiVendor}`}

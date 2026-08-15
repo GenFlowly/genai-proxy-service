@@ -22,6 +22,8 @@ import mu.KLogger
 sealed class StreamChunk {
     data class Content(val text: String) : StreamChunk()
     data class Thinking(val text: String) : StreamChunk()
+    /** Request receipt on the retrieval server → first generated token, in ms */
+    data class ThinkingDuration(val millis: Long) : StreamChunk()
     data class Usage(val inputTokens: Int, val outputTokens: Int, val totalTokens: Int) : StreamChunk()
 }
 
@@ -183,6 +185,10 @@ class RetrievalService(
                             jsonObj.containsKey("thinking") -> {
                                 val thinking = jsonObj["thinking"]?.jsonPrimitive?.content
                                 if (!thinking.isNullOrEmpty()) send(StreamChunk.Thinking(thinking))
+                            }
+                            jsonObj.containsKey("thinking_duration_ms") -> {
+                                val millis = jsonObj["thinking_duration_ms"]?.jsonPrimitive?.content?.toLongOrNull()
+                                if (millis != null) send(StreamChunk.ThinkingDuration(millis))
                             }
                             jsonObj.containsKey("usage") -> {
                                 val usageObj = jsonObj["usage"]!!.jsonObject

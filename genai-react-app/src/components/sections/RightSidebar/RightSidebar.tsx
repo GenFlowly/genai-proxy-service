@@ -36,6 +36,10 @@ export default function RightSidebar({ widgetIds, 'data-testid': testId }: Right
 
     return (
         <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`} data-testid={testId || "right-sidebar"}>
+            <div className={styles.sidebarContent}>
+                {widgetContent}
+            </div>
+
             <button
                 onClick={toggleRightSidebar}
                 className={styles.collapseButton}
@@ -48,10 +52,6 @@ export default function RightSidebar({ widgetIds, 'data-testid': testId }: Right
                     <Icon src={ICONS.ALT_ARROW_LEFT} size={15} />
                 )}
             </button>
-
-            <div className={styles.sidebarContent}>
-                {widgetContent}
-            </div>
         </div>
     )
 }

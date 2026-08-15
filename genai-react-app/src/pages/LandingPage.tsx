@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import Navbar from '../components/navbar/Navbar'
 import LeftSidebar from '../components/sections/LeftSidebar/LeftSidebar'
@@ -14,6 +14,10 @@ import { getPageConfig } from '../config/PageWidgetConfig'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useWindowSize } from '../hooks/useWindowSize'
 
+// Resize bounds for the conversation-history panel (px)
+const HISTORY_MIN_WIDTH = 160 // matches the panel's default 10rem
+const HISTORY_MAX_WIDTH = 480
+
 function LandingPageContent() {
     // Current Chat Page uses the 'CHAT_PAGE' config
     // In future, you could dynamically pick config based on 'useConversation' or 'routeId'
@@ -23,12 +27,47 @@ function LandingPageContent() {
     const { width } = useWindowSize()
     const isMobile = width <= 768
 
+    // Width survives toggling because the state lives here, not on the panel
+    const [historyWidth, setHistoryWidth] = useState(HISTORY_MIN_WIDTH)
+    const historyRef = useRef<HTMLDivElement>(null)
+
+    const handleHistoryResizeStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        e.preventDefault()
+        const startX = e.clientX
+        const startWidth = historyRef.current?.offsetWidth ?? historyWidth
+        const handle = e.currentTarget
+        handle.setPointerCapture?.(e.pointerId)
+
+        const onPointerMove = (ev: PointerEvent) => {
+            const next = Math.min(HISTORY_MAX_WIDTH, Math.max(HISTORY_MIN_WIDTH, startWidth + (ev.clientX - startX)))
+            setHistoryWidth(next)
+        }
+        const onPointerEnd = () => {
+            window.removeEventListener('pointermove', onPointerMove)
+            window.removeEventListener('pointerup', onPointerEnd)
+            window.removeEventListener('pointercancel', onPointerEnd)
+        }
+        window.addEventListener('pointermove', onPointerMove)
+        window.addEventListener('pointerup', onPointerEnd)
+        window.addEventListener('pointercancel', onPointerEnd)
+    }, [historyWidth])
+
     return (
         <div className={styles.layout}>
             {/* On mobile, history is a dedicated page (/history) instead of a sidebar widget */}
             {!isMobile && isHistoryWidgetExpanded && config.pageId === 'CHAT_PAGE' && (
-                <div className={styles.historySidebar}>
+                <div
+                    className={styles.historySidebar}
+                    ref={historyRef}
+                    style={{ width: historyWidth }}
+                    data-testid="history-sidebar"
+                >
                     <ConversationHistoryComponent />
+                    <div
+                        className={styles.historyResizeHandle}
+                        onPointerDown={handleHistoryResizeStart}
+                        data-testid="history-resize-handle"
+                    />
                 </div>
             )}
             <LeftSidebar widgetIds={config.leftSidebar} />
@@ -54,11 +93,12 @@ export default function LandingPage() {
     // Orchestrate Sidebar and History states based on active conversation
     useEffect(() => {
         if (contextId) {
-            // Active conversation: both collapsed, history hidden
+            // Active conversation: both sidebars collapsed. History is left
+            // alone here — it auto-hides only when the text-generation API is
+            // called (see generateResponses/generateResponsesStream)
             setRightSidebarExpanded(false)
             setLeftSidebarMinimized(false)
             setLeftSidebarExpanded(false)
-            setHistoryWidgetExpanded(false)
         } else {
             // No conversation (New Chat): right expanded (desktop), left fully minimized/hidden, history expanded (desktop)
             setRightSidebarExpanded(!isMobile)

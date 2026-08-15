@@ -72,7 +72,8 @@ class ConversationService(
                                 inputTokens = nextMsg.inputTokens,
                                 outputTokens = nextMsg.outputTokens,
                                 totalTokens = nextMsg.totalTokens,
-                                tokensReadFromCache = nextMsg.tokensReadFromCache
+                                tokensReadFromCache = nextMsg.tokensReadFromCache,
+                                thinkingDurationMs = nextMsg.thinkingDurationMs
                             )
                         )
                         i++ // consume next message
@@ -84,12 +85,13 @@ class ConversationService(
                 if (isParallelDuplicate) {
                     currentTurnUserIds.add(msg.messageId)
                     val last = pairs.removeAt(pairs.size - 1)
-                    pairs.add(PromptAndResponse(last.prompt, (last.responses ?: emptyList()) + responses))
+                    // Keep the first copy's createdAt — it marks when the turn was sent
+                    pairs.add(PromptAndResponse(last.prompt, (last.responses ?: emptyList()) + responses, last.promptCreatedAt))
                 } else {
                     val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text)
                     currentTurnUserIds = mutableSetOf(msg.messageId)
                     currentTurnPrompt = msg.text
-                    pairs.add(PromptAndResponse(prompt, responses))
+                    pairs.add(PromptAndResponse(prompt, responses, msg.createdAt))
                 }
             }
             i++

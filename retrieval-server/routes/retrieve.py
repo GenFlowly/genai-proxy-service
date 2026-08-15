@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -106,6 +107,8 @@ def _resolve_graph(customer_id: str) -> tuple:
 
 @router.post("/retrieve")
 async def retrieve(req: RetrieveRequest):
+    # Anchor for the "thinking" duration: request receipt → first generated token
+    request_start = time.monotonic()
     creds_keys = list(req.llm_credentials.keys())
     logger.info(
         "Incoming /retrieve — customer=%s client=%s provider=%s stream=%s agentic=%s "
@@ -133,7 +136,7 @@ async def retrieve(req: RetrieveRequest):
     if req.stream:
         logger.info("Returning StreamingResponse for customer=%s", req.customer_id)
         return StreamingResponse(
-            stream_response(state, graph=graph, node_type_map=node_type_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations),
+            stream_response(state, graph=graph, node_type_map=node_type_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
