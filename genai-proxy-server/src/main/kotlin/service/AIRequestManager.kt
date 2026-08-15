@@ -123,7 +123,8 @@ class AIRequestManager(
         conversationId: String?,
         selectedResponseId: String?,
         client: String,
-        customerId: String
+        customerId: String,
+        agentic: Boolean = true
 
     ): List<Message> {
 
@@ -170,7 +171,8 @@ class AIRequestManager(
                         aiVendor = aiConfig.aiVendor,
                         model = aiConfig.model,
                         maxTokens = aiConfig.maxTokens ?: 4096,
-                        message = message
+                        message = message,
+                        agentic = agentic
                     )
                 }
             }.awaitAll()
@@ -185,7 +187,8 @@ class AIRequestManager(
         aiVendor: AIVendor,
         model: String,
         maxTokens: Int = 4096,
-        message: Message
+        message: Message,
+        agentic: Boolean = true
     ): Message {
         val apiKey = fetchApiKey(aiVendor, message.customerId, customerProfileService)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
@@ -206,7 +209,8 @@ class AIRequestManager(
             llmModel = model,
             llmMaxTokens = maxTokens,
             conversationHistory = conversationHistory,
-            systemPrompt = message.systemPrompt
+            systemPrompt = message.systemPrompt,
+            agentic = agentic
         )
 
         val responseMessage = Message(
@@ -356,7 +360,8 @@ class AIRequestManager(
         conversationId: String?,
         selectedResponseId: String?,
         client: String,
-        customerId: String
+        customerId: String,
+        agentic: Boolean = true
     ): StreamExecutionResult {
 
         val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, instructionVersion.toIntOrNull() ?: 1)
@@ -451,7 +456,8 @@ class AIRequestManager(
                     llmModel = config.model,
                     llmMaxTokens = config.maxTokens ?: 4096,
                     conversationHistory = conversationHistory,
-                    systemPrompt = systemPrompt
+                    systemPrompt = systemPrompt,
+                    agentic = agentic
                 ).collect { chunk ->
                     when (chunk) {
                         is StreamChunk.Content -> {

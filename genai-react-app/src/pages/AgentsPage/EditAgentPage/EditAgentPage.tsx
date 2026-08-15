@@ -41,9 +41,12 @@ interface NodeConfigEditorProps {
     onConfigChange: (val: string) => void
 }
 
+const RESPONSE_NODE_TYPES = new Set(['RESPONSE_GENERATOR', 'RESPONSE_GENERATOR_WITH_REFLECTION'])
+
 function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfigChange }: NodeConfigEditorProps) {
     const [open, setOpen] = useState(false)
     const meta = getNodeMeta(node.nodeType)
+    const isResponseNode = RESPONSE_NODE_TYPES.has(node.nodeType)
     const configInvalid = patchConfig.trim() !== '' && !isValidJson(patchConfig)
 
     let parsedConfig: Record<string, any> = {}
@@ -96,17 +99,25 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
 
                     {node.nodeType !== 'RETRIEVAL' && (
                         <>
-                            <div className={styles.fieldGroup}>
-                                <label className={styles.fieldLabel} htmlFor={`system-prompt-${node.nodeId}`}>System Prompt</label>
-                                <textarea
-                                    id={`system-prompt-${node.nodeId}`}
-                                    className={styles.fieldTextarea}
-                                    rows={6}
-                                    value={systemPrompt}
-                                    onChange={e => updateConfigField('system_prompt', e.target.value)}
-                                    placeholder="You are a helpful assistant."
-                                />
-                            </div>
+                            {!isResponseNode && (
+                                <div className={styles.fieldGroup}>
+                                    <label className={styles.fieldLabel} htmlFor={`system-prompt-${node.nodeId}`}>System Prompt</label>
+                                    <textarea
+                                        id={`system-prompt-${node.nodeId}`}
+                                        className={styles.fieldTextarea}
+                                        rows={6}
+                                        value={systemPrompt}
+                                        onChange={e => updateConfigField('system_prompt', e.target.value)}
+                                        placeholder="You are a helpful assistant."
+                                    />
+                                </div>
+                            )}
+                            {isResponseNode && (
+                                <p className={styles.fieldHint}>
+                                    The system prompt and model for this node come from the instruction
+                                    and model selected at request time.
+                                </p>
+                            )}
                             <div className={styles.fieldRow2}>
                                 <div className={styles.fieldGroup}>
                                     <label className={styles.fieldLabel}>Input Template</label>
@@ -121,18 +132,20 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                                         Placeholders: <code>{'{query}'}</code> <code>{'{context}'}</code> <code>{'{chunks_text}'}</code>
                                     </p>
                                 </div>
-                                <div className={styles.fieldGroup}>
-                                    <label className={styles.fieldLabel}>
-                                        Model Override <span className={styles.optional}>(optional)</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className={styles.fieldInput}
-                                        value={modelOverride}
-                                        onChange={e => updateConfigField('model_override', e.target.value)}
-                                        placeholder="e.g. gpt-4o, claude-sonnet-4-5"
-                                    />
-                                </div>
+                                {!isResponseNode && (
+                                    <div className={styles.fieldGroup}>
+                                        <label className={styles.fieldLabel}>
+                                            Model Override <span className={styles.optional}>(optional)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className={styles.fieldInput}
+                                            value={modelOverride}
+                                            onChange={e => updateConfigField('model_override', e.target.value)}
+                                            placeholder="e.g. gpt-4o, claude-sonnet-4-5"
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}
