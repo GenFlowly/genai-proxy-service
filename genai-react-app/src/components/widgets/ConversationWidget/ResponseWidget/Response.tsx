@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ICONS } from '../../../../constants/icons'
 import styles from './Response.module.scss'
 import { useLayout } from '../../../../context/LayoutContext'
@@ -14,8 +15,10 @@ import {
     GeminiBrandName
 } from '../../../common/BrandName/BrandName'
 import { AIVendor } from '../../../../constants/vendors'
-import { useMemo } from 'react'
 import { useMaxVendors } from '../../../../hooks/useMaxVendors'
+import { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
+import RadioButtonGroup from '../../../common/ToggleGroupButton/RadioButtonGroup'
+import CheckboxButtonGroup from '../../../common/ToggleGroupButton/CheckboxButtonGroup'
 
 interface ResponseProps {
     blockId: string
@@ -25,9 +28,55 @@ interface ResponseProps {
     isLastResponseBlock?: boolean
 }
 
+/**
+ * Collapsible thinking summary shown inside each response card, between the
+ * header and the response text (formerly the separate ResponseThinking widget).
+ */
+function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], isThinking: boolean, durationMs?: number | null }) {
+    const { t } = useTranslation()
+    const [isExpanded, setIsExpanded] = useState(true)
+
+    // Auto-collapse once the answer starts streaming
+    useEffect(() => {
+        if (!isThinking) setIsExpanded(false)
+    }, [isThinking])
+
+    if (steps.length === 0 && !isThinking) return null
+
+    // Once thinking completes, show how long it took (measured by the
+    // retrieval server: request receipt → first generated token)
+    let label = t('conversation.response.thinking')
+    if (!isThinking && durationMs != null) {
+        const seconds = Math.max(1, Math.round(durationMs / 1000))
+        label = t('conversation.response.thoughtForSeconds', { count: seconds })
+    }
+
+    return (
+        <div className={styles.thinkingSection} data-testid="thinking-section">
+            <button
+                className={styles.thinkingToggle}
+                onClick={() => setIsExpanded(prev => !prev)}
+                aria-expanded={isExpanded}
+            >
+                {isThinking && <span className={styles.pulse} />}
+                <span className={styles.thinkingLabel}>{label}</span>
+                <span className={styles.chevron}>{isExpanded ? '▼' : '▶'}</span>
+            </button>
+            {/* No placeholder when steps haven't arrived yet — the toggle's
+                "Thinking" label plus pulse already says it */}
+            {isExpanded && steps.length > 0 && (
+                <ul className={styles.thinkingSteps}>
+                    {steps.map((step, i) => <li key={i}>{step}</li>)}
+                </ul>
+            )}
+        </div>
+    )
+}
+
 export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
+    const { t } = useTranslation()
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
-    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, stopGenerating } = useConversation()
+    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, setVendorSelectionForBlock, stopGenerating } = useConversation()
 
     const selectedResponseId = getSelectedResponseForBlock(blockId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
@@ -45,8 +94,27 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         return Array.from(vendors)
     }, [visibleMessages])
 
+    // Keep a ref to the latest context selection to avoid stale closure in the effect below
+    const selectionRef = useRef<string[]>([])
+    selectionRef.current = getVendorSelectionForBlock(blockId)
+
+    // Auto-select any vendor that appears for the first time in this block
+    useEffect(() => {
+        const newVendors = availableVendors.filter(v => !selectionRef.current.includes(v))
+        if (newVendors.length > 0) {
+            setVendorSelectionForBlock(blockId, [...selectionRef.current, ...newVendors])
+        }
+    }, [availableVendors, blockId, setVendorSelectionForBlock])
+
     const selectedVendors = getVendorSelectionForBlock(blockId)
     const maxVendors = useMaxVendors()
+
+    const toggleOptions: ToggleOption[] = useMemo(() => availableVendors.map(vendor => ({
+        id: vendor,
+        label: vendor === AIVendor.OPENAI ? 'OpenAI' :
+            vendor === AIVendor.CLAUDE ? 'Claude' :
+                vendor === AIVendor.GEMINI ? 'Gemini' : vendor
+    })), [availableVendors])
     const rawSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
     const effectiveSelectedVendors = rawSelectedVendors.slice(0, maxVendors)
     const filteredResponseList = useMemo(() => {
@@ -67,7 +135,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                 data-testid={testId || "empty-response-block"}
             >
                 <div style={{ textAlign: 'left', padding: '1rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                    No responses were generated
+                    {t('conversation.response.noResponsesGenerated')}
                 </div>
             </div>
         )
@@ -90,16 +158,53 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             data-response-block-id={blockId}
             data-testid={testId}
         >
+            {availableVendors.length > 1 && (
+                <div className={styles.toggleWrapper}>
+                    {availableVendors.length > maxVendors ? (
+                        // More vendors than columns fit on this screen: pick one at a time
+                        <RadioButtonGroup
+                            options={toggleOptions}
+                            selectedValues={effectiveSelectedVendors}
+                            onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
+                            allowEmpty={false}
+                            data-testid="vendor-radio-group"
+                        />
+                    ) : (
+                        // All vendors fit: toggle freely up to the column limit
+                        <CheckboxButtonGroup
+                            options={toggleOptions}
+                            selectedValues={effectiveSelectedVendors}
+                            onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
+                            allowEmpty={false}
+                            maxSelection={maxVendors}
+                            data-testid="vendor-checkbox-group"
+                        />
+                    )}
+                </div>
+            )}
+
             <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
-                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
+                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, thinkingSteps, thinkingDurationMs, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
                     const isSelected = selectedResponseId === messageId
+                    const isThinkingPhase = !!isLoading && text.trim().length === 0
 
                     let HeaderComponent: React.ReactNode = null
                     if (aiVendor) {
-                        if (aiVendor === AIVendor.OPENAI) HeaderComponent = <OpenAIBrandName as="span" />
-                        else if (aiVendor === AIVendor.CLAUDE) HeaderComponent = <ClaudeBrandName as="span" />
-                        else if (aiVendor === AIVendor.GEMINI) HeaderComponent = <GeminiBrandName as="span" />
-                        else HeaderComponent = <h2>{aiVendor}</h2>
+                        let brand: React.ReactNode
+                        if (aiVendor === AIVendor.OPENAI) brand = <OpenAIBrandName as="span" />
+                        else if (aiVendor === AIVendor.CLAUDE) brand = <ClaudeBrandName as="span" />
+                        else if (aiVendor === AIVendor.GEMINI) brand = <GeminiBrandName as="span" />
+                        else brand = <h2>{aiVendor}</h2>
+                        HeaderComponent = (
+                            <span className={styles.responseCardTitle}>
+                                {brand}
+                                {model && (
+                                    <span className={styles.modelName} data-testid="response-model-name" title={model}>
+                                        {model}
+                                    </span>
+                                )}
+                            </span>
+                        )
                     }
 
                     return (
@@ -107,15 +212,22 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                             <TextContainer
                                 title={HeaderComponent}
                                 content={text}
-                                isLoading={isLoading && text.trim().length === 0}
+                                subheader={
+                                    <ThinkingSection
+                                        steps={thinkingSteps ?? []}
+                                        isThinking={isThinkingPhase}
+                                        durationMs={thinkingDurationMs}
+                                    />
+                                }
+                                isLoading={isThinkingPhase}
                                 loadingContent={null}
                                 data-testid="response-message"
-                                aria-label={`Response from ${aiVendor}`}
+                                aria-label={t('conversation.response.responseFrom', { vendor: aiVendor })}
                             >
                                 {!isLoading && (inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
                                     <div className={styles.tokenBadge}>
                                         {inputTokens != null && (
-                                            <Tooltip content="Total Input Tokens">
+                                            <Tooltip content={t('conversation.response.totalInputTokens')}>
                                                 <span className={styles.tokenItem}>
                                                     <Icon src={ICONS.INPUT_TOKENS} size={12} />
                                                     {inputTokens.toLocaleString()}
@@ -123,7 +235,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                             </Tooltip>
                                         )}
                                         {outputTokens != null && (
-                                            <Tooltip content="Total Output Tokens">
+                                            <Tooltip content={t('conversation.response.totalOutputTokens')}>
                                                 <span className={styles.tokenItem}>
                                                     <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
                                                     {outputTokens.toLocaleString()}
@@ -131,7 +243,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                             </Tooltip>
                                         )}
                                         {tokensReadFromCache != null && (
-                                            <Tooltip content="Tokens read from cache">
+                                            <Tooltip content={t('conversation.response.tokensReadFromCache')}>
                                                 <span className={styles.tokenItem}>
                                                     <Icon src={ICONS.CACHE_TOKENS} size={12} />
                                                     {tokensReadFromCache.toLocaleString()}
@@ -139,7 +251,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                             </Tooltip>
                                         )}
                                         {totalTokens != null && (
-                                            <Tooltip content="Total Tokens">
+                                            <Tooltip content={t('conversation.response.totalTokens')}>
                                                 <span className={styles.tokenItem}>
                                                     <Icon src={ICONS.TOTAL_TOKENS} size={12} />
                                                     {totalTokens.toLocaleString()}
@@ -153,16 +265,16 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             {isLoading ? (
                                                 <MultiPurposeButton
-                                                    label="Stop"
+                                                    label={t('conversation.response.stop')}
                                                     onClick={() => stopGenerating(blockId, aiVendor as AIVendor)}
                                                     data-testid="stop-button"
                                                 />
                                             ) : (
                                                 <>
-                                                    <Tooltip content={disabled ? "No API keys set" : ""}>
+                                                    <Tooltip content={disabled ? t('conversation.response.noApiKeysSet') : ""}>
                                                         <div style={disabled ? { cursor: 'not-allowed' } : {}}>
                                                             <MultiPurposeButton
-                                                                label="Regenerate"
+                                                                label={t('conversation.response.regenerate')}
                                                                 onClick={() => handleRegenerate(aiVendor as AIVendor)}
                                                                 disabled={disabled}
                                                                 icon={ICONS.REFRESH_ICON}
@@ -172,10 +284,10 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                                     </Tooltip>
 
                                                     {onFollowUp && text.trim().length > 0 && (
-                                                        <Tooltip content={disabled ? "No API keys set" : ""}>
+                                                        <Tooltip content={disabled ? t('conversation.response.noApiKeysSet') : ""}>
                                                             <div style={disabled ? { cursor: 'not-allowed' } : {}}>
                                                                 <MultiPurposeButton
-                                                                    label={isSelected ? 'Selected' : 'Follow up'}
+                                                                    label={isSelected ? t('conversation.response.selected') : t('conversation.response.followUp')}
                                                                     onClick={() => handleFollowUp(messageId)}
                                                                     disabled={isSelected || disabled}
                                                                     icon={isSelected ? undefined : ICONS.SEND}

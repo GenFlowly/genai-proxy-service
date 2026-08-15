@@ -1,11 +1,12 @@
 from typing import TypedDict, Optional, Annotated
 
-# TODO fix this to include cache
 def _merge_usage(current: dict, update: dict) -> dict:
     return {
         "input_tokens": current.get("input_tokens", 0) + update.get("input_tokens", 0),
         "output_tokens": current.get("output_tokens", 0) + update.get("output_tokens", 0),
         "total_tokens": current.get("total_tokens", 0) + update.get("total_tokens", 0),
+        "cache_read_tokens": current.get("cache_read_tokens", 0) + update.get("cache_read_tokens", 0),
+        "cache_creation_tokens": current.get("cache_creation_tokens", 0) + update.get("cache_creation_tokens", 0),
     }
 
 
@@ -39,7 +40,8 @@ class RetrievalState(TypedDict):
 
     # Per-node config loaded from DDB CustomerGraphNodes.config (keyed by nodeType).
     # Each node reads its own entry and falls back to built-in defaults when absent.
-    node_configs: dict  # e.g. {"RESPONSE_GENERATOR": {"system_prompt": "...", "model_override": "gpt-4o"}}
+    node_configs: dict  # e.g. {"QUERY_REWRITER": {"system_prompt": "...", "model_override": "gpt-4o"}}
+                        # Response generators ignore system_prompt/model_override — see llm_node.py.
 
     # Customer instruction forwarded from genai-proxy-server (fetched via instructionId/instructionVersion).
     # When set, overrides the RESPONSE_GENERATOR node's configured system_prompt.

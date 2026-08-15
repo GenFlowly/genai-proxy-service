@@ -16,17 +16,54 @@
   width: 100%;
   overflow: hidden;
   position: relative; // Context for absolute sidebars
+
+  // Page canvas behind the widget panels (matches PageHeader); shows through
+  // the panels' rounded corners and the 1px gaps between them
+  background-color: $color-page-background;
+  gap: $widget-gap;
+  padding: $widget-gap;
+
+  @include respond-to-mobile {
+    // Widgets are full-screen overlays/pages on mobile — no floating panels
+    background-color: $background-gray;
+    gap: 0;
+    padding: 0;
+  }
 }
 
 .historySidebar {
   @include sidebar-base(right);
-  width: 10rem; // Slightly wider than default 10rem
+  width: 10rem; // Default; drag-resizing overrides via inline style
   background-color: var(--color-background-tertiary); // slightly distinct background
   z-index: 15;
-  
+  border: none; // The page-background gap separates panels instead
+  border-radius: $widget-radius;
+  overflow: hidden; // Clip inner content to the rounded corners
+  transition: none; // Width is user-driven (drag); animating it would lag the pointer
+
   @include respond-to-mobile {
     width: 100%;
     position: absolute;
     z-index: 200;
+    border-radius: 0;
+  }
+}
+
+// Drag handle on the history panel's right edge; the center section reflows
+// automatically as the panel width changes
+.historyResizeHandle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 20; // Above the panel's scrolling content
+  touch-action: none; // Keep pointer events during drag instead of scrolling
+
+  // Affordance: show a slim highlight while hovering/dragging
+  &:hover,
+  &:active {
+    background: linear-gradient(to left, $color-primary 2px, transparent 2px);
   }
 }

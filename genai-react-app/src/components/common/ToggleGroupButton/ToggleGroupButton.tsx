@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Icon } from '../Icon/Icon'
 import styles from './ToggleGroupButton.module.scss'
 
@@ -33,6 +34,7 @@ export default function ToggleGroupButton({
     className = '',
     'data-testid': testId
 }: ToggleGroupButtonProps): React.ReactElement {
+    const { t } = useTranslation()
 
     const handleToggle = (optionId: string) => {
         const isSelected = selectedValues.includes(optionId)
@@ -88,7 +90,7 @@ export default function ToggleGroupButton({
                         onClick={() => !isDisabled && handleToggle(option.id)}
                         type="button"
                         aria-pressed={isActive}
-                        aria-label={`Toggle ${option.label}`}
+                        aria-label={t('common.toggleGroupButton.toggleOption', { label: option.label })}
                         aria-disabled={isDisabled}
                         disabled={isDisabled}
                         data-testid={testId ? `${testId}-option-${option.id}` : undefined}

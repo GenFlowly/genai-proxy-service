@@ -123,7 +123,8 @@ class AIRequestManager(
         conversationId: String?,
         selectedResponseId: String?,
         client: String,
-        customerId: String
+        customerId: String,
+        agentic: Boolean = true
 
     ): List<Message> {
 
@@ -170,7 +171,8 @@ class AIRequestManager(
                         aiVendor = aiConfig.aiVendor,
                         model = aiConfig.model,
                         maxTokens = aiConfig.maxTokens ?: 4096,
-                        message = message
+                        message = message,
+                        agentic = agentic
                     )
                 }
             }.awaitAll()
@@ -185,7 +187,8 @@ class AIRequestManager(
         aiVendor: AIVendor,
         model: String,
         maxTokens: Int = 4096,
-        message: Message
+        message: Message,
+        agentic: Boolean = true
     ): Message {
         val apiKey = fetchApiKey(aiVendor, message.customerId, customerProfileService)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
@@ -206,7 +209,8 @@ class AIRequestManager(
             llmModel = model,
             llmMaxTokens = maxTokens,
             conversationHistory = conversationHistory,
-            systemPrompt = message.systemPrompt
+            systemPrompt = message.systemPrompt,
+            agentic = agentic
         )
 
         val responseMessage = Message(
@@ -220,7 +224,8 @@ class AIRequestManager(
             systemPrompt = message.systemPrompt,
             inputTokens = result.inputTokens,
             outputTokens = result.outputTokens,
-            totalTokens = result.totalTokens
+            totalTokens = result.totalTokens,
+            tokensReadFromCache = result.tokensReadFromCache
         )
 
         conversationService.addMessageInConversation(responseMessage)
@@ -356,7 +361,8 @@ class AIRequestManager(
         conversationId: String?,
         selectedResponseId: String?,
         client: String,
-        customerId: String
+        customerId: String,
+        agentic: Boolean = true
     ): StreamExecutionResult {
 
         val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, instructionVersion.toIntOrNull() ?: 1)
@@ -440,6 +446,7 @@ class AIRequestManager(
         val flow = kotlinx.coroutines.flow.flow {
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
+            var capturedThinkingDurationMs: Long? = null
             var success = false
             try {
                 retrievalService.retrieveAndGenerateStream(
@@ -451,7 +458,8 @@ class AIRequestManager(
                     llmModel = config.model,
                     llmMaxTokens = config.maxTokens ?: 4096,
                     conversationHistory = conversationHistory,
-                    systemPrompt = systemPrompt
+                    systemPrompt = systemPrompt,
+                    agentic = agentic
                 ).collect { chunk ->
                     when (chunk) {
                         is StreamChunk.Content -> {
@@ -460,6 +468,10 @@ class AIRequestManager(
                         }
                         is StreamChunk.Thinking -> {
                             emit("{\"t\":\"k\",\"v\":${chunk.text.toJsonStringValue()}}\n")
+                        }
+                        is StreamChunk.ThinkingDuration -> {
+                            capturedThinkingDurationMs = chunk.millis
+                            emit("{\"t\":\"kd\",\"v\":${chunk.millis}}\n")
                         }
                         is StreamChunk.Usage -> capturedUsage = chunk
                     }
@@ -492,7 +504,9 @@ class AIRequestManager(
                         systemPrompt = message.systemPrompt,
                         inputTokens = capturedUsage?.inputTokens,
                         outputTokens = capturedUsage?.outputTokens,
-                        totalTokens = capturedUsage?.totalTokens
+                        totalTokens = capturedUsage?.totalTokens,
+                        tokensReadFromCache = capturedUsage?.tokensReadFromCache,
+                        thinkingDurationMs = capturedThinkingDurationMs
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }

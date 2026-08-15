@@ -79,24 +79,31 @@ def make_llm_node(agent_type: str):
       json_indices_source_key      (str)  — state list to reorder for response_format=json_indices
       include_conversation_history (bool) — prepend prior turns before the user message
       model_override               (str)  — override the request-level llm_model
+
+    Note: system_prompt and model_override are ignored when output_key is
+    "generated_response" — response generators always use the request's resolved
+    instruction as system prompt and the request's llm_model.
     """
     async def node(state: RetrievalState) -> dict:
         config = state.get("node_configs", {}).get(agent_type, {})
 
-        system_prompt = config.get("system_prompt", "You are a helpful assistant.")
         input_template = config.get("input_template", "{original_query}")
         output_key = config.get("output_key")
+        is_response_node = (output_key == "generated_response")
 
-        if output_key == "generated_response":
-            request_sp = state.get("request_system_prompt")
-            if request_sp:
-                logger.info("Node %s: overriding system_prompt with request_system_prompt (len=%d)", agent_type, len(request_sp))
-                system_prompt = request_sp
+        # Response generators always take their persona from the request's resolved
+        # instruction and their model from the request's aiConfig — node-level
+        # system_prompt/model_override are not honored for them.
+        if is_response_node:
+            system_prompt = state.get("request_system_prompt") or "You are a helpful assistant."
+            model_override = None
+        else:
+            system_prompt = config.get("system_prompt", "You are a helpful assistant.")
+            model_override = config.get("model_override")
         response_format = config.get("response_format", "text")
         json_output_mapping: dict = config.get("json_output_mapping", {})
         json_indices_source_key: str = config.get("json_indices_source_key", "retrieval_results")
         include_history: bool = config.get("include_conversation_history", True)
-        model_override: str | None = config.get("model_override")
 
         # Short-circuit: skip LLM call if source list for json_indices is empty
         if response_format == "json_indices":
@@ -121,7 +128,6 @@ def make_llm_node(agent_type: str):
 
         messages: list[Any] = [_make_system(system_prompt, cache_anthropic)]
 
-        is_response_node = (output_key == "generated_response")
         rendered_input = _render_template(input_template, state)
 
         if include_history:

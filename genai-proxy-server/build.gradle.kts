@@ -38,6 +38,9 @@ dependencies {
     // OpenAPI spec generation from routes + Swagger UI
     implementation("io.github.smiley4:ktor-openapi:5.1.0")
     implementation("io.github.smiley4:ktor-swagger-ui:5.1.0")
+    // Compile-time access to the OpenAPI model for the postBuild spec hook
+    // (transitive runtime dep of ktor-openapi; version matched to its parser)
+    implementation("io.swagger.core.v3:swagger-models:2.2.26")
     api("io.ktor:ktor-server-content-negotiation:3.0.0")
     api("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
 
@@ -67,6 +70,10 @@ dependencies {
 
     implementation("io.ktor:ktor-server-auth-jvm:3.0.0")
     implementation("io.ktor:ktor-server-auth-jwt-jvm:3.0.0")
+
+    // Voice session relay: client <-> proxy <-> retrieval-server WebSockets
+    implementation("io.ktor:ktor-server-websockets:3.0.0")
+    implementation("io.ktor:ktor-client-websockets:3.0.0")
 
     // ✅ Auth0 JWK
     implementation("com.auth0:jwks-rsa:0.22.1")

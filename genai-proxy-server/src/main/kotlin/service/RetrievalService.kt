@@ -22,14 +22,22 @@ import mu.KLogger
 sealed class StreamChunk {
     data class Content(val text: String) : StreamChunk()
     data class Thinking(val text: String) : StreamChunk()
-    data class Usage(val inputTokens: Int, val outputTokens: Int, val totalTokens: Int) : StreamChunk()
+    /** Request receipt on the retrieval server → first generated token, in ms */
+    data class ThinkingDuration(val millis: Long) : StreamChunk()
+    data class Usage(
+        val inputTokens: Int,
+        val outputTokens: Int,
+        val totalTokens: Int,
+        val tokensReadFromCache: Int
+    ) : StreamChunk()
 }
 
 data class RetrievalResult(
     val text: String?,
     val inputTokens: Int?,
     val outputTokens: Int?,
-    val totalTokens: Int?
+    val totalTokens: Int?,
+    val tokensReadFromCache: Int?
 )
 
 @Serializable
@@ -50,7 +58,8 @@ private data class RetrievalAgentPayload(
     val llm_max_tokens: Int,
     val conversation_history: List<ConversationMessage> = emptyList(),
     val system_prompt: String? = null,
-    val stream: Boolean = false
+    val stream: Boolean = false,
+    val agentic: Boolean = true
 )
 
 @Serializable
@@ -76,7 +85,8 @@ class RetrievalService(
         llmMaxTokens: Int,
         conversationHistory: List<ConversationMessage>,
         systemPrompt: String?,
-        stream: Boolean
+        stream: Boolean,
+        agentic: Boolean
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
@@ -89,7 +99,8 @@ class RetrievalService(
             llm_max_tokens = llmMaxTokens,
             conversation_history = conversationHistory,
             system_prompt = systemPrompt?.takeIf { it.isNotBlank() },
-            stream = stream
+            stream = stream,
+            agentic = agentic
         )
     )
 
@@ -102,10 +113,11 @@ class RetrievalService(
         llmModel: String,
         llmMaxTokens: Int = 4096,
         conversationHistory: List<ConversationMessage> = emptyList(),
-        systemPrompt: String? = null
+        systemPrompt: String? = null,
+        agentic: Boolean = true
     ): RetrievalResult {
-        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false)
+        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -118,7 +130,7 @@ class RetrievalService(
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Retrieval server error ${response.status}: $errorBody" }
-                return RetrievalResult(null, null, null, null)
+                return RetrievalResult(null, null, null, null, null)
             }
             val body = response.bodyAsText()
             val root = json.parseToJsonElement(body).jsonObject
@@ -129,10 +141,11 @@ class RetrievalService(
                 inputTokens = usageObj?.get("input_tokens")?.jsonPrimitive?.intOrNull,
                 outputTokens = usageObj?.get("output_tokens")?.jsonPrimitive?.intOrNull,
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
+                tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to call retrieval server (non-streaming)" }
-            RetrievalResult(null, null, null, null)
+            RetrievalResult(null, null, null, null, null)
         }
     }
 
@@ -145,10 +158,11 @@ class RetrievalService(
         llmModel: String,
         llmMaxTokens: Int = 4096,
         conversationHistory: List<ConversationMessage> = emptyList(),
-        systemPrompt: String? = null
+        systemPrompt: String? = null,
+        agentic: Boolean = true
     ): Flow<StreamChunk> = channelFlow {
-        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true)
+        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -179,6 +193,10 @@ class RetrievalService(
                                 val thinking = jsonObj["thinking"]?.jsonPrimitive?.content
                                 if (!thinking.isNullOrEmpty()) send(StreamChunk.Thinking(thinking))
                             }
+                            jsonObj.containsKey("thinking_duration_ms") -> {
+                                val millis = jsonObj["thinking_duration_ms"]?.jsonPrimitive?.content?.toLongOrNull()
+                                if (millis != null) send(StreamChunk.ThinkingDuration(millis))
+                            }
                             jsonObj.containsKey("usage") -> {
                                 val usageObj = jsonObj["usage"]!!.jsonObject
                                 send(
@@ -186,6 +204,7 @@ class RetrievalService(
                                         inputTokens = usageObj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                         outputTokens = usageObj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                         totalTokens = usageObj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                                        tokensReadFromCache = usageObj["cache_read_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                     )
                                 )
                             }

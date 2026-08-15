@@ -333,7 +333,9 @@ class DynamoDBProvider(
             inputTokens = inputTokens,
             outputTokens = outputTokens,
             totalTokens = totalTokens,
-            tokensReadFromCache = tokensReadFromCache
+            tokensReadFromCache = tokensReadFromCache,
+            thinkingDurationMs = item["thinkingDurationMs"]?.n()?.toLongOrNull(),
+            createdAt = item["createdAt"]?.s()
         )
     }
 
@@ -412,6 +414,9 @@ class DynamoDBProvider(
                     }
                     message.tokensReadFromCache?.let {
                         map["tokensReadFromCache"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    message.thinkingDurationMs?.let {
+                        map["thinkingDurationMs"] = AttributeValue.builder().n(it.toString()).build()
                     }
                 }
             )

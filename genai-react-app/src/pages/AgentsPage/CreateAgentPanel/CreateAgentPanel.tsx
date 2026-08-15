@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AIVendor } from '../../../constants/vendors'
 import VendorModelSelect from '../../../components/common/VendorModelSelect/VendorModelSelect'
 import styles from './CreateAgentPanel.module.scss'
@@ -6,21 +7,21 @@ import styles from './CreateAgentPanel.module.scss'
 const AVATAR_OPTIONS = ['🤖', '🦾', '🧠', '⚡', '🌟', '🔮', '🎯', '🚀']
 
 const TOOLS = [
-    { id: 'web_search', label: 'Web Search' },
-    { id: 'code_executor', label: 'Code Executor' },
-    { id: 'email', label: 'Email' },
-    { id: 'database', label: 'Database' },
-    { id: 'file_reader', label: 'File Reader' },
-    { id: 'calendar', label: 'Calendar' },
+    { id: 'web_search', labelKey: 'agentsPage.createAgentPanel.tools.webSearch' },
+    { id: 'code_executor', labelKey: 'agentsPage.createAgentPanel.tools.codeExecutor' },
+    { id: 'email', labelKey: 'agentsPage.createAgentPanel.tools.email' },
+    { id: 'database', labelKey: 'agentsPage.createAgentPanel.tools.database' },
+    { id: 'file_reader', labelKey: 'agentsPage.createAgentPanel.tools.fileReader' },
+    { id: 'calendar', labelKey: 'agentsPage.createAgentPanel.tools.calendar' },
 ]
 
 const CONTEXT_WINDOWS = [
-    { value: '1000', label: '1,000 tokens' },
-    { value: '2000', label: '2,000 tokens' },
-    { value: '4000', label: '4,000 tokens' },
-    { value: '8000', label: '8,000 tokens' },
-    { value: '16000', label: '16,000 tokens' },
-    { value: '32000', label: '32,000 tokens' },
+    { value: '1000', tokens: '1,000' },
+    { value: '2000', tokens: '2,000' },
+    { value: '4000', tokens: '4,000' },
+    { value: '8000', tokens: '8,000' },
+    { value: '16000', tokens: '16,000' },
+    { value: '32000', tokens: '32,000' },
 ]
 
 export interface AgentFormData {
@@ -55,13 +56,14 @@ const INITIAL_FORM: AgentFormData = {
     contextWindow: '4000',
 }
 
-const MEMORY_LABELS: Record<AgentFormData['memoryType'], string> = {
-    'short-term': 'Short-term',
-    'long-term': 'Long-term',
-    'none': 'None',
+const MEMORY_LABEL_KEYS: Record<AgentFormData['memoryType'], string> = {
+    'short-term': 'agentsPage.createAgentPanel.memoryTypes.shortTerm',
+    'long-term': 'agentsPage.createAgentPanel.memoryTypes.longTerm',
+    'none': 'agentsPage.createAgentPanel.memoryTypes.none',
 }
 
 export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAgentPanelProps) {
+    const { t } = useTranslation()
     const [form, setForm] = useState<AgentFormData>(INITIAL_FORM)
 
     const update = <K extends keyof AgentFormData>(field: K, value: AgentFormData[K]) => {
@@ -81,23 +83,23 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
         <div className={styles.panel}>
             <div className={styles.header}>
                 <button className={styles.backBtn} onClick={onBack} type="button">
-                    ← Back
+                    {t('agentsPage.createAgentPanel.back')}
                 </button>
-                <h1 className={styles.title}>CREATE NEW AGENT</h1>
+                <h1 className={styles.title}>{t('agentsPage.createAgentPanel.title')}</h1>
                 <div className={styles.headerActions}>
                     <button
                         className={styles.saveBtn}
                         onClick={() => onSave?.(form)}
                         type="button"
                     >
-                        Save
+                        {t('agentsPage.createAgentPanel.save')}
                     </button>
                     <button
                         className={styles.deployBtn}
                         onClick={() => onDeploy?.(form)}
                         type="button"
                     >
-                        Deploy
+                        {t('agentsPage.createAgentPanel.deploy')}
                     </button>
                 </div>
             </div>
@@ -107,31 +109,31 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                 <section className={styles.step}>
                     <h2 className={styles.stepTitle}>
                         <span className={styles.stepNum}>1</span>
-                        BASICS
+                        {t('agentsPage.createAgentPanel.stepBasics')}
                     </h2>
                     <div className={styles.card}>
                         <div className={styles.field}>
-                            <label className={styles.label}>Agent Name</label>
+                            <label className={styles.label}>{t('agentsPage.createAgentPanel.agentName')}</label>
                             <input
                                 className={styles.input}
                                 type="text"
-                                placeholder="e.g. Research Assistant"
+                                placeholder={t('agentsPage.createAgentPanel.agentNamePlaceholder')}
                                 value={form.name}
                                 onChange={e => update('name', e.target.value)}
                             />
                         </div>
                         <div className={styles.field}>
-                            <label className={styles.label}>Description</label>
+                            <label className={styles.label}>{t('agentsPage.createAgentPanel.description')}</label>
                             <input
                                 className={styles.input}
                                 type="text"
-                                placeholder="What does this agent do?"
+                                placeholder={t('agentsPage.createAgentPanel.descriptionPlaceholder')}
                                 value={form.description}
                                 onChange={e => update('description', e.target.value)}
                             />
                         </div>
                         <div className={styles.field}>
-                            <label className={styles.label}>Avatar</label>
+                            <label className={styles.label}>{t('agentsPage.createAgentPanel.avatar')}</label>
                             <div className={styles.avatarPicker}>
                                 {AVATAR_OPTIONS.map(emoji => (
                                     <button
@@ -139,7 +141,7 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                                         className={`${styles.avatarOption} ${form.avatar === emoji ? styles.avatarSelected : ''}`}
                                         onClick={() => update('avatar', emoji)}
                                         type="button"
-                                        aria-label={`Select avatar ${emoji}`}
+                                        aria-label={t('agentsPage.createAgentPanel.selectAvatarAriaLabel', { emoji })}
                                     >
                                         {emoji}
                                     </button>
@@ -153,11 +155,11 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                 <section className={styles.step}>
                     <h2 className={styles.stepTitle}>
                         <span className={styles.stepNum}>2</span>
-                        MODEL & PERSONALITY
+                        {t('agentsPage.createAgentPanel.stepModelPersonality')}
                     </h2>
                     <div className={styles.card}>
                         <div className={styles.field}>
-                            <label className={styles.label}>LLM Provider & Model</label>
+                            <label className={styles.label}>{t('agentsPage.createAgentPanel.llmProviderModel')}</label>
                             <VendorModelSelect
                                 vendor={form.aiVendor}
                                 model={form.llmModel}
@@ -166,7 +168,7 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                         </div>
                         <div className={styles.field}>
                             <div className={styles.labelRow}>
-                                <label className={styles.label}>Temperature</label>
+                                <label className={styles.label}>{t('agentsPage.createAgentPanel.temperature')}</label>
                                 <span className={styles.temperatureValue}>{form.temperature.toFixed(1)}</span>
                             </div>
                             <input
@@ -179,15 +181,15 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                                 onChange={e => update('temperature', parseFloat(e.target.value))}
                             />
                             <div className={styles.sliderLabels}>
-                                <span>Precise</span>
-                                <span>Creative</span>
+                                <span>{t('agentsPage.createAgentPanel.precise')}</span>
+                                <span>{t('agentsPage.createAgentPanel.creative')}</span>
                             </div>
                         </div>
                         <div className={styles.field}>
-                            <label className={styles.label}>System Prompt</label>
+                            <label className={styles.label}>{t('agentsPage.createAgentPanel.systemPrompt')}</label>
                             <textarea
                                 className={styles.textarea}
-                                placeholder="You are a helpful assistant that..."
+                                placeholder={t('agentsPage.createAgentPanel.systemPromptPlaceholder')}
                                 value={form.systemPrompt}
                                 onChange={e => update('systemPrompt', e.target.value)}
                                 rows={5}
@@ -200,7 +202,7 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                 <section className={styles.step}>
                     <h2 className={styles.stepTitle}>
                         <span className={styles.stepNum}>3</span>
-                        TOOLS & CAPABILITIES
+                        {t('agentsPage.createAgentPanel.stepToolsCapabilities')}
                     </h2>
                     <div className={styles.card}>
                         <div className={styles.toolsGrid}>
@@ -212,12 +214,12 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                                         checked={form.tools.includes(tool.id)}
                                         onChange={() => toggleTool(tool.id)}
                                     />
-                                    <span className={styles.toolLabel}>{tool.label}</span>
+                                    <span className={styles.toolLabel}>{t(tool.labelKey)}</span>
                                 </label>
                             ))}
                         </div>
                         <button className={styles.addToolBtn} type="button">
-                            + Add Custom Tool
+                            {t('agentsPage.createAgentPanel.addCustomTool')}
                         </button>
                     </div>
                 </section>
@@ -226,11 +228,11 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                 <section className={styles.step}>
                     <h2 className={styles.stepTitle}>
                         <span className={styles.stepNum}>4</span>
-                        MEMORY
+                        {t('agentsPage.createAgentPanel.stepMemory')}
                     </h2>
                     <div className={styles.card}>
                         <div className={styles.field}>
-                            <label className={styles.label}>Memory Type</label>
+                            <label className={styles.label}>{t('agentsPage.createAgentPanel.memoryType')}</label>
                             <div className={styles.radioGroup}>
                                 {(['short-term', 'long-term', 'none'] as const).map(type => (
                                     <label key={type} className={styles.radioItem}>
@@ -241,20 +243,22 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                                             checked={form.memoryType === type}
                                             onChange={() => update('memoryType', type)}
                                         />
-                                        <span>{MEMORY_LABELS[type]}</span>
+                                        <span>{t(MEMORY_LABEL_KEYS[type])}</span>
                                     </label>
                                 ))}
                             </div>
                         </div>
                         <div className={styles.field}>
-                            <label className={styles.label}>Context Window</label>
+                            <label className={styles.label}>{t('agentsPage.createAgentPanel.contextWindow')}</label>
                             <select
                                 className={styles.select}
                                 value={form.contextWindow}
                                 onChange={e => update('contextWindow', e.target.value)}
                             >
                                 {CONTEXT_WINDOWS.map(c => (
-                                    <option key={c.value} value={c.value}>{c.label}</option>
+                                    <option key={c.value} value={c.value}>
+                                        {t('agentsPage.createAgentPanel.contextWindowOption', { tokens: c.tokens })}
+                                    </option>
                                 ))}
                             </select>
                         </div>

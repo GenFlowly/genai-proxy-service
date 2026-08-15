@@ -55,7 +55,8 @@ describe('ConversationHeader', () => {
 
         render(<ConversationHeader />)
 
-        expect(screen.getByText('New Chat')).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'New Chat' })).toBeInTheDocument()
+        expect(screen.getByTestId('new-chat-button')).toBeInTheDocument()
         const shareButton = screen.getByTestId('conversation-share-button')
         expect(shareButton).toBeInTheDocument()
         expect(shareButton).toBeDisabled()
@@ -88,7 +89,7 @@ describe('ConversationHeader', () => {
 
         render(<ConversationHeader />)
 
-        expect(screen.getByText('New Chat')).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'New Chat' })).toBeInTheDocument()
         expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument()
     })
 

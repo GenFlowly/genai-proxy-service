@@ -1,5 +1,6 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage/SettingsPage'
@@ -17,9 +18,10 @@ import { LayoutProvider } from './context/LayoutContext'
 import { ToastProvider } from './context/ToastContext'
 
 export default function AppContent(): React.ReactElement {
+    const { t } = useTranslation()
     const { isLoading } = useAuth()
 
-    if (isLoading) return <div>Loading...</div>
+    if (isLoading) return <div>{t("layout.appContent.loading")}</div>
 
     return (
         <LayoutProvider>

@@ -5,6 +5,7 @@ import ConversationHistoryComponent from '../../../../components/widgets/Convers
 import { useAuth } from '../../../../context/AuthContext'
 import { useConversation } from '../../../../context/ConversationContext'
 import { getCustomerConversations, archiveConversation } from '../../../../services/conversationHistoryService'
+import { clearHistoryCache } from '../../../../components/widgets/ConversationHistoryWidget/historyCache'
 
 jest.mock('../../../../context/AuthContext')
 jest.mock('../../../../context/ConversationContext')
@@ -47,6 +48,7 @@ function setupMocks({
 describe('ConversationHistoryComponent', () => {
     beforeEach(() => {
         jest.clearAllMocks()
+        clearHistoryCache() // The module-level SWR cache must not leak between tests
         setupMocks()
         mockGetCustomerConversations.mockResolvedValue({
             conversations: defaultConversations,

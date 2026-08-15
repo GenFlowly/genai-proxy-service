@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth0 } from '@auth0/auth0-react'
 import ShareModal, { VisibilityMode } from '../../common/ShareModal/ShareModal'
 import PillButton from '../../common/PillButton/PillButton'
@@ -12,9 +13,11 @@ import {
     getConversationSharedUsers,
 } from '../../../services/conversationService'
 import { SearchUserResponse } from '../../../models/user.models'
+import { ICONS } from '../../../constants/icons'
 
 export default function ConversationHeader(): React.ReactElement | null {
-    const { conversationId, conversationTitle, conversationRole } = useConversation()
+    const { t } = useTranslation()
+    const { conversationId, conversationTitle, conversationRole, resetConversation } = useConversation()
     const { getAccessTokenSilently } = useAuth0()
     const { entitlements } = useAuth()
     const { showToast } = useToast()
@@ -23,7 +26,7 @@ export default function ConversationHeader(): React.ReactElement | null {
     const isNewChat = !conversationId
     const canShare = conversationRole === 'OWNER' || conversationRole === 'EDIT'
     const showShare = entitlements.canShare && (isNewChat || canShare)
-    const displayTitle = isNewChat ? 'New Chat' : (conversationTitle ?? 'Untitled conversation')
+    const displayTitle = isNewChat ? t('conversation.conversationHeader.newChat') : (conversationTitle ?? t('conversation.conversationHeader.untitledConversation'))
 
     const handleShareSave = async (
         _mode: VisibilityMode,
@@ -39,24 +42,36 @@ export default function ConversationHeader(): React.ReactElement | null {
             for (const user of removedUsers) {
                 await unshareConversation(token, conversationId, user.customerId)
             }
-            showToast('Share settings updated')
+            showToast(t('conversation.conversationHeader.shareSettingsUpdated'))
         } catch (err) {
             console.error('Failed to update conversation share', err)
-            showToast('Failed to update share settings')
+            showToast(t('conversation.conversationHeader.shareSettingsUpdateFailed'))
         }
     }
 
     return (
         <PageHeader
             title={displayTitle}
-            actions={showShare && (
-                <PillButton
-                    label="Share"
-                    className={pageHeaderStyles.actionButton}
-                    onClick={() => !isNewChat && setShareModalOpen(true)}
-                    data-testid="conversation-share-button"
-                    disabled={isNewChat}
-                />
+            actions={(
+                <>
+                    <PillButton
+                        label={t('conversation.conversationHeader.newChat')}
+                        icon={ICONS.PLUS}
+                        className={pageHeaderStyles.actionButton}
+                        onClick={resetConversation}
+                        data-testid="new-chat-button"
+                    />
+                    {showShare && (
+                        <PillButton
+                            label={t('conversation.conversationHeader.share')}
+                            icon={ICONS.SHARE}
+                            className={pageHeaderStyles.actionButton}
+                            onClick={() => !isNewChat && setShareModalOpen(true)}
+                            data-testid="conversation-share-button"
+                            disabled={isNewChat}
+                        />
+                    )}
+                </>
             )}
         >
             <ShareModal

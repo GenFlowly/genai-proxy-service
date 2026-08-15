@@ -10,5 +10,7 @@ data class GenerateTextStreamRequest(
     val prompt: Prompt,
     val selectedResponseId: String?,
     val conversationId: String?,
-    val client: String
+    val client: String,
+    // false → direct LLM generation: skip the agent graph (no retrieval/RAG)
+    val agentic: Boolean = true
 )

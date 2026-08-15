@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ICONS } from '../../../constants/icons'
 import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
 import PillButton from '../../common/PillButton/PillButton'
@@ -25,6 +26,7 @@ import { InstructionResponse } from '../../../models/instruction.models'
 export default function InstructionWidget({ 'data-testid': testId }: {
     'data-testid'?: string
 }) {
+    const { t } = useTranslation()
     const {
         systemPrompt,
         setSystemPrompt,
@@ -162,10 +164,10 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                         flex: 1,
                     }}>
                         <InputSelectWithHint
-                            hint="Persona"
+                            hint={t('instructionWidget.instructionWidget.personaHint')}
                             icon={ICONS.USER_ROLE}
                             iconOnlyHintOnMobile
-                            placeholder="Select a persona"
+                            placeholder={t('instructionWidget.instructionWidget.selectPersonaPlaceholder')}
                             className={styles.roleInput}
                             value={(() => {
                                 if (selectedInstructionId) return selectedInstructionId
@@ -189,7 +191,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                 }));
 
                                 const ctaOption = {
-                                    label: '[+] Create Instructions',
+                                    label: t('instructionWidget.instructionWidget.createInstructionsCta'),
                                     value: 'CTA_ACTION',
                                     isCta: true,
                                     ctaAction: () => {
@@ -221,8 +223,8 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                     <button
                         className={styles.editButton}
                         onClick={() => setInstructionWidgetExpanded(true)}
-                        aria-label="Edit instruction"
-                        title="Edit selected instruction"
+                        aria-label={t('instructionWidget.instructionWidget.editInstructionAriaLabel')}
+                        title={t('instructionWidget.instructionWidget.editSelectedInstructionTitle')}
                         data-testid="instruction-edit-button"
                     >
                         <Icon src={ICONS.EDIT} className={styles.editIcon} />
@@ -246,7 +248,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                     }));
 
                     const ctaOption = {
-                        label: '[+] Create Instructions',
+                        label: t('instructionWidget.instructionWidget.createInstructionsCta'),
                         value: 'CTA_ACTION',
                         isCta: true,
                         ctaAction: () => {
@@ -291,10 +293,10 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                 {/* Row 1: Dropdown Selector */}
                                 <div style={{ width: '100%' }}>
                                     <InputSelectWithHint
-                                        hint="Persona"
+                                        hint={t('instructionWidget.instructionWidget.personaHint')}
                                         icon={ICONS.USER_ROLE}
                                         iconOnlyHintOnMobile
-                                        placeholder="Select a persona"
+                                        placeholder={t('instructionWidget.instructionWidget.selectPersonaPlaceholder')}
                                         className={styles.roleInput}
                                         value={selectedInstructionId || ''}
                                         onChange={(val) => {
@@ -326,10 +328,10 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                             <div className={styles.titleGroup}
                                                 style={{ width: '100%' }}>
                                                 <InputTextWithHint
-                                                    hint="Name"
+                                                    hint={t('instructionWidget.instructionWidget.nameHint')}
                                                     value={instructionName}
                                                     onChange={(e) => setInstructionName(e.target.value)}
-                                                    placeholder="Instruction Name"
+                                                    placeholder={t('instructionWidget.instructionWidget.instructionNamePlaceholder')}
                                                     className={styles.nameInput}
                                                     autoFocus
                                                     data-testid="instruction-name-input"
@@ -337,7 +339,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                                 <button
                                                     onClick={() => setIsEditingName(false)}
                                                     className={styles.cancelButton}>
-                                                    Cancel
+                                                    {t('instructionWidget.instructionWidget.cancel')}
                                                 </button>
                                             </div>
                                         ) : (
@@ -349,7 +351,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                                         marginRight: '0.5rem'
                                                     }}
                                                     data-testid="instruction-name-display">
-                                                    {instructionName || latest?.name || 'Untitled Instruction'}
+                                                    {instructionName || latest?.name || t('instructionWidget.instructionWidget.untitledInstruction')}
                                                 </span>
                                                 <button
                                                     onClick={() => {
@@ -364,7 +366,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                                         display: 'flex',
                                                         alignItems: 'center'
                                                     }}
-                                                    title="Rename Instruction"
+                                                    title={t('instructionWidget.instructionWidget.renameInstructionTitle')}
                                                 >
                                                     <Icon src={ICONS.EDIT}
                                                         size={16}
@@ -378,7 +380,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                     {latest && (
                                         <div style={{ flexShrink: 0 }}>
                                             <InputSelectWithHint
-                                                hint="Version"
+                                                hint={t('instructionWidget.instructionWidget.versionHint')}
                                                 value={selectedVersion?.toString() || ''}
                                                 onChange={async (val) => {
                                                     const newVersion = parseInt(val, 10)
@@ -443,19 +445,19 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                     {/* Main Content Area */}
                     <div className={styles.buttonContent}>
                         <PillButton
-                            label="Looks good"
+                            label={t('instructionWidget.instructionWidget.looksGood')}
                             variant="secondary"
                             onClick={() => setInstructionWidgetExpanded(false)}
                             data-testid="instruction-looks-good-button"
                         />
 
                         <Tooltip
-                            content={!hasAnyValidApiKey ? "No API keys set" : ""}>
+                            content={!hasAnyValidApiKey ? t('instructionWidget.instructionWidget.noApiKeysSet') : ""}>
                             <div
                                 style={!hasAnyValidApiKey ? { cursor: 'not-allowed' } : {}}>
                                 <PillButton
                                     onClick={handleCreateInstruction}
-                                    label={isLoading ? 'Processing...' : 'Save Instructions'}
+                                    label={isLoading ? t('instructionWidget.instructionWidget.processing') : t('instructionWidget.instructionWidget.saveInstructions')}
                                     disabled={isLoading || !systemPrompt.trim()}
                                     icon={ICONS.SAVE_ICON}
                                     variant="primary"

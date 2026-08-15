@@ -3,7 +3,6 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.5rem 1rem;
-    border-bottom: 1px solid var(--color-border);
     background-color: var(--color-conversation-header-bg);
     gap: 1rem;
     min-height: 3rem;
@@ -53,5 +52,13 @@
         background-color: var(--color-background-hover) !important;
         color: var(--color-text-primary) !important;
         border-color: var(--color-primary) !important;
+    }
+
+    /* 📱 Mobile: icon-only header actions — hide the text label but keep the
+       Icon component's span (distinguished by its role="img") */
+    @media (max-width: 768px) {
+        span:not([role='img']) {
+            display: none;
+        }
     }
 }

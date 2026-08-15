@@ -95,7 +95,8 @@ fun Route.registerGenerateTextRoutes(
                         request.conversationId,
                         request.selectedResponseId,
                         request.client,
-                        customerId
+                        customerId,
+                        request.agentic
                     )
 
                 val generateTextResponseList =

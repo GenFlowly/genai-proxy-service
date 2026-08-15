@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 import PillButton from '../../../common/PillButton/PillButton'
@@ -8,11 +9,12 @@ import Tooltip from '../../../common/Tooltip/Tooltip'
 import { Icon } from '../../../common/Icon/Icon'
 
 export default function NewChatWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
+    const { t } = useTranslation()
     const { conversation } = useSidebarWidget()
     const { resetConversation } = conversation
 
     const collapsedContent = (
-        <Tooltip content="New Chat" position="left">
+        <Tooltip content={t('sidebar.newChatWidget.newChat')} position="left">
             <button
                 className={styles.collapsedButton}
                 onClick={resetConversation}
@@ -27,7 +29,7 @@ export default function NewChatWidget({ 'data-testid': testId }: { 'data-testid'
         <SidebarWidgetContainer collapsedContent={collapsedContent} data-testid={testId || "new-chat-widget"}>
             <div className={styles.container}>
                 <PillButton
-                    label="New Chat"
+                    label={t('sidebar.newChatWidget.newChat')}
                     onClick={resetConversation}
                     icon={ICONS.PLUS}
                     className={styles.fullWidthButton}

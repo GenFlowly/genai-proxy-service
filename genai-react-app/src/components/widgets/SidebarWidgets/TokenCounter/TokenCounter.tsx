@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 import { Icon } from '../../../common/Icon/Icon'
@@ -7,6 +8,7 @@ import Tooltip from '../../../common/Tooltip/Tooltip'
 import { estimateTokens } from '../../../../utils/tokenEstimate'
 
 export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
+    const { t } = useTranslation()
     const { conversation } = useSidebarWidget()
     const { editorPrompt, activeBlockId, conversationBlockList } = conversation
 
@@ -27,7 +29,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
 
     // Collapsed Content
     const headerCollapsed = (
-        <Tooltip content="Prompt Tokens" position="left">
+        <Tooltip content={t('sidebar.tokenCounter.promptTokens')} position="left">
             <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -54,7 +56,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
     const header = (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.25rem' }}>
             <Icon src={ICONS.TOKENS} size={20} />
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: 0 }}>Prompt Tokens</h3>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: 0 }}>{t('sidebar.tokenCounter.promptTokens')}</h3>
         </div>
     )
 
@@ -67,7 +69,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
         >
             <div style={{ display: 'flex', flexDirection: 'column', padding: '0 0.25rem' }}>
                 <div className="text-xs text-gray-500" data-testid="token-count-display">
-                    {`Estimated: ${tokenCount}`}
+                    {t('sidebar.tokenCounter.estimated', { tokenCount })}
                 </div>
             </div>
         </SidebarWidgetContainer>

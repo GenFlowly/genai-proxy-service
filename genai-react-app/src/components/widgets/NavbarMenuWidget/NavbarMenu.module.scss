@@ -1,4 +1,5 @@
 @import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
 
 .navLinks {
     display: flex;
@@ -10,6 +11,7 @@
 }
 
 .navLink {
+    position: relative; // Anchor for the active-page indicator
     color: $color-navbar-text;
     text-decoration: none;
     font-size: 0.775rem; // Approx 12px
@@ -28,4 +30,26 @@
 
 .activeNavLink {
     font-weight: 700; // Bold text for active "App" just like macOS highlighting the current app's name
+
+    // Active-page indicator: a primary-colored bar under the title, pinned to
+    // the navbar's bottom edge. Offset math: with the global border-box
+    // sizing, the navbar container is 1.5rem tall in total and this link is
+    // vertically centered in it — so the navbar's bottom edge lies
+    // (1.5rem - 100%) / 2 below the link's own bottom (100% = link height).
+    &::after {
+        content: '';
+        position: absolute;
+        left: 0.6rem; // Align with the title text (matches the link's side padding)
+        right: 0.6rem;
+        height: 2px;
+        bottom: calc((100% - 1.5rem) / 2);
+        background-color: $color-primary; // Theme-aware primary
+        border-radius: 2px 2px 0 0;
+
+        // 📱 The mobile menu reuses this component in a vertical list where
+        // the navbar-geometry offset doesn't apply — no indicator there
+        @include respond-to-mobile {
+            display: none;
+        }
+    }
 }

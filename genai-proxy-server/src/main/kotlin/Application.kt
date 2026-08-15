@@ -11,6 +11,8 @@ import io.github.smiley4.ktoropenapi.config.AuthType
 import com.genflowly.service.ConversationService
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
+import io.ktor.http.auth.HttpAuthHeader
+import io.ktor.server.auth.parseAuthorizationHeader
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.Authentication
@@ -57,7 +59,17 @@ fun Application.module() {
         json()
     }
 
+    install(io.ktor.server.websocket.WebSockets) {
+        pingPeriodMillis = 30_000
+        timeoutMillis = 60_000
+    }
+
     install(OpenApi) {
+        // OpenAPI cannot describe WebSocket routes, so the voice session
+        // endpoint is injected as a documented pseudo-entry (GET + 101)
+        postBuild = { spec, _ ->
+            spec.path(Routes.VOICE_SESSION, com.genflowly.activity.voice.voiceSessionSpecPath())
+        }
         info {
             title = "GenAI Proxy Service API"
             version = "1.0.0"
@@ -93,6 +105,7 @@ fun Application.module() {
             tag("Tool Credentials") { description = "Credentials for external tools" }
             tag("Agents") { description = "Agent graph management" }
             tag("Notes") { description = "Customer notes" }
+            tag("Voice") { description = "Realtime voice sessions and voice model listing" }
         }
     }
 
@@ -119,6 +132,17 @@ fun Application.module() {
     install(Authentication) {
         jwt("auth0") {
             logger.info("jwkProvider {}", jwkProvider)
+            // Browsers cannot set headers on WebSocket connections (voice
+            // sessions), so fall back to an access_token query parameter.
+            authHeader { call ->
+                try {
+                    call.request.parseAuthorizationHeader()
+                } catch (_: Exception) {
+                    null
+                } ?: call.request.queryParameters["access_token"]?.let {
+                    HttpAuthHeader.Single("Bearer", it)
+                }
+            }
             verifier(jwkProvider, issuer)
             validate { credential -> validateCredentials(credential) }
         }
@@ -173,5 +197,8 @@ fun Application.module() {
     val dynamoDBProvider = get<com.genflowly.providers.DynamoDBProvider>()
     val notesService = get<NotesService>()
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, notesService, developerApiKeyService)
+    val httpClient = get<io.ktor.client.HttpClient>()
+    val json = get<kotlinx.serialization.json.Json>()
+
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, notesService, developerApiKeyService, httpClient, json)
 }

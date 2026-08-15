@@ -16,3 +16,16 @@
         cursor: pointer;
     }
 }
+
+/* Plain vendor initial shown where the logo used to be (collapsed sidebar,
+   history item details) — just the character, no badge chrome */
+.collapsedInitial {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    font-weight: 700;
+    line-height: 1;
+    user-select: none;
+}

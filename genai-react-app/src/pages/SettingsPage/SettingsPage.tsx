@@ -13,16 +13,18 @@ import { useLayout } from '../../context/LayoutContext'
 import Breadcrumbs, { BreadcrumbItem } from '../../components/common/Breadcrumbs/Breadcrumbs'
 
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
-// Labels for the section breadcrumb, keyed by the route segment
-const SECTION_LABELS: Record<string, string> = {
-    profile: 'Profile',
-    ai: 'AI Settings',
-    memory: 'Memory Settings',
-    developer: 'Developer',
+// Translation keys for the section breadcrumb, keyed by the route segment
+const SECTION_LABEL_KEYS: Record<string, string> = {
+    profile: 'settingsPage.settingsPage.sectionProfile',
+    ai: 'settingsPage.settingsPage.sectionAi',
+    memory: 'settingsPage.settingsPage.sectionMemory',
+    developer: 'settingsPage.settingsPage.sectionDeveloper',
 }
 
 export default function SettingsPage(): React.ReactElement {
+    const { t } = useTranslation()
     usePageTitle()
     const { width } = useWindowSize()
     const isMobile = width <= 768
@@ -31,12 +33,12 @@ export default function SettingsPage(): React.ReactElement {
     const { setLeftSidebarExpanded } = useLayout()
 
     // Breadcrumbs (mobile only): Menu > Settings [> Section]
-    const section = SECTION_LABELS[location.pathname.split('/').pop() || '']
+    const sectionKey = SECTION_LABEL_KEYS[location.pathname.split('/').pop() || '']
     const breadcrumbItems: BreadcrumbItem[] = [
         // "Menu" reopens the mobile menu overlay
-        { label: 'Menu', onClick: () => setLeftSidebarExpanded(true) },
-        { label: 'Settings', onClick: () => navigate('/settings') },
-        ...(section ? [{ label: section, onClick: () => navigate(location.pathname) }] : []),
+        { label: t('settingsPage.settingsPage.breadcrumbMenu'), onClick: () => setLeftSidebarExpanded(true) },
+        { label: t('settingsPage.settingsPage.breadcrumbSettings'), onClick: () => navigate('/settings') },
+        ...(sectionKey ? [{ label: t(sectionKey), onClick: () => navigate(location.pathname) }] : []),
     ]
 
     return (

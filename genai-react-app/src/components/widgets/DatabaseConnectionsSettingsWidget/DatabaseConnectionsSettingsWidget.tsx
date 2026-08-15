@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { storeCustomerVectorDBConfig } from '../../../services/storeCustomerVectorDBConfigService'
 import { storeCustomerSupabaseConfig } from '../../../services/storeCustomerSupabaseConfigService'
@@ -11,6 +12,7 @@ import { useToast } from '../../../context/ToastContext'
 import styles from './DatabaseConnectionsSettingsWidget.module.scss'
 
 export default function DatabaseConnectionsSettingsWidget(): React.ReactElement {
+    const { t } = useTranslation()
     const { customerId, getAccessTokenSilently, isAuthenticated, updateVectorDBConfigStatus, updateSupabaseConfigStatus } = useAuth()
     const { showToast } = useToast()
 
@@ -25,7 +27,7 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
 
     const handleSaveZilliz = async () => {
         if (!isAuthenticated || !customerId) {
-            showToast('Please log in first.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.pleaseLogInFirst'))
             return
         }
 
@@ -33,19 +35,19 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
         const tokenValue = zillizToken.trim()
 
         if (!endpointValue || !tokenValue) {
-            showToast('Please enter both endpoint and token.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.enterEndpointAndToken'))
             return
         }
 
         const endpointRegex = /^https:\/\/[a-zA-Z0-9-]+\.(?:serverless|dedicated)\.[a-zA-Z0-9-]+\.cloud\.zilliz\.com\/?$/i
         if (!endpointRegex.test(endpointValue)) {
-            showToast('Invalid Zilliz endpoint format.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.invalidZillizEndpoint'))
             return
         }
 
         const tokenRegex = /^[a-fA-F0-9]{64,}$/
         if (!tokenRegex.test(tokenValue)) {
-            showToast('Invalid Zilliz token format. Expected a long hex string.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.invalidZillizToken'))
             return
         }
 
@@ -63,10 +65,10 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
             }
             setZillizEndpoint('')
             setZillizToken('')
-            showToast('Zilliz settings saved successfully.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.zillizSavedSuccessfully'))
         } catch (error: any) {
             console.error(error)
-            showToast(error.message || 'Error saving Zilliz settings.')
+            showToast(error.message || t('dbSettings.databaseConnectionsSettingsWidget.errorSavingZilliz'))
         } finally {
             setSavingZilliz(false)
         }
@@ -74,7 +76,7 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
 
     const handleSaveSupabase = async () => {
         if (!isAuthenticated || !customerId) {
-            showToast('Please log in first.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.pleaseLogInFirst'))
             return
         }
 
@@ -82,14 +84,14 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
         const keyValue = supabaseKey.trim()
 
         if (!endpointValue || !keyValue) {
-            showToast('Please enter both endpoint and key.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.enterEndpointAndKey'))
             return
         }
 
         try {
             new URL(endpointValue)
         } catch (_) {
-            showToast('Invalid Supabase endpoint format. Please enter a valid URL.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.invalidSupabaseEndpoint'))
             return
         }
 
@@ -110,10 +112,10 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
             setSupabaseEndpoint('')
             setSupabaseKey('')
             setSupabasePassword('')
-            showToast('Supabase settings saved successfully.')
+            showToast(t('dbSettings.databaseConnectionsSettingsWidget.supabaseSavedSuccessfully'))
         } catch (error: any) {
             console.error(error)
-            showToast(error.message || 'Error saving Supabase settings.')
+            showToast(error.message || t('dbSettings.databaseConnectionsSettingsWidget.errorSavingSupabase'))
         } finally {
             setSavingSupabase(false)
         }
@@ -121,30 +123,30 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
 
     return (
         <div className={styles.card}>
-            <h2 className={styles.title}>Database Settings</h2>
+            <h2 className={styles.title}>{t('dbSettings.databaseConnectionsSettingsWidget.title')}</h2>
             <div className={styles.form}>
                 <div className={styles.vendorSection}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span className={styles.vendorName}>Milvus Cloud</span>
+                        <span className={styles.vendorName}>{t('dbSettings.databaseConnectionsSettingsWidget.milvusCloud')}</span>
                         <CustomerVectorDBConfigStatus vendor="Zilliz" />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <InputTextWithHint
-                            hint="Endpoint"
+                            hint={t('dbSettings.databaseConnectionsSettingsWidget.endpointHint')}
                             value={zillizEndpoint}
                             onChange={e => setZillizEndpoint(e.target.value)}
-                            placeholder="https://in03-....zillizcloud.com"
+                            placeholder={t('dbSettings.databaseConnectionsSettingsWidget.zillizEndpointPlaceholder')}
                         />
                         <InputTextWithHint
-                            hint="Token"
+                            hint={t('dbSettings.databaseConnectionsSettingsWidget.tokenHint')}
                             value={zillizToken}
                             onChange={e => setZillizToken(e.target.value)}
-                            placeholder="Placeholder token..."
+                            placeholder={t('dbSettings.databaseConnectionsSettingsWidget.zillizTokenPlaceholder')}
                         />
                     </div>
                     <PillButton
                         onClick={handleSaveZilliz}
-                        label={savingZilliz ? 'Saving...' : 'Save'}
+                        label={savingZilliz ? t('dbSettings.databaseConnectionsSettingsWidget.saving') : t('dbSettings.databaseConnectionsSettingsWidget.save')}
                         icon={ICONS.SAVE_ICON}
                         disabled={savingZilliz || !zillizEndpoint.trim() || !zillizToken.trim()}
                     />
@@ -152,33 +154,33 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
 
                 <div className={styles.vendorSection}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span className={styles.vendorName}>Supabase</span>
+                        <span className={styles.vendorName}>{t('dbSettings.databaseConnectionsSettingsWidget.supabase')}</span>
                         <CustomerSupabaseConfigStatus />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <InputTextWithHint
-                            hint="Endpoint"
+                            hint={t('dbSettings.databaseConnectionsSettingsWidget.endpointHint')}
                             value={supabaseEndpoint}
                             onChange={e => setSupabaseEndpoint(e.target.value)}
-                            placeholder="https://your-project.supabase.co"
+                            placeholder={t('dbSettings.databaseConnectionsSettingsWidget.supabaseEndpointPlaceholder')}
                         />
                         <InputTextWithHint
-                            hint="Key"
+                            hint={t('dbSettings.databaseConnectionsSettingsWidget.keyHint')}
                             value={supabaseKey}
                             onChange={e => setSupabaseKey(e.target.value)}
-                            placeholder="your-anon-key / service_role"
+                            placeholder={t('dbSettings.databaseConnectionsSettingsWidget.supabaseKeyPlaceholder')}
                         />
                         <InputTextWithHint
-                            hint="Password"
+                            hint={t('dbSettings.databaseConnectionsSettingsWidget.passwordHint')}
                             value={supabasePassword}
                             onChange={e => setSupabasePassword(e.target.value)}
-                            placeholder="PostgreSQL Database Password"
+                            placeholder={t('dbSettings.databaseConnectionsSettingsWidget.supabasePasswordPlaceholder')}
                             type="password"
                         />
                     </div>
                     <PillButton
                         onClick={handleSaveSupabase}
-                        label={savingSupabase ? 'Saving...' : 'Save'}
+                        label={savingSupabase ? t('dbSettings.databaseConnectionsSettingsWidget.saving') : t('dbSettings.databaseConnectionsSettingsWidget.save')}
                         icon={ICONS.SAVE_ICON}
                         disabled={savingSupabase || !supabaseEndpoint.trim() || !supabaseKey.trim() || !supabasePassword.trim()}
                     />
