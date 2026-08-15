@@ -16,6 +16,7 @@ import {
     Message,
 } from '../models/conversation.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
+import i18n from '../i18n'
 
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
 
@@ -268,7 +269,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 if (!isAuthenticated) {
                     loginWithRedirect({ appState: { returnTo: window.location.pathname } })
                 } else {
-                    showToast('You do not have access to this conversation')
+                    showToast(i18n.t('toasts.conversation.noAccess'))
                     navigate('/chat')
                 }
             } else {
@@ -323,13 +324,13 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         const conversationBlock = conversationBlockList.find(c => c.conversationBlockId === id)
         if (!conversationBlock) return null
         if (!isAuthenticated || !customerId) {
-            showToast('Please log in first.')
+            showToast(i18n.t('toasts.auth.loginFirst'))
             return null
         }
 
         const aiConfigs = config.filter(c => c.aiVendor && c.model && c.model.trim() !== '')
         if (aiConfigs.length === 0) {
-            showToast('Select at least one vendor and model.')
+            showToast(i18n.t('toasts.ai.selectVendorAndModel'))
             return null
         }
 
@@ -404,7 +405,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 responseMessages: [
                     {
                         aiVendor: AIVendor.OPENAI,
-                        text: 'Error generating text.',
+                        text: i18n.t('errors.ai.generateTextFailed'),
                         messageId: 'error',
                     },
                 ],
@@ -423,7 +424,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         if (vendorToRegenerate) {
              aiConfigs = aiConfigs.filter(c => c.aiVendor === vendorToRegenerate)
              if (aiConfigs.length === 0) {
-                 showToast(`Please select a valid model for ${vendorToRegenerate} first.`)
+                 showToast(i18n.t('toasts.ai.selectValidModelForVendor', { vendor: vendorToRegenerate }))
                  return
              }
         }
@@ -731,14 +732,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 // Session expired mid-use. Draft is already persisted to localStorage by the
                 // editor (Request.tsx). Reset block state then logout so the Login button appears.
                 updateConversationBlock(id, { isLoading: false, status: 'draft' })
-                showToast('Session expired. Your draft is saved — log in to continue.')
+                showToast(i18n.t('toasts.auth.sessionExpiredDraftSaved'))
                 logout({ returnTo: window.location.origin, localOnly: true })
             } else {
                 updateConversationBlock(id, {
                     responseMessages: [
                         {
                             aiVendor: AIVendor.OPENAI,
-                            text: 'Error generating text stream.',
+                            text: i18n.t('errors.ai.generateTextStreamFailed'),
                             messageId: 'error',
                         },
                     ],

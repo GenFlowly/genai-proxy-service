@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import styles from './Breadcrumbs.module.scss'
 
 export interface BreadcrumbItem {
@@ -19,10 +20,11 @@ interface BreadcrumbsProps {
  * current level (aria-current) but remains clickable if it has an onClick.
  */
 export default function Breadcrumbs({ items, className = '', 'data-testid': testId }: BreadcrumbsProps) {
+    const { t } = useTranslation()
     return (
         <nav
             className={`${styles.breadcrumbs} ${className}`}
-            aria-label="Breadcrumbs"
+            aria-label={t('common.breadcrumbs.ariaLabel')}
             data-testid={testId || 'breadcrumbs'}
         >
             {items.map((item, index) => {

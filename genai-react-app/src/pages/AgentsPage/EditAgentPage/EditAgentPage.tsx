@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import Navbar from '../../../components/navbar/Navbar'
+import i18n from '../../../i18n'
 import { useLayout } from '../../../context/LayoutContext'
 import { usePageTitle } from '../../../hooks/usePageTitle'
 import { useAuth } from '../../../context/AuthContext'
@@ -11,17 +13,19 @@ import { formatServerDateTime } from '../../../utils/timeUtils'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const NODE_TYPE_META: Record<string, { icon: string; label: string; color: string }> = {
-    QUERY_ANALYZER:       { icon: '🔍', label: 'Query Analyzer',        color: '#4f86f7' },
-    QUERY_REWRITER:       { icon: '✏️',  label: 'Query Rewriter',        color: '#7c5cfc' },
-    RETRIEVAL:            { icon: '📦', label: 'Retrieval',              color: '#2ecc71' },
-    RESULT_RANKER:        { icon: '📊', label: 'Result Ranker',          color: '#f39c12' },
-    RESPONSE_GENERATOR:   { icon: '💬', label: 'Response Generator',     color: '#e74c3c' },
-    RESPONSE_GENERATOR_WITH_REFLECTION: { icon: '🪞', label: 'Reflective Generator', color: '#e67e22' },
+const NODE_TYPE_META: Record<string, { icon: string; labelKey: string; color: string }> = {
+    QUERY_ANALYZER:       { icon: '🔍', labelKey: 'agentsPage.nodeTypes.queryAnalyzer',      color: '#4f86f7' },
+    QUERY_REWRITER:       { icon: '✏️',  labelKey: 'agentsPage.nodeTypes.queryRewriter',      color: '#7c5cfc' },
+    RETRIEVAL:            { icon: '📦', labelKey: 'agentsPage.nodeTypes.retrieval',          color: '#2ecc71' },
+    RESULT_RANKER:        { icon: '📊', labelKey: 'agentsPage.nodeTypes.resultRanker',       color: '#f39c12' },
+    RESPONSE_GENERATOR:   { icon: '💬', labelKey: 'agentsPage.nodeTypes.responseGenerator',  color: '#e74c3c' },
+    RESPONSE_GENERATOR_WITH_REFLECTION: { icon: '🪞', labelKey: 'agentsPage.nodeTypes.reflectiveGenerator', color: '#e67e22' },
 }
 
 function getNodeMeta(nodeType: string) {
-    return NODE_TYPE_META[nodeType] ?? { icon: '⚙️', label: nodeType, color: '#6b7280' }
+    const meta = NODE_TYPE_META[nodeType]
+    if (meta) return { icon: meta.icon, label: i18n.t(meta.labelKey), color: meta.color }
+    return { icon: '⚙️', label: nodeType, color: '#6b7280' }
 }
 
 function tryPrettyJson(raw: string): string {
@@ -45,6 +49,7 @@ interface NodeConfigEditorProps {
 const RESPONSE_NODE_TYPES = new Set(['RESPONSE_GENERATOR', 'RESPONSE_GENERATOR_WITH_REFLECTION'])
 
 function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfigChange }: NodeConfigEditorProps) {
+    const { t } = useTranslation()
     const [open, setOpen] = useState(false)
     const meta = getNodeMeta(node.nodeType)
     const isResponseNode = RESPONSE_NODE_TYPES.has(node.nodeType)
@@ -79,7 +84,7 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                 </span>
                 <span className={styles.nodeEditorTitle}>{patchName || node.name}</span>
                 <span className={styles.nodeEditorType}>{meta.label}</span>
-                {configInvalid && <span className={styles.nodeEditorBadgeError}>Invalid JSON</span>}
+                {configInvalid && <span className={styles.nodeEditorBadgeError}>{t('agentsPage.nodeConfigEditor.invalidJsonBadge')}</span>}
                 <span className={styles.nodeEditorChevron}>{open ? '▲' : '▼'}</span>
             </button>
 
@@ -87,7 +92,7 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                 <div className={styles.nodeEditorBody}>
                     <div className={styles.fieldRow}>
                         <div className={styles.fieldGroup}>
-                            <label className={styles.fieldLabel}>Node Name</label>
+                            <label className={styles.fieldLabel}>{t('agentsPage.nodeConfigEditor.nodeName')}</label>
                             <input
                                 type="text"
                                 className={styles.fieldInput}
@@ -102,26 +107,25 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                         <>
                             {!isResponseNode && (
                                 <div className={styles.fieldGroup}>
-                                    <label className={styles.fieldLabel} htmlFor={`system-prompt-${node.nodeId}`}>System Prompt</label>
+                                    <label className={styles.fieldLabel} htmlFor={`system-prompt-${node.nodeId}`}>{t('agentsPage.nodeConfigEditor.systemPrompt')}</label>
                                     <textarea
                                         id={`system-prompt-${node.nodeId}`}
                                         className={styles.fieldTextarea}
                                         rows={6}
                                         value={systemPrompt}
                                         onChange={e => updateConfigField('system_prompt', e.target.value)}
-                                        placeholder="You are a helpful assistant."
+                                        placeholder={t('agentsPage.nodeConfigEditor.systemPromptPlaceholder')}
                                     />
                                 </div>
                             )}
                             {isResponseNode && (
                                 <p className={styles.fieldHint}>
-                                    The system prompt and model for this node come from the instruction
-                                    and model selected at request time.
+                                    {t('agentsPage.nodeConfigEditor.responseNodeHint')}
                                 </p>
                             )}
                             <div className={styles.fieldRow2}>
                                 <div className={styles.fieldGroup}>
-                                    <label className={styles.fieldLabel}>Input Template</label>
+                                    <label className={styles.fieldLabel}>{t('agentsPage.nodeConfigEditor.inputTemplate')}</label>
                                     <textarea
                                         className={styles.fieldTextarea}
                                         rows={3}
@@ -130,20 +134,22 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                                         placeholder="{query}"
                                     />
                                     <p className={styles.fieldHint}>
-                                        Placeholders: <code>{'{query}'}</code> <code>{'{context}'}</code> <code>{'{chunks_text}'}</code>
+                                        <Trans i18nKey="agentsPage.nodeConfigEditor.inputTemplatePlaceholdersList">
+                                            Placeholders: <code>{'{query}'}</code> <code>{'{context}'}</code> <code>{'{chunks_text}'}</code>
+                                        </Trans>
                                     </p>
                                 </div>
                                 {!isResponseNode && (
                                     <div className={styles.fieldGroup}>
                                         <label className={styles.fieldLabel}>
-                                            Model Override <span className={styles.optional}>(optional)</span>
+                                            {t('agentsPage.nodeConfigEditor.modelOverride')} <span className={styles.optional}>{t('agentsPage.nodeConfigEditor.optional')}</span>
                                         </label>
                                         <input
                                             type="text"
                                             className={styles.fieldInput}
                                             value={modelOverride}
                                             onChange={e => updateConfigField('model_override', e.target.value)}
-                                            placeholder="e.g. gpt-4o, claude-sonnet-4-5"
+                                            placeholder={t('agentsPage.nodeConfigEditor.modelOverridePlaceholder')}
                                         />
                                     </div>
                                 )}
@@ -153,8 +159,8 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
 
                     <div className={styles.fieldGroup}>
                         <label className={styles.fieldLabel} htmlFor={`raw-config-${node.nodeId}`}>
-                            Raw Config JSON
-                            {configInvalid && <span className={styles.jsonError}> — invalid JSON</span>}
+                            {t('agentsPage.nodeConfigEditor.rawConfigJson')}
+                            {configInvalid && <span className={styles.jsonError}> {t('agentsPage.nodeConfigEditor.invalidJsonSuffix')}</span>}
                         </label>
                         <textarea
                             id={`raw-config-${node.nodeId}`}
@@ -174,6 +180,7 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
 // ── EditAgentPage ─────────────────────────────────────────────────────────────
 
 export default function EditAgentPage() {
+    const { t } = useTranslation()
     const { graphId } = useParams<{ graphId: string }>()
     const navigate = useNavigate()
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
@@ -213,7 +220,7 @@ export default function EditAgentPage() {
                 if (cancelled) return
                 const found = data.agents.find(a => a.graphId === graphId)
                 if (!found) {
-                    setLoadError('Agent not found.')
+                    setLoadError(t('agentsPage.editAgentPage.agentNotFound'))
                     return
                 }
                 setAgent(found)
@@ -228,12 +235,12 @@ export default function EditAgentPage() {
                 setNodePatchNames(names)
                 setNodePatchConfigs(configs)
             } catch (err: any) {
-                if (!cancelled) setLoadError(err.message ?? 'Failed to load agent')
+                if (!cancelled) setLoadError(err.message ?? t('agentsPage.editAgentPage.loadFailed'))
             }
         }
         load()
         return () => { cancelled = true }
-    }, [graphId, getAccessTokenSilently])
+    }, [graphId, getAccessTokenSilently, t])
 
     // ── Save handler ──────────────────────────────────────────────────────────
 
@@ -243,12 +250,12 @@ export default function EditAgentPage() {
         setSaved(false)
 
         // Client-side validation
-        if (!name.trim()) { setSaveError('Agent name must not be blank.'); return }
-        if (maxIterations < 1 || maxIterations > 100) { setSaveError('Max iterations must be between 1 and 100.'); return }
+        if (!name.trim()) { setSaveError(t('agentsPage.editAgentPage.errorNameBlank')); return }
+        if (maxIterations < 1 || maxIterations > 100) { setSaveError(t('agentsPage.editAgentPage.errorMaxIterations')); return }
         for (const node of agent.nodes) {
             const cfg = nodePatchConfigs[node.nodeId] ?? ''
             if (cfg && !isValidJson(cfg)) {
-                setSaveError(`Node "${nodePatchNames[node.nodeId] || node.name}" has invalid JSON config.`)
+                setSaveError(t('agentsPage.editAgentPage.errorNodeConfigJson', { name: nodePatchNames[node.nodeId] || node.name }))
                 return
             }
         }
@@ -295,11 +302,11 @@ export default function EditAgentPage() {
             clearTimeout(savedTimerRef.current)
             savedTimerRef.current = setTimeout(() => setSaved(false), 3000)
         } catch (err: any) {
-            setSaveError(err.message ?? 'Failed to save agent')
+            setSaveError(err.message ?? t('agentsPage.editAgentPage.saveFailed'))
         } finally {
             setSaving(false)
         }
-    }, [agent, name, maxIterations, nodePatchNames, nodePatchConfigs, getAccessTokenSilently, navigate])
+    }, [agent, name, maxIterations, nodePatchNames, nodePatchConfigs, getAccessTokenSilently, navigate, t])
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -316,7 +323,7 @@ export default function EditAgentPage() {
                             className={styles.backBtn}
                             onClick={() => navigate('/agents')}
                         >
-                            ← Back to Agents
+                            {t('agentsPage.editAgentPage.backToAgents')}
                         </button>
                         {agent && (
                             <div className={styles.topBarTitle}>
@@ -324,8 +331,8 @@ export default function EditAgentPage() {
                                 <div>
                                     <h1 className={styles.topBarName}>{agent.name}</h1>
                                     <p className={styles.topBarMeta}>
-                                        {agent.nodes.length} nodes · max {agent.maxIterations} iterations
-                                        {agent.isDefault && <span className={styles.defaultBadge}>Default</span>}
+                                        {t('agentsPage.editAgentPage.topBarMeta', { count: agent.nodes.length, maxIterations: agent.maxIterations })}
+                                        {agent.isDefault && <span className={styles.defaultBadge}>{t('agentsPage.editAgentPage.defaultBadge')}</span>}
                                     </p>
                                 </div>
                             </div>
@@ -334,10 +341,10 @@ export default function EditAgentPage() {
 
                     <div className={styles.topBarActions}>
                         {saved && (
-                            <span className={styles.savedBadge}>✓ Saved</span>
+                            <span className={styles.savedBadge}>{t('agentsPage.editAgentPage.savedBadge')}</span>
                         )}
                         {saveError && (
-                            <span className={styles.errorBadge} title={saveError}>⚠️ Error</span>
+                            <span className={styles.errorBadge} title={saveError}>{t('agentsPage.editAgentPage.errorBadge')}</span>
                         )}
                         <button
                             type="button"
@@ -345,7 +352,7 @@ export default function EditAgentPage() {
                             onClick={() => navigate('/agents')}
                             disabled={saving}
                         >
-                            Discard
+                            {t('agentsPage.editAgentPage.discard')}
                         </button>
                         <button
                             type="button"
@@ -354,8 +361,8 @@ export default function EditAgentPage() {
                             disabled={saving || !agent}
                         >
                             {saving
-                                ? <><span className={styles.savingSpinner} />Saving…</>
-                                : 'Save Changes'
+                                ? <><span className={styles.savingSpinner} />{t('agentsPage.editAgentPage.saving')}</>
+                                : t('agentsPage.editAgentPage.saveChanges')
                             }
                         </button>
                     </div>
@@ -365,7 +372,7 @@ export default function EditAgentPage() {
                 {!agent && !loadError && (
                     <div className={styles.stateContainer}>
                         <div className={styles.spinner} />
-                        <p className={styles.stateText}>Loading agent…</p>
+                        <p className={styles.stateText}>{t('agentsPage.editAgentPage.loading')}</p>
                     </div>
                 )}
 
@@ -374,7 +381,7 @@ export default function EditAgentPage() {
                         <span className={styles.stateIcon}>⚠️</span>
                         <p className={styles.stateText}>{loadError}</p>
                         <button className={styles.saveBtn} onClick={() => navigate('/agents')} type="button">
-                            Back to Agents
+                            {t('agentsPage.editAgentPage.backToAgentsPlain')}
                         </button>
                     </div>
                 )}
@@ -384,10 +391,10 @@ export default function EditAgentPage() {
                         {/* ── Left column: agent-level settings ── */}
                         <aside className={styles.sidebar}>
                             <div className={styles.sidebarCard}>
-                                <h2 className={styles.cardTitle}>Agent Settings</h2>
+                                <h2 className={styles.cardTitle}>{t('agentsPage.editAgentPage.agentSettings')}</h2>
 
                                 <div className={styles.fieldGroup}>
-                                    <label className={styles.fieldLabel} htmlFor="agent-name">Name</label>
+                                    <label className={styles.fieldLabel} htmlFor="agent-name">{t('agentsPage.editAgentPage.nameLabel')}</label>
                                     <input
                                         id="agent-name"
                                         type="text"
@@ -399,8 +406,8 @@ export default function EditAgentPage() {
 
                                 <div className={styles.fieldGroup}>
                                     <label className={styles.fieldLabel} htmlFor="agent-max-iter">
-                                        Max Iterations
-                                        <span className={styles.fieldHintInline}> (1–100)</span>
+                                        {t('agentsPage.editAgentPage.maxIterations')}
+                                        <span className={styles.fieldHintInline}> {t('agentsPage.editAgentPage.maxIterationsRange')}</span>
                                     </label>
                                     <input
                                         id="agent-max-iter"
@@ -422,16 +429,16 @@ export default function EditAgentPage() {
 
                                 <div className={styles.graphMeta}>
                                     <div className={styles.graphMetaRow}>
-                                        <span className={styles.graphMetaLabel}>Graph ID</span>
+                                        <span className={styles.graphMetaLabel}>{t('agentsPage.editAgentPage.graphId')}</span>
                                         <code className={styles.graphMetaValue}>{agent.graphId}</code>
                                     </div>
                                     <div className={styles.graphMetaRow}>
-                                        <span className={styles.graphMetaLabel}>Entry point</span>
+                                        <span className={styles.graphMetaLabel}>{t('agentsPage.editAgentPage.entryPoint')}</span>
                                         <code className={styles.graphMetaValue}>{agent.entryPoint}</code>
                                     </div>
                                     {agent.updatedAt && (
                                         <div className={styles.graphMetaRow}>
-                                            <span className={styles.graphMetaLabel}>Last saved</span>
+                                            <span className={styles.graphMetaLabel}>{t('agentsPage.editAgentPage.lastSaved')}</span>
                                             <span className={styles.graphMetaValue}>
                                                 {formatServerDateTime(agent.updatedAt)}
                                             </span>
@@ -445,10 +452,9 @@ export default function EditAgentPage() {
                         <main className={styles.main}>
                             <div className={styles.mainCard}>
                                 <div className={styles.mainCardHeader}>
-                                    <h2 className={styles.cardTitle}>Node Configuration</h2>
+                                    <h2 className={styles.cardTitle}>{t('agentsPage.editAgentPage.nodeConfiguration')}</h2>
                                     <p className={styles.cardSubtitle}>
-                                        Expand any node to edit its name, system prompt, or full config JSON.
-                                        Node order follows the pipeline defined by the graph's edges.
+                                        {t('agentsPage.editAgentPage.nodeConfigurationSubtitle')}
                                     </p>
                                 </div>
 

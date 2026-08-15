@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAI } from '../../../../context/AIContext'
 import { useLayout } from '../../../../context/LayoutContext'
 import { Icon } from '../../../common/Icon/Icon'
@@ -7,6 +8,7 @@ import Tooltip from '../../../common/Tooltip/Tooltip'
 import styles from './InstructionSidebarWidget.module.scss'
 
 export default function InstructionSidebarWidget() {
+    const { t } = useTranslation()
     const { systemPrompt } = useAI()
     const { isLeftSidebarExpanded, setInstructionWidgetExpanded, isInstructionWidgetExpanded } = useLayout()
     const collapsed = !isLeftSidebarExpanded
@@ -36,13 +38,13 @@ export default function InstructionSidebarWidget() {
             <span className={styles.icon}>
                 <Icon src={ICONS.USER_ROLE} />
             </span>
-            {!collapsed && <span className={styles.text}>Instructions</span>}
+            {!collapsed && <span className={styles.text}>{t('sidebar.instructionSidebarWidget.instructions')}</span>}
         </button>
     )
 
     // Show tooltip on hover with system prompt text
     // If empty, show "Instructions"
-    const tooltipContent = systemPrompt || 'Instructions'
+    const tooltipContent = systemPrompt || t('sidebar.instructionSidebarWidget.instructions')
 
     // If collapsed, we might want to also show "Instructions" label or just the prompt
     // User requirement: "when i hover, it will show instructions in tooltip"

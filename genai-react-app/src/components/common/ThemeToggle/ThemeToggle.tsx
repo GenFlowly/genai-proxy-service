@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../../context/ThemeContext'
 import { Icon } from '../Icon/Icon'
 import { ICONS } from '../../../constants/icons'
@@ -10,19 +11,20 @@ interface ThemeToggleProps {
 }
 
 export default function ThemeToggle({ className = '', 'data-testid': testId }: ThemeToggleProps = {}) {
+    const { t } = useTranslation()
     const { themeMode, setThemeMode } = useTheme()
 
     const options = [
-        { id: 'light', icon: ICONS.SUN, label: 'Light Theme' },
-        { id: 'system', icon: ICONS.LAPTOP, label: 'System Theme' },
-        { id: 'dark', icon: ICONS.MOON, label: 'Dark Theme' }
+        { id: 'light', icon: ICONS.SUN, label: t('common.themeToggle.lightTheme') },
+        { id: 'system', icon: ICONS.LAPTOP, label: t('common.themeToggle.systemTheme') },
+        { id: 'dark', icon: ICONS.MOON, label: t('common.themeToggle.darkTheme') }
     ] as const;
 
     return (
         <div 
             className={`${styles.themeToggleContainer} ${className}`} 
             data-testid={testId || 'theme-toggle'}
-            aria-label="Theme selection"
+            aria-label={t('common.themeToggle.themeSelection')}
         >
             <div 
                 className={styles.slider} 

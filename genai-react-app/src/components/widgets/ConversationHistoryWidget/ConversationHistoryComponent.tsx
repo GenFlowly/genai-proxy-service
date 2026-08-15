@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { useConversation } from '../../../context/ConversationContext'
@@ -12,8 +13,10 @@ import { parseServerDate, formatServerDateTime, formatServerTime } from '../../.
 
 const PAGE_SIZE = 15
 
+type GroupId = 'today' | 'yesterday' | 'last7Days' | 'older'
+
 interface GroupedConversations {
-    label: string;
+    id: GroupId;
     items: ConversationSummary[];
 }
 
@@ -27,11 +30,11 @@ const groupConversations = (conversations: ConversationSummary[]): GroupedConver
     const last7Days = new Date(today);
     last7Days.setDate(last7Days.getDate() - 7);
 
-    const groups = [
-        { label: 'Today', items: [] as ConversationSummary[] },
-        { label: 'Yesterday', items: [] as ConversationSummary[] },
-        { label: 'Last 7 days', items: [] as ConversationSummary[] },
-        { label: 'Older', items: [] as ConversationSummary[] }
+    const groups: GroupedConversations[] = [
+        { id: 'today', items: [] as ConversationSummary[] },
+        { id: 'yesterday', items: [] as ConversationSummary[] },
+        { id: 'last7Days', items: [] as ConversationSummary[] },
+        { id: 'older', items: [] as ConversationSummary[] }
     ];
 
     conversations.forEach(conv => {
@@ -72,6 +75,7 @@ function ArchiveIcon({ className }: { className?: string }) {
 }
 
 export default function ConversationHistoryComponent() {
+    const { t } = useTranslation()
     const { getAccessTokenSilently, isAuthenticated } = useAuth()
     const { conversationId, conversationTitle } = useConversation()
     const navigate = useNavigate()
@@ -159,6 +163,13 @@ export default function ConversationHistoryComponent() {
 
     const groupedItems = useMemo(() => groupConversations(items), [items])
 
+    const groupLabels: Record<GroupId, string> = {
+        today: t('conversation.conversationHistory.groups.today'),
+        yesterday: t('conversation.conversationHistory.groups.yesterday'),
+        last7Days: t('conversation.conversationHistory.groups.last7Days'),
+        older: t('conversation.conversationHistory.groups.older'),
+    }
+
     const [isScrolling, setIsScrolling] = useState(false)
     const scrollTimeout = React.useRef<NodeJS.Timeout | null>(null)
 
@@ -179,7 +190,7 @@ export default function ConversationHistoryComponent() {
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                History
+                {t('conversation.conversationHistory.title')}
             </div>
 
             {isLoading && items.length === 0 ? (
@@ -195,18 +206,18 @@ export default function ConversationHistoryComponent() {
             ) : error && items.length === 0 ? (
                 // A failed background refresh keeps showing the stale list;
                 // the error state is only for having nothing at all to show
-                <div className={styles.emptyState}>Failed to load history</div>
+                <div className={styles.emptyState}>{t('conversation.conversationHistory.failedToLoad')}</div>
             ) : items.length === 0 ? (
-                <div className={styles.emptyState}>No conversations yet</div>
+                <div className={styles.emptyState}>{t('conversation.conversationHistory.noConversationsYet')}</div>
             ) : (
                 <div 
                     className={`${styles.list} ${isScrolling ? styles.scrolling : ''}`} 
-                    aria-label="Conversation history"
+                    aria-label={t('conversation.conversationHistory.listAriaLabel')}
                     onScroll={handleScroll}
                 >
                     {groupedItems.map(group => (
-                        <div key={group.label} className={styles.group}>
-                            <div className={styles.groupHeader}>{group.label}</div>
+                        <div key={group.id} className={styles.group}>
+                            <div className={styles.groupHeader}>{groupLabels[group.id]}</div>
                             <ul className={styles.groupList}>
                                 {group.items.map(conv => {
                                     const label = conv.title?.trim() || conv.conversationId
@@ -238,7 +249,7 @@ export default function ConversationHistoryComponent() {
                                                         )}
                                                         {conv.updatedAt && (
                                                             <span className={styles.timestamp}>
-                                                                {group.label === 'Today' || group.label === 'Yesterday'
+                                                                {group.id === 'today' || group.id === 'yesterday'
                                                                     // The group header already names the day — time only
                                                                     ? formatServerTime(conv.updatedAt)
                                                                     : formatServerDateTime(conv.updatedAt)}
@@ -250,8 +261,8 @@ export default function ConversationHistoryComponent() {
                                             <button
                                                 className={styles.archiveBtn}
                                                 onClick={(e) => handleArchive(e, conv.conversationId)}
-                                                title="Archive conversation"
-                                                aria-label="Archive conversation"
+                                                title={t('conversation.conversationHistory.archiveConversation')}
+                                                aria-label={t('conversation.conversationHistory.archiveConversation')}
                                                 data-testid={`conv-archive-btn-${conv.conversationId}`}
                                             >
                                                 <ArchiveIcon className={styles.archiveIcon} />
@@ -272,7 +283,7 @@ export default function ConversationHistoryComponent() {
                     disabled={isLoading}
                     data-testid="conv-history-load-more"
                 >
-                    {isLoading ? 'Loading…' : 'Load more'}
+                    {isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
                 </button>
             )}
         </div>

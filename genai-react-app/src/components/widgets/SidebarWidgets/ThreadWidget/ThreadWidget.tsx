@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useConversation } from '../../../../context/ConversationContext'
 import { useLayout } from '../../../../context/LayoutContext'
 import ThreadPromptItem from './ThreadPromptItem'
@@ -6,6 +7,7 @@ import ThreadResponseItem from './ThreadResponseItem'
 import styles from './ThreadWidget.module.scss'
 
 export default function ThreadWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
+    const { t } = useTranslation()
     const { conversationBlockList } = useConversation()
     const { isLeftSidebarExpanded } = useLayout()
 
@@ -30,10 +32,10 @@ export default function ThreadWidget({ 'data-testid': testId }: { 'data-testid'?
 
     return (
         <div className={styles.threadWidget} data-testid={testId || "thread-widget"}>
-            {!collapsed && <h3 className={styles.title}>Thread</h3>}
+            {!collapsed && <h3 className={styles.title}>{t('sidebar.threadWidget.title')}</h3>}
 
             {conversationBlockList.length === 0 || (conversationBlockList.length === 1 && !conversationBlockList[0].prompt && conversationBlockList[0].status === 'draft') ? (
-                !collapsed && <p className={styles.emptyState} data-testid="thread-empty-state">No conversation yet</p>
+                !collapsed && <p className={styles.emptyState} data-testid="thread-empty-state">{t('sidebar.threadWidget.noConversationYet')}</p>
             ) : (
                 <div 
                     className={`${styles.threadList} ${isScrolling ? styles.scrolling : ''}`}
