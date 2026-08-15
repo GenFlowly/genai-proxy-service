@@ -12,9 +12,6 @@ import saveIcon from '../assets/icons/save-icon.svg'
 import menuIcon from '../assets/icons/menu.svg'
 
 import addIcon from '../assets/icons/add-icon.svg'
-import openAIIcon from '../assets/icons/OpenAI.svg'
-import claudeIcon from '../assets/icons/Claude.svg'
-import geminiIcon from '../assets/icons/Gemini.svg'
 import modelsIcon from '../assets/icons/models.svg'
 import tokensIcon from '../assets/icons/tokens.svg'
 import editIcon from '../assets/icons/edit.svg'
@@ -25,6 +22,9 @@ import outputTokensIcon from '../assets/icons/output-tokens.svg'
 import totalTokensIcon from '../assets/icons/total-tokens.svg'
 import cacheTokensIcon from '../assets/icons/cache-tokens.svg'
 import shareIcon from '../assets/icons/share-icon.svg'
+import laptopIcon from '../assets/icons/laptop.svg'
+import moonIcon from '../assets/icons/moon.svg'
+import sunIcon from '../assets/icons/sun.svg'
 
 export const ICONS = {
     EDIT: editIcon,
@@ -40,9 +40,6 @@ export const ICONS = {
     SAVE_ICON: saveIcon,
     MENU: menuIcon,
     PLUS: addIcon,
-    OPENAI: openAIIcon,
-    CLAUDE: claudeIcon,
-    GEMINI: geminiIcon,
     MODELS: modelsIcon,
     TOKENS: tokensIcon,
     VALID: validIcon,
@@ -52,4 +49,7 @@ export const ICONS = {
     TOTAL_TOKENS: totalTokensIcon,
     CACHE_TOKENS: cacheTokensIcon,
     SHARE: shareIcon,
+    LAPTOP: laptopIcon,
+    MOON: moonIcon,
+    SUN: sunIcon,
 }

@@ -4,18 +4,16 @@ import { Icon } from '../Icon/Icon'
 import styles from './BrandName.module.scss'
 
 // --- Generic BrandName Component ---
+// Vendor logos were removed from the app: full brand names render as plain
+// text, and collapsed contexts show an initial badge ("C" for Claude, ...).
 interface BrandNameProps<T extends ElementType = 'div'> extends HTMLAttributes<HTMLElement> {
-    icon: string
     name: string
     as?: T
-    iconSize?: number
 }
 
 export default function BrandName<T extends ElementType = 'div'>({
-    icon,
     name,
     as,
-    iconSize = 20,
     className = '',
     ...props
 }: BrandNameProps<T> & React.ComponentPropsWithoutRef<T>): React.ReactElement {
@@ -23,7 +21,6 @@ export default function BrandName<T extends ElementType = 'div'>({
 
     return (
         <Component className={`${styles.brandContainer} ${className}`} {...props} data-testid="brand-name-container">
-            <Icon src={icon} size={iconSize} data-testid="brand-name-icon" />
             <span data-testid="brand-name-text">{name}</span>
         </Component>
     )
@@ -31,28 +28,53 @@ export default function BrandName<T extends ElementType = 'div'>({
 
 // --- Specific Implementations ---
 
-export function OpenAIBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'icon' | 'name'> & React.ComponentPropsWithoutRef<T>) {
-    return <BrandName icon={ICONS.OPENAI} name="OpenAI" iconSize={30} {...props} />
+export function OpenAIBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'name'> & React.ComponentPropsWithoutRef<T>) {
+    return <BrandName name="OpenAI" {...props} />
 }
 
-export function ClaudeBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'icon' | 'name'> & React.ComponentPropsWithoutRef<T>) {
-    return <BrandName icon={ICONS.CLAUDE} name="Claude" iconSize={20} {...props} />
+export function ClaudeBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'name'> & React.ComponentPropsWithoutRef<T>) {
+    return <BrandName name="Claude" {...props} />
 }
 
-export function GeminiBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'icon' | 'name'> & React.ComponentPropsWithoutRef<T>) {
-    return <BrandName icon={ICONS.GEMINI} name="Gemini" iconSize={20} {...props} />
+export function GeminiBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'name'> & React.ComponentPropsWithoutRef<T>) {
+    return <BrandName name="Gemini" {...props} />
+}
+
+// --- Collapsed variants: vendor initial badge ---
+
+interface CollapsedInitialProps {
+    initial: string
+    name: string
+    size?: number
+    className?: string
+    'data-testid'?: string
+}
+
+function CollapsedInitial({ initial, name, size = 20, className, 'data-testid': testId }: CollapsedInitialProps) {
+    return (
+        <span
+            className={`${styles.collapsedInitial} ${className || ''}`}
+            style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.75)) }}
+            role="img"
+            aria-label={name}
+            title={name}
+            data-testid={testId}
+        >
+            {initial}
+        </span>
+    )
 }
 
 export function CollapsedOpenAIBrandName({ size = 30, className }: { size?: number, className?: string }) {
-    return <Icon src={ICONS.OPENAI} size={30} className={className} data-testid="collapsed-openai-brand" />
+    return <CollapsedInitial initial="O" name="OpenAI" size={size} className={className} data-testid="collapsed-openai-brand" />
 }
 
 export function CollapsedClaudeBrandName({ size = 20, className }: { size?: number, className?: string }) {
-    return <Icon src={ICONS.CLAUDE} size={size} className={className} data-testid="collapsed-claude-brand" />
+    return <CollapsedInitial initial="C" name="Claude" size={size} className={className} data-testid="collapsed-claude-brand" />
 }
 
 export function CollapsedGeminiBrandName({ size = 20, className }: { size?: number, className?: string }) {
-    return <Icon src={ICONS.GEMINI} size={size} className={className} data-testid="collapsed-gemini-brand" />
+    return <CollapsedInitial initial="G" name="Gemini" size={size} className={className} data-testid="collapsed-gemini-brand" />
 }
 
 export function UserBrandName<T extends ElementType = 'div'>({

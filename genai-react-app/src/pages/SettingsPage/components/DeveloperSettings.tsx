@@ -15,11 +15,10 @@ import {
     DeveloperApiKeySummary,
 } from '../../../models/developerApiKeys.models'
 import styles from './DeveloperSettings.module.scss'
+import { formatServerDateOnly } from '../../../utils/timeUtils'
 
 function formatDate(iso?: string): string {
-    if (!iso) return '—'
-    const date = new Date(iso)
-    return isNaN(date.getTime()) ? '—' : date.toLocaleDateString()
+    return formatServerDateOnly(iso) || '—'
 }
 
 export function DeveloperSettings(): React.ReactElement {

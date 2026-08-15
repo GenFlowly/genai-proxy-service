@@ -103,8 +103,13 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
         // Get the last conversation block
         const lastBlock = conversationBlockList[conversationBlockList.length - 1]
 
-        // Check if last block is a draft (no responses yet AND not historically resolved with 0)
+        // Check if last block is a truly empty draft (waiting for input). A block
+        // that is mid-generation is also still 'draft' — it must NOT be reused,
+        // otherwise following up from an already-finished response while another
+        // vendor streams becomes a silent no-op
         const isLastBlockEmpty = lastBlock.status === 'draft'
+            && lastBlock.responseMessages.length === 0
+            && !lastBlock.isLoading
 
         if (isLastBlockEmpty) {
             // Reuse the existing empty block

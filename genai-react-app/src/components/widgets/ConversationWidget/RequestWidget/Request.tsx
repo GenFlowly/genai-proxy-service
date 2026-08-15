@@ -11,6 +11,7 @@ import styles from './Request.module.scss'
 import {
     UserBrandName
 } from '../../../common/BrandName/BrandName'
+import {formatServerDateTime} from '../../../../utils/timeUtils'
 
 interface RequestProps {
     blockId: string
@@ -145,13 +146,7 @@ export default function Request({
                     {conversationBlock.sentAt && (
                         <div className={styles.sentTimestamp}
                              data-testid="request-sent-timestamp">
-                            {new Date(conversationBlock.sentAt).toLocaleString([], {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            })}
+                            {formatServerDateTime(conversationBlock.sentAt)}
                         </div>
                     )}
                 </TextContainer>

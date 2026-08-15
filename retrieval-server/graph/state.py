@@ -1,11 +1,12 @@
 from typing import TypedDict, Optional, Annotated
 
-# TODO fix this to include cache
 def _merge_usage(current: dict, update: dict) -> dict:
     return {
         "input_tokens": current.get("input_tokens", 0) + update.get("input_tokens", 0),
         "output_tokens": current.get("output_tokens", 0) + update.get("output_tokens", 0),
         "total_tokens": current.get("total_tokens", 0) + update.get("total_tokens", 0),
+        "cache_read_tokens": current.get("cache_read_tokens", 0) + update.get("cache_read_tokens", 0),
+        "cache_creation_tokens": current.get("cache_creation_tokens", 0) + update.get("cache_creation_tokens", 0),
     }
 
 

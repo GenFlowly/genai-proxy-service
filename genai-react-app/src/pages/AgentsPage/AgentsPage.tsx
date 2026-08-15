@@ -7,6 +7,7 @@ import { usePageTitle } from '../../hooks/usePageTitle'
 import { useAuth } from '../../context/AuthContext'
 import { getCustomerAgents } from '../../services/agentsService'
 import { Agent } from '../../models/agents.models'
+import { formatServerDateTime } from '../../utils/timeUtils'
 
 // ── Node type display helpers ─────────────────────────────────────────────────
 
@@ -108,7 +109,7 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
                         <div className={styles.detailRow}>
                             <span className={styles.detailLabel}>Created</span>
                             <span className={styles.detailValue}>
-                                {new Date(agent.createdAt).toLocaleString()}
+                                {formatServerDateTime(agent.createdAt)}
                             </span>
                         </div>
                     )}
@@ -116,7 +117,7 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
                         <div className={styles.detailRow}>
                             <span className={styles.detailLabel}>Last updated</span>
                             <span className={styles.detailValue}>
-                                {new Date(agent.updatedAt).toLocaleString()}
+                                {formatServerDateTime(agent.updatedAt)}
                             </span>
                         </div>
                     )}

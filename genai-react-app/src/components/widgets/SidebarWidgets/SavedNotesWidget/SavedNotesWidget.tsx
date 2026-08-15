@@ -3,12 +3,9 @@ import { useAuth } from '../../../../context/AuthContext'
 import { useNotes } from '../../../../context/NotesContext'
 import { getNotes, SavedNote } from '../../../../services/saveNotesService'
 import styles from './SavedNotesWidget.module.scss'
+import { formatServerDateOnly } from '../../../../utils/timeUtils'
 
-const formatDate = (isoDate: string): string => {
-    const date = new Date(isoDate)
-    if (isNaN(date.getTime())) return ''
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
+const formatDate = (isoDate: string): string => formatServerDateOnly(isoDate)
 
 const noteLabel = (note: SavedNote): string => {
     if (note.title && note.title !== 'Untitled') return note.title

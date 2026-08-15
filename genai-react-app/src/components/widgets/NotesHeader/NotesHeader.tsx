@@ -2,6 +2,7 @@ import React from 'react'
 import PageHeader, { pageHeaderStyles } from '../../common/PageHeader/PageHeader'
 import { useNotes } from '../../../context/NotesContext'
 import { SaveStatus } from '../../../hooks/useAutosave'
+import { parseServerDate } from '../../../utils/timeUtils'
 
 function formatSavedAt(savedAt: Date): string {
     return savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
@@ -28,10 +29,11 @@ function statusLabel(status: SaveStatus, lastSavedAt: Date | null, noteUpdatedAt
             return "Couldn't save. Retrying…"
         default:
             if (lastSavedAt) return `Saved at ${formatSavedAt(lastSavedAt)}`
-            // No save this session yet: fall back to the note's stored timestamp
+            // No save this session yet: fall back to the note's stored
+            // timestamp (server value — parse as UTC)
             if (noteUpdatedAt) {
-                const updatedAt = new Date(noteUpdatedAt)
-                if (!isNaN(updatedAt.getTime())) return `Updated ${formatUpdatedAt(updatedAt)}`
+                const updatedAt = parseServerDate(noteUpdatedAt)
+                if (updatedAt) return `Updated ${formatUpdatedAt(updatedAt)}`
             }
             return null
     }

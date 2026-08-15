@@ -24,14 +24,20 @@ sealed class StreamChunk {
     data class Thinking(val text: String) : StreamChunk()
     /** Request receipt on the retrieval server → first generated token, in ms */
     data class ThinkingDuration(val millis: Long) : StreamChunk()
-    data class Usage(val inputTokens: Int, val outputTokens: Int, val totalTokens: Int) : StreamChunk()
+    data class Usage(
+        val inputTokens: Int,
+        val outputTokens: Int,
+        val totalTokens: Int,
+        val tokensReadFromCache: Int
+    ) : StreamChunk()
 }
 
 data class RetrievalResult(
     val text: String?,
     val inputTokens: Int?,
     val outputTokens: Int?,
-    val totalTokens: Int?
+    val totalTokens: Int?,
+    val tokensReadFromCache: Int?
 )
 
 @Serializable
@@ -124,7 +130,7 @@ class RetrievalService(
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Retrieval server error ${response.status}: $errorBody" }
-                return RetrievalResult(null, null, null, null)
+                return RetrievalResult(null, null, null, null, null)
             }
             val body = response.bodyAsText()
             val root = json.parseToJsonElement(body).jsonObject
@@ -135,10 +141,11 @@ class RetrievalService(
                 inputTokens = usageObj?.get("input_tokens")?.jsonPrimitive?.intOrNull,
                 outputTokens = usageObj?.get("output_tokens")?.jsonPrimitive?.intOrNull,
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
+                tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to call retrieval server (non-streaming)" }
-            RetrievalResult(null, null, null, null)
+            RetrievalResult(null, null, null, null, null)
         }
     }
 
@@ -197,6 +204,7 @@ class RetrievalService(
                                         inputTokens = usageObj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                         outputTokens = usageObj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                         totalTokens = usageObj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                                        tokensReadFromCache = usageObj["cache_read_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                     )
                                 )
                             }

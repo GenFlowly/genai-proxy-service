@@ -41,7 +41,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         request_system_prompt=req.system_prompt,
         retrieval_results=[],
         ranked_results=[],
-        usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+        usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
         generated_response=None,
         error=None,
     )

@@ -110,10 +110,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         id: vendor,
         label: vendor === AIVendor.OPENAI ? 'OpenAI' :
             vendor === AIVendor.CLAUDE ? 'Claude' :
-                vendor === AIVendor.GEMINI ? 'Gemini' : vendor,
-        icon: vendor === AIVendor.OPENAI ? ICONS.OPENAI :
-            vendor === AIVendor.CLAUDE ? ICONS.CLAUDE :
-                vendor === AIVendor.GEMINI ? ICONS.GEMINI : undefined
+                vendor === AIVendor.GEMINI ? 'Gemini' : vendor
     })), [availableVendors])
     const rawSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
     const effectiveSelectedVendors = rawSelectedVendors.slice(0, maxVendors)
@@ -184,16 +181,27 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             )}
 
             <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
-                {filteredResponseList.map(({ aiVendor, text, messageId, isLoading, thinkingSteps, thinkingDurationMs, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
+                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, thinkingSteps, thinkingDurationMs, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
                     const isSelected = selectedResponseId === messageId
                     const isThinkingPhase = !!isLoading && text.trim().length === 0
 
                     let HeaderComponent: React.ReactNode = null
                     if (aiVendor) {
-                        if (aiVendor === AIVendor.OPENAI) HeaderComponent = <OpenAIBrandName as="span" />
-                        else if (aiVendor === AIVendor.CLAUDE) HeaderComponent = <ClaudeBrandName as="span" />
-                        else if (aiVendor === AIVendor.GEMINI) HeaderComponent = <GeminiBrandName as="span" />
-                        else HeaderComponent = <h2>{aiVendor}</h2>
+                        let brand: React.ReactNode
+                        if (aiVendor === AIVendor.OPENAI) brand = <OpenAIBrandName as="span" />
+                        else if (aiVendor === AIVendor.CLAUDE) brand = <ClaudeBrandName as="span" />
+                        else if (aiVendor === AIVendor.GEMINI) brand = <GeminiBrandName as="span" />
+                        else brand = <h2>{aiVendor}</h2>
+                        HeaderComponent = (
+                            <span className={styles.responseCardTitle}>
+                                {brand}
+                                {model && (
+                                    <span className={styles.modelName} data-testid="response-model-name" title={model}>
+                                        {model}
+                                    </span>
+                                )}
+                            </span>
+                        )
                     }
 
                     return (
