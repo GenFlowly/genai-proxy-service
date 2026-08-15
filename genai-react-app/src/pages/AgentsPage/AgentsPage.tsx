@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Navbar from '../../components/navbar/Navbar'
+import i18n from '../../i18n'
 import styles from './AgentsPage.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
@@ -11,17 +13,19 @@ import { formatServerDateTime } from '../../utils/timeUtils'
 
 // ── Node type display helpers ─────────────────────────────────────────────────
 
-const NODE_TYPE_META: Record<string, { icon: string; label: string; color: string }> = {
-    QUERY_ANALYZER:       { icon: '🔍', label: 'Query Analyzer',        color: '#4f86f7' },
-    QUERY_REWRITER:       { icon: '✏️',  label: 'Query Rewriter',        color: '#7c5cfc' },
-    RETRIEVAL:            { icon: '📦', label: 'Retrieval',              color: '#2ecc71' },
-    RESULT_RANKER:        { icon: '📊', label: 'Result Ranker',          color: '#f39c12' },
-    RESPONSE_GENERATOR:   { icon: '💬', label: 'Response Generator',     color: '#e74c3c' },
-    RESPONSE_GENERATOR_WITH_REFLECTION: { icon: '🪞', label: 'Reflective Generator', color: '#e67e22' },
+const NODE_TYPE_META: Record<string, { icon: string; labelKey: string; color: string }> = {
+    QUERY_ANALYZER:       { icon: '🔍', labelKey: 'agentsPage.nodeTypes.queryAnalyzer',      color: '#4f86f7' },
+    QUERY_REWRITER:       { icon: '✏️',  labelKey: 'agentsPage.nodeTypes.queryRewriter',      color: '#7c5cfc' },
+    RETRIEVAL:            { icon: '📦', labelKey: 'agentsPage.nodeTypes.retrieval',          color: '#2ecc71' },
+    RESULT_RANKER:        { icon: '📊', labelKey: 'agentsPage.nodeTypes.resultRanker',       color: '#f39c12' },
+    RESPONSE_GENERATOR:   { icon: '💬', labelKey: 'agentsPage.nodeTypes.responseGenerator',  color: '#e74c3c' },
+    RESPONSE_GENERATOR_WITH_REFLECTION: { icon: '🪞', labelKey: 'agentsPage.nodeTypes.reflectiveGenerator', color: '#e67e22' },
 }
 
 function getNodeMeta(nodeType: string) {
-    return NODE_TYPE_META[nodeType] ?? { icon: '⚙️', label: nodeType, color: '#6b7280' }
+    const meta = NODE_TYPE_META[nodeType]
+    if (meta) return { icon: meta.icon, label: i18n.t(meta.labelKey), color: meta.color }
+    return { icon: '⚙️', label: nodeType, color: '#6b7280' }
 }
 
 // ── AgentCard ─────────────────────────────────────────────────────────────────
@@ -32,6 +36,7 @@ interface AgentCardProps {
 }
 
 function AgentCard({ agent, onEdit }: AgentCardProps) {
+    const { t } = useTranslation()
     const [expanded, setExpanded] = useState(false)
 
     return (
@@ -43,21 +48,21 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
                     <div>
                         <h2 className={styles.cardName}>{agent.name}</h2>
                         <span className={styles.cardMeta}>
-                            {agent.nodes.length} node{agent.nodes.length !== 1 ? 's' : ''} · max {agent.maxIterations} iterations
+                            {t('agentsPage.agentCard.meta', { count: agent.nodes.length, maxIterations: agent.maxIterations })}
                         </span>
                     </div>
                 </div>
                 <div className={styles.cardActions}>
                     {agent.isDefault && (
-                        <span className={styles.defaultBadge}>Default</span>
+                        <span className={styles.defaultBadge}>{t('agentsPage.agentCard.defaultBadge')}</span>
                     )}
                     <button
                         type="button"
                         className={styles.editBtn}
                         onClick={() => onEdit(agent)}
-                        aria-label={`Edit agent ${agent.name}`}
+                        aria-label={t('agentsPage.agentCard.editAriaLabel', { name: agent.name })}
                     >
-                        ✏️ Edit
+                        ✏️ {t('agentsPage.agentCard.edit')}
                     </button>
                 </div>
             </div>
@@ -93,21 +98,21 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
                 type="button"
                 aria-expanded={expanded}
             >
-                {expanded ? '▲ Hide details' : '▼ Show details'}
+                {expanded ? t('agentsPage.agentCard.hideDetails') : t('agentsPage.agentCard.showDetails')}
             </button>
             {expanded && (
                 <div className={styles.details}>
                     <div className={styles.detailRow}>
-                        <span className={styles.detailLabel}>Graph ID</span>
+                        <span className={styles.detailLabel}>{t('agentsPage.agentCard.graphId')}</span>
                         <code className={styles.detailValue}>{agent.graphId}</code>
                     </div>
                     <div className={styles.detailRow}>
-                        <span className={styles.detailLabel}>Entry point</span>
+                        <span className={styles.detailLabel}>{t('agentsPage.agentCard.entryPoint')}</span>
                         <code className={styles.detailValue}>{agent.entryPoint}</code>
                     </div>
                     {agent.createdAt && (
                         <div className={styles.detailRow}>
-                            <span className={styles.detailLabel}>Created</span>
+                            <span className={styles.detailLabel}>{t('agentsPage.agentCard.created')}</span>
                             <span className={styles.detailValue}>
                                 {formatServerDateTime(agent.createdAt)}
                             </span>
@@ -115,7 +120,7 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
                     )}
                     {agent.updatedAt && (
                         <div className={styles.detailRow}>
-                            <span className={styles.detailLabel}>Last updated</span>
+                            <span className={styles.detailLabel}>{t('agentsPage.agentCard.lastUpdated')}</span>
                             <span className={styles.detailValue}>
                                 {formatServerDateTime(agent.updatedAt)}
                             </span>
@@ -130,6 +135,7 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
 // ── AgentsPage ────────────────────────────────────────────────────────────────
 
 export default function AgentsPage() {
+    const { t } = useTranslation()
     const navigate = useNavigate()
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const { getAccessTokenSilently } = useAuth()
@@ -152,11 +158,11 @@ export default function AgentsPage() {
             const data = await getCustomerAgents(token)
             setAgents(data.agents ?? [])
         } catch (err: any) {
-            setError(err.message ?? 'Failed to load agents')
+            setError(err.message ?? t('agentsPage.agentsPage.loadFailed'))
         } finally {
             setLoading(false)
         }
-    }, [getAccessTokenSilently])
+    }, [getAccessTokenSilently, t])
 
     useEffect(() => { fetchAgents() }, [fetchAgents])
 
@@ -170,15 +176,15 @@ export default function AgentsPage() {
             <div className={styles.content}>
                 <div className={styles.pageHeader}>
                     <div>
-                        <h1 className={styles.pageTitle}>My Agents</h1>
-                        <p className={styles.pageSubtitle}>AI pipelines powering your conversations</p>
+                        <h1 className={styles.pageTitle}>{t('agentsPage.agentsPage.title')}</h1>
+                        <p className={styles.pageSubtitle}>{t('agentsPage.agentsPage.subtitle')}</p>
                     </div>
                 </div>
 
                 {loading && (
                     <div className={styles.stateContainer}>
-                        <div className={styles.spinner} aria-label="Loading agents" />
-                        <p className={styles.stateText}>Loading agents…</p>
+                        <div className={styles.spinner} aria-label={t('agentsPage.agentsPage.loadingAriaLabel')} />
+                        <p className={styles.stateText}>{t('agentsPage.agentsPage.loading')}</p>
                     </div>
                 )}
 
@@ -186,16 +192,16 @@ export default function AgentsPage() {
                     <div className={styles.stateContainer}>
                         <div className={styles.errorIcon}>⚠️</div>
                         <p className={styles.stateText}>{error}</p>
-                        <button className={styles.retryBtn} onClick={fetchAgents} type="button">Retry</button>
+                        <button className={styles.retryBtn} onClick={fetchAgents} type="button">{t('agentsPage.agentsPage.retry')}</button>
                     </div>
                 )}
 
                 {!loading && !error && agents.length === 0 && (
                     <div className={styles.stateContainer}>
                         <div className={styles.emptyIcon}>🤖</div>
-                        <p className={styles.stateText}>No agents found</p>
+                        <p className={styles.stateText}>{t('agentsPage.agentsPage.emptyTitle')}</p>
                         <p className={styles.stateSubText}>
-                            Agents are created automatically when you onboard. If you see this, try refreshing.
+                            {t('agentsPage.agentsPage.emptySubtitle')}
                         </p>
                     </div>
                 )}

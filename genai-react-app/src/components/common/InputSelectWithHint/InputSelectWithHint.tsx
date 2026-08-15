@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import styles from './InputSelectWithHint.module.scss'
 import { Icon } from '../Icon/Icon'
 
@@ -30,10 +31,12 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
     onChange,
     options,
     className = '',
-    placeholder = 'Select an option',
+    placeholder,
     iconOnlyHintOnMobile = false,
     'data-testid': testId
 }) => {
+    const { t } = useTranslation()
+    const resolvedPlaceholder = placeholder ?? t('common.inputSelectWithHint.placeholder')
 
     const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const newValue = e.target.value
@@ -59,7 +62,7 @@ export const InputSelectWithHint: React.FC<InputSelectWithHintProps> = ({
                 onChange={handleSelectChange}
                 data-testid={testId}
             >
-                <option value="" disabled data-testid={testId ? `${testId}-placeholder` : undefined}>{placeholder}</option>
+                <option value="" disabled data-testid={testId ? `${testId}-placeholder` : undefined}>{resolvedPlaceholder}</option>
                 {options.map((opt) => (
                     <option
                         key={opt.value}

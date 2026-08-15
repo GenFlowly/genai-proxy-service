@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -24,6 +25,7 @@ export const extractText = (nodes: any[]): string => {
  * Custom <pre> block with copy-to-clipboard button for code snippets
  */
 export const PreBlock = ({ node, children, ...props }: any) => {
+    const { t } = useTranslation()
     const codeString = node?.children
         ? extractText(node.children).replace(/\n$/, '')
         : ''
@@ -40,7 +42,7 @@ export const PreBlock = ({ node, children, ...props }: any) => {
             >
                 <CopyToClipboard
                     content={codeString}
-                    label="Copy Code"
+                    label={t('common.textContainer.copyCode')}
                     icon={ICONS.COPY}
                     successMessage="✓"
                     successDuration={2000}
@@ -77,6 +79,7 @@ export default function TextContainerCore({
     loadingContent,
     subheader
 }: TextContainerCoreProps) {
+    const { t } = useTranslation()
 
     const headerContent = (typeof title === 'string') ? <h2>{title}</h2> : title
 
@@ -90,7 +93,7 @@ export default function TextContainerCore({
                             <div className={styles.copyButtonPositioner}>
                                 <CopyToClipboard
                                     content={content}
-                                    label="Copy Response"
+                                    label={t('common.textContainer.copyResponse')}
                                     icon={ICONS.COPY}
                                     successMessage="✓"
                                     successDuration={2000}

@@ -1,4 +1,5 @@
 import React, { Suspense, lazy } from 'react'
+import { useTranslation } from 'react-i18next'
 import styles from './TextContainer.module.scss'
 
 const TextContainerCore = lazy(() => import('./TextContainerCore'))
@@ -28,12 +29,13 @@ export default function TextContainer({
     loadingContent,
     subheader
 }: TextContainerProps) {
+    const { t } = useTranslation()
 
     // Same fallback UX preserving structural padding layout
     const fallbackUI = (
         <article className={`${styles.article} ${className || ''}`} data-testid={testId}>
             <div style={{ color: 'var(--color-text-tertiary)', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                Loading content renderer...
+                {t('common.textContainer.loadingContentRenderer')}
             </div>
         </article>
     )

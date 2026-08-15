@@ -1,5 +1,6 @@
 import React from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import LoginIcon from '../icons/LoginIcon'
 import styles from './Navbar.module.scss'
@@ -15,6 +16,7 @@ import { useWindowSize } from '../../hooks/useWindowSize'
 import { MobileMenuContent } from '../sections/LeftSidebar/MobileMenuContent'
 
 export default function Navbar(): React.ReactElement {
+    const { t } = useTranslation()
     const { loginWithRedirect, isAuthenticated, isOnboarding, user, customerPicture, customerName } = useAuth()
     const { toggleLeftSidebar, toggleRightSidebar, isLeftSidebarExpanded } = useLayout()
     const navigate = useNavigate()
@@ -25,7 +27,7 @@ export default function Navbar(): React.ReactElement {
     const isChatPage = location.pathname === '/' || location.pathname.startsWith('/chat')
 
     const displayPicture = customerPicture || user?.picture
-    const displayName = customerName || user?.name || 'Account'
+    const displayName = customerName || user?.name || t("layout.navbar.account")
 
     const handleSettingsClick = () => {
         React.startTransition(() => {
@@ -42,8 +44,8 @@ export default function Navbar(): React.ReactElement {
                     <button onClick={toggleLeftSidebar} className={styles.mobileToggle} data-testid="mobile-left-sidebar-toggle">
                         <Icon src={ICONS.MENU} size={24} />
                     </button>
-                    <Link to="/" className={styles.logoLink} title="Home" data-testid="navbar-logo-link">
-                        <img src={logo} alt="Create a new prompt" className={styles.logoImage} />
+                    <Link to="/" className={styles.logoLink} title={t("layout.navbar.home")} data-testid="navbar-logo-link">
+                        <img src={logo} alt={t("layout.navbar.logoAlt")} className={styles.logoImage} />
                     </Link>
                 </div>
 
@@ -59,7 +61,7 @@ export default function Navbar(): React.ReactElement {
                             // customerId yet — don't flash the Login button
                             <div
                                 className={styles.authPlaceholder}
-                                aria-label="Signing in…"
+                                aria-label={t("layout.navbar.signingIn")}
                                 data-testid="auth-onboarding-placeholder"
                             />
                         ) : !isAuthenticated || !user ? (
@@ -69,7 +71,7 @@ export default function Navbar(): React.ReactElement {
                                 data-testid="login-button"
                             >
                                 <LoginIcon />
-                                <span>Login</span>
+                                <span>{t("layout.navbar.login")}</span>
                             </button>
                         ) : (
                             <div className={styles.accountMenu}>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import styles from './ThreadResponseItem.module.scss'
 import { Icon } from '../../../common/Icon/Icon'
 import { ICONS } from '../../../../constants/icons'
@@ -12,6 +13,7 @@ interface ThreadResponseItemProps {
 }
 
 export default function ThreadResponseItem({ conversationBlockId, responseCount, collapsed = false, 'data-testid': testId }: ThreadResponseItemProps) {
+    const { t } = useTranslation()
     const { activeViewportItem } = useConversation()
 
     const handleClick = () => {
@@ -20,7 +22,7 @@ export default function ThreadResponseItem({ conversationBlockId, responseCount,
         element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
     // Show 'No Responses' for 0, 'Response' for 1, 'Responses' for > 1
-    const label = responseCount === 0 ? 'No Responses' : responseCount === 1 ? 'Response' : 'Responses'
+    const label = t('sidebar.threadResponseItem.responses', { count: responseCount })
 
     const isActive = activeViewportItem?.blockId === conversationBlockId && activeViewportItem?.type === 'response'
     const itemRef = useRef<HTMLButtonElement>(null)

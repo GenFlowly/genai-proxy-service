@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ICONS } from '../../../../constants/icons'
 import styles from './Response.module.scss'
 import { useLayout } from '../../../../context/LayoutContext'
@@ -32,6 +33,7 @@ interface ResponseProps {
  * header and the response text (formerly the separate ResponseThinking widget).
  */
 function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], isThinking: boolean, durationMs?: number | null }) {
+    const { t } = useTranslation()
     const [isExpanded, setIsExpanded] = useState(true)
 
     // Auto-collapse once the answer starts streaming
@@ -43,10 +45,10 @@ function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], i
 
     // Once thinking completes, show how long it took (measured by the
     // retrieval server: request receipt → first generated token)
-    let label = 'Thinking'
+    let label = t('conversation.response.thinking')
     if (!isThinking && durationMs != null) {
         const seconds = Math.max(1, Math.round(durationMs / 1000))
-        label = `Thought for ${seconds} second${seconds === 1 ? '' : 's'}`
+        label = t('conversation.response.thoughtForSeconds', { count: seconds })
     }
 
     return (
@@ -72,6 +74,7 @@ function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], i
 }
 
 export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
+    const { t } = useTranslation()
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
     const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, setVendorSelectionForBlock, stopGenerating } = useConversation()
 
@@ -132,7 +135,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                 data-testid={testId || "empty-response-block"}
             >
                 <div style={{ textAlign: 'left', padding: '1rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                    No responses were generated
+                    {t('conversation.response.noResponsesGenerated')}
                 </div>
             </div>
         )
@@ -219,12 +222,12 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                 isLoading={isThinkingPhase}
                                 loadingContent={null}
                                 data-testid="response-message"
-                                aria-label={`Response from ${aiVendor}`}
+                                aria-label={t('conversation.response.responseFrom', { vendor: aiVendor })}
                             >
                                 {!isLoading && (inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
                                     <div className={styles.tokenBadge}>
                                         {inputTokens != null && (
-                                            <Tooltip content="Total Input Tokens">
+                                            <Tooltip content={t('conversation.response.totalInputTokens')}>
                                                 <span className={styles.tokenItem}>
                                                     <Icon src={ICONS.INPUT_TOKENS} size={12} />
                                                     {inputTokens.toLocaleString()}
@@ -232,7 +235,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                             </Tooltip>
                                         )}
                                         {outputTokens != null && (
-                                            <Tooltip content="Total Output Tokens">
+                                            <Tooltip content={t('conversation.response.totalOutputTokens')}>
                                                 <span className={styles.tokenItem}>
                                                     <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
                                                     {outputTokens.toLocaleString()}
@@ -240,7 +243,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                             </Tooltip>
                                         )}
                                         {tokensReadFromCache != null && (
-                                            <Tooltip content="Tokens read from cache">
+                                            <Tooltip content={t('conversation.response.tokensReadFromCache')}>
                                                 <span className={styles.tokenItem}>
                                                     <Icon src={ICONS.CACHE_TOKENS} size={12} />
                                                     {tokensReadFromCache.toLocaleString()}
@@ -248,7 +251,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                             </Tooltip>
                                         )}
                                         {totalTokens != null && (
-                                            <Tooltip content="Total Tokens">
+                                            <Tooltip content={t('conversation.response.totalTokens')}>
                                                 <span className={styles.tokenItem}>
                                                     <Icon src={ICONS.TOTAL_TOKENS} size={12} />
                                                     {totalTokens.toLocaleString()}
@@ -262,16 +265,16 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             {isLoading ? (
                                                 <MultiPurposeButton
-                                                    label="Stop"
+                                                    label={t('conversation.response.stop')}
                                                     onClick={() => stopGenerating(blockId, aiVendor as AIVendor)}
                                                     data-testid="stop-button"
                                                 />
                                             ) : (
                                                 <>
-                                                    <Tooltip content={disabled ? "No API keys set" : ""}>
+                                                    <Tooltip content={disabled ? t('conversation.response.noApiKeysSet') : ""}>
                                                         <div style={disabled ? { cursor: 'not-allowed' } : {}}>
                                                             <MultiPurposeButton
-                                                                label="Regenerate"
+                                                                label={t('conversation.response.regenerate')}
                                                                 onClick={() => handleRegenerate(aiVendor as AIVendor)}
                                                                 disabled={disabled}
                                                                 icon={ICONS.REFRESH_ICON}
@@ -281,10 +284,10 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                                     </Tooltip>
 
                                                     {onFollowUp && text.trim().length > 0 && (
-                                                        <Tooltip content={disabled ? "No API keys set" : ""}>
+                                                        <Tooltip content={disabled ? t('conversation.response.noApiKeysSet') : ""}>
                                                             <div style={disabled ? { cursor: 'not-allowed' } : {}}>
                                                                 <MultiPurposeButton
-                                                                    label={isSelected ? 'Selected' : 'Follow up'}
+                                                                    label={isSelected ? t('conversation.response.selected') : t('conversation.response.followUp')}
                                                                     onClick={() => handleFollowUp(messageId)}
                                                                     disabled={isSelected || disabled}
                                                                     icon={isSelected ? undefined : ICONS.SEND}

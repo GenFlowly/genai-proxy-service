@@ -14,6 +14,9 @@
 .inner {
   display: flex;
   flex-direction: row;
+  // Columns that don't fit wrap onto a new row instead of overflowing and
+  // overlapping each other (e.g. 2 columns + expanded sidebars on ~1366px)
+  flex-wrap: wrap;
   gap: $response-column-gap;
   padding-top: $widget-padding-y;
   padding-bottom: $widget-padding-y;
@@ -56,11 +59,20 @@
 .responseWrapper {
   // Common card styling is now handled by TextContainer's own CSS module
 
-  flex: 1 1 0; // Grow and shrink equally to fit the container
-  min-width: 0; // Allow shrinking below min-content
+  // Each column wants at least 30rem (the card's readable minimum); columns
+  // share extra space equally and wrap to the next row when they can't all fit
+  flex: 1 1 30rem;
+  min-width: min(30rem, 100%);
   // Cap the column at the card's max width so the visual gap between cards
   // always equals the flex gap, regardless of screen width
   max-width: $message-card-max-width;
+
+  // The wrapper above enforces the minimum width, so the card itself must be
+  // free to shrink with its column — a fixed card min-width would overflow
+  // the column and overlap its neighbor
+  article {
+    min-width: 0;
+  }
 
   display: flex;
   flex-direction: column;

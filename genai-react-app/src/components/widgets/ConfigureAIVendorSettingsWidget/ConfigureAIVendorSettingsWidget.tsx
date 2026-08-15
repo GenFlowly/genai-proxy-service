@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
 import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendorApiKeysService'
@@ -15,6 +16,7 @@ import { useToast } from '../../../context/ToastContext'
 import styles from './ConfigureAIVendorSettingsWidget.module.scss'
 
 export default function ConfigureAIVendorSettingsWidget(): React.ReactElement {
+    const { t } = useTranslation()
     const { customerId, getAccessTokenSilently, isAuthenticated, updateVendorApiKeyStatus } = useAuth()
     const { showToast } = useToast()
 
@@ -38,13 +40,13 @@ export default function ConfigureAIVendorSettingsWidget(): React.ReactElement {
 
     const handleSave = async (vendor: AIVendor) => {
         if (!isAuthenticated || !customerId) {
-            showToast('Please log in first.')
+            showToast(t('vendorSettings.configureAIVendorSettingsWidget.pleaseLogInFirst'))
             return
         }
 
         const apiKey = apiKeys[vendor]
         if (!apiKey.trim()) {
-            showToast('Please enter a valid API key.')
+            showToast(t('vendorSettings.configureAIVendorSettingsWidget.enterValidApiKey'))
             return
         }
 
@@ -63,7 +65,7 @@ export default function ConfigureAIVendorSettingsWidget(): React.ReactElement {
             showToast(response.apiKeyStatus.status)
         } catch (error: any) {
             console.error(error)
-            showToast(error.message || 'Error saving API key.')
+            showToast(error.message || t('vendorSettings.configureAIVendorSettingsWidget.errorSavingApiKey'))
         } finally {
             setLoading(prev => ({ ...prev, [vendor]: false }))
         }
@@ -71,7 +73,7 @@ export default function ConfigureAIVendorSettingsWidget(): React.ReactElement {
 
     return (
         <div className={styles.card}>
-            <h2 className={styles.title}>AI Vendor API Keys</h2>
+            <h2 className={styles.title}>{t('vendorSettings.configureAIVendorSettingsWidget.title')}</h2>
             <div className={styles.form}>
                 {vendors.map(vendor => {
                     let BrandComponent = <span className={styles.vendorName}>{vendor}</span>
@@ -87,15 +89,15 @@ export default function ConfigureAIVendorSettingsWidget(): React.ReactElement {
                             </div>
                             <div>
                                 <InputTextWithHint
-                                    hint="API Key"
+                                    hint={t('vendorSettings.configureAIVendorSettingsWidget.apiKeyHint')}
                                     value={apiKeys[vendor]}
                                     onChange={e => handleChange(vendor, e.target.value)}
-                                    placeholder="sk-..."
+                                    placeholder={t('vendorSettings.configureAIVendorSettingsWidget.apiKeyPlaceholder')}
                                 />
                             </div>
                             <PillButton
                                 onClick={() => handleSave(vendor)}
-                                label={loading[vendor] ? 'Saving...' : 'Save'}
+                                label={loading[vendor] ? t('vendorSettings.configureAIVendorSettingsWidget.saving') : t('vendorSettings.configureAIVendorSettingsWidget.save')}
                                 icon={ICONS.SAVE_ICON}
                                 disabled={loading[vendor]}
                             />

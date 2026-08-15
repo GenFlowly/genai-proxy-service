@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AIVendor } from '../../../constants/vendors'
 import { useAuth } from '../../../context/AuthContext'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
@@ -27,6 +28,7 @@ export interface VendorModelSelectProps {
 }
 
 export default function VendorModelSelect({ vendor, model, onChange }: VendorModelSelectProps) {
+    const { t } = useTranslation()
     const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList } = useAuth()
     const [vendorModels, setVendorModels] = useState<AIVendorModelList[]>([])
 
@@ -119,7 +121,7 @@ export default function VendorModelSelect({ vendor, model, onChange }: VendorMod
                             ))}
                         </select>
                     ) : (
-                        <span className={styles.hint}>No models available</span>
+                        <span className={styles.hint}>{t('common.vendorModelSelect.noModelsAvailable')}</span>
                     )}
                 </div>
             )}

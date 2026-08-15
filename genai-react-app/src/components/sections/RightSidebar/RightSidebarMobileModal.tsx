@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import PillButton from '../../common/PillButton/PillButton'
 // Deliberately reuses the sidebar stylesheet so the modal inherits its look
 import styles from './RightSidebar.module.scss'
@@ -16,6 +17,7 @@ interface RightSidebarMobileModalProps {
  * Covers everything below the navbar — the navbar itself stays visible.
  */
 export default function RightSidebarMobileModal({ children, onClose, 'data-testid': testId }: RightSidebarMobileModalProps): React.ReactElement {
+    const { t } = useTranslation()
     // Pin the modal directly below the navbar, whatever its rendered height is
     const [topOffset, setTopOffset] = useState(0)
 
@@ -35,7 +37,7 @@ export default function RightSidebarMobileModal({ children, onClose, 'data-testi
             style={{ top: topOffset }}
             role="dialog"
             aria-modal="true"
-            aria-label="AI Settings"
+            aria-label={t("layout.rightSidebarMobileModal.aiSettings")}
             data-testid={testId || 'right-sidebar-mobile-modal'}
         >
             <div className={styles.sidebarContent}>
@@ -43,7 +45,7 @@ export default function RightSidebarMobileModal({ children, onClose, 'data-testi
             </div>
             <div className={styles.mobileFooter}>
                 <PillButton
-                    label="Close Settings"
+                    label={t("layout.rightSidebarMobileModal.closeSettings")}
                     variant="secondary"
                     onClick={onClose}
                     className={styles.closeSettingsButton}

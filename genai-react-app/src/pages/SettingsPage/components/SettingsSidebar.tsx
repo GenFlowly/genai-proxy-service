@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { Icon } from '../../../components/common/Icon/Icon'
 import { ICONS } from '../../../constants/icons'
@@ -14,6 +15,7 @@ interface SettingsSidebarProps {
 }
 
 export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {}): React.ReactElement {
+    const { t } = useTranslation()
     const { logout } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
@@ -23,7 +25,7 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
     return (
         <aside className={`${styles.sidebar} ${fullPage ? styles.fullPage : ''}`}>
             <div className={styles.header}>
-                <h2>Settings</h2>
+                <h2>{t('settingsPage.settingsSidebar.title')}</h2>
             </div>
 
             <nav className={styles.nav}>
@@ -32,28 +34,28 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
                     onClick={() => navigate('/settings/profile')}
                 >
                     <Icon src={ICONS.USER_CIRCLE} size={20} className={styles.icon} />
-                    <span>Profile</span>
+                    <span>{t('settingsPage.settingsSidebar.profile')}</span>
                 </button>
                 <button
                     className={`${styles.tabButton} ${activeTab === 'ai' ? styles.active : ''}`}
                     onClick={() => navigate('/settings/ai')}
                 >
                     <Icon src={ICONS.MODELS} size={20} className={styles.icon} />
-                    <span>AI Settings</span>
+                    <span>{t('settingsPage.settingsSidebar.aiSettings')}</span>
                 </button>
                 <button
                     className={`${styles.tabButton} ${activeTab === 'memory' ? styles.active : ''}`}
                     onClick={() => navigate('/settings/memory')}
                 >
                     <Icon src={ICONS.TOKENS} size={20} className={styles.icon} />
-                    <span>Memory Settings</span>
+                    <span>{t('settingsPage.settingsSidebar.memorySettings')}</span>
                 </button>
                 <button
                     className={`${styles.tabButton} ${activeTab === 'developer' ? styles.active : ''}`}
                     onClick={() => navigate('/settings/developer')}
                 >
                     <Icon src={ICONS.EDIT} size={20} className={styles.icon} />
-                    <span>Developer</span>
+                    <span>{t('settingsPage.settingsSidebar.developer')}</span>
                 </button>
             </nav>
 
@@ -62,7 +64,7 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
                     className={styles.logoutButton}
                     onClick={() => logout({ returnTo: window.location.origin })}
                 >
-                    Logout
+                    {t('settingsPage.settingsSidebar.logout')}
                 </button>
             </div>
         </aside>

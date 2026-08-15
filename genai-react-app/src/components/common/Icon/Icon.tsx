@@ -1,5 +1,6 @@
 // src/components/common/Icon/Icon.tsx
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface IconProps extends React.HTMLAttributes<HTMLSpanElement> {
     src: string
@@ -8,7 +9,9 @@ interface IconProps extends React.HTMLAttributes<HTMLSpanElement> {
     className?: string
 }
 
-export const Icon = ({ src, alt, size = "1em", className, ...props }: IconProps) => (
+export const Icon = ({ src, alt, size = "1em", className, ...props }: IconProps) => {
+    const { t } = useTranslation()
+    return (
     <span
         className={className}
         style={{
@@ -27,7 +30,8 @@ export const Icon = ({ src, alt, size = "1em", className, ...props }: IconProps)
             flexShrink: 0
         }}
         role="img"
-        aria-label={alt || 'icon'}
+        aria-label={alt || t('common.icon.defaultAlt')}
         {...props}
     />
-)
+    )
+}

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import i18n from '../../../../i18n'
 import { useAuth } from '../../../../context/AuthContext'
 import { useNotes } from '../../../../context/NotesContext'
 import { getNotes, SavedNote } from '../../../../services/saveNotesService'
@@ -10,10 +12,11 @@ const formatDate = (isoDate: string): string => formatServerDateOnly(isoDate)
 const noteLabel = (note: SavedNote): string => {
     if (note.title && note.title !== 'Untitled') return note.title
     const firstLine = note.noteValue.split('\n').find(line => line.trim().length > 0)
-    return firstLine?.trim() || 'Untitled'
+    return firstLine?.trim() || i18n.t('sidebar.savedNotesWidget.untitled')
 }
 
 export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
+    const { t } = useTranslation()
     const { getAccessTokenSilently } = useAuth()
     const { openNote, activeNote, updatedNote } = useNotes()
     const [notes, setNotes] = useState<SavedNote[]>([])
@@ -55,18 +58,18 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
 
     return (
         <div className={styles.savedNotesWidget} data-testid={testId || 'saved-notes-widget'}>
-            <h3 className={styles.title}>Saved Notes</h3>
+            <h3 className={styles.title}>{t('sidebar.savedNotesWidget.title')}</h3>
 
             {isLoading && (
-                <p className={styles.stateMessage} data-testid="saved-notes-loading">Loading notes...</p>
+                <p className={styles.stateMessage} data-testid="saved-notes-loading">{t('sidebar.savedNotesWidget.loadingNotes')}</p>
             )}
 
             {!isLoading && hasError && (
-                <p className={styles.stateMessage} data-testid="saved-notes-error">Could not load notes</p>
+                <p className={styles.stateMessage} data-testid="saved-notes-error">{t('sidebar.savedNotesWidget.couldNotLoadNotes')}</p>
             )}
 
             {!isLoading && !hasError && notes.length === 0 && (
-                <p className={styles.stateMessage} data-testid="saved-notes-empty">No saved notes yet</p>
+                <p className={styles.stateMessage} data-testid="saved-notes-empty">{t('sidebar.savedNotesWidget.noSavedNotesYet')}</p>
             )}
 
             {!isLoading && !hasError && notes.length > 0 && (

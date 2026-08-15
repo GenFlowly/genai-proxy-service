@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
 import { config } from '../../../config/env'
@@ -22,6 +23,7 @@ function formatDate(iso?: string): string {
 }
 
 export function DeveloperSettings(): React.ReactElement {
+    const { t } = useTranslation()
     const { customerId, getAccessTokenSilently, isAuthenticated } = useAuth()
     const { showToast } = useToast()
 
@@ -42,7 +44,7 @@ export function DeveloperSettings(): React.ReactElement {
             setKeys(response.keys)
         } catch (error: any) {
             console.error(error)
-            showToast(error.message || 'Error loading API keys.')
+            showToast(error.message || t('settingsPage.developerSettings.loadErrorToast'))
         } finally {
             setLoadingList(false)
         }
@@ -55,12 +57,12 @@ export function DeveloperSettings(): React.ReactElement {
 
     const handleCreate = async () => {
         if (!isAuthenticated || !customerId) {
-            showToast('Please log in first.')
+            showToast(t('settingsPage.developerSettings.loginFirstToast'))
             return
         }
         const name = newKeyName.trim()
         if (!name) {
-            showToast('Please enter a name for the key.')
+            showToast(t('settingsPage.developerSettings.enterKeyNameToast'))
             return
         }
 
@@ -73,7 +75,7 @@ export function DeveloperSettings(): React.ReactElement {
             await loadKeys()
         } catch (error: any) {
             console.error(error)
-            showToast(error.message || 'Error creating API key.')
+            showToast(error.message || t('settingsPage.developerSettings.createErrorToast'))
         } finally {
             setCreating(false)
         }
@@ -83,14 +85,14 @@ export function DeveloperSettings(): React.ReactElement {
         if (!createdKey) return
         try {
             await navigator.clipboard.writeText(createdKey.apiKey)
-            showToast('API key copied to clipboard.')
+            showToast(t('settingsPage.developerSettings.copiedToast'))
         } catch {
-            showToast('Could not copy — please select and copy the key manually.')
+            showToast(t('settingsPage.developerSettings.copyFailedToast'))
         }
     }
 
     const handleRevoke = async (key: DeveloperApiKeySummary) => {
-        if (!window.confirm(`Revoke the key "${key.name}"? Applications using it will stop working immediately.`)) {
+        if (!window.confirm(t('settingsPage.developerSettings.revokeConfirm', { name: key.name }))) {
             return
         }
         try {
@@ -99,11 +101,11 @@ export function DeveloperSettings(): React.ReactElement {
             await revokeDeveloperApiKey(token, key.keyId)
             // The revoked key can no longer be the "just created" one worth showing
             if (createdKey?.keyId === key.keyId) setCreatedKey(null)
-            showToast('API key revoked.')
+            showToast(t('settingsPage.developerSettings.revokedToast'))
             await loadKeys()
         } catch (error: any) {
             console.error(error)
-            showToast(error.message || 'Error revoking API key.')
+            showToast(error.message || t('settingsPage.developerSettings.revokeErrorToast'))
         } finally {
             setRevokingKeyId(null)
         }
@@ -112,28 +114,29 @@ export function DeveloperSettings(): React.ReactElement {
     return (
         <div className={styles.container}>
             <div className={styles.headerBlock}>
-                <h2 className={styles.title}>Developer</h2>
+                <h2 className={styles.title}>{t('settingsPage.developerSettings.title')}</h2>
                 <p className={styles.subtitle}>
-                    Create API keys to call the API from your own code instead of logging in.
-                    Send a key on every request as{' '}
-                    <code className={styles.inlineCode}>Authorization: Bearer gfy_...</code>
-                    {' '}— see the <a href={`${config.backend.baseUrl}/docs`} target="_blank" rel="noreferrer">API docs</a> for details.
+                    <Trans i18nKey="settingsPage.developerSettings.subtitle">
+                        Create API keys to call the API from your own code instead of logging in.
+                        Send a key on every request as <code className={styles.inlineCode}>Authorization: Bearer gfy_...</code> — see
+                        the <a href={`${config.backend.baseUrl}/docs`} target="_blank" rel="noreferrer">API docs</a> for details.
+                    </Trans>
                 </p>
             </div>
 
             <div className={styles.createSection}>
                 <div className={styles.inputsGroup}>
                     <InputTextWithHint
-                        hint="Key name"
+                        hint={t('settingsPage.developerSettings.keyNameHint')}
                         value={newKeyName}
                         onChange={e => setNewKeyName(e.target.value)}
-                        placeholder="e.g. My CI server"
+                        placeholder={t('settingsPage.developerSettings.keyNamePlaceholder')}
                     />
                 </div>
                 <div className={styles.createFooter}>
                     <PillButton
                         onClick={handleCreate}
-                        label={creating ? 'Creating...' : 'Create API key'}
+                        label={creating ? t('settingsPage.developerSettings.creatingLabel') : t('settingsPage.developerSettings.createApiKey')}
                         icon={ICONS.PLUS}
                         disabled={creating}
                         data-testid="create-api-key"
@@ -144,17 +147,16 @@ export function DeveloperSettings(): React.ReactElement {
             {createdKey && (
                 <div className={styles.createdKeyPanel} data-testid="created-key-panel">
                     <p className={styles.createdKeyTitle}>
-                        Key “{createdKey.name}” created — copy it now
+                        {t('settingsPage.developerSettings.createdKeyTitle', { name: createdKey.name })}
                     </p>
                     <p className={styles.createdKeyWarning}>
-                        This is the only time the full key is shown. Store it somewhere safe;
-                        if you lose it, revoke it and create a new one.
+                        {t('settingsPage.developerSettings.createdKeyWarning')}
                     </p>
                     <div className={styles.createdKeyRow}>
                         <code className={styles.createdKeyValue}>{createdKey.apiKey}</code>
                         <PillButton
                             onClick={handleCopy}
-                            label="Copy"
+                            label={t('settingsPage.developerSettings.copy')}
                             icon={ICONS.COPY}
                             variant="secondary"
                         />
@@ -162,7 +164,7 @@ export function DeveloperSettings(): React.ReactElement {
                     <div className={styles.createdKeyDismiss}>
                         <PillButton
                             onClick={() => setCreatedKey(null)}
-                            label="I've saved my key"
+                            label={t('settingsPage.developerSettings.savedMyKey')}
                             variant="secondary"
                         />
                     </div>
@@ -170,11 +172,11 @@ export function DeveloperSettings(): React.ReactElement {
             )}
 
             <div className={styles.listSection}>
-                <h3 className={styles.listTitle}>Your API keys</h3>
+                <h3 className={styles.listTitle}>{t('settingsPage.developerSettings.yourApiKeys')}</h3>
                 {loadingList ? (
-                    <p className={styles.emptyState}>Loading…</p>
+                    <p className={styles.emptyState}>{t('settingsPage.developerSettings.loading')}</p>
                 ) : keys.length === 0 ? (
-                    <p className={styles.emptyState}>No API keys yet.</p>
+                    <p className={styles.emptyState}>{t('settingsPage.developerSettings.noKeysYet')}</p>
                 ) : (
                     <div className={styles.keyList}>
                         {keys.map(key => (
@@ -184,12 +186,12 @@ export function DeveloperSettings(): React.ReactElement {
                                     <code className={styles.keyPrefix}>{key.prefix}…</code>
                                 </div>
                                 <div className={styles.keyMeta}>
-                                    <span>Created {formatDate(key.createdAt)}</span>
-                                    <span>Last used {formatDate(key.lastUsedAt)}</span>
+                                    <span>{t('settingsPage.developerSettings.createdOn', { date: formatDate(key.createdAt) })}</span>
+                                    <span>{t('settingsPage.developerSettings.lastUsedOn', { date: formatDate(key.lastUsedAt) })}</span>
                                 </div>
                                 <PillButton
                                     onClick={() => handleRevoke(key)}
-                                    label={revokingKeyId === key.keyId ? 'Revoking...' : 'Revoke'}
+                                    label={revokingKeyId === key.keyId ? t('settingsPage.developerSettings.revokingLabel') : t('settingsPage.developerSettings.revoke')}
                                     variant="danger"
                                     disabled={revokingKeyId === key.keyId}
                                 />

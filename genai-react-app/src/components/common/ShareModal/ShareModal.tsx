@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
 import Modal from '../Modal/Modal';
 import PillButton from '../PillButton/PillButton';
@@ -17,6 +18,7 @@ interface ShareModalProps {
 }
 
 const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entityId, fetchSharedUsers }) => {
+    const { t } = useTranslation();
     const { getAccessTokenSilently } = useAuth0();
     const [mode, setMode] = useState<VisibilityMode>('PRIVATE');
     const [searchTerm, setSearchTerm] = useState('');
@@ -131,9 +133,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Share Options">
+        <Modal isOpen={isOpen} onClose={onClose} title={t('common.shareModal.title')}>
             {isLoadingInitial ? (
-                <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
+                <div style={{ padding: '20px', textAlign: 'center' }}>{t('common.shareModal.loading')}</div>
             ) : (
             <div className={styles.container}>
                 <div className={styles.optionsGroup}>
@@ -143,7 +145,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                             checked={mode === 'PRIVATE'} 
                             onChange={() => setMode('PRIVATE')} 
                         />
-                        <span>Not shared (Private)</span>
+                        <span>{t('common.shareModal.notSharedPrivate')}</span>
                     </label>
                     <label className={styles.radioLabel}>
                         <input 
@@ -151,7 +153,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                             checked={mode === 'PUBLIC'} 
                             onChange={() => setMode('PUBLIC')} 
                         />
-                        <span>Make public to everyone</span>
+                        <span>{t('common.shareModal.makePublicToEveryone')}</span>
                     </label>
                     <label className={styles.radioLabel}>
                         <input 
@@ -159,20 +161,20 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                             checked={mode === 'SPECIFIC'} 
                             onChange={() => setMode('SPECIFIC')} 
                         />
-                        <span>Share with only some users</span>
+                        <span>{t('common.shareModal.shareWithOnlySomeUsers')}</span>
                     </label>
                 </div>
 
                 {mode === 'PUBLIC' && (
                     <div className={styles.publicSection} style={{ padding: '15px 0', borderBottom: '1px solid #eaeaea', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span>Role for everyone:</span>
+                        <span>{t('common.shareModal.roleForEveryone')}</span>
                         <select 
                             value={publicRole} 
                             onChange={(e) => setPublicRole(e.target.value as 'VIEW' | 'EDIT')}
                             className={styles.roleSelect}
                         >
-                            <option value="VIEW">View</option>
-                            <option value="EDIT">Edit</option>
+                            <option value="VIEW">{t('common.shareModal.view')}</option>
+                            <option value="EDIT">{t('common.shareModal.edit')}</option>
                         </select>
                     </div>
                 )}
@@ -182,13 +184,13 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                         <div className={styles.searchRow}>
                             <input
                                 type="text"
-                                placeholder="Search username..."
+                                placeholder={t('common.shareModal.searchUsernamePlaceholder')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className={styles.searchInput}
                             />
                         </div>
-                        {isSearching && <div className={styles.searchingText}>Searching...</div>}
+                        {isSearching && <div className={styles.searchingText}>{t('common.shareModal.searching')}</div>}
                         {searchResults.length > 0 && (
                             <div className={styles.suggestionsList}>
                                 {searchResults.map(user => (
@@ -204,13 +206,13 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                         )}
                         {searchResults.length === 0 && searchTerm.length >= 3 && !isSearching && (
                             <div className={styles.searchMiss}>
-                                No users found matching "{searchTerm}".
+                                {t('common.shareModal.noUsersFound', { searchTerm })}
                             </div>
                         )}
                         
                         {selectedUsers.length > 0 && (
                             <div className={styles.selectedSection}>
-                                <h4>Shared with:</h4>
+                                <h4>{t('common.shareModal.sharedWith')}</h4>
                                 <div className={styles.tagsContainer}>
                                     {selectedUsers.map(user => (
                                         <div key={user.customerId} className={styles.tag}>
@@ -220,8 +222,8 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                                                 onChange={(e) => handleRoleChange(user.customerId, e.target.value as 'VIEW' | 'EDIT')}
                                                 className={styles.roleSelect}
                                             >
-                                                <option value="VIEW">View</option>
-                                                <option value="EDIT">Edit</option>
+                                                <option value="VIEW">{t('common.shareModal.view')}</option>
+                                                <option value="EDIT">{t('common.shareModal.edit')}</option>
                                             </select>
                                             <button onClick={() => handleRemoveUser(user.customerId)}>&times;</button>
                                         </div>
@@ -233,14 +235,14 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                 )}
 
                 <div className={styles.actions}>
-                    <PillButton 
-                        label="Cancel" 
-                        variant="secondary" 
-                        onClick={onClose} 
-                        disabled={isSaving} 
+                    <PillButton
+                        label={t('common.shareModal.cancel')}
+                        variant="secondary"
+                        onClick={onClose}
+                        disabled={isSaving}
                     />
-                    <PillButton 
-                        label={isSaving ? "Saving..." : "Save"} 
+                    <PillButton
+                        label={isSaving ? t('common.shareModal.saving') : t('common.shareModal.save')}
                         variant="primary" 
                         onClick={handleSave} 
                         disabled={isSaving || (mode === 'SPECIFIC' && selectedUsers.length === 0)} 

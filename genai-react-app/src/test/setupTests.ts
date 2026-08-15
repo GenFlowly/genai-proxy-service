@@ -1,5 +1,7 @@
 // jest-dom adds custom jest matchers for asserting on DOM nodes.
 import '@testing-library/jest-dom';
+// Initialize i18next so components using useTranslation render real English strings in tests.
+import '../i18n';
 import React from 'react';
 import { TextEncoder, TextDecoder } from 'util';
 

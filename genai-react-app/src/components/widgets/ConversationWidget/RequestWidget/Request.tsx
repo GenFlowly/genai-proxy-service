@@ -1,4 +1,5 @@
 import React, {useEffect} from 'react'
+import {useTranslation} from 'react-i18next'
 import {ICONS} from '../../../../constants/icons'
 import PromptEditor from '../../PromptEditorWidget/PromptEditor'
 import MultiPurposeButton
@@ -21,6 +22,7 @@ export default function Request({
                                     blockId,
                                     'data-testid': testId
                                 }: RequestProps & { 'data-testid'?: string }) {
+    const {t} = useTranslation()
     const {
         conversationBlockList,
         generateResponsesStream,
@@ -170,7 +172,7 @@ export default function Request({
 
             <div className={styles.buttonWrapper}
                  data-testid="generate-button-wrapper">
-                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
+                <Tooltip content={!hasAnyValidApiKey ? t('conversation.request.noApiKeysSet') : ""}>
                     <div
                         style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
                         <MultiPurposeButton
@@ -179,7 +181,7 @@ export default function Request({
                                 const selectedId = getSelectedResponseForBlock(blockId)
                                 generateResponsesStream(blockId, draftPrompt, selectedId)
                             }}
-                            label="Generate"
+                            label={t('conversation.request.generate')}
                             disabled={!hasAnyValidApiKey}
                             icon={ICONS.SEND}
                             data-testid="generate-button"
