@@ -4,6 +4,7 @@
 
 1. [Adding a New Page](#development-guide-adding-a-new-page)
 2. [Gating Features with Entitlements](#gating-features-with-entitlements)
+3. [Localization (i18n): No Hardcoded Strings](#localization-i18n-no-hardcoded-strings)
 
 # Development Guide: Adding a New Page
 
@@ -225,3 +226,125 @@ expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument(
 ## Important Caveat
 
 Entitlements are **UI gating only** — they hide affordances from users who can't use them. They are not a security boundary. The backend must always enforce authorization on its endpoints (it does, via token auth); never rely on an entitlement check alone to protect an operation.
+
+# Localization (i18n): No Hardcoded Strings
+
+The app is localized with **react-i18next**. Every user-visible string lives in `src/i18n/locales/en/translation.json` and is looked up at render time with `t('...')`. **Never hardcode user-facing text in a component** — hardcoded strings show up in English for every user regardless of their language.
+
+i18next is initialized in `src/i18n/index.ts` (imported once in `src/index.tsx`). It detects the browser language and falls back to English for missing keys.
+
+## What Counts as a User-Visible String
+
+Extract into `translation.json`:
+- JSX text content, button labels, headings
+- `placeholder=`, `title=` (tooltips), `aria-label=`, `alt=`
+- Toast messages, `window.confirm` text, error messages that render in the UI (including thrown `Error` messages that a catch block displays via `err.message`)
+
+Do **not** extract:
+- Brand/product names ("OpenAI", "Claude", "Supabase", "Milvus Cloud")
+- `console.*` output, thrown errors that are only logged, technical error codes
+- localStorage/cache keys, routes/URLs, API field names, `data-testid` values
+- Enum values coming from the server (translate at the display mapping if needed, not the data)
+- Pure symbols/glyphs (`✓`, `▼`, `─────`)
+
+## Adding a String to a New Component
+
+1. Add the key to `src/i18n/locales/en/translation.json`. Keys are camelCase and nested `<namespace>.<componentName>.<key>`. Use the namespace of the feature area your component belongs to (`common`, `layout`, `conversation`, `notes`, `editor`, `sidebar`, `vendorSettings`, `dbSettings`, `profileWidget`, `instructionWidget`, `agentsPage`, `settingsPage`, `instructionsPage`, `instructionDetail`, `toasts`, `errors`), or add a new top-level namespace for a new feature:
+
+   ```json
+   {
+     "settingsPage": {
+       "newFeature": {
+         "title": "New Feature",
+         "saveButton": "Save"
+       }
+     }
+   }
+   ```
+
+2. Use the `useTranslation` hook in the component:
+
+   ```tsx
+   import { useTranslation } from 'react-i18next';
+
+   export default function NewFeature() {
+       const { t } = useTranslation();
+       return (
+           <div>
+               <h2>{t('settingsPage.newFeature.title')}</h2>
+               <button>{t('settingsPage.newFeature.saveButton')}</button>
+           </div>
+       );
+   }
+   ```
+
+If `t` is used inside a `useCallback`/`useMemo`/`useEffect`, add it to the dependency array.
+
+## Dynamic Values: Interpolation, Never Concatenation
+
+Word order differs across languages, so **never build a sentence by concatenating translated parts or template literals**. Put the variable inside the string with `{{...}}`:
+
+```json
+"noUsersFound": "No users found matching \"{{searchTerm}}\"."
+```
+
+```tsx
+t('common.shareModal.noUsersFound', { searchTerm })
+```
+
+## Plurals
+
+Don't hand-roll `${count} node${count === 1 ? '' : 's'}`. Use i18next plural keys — pass `count` and define `_one` / `_other` variants (add `_zero` if you want a distinct empty form):
+
+```json
+"meta_one": "{{count}} node · max {{maxIterations}} iterations",
+"meta_other": "{{count}} nodes · max {{maxIterations}} iterations"
+```
+
+```tsx
+t('agentsPage.agentCard.meta', { count: nodeCount, maxIterations })
+```
+
+Note: an interpolation variable named `count` always triggers plural resolution. If you just want to display a number without plural forms, name the variable something else (e.g. `{{tokenCount}}`).
+
+## Sentences Containing Markup
+
+For text with inline links or `<code>`, use the `<Trans>` component so translators get one full sentence and the markup stays in the component:
+
+```tsx
+import { Trans } from 'react-i18next';
+
+<Trans i18nKey="settingsPage.developerSettings.subtitle">
+    Send a key as <code>Authorization: Bearer gfy_...</code> — see
+    the <a href={docsUrl}>API docs</a> for details.
+</Trans>
+```
+
+## Strings Outside Components
+
+Hooks only work in function components. In module-level code (helpers, config objects, services, context logic), import the i18n instance directly:
+
+```ts
+import i18n from '../i18n'; // adjust relative path
+
+const message = i18n.t('errors.user.usernameTaken');
+```
+
+Caveat: `i18n.t` evaluated **at module load** (e.g. in a top-level constant) resolves once and won't react to runtime language switches. Prefer storing the *key* in the constant and translating at render/call time.
+
+## Testing
+
+`src/test/setupTests.ts` imports `src/i18n`, so components render real English strings in tests — assert on the visible English text as usual (`screen.getByText('Save')`). No per-test i18n mocking is needed.
+
+## Adding a New Language
+
+1. Create `src/i18n/locales/<lang>/translation.json` with the same key structure as the English file.
+2. Register it in `src/i18n/index.ts`:
+
+   ```ts
+   import es from './locales/es/translation.json';
+   // ...
+   resources: { en: { translation: en }, es: { translation: es } },
+   ```
+
+Missing keys automatically fall back to English, so a partially translated language file is safe to ship.
