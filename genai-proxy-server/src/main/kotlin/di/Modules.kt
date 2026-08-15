@@ -29,10 +29,13 @@ fun appModule(): Module = module {
     single { provideJson() }
     single<KLogger> { logger("Logger") }
     
-    single { 
+    single {
         HttpClient(CIO) {
             engine {
-                requestTimeout = 60_000 // 60 seconds
+                // Disabled at the engine level so long-lived WebSocket voice
+                // sessions aren't cut off; REST calls are still bounded by the
+                // HttpTimeout plugin below (with per-request overrides).
+                requestTimeout = 0
             }
             install(HttpRequestRetry) {
                 retryOnServerErrors(maxRetries = 3)
@@ -46,6 +49,7 @@ fun appModule(): Module = module {
             install(ContentNegotiation) {
                 json(get<Json>())
             }
+            install(io.ktor.client.plugins.websocket.WebSockets)
         }
     }
 
@@ -73,7 +77,7 @@ fun appModule(): Module = module {
     single { CustomerProfileService(get(), get(), get()) }
     single { ConversationService(get(), get()) }
     single { AIRequestManager(get(), get(), get(), get(), get()) }
-    single { AIModelsService(get(), get()) }
+    single { AIModelsService(get(), get(), get()) }
     single { RetrievalService(get(), get(), get()) }
     single { PromptGenerationService() }
     single { GraphService(get()) }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import styles from './CopyToClipboard.module.scss'
 import { Icon } from '../Icon/Icon'
 
@@ -17,8 +18,8 @@ interface CopyToClipboardProps extends React.ButtonHTMLAttributes<HTMLButtonElem
 
 export default function CopyToClipboard({
     content,
-    label = 'Copy',
-    successMessage = '✓ Copied',
+    label,
+    successMessage,
     successDuration = 2000,
     disabled = false,
     className = '',
@@ -27,7 +28,11 @@ export default function CopyToClipboard({
     icon,
     ...props
 }: CopyToClipboardProps): React.ReactElement {
+    const { t } = useTranslation()
     const [copied, setCopied] = useState(false)
+
+    const resolvedLabel = label ?? t('common.copyToClipboard.copy')
+    const resolvedSuccessMessage = successMessage ?? t('common.copyToClipboard.copied')
 
     const handleCopy = async () => {
         try {
@@ -46,12 +51,12 @@ export default function CopyToClipboard({
             onClick={handleCopy}
             disabled={isDisabled}
             className={`${styles.copyToClipboard} ${styles[size]} ${styles[variant]} ${className}`}
-            title={label}
+            title={resolvedLabel}
             data-testid="copy-to-clipboard-button"
             {...props}
         >
-            {copied ? successMessage : (
-                icon ? <Icon src={icon} size="1.2em" /> : label
+            {copied ? resolvedSuccessMessage : (
+                icon ? <Icon src={icon} size="1.2em" /> : resolvedLabel
             )}
         </button>
     )

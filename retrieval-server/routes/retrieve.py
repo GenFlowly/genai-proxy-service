@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -40,7 +41,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         request_system_prompt=req.system_prompt,
         retrieval_results=[],
         ranked_results=[],
-        usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+        usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
         generated_response=None,
         error=None,
     )
@@ -53,7 +54,6 @@ _FALLBACK_CONFIG = {
     "include_conversation_history": True,
     "is_streaming": True,
     "output_key": "generated_response",
-    "system_prompt": "You are a helpful assistant.",
     "input_template": "{original_query}",
 }
 _fallback_graph = None
@@ -70,6 +70,15 @@ def _get_fallback_graph():
     return _fallback_graph
 
 
+def _direct_graph() -> tuple:
+    """Single-node direct-LLM pipeline: no retrieval, no intermediate nodes."""
+    graph = _get_fallback_graph()
+    node_type_map = {_FALLBACK_NODE_ID: _FALLBACK_NODE_TYPE}
+    node_configs = {_FALLBACK_NODE_TYPE: _FALLBACK_CONFIG}
+    streaming_nodes = {_FALLBACK_NODE_ID}
+    return graph, node_type_map, node_configs, streaming_nodes, _DEFAULT_MAX_ITERATIONS
+
+
 def _resolve_graph(customer_id: str) -> tuple:
     """
     Load the customer's dynamic graph from DDB.
@@ -79,11 +88,7 @@ def _resolve_graph(customer_id: str) -> tuple:
     graph_data = get_default_graph_and_nodes(customer_id)
     if graph_data is None:
         logger.info("No graph found for customer=%s — falling back to direct LLM", customer_id)
-        graph = _get_fallback_graph()
-        node_type_map = {_FALLBACK_NODE_ID: _FALLBACK_NODE_TYPE}
-        node_configs = {_FALLBACK_NODE_TYPE: _FALLBACK_CONFIG}
-        streaming_nodes = {_FALLBACK_NODE_ID}
-        return graph, node_type_map, node_configs, streaming_nodes, _DEFAULT_MAX_ITERATIONS
+        return _direct_graph()
 
     graph_record, nodes = graph_data
     graph, max_iterations = get_or_build_graph(customer_id, graph_record, nodes)
@@ -102,15 +107,18 @@ def _resolve_graph(customer_id: str) -> tuple:
 
 @router.post("/retrieve")
 async def retrieve(req: RetrieveRequest):
+    # Anchor for the "thinking" duration: request receipt → first generated token
+    request_start = time.monotonic()
     creds_keys = list(req.llm_credentials.keys())
     logger.info(
-        "Incoming /retrieve — customer=%s client=%s provider=%s stream=%s "
+        "Incoming /retrieve — customer=%s client=%s provider=%s stream=%s agentic=%s "
         "query='%s' credential_keys=%s has_system_prompt=%s system_prompt_len=%d "
         "system_prompt=%r",
         req.customer_id,
         req.client,
         req.llm_provider,
         req.stream,
+        req.agentic,
         req.raw_data.query_data[:80],
         creds_keys,
         bool(req.system_prompt),
@@ -118,14 +126,17 @@ async def retrieve(req: RetrieveRequest):
         req.system_prompt,
     )
 
-    graph, node_type_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id)
+    if req.agentic:
+        graph, node_type_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id)
+    else:
+        graph, node_type_map, node_configs, streaming_nodes, max_iterations = _direct_graph()
     state = _build_state(req, node_configs)
     run_config = {"recursion_limit": max_iterations}
 
     if req.stream:
         logger.info("Returning StreamingResponse for customer=%s", req.customer_id)
         return StreamingResponse(
-            stream_response(state, graph=graph, node_type_map=node_type_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations),
+            stream_response(state, graph=graph, node_type_map=node_type_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

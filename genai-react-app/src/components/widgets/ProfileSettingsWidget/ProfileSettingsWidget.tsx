@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
 import PillButton from '../../common/PillButton/PillButton';
 import { getUserProfile, updateUsername, updateDiscoverability } from '../../../services/userService';
@@ -6,6 +7,7 @@ import { CustomerProfileResponse } from '../../../models/user.models';
 import styles from './ProfileSettingsWidget.module.scss';
 
 const ProfileSettingsWidget: React.FC = () => {
+    const { t } = useTranslation();
     const { getAccessTokenSilently } = useAuth0();
     const [profile, setProfile] = useState<CustomerProfileResponse | null>(null);
     const [usernameInput, setUsernameInput] = useState('');
@@ -46,9 +48,9 @@ const ProfileSettingsWidget: React.FC = () => {
             const token = await getAccessTokenSilently();
             await updateUsername(token, usernameInput);
             setProfile(prev => prev ? { ...prev, username: usernameInput } : null);
-            setMessage({ text: 'Username updated successfully!', type: 'success' });
+            setMessage({ text: t('profileWidget.profileSettingsWidget.usernameUpdatedSuccessfully'), type: 'success' });
         } catch (err: any) {
-            setMessage({ text: err.message || 'Failed to update username', type: 'error' });
+            setMessage({ text: err.message || t('profileWidget.profileSettingsWidget.failedToUpdateUsername'), type: 'error' });
             // Revert input on error
             setUsernameInput(profile?.username || '');
         } finally {
@@ -66,10 +68,10 @@ const ProfileSettingsWidget: React.FC = () => {
             if (success) {
                 setProfile(prev => prev ? { ...prev, isDiscoverable: checked } : null);
             } else {
-                throw new Error("Failed to update discoverability");
+                throw new Error(t('profileWidget.profileSettingsWidget.failedToUpdateDiscoverability'));
             }
         } catch (err: any) {
-            setMessage({ text: err.message || 'Failed to update discoverability', type: 'error' });
+            setMessage({ text: err.message || t('profileWidget.profileSettingsWidget.failedToUpdateDiscoverability'), type: 'error' });
             setIsDiscoverable(!checked); // Revert
         } finally {
             setIsSavingDiscoverability(false);
@@ -77,16 +79,16 @@ const ProfileSettingsWidget: React.FC = () => {
     };
 
     if (isLoading) {
-        return <div className={styles.card}>Loading profile...</div>;
+        return <div className={styles.card}>{t('profileWidget.profileSettingsWidget.loadingProfile')}</div>;
     }
 
     if (!profile) {
-        return <div className={styles.card}>Failed to load profile data.</div>;
+        return <div className={styles.card}>{t('profileWidget.profileSettingsWidget.failedToLoadProfile')}</div>;
     }
 
     return (
         <div className={styles.card}>
-            <h2 className={styles.title}>Profile Settings</h2>
+            <h2 className={styles.title}>{t('profileWidget.profileSettingsWidget.title')}</h2>
             
             <div className={styles.form}>
                 
@@ -97,34 +99,34 @@ const ProfileSettingsWidget: React.FC = () => {
                 )}
                 
                 <div className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Personal Details</h3>
+                    <h3 className={styles.sectionTitle}>{t('profileWidget.profileSettingsWidget.personalDetails')}</h3>
                     <div className={styles.profileInfo}>
                         {profile.picture ? (
-                            <img src={profile.picture} alt="Profile" className={styles.profilePic} />
+                            <img src={profile.picture} alt={t('profileWidget.profileSettingsWidget.profilePictureAlt')} className={styles.profilePic} />
                         ) : (
                             <div className={styles.profilePic} style={{ backgroundColor: '#e2e8f0' }} />
                         )}
                         <div className={styles.profileDetails}>
-                            <strong>{profile.name || 'No Name'}</strong>
-                            <span>{profile.email || 'No Email'}</span>
+                            <strong>{profile.name || t('profileWidget.profileSettingsWidget.noName')}</strong>
+                            <span>{profile.email || t('profileWidget.profileSettingsWidget.noEmail')}</span>
                         </div>
                     </div>
                 </div>
 
                 <div className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Username</h3>
+                    <h3 className={styles.sectionTitle}>{t('profileWidget.profileSettingsWidget.username')}</h3>
                     <div className={styles.inputGroup}>
-                        <label className={styles.inputLabel}>Your Username</label>
+                        <label className={styles.inputLabel}>{t('profileWidget.profileSettingsWidget.yourUsername')}</label>
                         <input 
                             type="text" 
                             value={usernameInput}
                             onChange={(e) => setUsernameInput(e.target.value)}
-                            placeholder="e.g. johndoe-1234"
+                            placeholder={t('profileWidget.profileSettingsWidget.usernamePlaceholder')}
                         />
                     </div>
                     <div className={styles.actions}>
                         <PillButton 
-                            label={isSavingUsername ? "Saving..." : "Update Username"} 
+                            label={isSavingUsername ? t('profileWidget.profileSettingsWidget.saving') : t('profileWidget.profileSettingsWidget.updateUsername')}
                             variant="primary" 
                             onClick={handleSaveUsername} 
                             disabled={isSavingUsername || usernameInput === profile.username || usernameInput.trim() === ''}
@@ -133,11 +135,11 @@ const ProfileSettingsWidget: React.FC = () => {
                 </div>
 
                 <div className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Privacy</h3>
+                    <h3 className={styles.sectionTitle}>{t('profileWidget.profileSettingsWidget.privacy')}</h3>
                     <div className={styles.toggleGroup}>
                         <div className={styles.toggleLabel}>
-                            <strong>Discoverable</strong>
-                            <span>Allow other users to search for you by your exact username when sharing instructions.</span>
+                            <strong>{t('profileWidget.profileSettingsWidget.discoverable')}</strong>
+                            <span>{t('profileWidget.profileSettingsWidget.discoverableDescription')}</span>
                         </div>
                         <input 
                             type="checkbox"

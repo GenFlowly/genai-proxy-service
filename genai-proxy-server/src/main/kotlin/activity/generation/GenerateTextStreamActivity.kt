@@ -86,7 +86,8 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.conversationId,
                     request.selectedResponseId,
                     request.client,
-                    customerId
+                    customerId,
+                    request.agentic
                 )
 
                 // Send Metadata Headers

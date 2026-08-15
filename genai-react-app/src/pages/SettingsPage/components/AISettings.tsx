@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
 import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendorApiKeysService'
@@ -16,6 +17,7 @@ import { useToast } from '../../../context/ToastContext'
 import styles from './AISettings.module.scss'
 
 export function AISettings(): React.ReactElement {
+    const { t } = useTranslation()
     const { customerId, getAccessTokenSilently, isAuthenticated, updateVendorApiKeyStatus, aiVendorAPIKeyStatusList } = useAuth()
     const { showToast } = useToast()
 
@@ -39,13 +41,13 @@ export function AISettings(): React.ReactElement {
 
     const handleSave = async (vendor: AIVendor) => {
         if (!isAuthenticated || !customerId) {
-            showToast('Please log in first.')
+            showToast(t('settingsPage.aiSettings.loginFirstToast'))
             return
         }
 
         const apiKey = apiKeys[vendor]
         if (!apiKey.trim()) {
-            showToast('Please enter a valid API key.')
+            showToast(t('settingsPage.aiSettings.enterValidApiKeyToast'))
             return
         }
 
@@ -64,7 +66,7 @@ export function AISettings(): React.ReactElement {
             showToast(response.apiKeyStatus.status)
         } catch (error: any) {
             console.error(error)
-            showToast(error.message || 'Error saving API key.')
+            showToast(error.message || t('settingsPage.aiSettings.saveErrorToast'))
         } finally {
             setLoading(prev => ({ ...prev, [vendor]: false }))
         }
@@ -73,8 +75,8 @@ export function AISettings(): React.ReactElement {
     return (
         <div className={styles.container}>
             <div className={styles.headerBlock}>
-                <h2 className={styles.title}>AI Models & Providers</h2>
-                <p className={styles.subtitle}>Configure your API keys to enable various AI models across the platform.</p>
+                <h2 className={styles.title}>{t('settingsPage.aiSettings.title')}</h2>
+                <p className={styles.subtitle}>{t('settingsPage.aiSettings.subtitle')}</p>
             </div>
             <div className={styles.form}>
                 {vendors.map(vendor => {
@@ -94,7 +96,7 @@ export function AISettings(): React.ReactElement {
                             </div>
                             <div className={styles.inputsGroup}>
                                 <InputTextWithHint
-                                    hint="API Key"
+                                    hint={t('settingsPage.aiSettings.apiKeyHint')}
                                     value={apiKeys[vendor]}
                                     onChange={e => handleChange(vendor, e.target.value)}
                                     placeholder="sk-..."
@@ -104,7 +106,7 @@ export function AISettings(): React.ReactElement {
                             <div className={styles.footer}>
                                 <PillButton
                                     onClick={() => handleSave(vendor)}
-                                    label={loading[vendor] ? 'Saving...' : (isCurrentlyValid ? 'Overwrite API Key' : 'Save')}
+                                    label={loading[vendor] ? t('settingsPage.aiSettings.savingLabel') : (isCurrentlyValid ? t('settingsPage.aiSettings.overwriteApiKey') : t('settingsPage.aiSettings.save'))}
                                     icon={ICONS.SAVE_ICON}
                                     disabled={loading[vendor]}
                                 />

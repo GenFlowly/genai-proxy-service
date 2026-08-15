@@ -16,5 +16,7 @@ data class GetConversationResponse(
 @Serializable
 data class PromptAndResponse(
     val prompt: Prompt,
-    val responses: List<GenerateTextResponse>? = emptyList()
+    val responses: List<GenerateTextResponse>? = emptyList(),
+    /** ISO-8601 createdAt of the user message that carried this prompt. */
+    val promptCreatedAt: String? = null
 )

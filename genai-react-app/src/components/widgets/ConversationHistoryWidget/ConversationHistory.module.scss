@@ -145,20 +145,30 @@
     font-size: 0.6rem; // Reduced font size for line 2
     line-height: 1; // Reduced line height
     color: $color-text-muted;
+    min-width: 0; // Allow shrinking within the item's padding
+    overflow: hidden; // Never slide under the absolutely-positioned archive button
 }
 
 .vendorIcons {
     display: flex;
     align-items: center;
     gap: 0.15rem;
+    flex-shrink: 0; // Badges keep their size; the timestamp ellipsizes instead
 }
 
 .vendorIcon {
     opacity: 0.7;
 }
 
+.detailsSeparator {
+    flex-shrink: 0;
+    color: $color-text-muted;
+    opacity: 0.7;
+}
+
 .timestamp {
-    white-space: nowrap;
+    @include ellipsis;
+    min-width: 0;
 }
 
 .loadMore {

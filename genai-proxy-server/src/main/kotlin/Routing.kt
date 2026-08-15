@@ -30,6 +30,8 @@ import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoute
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
+import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
+import com.genflowly.activity.voice.registerVoiceSessionRoutes
 import com.genflowly.service.AIRequestService
 import com.genflowly.service.DeveloperApiKeyService
 import io.github.smiley4.ktoropenapi.get
@@ -85,6 +87,9 @@ object Routes {
 
     const val DEVELOPER_API_KEYS = "$API_V1/developer/api-keys"
     const val DEVELOPER_API_KEY = "$API_V1/developer/api-keys/{keyId}"
+
+    const val VOICE_SESSION = "$API_V1/voice/session"
+    const val GET_VOICE_MODELS = "$API_V1/voice/models"
 }
 
 
@@ -100,6 +105,8 @@ fun Application.configureRouting(
     dynamoDBProvider: DynamoDBProvider,
     notesService: com.genflowly.service.NotesService,
     developerApiKeyService: DeveloperApiKeyService,
+    httpClient: io.ktor.client.HttpClient,
+    json: kotlinx.serialization.json.Json,
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -151,5 +158,7 @@ fun Application.configureRouting(
         registerGetProfileRoutes(dynamoDBProvider)
         registerNotesRoutes(notesService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
+        registerVoiceSessionRoutes(customerProfileService, conversationService, aiRequestManager, httpClient, json)
+        registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }
 }

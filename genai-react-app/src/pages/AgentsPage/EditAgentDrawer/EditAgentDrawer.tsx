@@ -1,20 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { Agent, AgentNode, UpdateAgentNodePatch, UpdateAgentRequest } from '../../../models/agents.models'
+import i18n from '../../../i18n'
 import styles from './EditAgentDrawer.module.scss'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const NODE_TYPE_META: Record<string, { icon: string; label: string; color: string }> = {
-    QUERY_ANALYZER:       { icon: '🔍', label: 'Query Analyzer',        color: '#4f86f7' },
-    QUERY_REWRITER:       { icon: '✏️',  label: 'Query Rewriter',        color: '#7c5cfc' },
-    RETRIEVAL:            { icon: '📦', label: 'Retrieval',              color: '#2ecc71' },
-    RESULT_RANKER:        { icon: '📊', label: 'Result Ranker',          color: '#f39c12' },
-    RESPONSE_GENERATOR:   { icon: '💬', label: 'Response Generator',     color: '#e74c3c' },
-    RESPONSE_GENERATOR_WITH_REFLECTION: { icon: '🪞', label: 'Reflective Generator', color: '#e67e22' },
+const NODE_TYPE_META: Record<string, { icon: string; labelKey: string; color: string }> = {
+    QUERY_ANALYZER:       { icon: '🔍', labelKey: 'agentsPage.nodeTypes.queryAnalyzer',      color: '#4f86f7' },
+    QUERY_REWRITER:       { icon: '✏️',  labelKey: 'agentsPage.nodeTypes.queryRewriter',      color: '#7c5cfc' },
+    RETRIEVAL:            { icon: '📦', labelKey: 'agentsPage.nodeTypes.retrieval',          color: '#2ecc71' },
+    RESULT_RANKER:        { icon: '📊', labelKey: 'agentsPage.nodeTypes.resultRanker',       color: '#f39c12' },
+    RESPONSE_GENERATOR:   { icon: '💬', labelKey: 'agentsPage.nodeTypes.responseGenerator',  color: '#e74c3c' },
+    RESPONSE_GENERATOR_WITH_REFLECTION: { icon: '🪞', labelKey: 'agentsPage.nodeTypes.reflectiveGenerator', color: '#e67e22' },
 }
 
 function getNodeMeta(nodeType: string) {
-    return NODE_TYPE_META[nodeType] ?? { icon: '⚙️', label: nodeType, color: '#6b7280' }
+    const meta = NODE_TYPE_META[nodeType]
+    if (meta) return { icon: meta.icon, label: i18n.t(meta.labelKey), color: meta.color }
+    return { icon: '⚙️', label: nodeType, color: '#6b7280' }
 }
 
 function tryPrettyJson(raw: string): string {
@@ -39,9 +43,13 @@ interface NodeConfigEditorProps {
     onConfigChange: (val: string) => void
 }
 
+const RESPONSE_NODE_TYPES = new Set(['RESPONSE_GENERATOR', 'RESPONSE_GENERATOR_WITH_REFLECTION'])
+
 function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfigChange }: NodeConfigEditorProps) {
+    const { t } = useTranslation()
     const [open, setOpen] = useState(false)
     const meta = getNodeMeta(node.nodeType)
+    const isResponseNode = RESPONSE_NODE_TYPES.has(node.nodeType)
     const configInvalid = patchConfig.trim() !== '' && !isValidJson(patchConfig)
 
     // Parse config to extract known keys for friendly editing
@@ -82,7 +90,7 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                 <div className={styles.nodeEditorBody}>
                     {/* Node name */}
                     <div className={styles.fieldGroup}>
-                        <label className={styles.fieldLabel}>Node Name</label>
+                        <label className={styles.fieldLabel}>{t('agentsPage.nodeConfigEditor.nodeName')}</label>
                         <input
                             type="text"
                             className={styles.fieldInput}
@@ -92,21 +100,29 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                         />
                     </div>
 
-                    {/* Friendly system_prompt field (only for LLM nodes) */}
+                    {/* Friendly system_prompt field (only for LLM nodes; response generators
+                        take persona/model from the request, not node config) */}
                     {node.nodeType !== 'RETRIEVAL' && (
                         <>
+                            {!isResponseNode && (
+                                <div className={styles.fieldGroup}>
+                                    <label className={styles.fieldLabel}>{t('agentsPage.nodeConfigEditor.systemPrompt')}</label>
+                                    <textarea
+                                        className={styles.fieldTextarea}
+                                        rows={5}
+                                        value={systemPrompt}
+                                        onChange={e => updateConfigField('system_prompt', e.target.value)}
+                                        placeholder={t('agentsPage.nodeConfigEditor.systemPromptPlaceholder')}
+                                    />
+                                </div>
+                            )}
+                            {isResponseNode && (
+                                <p className={styles.fieldHint}>
+                                    {t('agentsPage.nodeConfigEditor.responseNodeHint')}
+                                </p>
+                            )}
                             <div className={styles.fieldGroup}>
-                                <label className={styles.fieldLabel}>System Prompt</label>
-                                <textarea
-                                    className={styles.fieldTextarea}
-                                    rows={5}
-                                    value={systemPrompt}
-                                    onChange={e => updateConfigField('system_prompt', e.target.value)}
-                                    placeholder="You are a helpful assistant."
-                                />
-                            </div>
-                            <div className={styles.fieldGroup}>
-                                <label className={styles.fieldLabel}>Input Template</label>
+                                <label className={styles.fieldLabel}>{t('agentsPage.nodeConfigEditor.inputTemplate')}</label>
                                 <textarea
                                     className={styles.fieldTextarea}
                                     rows={3}
@@ -115,27 +131,31 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                                     placeholder="{query}"
                                 />
                                 <p className={styles.fieldHint}>
-                                    Use <code>{'{query}'}</code>, <code>{'{context}'}</code>, <code>{'{chunks_text}'}</code> as placeholders.
+                                    <Trans i18nKey="agentsPage.nodeConfigEditor.inputTemplateHint">
+                                        Use <code>{'{query}'}</code>, <code>{'{context}'}</code>, <code>{'{chunks_text}'}</code> as placeholders.
+                                    </Trans>
                                 </p>
                             </div>
-                            <div className={styles.fieldGroup}>
-                                <label className={styles.fieldLabel}>Model Override <span className={styles.optional}>(optional)</span></label>
-                                <input
-                                    type="text"
-                                    className={styles.fieldInput}
-                                    value={modelOverride}
-                                    onChange={e => updateConfigField('model_override', e.target.value)}
-                                    placeholder="e.g. gpt-4o, claude-sonnet-4-5"
-                                />
-                            </div>
+                            {!isResponseNode && (
+                                <div className={styles.fieldGroup}>
+                                    <label className={styles.fieldLabel}>{t('agentsPage.nodeConfigEditor.modelOverride')} <span className={styles.optional}>{t('agentsPage.nodeConfigEditor.optional')}</span></label>
+                                    <input
+                                        type="text"
+                                        className={styles.fieldInput}
+                                        value={modelOverride}
+                                        onChange={e => updateConfigField('model_override', e.target.value)}
+                                        placeholder={t('agentsPage.nodeConfigEditor.modelOverridePlaceholder')}
+                                    />
+                                </div>
+                            )}
                         </>
                     )}
 
                     {/* Raw JSON editor */}
                     <div className={styles.fieldGroup}>
                         <label className={styles.fieldLabel}>
-                            Raw Config JSON
-                            {configInvalid && <span className={styles.jsonError}> — invalid JSON</span>}
+                            {t('agentsPage.nodeConfigEditor.rawConfigJson')}
+                            {configInvalid && <span className={styles.jsonError}> {t('agentsPage.nodeConfigEditor.invalidJsonSuffix')}</span>}
                         </label>
                         <textarea
                             className={`${styles.fieldTextarea} ${styles.monoFont} ${configInvalid ? styles.fieldError : ''}`}
@@ -168,6 +188,7 @@ export default function EditAgentDrawer({
     onClose,
     onSave,
 }: EditAgentDrawerProps) {
+    const { t } = useTranslation()
     // ── Local form state ─────────────────────────────────────────────────────
     const [name, setName] = useState('')
     const [maxIterations, setMaxIterations] = useState<number>(10)
@@ -208,17 +229,17 @@ export default function EditAgentDrawer({
 
         // Client-side validation
         if (!name.trim()) {
-            setValidationError('Agent name must not be blank.')
+            setValidationError(t('agentsPage.editAgentDrawer.errorNameBlank'))
             return
         }
         if (maxIterations < 1 || maxIterations > 100) {
-            setValidationError('Max iterations must be between 1 and 100.')
+            setValidationError(t('agentsPage.editAgentDrawer.errorMaxIterations'))
             return
         }
         for (const node of agent.nodes) {
             const cfg = nodePatchConfigs[node.nodeId] ?? ''
             if (cfg && !isValidJson(cfg)) {
-                setValidationError(`Config for node "${nodePatchNames[node.nodeId] || node.name}" is not valid JSON.`)
+                setValidationError(t('agentsPage.editAgentDrawer.errorNodeConfigJson', { name: nodePatchNames[node.nodeId] || node.name }))
                 return
             }
         }
@@ -267,14 +288,14 @@ export default function EditAgentDrawer({
                 className={styles.drawer}
                 role="dialog"
                 aria-modal="true"
-                aria-label={`Edit agent: ${agent.name}`}
+                aria-label={t('agentsPage.editAgentDrawer.dialogAriaLabel', { name: agent.name })}
             >
                 {/* Header */}
                 <div className={styles.drawerHeader}>
                     <div className={styles.drawerHeaderLeft}>
                         <span className={styles.drawerIcon}>🤖</span>
                         <div>
-                            <h2 className={styles.drawerTitle}>Edit Agent</h2>
+                            <h2 className={styles.drawerTitle}>{t('agentsPage.editAgentDrawer.title')}</h2>
                             <p className={styles.drawerSubtitle}>{agent.name}</p>
                         </div>
                     </div>
@@ -282,7 +303,7 @@ export default function EditAgentDrawer({
                         type="button"
                         className={styles.closeBtn}
                         onClick={onClose}
-                        aria-label="Close"
+                        aria-label={t('agentsPage.editAgentDrawer.closeAriaLabel')}
                     >
                         ✕
                     </button>
@@ -292,10 +313,10 @@ export default function EditAgentDrawer({
                 <div className={styles.drawerBody}>
                     {/* Agent-level fields */}
                     <section className={styles.section}>
-                        <h3 className={styles.sectionTitle}>Agent Settings</h3>
+                        <h3 className={styles.sectionTitle}>{t('agentsPage.editAgentDrawer.agentSettings')}</h3>
 
                         <div className={styles.fieldGroup}>
-                            <label className={styles.fieldLabel} htmlFor="agent-name">Name</label>
+                            <label className={styles.fieldLabel} htmlFor="agent-name">{t('agentsPage.editAgentDrawer.nameLabel')}</label>
                             <input
                                 id="agent-name"
                                 type="text"
@@ -307,8 +328,8 @@ export default function EditAgentDrawer({
 
                         <div className={styles.fieldGroup}>
                             <label className={styles.fieldLabel} htmlFor="agent-max-iter">
-                                Max Iterations
-                                <span className={styles.fieldHintInline}> (1–100)</span>
+                                {t('agentsPage.editAgentDrawer.maxIterations')}
+                                <span className={styles.fieldHintInline}> {t('agentsPage.editAgentDrawer.maxIterationsRange')}</span>
                             </label>
                             <input
                                 id="agent-max-iter"
@@ -324,9 +345,9 @@ export default function EditAgentDrawer({
 
                     {/* Node config section */}
                     <section className={styles.section}>
-                        <h3 className={styles.sectionTitle}>Node Configuration</h3>
+                        <h3 className={styles.sectionTitle}>{t('agentsPage.editAgentDrawer.nodeConfiguration')}</h3>
                         <p className={styles.sectionSubtitle}>
-                            Expand each node to edit its name, system prompt, or full config JSON.
+                            {t('agentsPage.editAgentDrawer.nodeConfigurationSubtitle')}
                         </p>
                         <div className={styles.nodeList}>
                             {agent.nodes.map(node => (
@@ -361,7 +382,7 @@ export default function EditAgentDrawer({
                             onClick={onClose}
                             disabled={saving}
                         >
-                            Cancel
+                            {t('agentsPage.editAgentDrawer.cancel')}
                         </button>
                         <button
                             type="button"
@@ -370,8 +391,8 @@ export default function EditAgentDrawer({
                             disabled={saving}
                         >
                             {saving ? (
-                                <><span className={styles.savingSpinner} />Saving…</>
-                            ) : 'Save Changes'}
+                                <><span className={styles.savingSpinner} />{t('agentsPage.editAgentDrawer.saving')}</>
+                            ) : t('agentsPage.editAgentDrawer.saveChanges')}
                         </button>
                     </div>
                 </div>

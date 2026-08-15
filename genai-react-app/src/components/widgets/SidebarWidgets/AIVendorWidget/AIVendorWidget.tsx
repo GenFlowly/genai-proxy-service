@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AIVendor } from '../../../../constants/vendors'
 import { useToast } from '../../../../context/ToastContext'
 import {
@@ -32,6 +33,7 @@ import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/Sideb
 const vendors = Object.values(AIVendor) as AIVendor[]
 
 export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
+    const { t } = useTranslation()
     const { ai, auth } = useSidebarWidget()
     const { config, setSelectedModelForAIVendor, resetConfig } = ai
     const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList, aiConfigPreferences } = auth
@@ -172,10 +174,10 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                     preferredModels: config.filter(c => c.model && c.model.trim() !== '')
                 }
             })
-            showToast('Preferences saved successfully!')
+            showToast(t('sidebar.aiVendorWidget.preferencesSavedSuccessfully'))
         } catch (err: any) {
             console.error('Failed to save preferences:', err)
-            showToast('Failed to save preferences: ' + err.message)
+            showToast(t('sidebar.aiVendorWidget.failedToSavePreferences', { message: err.message }))
         } finally {
             setIsSaving(false)
         }
@@ -189,7 +191,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
 
     // Collapsed Content
     const headerCollapsed = (
-        <Tooltip content="AI Models" position="left">
+        <Tooltip content={t('sidebar.aiVendorWidget.aiModelsTooltip')} position="left">
             <div className={styles.buttonWrapper}>
                 <div className={styles.iconButton} style={{ border: 'none', background: 'transparent', cursor: 'default' }}>
                     <Icon src={ICONS.MODELS} size={24} />
@@ -205,7 +207,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                 const isEnabled = isVendorEnabled(vendor)
                 const models = getModelsForVendor(vendor)
 
-                const tooltipContent = !isEnabled ? 'API key not set' : vendor
+                const tooltipContent = !isEnabled ? t('sidebar.aiVendorWidget.apiKeyNotSet') : vendor
 
                 let CollapsedBrandComponent = ({ size }: { size?: number }) => <Icon src={ICONS.MODELS} size={size} />
                 if (vendor === AIVendor.OPENAI) CollapsedBrandComponent = CollapsedOpenAIBrandName
@@ -244,15 +246,15 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
         <div className={styles.header}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
                 <Icon src={ICONS.MODELS} size={20} />
-                <h3 className={styles.title}>Models</h3>
+                <h3 className={styles.title}>{t('sidebar.aiVendorWidget.title')}</h3>
             </div>
             <div className={styles.actions}>
-                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Refresh Models"}>
+                <Tooltip content={!hasAnyValidApiKey ? t('sidebar.aiVendorWidget.noApiKeysSet') : t('sidebar.aiVendorWidget.refreshModels')}>
                     <button
                         className={styles.iconActionButton}
                         onClick={handleRefresh}
                         disabled={isRefreshing || !hasAnyValidApiKey}
-                        aria-label="Refresh Models"
+                        aria-label={t('sidebar.aiVendorWidget.refreshModels')}
                         data-testid="refresh-models-button"
                     >
                         <Icon
@@ -263,12 +265,12 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                     </button>
                 </Tooltip>
 
-                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : "Set as default"}>
+                <Tooltip content={!hasAnyValidApiKey ? t('sidebar.aiVendorWidget.noApiKeysSet') : t('sidebar.aiVendorWidget.setAsDefault')}>
                     <button
                         className={styles.iconActionButton}
                         onClick={handleSave}
                         disabled={isSaving || !hasAnyValidApiKey}
-                        aria-label="Set as default"
+                        aria-label={t('sidebar.aiVendorWidget.setAsDefault')}
                     >
                         <Icon src={ICONS.SAVE_ICON} size={20} />
                     </button>
@@ -339,7 +341,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                             )}
 
                             {isActive && isEnabled && models.length === 0 && (
-                                <span className={styles.errorText}>No models available</span>
+                                <span className={styles.errorText}>{t('sidebar.aiVendorWidget.noModelsAvailable')}</span>
                             )}
                         </div>
                     )

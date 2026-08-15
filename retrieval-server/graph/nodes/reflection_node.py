@@ -37,27 +37,32 @@ def make_reflection_node(node_type: str):
     failure) so a cycle using this node always has a safe exit path.
 
     Configurable via DDB node config:
-      system_prompt   (str)  — must instruct the LLM to return the required JSON schema
       input_template  (str)  — {context}, {query} and other state placeholders
       output_key      (str)  — state field for the answer (default: generated_response)
-      model_override  (str)  — override request-level model
       include_conversation_history (bool)
+
+    system_prompt and model_override are ignored when output_key is
+    "generated_response" (the default) — the persona comes from the request's
+    resolved instruction and the model from the request's llm_model.
     """
     async def node(state: RetrievalState) -> dict:
         config = state.get("node_configs", {}).get(node_type, {})
-        system_prompt = config.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)
         input_template = config.get("input_template", _DEFAULT_INPUT_TEMPLATE)
         output_key = config.get("output_key", "generated_response")
         include_history: bool = config.get("include_conversation_history", True)
-        model_override: str | None = config.get("model_override")
 
-        # Customer instruction from the request: replace the persona portion but keep the
-        # JSON schema requirement so needs_more_context is always emitted (cycle-exit contract).
-        if output_key == "generated_response":
+        is_response_node = (output_key == "generated_response")
+        if is_response_node:
+            # Persona always comes from the request's resolved instruction (node-level
+            # system_prompt/model_override are not honored for response generators);
+            # the JSON schema requirement is always appended so needs_more_context is
+            # emitted regardless of persona (cycle-exit contract).
             request_sp = state.get("request_system_prompt")
-            if request_sp:
-                logger.info("Node %s: overriding system_prompt with request_system_prompt + JSON schema (len=%d)", node_type, len(request_sp))
-                system_prompt = request_sp + _JSON_FORMAT_REQUIREMENT
+            system_prompt = (request_sp or _DEFAULT_PERSONA) + _JSON_FORMAT_REQUIREMENT
+            model_override = None
+        else:
+            system_prompt = config.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)
+            model_override = config.get("model_override")
 
         effective_model = model_override or state.get("llm_model")
         llm = get_llm(
@@ -71,7 +76,6 @@ def make_reflection_node(node_type: str):
         cache_anthropic = (provider == "anthropic")
         messages: list[Any] = [_make_system(system_prompt, cache_anthropic)]
 
-        is_response_node = (output_key == "generated_response")
         rendered_input = _render_template(input_template, state)
 
         if include_history:

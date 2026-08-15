@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { InstructionTile } from '../../components/common/InstructionTile/InstructionTile';
 import styles from './InstructionsPage.module.scss';
@@ -7,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/navbar/Navbar';
 
 export default function InstructionsPage() {
+    const { t } = useTranslation();
     const { customerInstructions, refreshInstructions } = useAuth();
     const navigate = useNavigate();
 
@@ -32,17 +34,17 @@ export default function InstructionsPage() {
             <Navbar />
             <div className={styles.pageContainer}>
                 <div className={styles.header}>
-                <h1 className={styles.title}>Instructions Hub</h1>
-                <PillButton 
-                    label="Create Instruction" 
-                    variant="primary" 
+                <h1 className={styles.title}>{t('instructionsPage.instructionsPage.title')}</h1>
+                <PillButton
+                    label={t('instructionsPage.instructionsPage.createInstruction')}
+                    variant="primary"
                     onClick={() => navigate('/instructions/new')} 
                 />
             </div>
             
             {uniqueInstructions.length === 0 ? (
                 <div className={styles.emptyState}>
-                    <p>No instructions found. Create one to get started!</p>
+                    <p>{t('instructionsPage.instructionsPage.emptyState')}</p>
                 </div>
             ) : (
                 <div className={styles.grid}>

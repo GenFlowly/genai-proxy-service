@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
 import PillButton from '../../../components/common/PillButton/PillButton';
 import { getUserProfile, updateUsername, updateDiscoverability } from '../../../services/userService';
@@ -6,6 +7,7 @@ import { CustomerProfileResponse } from '../../../models/user.models';
 import styles from './ProfileSettings.module.scss';
 
 export function ProfileSettings(): React.ReactElement {
+    const { t } = useTranslation();
     const { getAccessTokenSilently } = useAuth0();
     const [profile, setProfile] = useState<CustomerProfileResponse | null>(null);
     const [usernameInput, setUsernameInput] = useState('');
@@ -46,9 +48,9 @@ export function ProfileSettings(): React.ReactElement {
             const token = await getAccessTokenSilently();
             await updateUsername(token, usernameInput);
             setProfile(prev => prev ? { ...prev, username: usernameInput } : null);
-            setMessage({ text: 'Username updated successfully!', type: 'success' });
+            setMessage({ text: t('settingsPage.profileSettings.usernameUpdatedMessage'), type: 'success' });
         } catch (err: any) {
-            setMessage({ text: err.message || 'Failed to update username', type: 'error' });
+            setMessage({ text: err.message || t('settingsPage.profileSettings.usernameUpdateFailedMessage'), type: 'error' });
             // Revert input on error
             setUsernameInput(profile?.username || '');
         } finally {
@@ -66,10 +68,10 @@ export function ProfileSettings(): React.ReactElement {
             if (success) {
                 setProfile(prev => prev ? { ...prev, isDiscoverable: checked } : null);
             } else {
-                throw new Error("Failed to update discoverability");
+                throw new Error(t('settingsPage.profileSettings.discoverabilityUpdateFailedMessage'));
             }
         } catch (err: any) {
-            setMessage({ text: err.message || 'Failed to update discoverability', type: 'error' });
+            setMessage({ text: err.message || t('settingsPage.profileSettings.discoverabilityUpdateFailedMessage'), type: 'error' });
             setIsDiscoverable(!checked); // Revert
         } finally {
             setIsSavingDiscoverability(false);
@@ -77,18 +79,18 @@ export function ProfileSettings(): React.ReactElement {
     };
 
     if (isLoading) {
-        return <div className={styles.card}>Loading profile...</div>;
+        return <div className={styles.card}>{t('settingsPage.profileSettings.loadingProfile')}</div>;
     }
 
     if (!profile) {
-        return <div className={styles.card}>Failed to load profile data.</div>;
+        return <div className={styles.card}>{t('settingsPage.profileSettings.loadProfileFailed')}</div>;
     }
 
     return (
         <div className={styles.container}>
             <div className={styles.headerBlock}>
-                <h2 className={styles.title}>Profile Settings</h2>
-                <p className={styles.subtitle}>Manage your personal information and preferences.</p>
+                <h2 className={styles.title}>{t('settingsPage.profileSettings.title')}</h2>
+                <p className={styles.subtitle}>{t('settingsPage.profileSettings.subtitle')}</p>
             </div>
             
             <div className={styles.form}>
@@ -100,34 +102,34 @@ export function ProfileSettings(): React.ReactElement {
                 )}
                 
                 <div className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Personal Details</h3>
+                    <h3 className={styles.sectionTitle}>{t('settingsPage.profileSettings.personalDetails')}</h3>
                     <div className={styles.profileInfo}>
                         {profile.picture ? (
-                            <img src={profile.picture} alt="Profile" className={styles.profilePic} />
+                            <img src={profile.picture} alt={t('settingsPage.profileSettings.profilePictureAlt')} className={styles.profilePic} />
                         ) : (
                             <div className={styles.profilePic} style={{ backgroundColor: '#e2e8f0' }} />
                         )}
                         <div className={styles.profileDetails}>
-                            <strong>{profile.name || 'No Name'}</strong>
-                            <span>{profile.email || 'No Email'}</span>
+                            <strong>{profile.name || t('settingsPage.profileSettings.noName')}</strong>
+                            <span>{profile.email || t('settingsPage.profileSettings.noEmail')}</span>
                         </div>
                     </div>
                 </div>
 
                 <div className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Username</h3>
+                    <h3 className={styles.sectionTitle}>{t('settingsPage.profileSettings.usernameSection')}</h3>
                     <div className={styles.inputGroup}>
-                        <label className={styles.inputLabel}>Your Username</label>
-                        <input 
-                            type="text" 
+                        <label className={styles.inputLabel}>{t('settingsPage.profileSettings.yourUsername')}</label>
+                        <input
+                            type="text"
                             value={usernameInput}
                             onChange={(e) => setUsernameInput(e.target.value)}
-                            placeholder="e.g. johndoe-1234"
+                            placeholder={t('settingsPage.profileSettings.usernamePlaceholder')}
                         />
                     </div>
                     <div className={styles.actions}>
-                        <PillButton 
-                            label={isSavingUsername ? "Saving..." : "Update Username"} 
+                        <PillButton
+                            label={isSavingUsername ? t('settingsPage.profileSettings.savingLabel') : t('settingsPage.profileSettings.updateUsername')}
                             variant="primary" 
                             onClick={handleSaveUsername} 
                             disabled={isSavingUsername || usernameInput === profile.username || usernameInput.trim() === ''}
@@ -136,11 +138,11 @@ export function ProfileSettings(): React.ReactElement {
                 </div>
 
                 <div className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Privacy</h3>
+                    <h3 className={styles.sectionTitle}>{t('settingsPage.profileSettings.privacy')}</h3>
                     <div className={styles.toggleGroup}>
                         <div className={styles.toggleLabel}>
-                            <strong>Discoverable</strong>
-                            <span>Allow other users to search for you by your exact username when sharing instructions.</span>
+                            <strong>{t('settingsPage.profileSettings.discoverable')}</strong>
+                            <span>{t('settingsPage.profileSettings.discoverableDescription')}</span>
                         </div>
                         <input 
                             type="checkbox"

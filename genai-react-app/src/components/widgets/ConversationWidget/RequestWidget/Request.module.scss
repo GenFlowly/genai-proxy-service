@@ -35,6 +35,44 @@
     justify-content: center;
     background-color: $color-request-container-background;
 
+    // Match the request card's max width to the total max allowed width of
+    // the response columns (N cards + the gaps between them), so the request
+    // and the response row share the same edges. --response-column-count is
+    // set inline by Request.tsx; the tablet/mobile !important overrides in
+    // message-card-base and below still win over this.
+    .requestWrapper {
+        border: none; // The request card is borderless (responses keep theirs)
+
+        // Tighter vertical rhythm than the default 2rem card padding
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+
+        // Re-assert the tablet values from TextContainer's .article rule,
+        // which this higher-specificity block would otherwise override
+        @include respond-to-tablet {
+            padding-top: $spacing-md;
+            padding-bottom: $spacing-md;
+        }
+
+        max-width: calc(
+            var(--response-column-count, 1) * #{$message-card-max-width} +
+            (var(--response-column-count, 1) - 1) * #{$response-column-gap}
+        );
+
+        // Presentation-only: the prompt text begins with a capital letter
+        // (the stored/copied text is untouched)
+        p:first-of-type::first-letter {
+            text-transform: uppercase;
+        }
+
+        // Left-align the header (TextContainer centers it by default). Element
+        // selector because .headerContent is a hashed class in TextContainer's
+        // module; the copy button keeps its absolute right position.
+        header > div {
+            justify-content: flex-start;
+        }
+    }
+
     @include respond-to-tablet {
         width: 100% !important;
         max-width: 100% !important;
@@ -52,6 +90,16 @@
             max-width: $mobile-content-width !important;
         }
     }
+}
+
+// Sent-at timestamp pinned to the bottom-right of the request card
+// (the card is a flex column, so align-self handles the right edge)
+.sentTimestamp {
+    align-self: flex-end;
+    margin-top: 0.5rem;
+    font-size: 0.7rem;
+    color: $color-text-muted;
+    white-space: nowrap;
 }
 
 .promptEditorFullscreen {

@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -24,6 +25,7 @@ export const extractText = (nodes: any[]): string => {
  * Custom <pre> block with copy-to-clipboard button for code snippets
  */
 export const PreBlock = ({ node, children, ...props }: any) => {
+    const { t } = useTranslation()
     const codeString = node?.children
         ? extractText(node.children).replace(/\n$/, '')
         : ''
@@ -40,7 +42,7 @@ export const PreBlock = ({ node, children, ...props }: any) => {
             >
                 <CopyToClipboard
                     content={codeString}
-                    label="Copy Code"
+                    label={t('common.textContainer.copyCode')}
                     icon={ICONS.COPY}
                     successMessage="✓"
                     successDuration={2000}
@@ -62,6 +64,8 @@ export interface TextContainerCoreProps {
     children?: React.ReactNode
     'data-testid'?: string
     loadingContent?: React.ReactNode
+    /** Rendered between the header and the markdown content (e.g. a thinking summary) */
+    subheader?: React.ReactNode
 }
 
 export default function TextContainerCore({
@@ -72,8 +76,10 @@ export default function TextContainerCore({
     isLoading = false,
     children,
     'data-testid': testId,
-    loadingContent
+    loadingContent,
+    subheader
 }: TextContainerCoreProps) {
+    const { t } = useTranslation()
 
     const headerContent = (typeof title === 'string') ? <h2>{title}</h2> : title
 
@@ -87,7 +93,7 @@ export default function TextContainerCore({
                             <div className={styles.copyButtonPositioner}>
                                 <CopyToClipboard
                                     content={content}
-                                    label="Copy Response"
+                                    label={t('common.textContainer.copyResponse')}
                                     icon={ICONS.COPY}
                                     successMessage="✓"
                                     successDuration={2000}
@@ -100,6 +106,8 @@ export default function TextContainerCore({
                     </div>
                 </header>
             )}
+
+            {subheader}
 
             {isLoading ? loadingContent : (
                 <ReactMarkdown

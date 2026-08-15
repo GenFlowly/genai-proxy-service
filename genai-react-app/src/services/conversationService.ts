@@ -5,6 +5,7 @@ import { HttpMethod } from '../constants/http';
 import { ConversationBlock, Message } from '../models/conversation.models';
 import { AIVendor } from '../constants/vendors';
 import { SearchUserResponse } from '../models/user.models';
+import { parseServerDate } from '../utils/timeUtils';
 
 export type ConversationRole = 'OWNER' | 'EDIT' | 'VIEW';
 
@@ -18,17 +19,21 @@ interface BackendPrompt {
 interface BackendResponse {
     text: string | null;
     aiVendor: string | null;
+    model?: string | null;
     conversationId: string | null;
     messageId: string | null;
     inputTokens?: number | null;
     outputTokens?: number | null;
     totalTokens?: number | null;
     tokensReadFromCache?: number | null;
+    thinkingDurationMs?: number | null;
 }
 
 interface BackendPromptAndResponse {
     prompt: BackendPrompt;
     responses?: BackendResponse[];
+    /** ISO-8601 createdAt of the user message that carried this prompt */
+    promptCreatedAt?: string | null;
 }
 
 interface BackendGetConversationResponse {
@@ -88,25 +93,32 @@ export async function getConversation(
 
                 responses.push({
                     aiVendor: vendor,
+                    model: resp.model ?? null,
                     text: resp.text,
                     messageId: resp.messageId || `msg-${index}-${respIndex}`,
                     inputTokens: resp.inputTokens ?? null,
                     outputTokens: resp.outputTokens ?? null,
                     totalTokens: resp.totalTokens ?? null,
                     tokensReadFromCache: resp.tokensReadFromCache ?? null,
+                    thinkingDurationMs: resp.thinkingDurationMs ?? null,
                 });
             }
         });
 
+        // Backend timestamp of the user message (UTC-normalized); NaN-guard in
+        // case of an unparseable value from older records
+        const sentAtMs = parseServerDate(item.promptCreatedAt)?.getTime() ?? NaN;
+
         return {
             // Use messageId for block ID if available to be stable, otherwise index
-            conversationBlockId: item.responses && item.responses.length > 0 && item.responses[0].messageId 
-                ? `block-${item.responses[0].messageId}` 
+            conversationBlockId: item.responses && item.responses.length > 0 && item.responses[0].messageId
+                ? `block-${item.responses[0].messageId}`
                 : `block-${index}-${Date.now()}`,
             prompt: item.prompt.prompt,
             responseMessages: responses,
             isLoading: false,
-            status: 'resolved'
+            status: 'resolved',
+            ...(Number.isFinite(sentAtMs) ? { sentAt: sentAtMs } : {})
         };
     });
 

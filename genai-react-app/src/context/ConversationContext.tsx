@@ -16,6 +16,7 @@ import {
     Message,
 } from '../models/conversation.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
+import i18n from '../i18n'
 
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
 
@@ -197,6 +198,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         return rawResults.map((r: any) => ({
             aiVendor: r.aiVendor as AIVendor,
+            model: r.model ?? aiConfigs.find(c => c.aiVendor === r.aiVendor)?.model ?? null,
             text: r.text ?? '',
             messageId: r.messageId ?? '',
             inputTokens: r.inputTokens ?? null,
@@ -218,7 +220,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         // Added idOverride to support explicit conversation targeting (parallel streams)
         idOverride?: string,
         onThinking?: (step: string) => void,
-        signal?: AbortSignal
+        signal?: AbortSignal,
+        onThinkingDuration?: (millis: number) => void
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -230,7 +233,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta, onMetadata, onThinking, signal)
+        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -266,7 +269,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 if (!isAuthenticated) {
                     loginWithRedirect({ appState: { returnTo: window.location.pathname } })
                 } else {
-                    showToast('You do not have access to this conversation')
+                    showToast(i18n.t('toasts.conversation.noAccess'))
                     navigate('/chat')
                 }
             } else {
@@ -321,13 +324,13 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         const conversationBlock = conversationBlockList.find(c => c.conversationBlockId === id)
         if (!conversationBlock) return null
         if (!isAuthenticated || !customerId) {
-            showToast('Please log in first.')
+            showToast(i18n.t('toasts.auth.loginFirst'))
             return null
         }
 
         const aiConfigs = config.filter(c => c.aiVendor && c.model && c.model.trim() !== '')
         if (aiConfigs.length === 0) {
-            showToast('Select at least one vendor and model.')
+            showToast(i18n.t('toasts.ai.selectVendorAndModel'))
             return null
         }
 
@@ -367,7 +370,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
         const { aiConfigs, finalSelectedResponseId, promptToUse } = prep
 
-        updateConversationBlock(id, { isLoading: true, responseMessages: [] })
+        updateConversationBlock(id, { isLoading: true, responseMessages: [], sentAt: Date.now() })
         setLeftSidebarExpanded(false)
         setRightSidebarExpanded(false)
         setLeftSidebarMinimized(false)
@@ -402,7 +405,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 responseMessages: [
                     {
                         aiVendor: AIVendor.OPENAI,
-                        text: 'Error generating text.',
+                        text: i18n.t('errors.ai.generateTextFailed'),
                         messageId: 'error',
                     },
                 ],
@@ -421,7 +424,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         if (vendorToRegenerate) {
              aiConfigs = aiConfigs.filter(c => c.aiVendor === vendorToRegenerate)
              if (aiConfigs.length === 0) {
-                 showToast(`Please select a valid model for ${vendorToRegenerate} first.`)
+                 showToast(i18n.t('toasts.ai.selectValidModelForVendor', { vendor: vendorToRegenerate }))
                  return
              }
         }
@@ -444,6 +447,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                      const existingIndex = newMsgs.findIndex(m => m.aiVendor === vendorToRegenerate)
                      const newMsg: Message = {
                          aiVendor: vendorToRegenerate,
+                         model: aiConfigs[0]?.model ?? null,
                          text: '',
                          messageId: `resp-${timestamp}-regen`,
                          isLoading: true
@@ -457,6 +461,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                  } else {
                      newMsgs = aiConfigs.map((config, index) => ({
                          aiVendor: config.aiVendor,
+                         model: config.model ?? null,
                          text: '',
                          messageId: `resp-${timestamp}-${index}`,
                          isLoading: true
@@ -464,7 +469,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                      initialResponseMessages = newMsgs
                  }
                  
-                 return { ...block, isLoading: true, prompt: promptToUse, responseMessages: newMsgs }
+                 // Regenerating a single vendor re-uses the original send time
+                 return { ...block, isLoading: true, prompt: promptToUse, responseMessages: newMsgs, sentAt: vendorToRegenerate ? block.sentAt : timestamp }
              }
              return block
         }))
@@ -497,6 +503,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         const msgs = block.responseMessages.map(m => {
                             if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
                             return { ...m, thinkingSteps: [...(m.thinkingSteps ?? []), step] }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
+                const handleThinkingDuration = (millis: number) => {
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, thinkingDurationMs: millis }
                         })
                         return { ...block, responseMessages: msgs }
                     }))
@@ -578,7 +595,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     },
                     idToUse,
                     handleThinking,
-                    abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal
+                    abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal,
+                    handleThinkingDuration
                 )
 
                 const finalConversationId = explicitConversationId || conversationIdRef.current
@@ -714,14 +732,14 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 // Session expired mid-use. Draft is already persisted to localStorage by the
                 // editor (Request.tsx). Reset block state then logout so the Login button appears.
                 updateConversationBlock(id, { isLoading: false, status: 'draft' })
-                showToast('Session expired. Your draft is saved — log in to continue.')
+                showToast(i18n.t('toasts.auth.sessionExpiredDraftSaved'))
                 logout({ returnTo: window.location.origin, localOnly: true })
             } else {
                 updateConversationBlock(id, {
                     responseMessages: [
                         {
                             aiVendor: AIVendor.OPENAI,
-                            text: 'Error generating text stream.',
+                            text: i18n.t('errors.ai.generateTextStreamFailed'),
                             messageId: 'error',
                         },
                     ],

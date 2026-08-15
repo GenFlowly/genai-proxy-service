@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLayout } from '../../../context/LayoutContext'
 import { Icon } from '../../common/Icon/Icon'
 import { ICONS } from '../../../constants/icons'
@@ -13,6 +14,7 @@ interface RightSidebarProps {
 }
 
 export default function RightSidebar({ widgetIds, 'data-testid': testId }: RightSidebarProps): React.ReactElement | null {
+    const { t } = useTranslation()
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()
     const collapsed = !isRightSidebarExpanded
     const widgets = useWidgetResolver(widgetIds)
@@ -36,10 +38,14 @@ export default function RightSidebar({ widgetIds, 'data-testid': testId }: Right
 
     return (
         <div className={`${styles.sidebarWrapper} ${collapsed ? styles.collapsed : ''}`} data-testid={testId || "right-sidebar"}>
+            <div className={styles.sidebarContent}>
+                {widgetContent}
+            </div>
+
             <button
                 onClick={toggleRightSidebar}
                 className={styles.collapseButton}
-                title={isRightSidebarExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
+                title={isRightSidebarExpanded ? t("layout.rightSidebar.collapseSidebar") : t("layout.rightSidebar.expandSidebar")}
                 data-testid="right-sidebar-toggle"
             >
                 {isRightSidebarExpanded ? (
@@ -48,10 +54,6 @@ export default function RightSidebar({ widgetIds, 'data-testid': testId }: Right
                     <Icon src={ICONS.ALT_ARROW_LEFT} size={15} />
                 )}
             </button>
-
-            <div className={styles.sidebarContent}>
-                {widgetContent}
-            </div>
         </div>
     )
 }

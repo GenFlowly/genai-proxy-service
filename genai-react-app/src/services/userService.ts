@@ -2,6 +2,7 @@ import { endpoints } from "../config/endpoints";
 import { HttpMethod } from "../constants/http";
 import { fetchWithRetry } from "../utils/apiUtils";
 import { SearchUserResponse, CustomerProfileResponse } from "../models/user.models";
+import i18n from "../i18n";
 
 export async function searchUserByUsername(token: string, username: string): Promise<SearchUserResponse[]> {
     try {
@@ -57,11 +58,11 @@ export async function updateUsername(token: string, username: string): Promise<b
         });
 
         if (response.status === 409) {
-            throw new Error("Username is already taken");
+            throw new Error(i18n.t("errors.user.usernameTaken"));
         }
 
         if (!response.ok) {
-            throw new Error(`Update Username failed: ${response.status} ${response.statusText}`);
+            throw new Error(i18n.t("errors.user.updateUsernameFailed", { status: response.status, statusText: response.statusText }));
         }
 
         return true;

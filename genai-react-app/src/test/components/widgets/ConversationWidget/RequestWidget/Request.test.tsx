@@ -146,7 +146,7 @@ describe('Request Widget Component', () => {
         expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', 'Ready Prompt', 'selected-res-id');
     });
 
-    test('renders as TextContainer with Stop Generating button when loading', () => {
+    test('renders as TextContainer without any button when loading', () => {
         mockUseConversation.mockReturnValue({
             conversationBlockList: [{
                 conversationBlockId: 'block-1',
@@ -166,15 +166,10 @@ describe('Request Widget Component', () => {
         // Editor should NOT be visible, TextContainer should be visible
         expect(screen.queryByTestId('prompt-editor')).not.toBeInTheDocument();
         expect(screen.getByTestId('resolved-request-wrapper')).toBeInTheDocument();
-        
-        // Button should exist
-        const btn = screen.getByTestId('generate-button');
-        expect(btn).toBeInTheDocument();
 
-        // Clicking it should call stopGenerating
-        fireEvent.click(btn);
-        expect(mockStopGenerating).toHaveBeenCalledWith('block-1');
-        expect(mockGenerateResponsesStream).not.toHaveBeenCalled();
+        // No Stop Generating (or any) button in the Request widget while
+        // loading — stopping is handled per-vendor in the Response widget
+        expect(screen.queryByTestId('generate-button')).not.toBeInTheDocument();
     });
 
     test('disable Generate button if API key invalid', () => {

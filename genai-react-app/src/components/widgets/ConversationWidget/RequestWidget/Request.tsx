@@ -1,4 +1,5 @@
 import React, {useEffect} from 'react'
+import {useTranslation} from 'react-i18next'
 import {ICONS} from '../../../../constants/icons'
 import PromptEditor from '../../PromptEditorWidget/PromptEditor'
 import MultiPurposeButton
@@ -11,6 +12,7 @@ import styles from './Request.module.scss'
 import {
     UserBrandName
 } from '../../../common/BrandName/BrandName'
+import {formatServerDateTime} from '../../../../utils/timeUtils'
 
 interface RequestProps {
     blockId: string
@@ -20,10 +22,10 @@ export default function Request({
                                     blockId,
                                     'data-testid': testId
                                 }: RequestProps & { 'data-testid'?: string }) {
+    const {t} = useTranslation()
     const {
         conversationBlockList,
         generateResponsesStream,
-        stopGenerating,
         getSelectedResponseForBlock,
         setEditorPrompt,
         setActiveBlockId
@@ -122,14 +124,18 @@ export default function Request({
     if (!conversationBlock) return null
 
     // If we have responses AND loading is finished, this block is "resolved" -> Show static text
-    // We keep the editor visible during loading so the user sees the "Stop Generating" button state.
+    // (Stopping an in-flight generation is done per-vendor from the Response widget.)
     const displayName = customerName || user?.name || ''
     const displayPicture = customerPicture || user?.picture
 
     // Only lock Request when actively streaming/resolved AND not being edited
     if (conversationBlock.status === 'resolved' || conversationBlock.isLoading) {
+        // The request card spans the total max allowed width of the response
+        // columns below it (N columns + the gaps between them)
+        const responseColumnCount = Math.max(1, conversationBlock.responseMessages.length)
         return (
             <div className={styles.resolvedRequestContainer}
+                 style={{ '--response-column-count': responseColumnCount } as React.CSSProperties}
                  data-testid={testId || "resolved-request-wrapper"}>
                 <TextContainer
                     className={styles.requestWrapper}
@@ -138,19 +144,14 @@ export default function Request({
                                           picture={displayPicture} as="span"/>}
                     showCopyButton={true}
                     data-testid={testId || "resolved-request-wrapper"}
-                />
-                {conversationBlock.isLoading && (
-                    <div className={styles.buttonWrapper}
-                         data-testid="generate-button-wrapper"
-                         style={{ marginTop: '1rem' }}>
-                        <MultiPurposeButton
-                            onClick={() => stopGenerating(blockId)}
-                            label="Stop Generating"
-                            disabled={false}
-                            data-testid="generate-button"
-                        />
-                    </div>
-                )}
+                >
+                    {conversationBlock.sentAt && (
+                        <div className={styles.sentTimestamp}
+                             data-testid="request-sent-timestamp">
+                            {formatServerDateTime(conversationBlock.sentAt)}
+                        </div>
+                    )}
+                </TextContainer>
             </div>
         )
     }
@@ -171,7 +172,7 @@ export default function Request({
 
             <div className={styles.buttonWrapper}
                  data-testid="generate-button-wrapper">
-                <Tooltip content={!hasAnyValidApiKey ? "No API keys set" : ""}>
+                <Tooltip content={!hasAnyValidApiKey ? t('conversation.request.noApiKeysSet') : ""}>
                     <div
                         style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
                         <MultiPurposeButton
@@ -180,7 +181,7 @@ export default function Request({
                                 const selectedId = getSelectedResponseForBlock(blockId)
                                 generateResponsesStream(blockId, draftPrompt, selectedId)
                             }}
-                            label="Generate"
+                            label={t('conversation.request.generate')}
                             disabled={!hasAnyValidApiKey}
                             icon={ICONS.SEND}
                             data-testid="generate-button"

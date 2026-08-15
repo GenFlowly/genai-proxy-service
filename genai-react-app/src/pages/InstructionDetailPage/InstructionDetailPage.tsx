@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useAuth0 } from '@auth0/auth0-react';
 import { 
@@ -18,6 +19,7 @@ import styles from './InstructionDetailPage.module.scss';
 import Navbar from '../../components/navbar/Navbar';
 
 export default function InstructionDetailPage() {
+    const { t } = useTranslation();
     const { instructionId } = useParams<{ instructionId: string }>();
     const navigate = useNavigate();
     const { getAccessTokenSilently } = useAuth0();
@@ -49,7 +51,7 @@ export default function InstructionDetailPage() {
                 if (!isAuthenticated) {
                     loginWithRedirect({ appState: { returnTo: window.location.pathname } });
                 } else {
-                    alert("You do not have access to this instruction or it doesn't exist.");
+                    alert(t('instructionDetail.instructionDetailPage.noAccessAlert'));
                     navigate('/instructions');
                 }
             }
@@ -59,7 +61,7 @@ export default function InstructionDetailPage() {
             }
             setRole('OWNER');
         }
-    }, [instructionId, isNew, customerInstructions, isInstructionsLoaded, isAuthenticated, loginWithRedirect, navigate]);
+    }, [instructionId, isNew, customerInstructions, isInstructionsLoaded, isAuthenticated, loginWithRedirect, navigate, t]);
 
     const handleSave = async () => {
         if (!instructionText.trim()) return;
@@ -81,7 +83,7 @@ export default function InstructionDetailPage() {
             }
         } catch (error) {
             console.error("Failed to save instruction", error);
-            alert("Failed to save instruction");
+            alert(t('instructionDetail.instructionDetailPage.saveFailedAlert'));
         } finally {
             setIsLoading(false);
         }
@@ -101,17 +103,17 @@ export default function InstructionDetailPage() {
             for (const user of removedUsers) {
                 await unshareInstruction(token, instructionId!, user.customerId);
             }
-            alert(`Instruction share settings updated successfully!`);
+            alert(t('instructionDetail.instructionDetailPage.shareUpdatedAlert'));
         } catch (error) {
             console.error("Failed to share instruction", error);
-            alert("Failed to share instruction. Make sure you own it.");
+            alert(t('instructionDetail.instructionDetailPage.shareFailedAlert'));
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleDelete = async () => {
-        if (!window.confirm("Are you sure you want to delete this instruction? This action cannot be undone.")) return;
+        if (!window.confirm(t('instructionDetail.instructionDetailPage.deleteConfirm'))) return;
         
         setIsLoading(true);
         try {
@@ -121,7 +123,7 @@ export default function InstructionDetailPage() {
             navigate('/instructions');
         } catch (error) {
             console.error("Failed to delete instruction", error);
-            alert("Failed to delete instruction. You can only delete instructions you own.");
+            alert(t('instructionDetail.instructionDetailPage.deleteFailedAlert'));
         } finally {
             setIsLoading(false);
         }
@@ -134,9 +136,9 @@ export default function InstructionDetailPage() {
                 <div className={styles.header}>
                 <div className={styles.titleGroup}>
                     <button className={styles.backButton} onClick={() => navigate('/instructions')}>
-                        &larr; Back
+                        &larr; {t('instructionDetail.instructionDetailPage.back')}
                     </button>
-                    <h2>{isNew ? 'Create Instruction' : 'Edit Instruction'}</h2>
+                    <h2>{isNew ? t('instructionDetail.instructionDetailPage.createTitle') : t('instructionDetail.instructionDetailPage.editTitle')}</h2>
                 </div>
                 
                 <div className={styles.actions}>
@@ -144,16 +146,16 @@ export default function InstructionDetailPage() {
                         <>
                             {entitlements.canShare && (
                                 <PillButton
-                                    label="Share"
+                                    label={t('instructionDetail.instructionDetailPage.share')}
                                     variant="secondary"
                                     onClick={handleShareClick}
                                     disabled={isLoading}
                                 />
                             )}
                             {role === 'OWNER' && (
-                                <PillButton 
-                                    label="Delete" 
-                                    variant="danger" 
+                                <PillButton
+                                    label={t('instructionDetail.instructionDetailPage.delete')}
+                                    variant="danger"
                                     onClick={handleDelete} 
                                     disabled={isLoading}
                                 />
@@ -161,8 +163,8 @@ export default function InstructionDetailPage() {
                         </>
                     )}
                     {role !== 'VIEW' && (
-                        <PillButton 
-                            label={isLoading ? 'Saving...' : 'Save'} 
+                        <PillButton
+                            label={isLoading ? t('instructionDetail.instructionDetailPage.savingLabel') : t('instructionDetail.instructionDetailPage.save')}
                             variant="primary" 
                             onClick={handleSave} 
                             disabled={isLoading || !instructionText.trim()}
@@ -174,21 +176,21 @@ export default function InstructionDetailPage() {
             <div className={styles.content}>
                 {role === 'VIEW' && (
                     <div className={styles.readonlyBanner}>
-                        You are viewing a shared instruction. You cannot make changes.
+                        {t('instructionDetail.instructionDetailPage.readonlyBanner')}
                     </div>
                 )}
                 <div className={styles.inputGroup}>
                     <InputTextWithHint
-                        hint="Name"
+                        hint={t('instructionDetail.instructionDetailPage.nameHint')}
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g., Code Reviewer Persona"
+                        placeholder={t('instructionDetail.instructionDetailPage.namePlaceholder')}
                         disabled={role === 'VIEW'}
                     />
                 </div>
                 
                 <div className={styles.editorContainer}>
-                    <label className={styles.editorLabel}>Instruction Prompt</label>
+                    <label className={styles.editorLabel}>{t('instructionDetail.instructionDetailPage.instructionPrompt')}</label>
                     <PromptEditor
                         id="instruction-detail-editor"
                         value={instructionText}

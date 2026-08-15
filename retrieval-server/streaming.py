@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Any, AsyncIterator, Optional
 
 from graph.state import RetrievalState
@@ -42,6 +43,7 @@ async def stream_response(
     node_type_map: Optional[dict[str, str]] = None,
     streaming_nodes: Optional[set[str]] = None,
     recursion_limit: int = 25,
+    request_start: Optional[float] = None,
 ) -> AsyncIterator[str]:
     """
     Stream SSE events from a graph execution.
@@ -52,6 +54,9 @@ async def stream_response(
         node_type_map:   Maps nodeId -> nodeType.
         streaming_nodes: Set of nodeIds whose LLM token output should be streamed
                          as content chunks. Agents with is_streaming=true in DDB config.
+        request_start:   time.monotonic() taken when the HTTP request was received.
+                         Used to emit thinking_duration_ms (request receipt → first
+                         generated token) just before the first content chunk.
     """
     if graph is None:
         raise ValueError("stream_response requires a compiled graph — no fallback available")
@@ -120,6 +125,12 @@ async def stream_response(
             if event_type == "on_chat_model_stream" and node in streaming_nodes:
                 chunk = event["data"].get("chunk")
                 if chunk and chunk.content:
+                    if token_count == 0 and request_start is not None:
+                        # Actual response generation begins now — everything up to
+                        # this point (retrieval, ranking, LLM ramp-up) was "thinking"
+                        thinking_duration_ms = int((time.monotonic() - request_start) * 1000)
+                        logger.info("Stream: thinking phase took %d ms", thinking_duration_ms)
+                        yield f"data: {json.dumps({'thinking_duration_ms': thinking_duration_ms})}\n\n"
                     token_count += 1
                     yield f"data: {json.dumps({'content': chunk.content})}\n\n"
 
