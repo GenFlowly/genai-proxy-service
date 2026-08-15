@@ -39,7 +39,8 @@ class RetrievalState(TypedDict):
 
     # Per-node config loaded from DDB CustomerGraphNodes.config (keyed by nodeType).
     # Each node reads its own entry and falls back to built-in defaults when absent.
-    node_configs: dict  # e.g. {"RESPONSE_GENERATOR": {"system_prompt": "...", "model_override": "gpt-4o"}}
+    node_configs: dict  # e.g. {"QUERY_REWRITER": {"system_prompt": "...", "model_override": "gpt-4o"}}
+                        # Response generators ignore system_prompt/model_override — see llm_node.py.
 
     # Customer instruction forwarded from genai-proxy-server (fetched via instructionId/instructionVersion).
     # When set, overrides the RESPONSE_GENERATOR node's configured system_prompt.

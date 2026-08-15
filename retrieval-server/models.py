@@ -28,3 +28,6 @@ class RetrieveRequest(BaseModel):
     model_name: Optional[str] = None
     system_prompt: Optional[str] = None
     stream: bool = False
+    # False → skip the customer's agent graph entirely and generate directly
+    # from the LLM (no retrieval, no intermediate nodes).
+    agentic: bool = True
