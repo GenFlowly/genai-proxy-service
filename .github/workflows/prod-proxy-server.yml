@@ -75,6 +75,11 @@ jobs:
         working-directory: ${{ env.CDK_APP_PATH }}
         run: cdk deploy gen-ai-proxy-service-DynamoDBStack --require-approval never
 
+      # Must deploy before FlyioIamStack, which imports the bucket ARN
+      - name: Deploy S3 stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy gen-ai-proxy-service-S3Stack --require-approval never
+
       - name: Deploy FlyioIamStack
         working-directory: ${{ env.CDK_APP_PATH }}
         run: cdk deploy gen-ai-proxy-service-FlyioIamStack --require-approval never
@@ -92,9 +97,10 @@ jobs:
           # Fetch AWS credentials from CDK outputs (now required since retrieval-server queries DynamoDB)
           FLY_AWS_ACCESS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsAccessKeyId'].OutputValue" --output text)
           FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsSecretAccessKey'].OutputValue" --output text)
-          
+          ATTACHMENTS_BUCKET=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-S3Stack --query "Stacks[0].Outputs[?OutputKey=='AttachmentsBucketName'].OutputValue" --output text)
+
           # Set secrets and deploy
-          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }}
+          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET
           flyctl deploy --app $APP_NAME --yes
 
       - name: Deploy Proxy Server to Fly.io
@@ -110,8 +116,9 @@ jobs:
           FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsSecretAccessKey'].OutputValue" --output text)
           KMS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-KmsStack --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArnOutput'].OutputValue" --output text)
           ENCODING_SERVER_URL=$(aws cloudformation list-exports --query "Exports[?Name=='encoding-service-${{ env.STAGE }}-apigw-ApiEndpoint'].Value" --output text)
-          
+          ATTACHMENTS_BUCKET=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-S3Stack --query "Stacks[0].Outputs[?OutputKey=='AttachmentsBucketName'].OutputValue" --output text)
+
           # Set secrets and deploy
-          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.internal:5001" ENCODING_SERVER_URL=$ENCODING_SERVER_URL
+          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.internal:5001" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET
 
           flyctl deploy --config fly.production.toml --app $APP_NAME --yes
