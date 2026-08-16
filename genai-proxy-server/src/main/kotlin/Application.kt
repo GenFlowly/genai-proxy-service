@@ -125,24 +125,87 @@ fun Application.module() {
 
                 ### Computer use (Claude only)
 
-                Anthropic's native computer-use tool is supported by setting `type` on a
-                tool definition (no `parameters` — Anthropic defines the action space):
+                Anthropic's native computer-use tool lets Claude drive a screen your client
+                controls: Claude looks at screenshots and responds with actions (click, type,
+                scroll). Your client executes each action against its surface — a backend
+                browser (Playwright/Puppeteer), an embedded iframe it can rasterize, or a VM —
+                and returns a fresh screenshot. Requires a Claude `aiConfig`; native tool
+                types are rejected for other vendors.
+
+                **Step 1 — open the loop.** Set `type` on the tool (no `parameters` —
+                Anthropic defines the action space). The required beta header is applied
+                automatically. `display_*` must match the pixel size of the screenshots
+                you will send; `agentic: false` skips retrieval for pure GUI-driving turns.
                 ```json
-                {"tools": [{"name": "computer", "type": "computer_20250124",
-                            "options": {"display_width_px": 1280, "display_height_px": 800}}]}
+                {
+                  "aiConfig": [{"aiVendor": "CLAUDE", "model": "claude-sonnet-4-6"}],
+                  "prompt": {"instructionId": "", "instructionVersion": "", "prompt": "Open example.com and add the first product to the cart"},
+                  "selectedResponseId": null, "conversationId": null, "client": "my-app",
+                  "agentic": false,
+                  "tools": [{"name": "computer", "type": "computer_20250124",
+                             "options": {"display_width_px": 1280, "display_height_px": 800}}]
+                }
                 ```
-                The required beta header is applied automatically. The model responds with
-                actions as tool calls (`screenshot`, `left_click`, `type`, ...); execute them
-                against your environment and continue with `toolResults`. Screenshot results
-                are sent as images:
+
+                **Step 2 — read the action.** The response `text` may be empty; the action
+                arrives in `toolCalls` (streaming: a `{"t":"tc"}` event + the
+                `X-Response-Message-Id` header):
                 ```json
-                {"toolResults": [{"toolCallId": "toolu_1", "content": "",
-                                  "images": [{"data": "<base64 png>", "mediaType": "image/png"}]}]}
+                {"results": [{"messageId": "8f2c...", "conversationId": "conv-123", "text": "",
+                              "toolCalls": [{"id": "toolu_01A", "name": "computer", "args": {"action": "screenshot"}}]}]}
                 ```
-                Images may alternatively reference an uploaded attachment via `s3Key`.
-                Native tool types and image tool results are rejected for non-Claude vendors.
-                Inline screenshot data is not replayed in later conversation turns
-                (marked "[screenshot omitted from history]"); S3-referenced images are.
+                Actions to implement: `screenshot`; `left_click` / `double_click` /
+                `right_click` (`coordinate: [x, y]`); `type` (`text`); `key` (`text`,
+                e.g. "Return", "ctrl+s"); `scroll` (`coordinate`, `scroll_direction`,
+                `scroll_amount`); plus `mouse_move`, `left_click_drag`, `wait`,
+                `cursor_position`.
+
+                **Step 3 — execute and continue.** Same endpoint, empty prompt,
+                `selectedResponseId` = the tool-calling message id, the same `tools`
+                array re-declared, and the result. For a screenshot action the result
+                is the image; for click/type send `content` only ("clicked") — Claude
+                usually requests a fresh screenshot next to verify:
+                ```json
+                {
+                  "aiConfig": [{"aiVendor": "CLAUDE", "model": "claude-sonnet-4-6"}],
+                  "prompt": {"instructionId": "", "instructionVersion": "", "prompt": ""},
+                  "conversationId": "conv-123", "selectedResponseId": "8f2c...", "client": "my-app",
+                  "agentic": false,
+                  "tools": [{"name": "computer", "type": "computer_20250124",
+                             "options": {"display_width_px": 1280, "display_height_px": 800}}],
+                  "toolResults": [{"toolCallId": "toolu_01A", "content": "",
+                                   "images": [{"data": "<base64 PNG>", "mediaType": "image/png"}]}]
+                }
+                ```
+
+                **Step 4 — repeat until text.** Each response either carries `toolCalls`
+                (back to step 3) or a final `text` answer (done). Cap iterations client-side
+                (e.g. 25) so a confused model cannot loop forever.
+
+                Reference client loop:
+                ```js
+                let convId = null, lastMsgId = null, toolResults = [];
+                while (true) {
+                  const res = await generateText({ prompt: toolResults.length ? "" : task,
+                    conversationId: convId, selectedResponseId: lastMsgId,
+                    tools: COMPUTER_TOOL, toolResults });
+                  const r = res.results[0];
+                  convId = r.conversationId; lastMsgId = r.messageId;
+                  if (!r.toolCalls || !r.toolCalls.length) return r.text;   // done
+                  toolResults = [];
+                  for (const call of r.toolCalls) {
+                    const out = await executeOnSurface(call.args);          // your driver
+                    toolResults.push(out.screenshot
+                      ? { toolCallId: call.id, content: "", images: [{ data: out.screenshot, mediaType: "image/png" }] }
+                      : { toolCallId: call.id, content: out.status || "" });
+                  }
+                }
+                ```
+
+                Screenshot images may alternatively reference an uploaded attachment via
+                `s3Key` (see Attachments) to keep request bodies small. Inline base64
+                screenshots are not replayed in later conversation turns (marked
+                "[screenshot omitted from history]"); S3-referenced images are.
             """.trimIndent()
         }
         security {
