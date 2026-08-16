@@ -29,6 +29,7 @@ import com.genflowly.activity.instruction.registerGetCustomerInstructionListRout
 import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoutes
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
+import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
@@ -89,6 +90,12 @@ object Routes {
     const val DEVELOPER_API_KEYS = "$API_V1/developer/api-keys"
     const val DEVELOPER_API_KEY = "$API_V1/developer/api-keys/{keyId}"
 
+    const val ADMIN_SYSTEM_API_KEYS = "$API_V1/admin/system-api-keys"
+    const val ADMIN_SYSTEM_API_KEY_CONFIG = "$API_V1/admin/system-api-keys/config"
+    const val ADMIN_SYSTEM_API_KEY = "$API_V1/admin/system-api-keys/{aiVendor}"
+    const val ADMIN_SYSTEM_API_KEY_MODELS = "$API_V1/admin/system-api-keys/{aiVendor}/models"
+    const val ADMIN_MODEL_CATALOG_REFRESH = "$API_V1/admin/model-catalog/refresh"
+
     const val VOICE_SESSION = "$API_V1/voice/session"
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
 
@@ -110,6 +117,8 @@ fun Application.configureRouting(
     s3Provider: com.genflowly.providers.S3Provider,
     notesService: com.genflowly.service.NotesService,
     developerApiKeyService: DeveloperApiKeyService,
+    systemApiKeyService: com.genflowly.service.SystemApiKeyService,
+    modelCatalogService: com.genflowly.service.ModelCatalogService,
     httpClient: io.ktor.client.HttpClient,
     json: kotlinx.serialization.json.Json,
 ) {
@@ -164,6 +173,9 @@ fun Application.configureRouting(
         registerAttachmentRoutes(s3Provider, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
+        registerSystemVendorApiKeysRoutes(
+            systemApiKeyService, customerProfileService, aiModelsService, dynamoDBProvider, modelCatalogService
+        )
         registerVoiceSessionRoutes(customerProfileService, conversationService, aiRequestManager, httpClient, json)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }

@@ -31,6 +31,8 @@ services:
       RETRIEVAL_SERVER_URL: "http://retrieval-server:5001"
       ATTACHMENTS_BUCKET: "gen-ai-proxy-service-development-attachments"
       ENCODING_SERVER_URL: "${ENCODING_SERVER_URL:-}"
+      # Admin allowlist for the admin-panel endpoints (/api/v1/admin/*)
+      ADMIN_EMAILS: "support+secureadmin@genflowly.com"
       IMAGE_TAG: "local-dev"   # For local builds; in CI this is set from GITHUB_SHA
       # Google OAuth — required for Gmail/Calendar tool nodes.
       # Set actual values in .env (never commit them).
