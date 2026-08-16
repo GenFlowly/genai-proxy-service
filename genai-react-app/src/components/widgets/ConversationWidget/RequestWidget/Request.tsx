@@ -7,12 +7,23 @@ import MultiPurposeButton
 import Tooltip from '../../../common/Tooltip/Tooltip'
 import {useConversation} from '../../../../context/ConversationContext'
 import {useAuth} from '../../../../context/AuthContext'
+import {useToast} from '../../../../context/ToastContext'
 import TextContainer from '../../../common/TextContainer/TextContainer'
 import styles from './Request.module.scss'
 import {
     UserBrandName
 } from '../../../common/BrandName/BrandName'
 import {formatServerDateTime} from '../../../../utils/timeUtils'
+import AttachmentPreviewStrip, {
+    PendingAttachment,
+    ResolvedAttachmentThumbnails
+} from './AttachmentPreviewStrip'
+import {uploadAttachment} from '../../../../services/attachmentService'
+import {
+    ALLOWED_ATTACHMENT_MEDIA_TYPES,
+    MAX_ATTACHMENTS_PER_MESSAGE,
+    MAX_ATTACHMENT_SIZE_BYTES
+} from '../../../../models/attachment.models'
 
 interface RequestProps {
     blockId: string
@@ -35,14 +46,88 @@ export default function Request({
         aiVendorAPIKeyStatusList,
         customerName,
         customerPicture,
-        user
+        user,
+        getAccessTokenSilently
     } = useAuth()
+    const {showToast} = useToast()
     const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
 
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === blockId)
 
     // ✅ Local draft state to prevent global re-renders on typing
     const [draftPrompt, setDraftPrompt] = React.useState(conversationBlock?.prompt || '')
+
+    // Images pasted into the editor; uploaded to S3 in the background
+    const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([])
+    const pendingAttachmentsRef = React.useRef(pendingAttachments)
+    pendingAttachmentsRef.current = pendingAttachments
+
+    // Revoke preview object URLs on unmount
+    useEffect(() => {
+        return () => {
+            pendingAttachmentsRef.current.forEach(a => URL.revokeObjectURL(a.previewUrl))
+        }
+    }, [])
+
+    const removeAttachment = React.useCallback((localId: string) => {
+        setPendingAttachments(prev => {
+            const target = prev.find(a => a.localId === localId)
+            if (target) URL.revokeObjectURL(target.previewUrl)
+            return prev.filter(a => a.localId !== localId)
+        })
+    }, [])
+
+    const uploadPastedImage = React.useCallback(async (file: File) => {
+        if (!ALLOWED_ATTACHMENT_MEDIA_TYPES.includes(file.type)) {
+            showToast(t('conversation.request.attachmentUnsupportedType'))
+            return
+        }
+        if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+            showToast(t('conversation.request.attachmentTooLarge'))
+            return
+        }
+        if (pendingAttachmentsRef.current.length >= MAX_ATTACHMENTS_PER_MESSAGE) {
+            showToast(t('conversation.request.attachmentLimitReached', {max: MAX_ATTACHMENTS_PER_MESSAGE}))
+            return
+        }
+
+        const localId = `attachment-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        const previewUrl = URL.createObjectURL(file)
+        setPendingAttachments(prev => [...prev, {
+            localId,
+            fileName: file.name || 'pasted-image',
+            previewUrl,
+            status: 'uploading'
+        }])
+
+        try {
+            const token = await getAccessTokenSilently()
+            const ref = await uploadAttachment(token, file)
+            setPendingAttachments(prev => prev.map(a =>
+                a.localId === localId ? {...a, status: 'ready', ref} : a
+            ))
+        } catch (err) {
+            console.error('Attachment upload failed:', err)
+            showToast(t('conversation.request.attachmentUploadFailed'))
+            removeAttachment(localId)
+        }
+    }, [getAccessTokenSilently, removeAttachment, showToast, t])
+
+    // GitHub-style paste: an image in the clipboard uploads automatically,
+    // no file picker involved. Capture phase so the markdown editor doesn't
+    // swallow the event first.
+    const handlePasteCapture = React.useCallback((e: React.ClipboardEvent) => {
+        const files = Array.from(e.clipboardData?.items ?? [])
+            .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+            .map(item => item.getAsFile())
+            .filter((f): f is File => f !== null)
+
+        if (files.length === 0) return
+
+        e.preventDefault()
+        e.stopPropagation()
+        files.forEach(uploadPastedImage)
+    }, [uploadPastedImage])
 
     // Dependencies moved from PromptEditor
     const {customerId} = useAuth()
@@ -145,6 +230,9 @@ export default function Request({
                     showCopyButton={true}
                     data-testid={testId || "resolved-request-wrapper"}
                 >
+                    {(conversationBlock.attachments?.length ?? 0) > 0 && (
+                        <ResolvedAttachmentThumbnails attachments={conversationBlock.attachments!} />
+                    )}
                     {conversationBlock.sentAt && (
                         <div className={styles.sentTimestamp}
                              data-testid="request-sent-timestamp">
@@ -160,6 +248,7 @@ export default function Request({
     return (
 
         <div className={styles.container}
+             onPasteCapture={handlePasteCapture}
              data-testid={testId || "request-widget-container"}>
             <PromptEditor
                 id={blockId}
@@ -170,6 +259,11 @@ export default function Request({
                 data-testid="prompt-editor"
             />
 
+            <AttachmentPreviewStrip
+                attachments={pendingAttachments}
+                onRemove={removeAttachment}
+            />
+
             <div className={styles.buttonWrapper}
                  data-testid="generate-button-wrapper">
                 <Tooltip content={!hasAnyValidApiKey ? t('conversation.request.noApiKeysSet') : ""}>
@@ -178,8 +272,18 @@ export default function Request({
                         <MultiPurposeButton
                             onClick={() => {
                                 if (!hasAnyValidApiKey) return
+                                if (pendingAttachments.some(a => a.status === 'uploading')) {
+                                    showToast(t('conversation.request.attachmentsUploading'))
+                                    return
+                                }
                                 const selectedId = getSelectedResponseForBlock(blockId)
-                                generateResponsesStream(blockId, draftPrompt, selectedId)
+                                const attachmentRefs = pendingAttachments
+                                    .map(a => a.ref)
+                                    .filter((r): r is NonNullable<typeof r> => r != null)
+                                generateResponsesStream(blockId, draftPrompt, selectedId, undefined, attachmentRefs)
+                                // The block now owns the refs; drop the local previews
+                                pendingAttachments.forEach(a => URL.revokeObjectURL(a.previewUrl))
+                                setPendingAttachments([])
                             }}
                             label={t('conversation.request.generate')}
                             disabled={!hasAnyValidApiKey}
