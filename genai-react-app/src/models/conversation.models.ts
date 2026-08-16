@@ -1,4 +1,5 @@
 import { AIVendor } from '../constants/vendors'
+import { AttachmentRef } from './attachment.models'
 
 /**
  * Represents a single AI model's response.
@@ -33,6 +34,8 @@ export interface Message {
 export interface ConversationBlock {
     conversationBlockId: string
     prompt: string
+    /** Image attachments sent with the prompt (S3 references, bytes live in the bucket) */
+    attachments?: AttachmentRef[]
     responseMessages: Message[]
     isLoading: boolean
     status: 'draft' | 'resolved'
@@ -65,7 +68,7 @@ export interface IConversationContext {
     addNewConversationBlockWithId: (id: string) => void
     updateResponseInConversationBlock: (conversationBlockId: string, prompt: string) => void
     generateResponses: (conversationBlockId: string, prompt?: string, selectedMessageId?: string | null) => void
-    generateResponsesStream: (conversationBlockId: string, prompt?: string, selectedMessageId?: string | null, vendorToRegenerate?: AIVendor) => void
+    generateResponsesStream: (conversationBlockId: string, prompt?: string, selectedMessageId?: string | null, vendorToRegenerate?: AIVendor, attachments?: AttachmentRef[]) => void
     stopGenerating: (blockId?: string, vendor?: string) => void
 
     /** Per-block selected response management */

@@ -1,10 +1,12 @@
 // models/textGen.models.ts
 import { AIConfig } from "../context/AIContext";
+import { AttachmentRef } from "./attachment.models";
 
 export interface Prompt {
     instructionId: string
     instructionVersion: string
     prompt: string
+    attachments?: AttachmentRef[]
 }
 
 export interface GenerateTextRequest {

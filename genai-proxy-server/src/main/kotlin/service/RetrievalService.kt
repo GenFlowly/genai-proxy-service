@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -24,6 +25,8 @@ sealed class StreamChunk {
     data class Thinking(val text: String) : StreamChunk()
     /** Request receipt on the retrieval server → first generated token, in ms */
     data class ThinkingDuration(val millis: Long) : StreamChunk()
+    /** Raw JSON array of tool calls the model made: [{"id","name","args"}] */
+    data class ToolCalls(val json: String) : StreamChunk()
     data class Usage(
         val inputTokens: Int,
         val outputTokens: Int,
@@ -37,13 +40,52 @@ data class RetrievalResult(
     val inputTokens: Int?,
     val outputTokens: Int?,
     val totalTokens: Int?,
-    val tokensReadFromCache: Int?
+    val tokensReadFromCache: Int?,
+    /** JSON array of tool calls the model made, null when it answered directly */
+    val toolCallsJson: String? = null
+)
+
+/** Image reference passed to the retrieval-server, which fetches the bytes from S3 itself. */
+@Serializable
+data class ImageRef(
+    @SerialName("s3_key") val s3Key: String,
+    @SerialName("media_type") val mediaType: String
 )
 
 @Serializable
 data class ConversationMessage(
     val role: String,
-    val content: String
+    val content: String,
+    val images: List<ImageRef> = emptyList(),
+    /** Assistant turns: [{"id","name","args"}] tool calls the model made */
+    @SerialName("tool_calls") val toolCalls: kotlinx.serialization.json.JsonElement? = null,
+    /** User turns: [{"tool_call_id","content"}] results the caller executed */
+    @SerialName("tool_results") val toolResults: kotlinx.serialization.json.JsonElement? = null
+)
+
+@Serializable
+data class PayloadToolDefinition(
+    val name: String,
+    val description: String = "",
+    val parameters: kotlinx.serialization.json.JsonObject? = null,
+    val type: String? = null,
+    val options: kotlinx.serialization.json.JsonObject? = null
+)
+
+@Serializable
+data class PayloadToolResult(
+    @SerialName("tool_call_id") val toolCallId: String,
+    val content: String,
+    val images: List<PayloadToolResultImage> = emptyList()
+)
+
+@Serializable
+data class PayloadToolResultImage(
+    val data: String? = null,
+    @SerialName("s3_key") val s3Key: String? = null,
+    @SerialName("media_type") val mediaType: String = "image/png",
+    /** true when a base64 screenshot was stripped at persistence time (history replay) */
+    val omitted: Boolean = false
 )
 
 @Serializable
@@ -59,13 +101,18 @@ private data class RetrievalAgentPayload(
     val conversation_history: List<ConversationMessage> = emptyList(),
     val system_prompt: String? = null,
     val stream: Boolean = false,
-    val agentic: Boolean = true
+    val agentic: Boolean = true,
+    val tools: List<PayloadToolDefinition> = emptyList(),
+    val tool_choice: String? = null,
+    val tool_results: List<PayloadToolResult> = emptyList()
 )
 
 @Serializable
 private data class AgentRawData(
     val query_data: String,
-    val top_n: Int = 3
+    val top_n: Int = 3,
+    /** Images attached to the current-turn query */
+    val images: List<ImageRef> = emptyList()
 )
 
 class RetrievalService(
@@ -86,13 +133,17 @@ class RetrievalService(
         conversationHistory: List<ConversationMessage>,
         systemPrompt: String?,
         stream: Boolean,
-        agentic: Boolean
+        agentic: Boolean,
+        queryImages: List<ImageRef>,
+        tools: List<PayloadToolDefinition>,
+        toolChoice: String?,
+        toolResults: List<PayloadToolResult>
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
             client = client,
             data_type = "text",
-            raw_data = AgentRawData(query_data = query),
+            raw_data = AgentRawData(query_data = query, images = queryImages),
             llm_credentials = llmCredentials,
             llm_provider = llmProvider,
             llm_model = llmModel,
@@ -100,7 +151,10 @@ class RetrievalService(
             conversation_history = conversationHistory,
             system_prompt = systemPrompt?.takeIf { it.isNotBlank() },
             stream = stream,
-            agentic = agentic
+            agentic = agentic,
+            tools = tools,
+            tool_choice = toolChoice,
+            tool_results = toolResults
         )
     )
 
@@ -114,10 +168,14 @@ class RetrievalService(
         llmMaxTokens: Int = 4096,
         conversationHistory: List<ConversationMessage> = emptyList(),
         systemPrompt: String? = null,
-        agentic: Boolean = true
+        agentic: Boolean = true,
+        queryImages: List<ImageRef> = emptyList(),
+        tools: List<PayloadToolDefinition> = emptyList(),
+        toolChoice: String? = null,
+        toolResults: List<PayloadToolResult> = emptyList()
     ): RetrievalResult {
-        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic)
+        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -136,12 +194,14 @@ class RetrievalService(
             val root = json.parseToJsonElement(body).jsonObject
             val text = root["generated_response"]?.jsonPrimitive?.content
             val usageObj = root["usage"]?.jsonObject
+            val toolCallsElement = root["tool_calls"]?.takeIf { it !is kotlinx.serialization.json.JsonNull }
             RetrievalResult(
                 text = text,
                 inputTokens = usageObj?.get("input_tokens")?.jsonPrimitive?.intOrNull,
                 outputTokens = usageObj?.get("output_tokens")?.jsonPrimitive?.intOrNull,
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
                 tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
+                toolCallsJson = toolCallsElement?.toString(),
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to call retrieval server (non-streaming)" }
@@ -159,10 +219,14 @@ class RetrievalService(
         llmMaxTokens: Int = 4096,
         conversationHistory: List<ConversationMessage> = emptyList(),
         systemPrompt: String? = null,
-        agentic: Boolean = true
+        agentic: Boolean = true,
+        queryImages: List<ImageRef> = emptyList(),
+        tools: List<PayloadToolDefinition> = emptyList(),
+        toolChoice: String? = null,
+        toolResults: List<PayloadToolResult> = emptyList()
     ): Flow<StreamChunk> = channelFlow {
-        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic)
+        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -196,6 +260,12 @@ class RetrievalService(
                             jsonObj.containsKey("thinking_duration_ms") -> {
                                 val millis = jsonObj["thinking_duration_ms"]?.jsonPrimitive?.content?.toLongOrNull()
                                 if (millis != null) send(StreamChunk.ThinkingDuration(millis))
+                            }
+                            jsonObj.containsKey("tool_calls") -> {
+                                val toolCalls = jsonObj["tool_calls"]
+                                if (toolCalls != null && toolCalls !is kotlinx.serialization.json.JsonNull) {
+                                    send(StreamChunk.ToolCalls(toolCalls.toString()))
+                                }
                             }
                             jsonObj.containsKey("usage") -> {
                                 val usageObj = jsonObj["usage"]!!.jsonObject

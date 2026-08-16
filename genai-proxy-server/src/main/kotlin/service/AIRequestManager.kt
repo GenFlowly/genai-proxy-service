@@ -11,13 +11,22 @@ import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.PromptGenerationService
 import com.genflowly.service.ConversationMessage
+import com.genflowly.service.ImageRef
+import com.genflowly.service.PayloadToolDefinition
+import com.genflowly.service.PayloadToolResult
 import com.genflowly.service.RetrievalService
+import com.genflowly.providers.S3Provider
 import com.genflowly.service.StreamChunk
 import com.genflowly.utils.fetchApiKey
 import models.AIConfig
 import models.AIGenerateResult
+import models.AttachmentRef
 import models.GenerateTextRequest
+import models.MAX_ATTACHMENTS_PER_MESSAGE
+import models.MAX_ATTACHMENT_SIZE_BYTES
 import models.Message
+import models.ToolDefinition
+import models.ToolResult
 import org.slf4j.LoggerFactory
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -48,7 +57,8 @@ class AIRequestManager(
     private val customerProfileService: CustomerProfileService,
     private val conversationService: ConversationService,
     private val promptGenerationService: PromptGenerationService,
-    private val retrievalService: RetrievalService
+    private val retrievalService: RetrievalService,
+    private val s3Provider: S3Provider
 ) {
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
@@ -73,6 +83,118 @@ class AIRequestManager(
         messageId: String
     ): List<Message> {
         return conversationService.getMessageThread(conversationId, messageId)
+    }
+
+    /**
+     * Rejects attachments the caller doesn't own (key must sit under the
+     * authenticated customer's prefix) or that were never actually uploaded /
+     * exceed the size limit. Runs only for the current turn's attachments —
+     * history attachments were validated when their message was created.
+     */
+    private suspend fun validateAttachments(attachments: List<AttachmentRef>, customerId: String) {
+        if (attachments.isEmpty()) return
+        require(attachments.size <= MAX_ATTACHMENTS_PER_MESSAGE) {
+            "At most $MAX_ATTACHMENTS_PER_MESSAGE attachments are allowed per message"
+        }
+        val ownedPrefix = "customers/$customerId/"
+        for (attachment in attachments) {
+            require(attachment.s3Key.startsWith(ownedPrefix)) {
+                "Attachment ${attachment.attachmentId} does not belong to the authenticated customer"
+            }
+            val info = s3Provider.head(attachment.s3Key)
+                ?: throw IllegalArgumentException("Attachment ${attachment.attachmentId} has not been uploaded")
+            require(info.sizeBytes <= MAX_ATTACHMENT_SIZE_BYTES) {
+                "Attachment ${attachment.attachmentId} exceeds the $MAX_ATTACHMENT_SIZE_BYTES byte limit"
+            }
+        }
+    }
+
+    private fun List<AttachmentRef>.toImageRefs(): List<ImageRef> =
+        map { ImageRef(s3Key = it.s3Key, mediaType = it.mediaType) }
+
+    private fun Message.toConversationMessage(): ConversationMessage =
+        ConversationMessage(
+            role = role,
+            content = text,
+            images = attachments.toImageRefs(),
+            toolCalls = toolCallsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
+            toolResults = toolResultsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() }
+        )
+
+    private fun List<ToolDefinition>.toPayloadTools(): List<PayloadToolDefinition> =
+        map {
+            PayloadToolDefinition(
+                name = it.name,
+                description = it.description,
+                parameters = it.parameters,
+                type = it.type,
+                options = it.options
+            )
+        }
+
+    private fun List<ToolResult>.toPayloadToolResults(): List<PayloadToolResult> =
+        map { r ->
+            PayloadToolResult(
+                toolCallId = r.toolCallId,
+                content = r.content,
+                images = r.images.map { img ->
+                    com.genflowly.service.PayloadToolResultImage(data = img.data, s3Key = img.s3Key, mediaType = img.mediaType)
+                }
+            )
+        }
+
+    /**
+     * Snake-cased JSON of tool results as persisted on the user Message and replayed
+     * in later turns. Inline base64 screenshots are stripped (marked omitted) — raw
+     * screenshots would blow DynamoDB's 400 KB item limit, and stale screenshots
+     * shouldn't be replayed anyway. S3-referenced images keep their reference.
+     */
+    private fun List<ToolResult>.toResultsJson(): String? =
+        takeIf { it.isNotEmpty() }?.let { results ->
+            jsonParser.encodeToString(results.map { r ->
+                PayloadToolResult(
+                    toolCallId = r.toolCallId,
+                    content = r.content,
+                    images = r.images.map { img ->
+                        if (img.data != null) {
+                            com.genflowly.service.PayloadToolResultImage(mediaType = img.mediaType, omitted = true)
+                        } else {
+                            com.genflowly.service.PayloadToolResultImage(s3Key = img.s3Key, mediaType = img.mediaType)
+                        }
+                    }
+                )
+            })
+        }
+
+    /**
+     * Native tool types (computer use etc.) are Anthropic-only; tool-result image
+     * S3 keys must belong to the authenticated customer.
+     */
+    private fun validateTools(
+        tools: List<ToolDefinition>,
+        toolResults: List<ToolResult>,
+        vendors: List<AIVendor>,
+        customerId: String
+    ) {
+        val nativeTypes = tools.mapNotNull { it.type }.filter { it != "function" }
+        if (nativeTypes.isNotEmpty()) {
+            require(vendors.all { it == AIVendor.CLAUDE }) {
+                "Native tool types $nativeTypes are supported on Claude only — use function tools for other vendors"
+            }
+        }
+        val ownedPrefix = "customers/$customerId/"
+        for (result in toolResults) {
+            for (img in result.images) {
+                require(img.data != null || img.s3Key != null) {
+                    "Tool result image must provide either data or s3Key"
+                }
+                img.s3Key?.let {
+                    require(it.startsWith(ownedPrefix)) {
+                        "Tool result image s3Key does not belong to the authenticated customer"
+                    }
+                }
+            }
+        }
     }
 
 
@@ -124,9 +246,16 @@ class AIRequestManager(
         selectedResponseId: String?,
         client: String,
         customerId: String,
-        agentic: Boolean = true
+        agentic: Boolean = true,
+        attachments: List<AttachmentRef> = emptyList(),
+        tools: List<ToolDefinition> = emptyList(),
+        toolChoice: String? = null,
+        toolResults: List<ToolResult> = emptyList()
 
     ): List<Message> {
+
+        validateAttachments(attachments, customerId)
+        validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
 
         val versionInt = instructionVersion.toIntOrNull() ?: 1
         val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, versionInt)
@@ -148,6 +277,8 @@ class AIRequestManager(
             client = client,
             role = "user",
             text = userRequestRawPrompt,
+            attachments = attachments,
+            toolResultsJson = toolResults.toResultsJson(),
             previousMessageId = actualPreviousMessageId,
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
@@ -172,7 +303,10 @@ class AIRequestManager(
                         model = aiConfig.model,
                         maxTokens = aiConfig.maxTokens ?: 4096,
                         message = message,
-                        agentic = agentic
+                        agentic = agentic,
+                        tools = tools,
+                        toolChoice = toolChoice,
+                        toolResults = toolResults
                     )
                 }
             }.awaitAll()
@@ -188,7 +322,10 @@ class AIRequestManager(
         model: String,
         maxTokens: Int = 4096,
         message: Message,
-        agentic: Boolean = true
+        agentic: Boolean = true,
+        tools: List<ToolDefinition> = emptyList(),
+        toolChoice: String? = null,
+        toolResults: List<ToolResult> = emptyList()
     ): Message {
         val apiKey = fetchApiKey(aiVendor, message.customerId, customerProfileService)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
@@ -198,7 +335,7 @@ class AIRequestManager(
         } else {
             getThreadContext(message.conversationId, message.previousMessageId) + message
         }
-        val conversationHistory = thread.map { ConversationMessage(role = it.role, content = it.text) }
+        val conversationHistory = thread.map { it.toConversationMessage() }
 
         val result = retrievalService.retrieveAndGenerate(
             customerId = message.customerId,
@@ -210,7 +347,11 @@ class AIRequestManager(
             llmMaxTokens = maxTokens,
             conversationHistory = conversationHistory,
             systemPrompt = message.systemPrompt,
-            agentic = agentic
+            agentic = agentic,
+            queryImages = message.attachments.toImageRefs(),
+            tools = tools.toPayloadTools(),
+            toolChoice = toolChoice,
+            toolResults = toolResults.toPayloadToolResults()
         )
 
         val responseMessage = Message(
@@ -218,7 +359,9 @@ class AIRequestManager(
             customerId = message.customerId,
             client = message.client,
             role = "assistant",
-            text = result.text ?: "No response received. Please try again.",
+            // A pure tool-call response has no text — don't fake an error message
+            text = result.text ?: if (result.toolCallsJson != null) "" else "No response received. Please try again.",
+            toolCallsJson = result.toolCallsJson,
             previousMessageId = message.messageId,
             aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
             systemPrompt = message.systemPrompt,
@@ -362,8 +505,15 @@ class AIRequestManager(
         selectedResponseId: String?,
         client: String,
         customerId: String,
-        agentic: Boolean = true
+        agentic: Boolean = true,
+        attachments: List<AttachmentRef> = emptyList(),
+        tools: List<ToolDefinition> = emptyList(),
+        toolChoice: String? = null,
+        toolResults: List<ToolResult> = emptyList()
     ): StreamExecutionResult {
+
+        validateAttachments(attachments, customerId)
+        validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
 
         val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, instructionVersion.toIntOrNull() ?: 1)
         val systemPrompt = instructionResp?.instruction ?: ""
@@ -377,7 +527,10 @@ class AIRequestManager(
         // duplicate off it (which fragments history into per-vendor pairs).
         var existingUserMessage: Message? = null
         if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
-            existingUserMessage = conversationService.findActiveTurnUserMessage(activeConversationId, userRequestRawPrompt)
+            existingUserMessage = conversationService.findActiveTurnUserMessage(
+                activeConversationId, userRequestRawPrompt, attachments.map { it.attachmentId },
+                toolResults.toResultsJson()
+            )
             actualPreviousMessageId = if (existingUserMessage != null) {
                 existingUserMessage.previousMessageId
             } else {
@@ -386,8 +539,12 @@ class AIRequestManager(
         }
 
         // Step 2 - Create message object (retrieval-server handles RAG during generation)
-        // Use deterministic ID to prevent duplication in DDB on retries.
-        val uniqueContent = "${activeConversationId}-${userRequestRawPrompt}-${actualPreviousMessageId ?: ""}-user"
+        // Use deterministic ID to prevent duplication in DDB on retries. Attachment IDs
+        // and tool results are part of the hash so same-text turns don't collide
+        // (tool continuations often carry an empty prompt).
+        val attachmentsFingerprint = attachments.joinToString(",") { it.attachmentId }
+        val toolResultsFingerprint = toolResults.joinToString(",") { it.toolCallId }
+        val uniqueContent = "${activeConversationId}-${userRequestRawPrompt}-${actualPreviousMessageId ?: ""}-${attachmentsFingerprint}-${toolResultsFingerprint}-user"
         val deterministicId = existingUserMessage?.messageId
             ?: java.util.UUID.nameUUIDFromBytes(uniqueContent.toByteArray()).toString()
 
@@ -398,6 +555,8 @@ class AIRequestManager(
             client = client,
             role = "user",
             text = userRequestRawPrompt,
+            attachments = attachments,
+            toolResultsJson = toolResults.toResultsJson(),
             previousMessageId = actualPreviousMessageId,
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
@@ -437,7 +596,7 @@ class AIRequestManager(
         } else {
             getThreadContext(activeConversationId, message.previousMessageId) + message
         }
-        val conversationHistory = thread.map { ConversationMessage(role = it.role, content = it.text) }
+        val conversationHistory = thread.map { it.toConversationMessage() }
 
         // Pre-calculate the deterministic response ID to send as a response header immediately
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
@@ -447,6 +606,7 @@ class AIRequestManager(
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
             var capturedThinkingDurationMs: Long? = null
+            var capturedToolCallsJson: String? = null
             var success = false
             try {
                 retrievalService.retrieveAndGenerateStream(
@@ -459,7 +619,11 @@ class AIRequestManager(
                     llmMaxTokens = config.maxTokens ?: 4096,
                     conversationHistory = conversationHistory,
                     systemPrompt = systemPrompt,
-                    agentic = agentic
+                    agentic = agentic,
+                    queryImages = attachments.toImageRefs(),
+                    tools = tools.toPayloadTools(),
+                    toolChoice = toolChoice,
+                    toolResults = toolResults.toPayloadToolResults()
                 ).collect { chunk ->
                     when (chunk) {
                         is StreamChunk.Content -> {
@@ -472,6 +636,11 @@ class AIRequestManager(
                         is StreamChunk.ThinkingDuration -> {
                             capturedThinkingDurationMs = chunk.millis
                             emit("{\"t\":\"kd\",\"v\":${chunk.millis}}\n")
+                        }
+                        is StreamChunk.ToolCalls -> {
+                            capturedToolCallsJson = chunk.json
+                            // chunk.json is already a JSON array — embed as-is
+                            emit("{\"t\":\"tc\",\"v\":${chunk.json}}\n")
                         }
                         is StreamChunk.Usage -> capturedUsage = chunk
                     }
@@ -491,7 +660,7 @@ class AIRequestManager(
                     message.conversationId, responseText.length,
                     capturedUsage?.inputTokens, capturedUsage?.outputTokens, capturedUsage?.totalTokens
                 )
-                if (success && responseText.isNotEmpty()) {
+                if (success && (responseText.isNotEmpty() || capturedToolCallsJson != null)) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
                         conversationId = message.conversationId,
@@ -499,6 +668,7 @@ class AIRequestManager(
                         client = message.client,
                         role = "assistant",
                         text = responseText,
+                        toolCallsJson = capturedToolCallsJson,
                         previousMessageId = message.messageId,
                         aiConfig = listOf(config),
                         systemPrompt = message.systemPrompt,

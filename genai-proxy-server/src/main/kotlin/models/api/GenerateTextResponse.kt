@@ -15,5 +15,11 @@ data class GenerateTextResponse(
     val totalTokens: Int? = null,
     val tokensReadFromCache: Int? = null,
     /** Retrieval-server thinking time (request receipt → first generated token), ms */
-    val thinkingDurationMs: Long? = null
+    val thinkingDurationMs: Long? = null,
+    /**
+     * Tool calls the model made: [{"id","name","args"}]. Execute them and send the
+     * results back via toolResults on the next generate request (with
+     * selectedResponseId set to this messageId) to continue the turn.
+     */
+    val toolCalls: kotlinx.serialization.json.JsonElement? = null
 )
