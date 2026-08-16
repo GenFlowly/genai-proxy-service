@@ -36,7 +36,20 @@ class RetrievalState(TypedDict):
     llm_provider: str      # "openai" | "anthropic" | "gemini"
     llm_model: Optional[str]  # model name forwarded from request (e.g. "gpt-4o", "claude-sonnet-4-6")
     llm_max_tokens: Optional[int]  # max tokens for generation, defaults to 4096
-    conversation_history: list  # prior + current turns: [{role, content}, ...]
+    conversation_history: list  # prior + current turns: [{role, content, images?}, ...]
+
+    # Images attached to the current-turn query: [{s3_key, media_type}, ...].
+    # Only the response-generator node sends them to the LLM (retrieval/ranking
+    # nodes stay text-only).
+    query_images: list
+
+    # Caller-defined tools: [{name, description, parameters}, ...]. Bound only to
+    # the response-generator node (text format); other nodes never see them.
+    tools: list
+    tool_choice: Optional[str]
+    # Current-turn tool results: [{tool_call_id, content}, ...] — become
+    # ToolMessages directly after the assistant turn that made the calls.
+    query_tool_results: list
 
     # Per-node config loaded from DDB CustomerGraphNodes.config (keyed by nodeType).
     # Each node reads its own entry and falls back to built-in defaults when absent.
@@ -56,6 +69,9 @@ class RetrievalState(TypedDict):
 
     # Output
     generated_response: Optional[str]
+    # Tool calls the response generator's model made: [{id, name, args}, ...].
+    # Returned to the caller, who executes them and continues via tool_results.
+    tool_calls: Optional[list]
     error: Optional[str]
 
     # Cycle termination signal — written by RESPONSE_GENERATOR_WITH_REFLECTION.

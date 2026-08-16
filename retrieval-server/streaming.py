@@ -121,9 +121,29 @@ async def stream_response(
                     "Stream: LLM call ended node=%s — chunk_usage=%s running_total=%s",
                     node, meta, usage,
                 )
+                # Tool calls from the response generator go to the caller, who
+                # executes them and continues the turn via tool_results
+                if node in streaming_nodes:
+                    raw_tool_calls = getattr(output, "tool_calls", None) or []
+                    if raw_tool_calls:
+                        tool_calls = [
+                            {"id": c.get("id", ""), "name": c.get("name", ""), "args": c.get("args") or {}}
+                            for c in raw_tool_calls
+                        ]
+                        logger.info("Stream: emitting %d tool call(s): %s", len(tool_calls), [c["name"] for c in tool_calls])
+                        yield f"data: {json.dumps({'tool_calls': tool_calls})}\n\n"
 
             if event_type == "on_chat_model_stream" and node in streaming_nodes:
                 chunk = event["data"].get("chunk")
+                # With tools bound, providers stream tool-call argument deltas as
+                # block lists — extract only the text so raw blocks never leak
+                # into the content stream.
+                if chunk and isinstance(chunk.content, list):
+                    text = "".join(
+                        b.get("text", "") for b in chunk.content
+                        if isinstance(b, dict) and b.get("type") == "text"
+                    )
+                    chunk.content = text
                 if chunk and chunk.content:
                     if token_count == 0 and request_start is not None:
                         # Actual response generation begins now — everything up to
