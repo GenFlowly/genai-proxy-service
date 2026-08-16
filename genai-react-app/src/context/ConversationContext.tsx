@@ -15,6 +15,7 @@ import {
     IConversationContext,
     Message,
 } from '../models/conversation.models'
+import { AttachmentRef } from '../models/attachment.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
 import i18n from '../i18n'
 
@@ -156,7 +157,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         prompt: string,
         selectedResponseId: string | null,
         instructionId: string,
-        instructionVersion: string
+        instructionVersion: string,
+        attachments: AttachmentRef[] = []
     ): Promise<Message[]> => {
         const response = await generateText(token, {
             aiConfig: aiConfigs.filter(c => c.aiVendor && c.model),
@@ -164,6 +166,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 instructionId,
                 instructionVersion,
                 prompt,
+                attachments,
             },
             // customerId: customerId!,
             selectedResponseId: selectedResponseId ?? '',
@@ -221,7 +224,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         idOverride?: string,
         onThinking?: (step: string) => void,
         signal?: AbortSignal,
-        onThinkingDuration?: (millis: number) => void
+        onThinkingDuration?: (millis: number) => void,
+        attachments: AttachmentRef[] = []
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -229,6 +233,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 instructionId,
                 instructionVersion,
                 prompt,
+                attachments,
             },
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
@@ -389,7 +394,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 promptToUse,
                 finalSelectedResponseId,
                 instructionId,
-                instructionVersion
+                instructionVersion,
+                prep.conversationBlock.attachments ?? []
             )
 
             updateConversationBlock(id, {
@@ -415,11 +421,15 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         }
     }
 
-    const generateResponsesStream = async (id: string, overridePrompt?: string, selectedMessageId?: string | null, vendorToRegenerate?: AIVendor) => {
+    const generateResponsesStream = async (id: string, overridePrompt?: string, selectedMessageId?: string | null, vendorToRegenerate?: AIVendor, attachments?: AttachmentRef[]) => {
         const prep = validateAndPrepareGeneration(id, overridePrompt, selectedMessageId)
         if (!prep) return
 
         let { aiConfigs, finalSelectedResponseId, promptToUse } = prep
+
+        // Regeneration resends the turn's original attachments so the backend
+        // matches the existing user message instead of creating a new one
+        const attachmentsToUse = attachments ?? prep.conversationBlock.attachments ?? []
         
         if (vendorToRegenerate) {
              aiConfigs = aiConfigs.filter(c => c.aiVendor === vendorToRegenerate)
@@ -470,7 +480,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                  }
                  
                  // Regenerating a single vendor re-uses the original send time
-                 return { ...block, isLoading: true, prompt: promptToUse, responseMessages: newMsgs, sentAt: vendorToRegenerate ? block.sentAt : timestamp }
+                 return { ...block, isLoading: true, prompt: promptToUse, attachments: attachmentsToUse, responseMessages: newMsgs, sentAt: vendorToRegenerate ? block.sentAt : timestamp }
              }
              return block
         }))
@@ -596,7 +606,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     idToUse,
                     handleThinking,
                     abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal,
-                    handleThinkingDuration
+                    handleThinkingDuration,
+                    attachmentsToUse
                 )
 
                 const finalConversationId = explicitConversationId || conversationIdRef.current

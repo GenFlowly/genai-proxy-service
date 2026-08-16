@@ -3,6 +3,7 @@ import { config } from '../config/env';
 import { endpoints } from '../config/endpoints';
 import { HttpMethod } from '../constants/http';
 import { ConversationBlock, Message } from '../models/conversation.models';
+import { AttachmentRef } from '../models/attachment.models';
 import { AIVendor } from '../constants/vendors';
 import { SearchUserResponse } from '../models/user.models';
 import { parseServerDate } from '../utils/timeUtils';
@@ -14,6 +15,7 @@ interface BackendPrompt {
     instructionId: string;
     instructionVersion: string;
     prompt: string;
+    attachments?: AttachmentRef[];
 }
 
 interface BackendResponse {
@@ -115,6 +117,7 @@ export async function getConversation(
                 ? `block-${item.responses[0].messageId}`
                 : `block-${index}-${Date.now()}`,
             prompt: item.prompt.prompt,
+            attachments: item.prompt.attachments ?? [],
             responseMessages: responses,
             isLoading: false,
             status: 'resolved',

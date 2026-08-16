@@ -2,16 +2,59 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class ImageRef(BaseModel):
+    """Reference to an image in the attachments S3 bucket; bytes are fetched at LLM-call time."""
+    s3_key: str
+    media_type: str
+
+
+class ToolDefinition(BaseModel):
+    """
+    Caller-defined tool the LLM may call. Two flavors:
+    - Function tool (type=None): `parameters` is a JSON Schema object; works on all vendors.
+    - Native Anthropic tool (type set, e.g. "computer_20250124"): passed through
+      untranslated with `options` (e.g. display_width_px) merged in; Claude only.
+    """
+    name: str
+    description: str = ""
+    parameters: dict = {}
+    type: Optional[str] = None
+    options: dict = {}
+
+
+class ToolResultImage(BaseModel):
+    """Image in a tool result (e.g. a computer-use screenshot). Exactly one of
+    data (base64) or s3_key should be set; omitted marks a stripped historical image."""
+    data: Optional[str] = None
+    s3_key: Optional[str] = None
+    media_type: str = "image/png"
+    omitted: bool = False
+
+
+class ToolResult(BaseModel):
+    """Result of a tool call the caller executed, sent back to continue the turn."""
+    tool_call_id: str
+    content: str
+    images: list[ToolResultImage] = []
+
+
 class RawData(BaseModel):
     query_data: str
     top_n: int = 3
     search_params: dict = {"metric_type": "COSINE", "params": {"nprobe": 10}}
     similarity_threshold: float = 0.6
+    # Images attached to the current-turn query
+    images: list[ImageRef] = []
 
 
 class ConversationMessage(BaseModel):
     role: str
     content: str
+    images: list[ImageRef] = []
+    # Assistant turns: tool calls the model made — [{id, name, args}, ...]
+    tool_calls: Optional[list] = None
+    # User turns: results for the preceding assistant turn's tool calls
+    tool_results: Optional[list] = None
 
 
 class RetrieveRequest(BaseModel):
@@ -31,3 +74,9 @@ class RetrieveRequest(BaseModel):
     # False → skip the customer's agent graph entirely and generate directly
     # from the LLM (no retrieval, no intermediate nodes).
     agentic: bool = True
+    # Caller-defined tools, bound to the response generator across all vendors
+    tools: list[ToolDefinition] = []
+    # "auto" (default), "required"/"any", or a specific tool name
+    tool_choice: Optional[str] = None
+    # Results for the previous assistant message's tool calls (current turn)
+    tool_results: list[ToolResult] = []

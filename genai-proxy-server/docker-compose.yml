@@ -29,6 +29,7 @@ services:
       AUTH0_SPA_CLIENT_ID: "VSKaAyEXLKM0LuZzJVhvH6RTT11LiNgE"
       AUTH0_API_AUDIENCE: "https://api-development.genflowly.com"
       RETRIEVAL_SERVER_URL: "http://retrieval-server:5001"
+      ATTACHMENTS_BUCKET: "gen-ai-proxy-service-development-attachments"
       ENCODING_SERVER_URL: "${ENCODING_SERVER_URL:-}"
       IMAGE_TAG: "local-dev"   # For local builds; in CI this is set from GITHUB_SHA
       # Google OAuth — required for Gmail/Calendar tool nodes.
@@ -72,6 +73,7 @@ services:
       AWS_SECRET_ACCESS_KEY: "1SHfsMDOFADkPVvGgJidpBhOcSUbXxnNdbdQEp83"
       AWS_ACCESS_KEY_ID: "AKIAYKFQRDRO4B3UB67C"
       KMS_KEY_ID: "alias/gen-ai-proxy-service-development-vendor-api-key-encryption-key"
+      ATTACHMENTS_BUCKET: "gen-ai-proxy-service-development-attachments"
       # If using SSO or dynamic credentials, mounting ~/.aws is preferred
       # Or you can inject temporary credentials via .env in the env_file below
     volumes:

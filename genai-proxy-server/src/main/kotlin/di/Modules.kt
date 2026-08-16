@@ -21,6 +21,9 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
 import software.amazon.awssdk.services.lambda.LambdaClient
+import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.presigner.S3Presigner
+import com.genflowly.providers.S3Provider
 import com.genflowly.service.GraphService
 import com.genflowly.service.PromptGenerationService
 import com.genflowly.service.RetrievalService
@@ -71,12 +74,25 @@ fun appModule(): Module = module {
             .build()
     }
 
+    single {
+        S3Client.builder()
+            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .build()
+    }
+
+    single {
+        S3Presigner.builder()
+            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .build()
+    }
+
     single { DynamoDBProvider(get(), get()) }
     single { KMSProvider(get(), get()) }
+    single { S3Provider(get(), get(), get()) }
     single { AIRequestService(get()) }
     single { CustomerProfileService(get(), get(), get()) }
     single { ConversationService(get(), get()) }
-    single { AIRequestManager(get(), get(), get(), get(), get()) }
+    single { AIRequestManager(get(), get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get(), get()) }
     single { RetrievalService(get(), get(), get()) }
     single { PromptGenerationService() }

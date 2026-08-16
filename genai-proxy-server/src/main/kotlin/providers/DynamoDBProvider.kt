@@ -321,6 +321,9 @@ class DynamoDBProvider(
             messageId = item["messageId"]?.s() ?: return null,
             conversationId = item["conversationId"]?.s() ?: return null,
             text = text,
+            attachments = attributeValueToAttachments(item["attachments"]),
+            toolCallsJson = item["toolCallsJson"]?.s()?.takeIf { it.isNotBlank() },
+            toolResultsJson = item["toolResultsJson"]?.s()?.takeIf { it.isNotBlank() },
             client = client,
             role = role,
             customerId = customerId,
@@ -349,6 +352,36 @@ class DynamoDBProvider(
                 model = map["model"]!!.s()
             )
         }
+
+    private fun attachmentsToAttributeValue(
+        attachments: List<models.AttachmentRef>
+    ): AttributeValue =
+        AttributeValue.builder()
+            .l(
+                attachments.map { attachment ->
+                    AttributeValue.builder()
+                        .m(
+                            mapOf(
+                                "attachmentId" to AttributeValue.builder().s(attachment.attachmentId).build(),
+                                "s3Key" to AttributeValue.builder().s(attachment.s3Key).build(),
+                                "mediaType" to AttributeValue.builder().s(attachment.mediaType).build()
+                            )
+                        )
+                        .build()
+                }
+            )
+            .build()
+
+    private fun attributeValueToAttachments(
+        attributeValue: AttributeValue?
+    ): List<models.AttachmentRef> =
+        attributeValue?.l()?.mapNotNull { av ->
+            val map = av.m()
+            val attachmentId = map["attachmentId"]?.s() ?: return@mapNotNull null
+            val s3Key = map["s3Key"]?.s() ?: return@mapNotNull null
+            val mediaType = map["mediaType"]?.s() ?: return@mapNotNull null
+            models.AttachmentRef(attachmentId = attachmentId, s3Key = s3Key, mediaType = mediaType)
+        } ?: emptyList()
 
 
     suspend fun createMessage(
@@ -403,6 +436,15 @@ class DynamoDBProvider(
                         .s(message.instructionVersion ?: "")
                         .build()
                 ).also { map ->
+                    if (message.attachments.isNotEmpty()) {
+                        map["attachments"] = attachmentsToAttributeValue(message.attachments)
+                    }
+                    message.toolCallsJson?.let {
+                        map["toolCallsJson"] = AttributeValue.builder().s(it).build()
+                    }
+                    message.toolResultsJson?.let {
+                        map["toolResultsJson"] = AttributeValue.builder().s(it).build()
+                    }
                     message.inputTokens?.let {
                         map["inputTokens"] = AttributeValue.builder().n(it.toString()).build()
                     }

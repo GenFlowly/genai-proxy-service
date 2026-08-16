@@ -5,7 +5,15 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from graph.llm_factory import get_llm
-from graph.nodes.llm_node import _make_ai, _make_human, _make_system, _render_template
+from graph.nodes.llm_node import (
+    _content_summary,
+    _image_blocks,
+    _make_ai,
+    _make_human,
+    _make_system,
+    _render_template,
+    _user_content,
+)
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -78,12 +86,18 @@ def make_reflection_node(node_type: str):
 
         rendered_input = _render_template(input_template, state)
 
+        # Response generators send the current turn's images; other nodes stay text-only
+        query_image_blocks: list = []
+        if is_response_node:
+            query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True)
+        current_content = _user_content(rendered_input, query_image_blocks)
+
         if include_history:
             history = state.get("conversation_history", [])
             turns = history[:-1] if history else []
-            
+
             if not turns:
-                messages.append(HumanMessage(content=rendered_input))
+                messages.append(HumanMessage(content=current_content))
             elif is_response_node:
                 # For response generation, pass as actual chat turns
                 last_idx = len(turns) - 1
@@ -93,21 +107,22 @@ def make_reflection_node(node_type: str):
                     is_last = (i == last_idx)
                     cache_this = cache_anthropic and is_last
                     if role == "user":
-                        messages.append(_make_human(content, cache_this))
+                        turn_blocks = await _image_blocks(turn.get("images", []), strict=False)
+                        messages.append(_make_human(_user_content(content, turn_blocks), cache_this))
                     else:
                         messages.append(_make_ai(content, cache_this))
-                messages.append(HumanMessage(content=rendered_input))
+                messages.append(HumanMessage(content=current_content))
             else:
                 # For extraction/classification, Anthropic expects context in XML tags
                 history_text = "\n".join(f"{t.get('role', 'user').capitalize()}: {t.get('content', '')}" for t in turns)
                 combined = f"<conversation_context>\n{history_text}\n</conversation_context>\n\n{rendered_input}"
                 messages.append(HumanMessage(content=combined))
         else:
-            messages.append(HumanMessage(content=rendered_input))
+            messages.append(HumanMessage(content=current_content))
 
         logger.info("Node %s (reflection): calling LLM model=%s", node_type, effective_model)
         for idx, m in enumerate(messages):
-            logger.info("Node %s - Message %d [%s]:\n%s\n---", node_type, idx, type(m).__name__, m.content)
+            logger.info("Node %s - Message %d [%s]:\n%s\n---", node_type, idx, type(m).__name__, _content_summary(m.content))
 
         response = await llm.ainvoke(messages)
         logger.info("Node %s - Received Response:\n%s\n---", node_type, response.content)

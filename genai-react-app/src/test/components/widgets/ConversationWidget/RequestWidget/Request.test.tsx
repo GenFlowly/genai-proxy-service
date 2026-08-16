@@ -1,13 +1,19 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import Request from '../../../../../components/widgets/ConversationWidget/RequestWidget/Request';
 import { useConversation } from '../../../../../context/ConversationContext';
 import { useAuth } from '../../../../../context/AuthContext';
+import { uploadAttachment } from '../../../../../services/attachmentService';
 import '@testing-library/jest-dom';
 
 // Mock contexts
+const mockShowToast = jest.fn();
 jest.mock('../../../../../context/ConversationContext');
 jest.mock('../../../../../context/AuthContext');
+jest.mock('../../../../../context/ToastContext', () => ({
+    useToast: () => ({ showToast: mockShowToast })
+}));
+jest.mock('../../../../../services/attachmentService');
 
 // Mock child components
 jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', () => ({
@@ -60,7 +66,8 @@ describe('Request Widget Component', () => {
             aiVendorAPIKeyStatusList: [{ isAPIKeyValid: true }],
             customerName: 'Test User',
             user: { name: 'Auth0 User' },
-            customerId: 'cust-123'
+            customerId: 'cust-123',
+            getAccessTokenSilently: jest.fn().mockResolvedValue('test-token')
         });
     });
 
@@ -143,7 +150,7 @@ describe('Request Widget Component', () => {
 
         fireEvent.click(btn);
 
-        expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', 'Ready Prompt', 'selected-res-id');
+        expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', 'Ready Prompt', 'selected-res-id', undefined, []);
     });
 
     test('renders as TextContainer without any button when loading', () => {
@@ -203,5 +210,106 @@ describe('Request Widget Component', () => {
 
         // Clean up
         localStorage.removeItem(storageKey);
+    });
+
+    describe('image paste-to-upload', () => {
+        const mockUploadAttachment = uploadAttachment as jest.Mock;
+
+        const makeImageFile = (type = 'image/png', size = 1024): File => {
+            const file = new File(['x'], 'shot.png', { type });
+            Object.defineProperty(file, 'size', { value: size });
+            return file;
+        };
+
+        const pasteImage = (target: HTMLElement, file: File) => {
+            fireEvent.paste(target, {
+                clipboardData: {
+                    items: [{ kind: 'file', type: file.type, getAsFile: () => file }],
+                },
+            });
+        };
+
+        beforeEach(() => {
+            (global.URL.createObjectURL as any) = jest.fn(() => 'blob:preview');
+            (global.URL.revokeObjectURL as any) = jest.fn();
+        });
+
+        test('pasting an image uploads it and shows a ready thumbnail', async () => {
+            const ref = { attachmentId: 'att-1', s3Key: 'customers/cust-123/attachments/att-1', mediaType: 'image/png' };
+            mockUploadAttachment.mockResolvedValue(ref);
+
+            render(<Request blockId="block-1" />);
+            pasteImage(screen.getByTestId('request-widget-container'), makeImageFile());
+
+            expect(await screen.findByTestId('attachment-thumbnail')).toBeInTheDocument();
+            await waitFor(() => {
+                expect(screen.queryByTestId('attachment-uploading-spinner')).not.toBeInTheDocument();
+            });
+            expect(mockUploadAttachment).toHaveBeenCalledWith('test-token', expect.any(File));
+
+            // Generate passes the uploaded refs
+            fireEvent.click(screen.getByTestId('generate-button'));
+            expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', '', undefined, undefined, [ref]);
+        });
+
+        test('rejects unsupported media types with a toast', () => {
+            render(<Request blockId="block-1" />);
+            pasteImage(screen.getByTestId('request-widget-container'), makeImageFile('image/tiff'));
+
+            expect(mockShowToast).toHaveBeenCalled();
+            expect(screen.queryByTestId('attachment-thumbnail')).not.toBeInTheDocument();
+            expect(mockUploadAttachment).not.toHaveBeenCalled();
+        });
+
+        test('rejects oversized images with a toast', () => {
+            render(<Request blockId="block-1" />);
+            pasteImage(screen.getByTestId('request-widget-container'), makeImageFile('image/png', 6 * 1024 * 1024));
+
+            expect(mockShowToast).toHaveBeenCalled();
+            expect(mockUploadAttachment).not.toHaveBeenCalled();
+        });
+
+        test('remove button discards the attachment before send', async () => {
+            mockUploadAttachment.mockResolvedValue({ attachmentId: 'att-1', s3Key: 'k', mediaType: 'image/png' });
+
+            render(<Request blockId="block-1" />);
+            pasteImage(screen.getByTestId('request-widget-container'), makeImageFile());
+            await screen.findByTestId('attachment-thumbnail');
+
+            fireEvent.click(screen.getByTestId('attachment-remove-button'));
+            expect(screen.queryByTestId('attachment-thumbnail')).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByTestId('generate-button'));
+            expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', '', undefined, undefined, []);
+        });
+
+        test('failed uploads show a toast and drop the pending attachment', async () => {
+            mockUploadAttachment.mockRejectedValue(new Error('network'));
+
+            render(<Request blockId="block-1" />);
+            pasteImage(screen.getByTestId('request-widget-container'), makeImageFile());
+
+            await waitFor(() => {
+                expect(mockShowToast).toHaveBeenCalled();
+            });
+            expect(screen.queryByTestId('attachment-thumbnail')).not.toBeInTheDocument();
+        });
+
+        test('blocks Generate while an upload is in flight', async () => {
+            let resolveUpload: (v: any) => void = () => {};
+            mockUploadAttachment.mockReturnValue(new Promise(r => { resolveUpload = r; }));
+
+            render(<Request blockId="block-1" />);
+            pasteImage(screen.getByTestId('request-widget-container'), makeImageFile());
+            await screen.findByTestId('attachment-uploading-spinner');
+
+            fireEvent.click(screen.getByTestId('generate-button'));
+            expect(mockGenerateResponsesStream).not.toHaveBeenCalled();
+            expect(mockShowToast).toHaveBeenCalled();
+
+            await act(async () => {
+                resolveUpload({ attachmentId: 'att-1', s3Key: 'k', mediaType: 'image/png' });
+            });
+        });
     });
 });

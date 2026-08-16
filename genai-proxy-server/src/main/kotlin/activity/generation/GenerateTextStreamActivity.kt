@@ -31,7 +31,13 @@ fun Route.registerGenerateTextStreamRoutes(
             description = "Streams the generated text incrementally as plain-text chunks " +
                     "(Transfer-Encoding: chunked). Conversation and message metadata is returned " +
                     "in response headers, not the body. The first byte is a heartbeat space " +
-                    "character sent before generation starts."
+                    "character sent before generation starts. Image input: upload images via " +
+                    "POST /attachments first, then reference them in prompt.attachments — " +
+                    "they are passed to vision-capable models alongside the prompt text. " +
+                    "Tool use: pass tools and the model's tool calls arrive as a " +
+                    "{\"t\":\"tc\",\"v\":[{id,name,args}]} stream event; execute them and send a " +
+                    "follow-up request with toolResults (and selectedResponseId set to the " +
+                    "X-Response-Message-Id header value) to get the final answer."
             request {
                 body<GenerateTextStreamRequest> {
                     description = "Prompt, a single AI vendor configuration and conversation context"
@@ -87,7 +93,11 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.selectedResponseId,
                     request.client,
                     customerId,
-                    request.agentic
+                    request.agentic,
+                    request.prompt.attachments,
+                    request.tools,
+                    request.toolChoice,
+                    request.toolResults
                 )
 
                 // Send Metadata Headers
