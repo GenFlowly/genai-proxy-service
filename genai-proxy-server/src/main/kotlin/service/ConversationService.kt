@@ -90,7 +90,7 @@ class ConversationService(
                     // Keep the first copy's createdAt — it marks when the turn was sent
                     pairs.add(PromptAndResponse(last.prompt, (last.responses ?: emptyList()) + responses, last.promptCreatedAt))
                 } else {
-                    val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text)
+                    val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text, attachments = msg.attachments)
                     currentTurnUserIds = mutableSetOf(msg.messageId)
                     currentTurnPrompt = msg.text
                     pairs.add(PromptAndResponse(prompt, responses, msg.createdAt))
@@ -266,9 +266,18 @@ class ConversationService(
      * attach to that message instead of each persisting its own copy —
      * otherwise history fragments into one request/response pair per vendor.
      */
-    suspend fun findActiveTurnUserMessage(conversationId: String, promptText: String): Message? {
+    suspend fun findActiveTurnUserMessage(
+        conversationId: String,
+        promptText: String,
+        attachmentIds: List<String> = emptyList(),
+        toolResultsJson: String? = null
+    ): Message? {
         val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
         val latest = messages.maxByOrNull { it.sequence ?: 0 } ?: return null
-        return latest.takeIf { it.role == "user" && it.text == promptText }
+        return latest.takeIf {
+            it.role == "user" && it.text == promptText &&
+                    it.attachments.map { a -> a.attachmentId } == attachmentIds &&
+                    it.toolResultsJson == toolResultsJson
+        }
     }
 }

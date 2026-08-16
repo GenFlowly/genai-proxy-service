@@ -76,6 +76,8 @@ fun Application.module() {
             description = """
                 REST API for the GenAI proxy service: AI text generation across vendors,
                 conversation and instruction management, customer onboarding and configuration.
+                Supports image input on generation requests — see the Attachments tag for the
+                upload flow — and tool use (function calling) across all vendors, described below.
 
                 Authenticate with a developer API key, created in the web app under
                 Settings → Developer. Pass it on every request as
@@ -83,6 +85,64 @@ fun Application.module() {
                 revoked at any time from the same page. A few web-app-only endpoints
                 (onboarding, profile, user search, notes) additionally require an Auth0 session
                 and are marked as such in their descriptions.
+
+                ## Tool use (function calling)
+
+                Generation requests accept caller-defined tools; one definition format works
+                across OpenAI, Claude and Gemini. Your code executes the tools — the API
+                returns the model's tool calls to you and you send the results back.
+
+                **1. Send tools with the request:**
+                ```json
+                {
+                  "aiConfig": [{"aiVendor": "OPENAI", "model": "gpt-5"}],
+                  "prompt": {"instructionId": "", "instructionVersion": "", "prompt": "Weather in Paris?"},
+                  "selectedResponseId": null, "conversationId": null, "client": "api",
+                  "tools": [{
+                    "name": "get_weather",
+                    "description": "Get current weather for a city",
+                    "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}
+                  }]
+                }
+                ```
+                `toolChoice` is optional: `"auto"` (default), `"required"`, or a tool name.
+
+                **2. The model may answer with tool calls instead of text.**
+                Non-streaming: the response's `toolCalls` field, e.g.
+                `[{"id": "call_1", "name": "get_weather", "args": {"city": "Paris"}}]`.
+                Streaming: a `{"t": "tc", "v": [...]}` line in the stream; the assistant
+                message id is in the `X-Response-Message-Id` header.
+
+                **3. Execute the tools yourself, then continue the turn** by sending a
+                follow-up generation request with `selectedResponseId` set to the
+                tool-calling message's id, the same `tools`, an empty `prompt`, and:
+                ```json
+                {"toolResults": [{"toolCallId": "call_1", "content": "18C, sunny"}]}
+                ```
+                The model then produces the final text answer. The model may also chain
+                further tool calls — repeat step 3 until you receive text. Tool exchanges
+                are persisted in the conversation, so later turns retain full context.
+
+                ### Computer use (Claude only)
+
+                Anthropic's native computer-use tool is supported by setting `type` on a
+                tool definition (no `parameters` — Anthropic defines the action space):
+                ```json
+                {"tools": [{"name": "computer", "type": "computer_20250124",
+                            "options": {"display_width_px": 1280, "display_height_px": 800}}]}
+                ```
+                The required beta header is applied automatically. The model responds with
+                actions as tool calls (`screenshot`, `left_click`, `type`, ...); execute them
+                against your environment and continue with `toolResults`. Screenshot results
+                are sent as images:
+                ```json
+                {"toolResults": [{"toolCallId": "toolu_1", "content": "",
+                                  "images": [{"data": "<base64 png>", "mediaType": "image/png"}]}]}
+                ```
+                Images may alternatively reference an uploaded attachment via `s3Key`.
+                Native tool types and image tool results are rejected for non-Claude vendors.
+                Inline screenshot data is not replayed in later conversation turns
+                (marked "[screenshot omitted from history]"); S3-referenced images are.
             """.trimIndent()
         }
         security {
@@ -98,7 +158,11 @@ fun Application.module() {
             }
         }
         tags {
-            tag("Generation") { description = "AI text generation, model listing and usage" }
+            tag("Generation") {
+                description = "AI text generation, model listing and usage. Supports image " +
+                        "attachments (see Attachments) and cross-vendor tool use — the " +
+                        "request/continue flow is described in the API introduction above."
+            }
             tag("Conversations") { description = "Conversation history, sharing and lifecycle" }
             tag("Instructions") { description = "Instruction (persona) management and sharing" }
             tag("Customer") { description = "Onboarding, profile and configuration" }
@@ -106,6 +170,14 @@ fun Application.module() {
             tag("Agents") { description = "Agent graph management" }
             tag("Notes") { description = "Customer notes" }
             tag("Voice") { description = "Realtime voice sessions and voice model listing" }
+            tag("Attachments") {
+                description = "Image attachments for AI requests. Flow: POST /attachments with the " +
+                        "image's media type and size to get a presigned S3 upload URL, PUT the raw " +
+                        "bytes to that URL, then include the returned attachmentId/s3Key/mediaType " +
+                        "in the prompt.attachments array of a generate-text or generate-text-stream " +
+                        "request. Supported types: PNG, JPEG, WebP, GIF; max 5 MB per image, " +
+                        "10 images per message."
+            }
         }
     }
 
@@ -195,10 +267,11 @@ fun Application.module() {
     val aiModelsService = get<AIModelsService>()
     val graphService = get<GraphService>()
     val dynamoDBProvider = get<com.genflowly.providers.DynamoDBProvider>()
+    val s3Provider = get<com.genflowly.providers.S3Provider>()
     val notesService = get<NotesService>()
 
     val httpClient = get<io.ktor.client.HttpClient>()
     val json = get<kotlinx.serialization.json.Json>()
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, notesService, developerApiKeyService, httpClient, json)
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, httpClient, json)
 }
