@@ -36,13 +36,12 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
     const { t } = useTranslation()
     const { ai, auth } = useSidebarWidget()
     const { config, setSelectedModelForAIVendor, resetConfig } = ai
-    const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList, aiConfigPreferences } = auth
+    const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList } = auth
     const { showToast } = useToast()
 
     const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
-    const [loadedPreferencesSignature, setLoadedPreferencesSignature] = useState<string>('')
 
     const isAIVendorModelsPopulated = (aiVendor: AIVendor) =>
         config.some(c => c.aiVendor === aiVendor && c.model)
@@ -55,33 +54,8 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
         return status?.status === APIKeyStatus.VALID
     }
 
-    // --- Sync Backend Preferences to AI Context ---
-    useEffect(() => {
-        if (!aiConfigPreferences?.preferredModels) return
-
-        const currentSignature = JSON.stringify(aiConfigPreferences.preferredModels)
-
-        if (currentSignature !== loadedPreferencesSignature) {
-            // Check if user has already made manual selections (config has active models)
-            // If so, do not overwrite with defaults on remount.
-            const hasActiveSelection = config.some(c => c.model && c.model.trim() !== '')
-
-            // Only sync if no active selection exists, OR if this is the very first load (signature empty) and we really want defaults?
-            // Actually, if signature is empty (mount), and we have active selection (from context persisting), we should SKIP.
-            // But we must setLoadedPreferencesSignature to prevent future loops if preferences change?
-            // If we skip, we should still update the signature so we track that we "processed" this version.
-
-            if (!hasActiveSelection) {
-                console.log('Syncing AI Vendor Preferences', aiConfigPreferences.preferredModels)
-                aiConfigPreferences.preferredModels.forEach(pref => {
-                    if (pref.aiVendor && pref.model) {
-                        setSelectedModelForAIVendor(pref.aiVendor, pref.model)
-                    }
-                })
-            }
-            setLoadedPreferencesSignature(currentSignature)
-        }
-    }, [aiConfigPreferences, loadedPreferencesSignature, setSelectedModelForAIVendor, config])
+    // Backend preference → config sync now lives in AIContext, so model
+    // selections exist even before this widget first mounts (mobile).
 
     // --- Fetch models (with bypass option for refresh) ---
     const fetchModels = useCallback(

@@ -148,10 +148,12 @@
   min-width: 1rem; // Fixed minimum width
   padding-left: 0;
 
-  /* 📱 Mobile: reduce min-width */
+  /* 📱 Mobile: reduce min-width; pull the sidebar toggle flush with the
+     screen edge by cancelling the container's horizontal padding */
   @include respond-to-mobile {
     min-width: auto;
     gap: 0.5rem;
+    margin-left: calc(-1 * #{$spacing-lg});
   }
 }
 
@@ -181,12 +183,17 @@
   flex: 0 0 auto;
   min-width: 1rem; // Fixed minimum width
 
-  /* 📱 Mobile: Allow shrinking and fit toggle */
+  /* 📱 Mobile: Allow shrinking and fit toggle; pull the AI sidebar toggle
+     flush with the screen edge by cancelling the container's padding */
   @include respond-to-mobile {
     min-width: auto;
     padding-left: 0.5rem;
+    margin-right: calc(-1 * #{$spacing-lg});
     > :not(.mobileToggle) {
       display: none;
+    }
+    .mobileToggle {
+      margin-right: 0;
     }
   }
 }
