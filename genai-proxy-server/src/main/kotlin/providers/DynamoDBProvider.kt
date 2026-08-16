@@ -54,6 +54,9 @@ import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.BatchGetItemRequest
+import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
+import software.amazon.awssdk.services.dynamodb.model.PutRequest
+import software.amazon.awssdk.services.dynamodb.model.WriteRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.KeysAndAttributes
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
@@ -66,6 +69,20 @@ import com.genflowly.models.api.GetCustomerConversationsResponse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+
+/**
+ * One row of the AIModelCatalog table: token limits and pricing for a
+ * vendor's model. Costs are USD per 1M tokens.
+ */
+data class ModelCatalogEntry(
+    val model: String,
+    val maxOutputTokens: Int?,
+    val maxInputTokens: Int?,
+    val inputCostPerMTok: Double? = null,
+    val outputCostPerMTok: Double? = null,
+    val cacheReadCostPerMTok: Double? = null,
+    val cacheWriteCostPerMTok: Double? = null
+)
 
 class DynamoDBProvider(
     private val dynamoDbClient: DynamoDbClient,
@@ -1266,6 +1283,166 @@ class DynamoDBProvider(
             return@withContext response.items().firstOrNull()
         }
 
+
+    suspend fun saveSystemApiKey(
+        aiVendor: String,
+        encryptedKey: String,
+        updatedBy: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            // Upsert instead of PutItem so rotating a key preserves the
+            // vendor's saved model/priority configuration
+            val now = Instant.now().toString()
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(DynamoDBConstants.SYSTEM_VENDOR_API_KEY_TABLE)
+                    .key(mapOf(AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()))
+                    .updateExpression(
+                        "SET apiKey = :key, isAPIKeyValid = :valid, updatedBy = :by, " +
+                                "updatedAt = :now, createdAt = if_not_exists(createdAt, :now)"
+                    )
+                    .expressionAttributeValues(mapOf(
+                        ":key" to AttributeValue.builder().s(encryptedKey).build(),
+                        ":valid" to AttributeValue.builder().bool(true).build(),
+                        ":by" to AttributeValue.builder().s(updatedBy).build(),
+                        ":now" to AttributeValue.builder().s(now).build()
+                    ))
+                    .build()
+            )
+            logger.info("Saved system API key for vendor $aiVendor to DynamoDB")
+        } catch (e: Exception) {
+            logger.error("Failed to save system API key to DynamoDB", e)
+            throw e
+        }
+    }
+
+    suspend fun updateSystemApiKeyConfig(
+        aiVendor: String,
+        selectedModel: String,
+        priority: Int
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(DynamoDBConstants.SYSTEM_VENDOR_API_KEY_TABLE)
+                    .key(mapOf(AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()))
+                    .updateExpression("SET selectedModel = :m, #p = :p, updatedAt = :now")
+                    // Config only makes sense on a vendor that has a stored key
+                    .conditionExpression("attribute_exists($AI_VENDOR_KEY) AND attribute_exists(apiKey)")
+                    .expressionAttributeNames(mapOf("#p" to "priority"))
+                    .expressionAttributeValues(mapOf(
+                        ":m" to AttributeValue.builder().s(selectedModel).build(),
+                        ":p" to AttributeValue.builder().n(priority.toString()).build(),
+                        ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
+                    ))
+                    .build()
+            )
+            logger.info("Saved system vendor config for $aiVendor: model=$selectedModel priority=$priority")
+        } catch (e: Exception) {
+            logger.error("Failed to save system vendor config to DynamoDB", e)
+            throw e
+        }
+    }
+
+    suspend fun getSystemApiKeyItem(aiVendor: String): Map<String, AttributeValue>? =
+        withContext(Dispatchers.IO) {
+            val request = GetItemRequest.builder()
+                .tableName(DynamoDBConstants.SYSTEM_VENDOR_API_KEY_TABLE)
+                .key(mapOf(AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()))
+                .build()
+
+            val response = dynamoDbClient.getItem(request)
+            if (response.hasItem()) response.item() else null
+        }
+
+    suspend fun deleteSystemApiKey(aiVendor: String) = withContext(Dispatchers.IO) {
+        dynamoDbClient.deleteItem(
+            DeleteItemRequest.builder()
+                .tableName(DynamoDBConstants.SYSTEM_VENDOR_API_KEY_TABLE)
+                .key(mapOf(AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()))
+                .build()
+        )
+        logger.info("Deleted system API key for vendor $aiVendor from DynamoDB")
+    }
+
+    /**
+     * Upserts one vendor's model-catalog entries (token limits per model).
+     * Batched in chunks of 25 — the BatchWriteItem maximum.
+     */
+    suspend fun saveModelCatalogEntries(
+        aiVendor: String,
+        entries: List<ModelCatalogEntry>
+    ) = withContext(Dispatchers.IO) {
+        val now = Instant.now().toString()
+        entries.chunked(25).forEach { chunk ->
+            val writeRequests = chunk.map { entry ->
+                val item = buildMap {
+                    put(AI_VENDOR_KEY, AttributeValue.builder().s(aiVendor).build())
+                    put(DynamoDBConstants.MODEL_SORT_KEY, AttributeValue.builder().s(entry.model).build())
+                    entry.maxOutputTokens?.let {
+                        put("maxOutputTokens", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    entry.maxInputTokens?.let {
+                        put("maxInputTokens", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    entry.inputCostPerMTok?.let {
+                        put("inputCostPerMTok", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    entry.outputCostPerMTok?.let {
+                        put("outputCostPerMTok", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    entry.cacheReadCostPerMTok?.let {
+                        put("cacheReadCostPerMTok", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    entry.cacheWriteCostPerMTok?.let {
+                        put("cacheWriteCostPerMTok", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    put("updatedAt", AttributeValue.builder().s(now).build())
+                }
+                WriteRequest.builder()
+                    .putRequest(PutRequest.builder().item(item).build())
+                    .build()
+            }
+            var request = BatchWriteItemRequest.builder()
+                .requestItems(mapOf(DynamoDBConstants.AI_MODEL_CATALOG_TABLE to writeRequests))
+                .build()
+            var response = dynamoDbClient.batchWriteItem(request)
+            // Retry throttled leftovers so a partial batch never silently drops rows
+            var retries = 0
+            while (response.hasUnprocessedItems() && response.unprocessedItems().isNotEmpty() && retries < 3) {
+                retries++
+                Thread.sleep(200L * retries)
+                request = BatchWriteItemRequest.builder()
+                    .requestItems(response.unprocessedItems())
+                    .build()
+                response = dynamoDbClient.batchWriteItem(request)
+            }
+        }
+        logger.info("Saved ${entries.size} model catalog entries for vendor $aiVendor")
+    }
+
+    suspend fun getModelCatalogEntry(aiVendor: String, model: String): ModelCatalogEntry? =
+        withContext(Dispatchers.IO) {
+            val response = dynamoDbClient.getItem(
+                GetItemRequest.builder()
+                    .tableName(DynamoDBConstants.AI_MODEL_CATALOG_TABLE)
+                    .key(mapOf(
+                        AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build(),
+                        DynamoDBConstants.MODEL_SORT_KEY to AttributeValue.builder().s(model).build()
+                    ))
+                    .build()
+            )
+            val item = response.item()?.takeIf { it.isNotEmpty() } ?: return@withContext null
+            ModelCatalogEntry(
+                model = model,
+                maxOutputTokens = item["maxOutputTokens"]?.n()?.toIntOrNull(),
+                maxInputTokens = item["maxInputTokens"]?.n()?.toIntOrNull(),
+                inputCostPerMTok = item["inputCostPerMTok"]?.n()?.toDoubleOrNull(),
+                outputCostPerMTok = item["outputCostPerMTok"]?.n()?.toDoubleOrNull(),
+                cacheReadCostPerMTok = item["cacheReadCostPerMTok"]?.n()?.toDoubleOrNull(),
+                cacheWriteCostPerMTok = item["cacheWriteCostPerMTok"]?.n()?.toDoubleOrNull()
+            )
+        }
 
     private fun withTimestamps(base: Map<String, AttributeValue>): Map<String, AttributeValue> {
         val now = Instant.now().toString()

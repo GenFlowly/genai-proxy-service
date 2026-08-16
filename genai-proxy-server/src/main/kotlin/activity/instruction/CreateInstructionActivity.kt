@@ -64,8 +64,8 @@ fun Route.registerCreateInstructionRoutes(
                 }
 
                 val response = customerProfileService.createInstruction(
-                    customerId = customerId, 
-                    instructionName = instructionName, 
+                    customerId = customerId,
+                    instructionName = instructionName,
                     instruction = request.instruction,
                     existingInstructionId = request.existingInstructionId,
                     icon = generatedPersona.icon,

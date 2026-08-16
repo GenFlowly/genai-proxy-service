@@ -363,5 +363,12 @@ fun Application.module() {
     val httpClient = get<io.ktor.client.HttpClient>()
     val json = get<kotlinx.serialization.json.Json>()
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, httpClient, json)
+    val systemApiKeyService = get<com.genflowly.service.SystemApiKeyService>()
+
+    // Refresh the AIModelCatalog table (per-model token limits, fetched from the
+    // vendors with the system API keys) once at startup, then every 24 hours.
+    val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
+    modelCatalogService.startDailyRefresh(this)
+
+    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, httpClient, json)
 }
