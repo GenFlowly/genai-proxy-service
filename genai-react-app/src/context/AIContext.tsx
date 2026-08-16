@@ -30,10 +30,11 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     const [config, setConfig] = useState<AIConfig[]>([])
     const [activeBlockId, setActiveBlockId] = useState<string>('')
     const [supplementalText, setSupplementalText] = useState<string>('')
-    const { customerInstructions, customerId } = useAuth()
+    const { customerInstructions, customerId, aiConfigPreferences } = useAuth()
     const [systemPrompt, setSystemPrompt] = useState<string>('')
     const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null)
     const [isSystemPromptLoaded, setIsSystemPromptLoaded] = useState<boolean>(false)
+    const [loadedPreferencesSignature, setLoadedPreferencesSignature] = useState<string>('')
 
     // 🔹 Restore from localStorage
     useEffect(() => {
@@ -68,6 +69,28 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
             }
         }
     }, [systemPrompt, selectedInstructionId, customerId, isSystemPromptLoaded])
+
+    // 🔹 Sync backend model preferences into config as soon as they load.
+    // This must live here (not in AIVendorWidget): the widget only mounts when
+    // the AI settings sidebar/modal is open, so on mobile the config stayed
+    // empty until the user opened it.
+    useEffect(() => {
+        if (!aiConfigPreferences?.preferredModels) return
+
+        const currentSignature = JSON.stringify(aiConfigPreferences.preferredModels)
+        if (currentSignature === loadedPreferencesSignature) return
+
+        // Don't overwrite selections the user already made this session
+        const hasActiveSelection = config.some(c => c.model && c.model.trim() !== '')
+        if (!hasActiveSelection) {
+            aiConfigPreferences.preferredModels.forEach(pref => {
+                if (pref.aiVendor && pref.model) {
+                    setSelectedModelForAIVendor(pref.aiVendor, pref.model)
+                }
+            })
+        }
+        setLoadedPreferencesSignature(currentSignature)
+    }, [aiConfigPreferences, loadedPreferencesSignature, config])
 
     // 🔹 Update or insert vendor+model config safely
     const setSelectedModelForAIVendor = (aiVendor: AIVendor, model: string) => {

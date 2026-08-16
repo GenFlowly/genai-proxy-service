@@ -9,6 +9,7 @@ import SidebarListPanel, { SidebarListGroup } from '../../../common/SidebarListP
 import panelStyles from '../../../common/SidebarListPanel/SidebarListPanel.module.scss'
 import { formatServerDateTime, formatServerTime } from '../../../../utils/timeUtils'
 import { groupByDate, DateGroupId } from '../../../../utils/dateGrouping'
+import { loadNotesCache, saveNotesCache } from './notesCache'
 
 const noteLabel = (note: SavedNote): string => {
     if (note.title && note.title !== 'Untitled') return note.title
@@ -20,9 +21,17 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
     const { t } = useTranslation()
     const { getAccessTokenSilently } = useAuth()
     const { openNote, activeNote, updatedNote, clearActiveNote } = useNotes()
-    const [notes, setNotes] = useState<SavedNote[]>([])
+
+    // Stale-while-revalidate: paint the last known list immediately (if any),
+    // then refresh from the API in the background
+    const cached = useMemo(loadNotesCache, [])
+    const [notes, setNotes] = useState<SavedNote[]>(cached ?? [])
     const [isLoading, setIsLoading] = useState(true)
     const [hasError, setHasError] = useState(false)
+
+    // Only persist state to the cache once a real load has happened, so an
+    // empty "never loaded" state can't masquerade as "no notes"
+    const hasLoadedRef = React.useRef(!!cached)
 
     useEffect(() => {
         let cancelled = false
@@ -31,7 +40,10 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
             try {
                 const token = await getAccessTokenSilently()
                 const fetchedNotes = await getNotes(token)
-                if (!cancelled) setNotes(fetchedNotes)
+                if (!cancelled) {
+                    hasLoadedRef.current = true
+                    setNotes(fetchedNotes)
+                }
             } catch (error) {
                 console.error('Failed to fetch saved notes:', error)
                 if (!cancelled) setHasError(true)
@@ -43,6 +55,13 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
         fetchNotes()
         return () => { cancelled = true }
     }, [getAccessTokenSilently])
+
+    // Mirror every loaded/mutated state (fetch, archive, autosave merge) to
+    // the cache so the next mount paints instantly
+    useEffect(() => {
+        if (!hasLoadedRef.current) return
+        saveNotesCache(notes)
+    }, [notes])
 
     // Keep the list in sync with autosaves published by the editor: update
     // saved notes in place, and surface brand-new notes at the top

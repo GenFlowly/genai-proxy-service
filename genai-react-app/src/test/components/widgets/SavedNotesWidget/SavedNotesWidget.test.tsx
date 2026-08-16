@@ -5,6 +5,7 @@ import SavedNotesWidget from '../../../../components/widgets/SidebarWidgets/Save
 import { useAuth } from '../../../../context/AuthContext'
 import { NotesProvider, useNotes } from '../../../../context/NotesContext'
 import * as saveNotesService from '../../../../services/saveNotesService'
+import { loadNotesCache, saveNotesCache, clearNotesCache } from '../../../../components/widgets/SidebarWidgets/SavedNotesWidget/notesCache'
 
 jest.mock('../../../../context/AuthContext', () => ({
     useAuth: jest.fn(),
@@ -18,6 +19,7 @@ const mockDeleteNote = saveNotesService.deleteNote as jest.Mock
 describe('SavedNotesWidget', () => {
     beforeEach(() => {
         jest.clearAllMocks()
+        clearNotesCache() // The module-level SWR cache must not leak between tests
         mockUseAuth.mockReturnValue({
             getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token'),
         })
@@ -196,6 +198,52 @@ describe('SavedNotesWidget', () => {
         await waitFor(() => {
             expect(screen.getByTestId('active-note')).toHaveTextContent('none')
         })
+    })
+
+    test('paints cached notes instantly while refreshing in the background', async () => {
+        saveNotesCache([
+            { noteKey: 'k1', noteValue: 'cached body', title: 'Cached note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
+        ])
+        // Keep the refresh pending: the cached list must show without a skeleton
+        mockGetNotes.mockReturnValue(new Promise(() => {}))
+
+        render(<SavedNotesWidget />)
+
+        expect(screen.getByText('Cached note')).toBeInTheDocument()
+        expect(screen.queryByTestId('saved-notes-loading')).not.toBeInTheDocument()
+    })
+
+    test('replaces the cached list once the refresh lands and mirrors it to the cache', async () => {
+        saveNotesCache([
+            { noteKey: 'k1', noteValue: 'cached body', title: 'Stale note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
+        ])
+        const fresh = [
+            { noteKey: 'k2', noteValue: 'fresh body', title: 'Fresh note', createdAt: '2026-08-02T10:00:00Z', updatedAt: '2026-08-02T10:00:00Z' },
+        ]
+        mockGetNotes.mockResolvedValue(fresh)
+
+        render(<SavedNotesWidget />)
+
+        await waitFor(() => {
+            expect(screen.getByText('Fresh note')).toBeInTheDocument()
+        })
+        expect(screen.queryByText('Stale note')).not.toBeInTheDocument()
+        expect(loadNotesCache()).toEqual(fresh)
+    })
+
+    test('keeps showing the stale list when the background refresh fails', async () => {
+        saveNotesCache([
+            { noteKey: 'k1', noteValue: 'cached body', title: 'Cached note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
+        ])
+        mockGetNotes.mockRejectedValue(new Error('network down'))
+
+        render(<SavedNotesWidget />)
+
+        await waitFor(() => {
+            expect(mockGetNotes).toHaveBeenCalled()
+        })
+        expect(screen.getByText('Cached note')).toBeInTheDocument()
+        expect(screen.queryByTestId('saved-notes-error')).not.toBeInTheDocument()
     })
 
     test('honors a custom data-testid', async () => {

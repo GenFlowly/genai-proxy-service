@@ -80,15 +80,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     raise ValueError(f"Payload must contain 'client' and 'data'. Got keys: {list(item_data.keys())}")
 
                 # Build typed internal state directly from the envelope — no flattening
+                # Accept both camelCase (MemoryRequest aliases) and snake_case keys
                 internal_state = MemoryRequestInternalState(
                     data_type='NOTE',
                     customer_id=customer_id,
                     client=item_data['client'],
                     raw_data=item_data['data'],
-                    model_type=item_data.get('model_type'),
-                    model_name=item_data.get('model_name'),
-                    chunking_type=item_data.get('chunking_type'),
-                    chunking_technique=item_data.get('chunking_technique'),
+                    model_type=item_data.get('modelType', item_data.get('model_type')),
+                    model_name=item_data.get('modelName', item_data.get('model_name')),
+                    chunking_type=item_data.get('chunkingType', item_data.get('chunking_type')),
+                    chunking_technique=item_data.get('chunkingTechnique', item_data.get('chunking_technique')),
                 )
 
                 # Get appropriate processor from the typed state

@@ -1,3 +1,3 @@
 # Create Embeddings Lambda requirements
 -r requirements.txt
-genflowly-encoding-library[ml]>=0.1.24
+genflowly-encoding-library[ml]>=0.1.25

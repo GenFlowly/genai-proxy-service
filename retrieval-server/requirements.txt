@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic
-genflowly-encoding-library[ml]>=0.1.24
+genflowly-encoding-library[ml]>=0.1.25
 
 langgraph>=1.2
 langchain-core
