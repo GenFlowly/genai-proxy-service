@@ -39,7 +39,7 @@ class ChunkerFactory:
             return RecursiveChunker(technique=technique, **kwargs)
 
         elif chunking_type == ChunkingType.SEMANTIC:
-            # semantic types: percentile (default), std_dev, interquartile, gradient
+            # semantic types: percentile (default), standard_deviation, interquartile, gradient
             # Langchain naturally expects a string for the semantic breakpoint threshold
             if not isinstance(technique, str):
                 technique = "percentile"
