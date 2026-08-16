@@ -19,6 +19,13 @@ const getInitialThemeMode = (): ThemeMode => {
     return (localStorage.getItem('theme') as ThemeMode | null) || 'system'
 }
 
+// data-color-mode drives third-party @uiw components (markdown editor/preview),
+// which otherwise fall back to the browser's prefers-color-scheme instead of the app theme
+const applyThemeAttributes = (theme: EffectiveTheme) => {
+    document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.setAttribute('data-color-mode', theme)
+}
+
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     const [themeMode, setThemeModeState] = useState<ThemeMode>(getInitialThemeMode)
     const [theme, setThemeState] = useState<EffectiveTheme>('light')
@@ -28,14 +35,14 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         const effective: EffectiveTheme = themeMode === 'system' ? (prefersDark ? 'dark' : 'light') : themeMode
 
         setThemeState(effective)
-        document.documentElement.setAttribute('data-theme', effective)
+        applyThemeAttributes(effective)
 
         if (themeMode === 'system') {
             const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
             const handleChange = (e: MediaQueryListEvent) => {
                 const newTheme = e.matches ? 'dark' : 'light'
                 setThemeState(newTheme)
-                document.documentElement.setAttribute('data-theme', newTheme)
+                applyThemeAttributes(newTheme)
             }
             if (mediaQuery.addEventListener) {
                 mediaQuery.addEventListener('change', handleChange)
