@@ -15,6 +15,9 @@ boto3
 # Model catalog for /models listing (capability metadata per model)
 litellm
 
+# Live vendor model-metadata lookups (/models/metadata)
+httpx
+
 # Voice sessions: upstream WebSocket client for OpenAI Realtime
 # (Gemini Live uses google-genai's built-in live support)
 websockets

@@ -14,6 +14,15 @@ object DynamoDBConstants {
     const val CUSTOMER_ID_KEY = "customerId"
     const val AI_VENDOR_KEY = "aiVendor"
 
+    // System-wide (not per-customer) AI vendor API keys, managed from the
+    // admin panel. PK=aiVendor so retrieval is a single O(1) GetItem.
+    const val SYSTEM_VENDOR_API_KEY_TABLE = "SystemVendorApiKeys"
+
+    // Per-model metadata (token limits) refreshed daily from the vendors'
+    // model APIs using the system keys. PK=aiVendor, SK=model.
+    const val AI_MODEL_CATALOG_TABLE = "AIModelCatalog"
+    const val MODEL_SORT_KEY = "model"
+
     const val CUSTOMER_DEVELOPER_API_KEY_TABLE = "CustomerDeveloperApiKeys"
     const val DEVELOPER_API_KEY_HASH_KEY = "keyHash"
     const val DEVELOPER_API_KEY_CUSTOMER_GSI = "customerIdIndex"

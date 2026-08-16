@@ -232,7 +232,11 @@ class RetrievalService(
                 contentType(ContentType.Application.Json)
                 setBody(payload)
                 timeout {
-                    requestTimeoutMillis = 300_000L
+                    // Bounds the WHOLE request including body streaming — with
+                    // catalog-sized token budgets a long generation can far
+                    // exceed 5 minutes, so only the socket timeout (time between
+                    // chunks) guards against stalls.
+                    requestTimeoutMillis = 1_800_000L
                     socketTimeoutMillis = 300_000L
                 }
             }.execute { response ->

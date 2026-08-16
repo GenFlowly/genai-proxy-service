@@ -58,7 +58,9 @@ class AIRequestManager(
     private val conversationService: ConversationService,
     private val promptGenerationService: PromptGenerationService,
     private val retrievalService: RetrievalService,
-    private val s3Provider: S3Provider
+    private val s3Provider: S3Provider,
+    private val systemAIFailoverService: com.genflowly.service.SystemAIFailoverService,
+    private val modelCatalogService: com.genflowly.service.ModelCatalogService
 ) {
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
@@ -301,7 +303,7 @@ class AIRequestManager(
                     fetchResponseFromAIVendor(
                         aiVendor = aiConfig.aiVendor,
                         model = aiConfig.model,
-                        maxTokens = aiConfig.maxTokens ?: 4096,
+                        maxTokens = aiConfig.maxTokens,
                         message = message,
                         agentic = agentic,
                         tools = tools,
@@ -320,7 +322,7 @@ class AIRequestManager(
     suspend fun fetchResponseFromAIVendor(
         aiVendor: AIVendor,
         model: String,
-        maxTokens: Int = 4096,
+        maxTokens: Int? = null,
         message: Message,
         agentic: Boolean = true,
         tools: List<ToolDefinition> = emptyList(),
@@ -337,6 +339,10 @@ class AIRequestManager(
         }
         val conversationHistory = thread.map { it.toConversationMessage() }
 
+        val resolvedMaxTokens = modelCatalogService.resolveMaxTokens(
+            vendor = aiVendor, model = model, requested = maxTokens, streaming = false
+        )
+
         val result = retrievalService.retrieveAndGenerate(
             customerId = message.customerId,
             client = message.client,
@@ -344,7 +350,7 @@ class AIRequestManager(
             llmCredentials = mapOf(vendorToCredentialKey(aiVendor) to apiKey),
             llmProvider = vendorToProviderString(aiVendor),
             llmModel = model,
-            llmMaxTokens = maxTokens,
+            llmMaxTokens = resolvedMaxTokens,
             conversationHistory = conversationHistory,
             systemPrompt = message.systemPrompt,
             agentic = agentic,
@@ -390,86 +396,96 @@ class AIRequestManager(
                 customerProfileService
             ) ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
-            // Step 2: Start timer for 3rd party API call
-            val startTime = System.currentTimeMillis()
-
-            val aiResponse = when (aiVendor) {
-                AIVendor.OPENAI -> {
-                    val params = aiRequestService.buildOpenAIRequest(
-                        messages,
-                        model,
-                        systemPrompt ?: ""
-                    )
-                    val httpClient = aiRequestService.getOpenAIProvider(apiKey)
-                    httpClient.generateResponse(
-                        com.genflowly.aicallerlib.models.openai.OpenAIRequest(
-                            params
-                        )
-                    )
-                }
-
-                AIVendor.GEMINI -> {
-                    val params = aiRequestService.buildGeminiRequest(
-                        messages,
-                        model,
-                        systemPrompt ?: ""
-                    )
-                    val httpClient = aiRequestService.getGeminiProvider(apiKey)
-                    httpClient.generateResponse(
-                        com.genflowly.aicallerlib.models.gemini.GeminiRequest(
-                            params
-                        )
-                    )
-                }
-
-                AIVendor.CLAUDE -> {
-                    val params = aiRequestService.buildClaudeRequest(
-                        messages,
-                        model,
-                        systemPrompt ?: ""
-                    )
-                    val httpClient = aiRequestService.getClaudeProvider(apiKey)
-                    httpClient.generateResponse(
-                        com.genflowly.aicallerlib.models.claude.ClaudeRequest(
-                            params
-                        )
-                    )
-                }
-            }
-
-
-            // Step 3: Stop timer for 3rd party API call
-            val durationMs = System.currentTimeMillis() - startTime
-
-            // Step 4: Extract text and usage metadata
-            val responseText = aiResponse.getText() ?: ""
-            val metadata = aiResponse.getUsageMetadata()
-            val (inputTokens, outputTokens) = extractTokens(metadata)
-            val totalTokens = metadata?.getTotalTokenCount()?.toInt()
-            val tokensReadFromCache = metadata?.getTokenCountReadFromCache()?.toInt()
-
-            logger.info(
-                "AI response received: vendor={}, model={}, " +
-                        "responseText={}, durationMs={}, inputTokens={}, outputTokens={}",
-                aiVendor,
-                model,
-                responseText,
-                durationMs,
-                inputTokens,
-                outputTokens
-            )
-            return AIGenerateResult(
-                text = responseText, 
-                inputTokens = inputTokens, 
-                outputTokens = outputTokens,
-                totalTokens = totalTokens,
-                tokensReadFromCache = tokensReadFromCache
-            )
-
+            return generateTextWithApiKey(aiVendor, model, messages, systemPrompt, apiKey)
         } catch (e: Exception) {
             val errorText = "Error occurred while generating response from $aiVendor - ${e.message}"
             return AIGenerateResult(text = errorText, inputTokens = null, outputTokens = null, totalTokens = null, tokensReadFromCache = null)
         }
+    }
+
+    /**
+     * Generate text with an explicitly provided API key (e.g. a system key).
+     * Unlike [generateText] this THROWS on any generation failure instead of
+     * returning error text, so callers like the system-key failover can react.
+     */
+    suspend fun generateTextWithApiKey(
+        aiVendor: AIVendor,
+        model: String,
+        messages: List<Message>,
+        systemPrompt: String?,
+        apiKey: String
+    ): AIGenerateResult {
+        val startTime = System.currentTimeMillis()
+
+        val aiResponse = when (aiVendor) {
+            AIVendor.OPENAI -> {
+                val params = aiRequestService.buildOpenAIRequest(
+                    messages,
+                    model,
+                    systemPrompt ?: ""
+                )
+                val httpClient = aiRequestService.getOpenAIProvider(apiKey)
+                httpClient.generateResponse(
+                    com.genflowly.aicallerlib.models.openai.OpenAIRequest(
+                        params
+                    )
+                )
+            }
+
+            AIVendor.GEMINI -> {
+                val params = aiRequestService.buildGeminiRequest(
+                    messages,
+                    model,
+                    systemPrompt ?: ""
+                )
+                val httpClient = aiRequestService.getGeminiProvider(apiKey)
+                httpClient.generateResponse(
+                    com.genflowly.aicallerlib.models.gemini.GeminiRequest(
+                        params
+                    )
+                )
+            }
+
+            AIVendor.CLAUDE -> {
+                val params = aiRequestService.buildClaudeRequest(
+                    messages,
+                    model,
+                    systemPrompt ?: ""
+                )
+                val httpClient = aiRequestService.getClaudeProvider(apiKey)
+                httpClient.generateResponse(
+                    com.genflowly.aicallerlib.models.claude.ClaudeRequest(
+                        params
+                    )
+                )
+            }
+        }
+
+        val durationMs = System.currentTimeMillis() - startTime
+
+        val responseText = aiResponse.getText() ?: ""
+        val metadata = aiResponse.getUsageMetadata()
+        val (inputTokens, outputTokens) = extractTokens(metadata)
+        val totalTokens = metadata?.getTotalTokenCount()?.toInt()
+        val tokensReadFromCache = metadata?.getTokenCountReadFromCache()?.toInt()
+
+        logger.info(
+            "AI response received: vendor={}, model={}, " +
+                    "responseText={}, durationMs={}, inputTokens={}, outputTokens={}",
+            aiVendor,
+            model,
+            responseText,
+            durationMs,
+            inputTokens,
+            outputTokens
+        )
+        return AIGenerateResult(
+            text = responseText,
+            inputTokens = inputTokens,
+            outputTokens = outputTokens,
+            totalTokens = totalTokens,
+            tokensReadFromCache = tokensReadFromCache
+        )
     }
 
     /**
@@ -616,7 +632,12 @@ class AIRequestManager(
                     llmCredentials = llmCredentials,
                     llmProvider = llmProvider,
                     llmModel = config.model,
-                    llmMaxTokens = config.maxTokens ?: 4096,
+                    llmMaxTokens = modelCatalogService.resolveMaxTokens(
+                        vendor = config.aiVendor,
+                        model = config.model,
+                        requested = config.maxTokens,
+                        streaming = true
+                    ),
                     conversationHistory = conversationHistory,
                     systemPrompt = systemPrompt,
                     agentic = agentic,
@@ -859,7 +880,12 @@ class AIRequestManager(
                 // Reasoning models (gpt-5) spend completion tokens on internal
                 // reasoning before any visible text; a tight cap yields an
                 // empty response, so keep the same headroom as chat requests
-                llmMaxTokens = 4096,
+                llmMaxTokens = modelCatalogService.resolveMaxTokens(
+                    vendor = defaultAIVendor,
+                    model = defaultAIModel,
+                    requested = null,
+                    streaming = false
+                ),
                 systemPrompt = "Create a short descriptive title (at most 8 words) for the note the user sends. " +
                         "Respond with the title only - no quotes, no trailing punctuation, no extra text."
             )
@@ -895,27 +921,33 @@ class AIRequestManager(
             5. "tags": An array of 3-5 string metadata tags to support searching/filtering in large collections. Include tags for domain, task, tone, or tool (e.g., ["coding", "python", "debugging", "helpful"]).
         """.trimIndent()
 
-        val responseText = generateText(
-            defaultAIVendor,
-            defaultAIModel,
-            listOf(
-                Message(
-                    conversationId = "instruction-creation",
-                    text = instructionText,
-                    client = "internal",
-                    role = "user",
-                    customerId = customerId,
-                    systemPrompt = "",
-                    aiConfig = listOf(AIConfig(defaultAIVendor, defaultAIModel)),
-                    previousMessageId = null
-                )
-            ),
-            prompt,
-            customerId
-        ).text
-        
-        val jsonString = responseText.substringAfter("{").substringBeforeLast("}")
-        return jsonParser.decodeFromString<GeneratedPersona>("{$jsonString}")
+        // Persona generation runs on the SYSTEM API keys (admin-configured
+        // vendor/model pairs), trying providers in priority order. A JSON
+        // parse failure also counts as a generation failure and moves on to
+        // the next provider.
+        return systemAIFailoverService.executeWithFailover("persona-generation") { config ->
+            val responseText = generateTextWithApiKey(
+                config.aiVendor,
+                config.model,
+                listOf(
+                    Message(
+                        conversationId = "instruction-creation",
+                        text = instructionText,
+                        client = "internal",
+                        role = "user",
+                        customerId = customerId,
+                        systemPrompt = "",
+                        aiConfig = listOf(AIConfig(config.aiVendor, config.model)),
+                        previousMessageId = null
+                    )
+                ),
+                prompt,
+                config.apiKey
+            ).text
+
+            val jsonString = responseText.substringAfter("{").substringBeforeLast("}")
+            jsonParser.decodeFromString<GeneratedPersona>("{$jsonString}")
+        }
     }
 
     companion object {

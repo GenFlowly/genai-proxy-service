@@ -92,13 +92,16 @@ fun appModule(): Module = module {
     single { AIRequestService(get()) }
     single { CustomerProfileService(get(), get(), get()) }
     single { ConversationService(get(), get()) }
-    single { AIRequestManager(get(), get(), get(), get(), get(), get()) }
+    single { AIRequestManager(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get(), get()) }
     single { RetrievalService(get(), get(), get()) }
     single { PromptGenerationService() }
     single { GraphService(get()) }
     single { com.genflowly.service.NotesService(get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get()) }
+    single { com.genflowly.service.SystemApiKeyService(get(), get()) }
+    single { com.genflowly.service.SystemAIFailoverService(get()) }
+    single { com.genflowly.service.ModelCatalogService(get(), get(), get(), get()) }
 
 }
 

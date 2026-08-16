@@ -44,6 +44,29 @@ export class DynamoDBStack extends cdk.Stack {
             sortKey: { name: 'aiVendor', type: dynamodb.AttributeType.STRING },
         };
 
+        // System-wide (not per-customer) AI vendor API keys, managed from the
+        // admin panel. PK=aiVendor only, so the proxy can fetch the key for a
+        // vendor with a single O(1) GetItem. apiKey is stored KMS-encrypted.
+        const systemVendorApiKeyTableProps: CreateTableProps = {
+            tableName: 'SystemVendorApiKeys',
+            partitionKey: {
+                name: 'aiVendor',
+                type: dynamodb.AttributeType.STRING
+            },
+        };
+
+        // Per-model metadata (max output/input token limits) refreshed daily by
+        // the proxy from the vendors' model APIs using the system keys.
+        // PK=aiVendor, SK=model.
+        const aiModelCatalogTableProps: CreateTableProps = {
+            tableName: 'AIModelCatalog',
+            partitionKey: {
+                name: 'aiVendor',
+                type: dynamodb.AttributeType.STRING
+            },
+            sortKey: { name: 'model', type: dynamodb.AttributeType.STRING },
+        };
+
         const customerApiUsageTableProps: CreateTableProps = {
             tableName: 'CustomerAIUsage',
             partitionKey: {
@@ -377,6 +400,8 @@ export class DynamoDBStack extends cdk.Stack {
 
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
+        const systemVendorApiKeyTable = createDefaultDynamoDbTable(this, systemVendorApiKeyTableProps);
+        const aiModelCatalogTable = createDefaultDynamoDbTable(this, aiModelCatalogTableProps);
         const customerApiUsageTable = createDefaultDynamoDbTable(this, customerApiUsageTableProps);
         const conversationTable = createDefaultDynamoDbTable(this, conversationTableProps);
         const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
@@ -396,7 +421,7 @@ export class DynamoDBStack extends cdk.Stack {
         const customerDeveloperApiKeyTable = createDefaultDynamoDbTable(this, customerDeveloperApiKeyTableProps);
 
         this.dynamoDbTableList.push(
-            customerTable, customerApiKeyTable, customerApiUsageTable,
+            customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
