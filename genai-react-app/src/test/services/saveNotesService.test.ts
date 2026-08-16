@@ -1,4 +1,4 @@
-import { saveNote, getNotes } from '../../services/saveNotesService';
+import { saveNote, getNotes, deleteNote } from '../../services/saveNotesService';
 import { HttpMethod } from '../../constants/http';
 import { NotesModel } from '../../models/encoding.models';
 import { config } from '../../config/env';
@@ -134,6 +134,34 @@ describe('saveNotesService', () => {
 
         await expect(getNotes(mockToken)).rejects.toThrow(
             'Failed to fetch notes: 403 Forbidden'
+        );
+    });
+
+    test('deleteNote calls fetch with the encoded note key', async () => {
+        (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+
+        await deleteNote(mockToken, 'key/with special');
+
+        expect(global.fetch).toHaveBeenCalledWith(
+            `${config.backend.baseUrl}/api/v1/notes/${encodeURIComponent('key/with special')}`,
+            expect.objectContaining({
+                method: HttpMethod.DELETE,
+                headers: {
+                    Authorization: `Bearer ${mockToken}`,
+                },
+            })
+        );
+    });
+
+    test('deleteNote throws error when response is not ok', async () => {
+        (global.fetch as jest.Mock).mockResolvedValue({
+            ok: false,
+            status: 404,
+            statusText: 'Not Found',
+        });
+
+        await expect(deleteNote(mockToken, 'k1')).rejects.toThrow(
+            'Failed to delete note: 404 Not Found'
         );
     });
 });

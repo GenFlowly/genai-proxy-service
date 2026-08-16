@@ -44,7 +44,25 @@ export async function generateTextStream(
     }
 
     if (!response.ok) {
-        throw new Error(`Text generation failed: ${response.status} ${response.statusText}`);
+        // The proxy returns {"error": "<reason>"} on failures — surface the
+        // real reason instead of a generic status line when it's available
+        let reason = '';
+        try {
+            const body = await response.text();
+            try {
+                reason = JSON.parse(body)?.error ?? '';
+            } catch {
+                reason = body;
+            }
+        } catch {
+            // Body unreadable — fall back to status text only
+        }
+        reason = (reason || '').trim();
+        throw new Error(
+            reason
+                ? `${reason} (HTTP ${response.status})`
+                : `Text generation failed: ${response.status} ${response.statusText}`
+        );
     }
 
     const conversationId = response.headers.get("X-Conversation-Id");
@@ -87,7 +105,14 @@ export async function generateTextStream(
             }
             // other types (heartbeat, etc.) are silently ignored
         } catch {
-            // Not JSON — treat as raw content (error messages, legacy format)
+            // Not JSON. The proxy emits "[Error: <reason>]" as a raw line when
+            // generation fails mid-stream — surface it as an error instead of
+            // appending it to the generated text.
+            const errorMatch = trimmed.match(/^\[Error: ([\s\S]*)\]$/);
+            if (errorMatch) {
+                throw new Error(errorMatch[1] || 'Stream failed');
+            }
+            // Other raw content (legacy format) still flows through as text
             onDelta(line);
         }
     };

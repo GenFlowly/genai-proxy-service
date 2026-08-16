@@ -110,6 +110,8 @@ const TestConversationUI = () => {
                     <div data-testid="debug-prompt">{block.prompt}</div>
                     <div data-testid="debug-block-id">{block.conversationBlockId}</div>
                     <div data-testid="debug-response-text">{block.responseMessages[0]?.text}</div>
+                    <div data-testid="debug-response-error">{block.responseMessages[0]?.error}</div>
+                    <div data-testid="debug-response-vendor">{block.responseMessages[0]?.aiVendor}</div>
                     <div data-testid={`debug-response-count-${block.conversationBlockId}`}>{block.responseMessages.length}</div>
 
                     <button data-testid={`select-block-${block.conversationBlockId}`} onClick={() => setActiveBlockId(block.conversationBlockId)}>Select Block</button>
@@ -258,8 +260,10 @@ describe('ConversationContext UI Integration', () => {
         const generateBtn = screen.getByTestId('generate-button');
         await act(async () => { fireEvent.click(generateBtn); });
         await waitFor(() => {
-            const debugText = screen.getByTestId('debug-response-text');
-            expect(debugText).toHaveTextContent('Error generating text stream.');
+            // The failing vendor's message carries the real failure reason and
+            // keeps its own vendor identity (not hardcoded OpenAI)
+            expect(screen.getByTestId('debug-response-error')).toHaveTextContent('API Fail');
+            expect(screen.getByTestId('debug-response-vendor')).toHaveTextContent(AIVendor.CLAUDE);
         });
     });
 
@@ -420,9 +424,9 @@ describe('ConversationContext UI Integration', () => {
         });
 
         await waitFor(() => {
-            const debugText = screen.getByTestId('debug-response-text');
-            expect(debugText).toHaveTextContent('Error generating text.'); // Note: Non-stream error message might be different
-            // Code: text: 'Error generating text.', (line 312 of ConversationContext)
+            // Error card per requested vendor with the real failure reason
+            expect(screen.getByTestId('debug-response-error')).toHaveTextContent('Legacy Fail');
+            expect(screen.getByTestId('debug-response-vendor')).toHaveTextContent(AIVendor.CLAUDE);
         });
     });
 

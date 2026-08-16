@@ -16,6 +16,12 @@
     width: 100%;
     overflow: hidden;
     position: relative;
+
+    // Page canvas behind the widget panels (matches the chat page); shows
+    // through the panels' rounded corners and the 1px gaps between them
+    background-color: $color-page-background;
+    gap: $widget-gap;
+    padding: $widget-gap;
 }
 
 .centerContainer {

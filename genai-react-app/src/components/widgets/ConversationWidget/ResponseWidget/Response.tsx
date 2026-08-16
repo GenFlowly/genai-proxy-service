@@ -82,7 +82,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
 
     const visibleMessages = useMemo(() =>
-        responseMessages.filter(msg => msg.text.length > 0 || msg.isLoading),
+        responseMessages.filter(msg => msg.text.length > 0 || msg.isLoading || msg.error),
         [responseMessages]
     )
 
@@ -184,7 +184,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             )}
 
             <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
-                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, thinkingSteps, thinkingDurationMs, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
+                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingDurationMs, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
                     const isSelected = selectedResponseId === messageId
                     const isThinkingPhase = !!isLoading && text.trim().length === 0
 
@@ -224,6 +224,13 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                 data-testid="response-message"
                                 aria-label={t('conversation.response.responseFrom', { vendor: aiVendor })}
                             >
+                                {error && (
+                                    <div className={styles.errorBanner} role="alert" data-testid="response-error">
+                                        {text.trim().length > 0
+                                            ? t('conversation.response.streamInterrupted', { reason: error })
+                                            : t('conversation.response.generationFailed', { reason: error })}
+                                    </div>
+                                )}
                                 {!isLoading && (inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
                                     <div className={styles.tokenBadge}>
                                         {inputTokens != null && (
