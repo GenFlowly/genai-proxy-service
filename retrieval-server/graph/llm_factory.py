@@ -12,9 +12,15 @@ _DEFAULTS = {
 }
 
 
-def get_llm(provider: str, credentials: dict, model: Optional[str] = None, max_tokens: int = 4096) -> BaseChatModel:
+def get_llm(
+    provider: str,
+    credentials: dict,
+    model: Optional[str] = None,
+    max_tokens: int = 4096,
+    betas: Optional[list[str]] = None,
+) -> BaseChatModel:
     resolved_model = model or _DEFAULTS.get(provider)
-    logger.info("LLM factory: provider=%s model=%s max_tokens=%d", provider, resolved_model, max_tokens)
+    logger.info("LLM factory: provider=%s model=%s max_tokens=%d betas=%s", provider, resolved_model, max_tokens, betas)
 
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
@@ -23,10 +29,12 @@ def get_llm(provider: str, credentials: dict, model: Optional[str] = None, max_t
             logger.error("LLM factory: anthropic_api_key is MISSING in credentials")
         else:
             logger.info("LLM factory: anthropic_api_key present (len=%d)", len(key))
+        kwargs = {"betas": betas} if betas else {}
         return ChatAnthropic(
             model=resolved_model,
             api_key=key,
             max_tokens=max_tokens,
+            **kwargs,
         )
 
     elif provider == "openai":

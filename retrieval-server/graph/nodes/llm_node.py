@@ -1,11 +1,13 @@
+import asyncio
 import json
 import logging
 import re
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from graph.llm_factory import get_llm
+from graph.s3_images import fetch_image_base64
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -36,10 +38,165 @@ def _make_system(text: str, cache: bool) -> SystemMessage:
     return SystemMessage(content=text)
 
 
-def _make_human(text: str, cache: bool) -> HumanMessage:
-    if cache:
-        return HumanMessage(content=[{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}])
-    return HumanMessage(content=text)
+def _make_human(content, cache: bool) -> HumanMessage:
+    """content is either a plain string or a list of multimodal blocks."""
+    if not cache:
+        return HumanMessage(content=content)
+    if isinstance(content, str):
+        return HumanMessage(content=[{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}])
+    # Block list: Anthropic wants cache_control on the last block of the prefix
+    blocks = [dict(b) for b in content]
+    if blocks:
+        blocks[-1] = {**blocks[-1], "cache_control": {"type": "ephemeral"}}
+    return HumanMessage(content=blocks)
+
+
+async def _image_blocks(images: list, strict: bool) -> list:
+    """
+    Resolve [{s3_key, media_type}, ...] into data-URL image blocks. The
+    image_url form is normalized by langchain-anthropic/-openai/-google-genai
+    into each provider's native image format, so one shape covers all vendors.
+
+    strict=True (current turn): a fetch failure fails the request.
+    strict=False (history replay): failed images degrade to a text note.
+    """
+    blocks = []
+    for img in images or []:
+        s3_key = img.get("s3_key", "")
+        try:
+            b64 = await asyncio.to_thread(fetch_image_base64, s3_key)
+            media_type = img.get("media_type") or "image/png"
+            blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{b64}"}})
+        except Exception as e:
+            logger.error("Failed to fetch attachment image %s: %s", s3_key, e)
+            if strict:
+                raise
+            blocks.append({"type": "text", "text": "[attached image unavailable]"})
+    return blocks
+
+
+def _user_content(text: str, image_blocks: list):
+    """Plain string when there are no images, otherwise text + image blocks."""
+    if not image_blocks:
+        return text
+    return [{"type": "text", "text": text}, *image_blocks]
+
+
+# Beta header each Anthropic-native tool version requires. A tool's options may
+# carry an explicit "anthropic_beta" to override/extend this mapping.
+_NATIVE_TOOL_BETAS = {
+    "computer_20250124": "computer-use-2025-01-24",
+    "bash_20250124": "computer-use-2025-01-24",
+    "computer_20241022": "computer-use-2024-10-22",
+    "text_editor_20241022": "computer-use-2024-10-22",
+    "bash_20241022": "computer-use-2024-10-22",
+}
+
+
+def _build_tool_specs(tools: list, provider: str) -> tuple[list, list]:
+    """
+    Convert API tool definitions into bind_tools specs. Returns (specs, betas).
+
+    Function tools (no `type`) become OpenAI function-tool dicts — LangChain
+    accepts that one format on all three vendor classes. Native tools (`type`
+    set, e.g. computer_20250124) pass through untranslated with their options
+    merged in; they are Anthropic-only and may require a beta header.
+    """
+    specs, betas = [], []
+    for t in tools:
+        native_type = t.get("type")
+        if native_type and native_type != "function":
+            if provider != "anthropic":
+                raise ValueError(
+                    f"Native tool type '{native_type}' is supported on Anthropic (Claude) only"
+                )
+            spec = {"type": native_type, "name": t["name"], **(t.get("options") or {})}
+            beta = spec.pop("anthropic_beta", None) or _NATIVE_TOOL_BETAS.get(native_type)
+            if beta and beta not in betas:
+                betas.append(beta)
+            specs.append(spec)
+        else:
+            specs.append({
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t.get("description", ""),
+                    "parameters": t.get("parameters") or {"type": "object", "properties": {}},
+                },
+            })
+    return specs, betas
+
+
+def _normalize_tool_choice(tool_choice: str | None) -> str | None:
+    """Map the API's tool_choice to LangChain's cross-provider vocabulary."""
+    if not tool_choice or tool_choice == "auto":
+        return "auto" if tool_choice else None
+    if tool_choice in ("required", "any"):
+        return "any"  # LangChain normalizes "any" per provider ("required" on OpenAI)
+    return tool_choice  # a specific tool name
+
+
+def _history_ai_message(content: str, tool_calls: list, cache: bool) -> AIMessage:
+    """Assistant turn that made tool calls — rebuilt so vendors see native tool-use blocks."""
+    normalized = [
+        {"name": c.get("name", ""), "args": c.get("args") or {}, "id": c.get("id", ""), "type": "tool_call"}
+        for c in tool_calls
+    ]
+    return AIMessage(content=content or "", tool_calls=normalized)
+
+
+async def _tool_messages(tool_results: list, provider: str) -> list:
+    """
+    Build ToolMessages, resolving any attached images (e.g. computer-use
+    screenshots) into content blocks. Images arrive as base64 data or an S3 key;
+    `omitted` entries are historical screenshots stripped at persistence time.
+    Image blocks are Anthropic-only — other providers get a text placeholder.
+    """
+    out = []
+    for r in tool_results or []:
+        text = r.get("content", "")
+        images = r.get("images") or []
+        if not images:
+            out.append(ToolMessage(content=text, tool_call_id=r.get("tool_call_id", "")))
+            continue
+        blocks: list = [{"type": "text", "text": text}] if text else []
+        for img in images:
+            if img.get("omitted"):
+                blocks.append({"type": "text", "text": "[screenshot omitted from history]"})
+                continue
+            if provider != "anthropic":
+                blocks.append({"type": "text", "text": "[image tool result omitted — images in tool results are Claude-only]"})
+                continue
+            media_type = img.get("media_type") or "image/png"
+            data = img.get("data")
+            if not data and img.get("s3_key"):
+                try:
+                    data = await asyncio.to_thread(fetch_image_base64, img["s3_key"])
+                except Exception as e:
+                    logger.error("Failed to fetch tool-result image %s: %s", img.get("s3_key"), e)
+                    blocks.append({"type": "text", "text": "[image unavailable]"})
+                    continue
+            if data:
+                blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{data}"}})
+        out.append(ToolMessage(content=blocks or "", tool_call_id=r.get("tool_call_id", "")))
+    return out
+
+
+def _content_summary(content) -> str:
+    """Log-safe rendering: image blocks become placeholders, never base64."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for b in content:
+            if isinstance(b, dict) and b.get("type") == "image_url":
+                parts.append("<image>")
+            elif isinstance(b, dict):
+                parts.append(str(b.get("text", b)))
+            else:
+                parts.append(str(b))
+        return " ".join(parts)
+    return str(content)
 
 
 def _make_ai(text: str, cache: bool) -> AIMessage:
@@ -113,12 +270,30 @@ def make_llm_node(agent_type: str):
                 return {output_key: [], "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
 
         effective_model = model_override or state.get("llm_model")
+
+        # Caller-defined tools bind only to the plain-text response generator;
+        # JSON-format nodes and pipeline nodes never see them. Native Anthropic
+        # tools (computer use etc.) may require beta headers, which must be set
+        # when the client is created — so specs are built before get_llm.
+        tools = state.get("tools") or []
+        tools_bound = bool(is_response_node and tools and response_format == "text")
+        tool_specs: list = []
+        llm_betas: list = []
+        if tools_bound:
+            tool_specs, llm_betas = _build_tool_specs(tools, state["llm_provider"])
+
         llm = get_llm(
             state["llm_provider"],
             state["llm_credentials"],
             effective_model,
             state.get("llm_max_tokens", 4096),
+            betas=llm_betas or None,
         )
+
+        if tools_bound:
+            tool_choice = _normalize_tool_choice(state.get("tool_choice"))
+            bind_kwargs = {"tool_choice": tool_choice} if tool_choice else {}
+            llm = llm.bind_tools(tool_specs, **bind_kwargs)
 
         provider = state["llm_provider"]
         # Cache stable prefixes (system prompt + conversation history) on the response
@@ -130,12 +305,33 @@ def make_llm_node(agent_type: str):
 
         rendered_input = _render_template(input_template, state)
 
+        # Only the response generator sees images — retrieval/ranking/classification
+        # nodes stay text-only (they don't need pixels, and it keeps them cheap).
+        query_image_blocks: list = []
+        if is_response_node:
+            query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True)
+        current_content = _user_content(rendered_input, query_image_blocks)
+
+        # Tool results for the current turn — must directly follow the assistant
+        # message whose tool_calls they answer (the last history turn).
+        current_tool_messages = (
+            await _tool_messages(state.get("query_tool_results"), provider) if is_response_node else []
+        )
+        # A tool-continuation request may carry no new prompt text; don't send an
+        # empty user message in that case.
+        has_current_text = bool(rendered_input.strip()) or bool(query_image_blocks)
+
+        def _append_current_turn():
+            messages.extend(current_tool_messages)
+            if has_current_text or not current_tool_messages:
+                messages.append(HumanMessage(content=current_content))
+
         if include_history:
             history = state.get("conversation_history", [])
             turns = history[:-1] if history else []
-            
+
             if not turns:
-                messages.append(HumanMessage(content=rendered_input))
+                _append_current_turn()
             elif is_response_node:
                 # For response generation, pass as actual chat turns
                 last_idx = len(turns) - 1
@@ -145,21 +341,32 @@ def make_llm_node(agent_type: str):
                     is_last = (i == last_idx)
                     cache_this = cache_anthropic and is_last
                     if role == "user":
-                        messages.append(_make_human(content, cache_this))
+                        # Replayed tool results precede the turn's own text
+                        messages.extend(await _tool_messages(turn.get("tool_results"), provider))
+                        turn_blocks = await _image_blocks(turn.get("images", []), strict=False)
+                        if content or turn_blocks:
+                            messages.append(_make_human(_user_content(content, turn_blocks), cache_this))
                     else:
-                        messages.append(_make_ai(content, cache_this))
-                messages.append(HumanMessage(content=rendered_input))
+                        turn_tool_calls = turn.get("tool_calls") or []
+                        if turn_tool_calls:
+                            messages.append(_history_ai_message(content, turn_tool_calls, cache_this))
+                        else:
+                            messages.append(_make_ai(content, cache_this))
+                _append_current_turn()
             else:
                 # For extraction/classification, Anthropic expects context in XML tags
                 history_text = "\n".join(f"{t.get('role', 'user').capitalize()}: {t.get('content', '')}" for t in turns)
                 combined = f"<conversation_context>\n{history_text}\n</conversation_context>\n\n{rendered_input}"
                 messages.append(HumanMessage(content=combined))
         else:
-            messages.append(HumanMessage(content=rendered_input))
+            _append_current_turn()
 
-        logger.info("Node %s: calling LLM, format=%s model=%s caching=%s", agent_type, response_format, effective_model, cache_anthropic)
+        logger.info(
+            "Node %s: calling LLM, format=%s model=%s caching=%s query_images=%d",
+            agent_type, response_format, effective_model, cache_anthropic, len(query_image_blocks),
+        )
         for idx, m in enumerate(messages):
-            logger.info("Node %s - Message %d [%s]:\n%s\n---", agent_type, idx, type(m).__name__, m.content)
+            logger.info("Node %s - Message %d [%s]:\n%s\n---", agent_type, idx, type(m).__name__, _content_summary(m.content))
 
         response = await llm.ainvoke(messages)
         logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
@@ -215,7 +422,19 @@ def make_llm_node(agent_type: str):
                 return {output_key: source, "usage": usage}
 
         # response_format == "text"
-        return {output_key: _get_text(response.content), "usage": usage}
+        result = {output_key: _get_text(response.content), "usage": usage}
+        if tools_bound:
+            raw_tool_calls = getattr(response, "tool_calls", None) or []
+            if raw_tool_calls:
+                result["tool_calls"] = [
+                    {"id": c.get("id", ""), "name": c.get("name", ""), "args": c.get("args") or {}}
+                    for c in raw_tool_calls
+                ]
+                logger.info(
+                    "Node %s: model requested %d tool call(s): %s",
+                    agent_type, len(raw_tool_calls), [c.get("name") for c in raw_tool_calls],
+                )
+        return result
 
     node.__name__ = f"llm_node_{agent_type.lower()}"
     return node
