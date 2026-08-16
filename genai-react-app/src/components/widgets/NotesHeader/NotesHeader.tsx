@@ -1,9 +1,11 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import PageHeader, { pageHeaderStyles } from '../../common/PageHeader/PageHeader'
+import PillButton from '../../common/PillButton/PillButton'
 import { useNotes } from '../../../context/NotesContext'
 import { SaveStatus } from '../../../hooks/useAutosave'
 import { parseServerDate } from '../../../utils/timeUtils'
+import { ICONS } from '../../../constants/icons'
 import i18n from '../../../i18n'
 
 function formatSavedAt(savedAt: Date): string {
@@ -43,7 +45,7 @@ function statusLabel(status: SaveStatus, lastSavedAt: Date | null, noteUpdatedAt
 
 export default function NotesHeader(): React.ReactElement {
     const { t } = useTranslation()
-    const { saveStatus, lastSavedAt, noteTitle, activeNote } = useNotes()
+    const { saveStatus, lastSavedAt, noteTitle, activeNote, startNewNote } = useNotes()
     const label = statusLabel(saveStatus, lastSavedAt, activeNote?.updatedAt ?? null)
 
     // No title yet: a fresh editor session is a "New Note"; an opened note
@@ -54,16 +56,25 @@ export default function NotesHeader(): React.ReactElement {
         <PageHeader
             title={title}
             data-testid="notes-header"
-            actions={
-                label && (
-                    <span
-                        className={`${pageHeaderStyles.saveStatus} ${saveStatus === 'error' ? pageHeaderStyles.saveStatusError : ''}`}
-                        data-testid="notes-save-status"
-                    >
-                        {label}
-                    </span>
-                )
-            }
+            actions={(
+                <>
+                    {label && (
+                        <span
+                            className={`${pageHeaderStyles.saveStatus} ${saveStatus === 'error' ? pageHeaderStyles.saveStatusError : ''}`}
+                            data-testid="notes-save-status"
+                        >
+                            {label}
+                        </span>
+                    )}
+                    <PillButton
+                        label={t('notes.notesHeader.newNote')}
+                        icon={ICONS.PLUS}
+                        className={pageHeaderStyles.actionButton}
+                        onClick={startNewNote}
+                        data-testid="new-note-button"
+                    />
+                </>
+            )}
         />
     )
 }

@@ -16,7 +16,9 @@ export const PAGE_WIDGET_CONFIG: PageConfig[] = [
     },
     {
         pageId: 'MEMORY_PAGE',
-        leftSidebar: ['SAVED_NOTES_WIDGET'],
+        // Saved notes render directly on the page in a ResizableSidebar
+        // (mirroring the chat page's history panel), not via LeftSidebar
+        leftSidebar: [],
         rightSidebar: [],
         centerSection: ['NOTES_WIDGET'],
     },

@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../../../../i18n'
 import { useAuth } from '../../../../context/AuthContext'
 import { useNotes } from '../../../../context/NotesContext'
-import { getNotes, SavedNote } from '../../../../services/saveNotesService'
-import styles from './SavedNotesWidget.module.scss'
-import { formatServerDateOnly } from '../../../../utils/timeUtils'
-
-const formatDate = (isoDate: string): string => formatServerDateOnly(isoDate)
+import { getNotes, deleteNote, SavedNote } from '../../../../services/saveNotesService'
+import ArchiveIcon from '../../../icons/ArchiveIcon'
+import SidebarListPanel, { SidebarListGroup } from '../../../common/SidebarListPanel/SidebarListPanel'
+import panelStyles from '../../../common/SidebarListPanel/SidebarListPanel.module.scss'
+import { formatServerDateTime, formatServerTime } from '../../../../utils/timeUtils'
+import { groupByDate, DateGroupId } from '../../../../utils/dateGrouping'
 
 const noteLabel = (note: SavedNote): string => {
     if (note.title && note.title !== 'Untitled') return note.title
@@ -18,7 +19,7 @@ const noteLabel = (note: SavedNote): string => {
 export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
     const { t } = useTranslation()
     const { getAccessTokenSilently } = useAuth()
-    const { openNote, activeNote, updatedNote } = useNotes()
+    const { openNote, activeNote, updatedNote, clearActiveNote } = useNotes()
     const [notes, setNotes] = useState<SavedNote[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [hasError, setHasError] = useState(false)
@@ -56,41 +57,77 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
         })
     }, [updatedNote])
 
+    const handleArchive = async (e: React.MouseEvent, noteKey: string) => {
+        e.stopPropagation()
+        try {
+            const token = await getAccessTokenSilently()
+            await deleteNote(token, noteKey)
+            setNotes(prev => prev.filter(n => n.noteKey !== noteKey))
+            // If the archived note is currently open in the editor, close it
+            if (noteKey === activeNote?.noteKey) {
+                clearActiveNote()
+            }
+        } catch (err) {
+            console.error('Failed to archive note:', err)
+        }
+    }
+
+    const groupedNotes = useMemo(
+        () => groupByDate(notes, note => note.updatedAt || note.createdAt),
+        [notes]
+    )
+
+    const groupLabels: Record<DateGroupId, string> = {
+        today: t('common.dateGroups.today'),
+        yesterday: t('common.dateGroups.yesterday'),
+        last7Days: t('common.dateGroups.last7Days'),
+        older: t('common.dateGroups.older'),
+    }
+
+    const groups: SidebarListGroup[] = groupedNotes.map(group => ({
+        id: group.id,
+        label: groupLabels[group.id],
+        items: group.items.map(note => {
+            const savedAt = note.updatedAt || note.createdAt
+            const timestamp = group.id === 'today' || group.id === 'yesterday'
+                // The group header already names the day — time only
+                ? formatServerTime(savedAt)
+                : formatServerDateTime(savedAt)
+            return {
+                id: note.noteKey,
+                label: noteLabel(note),
+                details: timestamp
+                    ? <span className={panelStyles.timestamp}>{timestamp}</span>
+                    : undefined,
+                isActive: activeNote?.noteKey === note.noteKey,
+                onSelect: () => openNote(note),
+                testId: `saved-note-${note.noteKey}`,
+                action: {
+                    icon: <ArchiveIcon />,
+                    label: t('sidebar.savedNotesWidget.archiveNote'),
+                    onClick: (e: React.MouseEvent) => handleArchive(e, note.noteKey),
+                    testId: `note-archive-btn-${note.noteKey}`,
+                },
+            }
+        }),
+    }))
+
     return (
-        <div className={styles.savedNotesWidget} data-testid={testId || 'saved-notes-widget'}>
-            <h3 className={styles.title}>{t('sidebar.savedNotesWidget.title')}</h3>
-
-            {isLoading && (
-                <p className={styles.stateMessage} data-testid="saved-notes-loading">{t('sidebar.savedNotesWidget.loadingNotes')}</p>
-            )}
-
-            {!isLoading && hasError && (
-                <p className={styles.stateMessage} data-testid="saved-notes-error">{t('sidebar.savedNotesWidget.couldNotLoadNotes')}</p>
-            )}
-
-            {!isLoading && !hasError && notes.length === 0 && (
-                <p className={styles.stateMessage} data-testid="saved-notes-empty">{t('sidebar.savedNotesWidget.noSavedNotesYet')}</p>
-            )}
-
-            {!isLoading && !hasError && notes.length > 0 && (
-                <div className={styles.notesList} data-testid="saved-notes-list">
-                    {notes.map(note => (
-                        <button
-                            key={note.noteKey}
-                            className={`${styles.noteItem} ${activeNote?.noteKey === note.noteKey ? styles.active : ''}`}
-                            onClick={() => openNote(note)}
-                            data-testid={`saved-note-${note.noteKey}`}
-                        >
-                            <span className={styles.noteTitle} title={noteLabel(note)}>
-                                {noteLabel(note)}
-                            </span>
-                            {formatDate(note.createdAt) && (
-                                <span className={styles.noteDate}>{formatDate(note.createdAt)}</span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
+        <SidebarListPanel
+            title={t('sidebar.savedNotesWidget.title')}
+            groups={groups}
+            isLoading={isLoading}
+            hasError={hasError}
+            errorText={t('sidebar.savedNotesWidget.couldNotLoadNotes')}
+            emptyText={t('sidebar.savedNotesWidget.noSavedNotesYet')}
+            listAriaLabel={t('sidebar.savedNotesWidget.title')}
+            data-testid={testId || 'saved-notes-widget'}
+            testIds={{
+                list: 'saved-notes-list',
+                loading: 'saved-notes-loading',
+                error: 'saved-notes-error',
+                empty: 'saved-notes-empty',
+            }}
+        />
     )
 }

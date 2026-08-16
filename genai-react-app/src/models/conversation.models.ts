@@ -12,6 +12,12 @@ export interface Message {
     messageId: string
     previousMessageId?: string
     isLoading?: boolean
+    /**
+     * Reason the generation failed for this vendor, if it did. Any text
+     * streamed before the failure is kept in `text`; the UI renders the
+     * error below it. Only ever set client-side — never persisted.
+     */
+    error?: string | null
     thinkingSteps?: string[]
     /**
      * Retrieval-server thinking time (request receipt → first generated token),

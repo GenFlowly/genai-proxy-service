@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import SavedNotesWidget from '../../../../components/widgets/SidebarWidgets/SavedNotesWidget/SavedNotesWidget'
 import { useAuth } from '../../../../context/AuthContext'
@@ -13,6 +13,7 @@ jest.mock('../../../../services/saveNotesService')
 
 const mockUseAuth = useAuth as jest.Mock
 const mockGetNotes = saveNotesService.getNotes as jest.Mock
+const mockDeleteNote = saveNotesService.deleteNote as jest.Mock
 
 describe('SavedNotesWidget', () => {
     beforeEach(() => {
@@ -117,6 +118,84 @@ describe('SavedNotesWidget', () => {
         rerender(renderWithNote({ noteKey: 'k2', noteValue: 'fresh note', title: 'Fresh Note', createdAt: '2026-08-04T10:00:00Z', updatedAt: '2026-08-04T10:00:00Z' }))
         expect(screen.getByText('Fresh Note')).toBeInTheDocument()
         expect(screen.getByText('Generated Title')).toBeInTheDocument()
+    })
+
+    test('archives a note when the archive button is clicked', async () => {
+        mockGetNotes.mockResolvedValue([
+            { noteKey: 'k1', noteValue: 'note body', title: 'First note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
+            { noteKey: 'k2', noteValue: 'second body', title: 'Second note', createdAt: '2026-08-02T10:00:00Z', updatedAt: '2026-08-02T10:00:00Z' },
+        ])
+        mockDeleteNote.mockResolvedValue(undefined)
+
+        render(<SavedNotesWidget />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
+        })
+
+        fireEvent.click(screen.getByTestId('note-archive-btn-k1'))
+
+        await waitFor(() => {
+            expect(mockDeleteNote).toHaveBeenCalledWith('mock-token', 'k1')
+        })
+        await waitFor(() => {
+            expect(screen.queryByTestId('saved-note-k1')).not.toBeInTheDocument()
+        })
+        // The other note stays
+        expect(screen.getByTestId('saved-note-k2')).toBeInTheDocument()
+    })
+
+    test('keeps the note in the list when the delete request fails', async () => {
+        mockGetNotes.mockResolvedValue([
+            { noteKey: 'k1', noteValue: 'note body', title: 'First note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
+        ])
+        mockDeleteNote.mockRejectedValue(new Error('server error'))
+
+        render(<SavedNotesWidget />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
+        })
+
+        fireEvent.click(screen.getByTestId('note-archive-btn-k1'))
+
+        await waitFor(() => {
+            expect(mockDeleteNote).toHaveBeenCalled()
+        })
+        expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
+    })
+
+    test('clears the active note when it is archived', async () => {
+        mockGetNotes.mockResolvedValue([
+            { noteKey: 'k1', noteValue: 'note body', title: 'First note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
+        ])
+        mockDeleteNote.mockResolvedValue(undefined)
+
+        function ActiveNoteProbe() {
+            const { activeNote } = useNotes()
+            return <div data-testid="active-note">{activeNote?.noteKey ?? 'none'}</div>
+        }
+
+        render(
+            <NotesProvider>
+                <SavedNotesWidget />
+                <ActiveNoteProbe />
+            </NotesProvider>
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
+        })
+
+        // Open the note, then archive it
+        fireEvent.click(screen.getByTestId('saved-note-k1'))
+        expect(screen.getByTestId('active-note')).toHaveTextContent('k1')
+
+        fireEvent.click(screen.getByTestId('note-archive-btn-k1'))
+
+        await waitFor(() => {
+            expect(screen.getByTestId('active-note')).toHaveTextContent('none')
+        })
     })
 
     test('honors a custom data-testid', async () => {

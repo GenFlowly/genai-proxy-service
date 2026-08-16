@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import NotesHeader from '../../../../components/widgets/NotesHeader/NotesHeader'
 import { NotesProvider, useNotes } from '../../../../context/NotesContext'
@@ -43,7 +43,7 @@ describe('NotesHeader', () => {
         render(<NotesHeader />)
 
         expect(screen.getByTestId('notes-header')).toBeInTheDocument()
-        expect(screen.getByText('New Note')).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'New Note' })).toBeInTheDocument()
         expect(screen.queryByTestId('notes-save-status')).not.toBeInTheDocument()
     })
 
@@ -77,7 +77,7 @@ describe('NotesHeader', () => {
                 <SetNoteTitle title={null} />
             </NotesProvider>
         )
-        expect(screen.getByText('New Note')).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'New Note' })).toBeInTheDocument()
 
         rerender(
             <NotesProvider>
@@ -86,7 +86,7 @@ describe('NotesHeader', () => {
             </NotesProvider>
         )
         expect(screen.getByText('Grocery List Ideas')).toBeInTheDocument()
-        expect(screen.queryByText('New Note')).not.toBeInTheDocument()
+        expect(screen.queryByRole('heading', { name: 'New Note' })).not.toBeInTheDocument()
     })
 
     test('shows the stored updated-at timestamp for an opened note before any save', () => {
@@ -123,7 +123,25 @@ describe('NotesHeader', () => {
         )
 
         expect(screen.getByText('Untitled Note')).toBeInTheDocument()
-        expect(screen.queryByText('New Note')).not.toBeInTheDocument()
+        expect(screen.queryByRole('heading', { name: 'New Note' })).not.toBeInTheDocument()
+    })
+
+    test('starts a fresh note when the New Note button is clicked', () => {
+        render(
+            <NotesProvider>
+                <NotesHeader />
+                <OpenNote note={untitledNote} />
+            </NotesProvider>
+        )
+
+        // A note is open — the header shows its (untitled) state
+        expect(screen.getByText('Untitled Note')).toBeInTheDocument()
+
+        fireEvent.click(screen.getByTestId('new-note-button'))
+
+        // Active note cleared — back to a fresh New Note session
+        expect(screen.getByRole('heading', { name: 'New Note' })).toBeInTheDocument()
+        expect(screen.queryByText('Untitled Note')).not.toBeInTheDocument()
     })
 
     test('shows an error message when saving fails', () => {

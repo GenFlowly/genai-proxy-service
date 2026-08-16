@@ -135,6 +135,12 @@
     "breadcrumbs": {
       "ariaLabel": "Breadcrumbs"
     },
+    "dateGroups": {
+      "last7Days": "Last 7 days",
+      "older": "Older",
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
     "copyToClipboard": {
       "copied": "✓ Copied",
       "copy": "Copy"
@@ -194,12 +200,6 @@
     "conversationHistory": {
       "archiveConversation": "Archive conversation",
       "failedToLoad": "Failed to load history",
-      "groups": {
-        "last7Days": "Last 7 days",
-        "older": "Older",
-        "today": "Today",
-        "yesterday": "Yesterday"
-      },
       "listAriaLabel": "Conversation history",
       "loadMore": "Load more",
       "loading": "Loading…",
@@ -218,12 +218,14 @@
     },
     "response": {
       "followUp": "Follow up",
+      "generationFailed": "Generation failed: {{reason}}",
       "noApiKeysSet": "No API keys set",
       "noResponsesGenerated": "No responses were generated",
       "regenerate": "Regenerate",
       "responseFrom": "Response from {{vendor}}",
       "selected": "Selected",
       "stop": "Stop",
+      "streamInterrupted": "Response interrupted: {{reason}}",
       "thinking": "Thinking",
       "thoughtForSeconds_one": "Thought for {{count}} second",
       "thoughtForSeconds_other": "Thought for {{count}} seconds",
@@ -521,8 +523,8 @@
       "newChat": "New Chat"
     },
     "savedNotesWidget": {
+      "archiveNote": "Archive note",
       "couldNotLoadNotes": "Could not load notes",
-      "loadingNotes": "Loading notes...",
       "noSavedNotesYet": "No saved notes yet",
       "title": "Saved Notes",
       "untitled": "Untitled"

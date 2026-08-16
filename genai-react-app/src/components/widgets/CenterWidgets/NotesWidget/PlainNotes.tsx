@@ -14,7 +14,7 @@ const newNoteKey = (): string =>
 
 export default function PlainNotes() {
     const { getAccessTokenSilently } = useAuth()
-    const { activeNote, setSaveState, setNoteTitle, publishNoteUpdate } = useNotes()
+    const { activeNote, newNoteRequestId, setSaveState, setNoteTitle, publishNoteUpdate } = useNotes()
     const [prompt, setPrompt] = useState('')
 
     // Stable identity for the whole editing session so every autosave updates
@@ -59,8 +59,14 @@ export default function PlainNotes() {
         setSaveState(status, lastSavedAt)
     }, [status, lastSavedAt, setSaveState])
 
-    // Load the note selected in the Saved Notes sidebar into the editor
+    // Load the note selected in the Saved Notes sidebar into the editor; when
+    // the active note is cleared (archived) or a new note is requested, start
+    // a fresh empty note
+    const handledNewNoteRequestRef = useRef(newNoteRequestId)
     useEffect(() => {
+        const isNewNoteRequest = newNoteRequestId !== handledNewNoteRequestRef.current
+        handledNewNoteRequestRef.current = newNoteRequestId
+
         if (activeNote) {
             flush()
             const realTitle =
@@ -71,8 +77,19 @@ export default function PlainNotes() {
             setNoteTitle(realTitle ?? null)
             setPrompt(activeNote.noteValue)
             reset(activeNote.noteValue)
+        } else {
+            // "New Note" saves pending edits under the note being left; a
+            // plain clear (archive) drops them instead — saving them would
+            // resurrect the archived note
+            if (isNewNoteRequest) flush()
+            noteKeyRef.current = newNoteKey()
+            createdAtRef.current = new Date().toISOString()
+            titleRef.current = undefined
+            setNoteTitle(null)
+            setPrompt('')
+            reset('')
         }
-    }, [activeNote, flush, reset, setNoteTitle])
+    }, [activeNote, newNoteRequestId, flush, reset, setNoteTitle])
 
     return (
         <div

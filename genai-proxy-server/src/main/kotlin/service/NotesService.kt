@@ -55,6 +55,19 @@ data class SaveNoteResponse(
 )
 
 @Serializable
+data class DeleteNoteResponse(
+    val status: String
+)
+
+@Serializable
+data class DeleteNoteVectorsRequest(
+    val customer_id: String,
+    val note_key: String
+)
+
+class NoteNotFoundException(noteKey: String) : Exception("Note $noteKey not found")
+
+@Serializable
 data class EncodingNoteData(
     val note_key: String,
     val noteKey: String,
@@ -80,6 +93,7 @@ class NotesService(
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
     private val encodingServerUrl = System.getenv("ENCODING_SERVER_URL") ?: "https://api-encode-development.genflowly.com"
+    private val retrievalServerUrl = System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001"
 
     suspend fun getNotes(customerId: String): GetNotesResponse {
         val items = dynamoDBProvider.getNotes(customerId)
@@ -174,5 +188,41 @@ class NotesService(
         }
 
         return effectiveTitle
+    }
+
+    /**
+     * Delete a note: soft delete in DynamoDB (is_delete=true, item kept) and a
+     * hard delete of its embeddings in the vector DB via the retrieval server.
+     * Throws NoteNotFoundException when the note doesn't exist.
+     */
+    suspend fun deleteNote(customerId: String, noteKey: String) {
+        // 1. Soft delete in DynamoDB — the authoritative state for listings
+        val existed = dynamoDBProvider.softDeleteNote(customerId, noteKey)
+        if (!existed) {
+            throw NoteNotFoundException(noteKey)
+        }
+
+        // 2. Hard-delete the note's vectors asynchronously (same fire-and-forget
+        // convention as the encoding call on save); a failure leaves orphaned
+        // vectors behind but never blocks or fails the delete itself
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val url = "$retrievalServerUrl/delete-note-vectors"
+                logger.info("Requesting vector deletion for note $noteKey: $url")
+
+                val response = httpClient.post(url) {
+                    contentType(ContentType.Application.Json)
+                    setBody(DeleteNoteVectorsRequest(customer_id = customerId, note_key = noteKey))
+                }
+
+                if (response.status.isSuccess()) {
+                    logger.info("Successfully deleted vectors for note $noteKey")
+                } else {
+                    logger.error("Failed to delete vectors for note $noteKey: ${response.status} ${response.bodyAsText()}")
+                }
+            } catch (e: Exception) {
+                logger.error("Error deleting vectors for note $noteKey", e)
+            }
+        }
     }
 }
