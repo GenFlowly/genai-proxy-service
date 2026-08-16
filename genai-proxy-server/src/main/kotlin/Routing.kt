@@ -29,6 +29,7 @@ import com.genflowly.activity.instruction.registerGetCustomerInstructionListRout
 import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoutes
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
+import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
 import com.genflowly.activity.voice.registerVoiceSessionRoutes
@@ -90,6 +91,9 @@ object Routes {
 
     const val VOICE_SESSION = "$API_V1/voice/session"
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
+
+    const val CREATE_ATTACHMENT = "$API_V1/attachments"
+    const val GET_ATTACHMENT_URL = "$API_V1/attachments/{attachmentId}/url"
 }
 
 
@@ -103,6 +107,7 @@ fun Application.configureRouting(
     aiModelsService: AIModelsService,
     graphService: GraphService,
     dynamoDBProvider: DynamoDBProvider,
+    s3Provider: com.genflowly.providers.S3Provider,
     notesService: com.genflowly.service.NotesService,
     developerApiKeyService: DeveloperApiKeyService,
     httpClient: io.ktor.client.HttpClient,
@@ -156,6 +161,7 @@ fun Application.configureRouting(
         registerCustomerProfileSettingsRoutes(dynamoDBProvider)
         registerSearchRoutes(dynamoDBProvider)
         registerGetProfileRoutes(dynamoDBProvider)
+        registerAttachmentRoutes(s3Provider, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerVoiceSessionRoutes(customerProfileService, conversationService, aiRequestManager, httpClient, json)

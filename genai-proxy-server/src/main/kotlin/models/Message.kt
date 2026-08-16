@@ -7,6 +7,18 @@ data class Message(
     val messageId: String = UUID.randomUUID().toString(),
     val conversationId: String,
     val text: String,
+    /** Image attachments referenced by this message; bytes live in S3 */
+    val attachments: List<AttachmentRef> = emptyList(),
+    /**
+     * Assistant messages: JSON array of tool calls the model made —
+     * [{"id","name","args"}]. Needed to replay tool-use turns to the vendors.
+     */
+    val toolCallsJson: String? = null,
+    /**
+     * User messages: JSON array of caller-executed tool results —
+     * [{"tool_call_id","content"}] — answering the previous assistant's calls.
+     */
+    val toolResultsJson: String? = null,
     val client: String,
     val role: String,
     val customerId: String,
