@@ -103,6 +103,50 @@ describe('generateTextStreamService', () => {
         )).rejects.toThrow('Text generation failed: 400 Bad Request');
     });
 
+    test('generateTextStream surfaces the error reason from a JSON error body', async () => {
+        mockFetchWithRetry.mockResolvedValue({
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+            text: jest.fn().mockResolvedValue('{"error":"API key not found for vendor: CLAUDE"}')
+        });
+
+        await expect(generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            jest.fn()
+        )).rejects.toThrow('API key not found for vendor: CLAUDE (HTTP 500)');
+    });
+
+    test('generateTextStream keeps streamed deltas and throws on a mid-stream [Error:] line', async () => {
+        const encoder = new TextEncoder();
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"partial "}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('\n\n[Error: Rate limit exceeded]\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            headers: new Map(),
+            body: { getReader: () => mockReader }
+        });
+
+        const onDelta = jest.fn();
+        await expect(generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            onDelta
+        )).rejects.toThrow('Rate limit exceeded');
+
+        // The text streamed before the failure was still delivered
+        expect(onDelta).toHaveBeenCalledWith('partial ');
+        expect(onDelta).not.toHaveBeenCalledWith(expect.stringContaining('[Error:'));
+        expect(mockReader.releaseLock).toHaveBeenCalled();
+    });
+
     test('generateTextStream throws error if response body is missing', async () => {
         mockFetchWithRetry.mockResolvedValue({
             ok: true,

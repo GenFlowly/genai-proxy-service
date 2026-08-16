@@ -786,14 +786,16 @@ class DynamoDBProvider(
                 "#createdAt" to "createdAt",
                 "#updatedAt" to "updatedAt",
                 "#synced" to "is_synced_with_milvus",
-                "#milvusIds" to "milvus_ids"
+                "#milvusIds" to "milvus_ids",
+                "#isDelete" to "is_delete"
             )
             val values = mutableMapOf(
                 ":noteValue" to AttributeValue.builder().s(noteValue).build(),
                 ":noteCreatedAt" to AttributeValue.builder().s(createdAt).build(),
                 ":now" to AttributeValue.builder().s(now).build(),
                 ":synced" to AttributeValue.builder().bool(false).build(),
-                ":milvusIds" to AttributeValue.builder().l(emptyList()).build()
+                ":milvusIds" to AttributeValue.builder().l(emptyList()).build(),
+                ":notDeleted" to AttributeValue.builder().bool(false).build()
             )
             val setParts = mutableListOf(
                 "#noteValue = :noteValue",
@@ -801,7 +803,10 @@ class DynamoDBProvider(
                 "#createdAt = if_not_exists(#createdAt, :now)",
                 "#updatedAt = :now",
                 "#synced = :synced",
-                "#milvusIds = :milvusIds"
+                "#milvusIds = :milvusIds",
+                // Saving always leaves the note visible (a re-save of a
+                // soft-deleted key resurrects it)
+                "#isDelete = :notDeleted"
             )
             if (title.isNotBlank() && title != "Untitled") {
                 setParts.add("#title = :title")
@@ -864,6 +869,46 @@ class DynamoDBProvider(
         }
     }
 
+    /**
+     * Soft-delete a note: the DDB item is kept but flagged is_delete=true so
+     * it disappears from listings. Returns false when the note doesn't exist.
+     */
+    suspend fun softDeleteNote(
+        customerId: String,
+        noteKey: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_NOTES_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        com.genflowly.DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build()
+                    ))
+                    .updateExpression("SET #isDelete = :true, #deletedAt = :now, #updatedAt = :now")
+                    .conditionExpression("attribute_exists(${com.genflowly.DynamoDBConstants.NOTE_KEY})")
+                    .expressionAttributeNames(mapOf(
+                        "#isDelete" to "is_delete",
+                        "#deletedAt" to "deletedAt",
+                        "#updatedAt" to "updatedAt"
+                    ))
+                    .expressionAttributeValues(mapOf(
+                        ":true" to AttributeValue.builder().bool(true).build(),
+                        ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
+                    ))
+                    .build()
+            )
+            logger.info("Soft-deleted note $noteKey for customer $customerId")
+            true
+        } catch (e: ConditionalCheckFailedException) {
+            logger.warn("Skipped soft delete for missing note $noteKey of $customerId")
+            false
+        } catch (e: Exception) {
+            logger.error("Failed to soft-delete note $noteKey for $customerId", e)
+            throw e
+        }
+    }
+
     suspend fun getNotes(customerId: String): List<Map<String, AttributeValue>> = withContext(Dispatchers.IO) {
         try {
             val items = mutableListOf<Map<String, AttributeValue>>()
@@ -873,8 +918,14 @@ class DynamoDBProvider(
                 val queryBuilder = QueryRequest.builder()
                     .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_NOTES_TABLE)
                     .keyConditionExpression("$CUSTOMER_ID_KEY = :cid")
+                    // Soft-deleted notes stay in the table but never in listings
+                    .filterExpression("attribute_not_exists(#isDelete) OR #isDelete = :notDeleted")
+                    .expressionAttributeNames(mapOf("#isDelete" to "is_delete"))
                     .expressionAttributeValues(
-                        mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+                        mapOf(
+                            ":cid" to AttributeValue.builder().s(customerId).build(),
+                            ":notDeleted" to AttributeValue.builder().bool(false).build()
+                        )
                     )
 
                 if (!exclusiveStartKey.isNullOrEmpty()) {

@@ -6,6 +6,12 @@ interface NotesContextType {
     activeNote: SavedNote | null
     openNote: (note: SavedNote) => void
     clearActiveNote: () => void
+    // "New Note" action: clears the active note AND signals the editor to
+    // start a fresh session even when no note was active. Unlike
+    // clearActiveNote (archive), pending edits are saved, not dropped.
+    startNewNote: () => void
+    // Bumped by startNewNote so the editor can react to repeated requests
+    newNoteRequestId: number
     saveStatus: SaveStatus
     lastSavedAt: Date | null
     setSaveState: (status: SaveStatus, lastSavedAt: Date | null) => void
@@ -25,6 +31,8 @@ const NotesContext = createContext<NotesContextType>({
     activeNote: null,
     openNote: () => {},
     clearActiveNote: () => {},
+    startNewNote: () => {},
+    newNoteRequestId: 0,
     saveStatus: 'idle',
     lastSavedAt: null,
     setSaveState: () => {},
@@ -40,9 +48,14 @@ export function NotesProvider({ children }: { children: ReactNode }) {
     const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
     const [noteTitle, setNoteTitle] = useState<string | null>(null)
     const [updatedNote, setUpdatedNote] = useState<SavedNote | null>(null)
+    const [newNoteRequestId, setNewNoteRequestId] = useState(0)
 
     const openNote = useCallback((note: SavedNote) => setActiveNote(note), [])
     const clearActiveNote = useCallback(() => setActiveNote(null), [])
+    const startNewNote = useCallback(() => {
+        setActiveNote(null)
+        setNewNoteRequestId(id => id + 1)
+    }, [])
     const setSaveState = useCallback((status: SaveStatus, savedAt: Date | null) => {
         setSaveStatus(status)
         setLastSavedAt(savedAt)
@@ -55,6 +68,8 @@ export function NotesProvider({ children }: { children: ReactNode }) {
                 activeNote,
                 openNote,
                 clearActiveNote,
+                startNewNote,
+                newNoteRequestId,
                 saveStatus,
                 lastSavedAt,
                 setSaveState,

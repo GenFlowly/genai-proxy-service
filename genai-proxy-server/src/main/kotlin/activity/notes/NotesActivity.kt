@@ -2,12 +2,15 @@ package com.genflowly.activity.notes
 
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
+import com.genflowly.service.DeleteNoteResponse
 import com.genflowly.service.GetNotesResponse
+import com.genflowly.service.NoteNotFoundException
 import com.genflowly.service.NotesService
 import com.genflowly.service.SaveNoteRequest
 import com.genflowly.service.SaveNoteResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.delete
 import io.github.smiley4.ktoropenapi.get
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
@@ -91,6 +94,54 @@ fun Route.registerNotesRoutes(
             } catch (e: Exception) {
                 logger.error("Error saving note", e)
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to save note"))
+            }
+        }
+
+        delete("/api/v1/notes/{noteKey}", {
+            tags("Notes")
+            summary = "Delete a note"
+            description = "Soft-deletes the note in DynamoDB (is_delete=true) and hard-deletes its " +
+                    "embeddings from the vector DB. " +
+                    "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
+            request {
+                pathParameter<String>("noteKey") {
+                    description = "Note to delete"
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Note deleted"
+                    body<DeleteNoteResponse>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Missing noteKey"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.NotFound) {
+                    description = "Note does not exist"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
+            try {
+                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                val noteKey = call.parameters["noteKey"]
+
+                if (noteKey.isNullOrBlank()) {
+                    return@delete call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing noteKey"))
+                }
+
+                notesService.deleteNote(customerId, noteKey)
+                call.respond(HttpStatusCode.OK, DeleteNoteResponse(status = "success"))
+            } catch (e: NoteNotFoundException) {
+                call.respond(HttpStatusCode.NotFound, mapOf("error" to "Note not found"))
+            } catch (e: Exception) {
+                logger.error("Error deleting note", e)
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to delete note"))
             }
         }
     }
