@@ -50,9 +50,9 @@
   }
 
   @include respond-to-mobile {
-    // Match the prompt editor's mobile geometry
-    padding-left: $mobile-content-inset;
-    padding-right: $mobile-content-inset;
+    // Cards span the full screen width on mobile
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 
@@ -101,10 +101,11 @@
     border-left: none;
     border-right: none;
 
-    // The TextContainer card — match the prompt editor's mobile width
+    // The TextContainer card — full screen width on mobile
     article {
-      width: $mobile-content-width !important;
-      max-width: $mobile-content-width !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      border: none;
     }
   }
 }

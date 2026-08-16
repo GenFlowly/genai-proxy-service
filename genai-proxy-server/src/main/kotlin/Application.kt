@@ -164,7 +164,11 @@ fun Application.module() {
                 `selectedResponseId` = the tool-calling message id, the same `tools`
                 array re-declared, and the result. For a screenshot action the result
                 is the image; for click/type send `content` only ("clicked") — Claude
-                usually requests a fresh screenshot next to verify:
+                usually requests a fresh screenshot next to verify. The screenshot can
+                be sent two ways.
+
+                *Option A — inline base64* (simplest; each screenshot rides in the
+                request body):
                 ```json
                 {
                   "aiConfig": [{"aiVendor": "CLAUDE", "model": "claude-sonnet-4-6"}],
@@ -177,6 +181,25 @@ fun Application.module() {
                                    "images": [{"data": "<base64 PNG>", "mediaType": "image/png"}]}]
                 }
                 ```
+
+                *Option B — S3 reference* (smaller request bodies; screenshots stay
+                visible in later conversation turns). First upload the PNG via the
+                Attachments flow — `POST /attachments` returns a presigned URL and an
+                `s3Key`, `PUT` the raw bytes to the URL — then reference the key:
+                ```json
+                {
+                  "aiConfig": [{"aiVendor": "CLAUDE", "model": "claude-sonnet-4-6"}],
+                  "prompt": {"instructionId": "", "instructionVersion": "", "prompt": ""},
+                  "conversationId": "conv-123", "selectedResponseId": "8f2c...", "client": "my-app",
+                  "agentic": false,
+                  "tools": [{"name": "computer", "type": "computer_20250124",
+                             "options": {"display_width_px": 1280, "display_height_px": 800}}],
+                  "toolResults": [{"toolCallId": "toolu_01A", "content": "",
+                                   "images": [{"s3Key": "customers/<customerId>/attachments/<attachmentId>", "mediaType": "image/png"}]}]
+                }
+                ```
+                The `s3Key` must come from your own attachment upload — keys outside
+                the authenticated customer's space are rejected.
 
                 **Step 4 — repeat until text.** Each response either carries `toolCalls`
                 (back to step 3) or a final `text` answer (done). Cap iterations client-side
@@ -202,10 +225,12 @@ fun Application.module() {
                 }
                 ```
 
-                Screenshot images may alternatively reference an uploaded attachment via
-                `s3Key` (see Attachments) to keep request bodies small. Inline base64
-                screenshots are not replayed in later conversation turns (marked
-                "[screenshot omitted from history]"); S3-referenced images are.
+                Choosing between the two: inline base64 screenshots are not persisted in
+                conversation history — on later turns they replay as
+                "[screenshot omitted from history]", so past screenshots are invisible to
+                the model. S3-referenced screenshots keep their reference and replay as
+                real images. If both `data` and `s3Key` are set on one image, `data` is
+                used for the current call.
             """.trimIndent()
         }
         security {
@@ -238,7 +263,9 @@ fun Application.module() {
                         "image's media type and size to get a presigned S3 upload URL, PUT the raw " +
                         "bytes to that URL, then include the returned attachmentId/s3Key/mediaType " +
                         "in the prompt.attachments array of a generate-text or generate-text-stream " +
-                        "request. Supported types: PNG, JPEG, WebP, GIF; max 5 MB per image, " +
+                        "request. The s3Key is also accepted in toolResults[].images to send " +
+                        "computer-use screenshots by reference (see the API introduction). " +
+                        "Supported types: PNG, JPEG, WebP, GIF; max 5 MB per image, " +
                         "10 images per message."
             }
         }

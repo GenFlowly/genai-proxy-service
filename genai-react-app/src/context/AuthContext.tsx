@@ -14,6 +14,7 @@ import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.model
 import { InstructionResponse } from '../models/instruction.models'
 import { StoreCustomerVectorDBConfigResponse } from '../models/storeCustomerVectorDBConfig.models'
 import { clearHistoryCache } from '../components/widgets/ConversationHistoryWidget/historyCache'
+import { clearNotesCache } from '../components/widgets/SidebarWidgets/SavedNotesWidget/notesCache'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
@@ -111,6 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         setSupabaseConfigStatus(null)
         localStorage.removeItem('customerId')
         clearHistoryCache() // Cached conversation list is user data — never carry across accounts
+        clearNotesCache() // Same for the cached saved-notes list
 
         auth0Logout({
             logoutParams: { returnTo },
