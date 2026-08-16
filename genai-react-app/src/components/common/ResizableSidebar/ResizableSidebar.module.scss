@@ -1,0 +1,39 @@
+@import '../../../styles/variables.scss';
+@import '../../../styles/mixins.scss';
+
+.sidebar {
+  @include sidebar-base(right);
+  width: 10rem; // Default; drag-resizing overrides via inline style
+  background-color: var(--color-background-tertiary); // slightly distinct background
+  z-index: 15;
+  border: none; // The page-background gap separates panels instead
+  border-radius: $widget-radius;
+  overflow: hidden; // Clip inner content to the rounded corners
+  transition: none; // Width is user-driven (drag); animating it would lag the pointer
+
+  @include respond-to-mobile {
+    width: 100%;
+    position: absolute;
+    z-index: 200;
+    border-radius: 0;
+  }
+}
+
+// Drag handle on the panel's right edge; sibling sections reflow
+// automatically as the panel width changes
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 20; // Above the panel's scrolling content
+  touch-action: none; // Keep pointer events during drag instead of scrolling
+
+  // Affordance: show a slim highlight while hovering/dragging
+  &:hover,
+  &:active {
+    background: linear-gradient(to left, $color-primary 2px, transparent 2px);
+  }
+}

@@ -243,6 +243,17 @@
   }
 }
 
+.errorBanner {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid $color-error;
+  border-radius: 6px;
+  color: $color-error;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .tokenBadge {
   display: flex;
   align-items: center;

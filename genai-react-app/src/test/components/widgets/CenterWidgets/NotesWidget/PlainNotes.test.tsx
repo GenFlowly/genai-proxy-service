@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import PlainNotes from '../../../../../components/widgets/CenterWidgets/NotesWidget/PlainNotes';
+import { NotesProvider, useNotes } from '../../../../../context/NotesContext';
 import { saveNote } from '../../../../../services/saveNotesService';
 
 jest.mock('../../../../../context/AuthContext', () => ({
@@ -136,6 +137,85 @@ describe('PlainNotes', () => {
 
         await typeAndSettle(editor, 'Some note content, extended');
         expect((saveNote as jest.Mock).mock.calls[1][0].title).toBe('Generated Title');
+    });
+
+    test('clears the editor when the active note is cleared (e.g. archived)', async () => {
+        function NotesControls() {
+            const { openNote, clearActiveNote } = useNotes();
+            return (
+                <>
+                    <button
+                        data-testid="open-note"
+                        onClick={() => openNote({
+                            noteKey: 'k1',
+                            noteValue: 'saved content',
+                            title: 'Saved title',
+                            createdAt: '2026-08-01T10:00:00Z',
+                            updatedAt: '2026-08-01T10:00:00Z',
+                        })}
+                    />
+                    <button data-testid="clear-note" onClick={clearActiveNote} />
+                </>
+            );
+        }
+
+        render(
+            <NotesProvider>
+                <PlainNotes />
+                <NotesControls />
+            </NotesProvider>
+        );
+        const editor = screen.getByTestId('notes-widget-editor');
+
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('open-note'));
+        });
+        expect(editor).toHaveValue('saved content');
+
+        // Edit the note, then clear it (archive) before the autosave fires
+        fireEvent.change(editor, { target: { value: 'saved content, edited' } });
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('clear-note'));
+        });
+
+        expect(editor).toHaveValue('');
+
+        // Pending edits of the cleared note are dropped — saving them would
+        // resurrect an archived note
+        await act(async () => {
+            jest.advanceTimersByTime(20000);
+        });
+        expect(saveNote).not.toHaveBeenCalled();
+    });
+
+    test('starts a fresh note on New Note, saving pending edits first', async () => {
+        function NewNoteControl() {
+            const { startNewNote } = useNotes();
+            return <button data-testid="start-new-note" onClick={startNewNote} />;
+        }
+
+        render(
+            <NotesProvider>
+                <PlainNotes />
+                <NewNoteControl />
+            </NotesProvider>
+        );
+        const editor = screen.getByTestId('notes-widget-editor');
+
+        // Type a draft, then request a new note before the autosave fires
+        fireEvent.change(editor, { target: { value: 'my draft' } });
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('start-new-note'));
+        });
+
+        // Unlike archiving, the draft is flushed (saved), not dropped
+        expect(saveNote).toHaveBeenCalledTimes(1);
+        expect(saveNote).toHaveBeenCalledWith(
+            expect.objectContaining({ noteValue: 'my draft' }),
+            'mock-token',
+            { encode: true, keepalive: false }
+        );
+        expect(editor).toHaveValue('');
     });
 
     test('keeps the content in the editor when a save fails', async () => {

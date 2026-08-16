@@ -406,15 +406,18 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 prompt: promptToUse
             })
             setSelectedResponseForBlock(id, '')
-        } catch (err) {
+        } catch (err: any) {
+            // One error card per requested vendor with the real reason — the
+            // batched call failed for all of them, not just OpenAI
+            const reason = err?.message || i18n.t('errors.ai.generateTextFailed')
             updateConversationBlock(id, {
-                responseMessages: [
-                    {
-                        aiVendor: AIVendor.OPENAI,
-                        text: i18n.t('errors.ai.generateTextFailed'),
-                        messageId: 'error',
-                    },
-                ],
+                responseMessages: aiConfigs.map((c, index) => ({
+                    aiVendor: c.aiVendor,
+                    model: c.model ?? null,
+                    text: '',
+                    messageId: `error-${index}`,
+                    error: reason,
+                })),
                 isLoading: false,
                 status: 'resolved',
             })
@@ -529,86 +532,120 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     }))
                 }
 
-                await fetchVendorResponseStream(
-                    token,
-                    conf,
-                    promptToUse,
-                    finalSelectedResponseId,
-                    instructionId,
-                    instructionVersion,
-                    (chunk) => {
-                        accumulatedText += chunk
-                        setConversationBlockList(prev =>
-                            prev.map(block => {
-                                if (block.conversationBlockId === id) {
-                                    const msgs = block.responseMessages.map(m => {
-                                        // Match either the current active ID (which might be new) OR the original placeholder ID (if state update hasn't landed yet)
-                                        const isMatch = (m.messageId === currentMsgId || m.messageId === msgId)
-                                        if (isMatch) {
-                                            return { ...m, text: accumulatedText }
-                                        }
-                                        return m
-                                    })
-                                    return { ...block, responseMessages: msgs }
+                // Finish THIS vendor's message only — on failure the streamed
+                // text is kept and the reason is attached; other vendors'
+                // streams are untouched
+                const finishVendorMessage = (errorReason: string | null) => {
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, isLoading: false, ...(errorReason ? { error: errorReason } : {}) }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
+                try {
+                    await fetchVendorResponseStream(
+                        token,
+                        conf,
+                        promptToUse,
+                        finalSelectedResponseId,
+                        instructionId,
+                        instructionVersion,
+                        (chunk) => {
+                            accumulatedText += chunk
+                            setConversationBlockList(prev =>
+                                prev.map(block => {
+                                    if (block.conversationBlockId === id) {
+                                        const msgs = block.responseMessages.map(m => {
+                                            // Match either the current active ID (which might be new) OR the original placeholder ID (if state update hasn't landed yet)
+                                            const isMatch = (m.messageId === currentMsgId || m.messageId === msgId)
+                                            if (isMatch) {
+                                                return { ...m, text: accumulatedText }
+                                            }
+                                            return m
+                                        })
+                                        return { ...block, responseMessages: msgs }
+                                    }
+                                    return block
+                                })
+                            )
+                        },
+                        (metadata: StreamMetadata) => {
+                            const newConversationId = metadata.conversationId
+
+                            if (newConversationId && newConversationId !== conversationIdRef.current) {
+                                const sanitizedId = newConversationId.split(',')[0].trim()
+
+                                if (sanitizedId && sanitizedId !== conversationIdRef.current) {
+                                    conversationIdRef.current = sanitizedId
                                 }
-                                return block
-                            })
-                        )
-                    },
-                    (metadata: StreamMetadata) => {
-                        const newConversationId = metadata.conversationId
-
-                        if (newConversationId && newConversationId !== conversationIdRef.current) {
-                            const sanitizedId = newConversationId.split(',')[0].trim()
-
-                            if (sanitizedId && sanitizedId !== conversationIdRef.current) {
-                                conversationIdRef.current = sanitizedId
                             }
-                        }
 
-                        // Capture currentMsgId BEFORE updating it later in this callback.
-                        // Essential because the functional state update below executes asynchronously/later, 
-                        // and if we don't capture it here, the closure might see the updated value!
-                        const targetId = currentMsgId
+                            // Capture currentMsgId BEFORE updating it later in this callback.
+                            // Essential because the functional state update below executes asynchronously/later, 
+                            // and if we don't capture it here, the closure might see the updated value!
+                            const targetId = currentMsgId
 
-                        // Update metadata in the conversation block
-                        setConversationBlockList(prev =>
-                            prev.map(block => {
-                                if (block.conversationBlockId === id) {
-                                    const msgs = block.responseMessages.map(m => {
-                                        // 1. Link to User Message (previousMessageId)
-                                        // 2. Update to Real Assistant Message ID (metadata.responseMessageId)
-                                        if (m.messageId === targetId) {
-                                            const updates: any = {}
-                                            if (metadata.messageId) updates.previousMessageId = metadata.messageId
-                                            if (metadata.responseMessageId) updates.messageId = metadata.responseMessageId
-                                            if (metadata.inputTokens != null) updates.inputTokens = metadata.inputTokens
-                                            if (metadata.outputTokens != null) updates.outputTokens = metadata.outputTokens
-                                            if (metadata.totalTokens != null) updates.totalTokens = metadata.totalTokens
-                                            if (metadata.tokensReadFromCache != null) updates.tokensReadFromCache = metadata.tokensReadFromCache
-                                            return { ...m, ...updates }
-                                        }
-                                        return m
-                                    })
-                                    return { ...block, responseMessages: msgs }
-                                }
-                                return block
-                            })
-                        )
+                            // Update metadata in the conversation block
+                            setConversationBlockList(prev =>
+                                prev.map(block => {
+                                    if (block.conversationBlockId === id) {
+                                        const msgs = block.responseMessages.map(m => {
+                                            // 1. Link to User Message (previousMessageId)
+                                            // 2. Update to Real Assistant Message ID (metadata.responseMessageId)
+                                            if (m.messageId === targetId) {
+                                                const updates: any = {}
+                                                if (metadata.messageId) updates.previousMessageId = metadata.messageId
+                                                if (metadata.responseMessageId) updates.messageId = metadata.responseMessageId
+                                                if (metadata.inputTokens != null) updates.inputTokens = metadata.inputTokens
+                                                if (metadata.outputTokens != null) updates.outputTokens = metadata.outputTokens
+                                                if (metadata.totalTokens != null) updates.totalTokens = metadata.totalTokens
+                                                if (metadata.tokensReadFromCache != null) updates.tokensReadFromCache = metadata.tokensReadFromCache
+                                                return { ...m, ...updates }
+                                            }
+                                            return m
+                                        })
+                                        return { ...block, responseMessages: msgs }
+                                    }
+                                    return block
+                                })
+                            )
 
-                        // Update local reference so subsequent chunks target the new ID
-                        if (metadata.responseMessageId) {
-                            currentMsgId = metadata.responseMessageId
-                        }
+                            // Update local reference so subsequent chunks target the new ID
+                            if (metadata.responseMessageId) {
+                                currentMsgId = metadata.responseMessageId
+                            }
 
-                        if (onIdResolved && newConversationId) onIdResolved(newConversationId)
-                    },
-                    idToUse,
-                    handleThinking,
-                    abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal,
-                    handleThinkingDuration,
-                    attachmentsToUse
-                )
+                            if (onIdResolved && newConversationId) onIdResolved(newConversationId)
+                        },
+                        idToUse,
+                        handleThinking,
+                        abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal,
+                        handleThinkingDuration,
+                        attachmentsToUse
+                    )
+                } catch (err: any) {
+                    // Session problems affect every vendor — let the outer
+                    // handler deal with logout
+                    if (
+                        err?.error === 'login_required' ||
+                        err?.error === 'consent_required' ||
+                        err?.message?.includes('Login required')
+                    ) {
+                        throw err
+                    }
+                    if (err?.name === 'AbortError') {
+                        // User stopped this vendor — keep whatever streamed, no error
+                        finishVendorMessage(null)
+                        return
+                    }
+                    console.error(`Stream failed for vendor ${conf.aiVendor}`, err)
+                    finishVendorMessage(err?.message || i18n.t('errors.ai.generateTextStreamFailed'))
+                    return
+                }
 
                 const finalConversationId = explicitConversationId || conversationIdRef.current
 
@@ -663,29 +700,48 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 ))
             } else {
                 // Scenario B: Smart Sequential Start for new conversation
-                const firstConfig = aiConfigs[0]
-                const firstMsgId = initialResponseMessages[0].messageId
+                // Try each vendor in turn as the "starter" until one yields a
+                // conversation ID — a starter that fails (e.g. bad API key)
+                // marks only its own message as errored, and the next vendor
+                // takes over so the rest still run.
+                const pendingPromises: Promise<any>[] = []
+                let starterIndex = 0
+                let establishedId: string | null = null
 
-                // Create a promise that resolves when ID is received
-                let resolveId: (id: string) => void = () => { }
-                const idPromise = new Promise<string>(r => { resolveId = r })
+                while (starterIndex < aiConfigs.length && !establishedId) {
+                    // Create a promise that resolves when ID is received
+                    let resolveId: (id: string) => void = () => { }
+                    const idPromise = new Promise<string>(r => { resolveId = r })
 
-                // Start first stream
-                const firstStreamPromise = runStream(firstConfig, firstMsgId, resolveId, undefined, 0)
+                    const starterPromise = runStream(
+                        aiConfigs[starterIndex],
+                        initialResponseMessages[starterIndex].messageId,
+                        resolveId,
+                        undefined,
+                        starterIndex
+                    )
 
-                // Race: Wait for ID or First Stream Completion (in case of error/no-ID)
-                const result = await Promise.race([
-                    idPromise.then(id => ({ type: 'id', value: id })),
-                    firstStreamPromise.then(() => ({ type: 'done', value: null }))
-                ])
+                    // Race: Wait for ID or Stream Completion (in case of error/no-ID)
+                    const result = await Promise.race([
+                        idPromise.then(id => ({ type: 'id', value: id })),
+                        starterPromise.then(() => ({ type: 'done', value: null }))
+                    ])
+                    pendingPromises.push(starterPromise)
 
-                const pendingPromises: Promise<any>[] = [firstStreamPromise]
+                    if (result.type === 'id' && result.value) {
+                        establishedId = result.value
+                    } else {
+                        // Stream ended without a conversation ID (it failed
+                        // before streaming) — promote the next vendor to starter
+                        starterIndex++
+                    }
+                }
 
-                if (result.type === 'id' && result.value) {
+                if (establishedId) {
                     const instruction = customerInstructions.find(i => i.id === selectedInstructionId)
                     // Fire-and-forget title generation
                     createConversationTitle(token, {
-                        conversationId: result.value,
+                        conversationId: establishedId,
                         prompt: promptToUse,
                         instructionName: instruction?.name
                     }).then(res => {
@@ -694,21 +750,21 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                             setConversationTitle(res.title)
                         }
                     }).catch(err => console.warn("Background title generation failed", err))
-                }
 
-                if (result.type === 'id' && result.value && aiConfigs.length > 1) {
-                    // ID established! Launch the rest immediately.
-                    const remainingConfigs = aiConfigs.slice(1)
-                    const remainingMsgs = initialResponseMessages.slice(1)
+                    if (starterIndex + 1 < aiConfigs.length) {
+                        // ID established! Launch the rest immediately.
+                        const remainingConfigs = aiConfigs.slice(starterIndex + 1)
+                        const remainingMsgs = initialResponseMessages.slice(starterIndex + 1)
 
-                    // Small delay to ensure backend stability and initial write settlement
-                    await new Promise(r => setTimeout(r, 200))
+                        // Small delay to ensure backend stability and initial write settlement
+                        await new Promise(r => setTimeout(r, 200))
 
-                    const others = remainingConfigs.map((config, i) =>
-                        // Note: index for remaining is i + 1
-                        runStream(config, remainingMsgs[i].messageId, undefined, result.value, i + 1)
-                    )
-                    pendingPromises.push(...others)
+                        const others = remainingConfigs.map((config, i) =>
+                            // Note: index for remaining is offset past the starter
+                            runStream(config, remainingMsgs[i].messageId, undefined, establishedId!, starterIndex + 1 + i)
+                        )
+                        pendingPromises.push(...others)
+                    }
                 }
 
                 await Promise.all(pendingPromises)
@@ -746,17 +802,18 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                 showToast(i18n.t('toasts.auth.sessionExpiredDraftSaved'))
                 logout({ returnTo: window.location.origin, localOnly: true })
             } else {
-                updateConversationBlock(id, {
-                    responseMessages: [
-                        {
-                            aiVendor: AIVendor.OPENAI,
-                            text: i18n.t('errors.ai.generateTextStreamFailed'),
-                            messageId: 'error',
-                        },
-                    ],
-                    isLoading: false,
-                    status: 'resolved',
-                })
+                // Per-vendor failures are handled inside runStream; this only
+                // fires for errors outside the streams (e.g. token fetch).
+                // Mark still-loading messages as failed with the real reason —
+                // never wipe out text that already streamed.
+                const reason = err?.message || i18n.t('errors.ai.generateTextStreamFailed')
+                setConversationBlockList(prev => prev.map(block => {
+                    if (block.conversationBlockId !== id) return block
+                    const msgs = block.responseMessages.map(m =>
+                        m.isLoading ? { ...m, isLoading: false, error: reason } : m
+                    )
+                    return { ...block, responseMessages: msgs, isLoading: false, status: 'resolved' as const }
+                }))
             }
         } finally {
             aiConfigs.forEach(c => {

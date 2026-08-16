@@ -4,9 +4,9 @@ import MemoryPage from '../../pages/MemoryPage/MemoryPage';
 
 // Mock children
 jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar">Navbar</div>);
-jest.mock('../../components/sections/LeftSidebar/LeftSidebar', () => ({ widgetIds }: any) => <div data-testid="left-sidebar" data-widget-ids={JSON.stringify(widgetIds)}>LeftSidebar</div>);
 jest.mock('../../components/sections/RightSidebar/RightSidebar', () => ({ widgetIds }: any) => <div data-testid="right-sidebar" data-widget-ids={JSON.stringify(widgetIds)}>RightSidebar</div>);
 jest.mock('../../components/sections/CenterSection/CenterSection', () => ({ widgetIds }: any) => <div data-testid="center-section" data-widget-ids={JSON.stringify(widgetIds)}>CenterSection</div>);
+jest.mock('../../components/widgets/SidebarWidgets/SavedNotesWidget/SavedNotesWidget', () => () => <div data-testid="saved-notes-widget">SavedNotesWidget</div>);
 
 // Mock Config
 jest.mock('../../config/PageWidgetConfig', () => ({
@@ -31,7 +31,7 @@ describe('MemoryPage', () => {
         jest.clearAllMocks();
         getPageConfig.mockReturnValue({
             pageId: 'MEMORY_PAGE',
-            leftSidebar: ['MOCK_LEFT'],
+            leftSidebar: [],
             rightSidebar: ['MOCK_RIGHT'],
             centerSection: ['MOCK_CENTER']
         });
@@ -51,9 +51,10 @@ describe('MemoryPage', () => {
 
         expect(screen.getByTestId('navbar')).toBeInTheDocument();
 
-        const left = screen.getByTestId('left-sidebar');
-        expect(left).toBeInTheDocument();
-        expect(left).toHaveAttribute('data-widget-ids', '["MOCK_LEFT"]');
+        // Saved notes render in a resizable side panel (desktop)
+        expect(screen.getByTestId('saved-notes-sidebar')).toBeInTheDocument();
+        expect(screen.getByTestId('saved-notes-widget')).toBeInTheDocument();
+        expect(screen.getByTestId('saved-notes-resize-handle')).toBeInTheDocument();
 
         const center = screen.getByTestId('center-section');
         expect(center).toBeInTheDocument();
