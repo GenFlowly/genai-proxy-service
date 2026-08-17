@@ -11,11 +11,10 @@ jest.mock('../../../../services/storeCustomerVendorApiKeysService');
 jest.mock('../../../../context/AuthContext');
 jest.mock('../../../../context/ToastContext');
 
-jest.mock('@genflowly/component-library', () => ({
-    ...jest.requireActual('@genflowly/component-library'),
+jest.mock('../../../../components/common/BrandName/BrandName', () => ({
     OpenAIBrandName: () => <div data-testid="brand-openai">OpenAI</div>,
     ClaudeBrandName: () => <div data-testid="brand-claude">Claude</div>,
-    GeminiBrandName: () => <div data-testid="brand-gemini">Gemini</div>,
+    GeminiBrandName: () => <div data-testid="brand-gemini">Gemini</div>
 }));
 
 jest.mock('../../../../components/common/VendorAPIKeyStatus/VendorAPIKeyStatus', () => ({

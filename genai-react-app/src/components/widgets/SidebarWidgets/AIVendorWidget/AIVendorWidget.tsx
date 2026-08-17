@@ -19,12 +19,14 @@ import { Tooltip } from '@genflowly/component-library'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
 import { PillButton } from '@genflowly/component-library'
-import { OpenAIBrandName,
+import {
+    OpenAIBrandName,
     ClaudeBrandName,
     GeminiBrandName,
     CollapsedOpenAIBrandName,
     CollapsedClaudeBrandName,
-    CollapsedGeminiBrandName } from '@genflowly/component-library'
+    CollapsedGeminiBrandName
+} from '../../../common/BrandName/BrandName'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 

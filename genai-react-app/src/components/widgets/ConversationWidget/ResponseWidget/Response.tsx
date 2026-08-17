@@ -9,9 +9,11 @@ import { Icon } from '@genflowly/component-library'
 import { Message } from "../../../../models/conversation.models";
 import { MultiPurposeButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
-import { OpenAIBrandName,
+import {
+    OpenAIBrandName,
     ClaudeBrandName,
-    GeminiBrandName } from '@genflowly/component-library'
+    GeminiBrandName
+} from '../../../common/BrandName/BrandName'
 import { AIVendor } from '../../../../constants/vendors'
 import { useMaxVendors } from '../../../../hooks/useMaxVendors'
 import { ToggleOption } from '@genflowly/component-library'

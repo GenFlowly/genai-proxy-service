@@ -31,9 +31,6 @@ jest.mock('@genflowly/component-library', () => ({
             </div>
         );
     },
-    OpenAIBrandName: () => <span>OpenAI</span>,
-    ClaudeBrandName: () => <span>Claude</span>,
-    GeminiBrandName: () => <span>Gemini</span>,
     MultiPurposeButton: (props) => {
         const { label, onClick, disabled, 'data-testid': testId } = props;
         return (
@@ -42,6 +39,12 @@ jest.mock('@genflowly/component-library', () => ({
             </button>
         );
     },
+}));
+
+jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
+    OpenAIBrandName: () => <span>OpenAI</span>,
+    ClaudeBrandName: () => <span>Claude</span>,
+    GeminiBrandName: () => <span>Gemini</span>
 }));
 
 describe('Response Widget Component', () => {

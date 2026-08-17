@@ -32,7 +32,10 @@ jest.mock('@genflowly/component-library', () => ({
     TextContainer: ({ content }: { content: string }) => (
         <div data-testid="text-container">{content}</div>
     ),
-    UserBrandName: () => <span data-testid="user-brand-name">User</span>,
+}));
+
+jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
+    UserBrandName: () => <span data-testid="user-brand-name">User</span>
 }));
 
 describe('Request Widget Component', () => {

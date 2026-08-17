@@ -9,7 +9,9 @@ import {useAuth} from '../../../../context/AuthContext'
 import {useToast} from '../../../../context/ToastContext'
 import { TextContainer } from '@genflowly/component-library'
 import styles from './Request.module.scss'
-import { UserBrandName } from '@genflowly/component-library'
+import {
+    UserBrandName
+} from '../../../common/BrandName/BrandName'
 import {formatServerDateTime} from '../../../../utils/timeUtils'
 import AttachmentPreviewStrip, {
     PendingAttachment,
