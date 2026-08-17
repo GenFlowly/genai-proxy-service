@@ -32,10 +32,10 @@ jest.mock('../../services/getAIUsageService', () => ({
 
 jest.mock('@genflowly/component-library', () => ({
     ...jest.requireActual('@genflowly/component-library'),
-    PromptEditor: (props: any) => (
+    TextEditor: (props: any) => (
         <div data-testid={`${props['data-testid']}-container`}>
             <textarea
-                data-testid={props['data-testid'] || 'mock-prompt-editor'}
+                data-testid={props['data-testid'] || 'mock-text-editor'}
                 aria-label="Prompt Editor"
                 value={props.value}
                 onChange={(e) => props.onChange(e.target.value)}
@@ -205,7 +205,7 @@ describe('ConversationContext UI Integration', () => {
         });
 
         customRender(<TestConversationUI />);
-        const editor = await screen.findByTestId('prompt-editor');
+        const editor = await screen.findByTestId('text-editor');
         fireEvent.change(editor, { target: { value: 'hi' } });
         const generateBtn = screen.getByTestId('generate-button');
 
@@ -228,7 +228,7 @@ describe('ConversationContext UI Integration', () => {
             aiVendorAPIKeyStatusList: [{ aiVendor: AIVendor.CLAUDE, isAPIKeyValid: true }]
         });
         customRender(<TestConversationUI />);
-        const editor = await screen.findByTestId('prompt-editor');
+        const editor = await screen.findByTestId('text-editor');
         fireEvent.change(editor, { target: { value: 'hi' } });
         const generateBtn = screen.getByTestId('generate-button');
         fireEvent.click(generateBtn);
@@ -247,7 +247,7 @@ describe('ConversationContext UI Integration', () => {
             setSelectedInstructionId: jest.fn()
         });
         customRender(<TestConversationUI />);
-        const editor = await screen.findByTestId('prompt-editor');
+        const editor = await screen.findByTestId('text-editor');
         fireEvent.change(editor, { target: { value: 'hi' } });
         const generateBtn = screen.getByTestId('generate-button');
         fireEvent.click(generateBtn);
@@ -257,7 +257,7 @@ describe('ConversationContext UI Integration', () => {
     test('Flow: Handles API Error', async () => {
         (generateTextStreamService.generateTextStream as jest.Mock).mockRejectedValue(new Error('API Fail'));
         customRender(<TestConversationUI />);
-        const editor = await screen.findByTestId('prompt-editor');
+        const editor = await screen.findByTestId('text-editor');
         fireEvent.change(editor, { target: { value: 'fail' } });
         const generateBtn = screen.getByTestId('generate-button');
         await act(async () => { fireEvent.click(generateBtn); });
@@ -338,7 +338,7 @@ describe('ConversationContext UI Integration', () => {
             }
         );
         customRender(<TestConversationUI />);
-        const editor = await screen.findByTestId('prompt-editor');
+        const editor = await screen.findByTestId('text-editor');
         fireEvent.change(editor, { target: { value: 'multi' } });
         const generateBtn = screen.getByTestId('generate-button');
         await act(async () => { fireEvent.click(generateBtn); });
@@ -353,7 +353,7 @@ describe('ConversationContext UI Integration', () => {
                 onMetadata({ conversationId: 'c1', responseMessageId: 'r1' });
             }
         );
-        const editor = await screen.findByTestId('prompt-editor');
+        const editor = await screen.findByTestId('text-editor');
         fireEvent.change(editor, { target: { value: 'prompt1' } });
         fireEvent.click(screen.getByTestId('generate-button'));
 
@@ -390,7 +390,7 @@ describe('ConversationContext UI Integration', () => {
         const blockIdDiv = await screen.findByTestId('debug-block-id');
         const blockId = blockIdDiv.textContent;
 
-        const editor = await screen.findByTestId('prompt-editor');
+        const editor = await screen.findByTestId('text-editor');
         fireEvent.change(editor, { target: { value: 'legacy prompt' } });
 
         // Click Legacy Generate button

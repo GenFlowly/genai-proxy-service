@@ -24,13 +24,13 @@ jest.mock('../../context/AuthContext', () => ({
     AuthProvider: ({ children }: any) => children
 }));
 
-// Mock PromptEditor (Real UI usage)
+// Mock TextEditor (Real UI usage)
 jest.mock('@genflowly/component-library', () => ({
     ...jest.requireActual('@genflowly/component-library'),
-    PromptEditor: (props: any) => (
+    TextEditor: (props: any) => (
         <div data-testid={`${props['data-testid']}-container`}>
             <textarea
-                data-testid={props['data-testid'] || 'mock-prompt-editor'}
+                data-testid={props['data-testid'] || 'mock-text-editor'}
                 aria-label="System Prompt Editor"
                 value={props.value}
                 onChange={(e) => props.onChange(e.target.value)}
@@ -131,12 +131,12 @@ describe('AIContext UI Integration', () => {
         fireEvent.click(editBtn);
 
         // Verify System Prompt matches instruction
-        const promptEditor = await screen.findByTestId('system-prompt-editor');
-        expect(promptEditor).toHaveValue('System Prompt 1');
+        const textEditor = await screen.findByTestId('system-text-editor');
+        expect(textEditor).toHaveValue('System Prompt 1');
 
         // 3. Edit System Prompt
-        fireEvent.change(promptEditor, { target: { value: 'Updated Prompt' } });
-        expect(promptEditor).toHaveValue('Updated Prompt');
+        fireEvent.change(textEditor, { target: { value: 'Updated Prompt' } });
+        expect(textEditor).toHaveValue('Updated Prompt');
     });
 
     test('Refresh Models triggers API call', async () => {

@@ -12,20 +12,20 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
     const { conversation } = useSidebarWidget()
     const { editorPrompt, activeBlockId, conversationBlockList } = conversation
 
-    // PromptEditor is only rendered when the active block is not yet resolved
+    // TextEditor is only rendered when the active block is not yet resolved
     const activeBlock = conversationBlockList.find(b => b.conversationBlockId === activeBlockId)
-    const promptEditorVisible = !!activeBlock && !(activeBlock.status === 'resolved' && !activeBlock.isLoading)
+    const textEditorVisible = !!activeBlock && !(activeBlock.status === 'resolved' && !activeBlock.isLoading)
 
     const [tokenCount, setTokenCount] = useState(0)
 
     useEffect(() => {
         // Estimation is cheap; the debounce only throttles re-renders while typing
         const timeout = setTimeout(() => {
-            const text = promptEditorVisible ? (editorPrompt || '') : ''
+            const text = textEditorVisible ? (editorPrompt || '') : ''
             setTokenCount(text.trim() ? estimateTokens(text) : 0)
         }, 500)
         return () => clearTimeout(timeout)
-    }, [editorPrompt, promptEditorVisible])
+    }, [editorPrompt, textEditorVisible])
 
     // Collapsed Content
     const headerCollapsed = (
