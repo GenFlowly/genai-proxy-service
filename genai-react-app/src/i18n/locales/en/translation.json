@@ -267,9 +267,6 @@
         "textEditor": {
             "loadingEditor": "Loading editor..."
         },
-        "textEditorTooltip": {
-            "markAsReusable": "Mark as Reusable"
-        },
         "toolbar": {
             "addExample": "Add Example",
             "addStep": "Add Step",
