@@ -3,6 +3,7 @@ import json
 import logging
 from typing import Dict, Any
 
+from encoding_library.chunkers.enums import ChunkingType
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.utils.embedding_utils import create_chunks, get_embedding_model
@@ -27,14 +28,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         processor = ProcessorFactory.get_processor(memory_request_internal_state)
         text_to_encode = processor.get_text_to_encode(memory_request_internal_state)
 
-        encoder = get_embedding_model(
-            memory_request_internal_state.model_type,
-            memory_request_internal_state.model_name,
-        )
+        # Only semantic chunking needs the embedding model; recursive chunking
+        # should not pay the model load (or require API keys) here.
+        chunking_type = memory_request_internal_state.chunking_type or ChunkingType.RECURSIVE.value
+        encoder = None
+        if chunking_type == ChunkingType.SEMANTIC.value:
+            encoder = get_embedding_model(
+                memory_request_internal_state.model_type,
+                memory_request_internal_state.model_name,
+            )
         chunks = create_chunks(
             text_to_encode,
             encoder,
-            chunking_type=memory_request_internal_state.chunking_type,
+            chunking_type=chunking_type,
             chunking_technique=memory_request_internal_state.chunking_technique,
         )
 

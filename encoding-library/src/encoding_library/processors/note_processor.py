@@ -74,6 +74,8 @@ class NoteProcessor(DataProcessor):
                 "note_key": (notes_model.note_key or "")[:256],
                 "client": state.client[:100],
                 "created_at": notes_model.created_at,
+                # TODO(s3): nothing writes raw notes to S3 yet — the raw note
+                # persists in DynamoDB (CustomerNotes); add S3 archival later.
                 "s3_key": f"notes/{state.client}/{data_id}.json",
             }
             records.append(record)
@@ -93,7 +95,7 @@ class NoteProcessor(DataProcessor):
         safe_model_name = model_name.replace('-', '_')
         return f"{state.customer_id}_notes_{safe_model_name}"
 
-    def get_collection_schema(self) -> Any:
+    def get_collection_schema(self, dim: int = 384, description: str = "") -> Any:
         """
         Get the Milvus schema definition for note type.
         """
@@ -104,9 +106,9 @@ class NoteProcessor(DataProcessor):
             sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             from pymilvus import MilvusClient, DataType
 
-        schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=True)
+        schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=True, description=description)
         schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
-        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384)
+        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=dim)
         schema.add_field(field_name="note_value", datatype=DataType.VARCHAR, max_length=65535)
         schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=512)
         schema.add_field(field_name="note_key", datatype=DataType.VARCHAR, max_length=256)

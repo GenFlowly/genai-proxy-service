@@ -377,6 +377,8 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                         <div style={{ flexShrink: 0 }}>
                                             <InputSelectWithHint
                                                 hint={t('instructionWidget.instructionWidget.versionHint')}
+                                                icon={ICONS.HISTORY}
+                                                iconOnlyHintOnMobile
                                                 value={selectedVersion?.toString() || ''}
                                                 onChange={async (val) => {
                                                     const newVersion = parseInt(val, 10)
