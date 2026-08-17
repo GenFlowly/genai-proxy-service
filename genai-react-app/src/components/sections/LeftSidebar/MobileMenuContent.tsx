@@ -6,7 +6,6 @@ import { useLayout } from '../../../context/LayoutContext'
 import { NavbarMenu } from '../../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../../common/ThemeToggle/ThemeToggle'
 import { UserAvatarButton } from '@genflowly/component-library'
-import { LoginIcon } from '@genflowly/component-library'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import styles from './MobileMenuContent.module.scss'
@@ -74,7 +73,7 @@ export const MobileMenuContent: React.FC = () => {
                             onClick={() => loginWithRedirect()}
                             className={styles.loginButton}
                         >
-                            <LoginIcon />
+                            <Icon src={ICONS.LOGIN} size={20} aria-hidden={true} />
                             <span>{t("layout.mobileMenu.login")}</span>
                         </button>
                     ) : (
