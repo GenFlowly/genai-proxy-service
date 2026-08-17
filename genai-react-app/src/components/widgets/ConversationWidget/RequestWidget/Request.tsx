@@ -1,18 +1,15 @@
 import React, {useEffect} from 'react'
 import {useTranslation} from 'react-i18next'
 import {ICONS} from '../../../../constants/icons'
-import PromptEditor from '../../PromptEditorWidget/PromptEditor'
-import MultiPurposeButton
-    from '../../../common/MultiPurposeButton/MultiPurposeButton'
-import Tooltip from '../../../common/Tooltip/Tooltip'
+import { PromptEditor } from '@genflowly/component-library'
+import { MultiPurposeButton } from '@genflowly/component-library'
+import { Tooltip } from '@genflowly/component-library'
 import {useConversation} from '../../../../context/ConversationContext'
 import {useAuth} from '../../../../context/AuthContext'
 import {useToast} from '../../../../context/ToastContext'
-import TextContainer from '../../../common/TextContainer/TextContainer'
+import { TextContainer } from '@genflowly/component-library'
 import styles from './Request.module.scss'
-import {
-    UserBrandName
-} from '../../../common/BrandName/BrandName'
+import { UserBrandName } from '@genflowly/component-library'
 import {formatServerDateTime} from '../../../../utils/timeUtils'
 import AttachmentPreviewStrip, {
     PendingAttachment,

@@ -1,10 +1,10 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLayout } from '../../../context/LayoutContext'
-import { Icon } from '../../common/Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import styles from './RightSidebar.module.scss'
-import RightSidebarMobileModal from './RightSidebarMobileModal'
+import { RightSidebarMobileModal } from '@genflowly/component-library'
 import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
 import { useWindowSize } from '../../../hooks/useWindowSize'
 

@@ -5,6 +5,7 @@ import { NotesProvider } from '../../context/NotesContext'
 import SavedNotesWidget from '../../components/widgets/SidebarWidgets/SavedNotesWidget/SavedNotesWidget'
 import PlainNotes from '../../components/widgets/CenterWidgets/NotesWidget/PlainNotes'
 import * as saveNotesService from '../../services/saveNotesService'
+import { sidebarListPanelStyles } from '@genflowly/component-library'
 
 jest.mock('../../context/AuthContext', () => ({
     useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token') }),
@@ -12,8 +13,9 @@ jest.mock('../../context/AuthContext', () => ({
 jest.mock('../../services/saveNotesService')
 
 // Mock PromptEditor to make it testable
-jest.mock('../../components/widgets/PromptEditorWidget/PromptEditor', () => {
-    return function MockPromptEditor(props: any) {
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PromptEditor: function MockPromptEditor(props: any) {
         return (
             <textarea
                 data-testid={props.id}
@@ -21,8 +23,8 @@ jest.mock('../../components/widgets/PromptEditorWidget/PromptEditor', () => {
                 onChange={(e) => props.onChange(e.target.value)}
             />
         )
-    }
-})
+    },
+}))
 
 const mockGetNotes = saveNotesService.getNotes as jest.Mock
 
@@ -79,12 +81,13 @@ describe('Notes flow (sidebar -> editor)', () => {
         )
 
         const noteButton = await screen.findByTestId('saved-note-k1')
-        expect(noteButton.className).not.toContain('active')
+        expect(sidebarListPanelStyles.active).toBeTruthy()
+        expect(noteButton.className).not.toContain(sidebarListPanelStyles.active)
 
         fireEvent.click(noteButton)
 
         await waitFor(() => {
-            expect(noteButton.className).toContain('active')
+            expect(noteButton.className).toContain(sidebarListPanelStyles.active)
         })
     })
 })

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
-import Modal from '../Modal/Modal';
-import PillButton from '../PillButton/PillButton';
+import { Modal } from '@genflowly/component-library';
+import { PillButton } from '@genflowly/component-library';
 import { searchUserByUsername } from '../../../services/userService';
 import { SearchUserResponse } from '../../../models/user.models';
 import styles from './ShareModal.module.scss';

@@ -21,15 +21,16 @@ jest.mock('../../../../../components/common/SidebarWidgetContainer/SidebarWidget
     }
 })
 
-jest.mock('../../../../../components/common/Tooltip/Tooltip', () => {
-    return function MockTooltip(props) {
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    Tooltip: function MockTooltip(props) {
         return (
             <div data-testid="tooltip" data-content={props.content}>
                 {props.children}
             </div>
         )
-    }
-})
+    },
+}))
 
 // Mock the config registry
 jest.mock('../../../../../config/SidebarMenuConfig', () => {

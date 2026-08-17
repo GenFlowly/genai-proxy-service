@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+// Component-library styles first so app styles (below) can override them.
+import '@genflowly/component-library/dist/main.css';
 import './styles/index.scss';
 import './i18n';
 import App from './App';

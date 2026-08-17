@@ -25,16 +25,19 @@ jest.mock('../../context/AuthContext', () => ({
 }));
 
 // Mock PromptEditor (Real UI usage)
-jest.mock('../../components/widgets/PromptEditorWidget/PromptEditor', () => (props: any) => (
-    <div data-testid={`${props['data-testid']}-container`}>
-        <textarea
-            data-testid={props['data-testid'] || 'mock-prompt-editor'}
-            aria-label="System Prompt Editor"
-            value={props.value}
-            onChange={(e) => props.onChange(e.target.value)}
-        />
-    </div>
-));
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PromptEditor: (props: any) => (
+        <div data-testid={`${props['data-testid']}-container`}>
+            <textarea
+                data-testid={props['data-testid'] || 'mock-prompt-editor'}
+                aria-label="System Prompt Editor"
+                value={props.value}
+                onChange={(e) => props.onChange(e.target.value)}
+            />
+        </div>
+    ),
+}));
 
 
 

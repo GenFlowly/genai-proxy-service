@@ -3,12 +3,13 @@ import { render, screen, act, fireEvent } from '@testing-library/react';
 import { ToastProvider, useToast } from '../../context/ToastContext';
 
 // Mock Toast component to avoid animation timing issues
-jest.mock('../../components/common/Toast/Toast', () => ({
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
     Toast: ({ toast, onRemove }: any) => (
         <div data-testid="toast-item" onClick={() => onRemove(toast.id)}>
             {toast.message}
         </div>
-    )
+    ),
 }));
 
 // Test Component

@@ -10,9 +10,9 @@ import {
     deleteInstruction,
     getInstructionSharedUsers
 } from '../../services/instructionService';
-import PromptEditor from '../../components/widgets/PromptEditorWidget/PromptEditor';
-import PillButton from '../../components/common/PillButton/PillButton';
-import { InputTextWithHint } from '../../components/common/InputTextWithHint/InputTextWithHint';
+import { PromptEditor } from '@genflowly/component-library';
+import { PillButton } from '@genflowly/component-library';
+import { InputTextWithHint } from '@genflowly/component-library';
 import ShareModal, { VisibilityMode } from '../../components/common/ShareModal/ShareModal';
 import { SearchUserResponse } from '../../models/user.models';
 import styles from './InstructionDetailPage.module.scss';

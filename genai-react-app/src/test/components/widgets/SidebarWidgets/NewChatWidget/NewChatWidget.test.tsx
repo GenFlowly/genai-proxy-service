@@ -16,11 +16,14 @@ jest.mock('../../../../../components/common/SidebarWidgetContainer/SidebarWidget
     )
 );
 
-jest.mock('../../../../../components/common/PillButton/PillButton', () => ({ label, onClick, 'data-testid': testId }: any) => (
-    <button data-testid={testId} onClick={onClick}>
-        {label}
-    </button>
-));
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PillButton: ({ label, onClick, 'data-testid': testId }: any) => (
+        <button data-testid={testId} onClick={onClick}>
+            {label}
+        </button>
+    ),
+}));
 
 describe('NewChatWidget', () => {
     const mockUseSidebarWidget = useSidebarWidget as jest.Mock;

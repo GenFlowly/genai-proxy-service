@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ICONS } from '../../../constants/icons'
-import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
-import PillButton from '../../common/PillButton/PillButton'
-import Tooltip from '../../common/Tooltip/Tooltip'
-import { Icon } from '../../common/Icon/Icon'
-import {
-    InputTextWithHint
-} from '../../common/InputTextWithHint/InputTextWithHint'
-import {
-    InputSelectWithHint
-} from '../../common/InputSelectWithHint/InputSelectWithHint'
+import { PromptEditor } from '@genflowly/component-library'
+import { PillButton } from '@genflowly/component-library'
+import { Tooltip } from '@genflowly/component-library'
+import { Icon } from '@genflowly/component-library'
+import { InputTextWithHint } from '@genflowly/component-library'
+import { InputSelectWithHint } from '@genflowly/component-library'
 import { useAI } from '../../../context/AIContext'
 import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'

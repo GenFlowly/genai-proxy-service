@@ -16,24 +16,23 @@ jest.mock('../../../../../context/ToastContext', () => ({
 jest.mock('../../../../../services/attachmentService');
 
 // Mock child components
-jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', () => ({
-    value,
-    onChange,
-    'data-testid': testId
-}: any) => (
-    <textarea
-        data-testid={testId}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-    />
-));
-
-jest.mock('../../../../../components/common/TextContainer/TextContainer', () => ({ content }: { content: string }) => (
-    <div data-testid="text-container">{content}</div>
-));
-
-jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
-    UserBrandName: () => <span data-testid="user-brand-name">User</span>
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PromptEditor: ({
+        value,
+        onChange,
+        'data-testid': testId
+    }: any) => (
+        <textarea
+            data-testid={testId}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    ),
+    TextContainer: ({ content }: { content: string }) => (
+        <div data-testid="text-container">{content}</div>
+    ),
+    UserBrandName: () => <span data-testid="user-brand-name">User</span>,
 }));
 
 describe('Request Widget Component', () => {

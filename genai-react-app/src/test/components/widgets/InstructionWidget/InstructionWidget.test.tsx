@@ -18,13 +18,16 @@ jest.mock('@auth0/auth0-react', () => ({
 jest.mock('../../../../services/instructionService');
 
 // Mock PromptEditor
-jest.mock('../../../../components/widgets/PromptEditorWidget/PromptEditor', () => ({ value, onChange, 'data-testid': testId }: any) => (
-    <textarea
-        data-testid={testId || 'prompt-editor'}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-    />
-));
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PromptEditor: ({ value, onChange, 'data-testid': testId }: any) => (
+        <textarea
+            data-testid={testId || 'prompt-editor'}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    ),
+}));
 
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = jest.fn();

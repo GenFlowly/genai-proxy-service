@@ -28,8 +28,9 @@ jest.mock('@auth0/auth0-react', () => ({
 }));
 
 // Mock the PromptEditor since it relies on UIW Markdown editor which can be tricky in JSDOM
-jest.mock('../../../components/widgets/PromptEditorWidget/PromptEditor', () => {
-    return function MockPromptEditor(props: any) {
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PromptEditor: function MockPromptEditor(props: any) {
         return (
             <textarea
                 data-testid="mock-prompt-editor"
@@ -37,8 +38,8 @@ jest.mock('../../../components/widgets/PromptEditorWidget/PromptEditor', () => {
                 onChange={(e) => props.onChange(e.target.value)}
             />
         );
-    };
-});
+    },
+}));
 
 jest.mock('../../../components/common/ShareModal/ShareModal', () => {
     const React = require('react');

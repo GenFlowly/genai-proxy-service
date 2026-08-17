@@ -2,9 +2,9 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAI } from '../../../../context/AIContext'
 import { useLayout } from '../../../../context/LayoutContext'
-import { Icon } from '../../../common/Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
-import Tooltip from '../../../common/Tooltip/Tooltip'
+import { Tooltip } from '@genflowly/component-library'
 import styles from './InstructionSidebarWidget.module.scss'
 
 export default function InstructionSidebarWidget() {
