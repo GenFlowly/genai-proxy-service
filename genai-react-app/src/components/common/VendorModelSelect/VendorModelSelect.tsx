@@ -5,7 +5,7 @@ import { useAuth } from '../../../context/AuthContext'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
 import { AIVendorModelList } from '../../../models/getTextGenerationModels.models'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
-import PillButton from '../PillButton/PillButton'
+import { PillButton } from '@genflowly/component-library'
 import {
     OpenAIBrandName,
     ClaudeBrandName,

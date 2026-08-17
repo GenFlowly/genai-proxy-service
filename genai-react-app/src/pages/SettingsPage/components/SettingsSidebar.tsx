@@ -1,7 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
-import { Icon } from '../../../components/common/Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import styles from './SettingsSidebar.module.scss'
 

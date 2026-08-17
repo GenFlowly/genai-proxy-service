@@ -4,9 +4,10 @@ import i18n from '../../../../i18n'
 import { useAuth } from '../../../../context/AuthContext'
 import { useNotes } from '../../../../context/NotesContext'
 import { getNotes, deleteNote, SavedNote } from '../../../../services/saveNotesService'
-import ArchiveIcon from '../../../icons/ArchiveIcon'
-import SidebarListPanel, { SidebarListGroup } from '../../../common/SidebarListPanel/SidebarListPanel'
-import panelStyles from '../../../common/SidebarListPanel/SidebarListPanel.module.scss'
+import { Icon } from '@genflowly/component-library'
+import { ICONS } from '../../../../constants/icons'
+import { SidebarListPanel, SidebarListGroup } from '@genflowly/component-library'
+import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import { formatServerDateTime, formatServerTime } from '../../../../utils/timeUtils'
 import { groupByDate, DateGroupId } from '../../../../utils/dateGrouping'
 import { loadNotesCache, saveNotesCache } from './notesCache'
@@ -122,7 +123,7 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
                 onSelect: () => openNote(note),
                 testId: `saved-note-${note.noteKey}`,
                 action: {
-                    icon: <ArchiveIcon />,
+                    icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
                     label: t('sidebar.savedNotesWidget.archiveNote'),
                     onClick: (e: React.MouseEvent) => handleArchive(e, note.noteKey),
                     testId: `note-archive-btn-${note.noteKey}`,

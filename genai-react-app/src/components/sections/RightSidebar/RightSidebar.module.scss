@@ -41,7 +41,7 @@
   }
 }
 
-/* 📱 Mobile view: modal covering everything below the navbar (see RightSidebarMobileModal) */
+/* 📱 Mobile view: modal covering everything below the navbar (see MobileFullPageModal in @genflowly/component-library) */
 .mobileModal {
   position: fixed; // Viewport-pinned; `top` is set inline to the navbar's measured bottom edge
   left: 0;

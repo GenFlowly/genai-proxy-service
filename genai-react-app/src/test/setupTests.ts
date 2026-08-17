@@ -84,30 +84,6 @@ jest.mock('@auth0/auth0-react', () => ({
     }),
 }));
 
-// Mock react-markdown and plugins to avoid ESM syntax errors in Jest
-jest.mock('react-markdown', () => (props: any) => {
-    const React = require('react');
-    return React.createElement('div', { 'data-testid': 'markdown-mock' }, props.children)
-})
-jest.mock('remark-gfm', () => () => { })
-jest.mock('rehype-highlight', () => () => { })
-
-jest.mock('@uiw/react-markdown-editor', () => (props: any) => {
-    const React = require('react');
-    return React.createElement('div', { 'data-testid': 'markdown-editor-mock' }, props.children)
-})
-
-jest.mock('@codemirror/view', () => ({
-    EditorView: {
-        lineWrapping: {},
-        theme: jest.fn(),
-        updateListener: { of: jest.fn() }
-    },
-    keymap: { of: jest.fn() }
-}))
-jest.mock('@codemirror/state', () => ({
-    EditorState: {
-        create: jest.fn()
-    }
-}))
-jest.mock('@codemirror/lang-markdown', () => ({}))
+// react-markdown/@uiw/@codemirror mocks removed: those packages moved into
+// @genflowly/component-library, whose published bundle is plain CJS (no ESM
+// parse issues) and is mocked per-test where needed.

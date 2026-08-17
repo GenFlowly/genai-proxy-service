@@ -1,15 +1,13 @@
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { addStepsCommand, addExamplesCommand, addCopyCommand } from '../../../../components/widgets/PromptEditorWidget/CustomToolbarCommands';
+import { addStepsCommand, addExamplesCommand, addCopyCommand } from '../../../../components/widgets/TextEditorWidget/CustomToolbarCommands';
 import '@testing-library/jest-dom';
 
 // Mocks
-jest.mock('../../../../components/common/Icon/Icon', () => ({
-    Icon: ({ alt }: any) => <span data-testid={`icon-${alt}`}>{alt}</span>
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    Icon: ({ alt }: any) => <span data-testid={`icon-${alt}`}>{alt}</span>,
+    Tooltip: ({ content, children }: any) => <div data-testid="tooltip-mock" data-content={content}>{children}</div>,
 }));
-
-jest.mock('../../../../components/common/Tooltip/Tooltip', () => {
-    return ({ content, children }: any) => <div data-testid="tooltip-mock" data-content={content}>{children}</div>;
-});
 
 const createMockEditor = (docString: string, selection = { from: 0, to: 0 }) => {
     const dispatch = jest.fn();

@@ -3,8 +3,8 @@ import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
 import { config } from '../../../config/env'
-import PillButton from '../../../components/common/PillButton/PillButton'
-import { InputTextWithHint } from '../../../components/common/InputTextWithHint/InputTextWithHint'
+import { PillButton } from '@genflowly/component-library'
+import { InputTextWithHint } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import {
     createDeveloperApiKey,

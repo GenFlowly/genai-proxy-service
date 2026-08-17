@@ -2,14 +2,13 @@ import React from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
-import LoginIcon from '../icons/LoginIcon'
 import styles from './Navbar.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { ICONS } from '../../constants/icons'
-import { Icon } from '../common/Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 
 import logo from '../../assets/icons/logo.png'
-import { UserAvatarButton } from '../common/UserAvatarButton/UserAvatarButton'
+import { UserAvatarButton } from '@genflowly/component-library'
 import { NavbarMenu } from '../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../common/ThemeToggle/ThemeToggle'
 import { useWindowSize } from '../../hooks/useWindowSize'
@@ -41,7 +40,7 @@ export default function Navbar(): React.ReactElement {
         <nav className={styles.navbar}>
             <div className={styles.container}>
                 <div className={styles.leftControls}>
-                    <button onClick={toggleLeftSidebar} className={styles.mobileToggle} data-testid="mobile-left-sidebar-toggle">
+                    <button onClick={toggleLeftSidebar} className={styles.mobileToggle} aria-label={t("layout.mobileMenu.menu")} data-testid="mobile-left-sidebar-toggle">
                         <Icon src={ICONS.MENU} size={24} />
                     </button>
                     <Link to="/" className={styles.logoLink} title={t("layout.navbar.home")} data-testid="navbar-logo-link">
@@ -70,7 +69,7 @@ export default function Navbar(): React.ReactElement {
                                 className={styles.loginButton}
                                 data-testid="login-button"
                             >
-                                <LoginIcon />
+                                <Icon src={ICONS.LOGIN} size={20} aria-hidden={true} />
                                 <span>{t("layout.navbar.login")}</span>
                             </button>
                         ) : (
@@ -85,7 +84,7 @@ export default function Navbar(): React.ReactElement {
                         )}
                     </div>
                     {isChatPage && (
-                        <button onClick={toggleRightSidebar} className={styles.mobileToggle} data-testid="mobile-right-sidebar-toggle">
+                        <button onClick={toggleRightSidebar} className={styles.mobileToggle} aria-label={t("layout.mobileFullPageModal.aiSettings")} data-testid="mobile-right-sidebar-toggle">
                             <Icon src={ICONS.MODELS} size={24} />
                         </button>
                     )}

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { InstructionTile } from '../../components/common/InstructionTile/InstructionTile';
 import styles from './InstructionsPage.module.scss';
-import PillButton from '../../components/common/PillButton/PillButton';
+import { PillButton } from '@genflowly/component-library';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/navbar/Navbar';
 
