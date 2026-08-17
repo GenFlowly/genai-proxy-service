@@ -2,7 +2,6 @@ import React from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
-import { LoginIcon } from '@genflowly/component-library'
 import styles from './Navbar.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { ICONS } from '../../constants/icons'
@@ -70,7 +69,7 @@ export default function Navbar(): React.ReactElement {
                                 className={styles.loginButton}
                                 data-testid="login-button"
                             >
-                                <LoginIcon />
+                                <Icon src={ICONS.LOGIN} size={20} aria-hidden={true} />
                                 <span>{t("layout.navbar.login")}</span>
                             </button>
                         ) : (
