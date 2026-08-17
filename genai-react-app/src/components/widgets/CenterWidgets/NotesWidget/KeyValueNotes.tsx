@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import PromptEditor from '../../PromptEditorWidget/PromptEditor'
+import { PromptEditor } from '@genflowly/component-library'
 import styles from './KeyValueNotes.module.scss'
 import { useAuth } from '../../../../context/AuthContext'
 import { useNotes } from '../../../../context/NotesContext'

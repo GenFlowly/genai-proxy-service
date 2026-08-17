@@ -5,12 +5,10 @@ import { useAuth } from '../../../context/AuthContext'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
 import { AIVendorModelList } from '../../../models/getTextGenerationModels.models'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
-import PillButton from '../PillButton/PillButton'
-import {
-    OpenAIBrandName,
+import { PillButton } from '@genflowly/component-library'
+import { OpenAIBrandName,
     ClaudeBrandName,
-    GeminiBrandName,
-} from '../BrandName/BrandName'
+    GeminiBrandName } from '@genflowly/component-library'
 import styles from './VendorModelSelect.module.scss'
 
 const ALL_VENDORS = Object.values(AIVendor) as AIVendor[]

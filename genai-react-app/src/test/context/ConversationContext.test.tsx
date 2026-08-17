@@ -30,23 +30,25 @@ jest.mock('../../services/getAIUsageService', () => ({
     getAIUsageActivity: jest.fn()
 }));
 
-jest.mock('../../components/widgets/PromptEditorWidget/PromptEditor', () => (props: any) => (
-    <div data-testid={`${props['data-testid']}-container`}>
-        <textarea
-            data-testid={props['data-testid'] || 'mock-prompt-editor'}
-            aria-label="Prompt Editor"
-            value={props.value}
-            onChange={(e) => props.onChange(e.target.value)}
-        />
-    </div>
-));
-
-jest.mock('../../components/common/TextContainer/TextContainer', () => (props: any) => (
-    <div data-testid={props['data-testid']} aria-label={props['aria-label']}>
-        {props.content}
-        {props.children}
-    </div>
-));
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PromptEditor: (props: any) => (
+        <div data-testid={`${props['data-testid']}-container`}>
+            <textarea
+                data-testid={props['data-testid'] || 'mock-prompt-editor'}
+                aria-label="Prompt Editor"
+                value={props.value}
+                onChange={(e) => props.onChange(e.target.value)}
+            />
+        </div>
+    ),
+    TextContainer: (props: any) => (
+        <div data-testid={props['data-testid']} aria-label={props['aria-label']}>
+            {props.content}
+            {props.children}
+        </div>
+    ),
+}));
 
 // Mock useToast to inspect calls
 const mockShowToast = jest.fn();

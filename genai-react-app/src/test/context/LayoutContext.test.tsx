@@ -17,7 +17,10 @@ jest.mock('../../components/widgets/SidebarWidgets/NewChatWidget/NewChatWidget',
 jest.mock('../../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget', () => () => <div>AIVendorWidget</div>);
 jest.mock('../../components/widgets/SidebarWidgets/TokenCounter/TokenCounter', () => () => <div>TokenCounter</div>);
 // Mock PromptEditor to avoid CodeMirror issues
-jest.mock('../../components/widgets/PromptEditorWidget/PromptEditor', () => () => <div data-testid="mock-prompt-editor">PromptEditor</div>);
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PromptEditor: () => <div data-testid="mock-prompt-editor">PromptEditor</div>,
+}));
 
 // Mock other contexts that components might need
 const mockUseAuth = jest.fn();

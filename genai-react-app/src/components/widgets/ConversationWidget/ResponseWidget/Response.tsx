@@ -4,21 +4,19 @@ import { ICONS } from '../../../../constants/icons'
 import styles from './Response.module.scss'
 import { useLayout } from '../../../../context/LayoutContext'
 import { useConversation } from '../../../../context/ConversationContext'
-import TextContainer from '../../../common/TextContainer/TextContainer'
-import { Icon } from '../../../common/Icon/Icon'
+import { TextContainer } from '@genflowly/component-library'
+import { Icon } from '@genflowly/component-library'
 import { Message } from "../../../../models/conversation.models";
-import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
-import Tooltip from '../../../common/Tooltip/Tooltip'
-import {
-    OpenAIBrandName,
+import { MultiPurposeButton } from '@genflowly/component-library'
+import { Tooltip } from '@genflowly/component-library'
+import { OpenAIBrandName,
     ClaudeBrandName,
-    GeminiBrandName
-} from '../../../common/BrandName/BrandName'
+    GeminiBrandName } from '@genflowly/component-library'
 import { AIVendor } from '../../../../constants/vendors'
 import { useMaxVendors } from '../../../../hooks/useMaxVendors'
-import { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
-import RadioButtonGroup from '../../../common/ToggleGroupButton/RadioButtonGroup'
-import CheckboxButtonGroup from '../../../common/ToggleGroupButton/CheckboxButtonGroup'
+import { ToggleOption } from '@genflowly/component-library'
+import { RadioButtonGroup } from '@genflowly/component-library'
+import { CheckboxButtonGroup } from '@genflowly/component-library'
 
 interface ResponseProps {
     blockId: string
@@ -208,7 +206,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                     }
 
                     return (
-                        <div key={messageId} className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}>
+                        <div key={messageId} className={styles.responseWrapper}>
                             <TextContainer
                                 title={HeaderComponent}
                                 content={text}

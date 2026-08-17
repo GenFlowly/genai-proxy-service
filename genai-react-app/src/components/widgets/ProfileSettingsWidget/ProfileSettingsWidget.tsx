@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
-import PillButton from '../../common/PillButton/PillButton';
+import { PillButton } from '@genflowly/component-library';
 import { getUserProfile, updateUsername, updateDiscoverability } from '../../../services/userService';
 import { CustomerProfileResponse } from '../../../models/user.models';
 import styles from './ProfileSettingsWidget.module.scss';
