@@ -182,7 +182,7 @@
             "systemTheme": "System Theme",
             "themeSelection": "Theme selection"
         },
-        "toggleGroupButton": {
+        "pillButtonGroup": {
             "toggleOption": "Toggle {{label}}"
         },
         "vendorModelSelect": {
