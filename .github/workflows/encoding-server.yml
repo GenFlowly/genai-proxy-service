@@ -15,6 +15,8 @@ on:
         required: false
       ZILLIZ_TOKEN:
         required: false
+      VOYAGE_API_KEY:
+        required: false
 
 env:
   AWS_REGION: us-east-1
@@ -269,5 +271,6 @@ jobs:
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
           CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
         run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
