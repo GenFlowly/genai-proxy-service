@@ -6,9 +6,11 @@ import { getTextGenerationModels } from '../../../services/getTextGenerationMode
 import { AIVendorModelList } from '../../../models/getTextGenerationModels.models'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import { PillButton } from '@genflowly/component-library'
-import { OpenAIBrandName,
+import {
+    OpenAIBrandName,
     ClaudeBrandName,
-    GeminiBrandName } from '@genflowly/component-library'
+    GeminiBrandName,
+} from '../BrandName/BrandName'
 import styles from './VendorModelSelect.module.scss'
 
 const ALL_VENDORS = Object.values(AIVendor) as AIVendor[]

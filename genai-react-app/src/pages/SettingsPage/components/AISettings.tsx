@@ -6,9 +6,11 @@ import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendor
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import { PillButton } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
-import { OpenAIBrandName,
+import {
+    OpenAIBrandName,
     ClaudeBrandName,
-    GeminiBrandName } from '@genflowly/component-library'
+    GeminiBrandName
+} from '../../../components/common/BrandName/BrandName'
 import { InputTextWithHint } from '@genflowly/component-library'
 import { VendorAPIKeyStatus } from '../../../components/common/VendorAPIKeyStatus/VendorAPIKeyStatus'
 import { useToast } from '../../../context/ToastContext'

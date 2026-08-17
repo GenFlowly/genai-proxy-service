@@ -5,9 +5,11 @@ import { AIVendor } from '../../../constants/vendors'
 import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendorApiKeysService'
 import { PillButton } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
-import { OpenAIBrandName,
+import {
+    OpenAIBrandName,
     ClaudeBrandName,
-    GeminiBrandName } from '@genflowly/component-library'
+    GeminiBrandName
+} from '../../common/BrandName/BrandName'
 import { InputTextWithHint } from '@genflowly/component-library'
 import { VendorAPIKeyStatus } from '../../common/VendorAPIKeyStatus/VendorAPIKeyStatus'
 import { useToast } from '../../../context/ToastContext'
