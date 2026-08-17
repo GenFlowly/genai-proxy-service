@@ -5,9 +5,8 @@ import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { NavbarMenu } from '../../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../../common/ThemeToggle/ThemeToggle'
-import { UserAvatarButton } from '../../common/UserAvatarButton/UserAvatarButton'
-import LoginIcon from '../../icons/LoginIcon'
-import { Icon } from '../../common/Icon/Icon'
+import { UserAvatarButton } from '@genflowly/component-library'
+import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import styles from './MobileMenuContent.module.scss'
 
@@ -42,7 +41,7 @@ export const MobileMenuContent: React.FC = () => {
         <div className={styles.mobileMenu}>
             <div className={styles.header}>
                 <h2>{t("layout.mobileMenu.menu")}</h2>
-                <button onClick={handleCloseMenu} className={styles.closeButton}>
+                <button onClick={handleCloseMenu} className={styles.closeButton} aria-label={t("layout.mobileMenu.close")}>
                     <Icon src={ICONS.ALT_ARROW_LEFT} size={20} />
                 </button>
             </div>
@@ -74,7 +73,7 @@ export const MobileMenuContent: React.FC = () => {
                             onClick={() => loginWithRedirect()}
                             className={styles.loginButton}
                         >
-                            <LoginIcon />
+                            <Icon src={ICONS.LOGIN} size={20} aria-hidden={true} />
                             <span>{t("layout.mobileMenu.login")}</span>
                         </button>
                     ) : (

@@ -6,15 +6,20 @@ def get_embedding_model(model_type_str: Optional[str] = None, model_name_str: Op
     Instantiates and returns the appropriate Langchain embedding model.
     Defaults to sentence-transformer / all-MiniLM-L6-v2 if not specified.
     """
-    model_type = model_type_str or "sentence-transformer"
-    model_name = model_name_str or "all-MiniLM-L6-v2"
+    from encoding_library.utils.model_registry import resolve_model
+    model_type, model_name = resolve_model(model_type_str, model_name_str)
 
     if model_type == "sentence-transformer":
         from langchain_huggingface import HuggingFaceEmbeddings
         return HuggingFaceEmbeddings(model_name=model_name)
     elif model_type == "openai":
+        # Requires OPENAI_API_KEY in the environment
         from langchain_openai import OpenAIEmbeddings
         return OpenAIEmbeddings(model=model_name)
+    elif model_type == "voyage":
+        # Requires VOYAGE_API_KEY in the environment
+        from langchain_voyageai import VoyageAIEmbeddings
+        return VoyageAIEmbeddings(model=model_name)
     else:
         raise ValueError(f"Unknown language model type specified: {model_type}")
 

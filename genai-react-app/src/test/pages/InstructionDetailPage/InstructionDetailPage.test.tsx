@@ -27,18 +27,19 @@ jest.mock('@auth0/auth0-react', () => ({
     })
 }));
 
-// Mock the PromptEditor since it relies on UIW Markdown editor which can be tricky in JSDOM
-jest.mock('../../../components/widgets/PromptEditorWidget/PromptEditor', () => {
-    return function MockPromptEditor(props: any) {
+// Mock the TextEditor since it relies on UIW Markdown editor which can be tricky in JSDOM
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    TextEditor: function MockTextEditor(props: any) {
         return (
             <textarea
-                data-testid="mock-prompt-editor"
+                data-testid="mock-text-editor"
                 value={props.value}
                 onChange={(e) => props.onChange(e.target.value)}
             />
         );
-    };
-});
+    },
+}));
 
 jest.mock('../../../components/common/ShareModal/ShareModal', () => {
     const React = require('react');
@@ -104,7 +105,7 @@ describe('InstructionDetailPage', () => {
         
         expect(screen.getByText('Edit Instruction')).toBeInTheDocument();
         expect(screen.getByDisplayValue('Existing')).toBeInTheDocument();
-        expect(screen.getByTestId('mock-prompt-editor')).toHaveValue('Original text');
+        expect(screen.getByTestId('mock-text-editor')).toHaveValue('Original text');
     });
 
     test('renders new instruction form when ID is "new"', () => {
@@ -112,7 +113,7 @@ describe('InstructionDetailPage', () => {
         
         expect(screen.getByText('Create Instruction')).toBeInTheDocument();
         expect(screen.getByPlaceholderText('e.g., Code Reviewer Persona')).toHaveValue('');
-        expect(screen.getByTestId('mock-prompt-editor')).toHaveValue('');
+        expect(screen.getByTestId('mock-text-editor')).toHaveValue('');
         // Share and Delete should not be present
         expect(screen.queryByText('Share')).not.toBeInTheDocument();
         expect(screen.queryByText('Delete')).not.toBeInTheDocument();
@@ -121,7 +122,7 @@ describe('InstructionDetailPage', () => {
     test('saves instruction and calls API', async () => {
         renderWithRoute('/instructions/new');
         
-        const editor = screen.getByTestId('mock-prompt-editor');
+        const editor = screen.getByTestId('mock-text-editor');
         await userEvent.type(editor, 'My new prompt');
         
         const nameInput = screen.getByPlaceholderText('e.g., Code Reviewer Persona');
@@ -185,7 +186,7 @@ describe('InstructionDetailPage', () => {
         jest.spyOn(instructionService, 'createInstruction').mockRejectedValueOnce(new Error('Save failed'));
         renderWithRoute('/instructions/new');
         
-        const editor = screen.getByTestId('mock-prompt-editor');
+        const editor = screen.getByTestId('mock-text-editor');
         await userEvent.type(editor, 'My new prompt');
         
         const saveButton = screen.getByText('Save');

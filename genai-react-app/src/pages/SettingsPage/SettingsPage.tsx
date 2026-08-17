@@ -10,7 +10,7 @@ import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useWindowSize } from '../../hooks/useWindowSize'
 import { useLayout } from '../../context/LayoutContext'
-import Breadcrumbs, { BreadcrumbItem } from '../../components/common/Breadcrumbs/Breadcrumbs'
+import { Breadcrumbs, BreadcrumbItem } from '@genflowly/component-library'
 
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'

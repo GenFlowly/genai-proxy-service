@@ -37,11 +37,35 @@ try {
     }
 
     const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
-    const total = summary.total;
 
-    // Check if total metrics map exists and isn't empty/unknown
-    if (!total || !total.lines || typeof total.lines.pct === 'undefined' || total.lines.pct === 'Unknown') {
-        console.warn(`${colors.yellow}Coverage data is empty or unknown. This usually means no source files were covered by the run tests.${colors.reset}`);
+    // 2b. Aggregate coverage over the CHANGED source files only. The jest run
+    // above uses --onlyChanged, which also drags every module the related
+    // tests happen to import into the report; judging the run total would
+    // fail commits for pre-existing gaps in unchanged neighbors.
+    const changedFiles = execSync('git diff HEAD --name-only', { encoding: 'utf8' })
+        .split('\n')
+        .filter(f => /\.(ts|tsx)$/.test(f))
+        .filter(f => !/\.test\.|\.stories\.|\.d\.ts$|\/test\//.test(f))
+        .map(f => f.replace(/^genai-react-app\//, ''));
+
+    const total = {};
+    for (const [file, cov] of Object.entries(summary)) {
+        if (file === 'total') continue;
+        const rel = file.split(/[\\/]genai-react-app[\\/]/).pop().replace(/\\/g, '/');
+        if (!changedFiles.some(c => c === rel || c.endsWith('/' + rel))) continue;
+        for (const metric of ['lines', 'statements', 'functions', 'branches']) {
+            total[metric] = total[metric] || { covered: 0, total: 0 };
+            total[metric].covered += cov[metric].covered;
+            total[metric].total += cov[metric].total;
+        }
+    }
+    Object.values(total).forEach(m => {
+        m.pct = m.total === 0 ? 100 : Math.round((m.covered / m.total) * 10000) / 100;
+    });
+
+    // Check if metrics map exists and isn't empty/unknown
+    if (!total.lines || typeof total.lines.pct === 'undefined') {
+        console.warn(`${colors.yellow}No changed source files appear in the coverage report; nothing to verify.${colors.reset}`);
         process.exit(0);
     }
 

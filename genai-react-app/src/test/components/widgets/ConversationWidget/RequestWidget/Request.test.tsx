@@ -16,21 +16,23 @@ jest.mock('../../../../../context/ToastContext', () => ({
 jest.mock('../../../../../services/attachmentService');
 
 // Mock child components
-jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', () => ({
-    value,
-    onChange,
-    'data-testid': testId
-}: any) => (
-    <textarea
-        data-testid={testId}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-    />
-));
-
-jest.mock('../../../../../components/common/TextContainer/TextContainer', () => ({ content }: { content: string }) => (
-    <div data-testid="text-container">{content}</div>
-));
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    TextEditor: ({
+        value,
+        onChange,
+        'data-testid': testId
+    }: any) => (
+        <textarea
+            data-testid={testId}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    ),
+    TextContainer: ({ content }: { content: string }) => (
+        <div data-testid="text-container">{content}</div>
+    ),
+}));
 
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
     UserBrandName: () => <span data-testid="user-brand-name">User</span>
@@ -74,7 +76,7 @@ describe('Request Widget Component', () => {
     test('renders in Editor mode when no responses', () => {
         render(<Request blockId="block-1" data-testid="request-comp" />);
         expect(screen.getByTestId('request-comp')).toBeInTheDocument();
-        expect(screen.getByTestId('prompt-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('text-editor')).toBeInTheDocument();
         expect(screen.getByTestId('generate-button')).toBeInTheDocument();
     });
 
@@ -99,7 +101,7 @@ describe('Request Widget Component', () => {
         // Should show resolved content
         expect(screen.getByTestId('text-container')).toHaveTextContent('Resolved Prompt');
         // Editor and button should NOT be there
-        expect(screen.queryByTestId('prompt-editor')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('text-editor')).not.toBeInTheDocument();
     });
 
     test('handles focus and typing (Active state)', () => {
@@ -107,7 +109,7 @@ describe('Request Widget Component', () => {
         jest.useFakeTimers();
 
         render(<Request blockId="block-1" />);
-        const editor = screen.getByTestId('prompt-editor');
+        const editor = screen.getByTestId('text-editor');
 
         // Test Focus (implicit by typing)
         editor.focus();
@@ -171,7 +173,7 @@ describe('Request Widget Component', () => {
 
         render(<Request blockId="block-1" />);
         // Editor should NOT be visible, TextContainer should be visible
-        expect(screen.queryByTestId('prompt-editor')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('text-editor')).not.toBeInTheDocument();
         expect(screen.getByTestId('resolved-request-wrapper')).toBeInTheDocument();
 
         // No Stop Generating (or any) button in the Request widget while
@@ -204,7 +206,7 @@ describe('Request Widget Component', () => {
         localStorage.setItem(storageKey, 'Restored Draft');
 
         render(<Request blockId="block-1" />);
-        const editor = screen.getByTestId('prompt-editor');
+        const editor = screen.getByTestId('text-editor');
 
         expect(editor).toHaveValue('Restored Draft');
 

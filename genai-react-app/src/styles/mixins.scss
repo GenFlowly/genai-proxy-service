@@ -295,15 +295,15 @@
     }
 }
 
-// HOST CONTAINER for PromptEditor to ensure consistent width/centering
-@mixin prompt-editor-container {
+// HOST CONTAINER for TextEditor to ensure consistent width/centering
+@mixin text-editor-container {
     width: 100%;
     display: flex;
     flex-direction: column;
-    // Ensure the container allows PromptEditor's internal max-width (75rem) to center itself
+    // Ensure the container allows TextEditor's internal max-width (75rem) to center itself
     align-items: center;
 
-    // Reset side padding if the host has it, because PromptEditor has its own internal padding (3rem)
+    // Reset side padding if the host has it, because TextEditor has its own internal padding (3rem)
     // We expect the host to use vertical padding if needed, but horizontal padding should be handled carefully
     // so we don't double-pad and shrink the editor.
     padding-left: 0;

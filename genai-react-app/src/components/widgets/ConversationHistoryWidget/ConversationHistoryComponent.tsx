@@ -7,9 +7,10 @@ import { getCustomerConversations, archiveConversation } from '../../../services
 import { ConversationSummary } from '../../../models/conversationHistory.models'
 import { CollapsedOpenAIBrandName, CollapsedClaudeBrandName, CollapsedGeminiBrandName } from '../../common/BrandName/BrandName'
 import { AIVendor } from '../../../constants/vendors'
-import ArchiveIcon from '../../icons/ArchiveIcon'
-import SidebarListPanel, { SidebarListGroup, SidebarListLoadMore } from '../../common/SidebarListPanel/SidebarListPanel'
-import panelStyles from '../../common/SidebarListPanel/SidebarListPanel.module.scss'
+import { Icon } from '@genflowly/component-library'
+import { ICONS } from '../../../constants/icons'
+import { SidebarListPanel, SidebarListGroup, SidebarListLoadMore } from '@genflowly/component-library'
+import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
 import { loadHistoryCache, saveHistoryCache } from './historyCache'
 import { formatServerDateTime, formatServerTime } from '../../../utils/timeUtils'
@@ -154,7 +155,7 @@ export default function ConversationHistoryComponent() {
                 onSelect: () => handleNavigate(conv.conversationId),
                 testId: `conv-history-item-${conv.conversationId}`,
                 action: {
-                    icon: <ArchiveIcon />,
+                    icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
                     label: t('conversation.conversationHistory.archiveConversation'),
                     onClick: (e: React.MouseEvent) => handleArchive(e, conv.conversationId),
                     testId: `conv-archive-btn-${conv.conversationId}`,

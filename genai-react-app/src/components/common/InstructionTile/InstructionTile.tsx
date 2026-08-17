@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import styles from './InstructionTile.module.scss';
 import { InstructionResponse } from '../../../models/instruction.models';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '@genflowly/component-library';
 import { ICONS } from '../../../constants/icons';
 
 interface InstructionTileProps {

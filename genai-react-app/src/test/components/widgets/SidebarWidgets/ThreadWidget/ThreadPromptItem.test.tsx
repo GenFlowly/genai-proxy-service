@@ -10,11 +10,14 @@ const defaultProps = {
 };
 
 // Mock Tooltip
-jest.mock('../../../../../components/common/Tooltip/Tooltip', () => ({ content, children }: any) => (
-    <div data-testid="mock-tooltip" data-content={content}>
-        {children}
-    </div>
-));
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    Tooltip: ({ content, children }: any) => (
+        <div data-testid="mock-tooltip" data-content={content}>
+            {children}
+        </div>
+    ),
+}));
 
 jest.mock('../../../../../context/ConversationContext');
 

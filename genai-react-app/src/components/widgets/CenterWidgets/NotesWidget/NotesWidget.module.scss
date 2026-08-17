@@ -3,7 +3,7 @@
 @import '../../../../styles/mixins.scss';
 
 .container {
-    @include prompt-editor-container;
+    @include text-editor-container;
     padding-top: 1rem;
     padding-bottom: 1rem;
     gap: 1rem;

@@ -4,11 +4,11 @@ import { ICONS } from '../../../../constants/icons'
 import styles from './Response.module.scss'
 import { useLayout } from '../../../../context/LayoutContext'
 import { useConversation } from '../../../../context/ConversationContext'
-import TextContainer from '../../../common/TextContainer/TextContainer'
-import { Icon } from '../../../common/Icon/Icon'
+import { TextContainer } from '@genflowly/component-library'
+import { Icon } from '@genflowly/component-library'
 import { Message } from "../../../../models/conversation.models";
-import MultiPurposeButton from '../../../common/MultiPurposeButton/MultiPurposeButton'
-import Tooltip from '../../../common/Tooltip/Tooltip'
+import { RectangleButton } from '@genflowly/component-library'
+import { Tooltip } from '@genflowly/component-library'
 import {
     OpenAIBrandName,
     ClaudeBrandName,
@@ -16,9 +16,9 @@ import {
 } from '../../../common/BrandName/BrandName'
 import { AIVendor } from '../../../../constants/vendors'
 import { useMaxVendors } from '../../../../hooks/useMaxVendors'
-import { ToggleOption } from '../../../common/ToggleGroupButton/ToggleGroupButton'
-import RadioButtonGroup from '../../../common/ToggleGroupButton/RadioButtonGroup'
-import CheckboxButtonGroup from '../../../common/ToggleGroupButton/CheckboxButtonGroup'
+import { ToggleOption } from '@genflowly/component-library'
+import { RadioButtonGroup } from '@genflowly/component-library'
+import { CheckboxButtonGroup } from '@genflowly/component-library'
 
 interface ResponseProps {
     blockId: string
@@ -208,7 +208,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                     }
 
                     return (
-                        <div key={messageId} className={`${styles.responseWrapper} ${isSelected ? styles.selected : ''}`}>
+                        <div key={messageId} className={styles.responseWrapper}>
                             <TextContainer
                                 title={HeaderComponent}
                                 content={text}
@@ -271,7 +271,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                     <div className={styles.responseActionButtonsWrapper}>
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             {isLoading ? (
-                                                <MultiPurposeButton
+                                                <RectangleButton
                                                     label={t('conversation.response.stop')}
                                                     onClick={() => stopGenerating(blockId, aiVendor as AIVendor)}
                                                     data-testid="stop-button"
@@ -280,7 +280,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                                 <>
                                                     <Tooltip content={disabled ? t('conversation.response.noApiKeysSet') : ""}>
                                                         <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                                            <MultiPurposeButton
+                                                            <RectangleButton
                                                                 label={t('conversation.response.regenerate')}
                                                                 onClick={() => handleRegenerate(aiVendor as AIVendor)}
                                                                 disabled={disabled}
@@ -293,7 +293,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                                     {onFollowUp && text.trim().length > 0 && (
                                                         <Tooltip content={disabled ? t('conversation.response.noApiKeysSet') : ""}>
                                                             <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                                                <MultiPurposeButton
+                                                                <RectangleButton
                                                                     label={isSelected ? t('conversation.response.selected') : t('conversation.response.followUp')}
                                                                     onClick={() => handleFollowUp(messageId)}
                                                                     disabled={isSelected || disabled}

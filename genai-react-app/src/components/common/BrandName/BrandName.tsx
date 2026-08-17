@@ -1,6 +1,6 @@
 import React, { ElementType, HTMLAttributes } from 'react'
 import { ICONS } from '../../../constants/icons'
-import { Icon } from '../Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 import styles from './BrandName.module.scss'
 
 // --- Generic BrandName Component ---

@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ICONS } from '../../../constants/icons'
-import PromptEditor from '../../widgets/PromptEditorWidget/PromptEditor'
-import PillButton from '../../common/PillButton/PillButton'
-import Tooltip from '../../common/Tooltip/Tooltip'
-import { Icon } from '../../common/Icon/Icon'
-import {
-    InputTextWithHint
-} from '../../common/InputTextWithHint/InputTextWithHint'
-import {
-    InputSelectWithHint
-} from '../../common/InputSelectWithHint/InputSelectWithHint'
+import { TextEditor } from '@genflowly/component-library'
+import { PillButton } from '@genflowly/component-library'
+import { Tooltip } from '@genflowly/component-library'
+import { Icon } from '@genflowly/component-library'
+import { InputTextWithHint } from '@genflowly/component-library'
+import { InputSelectWithHint } from '@genflowly/component-library'
 import { useAI } from '../../../context/AIContext'
 import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
@@ -281,7 +277,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                 const latestVersion = latest ? latest.version : 1
 
                 return (
-                    // Match PromptEditor structure:
+                    // Match TextEditor structure:
                     <div className={styles.instructionContainer}>
                         <div className={styles.instructionContent}>
                             {/* Left Spacer */}
@@ -381,6 +377,8 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                                         <div style={{ flexShrink: 0 }}>
                                             <InputSelectWithHint
                                                 hint={t('instructionWidget.instructionWidget.versionHint')}
+                                                icon={ICONS.HISTORY}
+                                                iconOnlyHintOnMobile
                                                 value={selectedVersion?.toString() || ''}
                                                 onChange={async (val) => {
                                                     const newVersion = parseInt(val, 10)
@@ -426,14 +424,14 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                 )
             })()}
 
-            <PromptEditor
+            <TextEditor
                 id="instruction-input"
                 value={systemPrompt}
                 onChange={setSystemPrompt}
                 disableCache={true}
                 height="100%"
-                className={styles.promptEditorFullscreen}
-                data-testid="system-prompt-editor"
+                className={styles.textEditorFullscreen}
+                data-testid="system-text-editor"
             />
 
             {/* Button Row - Aligning with Editor Box */}

@@ -17,14 +17,17 @@ jest.mock('@auth0/auth0-react', () => ({
 }));
 jest.mock('../../../../services/instructionService');
 
-// Mock PromptEditor
-jest.mock('../../../../components/widgets/PromptEditorWidget/PromptEditor', () => ({ value, onChange, 'data-testid': testId }: any) => (
-    <textarea
-        data-testid={testId || 'prompt-editor'}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-    />
-));
+// Mock TextEditor
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    TextEditor: ({ value, onChange, 'data-testid': testId }: any) => (
+        <textarea
+            data-testid={testId || 'text-editor'}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    ),
+}));
 
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = jest.fn();
@@ -101,7 +104,7 @@ describe('InstructionWidget Component', () => {
 
         render(<InstructionWidget />);
         expect(screen.getByTestId('instruction-widget-expanded')).toBeInTheDocument();
-        expect(screen.getByTestId('system-prompt-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('system-text-editor')).toBeInTheDocument();
         expect(screen.getByTestId('instruction-looks-good-button')).toBeInTheDocument();
         expect(screen.getByTestId('save-instruction-button')).toBeInTheDocument();
     });
@@ -371,7 +374,7 @@ describe('InstructionWidget Component', () => {
         // Let's check the mocks section.
         // I don't see an explicit mock for Tooltip in the provided file content (lines 11-27). 
         // It imports it. 
-        // Wait, line 21: mock PromptEditor. 
+        // Wait, line 21: mock TextEditor. 
         // Lines 12-18 mock contexts and services.
         // It does NOT mock Tooltip. So it renders the real Tooltip.
         // If Tooltip renders children, we can find the button.

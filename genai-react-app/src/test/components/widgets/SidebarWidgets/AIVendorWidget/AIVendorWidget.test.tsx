@@ -25,6 +25,15 @@ jest.mock('../../../../../components/common/SidebarWidgetContainer/SidebarWidget
     )
 );
 
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    PillButton: ({ label, onClick, variant, disabled, 'data-testid': testId }: any) => (
+        <button data-testid={testId} onClick={onClick} disabled={disabled} className={`pillButton ${variant}`}>
+            {label}
+        </button>
+    ),
+}));
+
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
     OpenAIBrandName: () => <span>OpenAI</span>,
     ClaudeBrandName: () => <span>Claude</span>,
@@ -33,12 +42,6 @@ jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
     CollapsedClaudeBrandName: () => <span>C</span>,
     CollapsedGeminiBrandName: () => <span>G</span>
 }));
-
-jest.mock('../../../../../components/common/PillButton/PillButton', () => ({ label, onClick, variant, disabled, 'data-testid': testId }: any) => (
-    <button data-testid={testId} onClick={onClick} disabled={disabled} className={`pillButton ${variant}`}>
-        {label}
-    </button>
-));
 
 describe('AIVendorWidget', () => {
     const mockUseSidebarWidget = useSidebarWidget as jest.Mock;
