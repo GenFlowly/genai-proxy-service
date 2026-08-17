@@ -107,6 +107,10 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
             environment: {
                 JOBLIB_TEMP_FOLDER: '/tmp',
+                // API keys for hosted embedding providers (voyage/openai model types).
+                // Only needed by semantic chunking here; sourced from the deploy environment.
+                ...(process.env.VOYAGE_API_KEY ? { VOYAGE_API_KEY: process.env.VOYAGE_API_KEY } : {}),
+                ...(process.env.OPENAI_API_KEY ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY } : {}),
             },
         });
 
@@ -122,6 +126,9 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
             environment: {
                 JOBLIB_TEMP_FOLDER: '/tmp',
+                // API keys for hosted embedding providers (voyage/openai model types)
+                ...(process.env.VOYAGE_API_KEY ? { VOYAGE_API_KEY: process.env.VOYAGE_API_KEY } : {}),
+                ...(process.env.OPENAI_API_KEY ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY } : {}),
             },
         });
 
