@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { PromptEditor } from '@genflowly/component-library'
+import { TextEditor } from '@genflowly/component-library'
 import styles from './PlainNotes.module.scss'
 import { useAuth } from '../../../../context/AuthContext'
 import { useNotes } from '../../../../context/NotesContext'
@@ -96,7 +96,7 @@ export default function PlainNotes() {
             className={styles.editorWrapper}
             onBlur={() => flush()}
         >
-            <PromptEditor
+            <TextEditor
                 id="notes-widget-editor"
                 value={prompt}
                 onChange={setPrompt}

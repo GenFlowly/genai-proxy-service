@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ICONS } from '../../../constants/icons'
-import { PromptEditor } from '@genflowly/component-library'
+import { TextEditor } from '@genflowly/component-library'
 import { PillButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
 import { Icon } from '@genflowly/component-library'
@@ -277,7 +277,7 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                 const latestVersion = latest ? latest.version : 1
 
                 return (
-                    // Match PromptEditor structure:
+                    // Match TextEditor structure:
                     <div className={styles.instructionContainer}>
                         <div className={styles.instructionContent}>
                             {/* Left Spacer */}
@@ -422,14 +422,14 @@ export default function InstructionWidget({ 'data-testid': testId }: {
                 )
             })()}
 
-            <PromptEditor
+            <TextEditor
                 id="instruction-input"
                 value={systemPrompt}
                 onChange={setSystemPrompt}
                 disableCache={true}
                 height="100%"
-                className={styles.promptEditorFullscreen}
-                data-testid="system-prompt-editor"
+                className={styles.textEditorFullscreen}
+                data-testid="system-text-editor"
             />
 
             {/* Button Row - Aligning with Editor Box */}

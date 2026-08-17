@@ -10,7 +10,7 @@ import {
     deleteInstruction,
     getInstructionSharedUsers
 } from '../../services/instructionService';
-import { PromptEditor } from '@genflowly/component-library';
+import { TextEditor } from '@genflowly/component-library';
 import { PillButton } from '@genflowly/component-library';
 import { InputTextWithHint } from '@genflowly/component-library';
 import ShareModal, { VisibilityMode } from '../../components/common/ShareModal/ShareModal';
@@ -191,7 +191,7 @@ export default function InstructionDetailPage() {
                 
                 <div className={styles.editorContainer}>
                     <label className={styles.editorLabel}>{t('instructionDetail.instructionDetailPage.instructionPrompt')}</label>
-                    <PromptEditor
+                    <TextEditor
                         id="instruction-detail-editor"
                         value={instructionText}
                         onChange={setInstructionText}

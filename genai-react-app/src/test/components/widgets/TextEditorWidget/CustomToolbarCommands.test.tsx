@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { addStepsCommand, addExamplesCommand, addCopyCommand } from '../../../../components/widgets/PromptEditorWidget/CustomToolbarCommands';
+import { addStepsCommand, addExamplesCommand, addCopyCommand } from '../../../../components/widgets/TextEditorWidget/CustomToolbarCommands';
 import '@testing-library/jest-dom';
 
 // Mocks

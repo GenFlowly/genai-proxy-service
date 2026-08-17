@@ -1,7 +1,7 @@
 import React, {useEffect} from 'react'
 import {useTranslation} from 'react-i18next'
 import {ICONS} from '../../../../constants/icons'
-import { PromptEditor } from '@genflowly/component-library'
+import { TextEditor } from '@genflowly/component-library'
 import { MultiPurposeButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
 import {useConversation} from '../../../../context/ConversationContext'
@@ -126,7 +126,7 @@ export default function Request({
         files.forEach(uploadPastedImage)
     }, [uploadPastedImage])
 
-    // Dependencies moved from PromptEditor
+    // Dependencies moved from TextEditor
     const {customerId} = useAuth()
     const storageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
     const contextTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -158,7 +158,7 @@ export default function Request({
     }, [conversationBlock?.prompt])
 
     // ✅ Sync AI Context on mount (or when blockId changes)
-    // This restores the logic previously in PromptEditor that ensures
+    // This restores the logic previously in TextEditor that ensures
     // the Token Counter knows about this block immediately.
     useEffect(() => {
         // Only sync if we are the "active" editing block (no responses yet)
@@ -247,13 +247,13 @@ export default function Request({
         <div className={styles.container}
              onPasteCapture={handlePasteCapture}
              data-testid={testId || "request-widget-container"}>
-            <PromptEditor
+            <TextEditor
                 id={blockId}
                 value={draftPrompt}
                 onChange={handleEditorChange}
                 height="100%"
-                className={styles.promptEditorFullscreen}
-                data-testid="prompt-editor"
+                className={styles.textEditorFullscreen}
+                data-testid="text-editor"
             />
 
             <AttachmentPreviewStrip

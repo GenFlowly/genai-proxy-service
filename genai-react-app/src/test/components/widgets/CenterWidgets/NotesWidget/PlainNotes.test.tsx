@@ -17,10 +17,10 @@ Object.defineProperty(global, 'crypto', {
     },
 });
 
-// Mock PromptEditor to make it testable
+// Mock TextEditor to make it testable
 jest.mock('@genflowly/component-library', () => ({
     ...jest.requireActual('@genflowly/component-library'),
-    PromptEditor: function MockPromptEditor(props: any) {
+    TextEditor: function MockTextEditor(props: any) {
         return (
             <textarea
                 data-testid={props.id}

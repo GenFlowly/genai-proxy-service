@@ -14,7 +14,7 @@
     // Request specific: vertical centering
     justify-content: center;
 
-    @include prompt-editor-container;
+    @include text-editor-container;
 
     @include respond-to-tablet {
         // Width/Radius handled by mixin
@@ -102,7 +102,7 @@
     white-space: nowrap;
 }
 
-.promptEditorFullscreen {
+.textEditorFullscreen {
     flex: 1;
     min-height: 0;
     width: 100%;
