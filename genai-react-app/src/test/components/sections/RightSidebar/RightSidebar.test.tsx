@@ -74,7 +74,7 @@ describe('RightSidebar', () => {
         test('renders as a full-screen modal with the widgets when expanded', () => {
             render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
 
-            expect(screen.getByTestId('right-sidebar-mobile-modal')).toBeInTheDocument();
+            expect(screen.getByTestId('mobile-full-page-modal')).toBeInTheDocument();
             expect(screen.getByTestId('mock-widget')).toBeInTheDocument();
             // No title header and no desktop collapse button in the modal
             expect(screen.queryByText('AI Settings')).not.toBeInTheDocument();
@@ -89,14 +89,14 @@ describe('RightSidebar', () => {
 
             render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
 
-            expect(screen.queryByTestId('right-sidebar-mobile-modal')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('mobile-full-page-modal')).not.toBeInTheDocument();
             expect(screen.queryByTestId('mock-widget')).not.toBeInTheDocument();
         });
 
         test('Close Settings button at the bottom closes the modal', () => {
             render(<RightSidebar widgetIds={['MOCK_WIDGET']} />);
 
-            const closeBtn = screen.getByTestId('right-sidebar-close');
+            const closeBtn = screen.getByTestId('mobile-full-page-modal-close');
             expect(closeBtn).toHaveTextContent('Close Settings');
             fireEvent.click(closeBtn);
 
