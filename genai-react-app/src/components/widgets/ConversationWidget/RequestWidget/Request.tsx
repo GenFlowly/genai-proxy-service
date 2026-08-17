@@ -2,7 +2,7 @@ import React, {useEffect} from 'react'
 import {useTranslation} from 'react-i18next'
 import {ICONS} from '../../../../constants/icons'
 import { TextEditor } from '@genflowly/component-library'
-import { MultiPurposeButton } from '@genflowly/component-library'
+import { RectangleButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
 import {useConversation} from '../../../../context/ConversationContext'
 import {useAuth} from '../../../../context/AuthContext'
@@ -268,7 +268,7 @@ export default function Request({
                 <Tooltip content={!hasAnyValidApiKey ? t('conversation.request.noApiKeysSet') : ""}>
                     <div
                         style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
-                        <MultiPurposeButton
+                        <RectangleButton
                             onClick={() => {
                                 if (!hasAnyValidApiKey) return
                                 if (pendingAttachments.some(a => a.status === 'uploading')) {
