@@ -18,6 +18,7 @@ export default function NewChatWidget({ 'data-testid': testId }: { 'data-testid'
             <button
                 className={styles.collapsedButton}
                 onClick={resetConversation}
+                aria-label={t('sidebar.newChatWidget.newChat')}
                 data-testid="new-chat-button-collapsed"
             >
                 <Icon src={ICONS.PLUS} size={20} />
