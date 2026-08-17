@@ -26,6 +26,7 @@ import laptopIcon from '../assets/icons/laptop.svg'
 import moonIcon from '../assets/icons/moon.svg'
 import loginIcon from '../assets/icons/login.svg'
 import archiveIcon from '../assets/icons/archive.svg'
+import historyIcon from '../assets/icons/history.svg'
 import sunIcon from '../assets/icons/sun.svg'
 
 export const ICONS = {
@@ -56,4 +57,5 @@ export const ICONS = {
     SUN: sunIcon,
     LOGIN: loginIcon,
     ARCHIVE: archiveIcon,
+    HISTORY: historyIcon,
 }
