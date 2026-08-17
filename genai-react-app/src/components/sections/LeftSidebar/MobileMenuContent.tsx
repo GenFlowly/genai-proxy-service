@@ -41,7 +41,7 @@ export const MobileMenuContent: React.FC = () => {
         <div className={styles.mobileMenu}>
             <div className={styles.header}>
                 <h2>{t("layout.mobileMenu.menu")}</h2>
-                <button onClick={handleCloseMenu} className={styles.closeButton}>
+                <button onClick={handleCloseMenu} className={styles.closeButton} aria-label={t("layout.mobileMenu.close")}>
                     <Icon src={ICONS.ALT_ARROW_LEFT} size={20} />
                 </button>
             </div>

@@ -37,7 +37,7 @@ export default function ThreadPromptItem({ conversationBlockId, prompt, collapse
     if (collapsed) {
         return (
             <Tooltip content={prompt || t('sidebar.threadPromptItem.newPrompt')} fullWidth>
-                <button ref={itemRef} className={`${styles.promptItem} ${styles.collapsed} ${isActive ? styles.activeViewport : ''}`} onClick={handleClick} data-testid={testId || "thread-prompt-item-collapsed"}>
+                <button ref={itemRef} className={`${styles.promptItem} ${styles.collapsed} ${isActive ? styles.activeViewport : ''}`} onClick={handleClick} aria-label={prompt || t('sidebar.threadPromptItem.newPrompt')} data-testid={testId || "thread-prompt-item-collapsed"}>
                     <span className={styles.icon}>
                         <Icon src={ICONS.PROMPT_ICON} />
                     </span>

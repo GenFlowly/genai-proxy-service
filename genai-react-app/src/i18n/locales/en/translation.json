@@ -145,9 +145,6 @@
             "copied": "✓ Copied",
             "copy": "Copy"
         },
-        "icon": {
-            "defaultAlt": "icon"
-        },
         "inputSelectWithHint": {
             "placeholder": "Select an option"
         },
@@ -344,7 +341,8 @@
             "conversationHistory": "Conversation History",
             "login": "Login",
             "menu": "Menu",
-            "signingIn": "Signing in…"
+            "signingIn": "Signing in…",
+            "close": "Close menu"
         },
         "navbar": {
             "account": "Account",
