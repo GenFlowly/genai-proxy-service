@@ -31,7 +31,7 @@ jest.mock('@genflowly/component-library', () => ({
             </div>
         );
     },
-    MultiPurposeButton: (props) => {
+    RectangleButton: (props) => {
         const { label, onClick, disabled, 'data-testid': testId } = props;
         return (
             <button data-testid={testId} onClick={onClick} disabled={disabled}>

@@ -7,7 +7,7 @@ import { useConversation } from '../../../../context/ConversationContext'
 import { TextContainer } from '@genflowly/component-library'
 import { Icon } from '@genflowly/component-library'
 import { Message } from "../../../../models/conversation.models";
-import { MultiPurposeButton } from '@genflowly/component-library'
+import { RectangleButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
 import {
     OpenAIBrandName,
@@ -271,7 +271,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                     <div className={styles.responseActionButtonsWrapper}>
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             {isLoading ? (
-                                                <MultiPurposeButton
+                                                <RectangleButton
                                                     label={t('conversation.response.stop')}
                                                     onClick={() => stopGenerating(blockId, aiVendor as AIVendor)}
                                                     data-testid="stop-button"
@@ -280,7 +280,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                                 <>
                                                     <Tooltip content={disabled ? t('conversation.response.noApiKeysSet') : ""}>
                                                         <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                                            <MultiPurposeButton
+                                                            <RectangleButton
                                                                 label={t('conversation.response.regenerate')}
                                                                 onClick={() => handleRegenerate(aiVendor as AIVendor)}
                                                                 disabled={disabled}
@@ -293,7 +293,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                                     {onFollowUp && text.trim().length > 0 && (
                                                         <Tooltip content={disabled ? t('conversation.response.noApiKeysSet') : ""}>
                                                             <div style={disabled ? { cursor: 'not-allowed' } : {}}>
-                                                                <MultiPurposeButton
+                                                                <RectangleButton
                                                                     label={isSelected ? t('conversation.response.selected') : t('conversation.response.followUp')}
                                                                     onClick={() => handleFollowUp(messageId)}
                                                                     disabled={isSelected || disabled}
