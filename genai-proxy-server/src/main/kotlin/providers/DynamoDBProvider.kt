@@ -523,7 +523,9 @@ class DynamoDBProvider(
         customerId: String,
         preferredModels: List<AIConfig>?,
         preferredGenerativeMode: AIMode?,
-        otherPreferences: Map<String, String>?
+        otherPreferences: Map<String, String>?,
+        embeddingMode: String? = null,
+        embeddingModel: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
             val now = Instant.now().toString()
@@ -559,6 +561,18 @@ class DynamoDBProvider(
                 attrValues[":otherPreferences"] = AttributeValue.builder().m(
                     otherPreferences.mapValues { AttributeValue.builder().s(it.value).build() }
                 ).build()
+            }
+
+            if (embeddingMode != null) {
+                updateParts.add("#embeddingMode = :embeddingMode")
+                attrNames["#embeddingMode"] = "embeddingMode"
+                attrValues[":embeddingMode"] = AttributeValue.builder().s(embeddingMode).build()
+            }
+
+            if (embeddingModel != null) {
+                updateParts.add("#embeddingModel = :embeddingModel")
+                attrNames["#embeddingModel"] = "embeddingModel"
+                attrValues[":embeddingModel"] = AttributeValue.builder().s(embeddingModel).build()
             }
 
             val updateReq = UpdateItemRequest.builder()
@@ -850,6 +864,51 @@ class DynamoDBProvider(
             logger.info("Saved Note $noteKey for $customerId to DynamoDB")
         } catch (e: Exception) {
             logger.error("Failed to save note to DynamoDB", e)
+            throw e
+        }
+    }
+
+    /**
+     * Flags a note for batch embedding: sets embedding_status=pending plus the
+     * model to use. The encoding server's accumulator sweeps these off the
+     * sparse embedding-status-index GSI. Replaces the synchronous /encode-notes
+     * call for batch-mode customers.
+     */
+    suspend fun markNotePendingEmbedding(
+        customerId: String,
+        noteKey: String,
+        embeddingModelType: String,
+        embeddingModel: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val updateReq = UpdateItemRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.CUSTOMER_NOTES_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    com.genflowly.DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build()
+                ))
+                .updateExpression(
+                    "SET #status = :status, #modelType = :modelType, #model = :model, #updatedAt = :now"
+                )
+                .conditionExpression("attribute_exists(${com.genflowly.DynamoDBConstants.NOTE_KEY})")
+                .expressionAttributeNames(mapOf(
+                    "#status" to "embedding_status",
+                    "#modelType" to "embedding_model_type",
+                    "#model" to "embedding_model",
+                    "#updatedAt" to "embedding_updated_at"
+                ))
+                .expressionAttributeValues(mapOf(
+                    ":status" to AttributeValue.builder().s("pending").build(),
+                    ":modelType" to AttributeValue.builder().s(embeddingModelType).build(),
+                    ":model" to AttributeValue.builder().s(embeddingModel).build(),
+                    ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
+                ))
+                .build()
+
+            dynamoDbClient.updateItem(updateReq)
+            logger.info("Marked note $noteKey of $customerId pending batch embedding ($embeddingModel)")
+        } catch (e: Exception) {
+            logger.error("Failed to mark note $noteKey pending embedding", e)
             throw e
         }
     }
@@ -1479,7 +1538,9 @@ class DynamoDBProvider(
 
             AIConfigPreferences(
                 preferredModels = preferredModels,
-                preferredGenerativeMode = preferredGenerativeMode
+                preferredGenerativeMode = preferredGenerativeMode,
+                embeddingMode = item["embeddingMode"]?.s(),
+                embeddingModel = item["embeddingModel"]?.s()
             )
         }
 

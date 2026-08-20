@@ -23,6 +23,7 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     stage,
     ingestionQueue: sqsStack.ingestionQueue,
     rawEmailBucket: s3Stack.rawEmailBucket,
+    customerDocumentsBucket: s3Stack.customerDocumentsBucket,
     ingestionRepo: ecrStack.ingestionRepo,
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
     embedRepo: ecrStack.createEmbeddingsRepo,
@@ -37,6 +38,8 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     zillizToken: process.env.ZILLIZ_TOKEN || 'dummy_zilliz_token',
     customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
     customerVectorDBConfigTableName: process.env.CUSTOMER_VECTOR_DB_CONFIG_TABLE_NAME || 'CustomerVectorDBConfig',
+    customerNotesTableName: process.env.CUSTOMER_NOTES_TABLE_NAME || 'CustomerNotes',
+    voyageApiKey: process.env.VOYAGE_API_KEY,
 });
 
 const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsV2Stack`, {
@@ -46,6 +49,7 @@ const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENC
     parseAndChunkLambda: lambdaStack.parseAndChunkLambda,
     embedLambda: lambdaStack.embedLambda,
     storeEmbeddingsLambda: lambdaStack.storeEmbeddingsLambda,
+    submitVoyageBatchLambda: lambdaStack.submitVoyageBatchLambda,
 });
 
 

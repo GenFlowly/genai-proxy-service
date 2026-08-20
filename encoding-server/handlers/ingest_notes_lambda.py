@@ -90,6 +90,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     model_name=item_data.get('modelName', item_data.get('model_name')),
                     chunking_type=item_data.get('chunkingType', item_data.get('chunking_type')),
                     chunking_technique=item_data.get('chunkingTechnique', item_data.get('chunking_technique')),
+                    processing_mode=item_data.get('processingMode', item_data.get('processing_mode')),
                 )
 
                 # Get appropriate processor from the typed state

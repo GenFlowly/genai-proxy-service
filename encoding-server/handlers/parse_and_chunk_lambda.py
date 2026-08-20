@@ -62,11 +62,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 chunking_type=memory_request_internal_state.chunking_type,
                 chunking_technique=memory_request_internal_state.chunking_technique,
                 data_chunks=chunks[i:i + BATCH_SIZE],
+                processing_mode=memory_request_internal_state.processing_mode,
             )
             batches.append(batch_state.to_dict())
 
-        logger.info(f"Returning {len(batches)} batches to Map state.")
-        return {"batches": batches}
+        # Surface processing_mode at the top level so the Step Functions Choice
+        # state can route between the realtime Map and the Voyage batch branch.
+        # Batch mode is voyage-only; anything else falls back to realtime.
+        processing_mode = (memory_request_internal_state.processing_mode or "realtime").lower()
+        if processing_mode == "batch" and (memory_request_internal_state.model_type or "") != "voyage":
+            logger.warning(
+                "processing_mode=batch is only supported for model_type=voyage; "
+                "falling back to realtime."
+            )
+            processing_mode = "realtime"
+
+        logger.info(f"Returning {len(batches)} batches (processing_mode={processing_mode}).")
+        return {"batches": batches, "processing_mode": processing_mode}
 
     except Exception as e:
         logger.error(f"Error in parse_and_chunk_lambda: {str(e)}")

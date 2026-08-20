@@ -377,6 +377,19 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'noteKey',
                 type: dynamodb.AttributeType.STRING
             },
+            // Sparse index: only notes awaiting/undergoing batch embedding carry
+            // `embedding_status`, so this index holds just the work queue and
+            // shrinks to near-empty as the encoding-server accumulator drains it.
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'embedding-status-index',
+                    partitionKey: {
+                        name: 'embedding_status',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
         };
 
         const customerDeveloperApiKeyTableProps: CreateTableProps = {

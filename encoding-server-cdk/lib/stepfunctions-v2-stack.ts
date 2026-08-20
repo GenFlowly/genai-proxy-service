@@ -17,6 +17,9 @@ export interface StepFunctionsV2StackProps extends cdk.StackProps {
     parseAndChunkLambda: lambda.IFunction;
     embedLambda: lambda.IFunction;
     storeEmbeddingsLambda: lambda.IFunction;
+    // Voyage batch branch (Option A): submit + track, then end. A scheduled
+    // poller (in LambdaStack) reconciles the job asynchronously.
+    submitVoyageBatchLambda: lambda.IFunction;
 }
 
 export class StepFunctionsV2Stack extends cdk.Stack {
@@ -50,12 +53,34 @@ export class StepFunctionsV2Stack extends cdk.Stack {
         const processBatchesMap = new sfn.Map(this, 'Process Batches Concurrently', {
             maxConcurrency: 3, // Set due to OpenAI API rate limits
             itemsPath: sfn.JsonPath.stringAt('$.batches'),
+            resultPath: sfn.JsonPath.DISCARD, // keep the state shape stable at the join
         });
 
         processBatchesMap.itemProcessor(processBatchDefinition);
 
+        /**
+         * Voyage Batch branch (processing_mode == "batch") — Option A.
+         * Submit one async batch job for all chunks + record a tracking row, then
+         * END. A scheduled poller (LambdaStack) reconciles the job when it
+         * completes — so there is no in-execution Wait loop, and polling cost is
+         * flat regardless of how many documents are in flight.
+         */
+        const submitVoyageBatchTask = new tasks.LambdaInvoke(this, 'SubmitVoyageBatch', {
+            stateName: 'SubmitVoyageBatch',
+            lambdaFunction: props.submitVoyageBatchLambda,
+            payloadResponseOnly: true,
+        });
+
+        const voyageBatchSubmitted = new sfn.Succeed(this, 'VoyageBatchSubmitted');
+        const voyageBatchBranch = submitVoyageBatchTask.next(voyageBatchSubmitted);
+
+        // Top-level Choice: batch vs realtime (default)
+        const modeChoice = new sfn.Choice(this, 'Realtime or Batch?')
+            .when(sfn.Condition.stringEquals('$.processing_mode', 'batch'), voyageBatchBranch)
+            .otherwise(processBatchesMap);
+
         // Define Master Sequence Chain
-        const definition = parseAndChunkTask.next(processBatchesMap);
+        const definition = parseAndChunkTask.next(modeChoice);
 
         // Define State Machine (Standard Workflow for extended timeout limits)
         const logGroup = new cdk.aws_logs.LogGroup(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-sm-v2-logs`, {

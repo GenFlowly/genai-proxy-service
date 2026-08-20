@@ -36,13 +36,17 @@ class CustomerProfileService(
         customerId: String,
         preferredModels: List<AIConfig>?,
         preferredGenerativeMode: AIMode?,
-        otherPreferences: Map<String, String>?
+        otherPreferences: Map<String, String>?,
+        embeddingMode: String? = null,
+        embeddingModel: String? = null
     ) {
         dynamoDBProvider.savePreferences(
             customerId,
             preferredModels,
             preferredGenerativeMode,
-            otherPreferences
+            otherPreferences,
+            embeddingMode,
+            embeddingModel
         )
     }
 

@@ -53,7 +53,9 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
                     customerId,
                     request.aiConfigPreferences?.preferredModels,
                     request.aiConfigPreferences?.preferredGenerativeMode,
-                    request.otherPreferences
+                    request.otherPreferences,
+                    request.aiConfigPreferences?.embeddingMode,
+                    request.aiConfigPreferences?.embeddingModel
                 )
 
                 call.respond(HttpStatusCode.OK, mapOf("status" to "success"))            } catch (e: Exception) {

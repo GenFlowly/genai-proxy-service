@@ -150,12 +150,33 @@ class NotesService(
             }
         }
 
-        // 3. Async call to encoding server
+        // 3. Delivery to embedding. Batch-mode customers are swept from
+        // CustomerNotes by the encoding server's accumulator, so we just flag the
+        // note here and skip the synchronous /encode-notes call. Realtime
+        // customers keep the existing async push.
+        val prefs = try {
+            dynamoDBProvider.getAIConfigPreferences(customerId)
+        } catch (e: Exception) {
+            logger.error("Could not read embedding preferences for $customerId; defaulting to realtime", e)
+            null
+        }
+        if (prefs?.embeddingMode == "batch") {
+            val model = prefs.embeddingModel ?: "voyage-4-large"
+            try {
+                dynamoDBProvider.markNotePendingEmbedding(customerId, request.data.note_key, "voyage", model)
+                logger.info("Flagged note ${request.data.note_key} for batch embedding ($model)")
+            } catch (e: Exception) {
+                logger.error("Failed to flag note ${request.data.note_key} for batch embedding", e)
+            }
+            return effectiveTitle
+        }
+
+        // Realtime: async call to encoding server
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = "$encodingServerUrl/encode-notes"
                 logger.info("Sending note to encoding server asynchronously: $url")
-                
+
                 val encodingRequest = EncodingSaveNoteRequest(
                     dataType = "NOTE",
                     client = request.client,
