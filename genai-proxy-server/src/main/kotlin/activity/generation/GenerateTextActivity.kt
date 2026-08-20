@@ -15,13 +15,13 @@ import models.GenerateTextRequest
 import models.GenerateTextResponse
 import models.Message
 import org.slf4j.LoggerFactory
-import com.genflowly.service.AIRequestManager
+import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
 fun Route.registerGenerateTextRoutes(
-    aiRequestManager: AIRequestManager,
+    generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -92,7 +92,7 @@ fun Route.registerGenerateTextRoutes(
                 )
 
 
-                val responseMessageList = aiRequestManager
+                val responseMessageList = generationOrchestrator
                     .processTextGenerateRequest(
                         request.aiConfig,
                         request.prompt.instructionId,

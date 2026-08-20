@@ -25,7 +25,9 @@ import java.util.concurrent.TimeUnit
 import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get
 import org.slf4j.LoggerFactory
-import com.genflowly.service.AIRequestManager
+import com.genflowly.service.CustomerCredentialsService
+import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.InstructionService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
 import models.ApiKeyPrincipal
@@ -355,7 +357,9 @@ fun Application.module() {
     val appScope = get<AppScope>()
     monitor.subscribe(ApplicationStopping) { appScope.shutdown() }
 
-    val aiRequestManager = get<AIRequestManager>()
+    val generationOrchestrator = get<GenerationOrchestrator>()
+    val customerCredentialsService = get<CustomerCredentialsService>()
+    val instructionService = get<InstructionService>()
     val customerProfileService = get<CustomerProfileService>()
     val conversationService = get<ConversationService>()
     val aiModelsService = get<AIModelsService>()
@@ -374,5 +378,5 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, customerProfileRepository, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, retrievalServerClient, json)
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, aiModelsService, graphService, customerProfileRepository, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, retrievalServerClient, json)
 }

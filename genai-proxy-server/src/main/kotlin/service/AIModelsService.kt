@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
  * key validation.
  */
 class AIModelsService(
-    private val customerProfileService: CustomerProfileService,
+    private val customerCredentialsService: CustomerCredentialsService,
     private val retrievalServerClient: RetrievalServerClient
 ) {
     private val logger = LoggerFactory.getLogger(AIModelsService::class.java)
@@ -24,7 +24,7 @@ class AIModelsService(
         val startTime = System.currentTimeMillis()
 
         val apiKeys: Map<AIVendor, String> = vendors.mapNotNull { vendor ->
-            val apiKey = customerProfileService.getCustomerApiKeyForVendor(vendor, customerId)
+            val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(vendor, customerId)
             // If stored key is null, we can't fetch.
             if (apiKey == null) {
                 logger.info("Skipping vendor {} as no API key is set.", vendor)

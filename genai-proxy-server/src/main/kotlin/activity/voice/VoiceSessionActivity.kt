@@ -22,7 +22,9 @@ import kotlinx.serialization.json.put
 import models.AIConfig
 import models.Message
 import org.slf4j.LoggerFactory
-import com.genflowly.service.AIRequestManager
+import com.genflowly.service.CustomerCredentialsService
+import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.InstructionService
 
 private val logger = LoggerFactory.getLogger("VoiceSessionRoute")
 
@@ -144,7 +146,9 @@ private data class VoiceTurnUsage(
 fun Route.registerVoiceSessionRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService,
-    aiRequestManager: AIRequestManager,
+    generationOrchestrator: GenerationOrchestrator,
+    instructionService: InstructionService,
+    customerCredentialsService: CustomerCredentialsService,
     retrievalServerClient: RetrievalServerClient,
     json: Json
 ) {
@@ -213,7 +217,7 @@ fun Route.registerVoiceSessionRoutes(
             val client = init["client"]?.jsonPrimitive?.content ?: "voice"
             val agentic = init["agentic"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
 
-            val apiKey = customerProfileService.getCustomerApiKeyForVendor(vendor, customerId)
+            val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(vendor, customerId)
                 ?: return@webSocket reject("No API key stored for $vendorName")
 
             // --- Resolve instruction (persona) into the system prompt ---
@@ -221,7 +225,7 @@ fun Route.registerVoiceSessionRoutes(
             val instructionId = promptJson?.get("instructionId")?.jsonPrimitive?.content ?: ""
             val instructionVersion = promptJson?.get("instructionVersion")?.jsonPrimitive?.content ?: ""
             val systemPrompt = if (instructionId.isNotBlank()) {
-                customerProfileService.getInstructionVersion(
+                instructionService.getInstructionVersion(
                     customerId, instructionId, instructionVersion.toIntOrNull() ?: 1
                 )?.instruction ?: ""
             } else ""
@@ -229,13 +233,13 @@ fun Route.registerVoiceSessionRoutes(
             // --- Resolve or create the conversation (enforces write access) ---
             val requestedConversationId = init["conversationId"]?.jsonPrimitive?.content
             val conversationId = try {
-                aiRequestManager.getConversationId(customerId, client, requestedConversationId)
+                generationOrchestrator.getConversationId(customerId, client, requestedConversationId)
             } catch (e: Exception) {
                 return@webSocket reject("Cannot use conversation: ${e.message}")
             }
 
             if (instructionId.isNotBlank()) {
-                customerProfileService.trackInstructionUsage(customerId, conversationId, instructionId)
+                instructionService.trackInstructionUsage(customerId, conversationId, instructionId)
             }
 
             // --- Load prior messages as context for the voice model ---

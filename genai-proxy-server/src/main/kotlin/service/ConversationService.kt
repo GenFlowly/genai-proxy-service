@@ -1,7 +1,10 @@
 package com.genflowly.service
 
+import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ShareRepository
+import models.AIConfig
+import org.slf4j.LoggerFactory
 import com.genflowly.models.api.GetConversationResponse
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.models.api.PromptAndResponse
@@ -15,8 +18,63 @@ class ConversationArchivedException(message: String) : Exception(message)
 
 class ConversationService(
     private val conversationRepository: ConversationRepository,
-    private val shareRepository: ShareRepository
+    private val shareRepository: ShareRepository,
+    private val sharedUsersResolver: SharedUsersResolver,
+    private val utilityGenerationService: UtilityGenerationService
 ) {
+    private val logger = LoggerFactory.getLogger("ConversationService")
+
+    private val titleAIModel: String = "gpt-5"
+    private val titleAIVendor: AIVendor = AIVendor.OPENAI
+
+    /**
+     * Uses AI (direct SDK path) to generate and store a short title for the
+     * conversation based on the first prompt and instruction name. Returns the
+     * title, or null when generation failed or produced nothing usable.
+     */
+    suspend fun createConversationTitle(
+        conversationId: String,
+        customerId: String,
+        prompt: String,
+        instructionName: String? = null
+    ): String? {
+        return try {
+            val titleMessage = Message(
+                conversationId = "title-generation",
+                text = "I am starting a conversation with $instructionName " +
+                        "using" +
+                        "this prompt - $prompt. Create a short title for this" +
+                        "conversation. Just give the title",
+                client = "internal",
+                role = "user",
+                customerId = customerId,
+                systemPrompt = "",
+                aiConfig = listOf(AIConfig(titleAIVendor, titleAIModel)),
+                previousMessageId = null
+            )
+
+            val result = utilityGenerationService.generateText(
+                titleAIVendor,
+                titleAIModel,
+                listOf(titleMessage),
+                "",
+                customerId
+            )
+
+            // Strip any surrounding quotes the LLM may include (e.g. "My Title" -> My Title)
+            val title = result.text.trim().removePrefix("\"").removeSuffix("\"").trim().take(200)
+            if (title.isNotBlank()) {
+                updateConversationTitle(conversationId, customerId, title)
+                logger.info("Conversation title set for $conversationId: '$title'")
+                title
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to generate conversation title for $conversationId: ${e.message}")
+            null
+        }
+    }
 
     /**
      * Returns the effective role [callerCustomerId] has on [conversationId]:
@@ -133,7 +191,7 @@ class ConversationService(
         callerCustomerId: String
     ): List<models.CustomerProfile> {
         requireEditOrOwner(conversationId, callerCustomerId, action = "list-shares")
-        return shareRepository.getUsersWithSharedConversation(conversationId)
+        return sharedUsersResolver.getUsersWithSharedConversation(conversationId)
     }
 
     private suspend fun requireEditOrOwner(conversationId: String, callerCustomerId: String, action: String) {

@@ -19,7 +19,11 @@ import mu.KLogger
 import mu.KotlinLogging.logger
 import org.koin.core.module.Module
 import org.koin.dsl.module
-import com.genflowly.service.AIRequestManager
+import com.genflowly.service.CustomerCredentialsService
+import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.InstructionService
+import com.genflowly.service.SharedUsersResolver
+import com.genflowly.service.UtilityGenerationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
 import io.ktor.client.*
@@ -99,7 +103,7 @@ fun appModule(): Module = module {
     // Per-domain repositories (the dissolved DynamoDBProvider)
     single { ConversationRepository(get(), get()) }
     single { CustomerProfileRepository(get(), get()) }
-    single { ShareRepository(get(), get(), get()) }
+    single { ShareRepository(get(), get()) }
     single { CustomerCredentialsRepository(get(), get()) }
     single { DeveloperApiKeyRepository(get(), get()) }
     single { SystemApiKeyRepository(get(), get()) }
@@ -109,23 +113,16 @@ fun appModule(): Module = module {
     single { GraphRepository(get(), get()) }
 
     single { AIRequestService() }
-    single {
-        CustomerProfileService(
-            kmsProvider = get(),
-            customerProfileRepository = get(),
-            customerCredentialsRepository = get(),
-            instructionRepository = get(),
-            shareRepository = get(),
-            graphRepository = get(),
-            encodingServerClient = get(),
-            appScope = get()
-        )
-    }
-    single { ConversationService(get(), get()) }
-    single { AIRequestManager(get(), get(), get(), get(), get(), get(), get()) }
-    single { AIModelsService(get(), get()) }
+    single { SharedUsersResolver(get(), get()) }
+    single { CustomerCredentialsService(get(), get(), get(), get()) }
+    single { UtilityGenerationService(get(), get()) }
     single { GraphService(get()) }
-    single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get()) }
+    single { CustomerProfileService(get(), get(), get()) }
+    single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
+    single { ConversationService(get(), get(), get(), get()) }
+    single { GenerationOrchestrator(get(), get(), get(), get(), get(), get()) }
+    single { AIModelsService(get(), get()) }
+    single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.SystemApiKeyService(get(), get()) }
     single { com.genflowly.service.SystemAIFailoverService(get()) }

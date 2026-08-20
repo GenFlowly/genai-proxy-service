@@ -6,8 +6,11 @@ import com.genflowly.repository.NotesRepository
 import com.genflowly.providers.EncodingNoteData
 import com.genflowly.providers.EncodingSaveNoteRequest
 import com.genflowly.providers.EncodingServerClient
+import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.providers.RetrievalServerClient
 import kotlinx.coroutines.launch
+import models.toCredentialKey
+import models.toProviderString
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
 
@@ -62,10 +65,54 @@ class NotesService(
     private val retrievalServerClient: RetrievalServerClient,
     private val notesRepository: NotesRepository,
     private val customerProfileRepository: CustomerProfileRepository,
-    private val aiRequestManager: AIRequestManager,
+    private val customerCredentialsService: CustomerCredentialsService,
+    private val modelCatalogService: ModelCatalogService,
     private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
+
+    private val titleAIModel: String = "gpt-5"
+    private val titleAIVendor: AIVendor = AIVendor.OPENAI
+
+    /**
+     * Generates a short descriptive title for a note via the retrieval-server,
+     * or null when no key is stored / generation produced nothing usable.
+     */
+    private suspend fun createNoteTitle(customerId: String, noteContent: String): String? {
+        return try {
+            val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(titleAIVendor, customerId)
+            if (apiKey == null) {
+                logger.warn("No $titleAIVendor API key for $customerId; skipping note title generation")
+                return null
+            }
+
+            val result = retrievalServerClient.retrieveAndGenerate(
+                customerId = customerId,
+                client = "internal",
+                query = noteContent.take(4000),
+                llmCredentials = mapOf(titleAIVendor.toCredentialKey() to apiKey),
+                llmProvider = titleAIVendor.toProviderString(),
+                llmModel = titleAIModel,
+                // Reasoning models (gpt-5) spend completion tokens on internal
+                // reasoning before any visible text; a tight cap yields an
+                // empty response, so keep the same headroom as chat requests
+                llmMaxTokens = modelCatalogService.resolveMaxTokens(
+                    vendor = titleAIVendor,
+                    model = titleAIModel,
+                    requested = null,
+                    streaming = false
+                ),
+                systemPrompt = "Create a short descriptive title (at most 8 words) for the note the user sends. " +
+                        "Respond with the title only - no quotes, no trailing punctuation, no extra text."
+            )
+
+            val title = result.text?.trim()?.removePrefix("\"")?.removeSuffix("\"")?.trim()?.take(200)
+            if (title.isNullOrBlank()) null else title
+        } catch (e: Exception) {
+            logger.warn("Failed to generate note title for customer $customerId: ${e.message}")
+            null
+        }
+    }
 
     suspend fun getNotes(customerId: String): GetNotesResponse {
         val items = notesRepository.getNotes(customerId)
@@ -111,7 +158,7 @@ class NotesService(
         var effectiveTitle = requestTitle
         if (shouldGenerateTitle(request.data.title, request.data.note_value)) {
             try {
-                val title = aiRequestManager.createNoteTitle(customerId, request.data.note_value)
+                val title = createNoteTitle(customerId, request.data.note_value)
                 if (!title.isNullOrBlank()) {
                     notesRepository.updateNoteTitle(customerId, request.data.note_key, title)
                     logger.info("Generated title for note ${request.data.note_key}: '$title'")

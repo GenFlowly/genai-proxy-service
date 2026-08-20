@@ -15,13 +15,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
-import com.genflowly.service.AIRequestManager
+import com.genflowly.service.CustomerCredentialsService
+import com.genflowly.service.InstructionService
 
 private val logger = LoggerFactory.getLogger("OnboardCustomerRoute")
 
 fun Route.registerOnboardCustomerRoutes(
     customerProfileService: CustomerProfileService,
-    aiRequestManager: AIRequestManager
+    customerCredentialsService: CustomerCredentialsService,
+    instructionService: InstructionService
 ) {
     authenticate("auth0") {
         post(Routes.ONBOARD_CUSTOMER, {
@@ -69,13 +71,13 @@ fun Route.registerOnboardCustomerRoutes(
             // customerId, so run them concurrently
             val response = coroutineScope {
                 val aiConfigPreferences = async { customerProfileService.getAIConfigPreferences(customerProfile.customerId) }
-                val aiVendorAPIKeyStatusList = async { customerProfileService.getAIVendorAPIKeyStatusList(customerProfile.customerId) }
-                val vectorDBConfigStatusList = async { customerProfileService.getCustomerVectorDBConfigStatusList(customerProfile.customerId) }
-                val supabaseConfigStatus = async { customerProfileService.getCustomerSupabaseConfigStatus(customerProfile.customerId) }
-                val customerInstructions = async { customerProfileService.getLatestCustomerInstructions(customerProfile.customerId) }
+                val aiVendorAPIKeyStatusList = async { customerCredentialsService.getAIVendorAPIKeyStatusList(customerProfile.customerId) }
+                val vectorDBConfigStatusList = async { customerCredentialsService.getCustomerVectorDBConfigStatusList(customerProfile.customerId) }
+                val supabaseConfigStatus = async { customerCredentialsService.getCustomerSupabaseConfigStatus(customerProfile.customerId) }
+                val customerInstructions = async { instructionService.getLatestCustomerInstructions(customerProfile.customerId) }
 
                 // Fire and forget backfill missing categories/icons using AI
-                customerProfileService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await(), aiRequestManager)
+                instructionService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await())
 
                 OnboardCustomerResponse(
                     customerId = customerProfile.customerId,

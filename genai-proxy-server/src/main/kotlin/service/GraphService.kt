@@ -35,10 +35,61 @@ private val logger = KotlinLogging.logger {}
 
 class GraphService(private val graphRepository: GraphRepository) {
 
+    // ─── Default graph seeding (used during onboarding) ───────────────────────
+
+    /** Seeds the default RAG graph only when the customer has none yet. */
+    suspend fun seedDefaultGraphIfMissing(customerId: String) {
+        if (graphRepository.getDefaultCustomerGraph(customerId) == null) {
+            logger.info { "No default graph found for customerId=$customerId — seeding now" }
+            seedDefaultGraph(customerId)
+        }
+    }
+
+    /**
+     * Seeds the default RAG pipeline graph (query analysis → optional rewrite →
+     * retrieval → ranking → response generation). Failures are logged, not
+     * thrown — a customer without the default graph can still chat non-agentically.
+     */
+    suspend fun seedDefaultGraph(customerId: String) {
+        try {
+            val queryAnalyzerId = models.generateNodeId()
+            val queryRewriterId = models.generateNodeId()
+            val retrievalId = models.generateNodeId()
+            val resultRankerId = models.generateNodeId()
+            val responseGeneratorId = models.generateNodeId()
+
+            val queryAnalyzerConfig = """{"system_prompt":"You are a query analysis expert for a vector similarity search system. Analyze the user query and determine the intent and whether it needs rewriting to improve retrieval. Return ONLY valid JSON: {\"intent\": \"<brief description>\", \"needs_rewrite\": <true|false>}","input_template":"Query: {original_query}","response_format":"json","json_output_mapping":{"intent":"query_intent","needs_rewrite":"needs_rewrite"}}"""
+            val queryRewriterConfig = """{"system_prompt":"You are a query rewriting expert for a vector similarity search system. Rewrite the query to be more specific and retrievable: expand abbreviations, add missing context, clarify ambiguity. Return ONLY the rewritten query text, nothing else.","input_template":"Original query: {original_query}\nIntent: {query_intent}","output_key":"rewritten_query","response_format":"text"}"""
+            val resultRankerConfig = """{"system_prompt":"You are a result ranking expert. Given a query and retrieved document chunks, re-rank them by relevance and remove irrelevant ones. Return ONLY a JSON array of 0-based indices in order of relevance (most relevant first). Include only indices of relevant results. Example: [2, 0, 4]","input_template":"Query: {query}\n\nChunks:\n{chunks_text}","output_key":"ranked_results","response_format":"json_indices","json_indices_source_key":"retrieval_results"}"""
+            val responseGeneratorConfig = """{"input_template":"Context:\n{context}\n\nQuestion: {query}","output_key":"generated_response","response_format":"text","include_conversation_history":true,"is_streaming":true}"""
+
+            graphRepository.createCustomerGraphNode(customerId, queryAnalyzerId, "QUERY_ANALYZER", "Query Analyzer", queryAnalyzerConfig)
+            graphRepository.createCustomerGraphNode(customerId, queryRewriterId, "QUERY_REWRITER", "Query Rewriter", queryRewriterConfig)
+            graphRepository.createCustomerGraphNode(customerId, retrievalId, "RETRIEVAL", "Retrieval", "{}")
+            graphRepository.createCustomerGraphNode(customerId, resultRankerId, "RESULT_RANKER", "Result Ranker", resultRankerConfig)
+            graphRepository.createCustomerGraphNode(customerId, responseGeneratorId, "RESPONSE_GENERATOR", "Response Generator", responseGeneratorConfig)
+
+            val edges = """{"edges":[{"from":"$queryRewriterId","to":"$retrievalId"},{"from":"$retrievalId","to":"$resultRankerId"},{"from":"$resultRankerId","to":"$responseGeneratorId"},{"from":"$responseGeneratorId","to":"__end__"}],"conditional_edges":[{"from":"$queryAnalyzerId","condition_key":"needs_rewrite","routes":{"true":"$queryRewriterId","false":"$retrievalId"}}]}"""
+
+            graphRepository.createCustomerGraph(
+                customerId = customerId,
+                graphId = models.generateGraphId(),
+                name = "Default Graph",
+                isDefault = true,
+                nodeIds = listOf(queryAnalyzerId, queryRewriterId, retrievalId, resultRankerId, responseGeneratorId),
+                edges = edges,
+                entryPoint = queryAnalyzerId
+            )
+            logger.info { "Seeded default graph for customerId=$customerId" }
+        } catch (e: Exception) {
+            logger.warn { "Failed to seed default graph for customerId=$customerId: ${e.message}" }
+        }
+    }
+
     // ─── Graph Nodes ──────────────────────────────────────────────────────────
 
     suspend fun createGraphNode(customerId: String, req: CreateGraphNodeRequest): GraphNodeResponse {
-        val nodeId = generateNodeId()
+        val nodeId = models.generateNodeId()
         graphRepository.createCustomerGraphNode(customerId, nodeId, req.nodeType, req.name, req.config)
         logger.info { "Created graph node $nodeId for customer $customerId" }
         return GraphNodeResponse(
@@ -109,7 +160,7 @@ class GraphService(private val graphRepository: GraphRepository) {
     // ─── Graphs ───────────────────────────────────────────────────────────────
 
     suspend fun createGraph(customerId: String, req: CreateCustomerGraphRequest): CustomerGraphResponse {
-        val graphId = generateGraphId()
+        val graphId = models.generateGraphId()
         graphRepository.createCustomerGraph(
             customerId = customerId,
             graphId = graphId,
