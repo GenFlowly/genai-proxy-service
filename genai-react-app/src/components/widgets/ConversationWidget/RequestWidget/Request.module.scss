@@ -21,6 +21,17 @@
         margin: 0;
         padding-top: 0;
     }
+
+    @include respond-to-mobile {
+        // Track the visual viewport (--vvh set by useVisualViewportHeight) so
+        // the editor gives up height when the on-screen keyboard opens and the
+        // Generate button stays visible above it. 100dvh fallback for browsers
+        // without VisualViewport support.
+        height: calc(var(--vvh, 100dvh) - 64px - 10rem);
+        // The keyboard open/close resize lands as discrete events; ease the
+        // height change so it doesn't snap
+        transition: height 150ms ease;
+    }
 }
 
 .resolvedRequestContainer {

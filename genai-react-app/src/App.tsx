@@ -5,10 +5,12 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import AppContent from './AppContent';
 import { config } from "./config/env";
+import { useVisualViewportHeight } from './hooks/useVisualViewportHeight';
 
 export default function App(): React.ReactElement {
   const { domain, clientId, audience } = config.auth0;
   const navigate = useNavigate();
+  useVisualViewportHeight();
 
   const onRedirectCallback = (appState: any) => {
     navigate(appState?.returnTo || window.location.pathname);
