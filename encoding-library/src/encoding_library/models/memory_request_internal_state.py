@@ -18,6 +18,7 @@ class MemoryRequestInternalState:
         chunking_technique: Optional[str] = None,
         data_chunks: Optional[List[str]] = None,
         vectors: Optional[List[Any]] = None,
+        processing_mode: Optional[str] = None,
     ):
         self.data_type = data_type
         self.customer_id = customer_id
@@ -29,6 +30,9 @@ class MemoryRequestInternalState:
         self.chunking_technique = chunking_technique
         self.data_chunks = data_chunks
         self.vectors = vectors
+        # "realtime" (default) embeds synchronously in the pipeline;
+        # "batch" submits chunks to the provider's async batch API (voyage only)
+        self.processing_mode = processing_mode
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -43,6 +47,7 @@ class MemoryRequestInternalState:
             "chunking_technique": self.chunking_technique,
             "data_chunks": self.data_chunks,
             "vectors": self.vectors,
+            "processing_mode": self.processing_mode,
         }
 
     @staticmethod
@@ -59,4 +64,5 @@ class MemoryRequestInternalState:
             chunking_technique=data.get('chunking_technique'),
             data_chunks=data.get('data_chunks'),
             vectors=data.get('vectors'),
+            processing_mode=data.get('processing_mode'),
         )
