@@ -74,9 +74,10 @@ class NoteProcessor(DataProcessor):
                 "note_key": (notes_model.note_key or "")[:256],
                 "client": state.client[:100],
                 "created_at": notes_model.created_at,
-                # TODO(s3): nothing writes raw notes to S3 yet — the raw note
-                # persists in DynamoDB (CustomerNotes); add S3 archival later.
-                "s3_key": f"notes/{state.client}/{data_id}.json",
+                # Points at the durable per-note document in the customer-documents
+                # bucket ({customerId}/notes/{noteKey}.json). Written by the batch
+                # accumulator; realtime-path notes may not have the object yet.
+                "s3_key": f"{state.customer_id}/notes/{notes_model.note_key}.json",
             }
             records.append(record)
 

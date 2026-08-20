@@ -70,9 +70,10 @@ class EmailProcessor(DataProcessor):
             "folder": email_model.folder[:100],
             "thread_id": (email_model.thread_id or "")[:200],
             "in_reply_to": (email_model.in_reply_to or "")[:200],
-            # TODO(s3): nothing writes raw emails to S3 yet — this key is a
-            # placeholder for a future raw-document archival step.
-            "s3_key": f"emails/{email_model.folder}/{email_model.message_id}.json"
+            # Points at the per-email document in the customer-documents bucket
+            # ({customerId}/emails/{messageId}.json). TODO(s3): the email ingestion
+            # path does not write this object yet — pointer is forward-looking.
+            "s3_key": f"{state.customer_id}/emails/{email_model.message_id}.json"
         }
 
         return [record]

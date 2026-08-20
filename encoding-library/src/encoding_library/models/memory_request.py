@@ -16,6 +16,7 @@ class MemoryRequest(BaseModel, Generic[T]):
     model_name: Optional[str] = None
     chunking_type: Optional[str] = None
     chunking_technique: Optional[str] = None
+    processing_mode: Optional[str] = None  # "realtime" (default) | "batch"
     
     class Config:
         populate_by_name = True
