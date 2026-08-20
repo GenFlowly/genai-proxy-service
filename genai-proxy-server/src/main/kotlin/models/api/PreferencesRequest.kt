@@ -19,6 +19,12 @@ data class AIConfigPreferences(
     // realtime when unset. embeddingModel names the batch model (e.g. voyage-4-large).
     val embeddingMode: String? = null,
     val embeddingModel: String? = null,
+    // Fallback instruction when a request selects none:
+    // instructionFallbackMode = "preferred" -> use preferredInstructionId;
+    // "lastUsed" -> use the customer's most-recently-used instruction.
+    // Either way, resolution ultimately falls back to the SYSTEM default.
+    val preferredInstructionId: String? = null,
+    val instructionFallbackMode: String? = null,
 )
 
 @Serializable

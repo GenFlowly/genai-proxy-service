@@ -5,6 +5,7 @@ import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.aicallerlib.models.claude.ClaudeUsageMetadata
 import com.genflowly.aicallerlib.models.gemini.GeminiUsageMetadata
 import com.genflowly.aicallerlib.models.openai.OpenAIUsageMetadata
+import com.genflowly.models.api.InstructionResponse
 import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationAccessDeniedException
 import com.genflowly.service.ConversationService
@@ -239,6 +240,35 @@ class AIRequestManager(
         return activeConversationId
     }
 
+    /**
+     * Resolve the effective (instructionId, version) for a generation request.
+     * An explicit selection is returned as-is; a blank selection falls back to
+     * the customer's default (preferred / last-used / SYSTEM). Returns the
+     * original blank values if nothing resolves — safe, yields no instruction.
+     */
+    /**
+     * Resolve the instruction to use for a generation request, returning the full
+     * instruction (no second fetch downstream). An explicit selection is fetched
+     * directly; a blank selection resolves the customer's default (preferred /
+     * last-used / SYSTEM). The default is an enhancement, not a requirement — any
+     * failure to resolve it degrades to no instruction (plain chat), never a 500.
+     */
+    private suspend fun resolveInstruction(
+        customerId: String,
+        instructionId: String,
+        instructionVersion: String
+    ): InstructionResponse? {
+        if (instructionId.isNotBlank()) {
+            return customerProfileService.getInstructionVersion(customerId, instructionId, instructionVersion.toIntOrNull() ?: 1)
+        }
+        return try {
+            customerProfileService.resolveDefaultInstruction(customerId)
+        } catch (e: Exception) {
+            logger.warn("Failed to resolve default instruction for customer {}; proceeding with none", customerId, e)
+            null
+        }
+    }
+
     suspend fun processTextGenerateRequest(
         aiConfig: List<AIConfig>,
         instructionId: String,
@@ -259,9 +289,13 @@ class AIRequestManager(
         validateAttachments(attachments, customerId)
         validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
 
-        val versionInt = instructionVersion.toIntOrNull() ?: 1
-        val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, versionInt)
+        // An explicit selection wins; otherwise resolve the customer's default
+        // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
+        // returns the full instruction, so there is no second fetch here.
+        val instructionResp = resolveInstruction(customerId, instructionId, instructionVersion)
         val systemPrompt = instructionResp?.instruction ?: ""
+        val effectiveInstructionId = instructionResp?.id ?: ""
+        val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =
@@ -284,8 +318,8 @@ class AIRequestManager(
             previousMessageId = actualPreviousMessageId,
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
-            instructionId = instructionId.takeIf { it.isNotBlank() },
-            instructionVersion = instructionVersion.takeIf { it.isNotBlank() }
+            instructionId = effectiveInstructionId.takeIf { it.isNotBlank() },
+            instructionVersion = effectiveInstructionVersion.takeIf { it.isNotBlank() }
         )
 
         // Step 4 - Add message request to conversation
@@ -294,8 +328,8 @@ class AIRequestManager(
         logger.info("Added Message id {} to conversation", message.messageId)
 
         // Step 5 - Track instruction usage (strict: counts each unique conversation+instruction once)
-        if (instructionId.isNotBlank()) {
-            customerProfileService.trackInstructionUsage(customerId, activeConversationId, instructionId)
+        if (effectiveInstructionId.isNotBlank()) {
+            customerProfileService.trackInstructionUsage(customerId, activeConversationId, effectiveInstructionId)
         }
         val responseMessageList = coroutineScope {
             message.aiConfig.map { aiConfig ->
@@ -531,8 +565,13 @@ class AIRequestManager(
         validateAttachments(attachments, customerId)
         validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
 
-        val instructionResp = customerProfileService.getInstructionVersion(customerId, instructionId, instructionVersion.toIntOrNull() ?: 1)
+        // An explicit selection wins; otherwise resolve the customer's default
+        // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
+        // returns the full instruction, so there is no second fetch here.
+        val instructionResp = resolveInstruction(customerId, instructionId, instructionVersion)
         val systemPrompt = instructionResp?.instruction ?: ""
+        val effectiveInstructionId = instructionResp?.id ?: ""
+        val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId = getConversationId(customerId, client, conversationId)
@@ -576,8 +615,8 @@ class AIRequestManager(
             previousMessageId = actualPreviousMessageId,
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
-            instructionId = instructionId.takeIf { it.isNotBlank() },
-            instructionVersion = instructionVersion.takeIf { it.isNotBlank() }
+            instructionId = effectiveInstructionId.takeIf { it.isNotBlank() },
+            instructionVersion = effectiveInstructionVersion.takeIf { it.isNotBlank() }
         )
 
         // Step 3 - Add message request to conversation (skip when a parallel
@@ -590,8 +629,8 @@ class AIRequestManager(
         }
 
         // Step 4 - Track instruction usage (strict: counts each unique conversation+instruction once)
-        if (instructionId.isNotBlank()) {
-            customerProfileService.trackInstructionUsage(customerId, activeConversationId, instructionId)
+        if (effectiveInstructionId.isNotBlank()) {
+            customerProfileService.trackInstructionUsage(customerId, activeConversationId, effectiveInstructionId)
         }
 
         val config = aiConfig.firstOrNull() ?: run {
