@@ -23,9 +23,10 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
+import com.genflowly.providers.EncodingServerClient
+import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.providers.S3Provider
 import com.genflowly.service.GraphService
-import com.genflowly.service.RetrievalService
 
 fun appModule(): Module = module {
     single { provideJson() }
@@ -84,18 +85,19 @@ fun appModule(): Module = module {
     single { DynamoDBProvider(get(), get()) }
     single { KMSProvider(get(), get(), get<AppConfig>().kmsKeyId) }
     single { S3Provider(get(), get(), get(), get<AppConfig>().attachmentsBucket) }
+    single { RetrievalServerClient(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
+    single { EncodingServerClient(get(), get(), get<AppConfig>().encodingServerUrl) }
     single { AIRequestService() }
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { ConversationService(get()) }
     single { AIRequestManager(get(), get(), get(), get(), get(), get(), get()) }
-    single { AIModelsService(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
-    single { RetrievalService(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
+    single { AIModelsService(get(), get()) }
     single { GraphService(get()) }
-    single { com.genflowly.service.NotesService(get(), get(), get(), get()) }
+    single { com.genflowly.service.NotesService(get(), get(), get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.SystemApiKeyService(get(), get()) }
     single { com.genflowly.service.SystemAIFailoverService(get()) }
-    single { com.genflowly.service.ModelCatalogService(get(), get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
+    single { com.genflowly.service.ModelCatalogService(get(), get(), get()) }
 }
 
 fun provideJson(): Json {

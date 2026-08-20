@@ -1,8 +1,11 @@
-package com.genflowly.service
+package com.genflowly.providers
 
+import com.genflowly.aicallerlib.models.AIVendor
 import io.ktor.client.*
-import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.client.plugins.timeout
+import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
+import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -18,6 +21,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import models.ModelCatalogEntry
+import models.aiVendorFromProviderString
+import models.toProviderString
 import mu.KLogger
 
 sealed class StreamChunk {
@@ -115,12 +121,100 @@ private data class AgentRawData(
     val images: List<ImageRef> = emptyList()
 )
 
-class RetrievalService(
+// --- /models and /validate-key wire types ---
+
+@Serializable
+private data class ListModelsVendorCredentials(
+    val provider: String,
+    val api_key: String,
+    val capability: String = "all"
+)
+
+@Serializable
+private data class ListModelsPayload(val vendors: List<ListModelsVendorCredentials>)
+
+@Serializable
+private data class VendorModels(val provider: String, val models: List<String>)
+
+@Serializable
+private data class ListModelsResponse(val vendor_models: List<VendorModels>)
+
+@Serializable
+private data class ValidateKeyPayload(val provider: String, val api_key: String)
+
+@Serializable
+private data class ValidateKeyResponse(
+    val provider: String,
+    val valid: Boolean,
+    val error: String? = null
+)
+
+// --- /models/metadata wire types ---
+
+@Serializable
+private data class MetadataVendorKey(val provider: String, val api_key: String)
+
+@Serializable
+private data class ModelMetadataPayload(val vendors: List<MetadataVendorKey>)
+
+@Serializable
+private data class ModelMetadataEntry(
+    val model: String,
+    val max_output_tokens: Int? = null,
+    val max_input_tokens: Int? = null,
+    // USD per 1M tokens (from LiteLLM's live price map — vendors expose no pricing API)
+    val input_cost_per_mtok: Double? = null,
+    val output_cost_per_mtok: Double? = null,
+    val cache_read_cost_per_mtok: Double? = null,
+    val cache_write_cost_per_mtok: Double? = null
+)
+
+@Serializable
+private data class WireVendorModelMetadata(
+    val provider: String,
+    val models: List<ModelMetadataEntry>,
+    val error: String? = null
+)
+
+@Serializable
+private data class ModelMetadataResponse(val vendor_models: List<WireVendorModelMetadata>)
+
+/** Per-vendor model metadata as returned by the retrieval-server's /models/metadata. */
+data class VendorModelMetadata(
+    val vendor: AIVendor,
+    val models: List<ModelCatalogEntry>,
+    /** Non-null when the vendor fetch failed on the retrieval-server side. */
+    val error: String? = null
+)
+
+/**
+ * The single HTTP/WebSocket client for the Python retrieval-server. All
+ * endpoints of that server are reached through this class: /retrieve (batch +
+ * SSE stream), /models, /validate-key, /models/metadata, /delete-note-vectors
+ * and the /voice WebSocket. No business logic lives here — callers own
+ * validation, persistence and policy.
+ */
+class RetrievalServerClient(
     private val logger: KLogger,
     private val json: Json,
     private val httpClient: HttpClient,
     private val retrievalServerUrl: String
 ) {
+    /** ws(s) URL of the realtime voice endpoint (http -> ws, https -> wss). */
+    val voiceWsUrl: String = retrievalServerUrl.replaceFirst("http", "ws") + "/voice"
+
+    /**
+     * Opens a WebSocket to the /voice endpoint with unbounded timeouts (voice
+     * sessions are long-lived) and runs [handler] on the session.
+     */
+    suspend fun voiceSession(handler: suspend DefaultClientWebSocketSession.() -> Unit) {
+        httpClient.webSocket(voiceWsUrl, request = {
+            timeout {
+                requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+            }
+        }, block = handler)
+    }
 
     private fun buildPayload(
         customerId: String,
@@ -292,4 +386,150 @@ class RetrievalService(
             logger.error(e) { "Streaming from retrieval server failed" }
         }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Fetches the model list per vendor via /models. Returns an empty map on
+     * any transport error (callers treat missing vendors as "no models").
+     */
+    suspend fun listModels(
+        apiKeys: Map<AIVendor, String>,
+        capability: String = "all"
+    ): Map<AIVendor, List<String>> {
+        if (apiKeys.isEmpty()) return emptyMap()
+
+        val start = System.currentTimeMillis()
+        val payload = json.encodeToString(
+            ListModelsPayload(
+                vendors = apiKeys.map { (vendor, apiKey) ->
+                    ListModelsVendorCredentials(
+                        provider = vendor.toProviderString(),
+                        api_key = apiKey,
+                        capability = capability
+                    )
+                }
+            )
+        )
+
+        return try {
+            val response: HttpResponse = httpClient.post("$retrievalServerUrl/models") {
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            if (!response.status.isSuccess()) {
+                val errorBody = response.bodyAsText()
+                logger.warn { "Retrieval server /models returned ${response.status}: $errorBody" }
+                return emptyMap()
+            }
+
+            val parsed = json.decodeFromString<ListModelsResponse>(response.bodyAsText())
+            logger.info {
+                "Models fetched via retrieval server: durationMs=${System.currentTimeMillis() - start}, " +
+                    "counts=${parsed.vendor_models.associate { it.provider to it.models.size }}"
+            }
+
+            parsed.vendor_models.mapNotNull { vendorModels ->
+                aiVendorFromProviderString(vendorModels.provider)?.let { it to vendorModels.models }
+            }.toMap()
+        } catch (e: Exception) {
+            logger.warn { "Failed to fetch models from retrieval server: ${e.message}" }
+            emptyMap()
+        }
+    }
+
+    /**
+     * Checks a vendor API key with one cheap authenticated vendor call via
+     * /validate-key. Any transport error reads as invalid.
+     */
+    suspend fun validateApiKey(vendor: AIVendor, apiKey: String): Boolean {
+        val payload = json.encodeToString(
+            ValidateKeyPayload(provider = vendor.toProviderString(), api_key = apiKey)
+        )
+        return try {
+            val response: HttpResponse = httpClient.post("$retrievalServerUrl/validate-key") {
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            if (!response.status.isSuccess()) {
+                logger.warn { "Retrieval server /validate-key returned ${response.status}" }
+                return false
+            }
+            val parsed = json.decodeFromString<ValidateKeyResponse>(response.bodyAsText())
+            if (!parsed.valid) {
+                logger.info { "API key invalid for vendor $vendor: ${parsed.error}" }
+            }
+            parsed.valid
+        } catch (e: Exception) {
+            logger.warn { "Failed to validate API key for vendor $vendor: ${e.message}" }
+            false
+        }
+    }
+
+    /**
+     * Fetches per-model metadata (token limits, pricing) for the given
+     * vendor/key pairs via /models/metadata. Returns one entry per vendor the
+     * server answered for; a vendor-level fetch failure is reported via
+     * [VendorModelMetadata.error] with an empty model list.
+     */
+    suspend fun fetchModelMetadata(vendorKeys: List<Pair<AIVendor, String>>): List<VendorModelMetadata> {
+        if (vendorKeys.isEmpty()) return emptyList()
+
+        val payload = json.encodeToString(
+            ModelMetadataPayload(
+                vendors = vendorKeys.map { (vendor, key) ->
+                    MetadataVendorKey(provider = vendor.toProviderString(), api_key = key)
+                }
+            )
+        )
+
+        val response: HttpResponse = httpClient.post("$retrievalServerUrl/models/metadata") {
+            contentType(ContentType.Application.Json)
+            setBody(payload)
+            timeout { requestTimeoutMillis = 120_000L }
+        }
+        if (!response.status.isSuccess()) {
+            logger.error { "Retrieval server /models/metadata returned ${response.status}" }
+            return emptyList()
+        }
+
+        val parsed = json.decodeFromString<ModelMetadataResponse>(response.bodyAsText())
+        return parsed.vendor_models.mapNotNull { vendorMetadata ->
+            val vendor = aiVendorFromProviderString(vendorMetadata.provider) ?: return@mapNotNull null
+            VendorModelMetadata(
+                vendor = vendor,
+                models = vendorMetadata.models.map {
+                    ModelCatalogEntry(
+                        model = it.model,
+                        maxOutputTokens = it.max_output_tokens,
+                        maxInputTokens = it.max_input_tokens,
+                        inputCostPerMTok = it.input_cost_per_mtok,
+                        outputCostPerMTok = it.output_cost_per_mtok,
+                        cacheReadCostPerMTok = it.cache_read_cost_per_mtok,
+                        cacheWriteCostPerMTok = it.cache_write_cost_per_mtok
+                    )
+                },
+                error = vendorMetadata.error
+            )
+        }
+    }
+
+    /**
+     * Hard-deletes a note's embeddings in the vector DB via /delete-note-vectors.
+     * Throws on transport errors — callers decide whether that is fatal.
+     */
+    suspend fun deleteNoteVectors(customerId: String, noteKey: String): Boolean {
+        val response = httpClient.post("$retrievalServerUrl/delete-note-vectors") {
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(DeleteNoteVectorsPayload(customer_id = customerId, note_key = noteKey)))
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            logger.error { "Failed to delete vectors for note $noteKey: ${response.status} $errorBody" }
+            return false
+        }
+        logger.info { "Successfully deleted vectors for note $noteKey" }
+        return true
+    }
 }
+
+@Serializable
+private data class DeleteNoteVectorsPayload(val customer_id: String, val note_key: String)

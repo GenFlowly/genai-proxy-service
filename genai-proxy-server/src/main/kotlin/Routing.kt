@@ -117,7 +117,7 @@ fun Application.configureRouting(
     developerApiKeyService: DeveloperApiKeyService,
     systemApiKeyService: com.genflowly.service.SystemApiKeyService,
     modelCatalogService: com.genflowly.service.ModelCatalogService,
-    httpClient: io.ktor.client.HttpClient,
+    retrievalServerClient: com.genflowly.providers.RetrievalServerClient,
     json: kotlinx.serialization.json.Json,
 ) {
     routing {
@@ -174,7 +174,7 @@ fun Application.configureRouting(
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, dynamoDBProvider, modelCatalogService
         )
-        registerVoiceSessionRoutes(customerProfileService, conversationService, aiRequestManager, httpClient, json)
+        registerVoiceSessionRoutes(customerProfileService, conversationService, aiRequestManager, retrievalServerClient, json)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }
 }

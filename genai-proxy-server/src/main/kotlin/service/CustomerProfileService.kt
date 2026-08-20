@@ -10,13 +10,9 @@ import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.AIMode
 import com.genflowly.di.AppScope
 import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.providers.EncodingServerClient
 import com.genflowly.providers.KMSProvider
 import java.util.*
-import io.ktor.client.HttpClient
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -29,7 +25,7 @@ private val logger = KotlinLogging.logger {}
 class CustomerProfileService(
     private val kmsProvider: KMSProvider,
     private val dynamoDBProvider: DynamoDBProvider,
-    private val httpClient: HttpClient,
+    private val encodingServerClient: EncodingServerClient,
     private val appScope: AppScope
 ) {
 
@@ -138,27 +134,8 @@ class CustomerProfileService(
 
     private fun ensureCollectionsExistAsync(customerId: String, authHeader: String?) {
         if (authHeader != null) {
-            val encodingServerUrl = System.getenv("ENCODING_SERVER_URL")
-            if (!encodingServerUrl.isNullOrBlank()) {
-                appScope.launch {
-                    try {
-                        logger.info { "Ensuring collections exist for customerId=$customerId on encoding server $encodingServerUrl" }
-                        val createRes = httpClient.post("$encodingServerUrl/create-collections") {
-                            header("Authorization", authHeader)
-                        }
-                        val createBody = createRes.bodyAsText()
-                        
-                        if (!createRes.status.isSuccess()) {
-                            logger.error { "Collection creation/check failed with status ${createRes.status}. Body: $createBody" }
-                        } else {
-                            logger.info { "Collections successfully verified/created for customerId=$customerId" }
-                        }
-                    } catch (e: Exception) {
-                        logger.error(e) { "Failed to ensure collection creation for customer $customerId" }
-                    }
-                }
-            } else {
-                logger.warn { "ENCODING_SERVER_URL is not set. Skipping collection check/creation." }
+            appScope.launch {
+                encodingServerClient.ensureCollections(customerId, authHeader)
             }
         }
     }

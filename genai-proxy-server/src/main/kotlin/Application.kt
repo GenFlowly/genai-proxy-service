@@ -364,7 +364,7 @@ fun Application.module() {
     val s3Provider = get<com.genflowly.providers.S3Provider>()
     val notesService = get<NotesService>()
 
-    val httpClient = get<io.ktor.client.HttpClient>()
+    val retrievalServerClient = get<com.genflowly.providers.RetrievalServerClient>()
     val json = get<kotlinx.serialization.json.Json>()
 
     val systemApiKeyService = get<com.genflowly.service.SystemApiKeyService>()
@@ -374,5 +374,5 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, httpClient, json)
+    configureRouting(aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, retrievalServerClient, json)
 }

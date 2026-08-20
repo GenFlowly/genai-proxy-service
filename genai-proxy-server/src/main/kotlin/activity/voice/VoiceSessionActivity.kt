@@ -2,13 +2,11 @@ package com.genflowly.activity.voice
 
 import com.genflowly.Routes
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.getAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.route
-import io.ktor.client.*
-import io.ktor.client.plugins.timeout
-import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.server.auth.authenticate
 import io.ktor.server.routing.Route
 import io.ktor.server.websocket.*
@@ -147,14 +145,9 @@ fun Route.registerVoiceSessionRoutes(
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService,
     aiRequestManager: AIRequestManager,
-    httpClient: HttpClient,
+    retrievalServerClient: RetrievalServerClient,
     json: Json
 ) {
-    val retrievalServerUrl: String =
-        System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001"
-    // http -> ws, https -> wss
-    val retrievalWsUrl = retrievalServerUrl.replaceFirst("http", "ws") + "/voice"
-
     authenticate("auth0", "apiKey") {
         route(Routes.VOICE_SESSION, {
             tags("Voice")
@@ -319,12 +312,7 @@ fun Route.registerVoiceSessionRoutes(
             }
 
             try {
-                httpClient.webSocket(retrievalWsUrl, request = {
-                    timeout {
-                        requestTimeoutMillis = io.ktor.client.plugins.HttpTimeoutConfig.INFINITE_TIMEOUT_MS
-                        socketTimeoutMillis = io.ktor.client.plugins.HttpTimeoutConfig.INFINITE_TIMEOUT_MS
-                    }
-                }) {
+                retrievalServerClient.voiceSession {
                     val upstream = this
                     upstream.send(Frame.Text(upstreamInit.toString()))
 
