@@ -493,6 +493,23 @@
             "memorySettings": "Memory Settings",
             "profile": "Profile",
             "title": "Settings"
+        },
+        "instructionDefaults": {
+            "title": "Default instruction",
+            "subtitle": "Choose which instruction (persona) applies when you start a chat without selecting one.",
+            "modeLabel": "When no instruction is selected, use",
+            "modeHint": "Fallback",
+            "modePreferred": "My preferred instruction",
+            "modeLastUsed": "My last used instruction",
+            "preferredLabel": "Preferred instruction",
+            "preferredHint": "Persona",
+            "preferredPlaceholder": "Select an instruction",
+            "noInstructions": "You have no instructions yet.",
+            "save": "Save preferences",
+            "saving": "Saving…",
+            "savedToast": "Instruction preferences saved",
+            "saveErrorToast": "Failed to save instruction preferences",
+            "loginFirstToast": "Please log in first"
         }
     },
     "sidebar": {

@@ -14,6 +14,7 @@ import {
 import { InputTextWithHint } from '@genflowly/component-library'
 import { VendorAPIKeyStatus } from '../../../components/common/VendorAPIKeyStatus/VendorAPIKeyStatus'
 import { useToast } from '../../../context/ToastContext'
+import { InstructionDefaultsSettings } from './InstructionDefaultsSettings'
 import styles from './AISettings.module.scss'
 
 export function AISettings(): React.ReactElement {
@@ -115,6 +116,8 @@ export function AISettings(): React.ReactElement {
                     )
                 })}
             </div>
+
+            <InstructionDefaultsSettings />
         </div>
     )
 }
