@@ -31,6 +31,11 @@ dependencies {
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-config-yaml")
     testImplementation("io.ktor:ktor-server-test-host")
+    testImplementation(kotlin("test"))
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("io.ktor:ktor-client-mock:3.0.0")
 
     implementation("io.ktor:ktor-server-cors:3.0.0")
     implementation("io.ktor:ktor-server-call-logging:3.0.0")
@@ -79,5 +84,14 @@ dependencies {
 
     // ✅ Auth0 JWK
     implementation("com.auth0:jwks-rsa:0.22.1")
+}
+
+tasks.test {
+    useJUnitPlatform()
+    // Several classes read these from the environment at construction time;
+    // bridged here until config is injected via AppConfig.
+    environment("RETRIEVAL_SERVER_URL", "http://localhost:9999")
+    environment("KMS_KEY_ID", "test-key")
+    environment("ATTACHMENTS_BUCKET", "test-bucket")
 }
 
