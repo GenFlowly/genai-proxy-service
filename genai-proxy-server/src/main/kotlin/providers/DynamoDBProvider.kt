@@ -45,6 +45,7 @@ import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.AIMode
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import models.AIConfig
@@ -88,6 +89,12 @@ class DynamoDBProvider(
     private val dynamoDbClient: DynamoDbClient,
     private val logger: KLogger
 ) {
+    // Instruction content cache. A given (id, version) is IMMUTABLE — editing an
+    // instruction creates a new version — so cached content never goes stale and
+    // needs no invalidation. Positive-only (misses are not cached). Soft-capped.
+    private val instructionCache = ConcurrentHashMap<String, models.Instruction>()
+    private val INSTRUCTION_CACHE_MAX = 10_000
+
     suspend fun getConversation(conversationId: String, customerId: String): Conversation? =
         withContext(Dispatchers.IO) {
             try {
@@ -525,7 +532,9 @@ class DynamoDBProvider(
         preferredGenerativeMode: AIMode?,
         otherPreferences: Map<String, String>?,
         embeddingMode: String? = null,
-        embeddingModel: String? = null
+        embeddingModel: String? = null,
+        preferredInstructionId: String? = null,
+        instructionFallbackMode: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
             val now = Instant.now().toString()
@@ -573,6 +582,18 @@ class DynamoDBProvider(
                 updateParts.add("#embeddingModel = :embeddingModel")
                 attrNames["#embeddingModel"] = "embeddingModel"
                 attrValues[":embeddingModel"] = AttributeValue.builder().s(embeddingModel).build()
+            }
+
+            if (preferredInstructionId != null) {
+                updateParts.add("#preferredInstructionId = :preferredInstructionId")
+                attrNames["#preferredInstructionId"] = "preferredInstructionId"
+                attrValues[":preferredInstructionId"] = AttributeValue.builder().s(preferredInstructionId).build()
+            }
+
+            if (instructionFallbackMode != null) {
+                updateParts.add("#instructionFallbackMode = :instructionFallbackMode")
+                attrNames["#instructionFallbackMode"] = "instructionFallbackMode"
+                attrValues[":instructionFallbackMode"] = AttributeValue.builder().s(instructionFallbackMode).build()
             }
 
             val updateReq = UpdateItemRequest.builder()
@@ -1540,7 +1561,9 @@ class DynamoDBProvider(
                 preferredModels = preferredModels,
                 preferredGenerativeMode = preferredGenerativeMode,
                 embeddingMode = item["embeddingMode"]?.s(),
-                embeddingModel = item["embeddingModel"]?.s()
+                embeddingModel = item["embeddingModel"]?.s(),
+                preferredInstructionId = item["preferredInstructionId"]?.s(),
+                instructionFallbackMode = item["instructionFallbackMode"]?.s()
             )
         }
 
@@ -1595,6 +1618,9 @@ class DynamoDBProvider(
         
     suspend fun getLatestInstructionVersion(id: String): Int? =
         withContext(Dispatchers.IO) {
+            // Guard: DynamoDB rejects an empty string as a key value. A blank id
+            // means "no instruction selected" — treat as not-found, don't query.
+            if (id.isBlank()) return@withContext null
             // Since version is Sort Key, we can Query by PK (id) with Limit 1 and ScanIndexForward false to get highest version
             val request = QueryRequest.builder()
                 .tableName(INSTRUCTION_TABLE)
@@ -1613,6 +1639,15 @@ class DynamoDBProvider(
 
     suspend fun getInstruction(instructionId: String, version: Int): models.Instruction? =
         withContext(Dispatchers.IO) {
+            // Guard: DynamoDB rejects an empty string as a key attribute value.
+            // A blank instructionId means "no instruction selected" — treat as
+            // not-found instead of throwing (was crashing GenerateTextStream).
+            if (instructionId.isBlank()) return@withContext null
+
+            // Serve immutable (id, version) content from cache when present.
+            val cacheKey = "$instructionId#$version"
+            instructionCache[cacheKey]?.let { return@withContext it }
+
             val key = mapOf(
                 INSTRUCTION_ID_KEY to AttributeValue.builder().s(instructionId).build(),
                 INSTRUCTION_VERSION_KEY to AttributeValue.builder().n(version.toString()).build()
@@ -1625,11 +1660,16 @@ class DynamoDBProvider(
 
             val response = dynamoDbClient.getItem(request)
             val item = response.item() ?: return@withContext null
-            
+
             // Check if Item is empty (getItem returns empty map if not found sometimes? No, usually null or empty map)
              if (item.isEmpty()) return@withContext null
 
-            itemToInstruction(item)
+            itemToInstruction(item)?.also { instruction ->
+                // Cache the immutable content (positive-only). Clear on soft-cap
+                // to keep memory bounded — the working set is tiny in practice.
+                if (instructionCache.size >= INSTRUCTION_CACHE_MAX) instructionCache.clear()
+                instructionCache[cacheKey] = instruction
+            }
         }
 
     suspend fun saveInstruction(instruction: models.Instruction) = withContext(Dispatchers.IO) {
@@ -1683,6 +1723,35 @@ class DynamoDBProvider(
 
             val response = dynamoDbClient.query(request)
             response.items().mapNotNull { itemToInstruction(it) }
+        }
+
+    /**
+     * The global default instruction: the SYSTEM-created instruction at its
+     * latest version (SYSTEM keeps one id whose version increases). Null if none
+     * has been seeded.
+     */
+    // Resolved fresh each call so a newly published System version takes effect
+    // immediately. The lookup is a single indexed query; the resolved version's
+    // content is then served from the immutable instruction cache downstream.
+    suspend fun getDefaultSystemInstruction(): models.Instruction? =
+        getInstructionsByCreator(com.genflowly.DynamoDBConstants.SYSTEM_INSTRUCTION_CREATOR)
+            .maxByOrNull { it.version ?: 0 }
+
+    /**
+     * The customer's most-recently-used instruction id (by lastUsedAt), or null
+     * if they have never used one. Backs the "lastUsed" fallback mode.
+     */
+    suspend fun getLastUsedInstructionId(customerId: String): String? =
+        withContext(Dispatchers.IO) {
+            val request = QueryRequest.builder()
+                .tableName(com.genflowly.DynamoDBConstants.INSTRUCTION_USAGE_TABLE)
+                .keyConditionExpression("$CUSTOMER_ID_KEY = :cid")
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                .build()
+
+            dynamoDbClient.query(request).items()
+                .maxByOrNull { it[com.genflowly.DynamoDBConstants.INSTRUCTION_LAST_USED_KEY]?.s() ?: "" }
+                ?.get(INSTRUCTION_ID_KEY)?.s()
         }
 
     private fun itemToInstruction(item: Map<String, AttributeValue>): models.Instruction? {

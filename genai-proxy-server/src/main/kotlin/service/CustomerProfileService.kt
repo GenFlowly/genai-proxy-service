@@ -38,7 +38,9 @@ class CustomerProfileService(
         preferredGenerativeMode: AIMode?,
         otherPreferences: Map<String, String>?,
         embeddingMode: String? = null,
-        embeddingModel: String? = null
+        embeddingModel: String? = null,
+        preferredInstructionId: String? = null,
+        instructionFallbackMode: String? = null
     ) {
         dynamoDBProvider.savePreferences(
             customerId,
@@ -46,7 +48,50 @@ class CustomerProfileService(
             preferredGenerativeMode,
             otherPreferences,
             embeddingMode,
-            embeddingModel
+            embeddingModel,
+            preferredInstructionId,
+            instructionFallbackMode
+        )
+    }
+
+    /**
+     * Resolve the instruction to use when a request selects none. Honors the
+     * customer's fallback mode (preferred vs last-used) and ultimately falls back
+     * to the SYSTEM default. Returns (instructionId, version) or null if nothing
+     * resolves (caller then proceeds with no instruction).
+     */
+    suspend fun resolveDefaultInstruction(customerId: String): InstructionResponse? {
+        val prefs = dynamoDBProvider.getAIConfigPreferences(customerId)
+
+        // Preferred mode (default): use the customer's preferred instruction.
+        if (prefs?.instructionFallbackMode != "lastUsed") {
+            val pid = prefs?.preferredInstructionId
+            if (!pid.isNullOrBlank()) {
+                val v = dynamoDBProvider.getLatestInstructionVersion(pid)
+                if (v != null) getInstructionVersion(customerId, pid, v)?.let { return it }
+            }
+        } else {
+            // Last-used mode.
+            val lastId = dynamoDBProvider.getLastUsedInstructionId(customerId)
+            if (!lastId.isNullOrBlank()) {
+                val v = dynamoDBProvider.getLatestInstructionVersion(lastId)
+                if (v != null) getInstructionVersion(customerId, lastId, v)?.let { return it }
+            }
+        }
+
+        // Ultimate fallback: the global SYSTEM default instruction. getDefaultSystemInstruction
+        // already fetched it in full — map it directly rather than re-fetching.
+        val system = dynamoDBProvider.getDefaultSystemInstruction() ?: return null
+        return InstructionResponse(
+            id = system.id,
+            version = system.version ?: 1,
+            name = system.name,
+            instruction = system.instructions,
+            icon = system.icon,
+            color = system.color,
+            category = system.category,
+            tags = system.tags,
+            role = "VIEW"
         )
     }
 
@@ -141,13 +186,9 @@ class CustomerProfileService(
             dynamoDBProvider.initCustomerApiKey(newCustomerId, vendor.name)
         }
 
-        // Create default instruction
-        createInstruction(
-            customerId = newCustomerId,
-            instructionName = "You are a helpful assistant",
-            instruction = "You are a helpful assistant",
-            existingInstructionId = null
-        )
+        // Note: no per-customer default instruction is seeded here. The global
+        // SYSTEM/PUBLIC instruction (managed via the admin panel) serves as the
+        // default for all customers.
 
         // Seed the default RAG pipeline graph for this customer
         seedDefaultGraph(newCustomerId)

@@ -95,6 +95,11 @@ object DynamoDBConstants {
     // of a conversation without knowing its owner (needed for shared conversations).
     const val CONVERSATION_ID_GSI_KEY = "conversationIdIndex"
 
+    // Creator value marking the single global default instruction, managed via
+    // the admin panel. It keeps one instruction id whose version increases; the
+    // latest version is the default used when a customer selects none.
+    const val SYSTEM_INSTRUCTION_CREATOR = "System"
+
     // Instruction usage tracking
     const val INSTRUCTION_USAGE_TABLE = "InstructionUsage"
     const val INSTRUCTION_USAGE_COUNT_KEY = "usageCount"
