@@ -3,8 +3,8 @@ package com.genflowly
 
 import com.auth0.jwk.JwkProviderBuilder
 import com.genflowly.aicallerlib.di.commonModule
+import com.genflowly.di.AppScope
 import com.genflowly.di.appModule
-import com.genflowly.service.AIRequestService
 import io.github.smiley4.ktoropenapi.OpenApi
 import io.github.smiley4.ktoropenapi.config.AuthScheme
 import io.github.smiley4.ktoropenapi.config.AuthType
@@ -25,10 +25,10 @@ import java.util.concurrent.TimeUnit
 import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
+import com.genflowly.service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
-import com.genflowly.service.ApiKeyPrincipal
+import models.ApiKeyPrincipal
 import com.genflowly.service.DeveloperApiKeyService
 import com.genflowly.service.GraphService
 import com.genflowly.service.NotesService
@@ -350,7 +350,11 @@ fun Application.module() {
     }
 
 
-    val aiRequestService = get<AIRequestService>()
+    // Cancel supervised background work (embedding sync, backfills, usage
+    // tracking) when the server stops.
+    val appScope = get<AppScope>()
+    monitor.subscribe(ApplicationStopping) { appScope.shutdown() }
+
     val aiRequestManager = get<AIRequestManager>()
     val customerProfileService = get<CustomerProfileService>()
     val conversationService = get<ConversationService>()
@@ -370,5 +374,5 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, httpClient, json)
+    configureRouting(aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, httpClient, json)
 }

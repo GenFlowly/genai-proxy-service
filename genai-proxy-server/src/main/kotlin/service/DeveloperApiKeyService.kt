@@ -1,5 +1,6 @@
 package com.genflowly.service
 
+import com.genflowly.di.AppScope
 import com.genflowly.models.api.DeveloperApiKeyCreatedResponse
 import com.genflowly.models.api.DeveloperApiKeySummary
 import com.genflowly.providers.DynamoDBProvider
@@ -8,8 +9,6 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.UUID
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
@@ -22,7 +21,8 @@ import org.slf4j.LoggerFactory
  */
 class DeveloperApiKeyService(
     private val dynamoDBProvider: DynamoDBProvider,
-    private val kmsProvider: KMSProvider
+    private val kmsProvider: KMSProvider,
+    private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger("DeveloperApiKeyService")
     private val secureRandom = SecureRandom()
@@ -105,7 +105,7 @@ class DeveloperApiKeyService(
             val customerId = item["customerId"]?.s() ?: return null
 
             // Best-effort usage tracking; must not block or fail the request
-            CoroutineScope(Dispatchers.IO).launch {
+            appScope.launch {
                 dynamoDBProvider.updateDeveloperApiKeyLastUsed(keyHash)
             }
 
@@ -122,6 +122,3 @@ class DeveloperApiKeyService(
         return digest.joinToString("") { "%02x".format(it) }
     }
 }
-
-/** Principal attached to calls authenticated with a developer API key. */
-data class ApiKeyPrincipal(val customerId: String)

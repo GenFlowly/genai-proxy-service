@@ -67,7 +67,6 @@ dependencies {
     // DynamoDB client
     implementation("software.amazon.awssdk:dynamodb")
     implementation("software.amazon.awssdk:kms")
-    implementation("software.amazon.awssdk:lambda")
     // Attachments bucket: presigned upload/download URLs + object metadata checks
     implementation("software.amazon.awssdk:s3")
     // Core HTTP client (Netty works well in Ktor)

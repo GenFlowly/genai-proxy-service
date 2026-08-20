@@ -2,7 +2,7 @@ package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.providers.DynamoDBProvider
-import com.genflowly.providers.ModelCatalogEntry
+import models.ModelCatalogEntry
 import io.ktor.client.*
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.*
@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import models.aiVendorFromProviderString
+import models.toProviderString
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
 
@@ -62,7 +64,8 @@ class ModelCatalogService(
     private val systemApiKeyService: SystemApiKeyService,
     private val dynamoDBProvider: DynamoDBProvider,
     private val httpClient: HttpClient,
-    private val json: Json
+    private val json: Json,
+    private val retrievalServerUrl: String
 ) {
     companion object {
         /** Used when the catalog has no entry for a model — safe across all vendors. */
@@ -79,9 +82,6 @@ class ModelCatalogService(
         private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
         private const val REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }
-
-    private val retrievalServerUrl: String =
-        System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001"
 
     private data class CacheEntry(val entry: ModelCatalogEntry?, val fetchedAt: Long)
 
@@ -121,7 +121,7 @@ class ModelCatalogService(
         val payload = json.encodeToString(
             ModelMetadataPayload(
                 vendors = vendorKeys.map { (vendor, key) ->
-                    MetadataVendorKey(provider = vendorToProviderString(vendor), api_key = key)
+                    MetadataVendorKey(provider = vendor.toProviderString(), api_key = key)
                 }
             )
         )
@@ -139,7 +139,7 @@ class ModelCatalogService(
         val parsed = json.decodeFromString<ModelMetadataResponse>(response.bodyAsText())
         val counts = mutableMapOf<String, Int>()
         for (vendorMetadata in parsed.vendor_models) {
-            val vendor = providerStringToVendor(vendorMetadata.provider) ?: continue
+            val vendor = aiVendorFromProviderString(vendorMetadata.provider) ?: continue
             if (vendorMetadata.error != null) {
                 logger.warn {
                     "Model metadata fetch failed for ${vendor.name}: ${vendorMetadata.error} — keeping existing catalog rows"
@@ -225,17 +225,4 @@ class ModelCatalogService(
     }
 
     private fun cacheKey(vendor: AIVendor, model: String) = "${vendor.name}#$model"
-
-    private fun vendorToProviderString(vendor: AIVendor): String = when (vendor) {
-        AIVendor.OPENAI -> "openai"
-        AIVendor.GEMINI -> "gemini"
-        AIVendor.CLAUDE -> "anthropic"
-    }
-
-    private fun providerStringToVendor(provider: String): AIVendor? = when (provider) {
-        "openai" -> AIVendor.OPENAI
-        "gemini" -> AIVendor.GEMINI
-        "anthropic" -> AIVendor.CLAUDE
-        else -> null
-    }
 }

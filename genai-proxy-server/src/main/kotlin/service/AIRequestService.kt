@@ -13,7 +13,6 @@ import com.genflowly.aicallerlib.models.gemini.GeminiModelsListResponse
 import com.genflowly.aicallerlib.models.gemini.GeminiResponse
 import com.genflowly.aicallerlib.models.openai.OpenAIModelsListResponse
 import com.genflowly.aicallerlib.models.openai.OpenAIResponse
-import com.genflowly.providers.DynamoDBProvider
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.GenerateContentParameters
@@ -32,8 +31,7 @@ import org.koin.core.qualifier.named
 import org.koin.java.KoinJavaComponent.get
 import org.slf4j.LoggerFactory
 
-class AIRequestService(private val dynamoDBProvider: DynamoDBProvider) :
-    KoinComponent {
+class AIRequestService : KoinComponent {
     private val logger = LoggerFactory.getLogger("AIRequestService")
 
     fun buildClaudeRequest(

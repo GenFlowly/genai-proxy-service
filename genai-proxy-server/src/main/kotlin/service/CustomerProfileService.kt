@@ -8,6 +8,7 @@ import com.genflowly.models.api.ToolCredentialStatus
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.AIMode
+import com.genflowly.di.AppScope
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import java.util.*
@@ -16,7 +17,6 @@ import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -29,7 +29,8 @@ private val logger = KotlinLogging.logger {}
 class CustomerProfileService(
     private val kmsProvider: KMSProvider,
     private val dynamoDBProvider: DynamoDBProvider,
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val appScope: AppScope
 ) {
 
     suspend fun savePreferences(
@@ -135,12 +136,11 @@ class CustomerProfileService(
         return handleNewUserOnboarding(sub, client, email, name, picture, authHeader)
     }
 
-    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     private fun ensureCollectionsExistAsync(customerId: String, authHeader: String?) {
         if (authHeader != null) {
             val encodingServerUrl = System.getenv("ENCODING_SERVER_URL")
             if (!encodingServerUrl.isNullOrBlank()) {
-                GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                appScope.launch {
                     try {
                         logger.info { "Ensuring collections exist for customerId=$customerId on encoding server $encodingServerUrl" }
                         val createRes = httpClient.post("$encodingServerUrl/create-collections") {
@@ -641,13 +641,12 @@ class CustomerProfileService(
             logger.warn { "Failed to track instruction usage for instructionId=$instructionId customerId=$customerId: ${e.message}" }
         }
     }
-    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     fun backfillInstructionsAsync(
-        customerId: String, 
+        customerId: String,
         instructionsToCheck: List<InstructionResponse>,
-        aiRequestManager: service.AIRequestManager
+        aiRequestManager: AIRequestManager
     ) {
-        GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        appScope.launch {
             try {
                 for (instructionRes in instructionsToCheck) {
                     if (instructionRes.icon == null || instructionRes.category == null) {

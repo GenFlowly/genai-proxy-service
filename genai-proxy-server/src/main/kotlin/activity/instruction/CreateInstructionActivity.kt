@@ -13,7 +13,7 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
+import com.genflowly.service.AIRequestManager
 import models.Message
 import models.AIConfig
 

@@ -34,7 +34,6 @@ import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
 import com.genflowly.activity.voice.registerVoiceSessionRoutes
-import com.genflowly.service.AIRequestService
 import com.genflowly.service.DeveloperApiKeyService
 import io.github.smiley4.ktoropenapi.get
 import io.github.smiley4.ktoropenapi.openApi
@@ -43,7 +42,7 @@ import io.ktor.http.ContentType
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import service.AIRequestManager
+import com.genflowly.service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
@@ -107,7 +106,6 @@ object Routes {
 
 
 fun Application.configureRouting(
-    aiRequestService: AIRequestService,
     aiRequestManager: AIRequestManager,
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService,

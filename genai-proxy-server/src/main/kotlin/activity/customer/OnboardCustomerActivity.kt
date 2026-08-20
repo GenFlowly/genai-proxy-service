@@ -15,7 +15,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
+import com.genflowly.service.AIRequestManager
 
 private val logger = LoggerFactory.getLogger("OnboardCustomerRoute")
 

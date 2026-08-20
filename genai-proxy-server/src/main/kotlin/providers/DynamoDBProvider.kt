@@ -51,6 +51,7 @@ import kotlinx.coroutines.withContext
 import models.AIConfig
 import models.Conversation
 import models.Message
+import models.ModelCatalogEntry
 import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
@@ -70,20 +71,6 @@ import com.genflowly.models.api.GetCustomerConversationsResponse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
-
-/**
- * One row of the AIModelCatalog table: token limits and pricing for a
- * vendor's model. Costs are USD per 1M tokens.
- */
-data class ModelCatalogEntry(
-    val model: String,
-    val maxOutputTokens: Int?,
-    val maxInputTokens: Int?,
-    val inputCostPerMTok: Double? = null,
-    val outputCostPerMTok: Double? = null,
-    val cacheReadCostPerMTok: Double? = null,
-    val cacheWriteCostPerMTok: Double? = null
-)
 
 class DynamoDBProvider(
     private val dynamoDbClient: DynamoDbClient,
@@ -1111,7 +1098,7 @@ class DynamoDBProvider(
             
             try {
                 val putUsernameReq = PutItemRequest.builder()
-                    .tableName("UsernameLookup")
+                    .tableName(com.genflowly.DynamoDBConstants.USERNAME_LOOKUP_TABLE)
                     .item(mapOf(
                         "username" to AttributeValue.builder().s(generatedUsername).build(),
                         "recordType" to AttributeValue.builder().s("USER").build(),
@@ -1167,7 +1154,7 @@ class DynamoDBProvider(
         withContext(Dispatchers.IO) {
             val queryReq = QueryRequest.builder()
                 .tableName(CUSTOMER_PROFILE_TABLE)
-                .indexName("customerIdIndex")
+                .indexName(com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_CUSTOMER_ID_GSI)
                 .keyConditionExpression("customerId = :cid")
                 .expressionAttributeValues(
                     mapOf(":cid" to AttributeValue.builder().s(customerId).build())
@@ -1251,7 +1238,7 @@ class DynamoDBProvider(
     ) = withContext(Dispatchers.IO) {
         // Reserve new username
         val putUsernameReq = PutItemRequest.builder()
-            .tableName("UsernameLookup")
+            .tableName(com.genflowly.DynamoDBConstants.USERNAME_LOOKUP_TABLE)
             .item(mapOf(
                 "username" to AttributeValue.builder().s(newUsername).build(),
                 "recordType" to AttributeValue.builder().s("USER").build(),
@@ -1281,7 +1268,7 @@ class DynamoDBProvider(
         // Cleanup old
         if (!oldUsername.isNullOrBlank()) {
             val delReq = DeleteItemRequest.builder()
-                .tableName("UsernameLookup")
+                .tableName(com.genflowly.DynamoDBConstants.USERNAME_LOOKUP_TABLE)
                 .key(mapOf("username" to AttributeValue.builder().s(oldUsername).build()))
                 .build()
             dynamoDbClient.deleteItem(delReq)
@@ -1307,8 +1294,8 @@ class DynamoDBProvider(
 
     suspend fun searchByUsername(usernamePrefix: String): List<com.genflowly.models.api.SearchCustomerResponse> = withContext(Dispatchers.IO) {
         val queryReq = QueryRequest.builder()
-            .tableName("UsernameLookup")
-            .indexName("recordTypeIndex")
+            .tableName(com.genflowly.DynamoDBConstants.USERNAME_LOOKUP_TABLE)
+            .indexName(com.genflowly.DynamoDBConstants.USERNAME_RECORD_TYPE_GSI)
             .keyConditionExpression("recordType = :type AND begins_with(username, :prefix)")
             .expressionAttributeValues(mapOf(
                 ":type" to AttributeValue.builder().s("USER").build(),
@@ -1830,7 +1817,7 @@ class DynamoDBProvider(
     suspend fun getUsersWithSharedEntity(entityId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
-            .indexName("instructionIdIndex")
+            .indexName(com.genflowly.DynamoDBConstants.SHARED_INSTRUCTIONS_GSI_KEY)
             .keyConditionExpression("$INSTRUCTION_ID_KEY = :id")
             .expressionAttributeValues(
                 mapOf(":id" to AttributeValue.builder().s(entityId).build())

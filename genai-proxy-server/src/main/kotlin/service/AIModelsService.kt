@@ -2,7 +2,6 @@ package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.AIVendorModelList
-import com.genflowly.utils.fetchApiKey
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -10,6 +9,8 @@ import io.ktor.http.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import models.aiVendorFromProviderString
+import models.toProviderString
 import org.slf4j.LoggerFactory
 
 @Serializable
@@ -51,12 +52,10 @@ private data class ValidateKeyResponse(
 class AIModelsService(
     private val customerProfileService: CustomerProfileService,
     private val httpClient: HttpClient,
-    private val json: Json
+    private val json: Json,
+    private val retrievalServerUrl: String
 ) {
     private val logger = LoggerFactory.getLogger(AIModelsService::class.java)
-
-    private val retrievalServerUrl: String =
-        System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001"
 
     suspend fun getModelsForVendors(
         vendors: List<AIVendor>,
@@ -66,11 +65,7 @@ class AIModelsService(
         val startTime = System.currentTimeMillis()
 
         val apiKeys: Map<AIVendor, String> = vendors.mapNotNull { vendor ->
-            val apiKey = fetchApiKey(
-                vendor,
-                customerId,
-                customerProfileService
-            )
+            val apiKey = customerProfileService.getCustomerApiKeyForVendor(vendor, customerId)
             // If stored key is null, we can't fetch.
             if (apiKey == null) {
                 logger.info("Skipping vendor {} as no API key is set.", vendor)
@@ -120,7 +115,7 @@ class AIModelsService(
     ): Boolean {
         val payload = json.encodeToString(
             ValidateKeyPayload(
-                provider = vendorToProviderString(vendor),
+                provider = vendor.toProviderString(),
                 api_key = apiKey
             )
         )
@@ -155,7 +150,7 @@ class AIModelsService(
             ListModelsPayload(
                 vendors = apiKeys.map { (vendor, apiKey) ->
                     ListModelsVendorCredentials(
-                        provider = vendorToProviderString(vendor),
+                        provider = vendor.toProviderString(),
                         api_key = apiKey,
                         capability = capability
                     )
@@ -184,24 +179,11 @@ class AIModelsService(
             )
 
             parsed.vendor_models.mapNotNull { vendorModels ->
-                providerStringToVendor(vendorModels.provider)?.let { it to vendorModels.models }
+                aiVendorFromProviderString(vendorModels.provider)?.let { it to vendorModels.models }
             }.toMap()
         } catch (e: Exception) {
             logger.warn("Failed to fetch models from retrieval server: {}", e.message)
             emptyMap()
         }
-    }
-
-    private fun vendorToProviderString(vendor: AIVendor): String = when (vendor) {
-        AIVendor.OPENAI -> "openai"
-        AIVendor.GEMINI -> "gemini"
-        AIVendor.CLAUDE -> "anthropic"
-    }
-
-    private fun providerStringToVendor(provider: String): AIVendor? = when (provider) {
-        "openai" -> AIVendor.OPENAI
-        "gemini" -> AIVendor.GEMINI
-        "anthropic" -> AIVendor.CLAUDE
-        else -> null
     }
 }

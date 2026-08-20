@@ -11,7 +11,7 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
+import com.genflowly.service.AIRequestManager
 
 private val logger = LoggerFactory.getLogger("GetInstructionVersionRoute")
 

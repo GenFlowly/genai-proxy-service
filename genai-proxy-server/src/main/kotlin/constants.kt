@@ -112,6 +112,19 @@ object DynamoDBConstants {
 
     const val CUSTOMER_NOTES_TABLE = "CustomerNotes"
     const val NOTE_KEY = "noteKey"
+
+    // Username reservation/lookup — PK=username; recordTypeIndex GSI supports
+    // prefix search across USER records.
+    const val USERNAME_LOOKUP_TABLE = "UsernameLookup"
+    const val USERNAME_KEY = "username"
+    const val USERNAME_RECORD_TYPE_KEY = "recordType"
+    const val USERNAME_RECORD_TYPE_GSI = "recordTypeIndex"
+
+    // GSI on CustomerProfile keyed by customerId (profiles are stored under sub+client).
+    const val CUSTOMER_PROFILE_CUSTOMER_ID_GSI = "customerIdIndex"
+
+    // GSI on SharedInstructions keyed by instructionId (who is an entity shared with).
+    const val SHARED_INSTRUCTIONS_GSI_KEY = "instructionIdIndex"
 }
 @Serializable
 data class PersonaCategory(
