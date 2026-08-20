@@ -15,17 +15,12 @@ import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 
 /**
  * Data access for the SharedInstructions (generic entity shares) and
- * SharedConversations tables.
- *
- * NOTE (Phase 4): the users-with-shared-* methods still synthesize the PUBLIC
- * pseudo-profile and fan out to CustomerProfileRepository — that join/policy
- * ascends to the domain services in the service-decomposition phase, at which
- * point the profile-repository dependency here disappears.
+ * SharedConversations tables. Returns raw (customerId, role) share pairs —
+ * PUBLIC synthesis and profile joins live in SharedUsersResolver.
  */
 class ShareRepository(
     private val dynamoDbClient: DynamoDbClient,
-    private val logger: KLogger,
-    private val customerProfileRepository: CustomerProfileRepository
+    private val logger: KLogger
 ) {
 
     suspend fun shareEntityWithCustomer(entityId: String, sharedWithCustomerId: String, sharedByCustomerId: String, role: String) = withContext(Dispatchers.IO) {
@@ -87,7 +82,8 @@ class ShareRepository(
         }.filter { prefix == null || it.first.startsWith(prefix) }
     }
 
-    suspend fun getUsersWithSharedEntity(entityId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
+    /** Raw (sharedWithCustomerId, role) pairs for an entity, role defaulting to VIEW. */
+    suspend fun getSharesForEntity(entityId: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
             .indexName(DynamoDBConstants.SHARED_INSTRUCTIONS_GSI_KEY)
@@ -97,40 +93,9 @@ class ShareRepository(
             )
             .build()
 
-        val response = dynamoDbClient.query(request)
-
-        response.items().mapNotNull { item ->
+        dynamoDbClient.query(request).items().mapNotNull { item ->
             val customerId = item[DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
-            val role = item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
-
-            if (customerId == "PUBLIC") {
-                return@mapNotNull models.CustomerProfile(
-                    customerId = "PUBLIC",
-                    sub = "",
-                    client = "",
-                    email = null,
-                    name = "Public",
-                    picture = null,
-                    username = "Public",
-                    isDiscoverable = true,
-                    role = role
-                )
-            }
-
-            val profileItem = customerProfileRepository.getCustomerProfileByCustomerId(customerId)
-            if (profileItem != null) {
-                models.CustomerProfile(
-                    customerId = customerId,
-                    sub = profileItem["sub"]?.s() ?: "",
-                    client = profileItem["client"]?.s() ?: "",
-                    email = profileItem["email"]?.s(),
-                    name = profileItem["name"]?.s(),
-                    picture = profileItem["picture"]?.s(),
-                    username = profileItem["username"]?.s(),
-                    isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false,
-                    role = role
-                )
-            } else null
+            customerId to (item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW")
         }
     }
 
@@ -251,7 +216,8 @@ class ShareRepository(
         else item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s()
     }
 
-    suspend fun getUsersWithSharedConversation(conversationId: String): List<models.CustomerProfile> = withContext(Dispatchers.IO) {
+    /** Raw (sharedWithCustomerId, role) pairs for a conversation, role defaulting to VIEW. */
+    suspend fun getSharesForConversation(conversationId: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
             .indexName(DynamoDBConstants.SHARED_CONVERSATIONS_GSI_KEY)
@@ -261,40 +227,9 @@ class ShareRepository(
             )
             .build()
 
-        val response = dynamoDbClient.query(request)
-
-        response.items().mapNotNull { item ->
+        dynamoDbClient.query(request).items().mapNotNull { item ->
             val customerId = item[DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
-            val role = item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
-
-            if (customerId == "PUBLIC") {
-                return@mapNotNull models.CustomerProfile(
-                    customerId = "PUBLIC",
-                    sub = "",
-                    client = "",
-                    email = null,
-                    name = "Public",
-                    picture = null,
-                    username = "Public",
-                    isDiscoverable = true,
-                    role = role
-                )
-            }
-
-            val profileItem = customerProfileRepository.getCustomerProfileByCustomerId(customerId)
-            if (profileItem != null) {
-                models.CustomerProfile(
-                    customerId = customerId,
-                    sub = profileItem["sub"]?.s() ?: "",
-                    client = profileItem["client"]?.s() ?: "",
-                    email = profileItem["email"]?.s(),
-                    name = profileItem["name"]?.s(),
-                    picture = profileItem["picture"]?.s(),
-                    username = profileItem["username"]?.s(),
-                    isDiscoverable = profileItem["isDiscoverable"]?.bool() ?: false,
-                    role = role
-                )
-            } else null
+            customerId to (item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW")
         }
     }
 }

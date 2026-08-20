@@ -1,6 +1,7 @@
 package com.genflowly.repository
 
 import com.genflowly.DynamoDBConstants
+import com.genflowly.service.SharedUsersResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -24,8 +25,9 @@ import kotlin.test.assertTrue
 class SharingResolutionTest {
 
     private val client = mockk<DynamoDbClient>()
-    private val provider = ShareRepository(
-        client, mockk<KLogger>(relaxed = true),
+    private val shareRepository = ShareRepository(client, mockk<KLogger>(relaxed = true))
+    private val provider = SharedUsersResolver(
+        shareRepository,
         CustomerProfileRepository(client, mockk<KLogger>(relaxed = true))
     )
 
@@ -128,10 +130,10 @@ class SharingResolutionTest {
             profiles = emptyMap()
         )
 
-        val all = provider.getSharedEntityIdsForCustomer("cust-1")
+        val all = shareRepository.getSharedEntityIdsForCustomer("cust-1")
         assertEquals(listOf("inst-a" to "EDIT", "inst-b" to "VIEW", "note-c" to "VIEW"), all)
 
-        val onlyInst = provider.getSharedEntityIdsForCustomer("cust-1", prefix = "inst-")
+        val onlyInst = shareRepository.getSharedEntityIdsForCustomer("cust-1", prefix = "inst-")
         assertTrue(onlyInst.all { it.first.startsWith("inst-") })
         assertEquals(2, onlyInst.size)
     }
@@ -148,7 +150,7 @@ class SharingResolutionTest {
             }
         }
 
-        assertEquals("EDIT", provider.getConversationShare("conv-1", "cust-2"))
-        assertEquals(null, provider.getConversationShare("conv-1", "cust-other"))
+        assertEquals("EDIT", shareRepository.getConversationShare("conv-1", "cust-2"))
+        assertEquals(null, shareRepository.getConversationShare("conv-1", "cust-other"))
     }
 }

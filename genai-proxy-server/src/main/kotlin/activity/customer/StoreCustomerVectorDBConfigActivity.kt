@@ -13,11 +13,13 @@ import models.StoreCustomerVectorDBConfigResponse
 import models.VectorDBConfigStatus
 import models.VectorDBConfigStatusValue
 import org.slf4j.LoggerFactory
+import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("StoreCustomerVectorDBConfigActivity")
 
 fun Route.registerStoreVectorDBConfigRoutes(
+    customerCredentialsService: CustomerCredentialsService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -49,7 +51,7 @@ fun Route.registerStoreVectorDBConfigRoutes(
 
             val vendor = request.vendor
 
-            val stored = customerProfileService.storeCustomerVectorDBConfig(
+            val stored = customerCredentialsService.storeCustomerVectorDBConfig(
                 customerId = customerId,
                 vendor = vendor,
                 endpoint = request.endpoint,

@@ -42,7 +42,9 @@ import io.ktor.http.ContentType
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import com.genflowly.service.AIRequestManager
+import com.genflowly.service.CustomerCredentialsService
+import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.InstructionService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
@@ -106,8 +108,10 @@ object Routes {
 
 
 fun Application.configureRouting(
-    aiRequestManager: AIRequestManager,
+    generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService,
+    customerCredentialsService: CustomerCredentialsService,
+    instructionService: InstructionService,
     conversationService: ConversationService,
     aiModelsService: AIModelsService,
     graphService: GraphService,
@@ -139,31 +143,31 @@ fun Application.configureRouting(
             call.respondText(scalarDocsHtml, ContentType.Text.Html)
         }
 
-        registerGenerateTextRoutes(aiRequestManager, customerProfileService)
-        registerGenerateTextStreamRoutes(aiRequestManager, customerProfileService)
-        registerStoreApiKeyRoutes(customerProfileService, aiModelsService)
-        registerStoreVectorDBConfigRoutes(customerProfileService)
-        registerStoreSupabaseConfigRoutes(customerProfileService)
-        registerOnboardCustomerRoutes(customerProfileService, aiRequestManager)
+        registerGenerateTextRoutes(generationOrchestrator, customerProfileService)
+        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService)
+        registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService, aiModelsService)
+        registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
+        registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)
+        registerOnboardCustomerRoutes(customerProfileService, customerCredentialsService, instructionService)
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
-        registerCreateInstructionRoutes(aiRequestManager, customerProfileService)
-        registerCreateInstructionShareRoutes(customerProfileService)
+        registerCreateInstructionRoutes(instructionService, customerProfileService)
+        registerCreateInstructionShareRoutes(instructionService, customerProfileService)
         registerCreateConversationShareRoutes(customerProfileService, conversationService)
         registerGetConversationSharedUsersRoutes(customerProfileService, conversationService)
-        registerDeleteInstructionRoutes(customerProfileService)
-        registerGetCustomerInstructionListRoutes(customerProfileService)
-        registerGetInstructionVersionRoutes(customerProfileService)
-        registerGetInstructionSharedUsersRoutes(customerProfileService)
-        registerCreateConversationTitleRoutes(aiRequestManager, customerProfileService)
+        registerDeleteInstructionRoutes(instructionService, customerProfileService)
+        registerGetCustomerInstructionListRoutes(instructionService, customerProfileService)
+        registerGetInstructionVersionRoutes(instructionService, customerProfileService)
+        registerGetInstructionSharedUsersRoutes(instructionService, customerProfileService)
+        registerCreateConversationTitleRoutes(conversationService, customerProfileService)
         registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)
         registerDeleteConversationRoutes(customerProfileService, conversationService)
         registerUnarchiveConversationRoutes(customerProfileService, conversationService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)
-        registerToolCredentialsRoutes(customerProfileService)
+        registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
         
         registerCustomerProfileSettingsRoutes(customerProfileRepository)
         registerSearchRoutes(customerProfileRepository)
@@ -174,7 +178,7 @@ fun Application.configureRouting(
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, customerProfileRepository, modelCatalogService
         )
-        registerVoiceSessionRoutes(customerProfileService, conversationService, aiRequestManager, retrievalServerClient, json)
+        registerVoiceSessionRoutes(customerProfileService, conversationService, generationOrchestrator, instructionService, customerCredentialsService, retrievalServerClient, json)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }
 }

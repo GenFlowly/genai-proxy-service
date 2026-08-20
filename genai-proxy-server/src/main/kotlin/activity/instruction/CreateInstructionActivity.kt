@@ -13,7 +13,7 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
-import com.genflowly.service.AIRequestManager
+import com.genflowly.service.InstructionService
 import models.Message
 import models.AIConfig
 
@@ -22,7 +22,7 @@ import com.genflowly.service.CustomerProfileService
 private val logger = LoggerFactory.getLogger("CreateInstructionRoute")
 
 fun Route.registerCreateInstructionRoutes(
-    aiRequestManager: AIRequestManager,
+    instructionService: InstructionService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -54,7 +54,7 @@ fun Route.registerCreateInstructionRoutes(
                 val request = call.receive<CreateInstructionRequest>()
 
                 // Always generate the persona metadata (icon, color, tags) via AI
-                val generatedPersona = aiRequestManager.generateInstructionPersona(request.instruction, customerId)
+                val generatedPersona = instructionService.generateInstructionPersona(request.instruction, customerId)
 
                 // Use user-provided name if available, otherwise use AI-generated name
                 val instructionName = if (!request.instructionName.isNullOrBlank()) {
@@ -63,7 +63,7 @@ fun Route.registerCreateInstructionRoutes(
                     generatedPersona.name
                 }
 
-                val response = customerProfileService.createInstruction(
+                val response = instructionService.createInstruction(
                     customerId = customerId,
                     instructionName = instructionName,
                     instruction = request.instruction,

@@ -4,6 +4,7 @@ import com.genflowly.Routes
 import com.genflowly.models.api.GetToolCredentialStatusListResponse
 import com.genflowly.models.api.StoreToolCredentialsRequest
 import com.genflowly.models.api.StoreToolCredentialsResponse
+import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.delete
@@ -18,7 +19,10 @@ import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("ToolCredentialsRoute")
 
-fun Route.registerToolCredentialsRoutes(customerProfileService: CustomerProfileService) {
+fun Route.registerToolCredentialsRoutes(
+    customerCredentialsService: CustomerCredentialsService,
+    customerProfileService: CustomerProfileService
+) {
     authenticate("auth0", "apiKey") {
 
         post(Routes.TOOL_CREDENTIALS, {
@@ -40,7 +44,7 @@ fun Route.registerToolCredentialsRoutes(customerProfileService: CustomerProfileS
             val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
             val request = call.receive<StoreToolCredentialsRequest>()
             logger.info("Storing tool credentials for customerId={} toolType={}", customerId, request.toolType)
-            val response = customerProfileService.storeToolCredentials(
+            val response = customerCredentialsService.storeToolCredentials(
                 customerId = customerId,
                 toolType = request.toolType,
                 authType = request.authType,
@@ -62,7 +66,7 @@ fun Route.registerToolCredentialsRoutes(customerProfileService: CustomerProfileS
             }
         }) {
             val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
-            val response = customerProfileService.listToolCredentialStatuses(customerId)
+            val response = customerCredentialsService.listToolCredentialStatuses(customerId)
             call.respond(response)
         }
 
@@ -87,7 +91,7 @@ fun Route.registerToolCredentialsRoutes(customerProfileService: CustomerProfileS
             val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
             val toolType = call.parameters["toolType"]
                 ?: return@delete call.respond(HttpStatusCode.BadRequest, "Missing toolType")
-            customerProfileService.removeToolCredentials(customerId, toolType)
+            customerCredentialsService.removeToolCredentials(customerId, toolType)
             call.respond(HttpStatusCode.NoContent)
         }
     }

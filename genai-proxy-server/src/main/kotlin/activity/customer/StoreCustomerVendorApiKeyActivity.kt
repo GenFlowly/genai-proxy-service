@@ -11,6 +11,7 @@ import io.ktor.server.routing.Route
 import models.StoreCustomerVendorApiKeyResponse
 import models.StoreCustomerVendorApiKeyRequest
 import org.slf4j.LoggerFactory
+import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
 import models.AIVendorAPIKeyStatus
@@ -19,6 +20,7 @@ import models.APIKeyStatus
 private val logger = LoggerFactory.getLogger("StoreCustomerVendorApiKeyRoute")
 
 fun Route.registerStoreApiKeyRoutes(
+    customerCredentialsService: CustomerCredentialsService,
     customerProfileService: CustomerProfileService,
     aiModelsService: AIModelsService
 ) {
@@ -59,7 +61,7 @@ fun Route.registerStoreApiKeyRoutes(
 
             if (isKeyValid) {
                 // Key is valid -> Store it
-                val stored = customerProfileService.storeApiKey(
+                val stored = customerCredentialsService.storeApiKey(
                     customerId = customerId,
                     aiVendor = request.aiVendor,
                     apiKey = request.apiKey
