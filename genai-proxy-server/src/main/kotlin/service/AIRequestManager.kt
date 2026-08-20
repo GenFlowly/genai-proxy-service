@@ -1,4 +1,4 @@
-package service
+package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIUsageMetadata
 import com.genflowly.aicallerlib.models.AIVendor
@@ -6,19 +6,7 @@ import com.genflowly.aicallerlib.models.claude.ClaudeUsageMetadata
 import com.genflowly.aicallerlib.models.gemini.GeminiUsageMetadata
 import com.genflowly.aicallerlib.models.openai.OpenAIUsageMetadata
 import com.genflowly.models.api.InstructionResponse
-import com.genflowly.service.AIRequestService
-import com.genflowly.service.ConversationAccessDeniedException
-import com.genflowly.service.ConversationService
-import com.genflowly.service.CustomerProfileService
-import com.genflowly.service.PromptGenerationService
-import com.genflowly.service.ConversationMessage
-import com.genflowly.service.ImageRef
-import com.genflowly.service.PayloadToolDefinition
-import com.genflowly.service.PayloadToolResult
-import com.genflowly.service.RetrievalService
 import com.genflowly.providers.S3Provider
-import com.genflowly.service.StreamChunk
-import com.genflowly.utils.fetchApiKey
 import models.AIConfig
 import models.AIGenerateResult
 import models.AttachmentRef
@@ -28,17 +16,12 @@ import models.MAX_ATTACHMENT_SIZE_BYTES
 import models.Message
 import models.ToolDefinition
 import models.ToolResult
+import models.toCredentialKey
+import models.toProviderString
 import org.slf4j.LoggerFactory
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
@@ -57,29 +40,15 @@ class AIRequestManager(
     private val aiRequestService: AIRequestService,
     private val customerProfileService: CustomerProfileService,
     private val conversationService: ConversationService,
-    private val promptGenerationService: PromptGenerationService,
     private val retrievalService: RetrievalService,
     private val s3Provider: S3Provider,
-    private val systemAIFailoverService: com.genflowly.service.SystemAIFailoverService,
-    private val modelCatalogService: com.genflowly.service.ModelCatalogService
+    private val systemAIFailoverService: SystemAIFailoverService,
+    private val modelCatalogService: ModelCatalogService
 ) {
     private val logger = LoggerFactory.getLogger("AIRequestManager")
 
     private val defaultAIModel: String = "gpt-5"
     private val defaultAIVendor: AIVendor = AIVendor.OPENAI
-
-    private fun vendorToProviderString(vendor: AIVendor): String = when (vendor) {
-        AIVendor.OPENAI -> "openai"
-        AIVendor.GEMINI -> "gemini"
-        AIVendor.CLAUDE -> "anthropic"
-    }
-
-    private fun vendorToCredentialKey(vendor: AIVendor): String = when (vendor) {
-        AIVendor.OPENAI -> "openai_api_key"
-        AIVendor.GEMINI -> "gemini_api_key"
-        AIVendor.CLAUDE -> "anthropic_api_key"
-    }
-
 
     private suspend fun getThreadContext(
         conversationId: String,
@@ -363,7 +332,7 @@ class AIRequestManager(
         toolChoice: String? = null,
         toolResults: List<ToolResult> = emptyList()
     ): Message {
-        val apiKey = fetchApiKey(aiVendor, message.customerId, customerProfileService)
+        val apiKey = customerProfileService.getCustomerApiKeyForVendor(aiVendor, message.customerId)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
         val thread = if (message.previousMessageId.isNullOrBlank()) {
@@ -381,8 +350,8 @@ class AIRequestManager(
             customerId = message.customerId,
             client = message.client,
             query = message.text,
-            llmCredentials = mapOf(vendorToCredentialKey(aiVendor) to apiKey),
-            llmProvider = vendorToProviderString(aiVendor),
+            llmCredentials = mapOf(aiVendor.toCredentialKey() to apiKey),
+            llmProvider = aiVendor.toProviderString(),
             llmModel = model,
             llmMaxTokens = resolvedMaxTokens,
             conversationHistory = conversationHistory,
@@ -424,11 +393,8 @@ class AIRequestManager(
     ): AIGenerateResult {
         try {
             // Step 1: Fetch API key for 3rd party AI vendor
-            val apiKey = fetchApiKey(
-                aiVendor,
-                customerId,
-                customerProfileService
-            ) ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
+            val apiKey = customerProfileService.getCustomerApiKeyForVendor(aiVendor, customerId)
+                ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
             return generateTextWithApiKey(aiVendor, model, messages, systemPrompt, apiKey)
         } catch (e: Exception) {
@@ -639,11 +605,11 @@ class AIRequestManager(
         }
 
         // Fetch API key before building the flow so auth errors surface immediately
-        val apiKey = fetchApiKey(config.aiVendor, customerId, customerProfileService)
+        val apiKey = customerProfileService.getCustomerApiKeyForVendor(config.aiVendor, customerId)
             ?: throw IllegalArgumentException("API key not found for vendor: ${config.aiVendor}")
 
-        val llmCredentials = mapOf(vendorToCredentialKey(config.aiVendor) to apiKey)
-        val llmProvider = vendorToProviderString(config.aiVendor)
+        val llmCredentials = mapOf(config.aiVendor.toCredentialKey() to apiKey)
+        val llmProvider = config.aiVendor.toProviderString()
 
         // Fetch conversation thread so the LLM sees full history (message is already saved above)
         val thread = if (message.previousMessageId.isNullOrBlank()) {
@@ -751,112 +717,6 @@ class AIRequestManager(
         )
     }
 
-    /**
-     * Internal streaming helper that emits pairs of (text chunk, raw AIResponse).
-     * The AIResponse is included so callers can extract usage metadata from
-     * provider-specific chunks (e.g. the final chunk that contains token counts).
-     */
-    private suspend fun generateTextStreamWithUsage(
-        aiVendor: AIVendor,
-        model: String,
-        messages: List<Message>,
-        systemPrompt: String?,
-        customerId: String
-    ): kotlinx.coroutines.flow.Flow<Pair<String, com.genflowly.aicallerlib.models.AIResponse?>> {
-        val apiKey = fetchApiKey(
-            aiVendor,
-            customerId,
-            customerProfileService
-        ) ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
-
-        return kotlinx.coroutines.flow.flow {
-             try {
-                 when (aiVendor) {
-                    AIVendor.OPENAI -> {
-                        val params = aiRequestService.buildOpenAIRequest(
-                            messages,
-                            model,
-                            systemPrompt ?: ""
-                        )
-                        val httpClient = aiRequestService.getOpenAIProvider(apiKey)
-                        httpClient.generateResponseStream(
-                            com.genflowly.aicallerlib.models.openai.OpenAIRequest(
-                                params
-                            )
-                        ).collect { response -> emit(Pair(response.getText(), response)) }
-                    }
-    
-                    AIVendor.GEMINI -> {
-                        logger.info("Building Gemini request")
-                        val params = aiRequestService.buildGeminiRequest(
-                            messages,
-                            model,
-                            systemPrompt ?: ""
-                        )
-                        logger.info("Getting Gemini provider")
-                        val httpClient = aiRequestService.getGeminiProvider(apiKey)
-                        logger.info("Starting Gemini stream collection with timeout")
-
-                        try {
-                            withTimeout(5000L) { // 20 seconds timeout to
-                                // catch silent SDK retries
-                                httpClient.generateResponseStream(
-                                    com.genflowly.aicallerlib.models.gemini.GeminiRequest(
-                                        params
-                                    )
-                                ).collect { response ->
-                                    logger.info("Gemini stream chunk received: ${response.getText()?.take(20)}...")
-                                    emit(Pair(response.getText() ?: "", response))
-                                }
-                            }
-                        } catch (e: TimeoutCancellationException) {
-                            val timeoutMsg = "Request timed out while waiting for Gemini. This likely indicates you are rate limited (429) and the SDK is retrying silently. Please try again later."
-                            logger.warn(timeoutMsg)
-                            emit(Pair(timeoutMsg, null))
-                        }
-                        
-                        logger.info("Gemini stream collection finished")
-                    }
-    
-                    AIVendor.CLAUDE -> {
-                        val params = aiRequestService.buildClaudeRequest(
-                            messages,
-                            model,
-                            systemPrompt ?: ""
-                        )
-                        val httpClient = aiRequestService.getClaudeProvider(apiKey)
-                        httpClient.generateResponseStream(
-                            com.genflowly.aicallerlib.models.claude.ClaudeRequest(
-                                params
-                            )
-                        ).collect { response -> emit(Pair(response.getText(), response)) }
-                    }
-                }
-             } catch (e: Exception) {
-                 logger.error("Error during streaming definition", e)
-                 
-                 val message = e.message ?: ""
-                 val isRateLimit = message.contains("429") || 
-                                   message.contains("Quota exceeded") || 
-                                   (e.javaClass.name.contains("ClientException") && message.contains("429"))
-
-                 val isApiKeyExpired = message.contains("API key expired") || message.contains("400")
-
-                 if (isRateLimit) {
-                      val rateLimitMsg = "Rate limit exceeded for your API key. Please retry later.\nDetails: $message"
-                      logger.info("Emitting rate limit message inside flow: {}", rateLimitMsg)
-                      emit(Pair(rateLimitMsg, null))
-                 } else if (isApiKeyExpired) {
-                      val expiredMsg = "Please update your API key.\nDetails: $message"
-                      logger.info("Emitting expired key message inside flow: {}", expiredMsg)
-                      emit(Pair(expiredMsg, null))
-                 } else {
-                      throw e
-                 }
-             }
-        }.flowOn(kotlinx.coroutines.Dispatchers.IO)
-    }
-
     suspend fun createConversationTitle(
         conversationId: String,
         customerId: String,
@@ -903,7 +763,7 @@ class AIRequestManager(
 
     suspend fun createNoteTitle(customerId: String, noteContent: String): String? {
         return try {
-            val apiKey = fetchApiKey(defaultAIVendor, customerId, customerProfileService)
+            val apiKey = customerProfileService.getCustomerApiKeyForVendor(defaultAIVendor, customerId)
             if (apiKey == null) {
                 logger.warn("No $defaultAIVendor API key for $customerId; skipping note title generation")
                 return null
@@ -913,8 +773,8 @@ class AIRequestManager(
                 customerId = customerId,
                 client = "internal",
                 query = noteContent.take(4000),
-                llmCredentials = mapOf(vendorToCredentialKey(defaultAIVendor) to apiKey),
-                llmProvider = vendorToProviderString(defaultAIVendor),
+                llmCredentials = mapOf(defaultAIVendor.toCredentialKey() to apiKey),
+                llmProvider = defaultAIVendor.toProviderString(),
                 llmModel = defaultAIModel,
                 // Reasoning models (gpt-5) spend completion tokens on internal
                 // reasoning before any visible text; a tight cap yields an

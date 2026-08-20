@@ -2,7 +2,6 @@ package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.providers.DynamoDBProvider
-import com.genflowly.providers.KMSProvider
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -26,7 +25,7 @@ class ConversationHistoryMergeTest {
     private val owner = "cust-owner"
 
     private val ddb = mockk<DynamoDBProvider>(relaxed = true)
-    private val service = ConversationService(mockk<KMSProvider>(relaxed = true), ddb)
+    private val service = ConversationService(ddb)
 
     private fun userMsg(id: String, text: String, seq: Int, prev: String? = null, createdAt: String? = null) = Message(
         messageId = id, conversationId = conv, text = text, client = "REACT_APP", role = "user",

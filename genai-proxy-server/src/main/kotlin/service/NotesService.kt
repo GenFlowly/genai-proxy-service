@@ -1,5 +1,6 @@
 package com.genflowly.service
 
+import com.genflowly.di.AppScope
 import com.genflowly.providers.DynamoDBProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
@@ -7,8 +8,6 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.header
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
@@ -89,7 +88,8 @@ data class EncodingSaveNoteRequest(
 class NotesService(
     private val httpClient: HttpClient,
     private val dynamoDBProvider: DynamoDBProvider,
-    private val aiRequestManager: service.AIRequestManager
+    private val aiRequestManager: AIRequestManager,
+    private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
     private val encodingServerUrl = System.getenv("ENCODING_SERVER_URL") ?: "https://api-encode-development.genflowly.com"
@@ -172,7 +172,7 @@ class NotesService(
         }
 
         // Realtime: async call to encoding server
-        CoroutineScope(Dispatchers.IO).launch {
+        appScope.launch {
             try {
                 val url = "$encodingServerUrl/encode-notes"
                 logger.info("Sending note to encoding server asynchronously: $url")
@@ -226,7 +226,7 @@ class NotesService(
         // 2. Hard-delete the note's vectors asynchronously (same fire-and-forget
         // convention as the encoding call on save); a failure leaves orphaned
         // vectors behind but never blocks or fails the delete itself
-        CoroutineScope(Dispatchers.IO).launch {
+        appScope.launch {
             try {
                 val url = "$retrievalServerUrl/delete-note-vectors"
                 logger.info("Requesting vector deletion for note $noteKey: $url")

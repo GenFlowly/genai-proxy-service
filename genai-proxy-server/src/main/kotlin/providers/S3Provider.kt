@@ -25,9 +25,9 @@ data class AttachmentObjectInfo(
 class S3Provider(
     private val s3Client: S3Client,
     private val s3Presigner: S3Presigner,
-    private val logger: KLogger
+    private val logger: KLogger,
+    private val bucket: String
 ) {
-    private val bucket: String = System.getenv("ATTACHMENTS_BUCKET") ?: ""
 
     /** Presigned URL the browser PUTs the image bytes to. Content type is part of the signature. */
     suspend fun presignPut(

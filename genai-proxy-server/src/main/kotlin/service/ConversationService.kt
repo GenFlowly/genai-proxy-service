@@ -1,7 +1,6 @@
 package com.genflowly.service
 
 import com.genflowly.providers.DynamoDBProvider
-import com.genflowly.providers.KMSProvider
 import com.genflowly.models.api.GetConversationResponse
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.models.api.PromptAndResponse
@@ -14,7 +13,6 @@ class ConversationAccessDeniedException(message: String) : Exception(message)
 class ConversationArchivedException(message: String) : Exception(message)
 
 class ConversationService(
-    private val kmsProvider: KMSProvider,
     private val dynamoDBProvider: DynamoDBProvider
 ) {
 

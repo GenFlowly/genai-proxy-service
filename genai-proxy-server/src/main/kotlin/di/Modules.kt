@@ -1,5 +1,6 @@
 package com.genflowly.di
 
+import com.genflowly.config.AppConfig
 import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
 import com.genflowly.service.AIRequestService
@@ -9,7 +10,7 @@ import mu.KLogger
 import mu.KotlinLogging.logger
 import org.koin.core.module.Module
 import org.koin.dsl.module
-import service.AIRequestManager
+import com.genflowly.service.AIRequestManager
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
 import io.ktor.client.*
@@ -20,18 +21,18 @@ import io.ktor.serialization.kotlinx.json.*
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
-import software.amazon.awssdk.services.lambda.LambdaClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import com.genflowly.providers.S3Provider
 import com.genflowly.service.GraphService
-import com.genflowly.service.PromptGenerationService
 import com.genflowly.service.RetrievalService
 
 fun appModule(): Module = module {
     single { provideJson() }
     single<KLogger> { logger("Logger") }
-    
+    single { AppConfig.fromEnv() }
+    single { AppScope() }
+
     single {
         HttpClient(CIO) {
             engine {
@@ -58,51 +59,43 @@ fun appModule(): Module = module {
 
     single {
         DynamoDbClient.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .region(Region.of(get<AppConfig>().awsRegion))
             .build()
     }
 
     single {
         KmsClient.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
-            .build()
-    }
-
-    single {
-        LambdaClient.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .region(Region.of(get<AppConfig>().awsRegion))
             .build()
     }
 
     single {
         S3Client.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .region(Region.of(get<AppConfig>().awsRegion))
             .build()
     }
 
     single {
         S3Presigner.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .region(Region.of(get<AppConfig>().awsRegion))
             .build()
     }
 
     single { DynamoDBProvider(get(), get()) }
-    single { KMSProvider(get(), get()) }
-    single { S3Provider(get(), get(), get()) }
-    single { AIRequestService(get()) }
-    single { CustomerProfileService(get(), get(), get()) }
-    single { ConversationService(get(), get()) }
-    single { AIRequestManager(get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { AIModelsService(get(), get(), get()) }
-    single { RetrievalService(get(), get(), get()) }
-    single { PromptGenerationService() }
+    single { KMSProvider(get(), get(), get<AppConfig>().kmsKeyId) }
+    single { S3Provider(get(), get(), get(), get<AppConfig>().attachmentsBucket) }
+    single { AIRequestService() }
+    single { CustomerProfileService(get(), get(), get(), get()) }
+    single { ConversationService(get()) }
+    single { AIRequestManager(get(), get(), get(), get(), get(), get(), get()) }
+    single { AIModelsService(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
+    single { RetrievalService(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
     single { GraphService(get()) }
-    single { com.genflowly.service.NotesService(get(), get(), get()) }
-    single { com.genflowly.service.DeveloperApiKeyService(get(), get()) }
+    single { com.genflowly.service.NotesService(get(), get(), get(), get()) }
+    single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.SystemApiKeyService(get(), get()) }
     single { com.genflowly.service.SystemAIFailoverService(get()) }
-    single { com.genflowly.service.ModelCatalogService(get(), get(), get(), get()) }
-
+    single { com.genflowly.service.ModelCatalogService(get(), get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
 }
 
 fun provideJson(): Json {
@@ -111,5 +104,3 @@ fun provideJson(): Json {
         isLenient = true
     }
 }
-
-

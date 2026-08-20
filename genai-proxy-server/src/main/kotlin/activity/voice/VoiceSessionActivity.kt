@@ -4,7 +4,6 @@ import com.genflowly.Routes
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
-import com.genflowly.utils.fetchApiKey
 import com.genflowly.utils.getAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.route
 import io.ktor.client.*
@@ -25,7 +24,7 @@ import kotlinx.serialization.json.put
 import models.AIConfig
 import models.Message
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
+import com.genflowly.service.AIRequestManager
 
 private val logger = LoggerFactory.getLogger("VoiceSessionRoute")
 
@@ -221,7 +220,7 @@ fun Route.registerVoiceSessionRoutes(
             val client = init["client"]?.jsonPrimitive?.content ?: "voice"
             val agentic = init["agentic"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
 
-            val apiKey = fetchApiKey(vendor, customerId, customerProfileService)
+            val apiKey = customerProfileService.getCustomerApiKeyForVendor(vendor, customerId)
                 ?: return@webSocket reject("No API key stored for $vendorName")
 
             // --- Resolve instruction (persona) into the system prompt ---

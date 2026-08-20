@@ -118,9 +118,9 @@ private data class AgentRawData(
 class RetrievalService(
     private val logger: KLogger,
     private val json: Json,
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val retrievalServerUrl: String
 ) {
-    private val retrievalServerUrl: String = System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001"
 
     private fun buildPayload(
         customerId: String,
@@ -174,7 +174,7 @@ class RetrievalService(
         toolChoice: String? = null,
         toolResults: List<PayloadToolResult> = emptyList()
     ): RetrievalResult {
-        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
+        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}" }
         val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
@@ -225,7 +225,7 @@ class RetrievalService(
         toolChoice: String? = null,
         toolResults: List<PayloadToolResult> = emptyList()
     ): Flow<StreamChunk> = channelFlow {
-        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, systemPrompt=$systemPrompt" }
+        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}" }
         val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
