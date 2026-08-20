@@ -1,7 +1,8 @@
 package com.genflowly.service
 
 import com.genflowly.di.AppScope
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.CustomerProfileRepository
+import com.genflowly.repository.NotesRepository
 import com.genflowly.providers.EncodingNoteData
 import com.genflowly.providers.EncodingSaveNoteRequest
 import com.genflowly.providers.EncodingServerClient
@@ -59,14 +60,15 @@ class NoteNotFoundException(noteKey: String) : Exception("Note $noteKey not foun
 class NotesService(
     private val encodingServerClient: EncodingServerClient,
     private val retrievalServerClient: RetrievalServerClient,
-    private val dynamoDBProvider: DynamoDBProvider,
+    private val notesRepository: NotesRepository,
+    private val customerProfileRepository: CustomerProfileRepository,
     private val aiRequestManager: AIRequestManager,
     private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
 
     suspend fun getNotes(customerId: String): GetNotesResponse {
-        val items = dynamoDBProvider.getNotes(customerId)
+        val items = notesRepository.getNotes(customerId)
         val notes = items.map { item ->
             CustomerNote(
                 noteKey = item["noteKey"]?.s() ?: "",
@@ -89,7 +91,7 @@ class NotesService(
         val requestTitle = request.data.title.takeIf { it.isNotBlank() && it != "Untitled" }
 
         // 1. Save to DynamoDB
-        dynamoDBProvider.saveNote(
+        notesRepository.saveNote(
             customerId = customerId,
             noteKey = request.data.note_key,
             noteValue = request.data.note_value,
@@ -111,7 +113,7 @@ class NotesService(
             try {
                 val title = aiRequestManager.createNoteTitle(customerId, request.data.note_value)
                 if (!title.isNullOrBlank()) {
-                    dynamoDBProvider.updateNoteTitle(customerId, request.data.note_key, title)
+                    notesRepository.updateNoteTitle(customerId, request.data.note_key, title)
                     logger.info("Generated title for note ${request.data.note_key}: '$title'")
                     effectiveTitle = title
                 }
@@ -125,7 +127,7 @@ class NotesService(
         // note here and skip the synchronous /encode-notes call. Realtime
         // customers keep the existing async push.
         val prefs = try {
-            dynamoDBProvider.getAIConfigPreferences(customerId)
+            customerProfileRepository.getAIConfigPreferences(customerId)
         } catch (e: Exception) {
             logger.error("Could not read embedding preferences for $customerId; defaulting to realtime", e)
             null
@@ -133,7 +135,7 @@ class NotesService(
         if (prefs?.embeddingMode == "batch") {
             val model = prefs.embeddingModel ?: "voyage-4-large"
             try {
-                dynamoDBProvider.markNotePendingEmbedding(customerId, request.data.note_key, "voyage", model)
+                notesRepository.markNotePendingEmbedding(customerId, request.data.note_key, "voyage", model)
                 logger.info("Flagged note ${request.data.note_key} for batch embedding ($model)")
             } catch (e: Exception) {
                 logger.error("Failed to flag note ${request.data.note_key} for batch embedding", e)
@@ -170,7 +172,7 @@ class NotesService(
      */
     suspend fun deleteNote(customerId: String, noteKey: String) {
         // 1. Soft delete in DynamoDB — the authoritative state for listings
-        val existed = dynamoDBProvider.softDeleteNote(customerId, noteKey)
+        val existed = notesRepository.softDeleteNote(customerId, noteKey)
         if (!existed) {
             throw NoteNotFoundException(noteKey)
         }

@@ -360,7 +360,7 @@ fun Application.module() {
     val conversationService = get<ConversationService>()
     val aiModelsService = get<AIModelsService>()
     val graphService = get<GraphService>()
-    val dynamoDBProvider = get<com.genflowly.providers.DynamoDBProvider>()
+    val customerProfileRepository = get<com.genflowly.repository.CustomerProfileRepository>()
     val s3Provider = get<com.genflowly.providers.S3Provider>()
     val notesService = get<NotesService>()
 
@@ -374,5 +374,5 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, retrievalServerClient, json)
+    configureRouting(aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, customerProfileRepository, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, retrievalServerClient, json)
 }

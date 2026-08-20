@@ -39,7 +39,7 @@ data class Message(
      */
     val thinkingDurationMs: Long? = null,
     /**
-     * ISO-8601 instant stamped by DynamoDBProvider.withTimestamps on write.
+     * ISO-8601 instant stamped by the repository's withTimestamps on write.
      * Read-only: populated when loading from DDB, ignored on create (the
      * provider always stamps its own value).
      */

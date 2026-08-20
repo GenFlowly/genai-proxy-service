@@ -14,7 +14,7 @@ import com.genflowly.DynamoDBConstants.NODE_ID_KEY
 import com.genflowly.DynamoDBConstants.NODE_NAME_KEY
 import com.genflowly.DynamoDBConstants.NODE_TYPE_KEY
 import com.genflowly.DynamoDBConstants.VERSION_KEY
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.GraphRepository
 import models.api.AgentNodeResponse
 import models.api.AgentResponse
 import models.api.CreateCustomerGraphRequest
@@ -33,13 +33,13 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
 private val logger = KotlinLogging.logger {}
 
-class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
+class GraphService(private val graphRepository: GraphRepository) {
 
     // ─── Graph Nodes ──────────────────────────────────────────────────────────
 
     suspend fun createGraphNode(customerId: String, req: CreateGraphNodeRequest): GraphNodeResponse {
         val nodeId = generateNodeId()
-        dynamoDBProvider.createCustomerGraphNode(customerId, nodeId, req.nodeType, req.name, req.config)
+        graphRepository.createCustomerGraphNode(customerId, nodeId, req.nodeType, req.name, req.config)
         logger.info { "Created graph node $nodeId for customer $customerId" }
         return GraphNodeResponse(
             nodeId = nodeId,
@@ -52,11 +52,11 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
     }
 
     suspend fun updateGraphNode(customerId: String, nodeId: String, req: UpdateGraphNodeRequest): GraphNodeResponse {
-        val current = dynamoDBProvider.getCustomerGraphNode(nodeId)
+        val current = graphRepository.getCustomerGraphNode(nodeId)
             ?: error("Graph node $nodeId not found")
         requireOwnership(current, customerId, "node", nodeId)
 
-        val updated = dynamoDBProvider.updateCustomerGraphNode(
+        val updated = graphRepository.updateCustomerGraphNode(
             nodeId = nodeId,
             nodeType = req.nodeType ?: current[NODE_TYPE_KEY]!!.s(),
             name = req.name ?: current[NODE_NAME_KEY]!!.s(),
@@ -66,27 +66,27 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
     }
 
     suspend fun getGraphNode(customerId: String, nodeId: String): GraphNodeResponse {
-        val item = dynamoDBProvider.getCustomerGraphNode(nodeId)
+        val item = graphRepository.getCustomerGraphNode(nodeId)
             ?: error("Graph node $nodeId not found")
         requireOwnership(item, customerId, "node", nodeId)
         return nodeItemToResponse(item)
     }
 
     suspend fun deleteGraphNode(customerId: String, nodeId: String) {
-        val item = dynamoDBProvider.getCustomerGraphNode(nodeId)
+        val item = graphRepository.getCustomerGraphNode(nodeId)
             ?: error("Graph node $nodeId not found")
         requireOwnership(item, customerId, "node", nodeId)
-        dynamoDBProvider.deleteCustomerGraphNode(nodeId)
+        graphRepository.deleteCustomerGraphNode(nodeId)
     }
 
     suspend fun listGraphNodes(customerId: String): List<GraphNodeResponse> =
-        dynamoDBProvider.listCustomerGraphNodes(customerId).map { nodeItemToResponse(it) }
+        graphRepository.listCustomerGraphNodes(customerId).map { nodeItemToResponse(it) }
 
     suspend fun getGraphNodeVersions(customerId: String, nodeId: String): List<GraphNodeVersionResponse> {
-        val current = dynamoDBProvider.getCustomerGraphNode(nodeId)
+        val current = graphRepository.getCustomerGraphNode(nodeId)
             ?: error("Graph node $nodeId not found")
         requireOwnership(current, customerId, "node", nodeId)
-        return dynamoDBProvider.getCustomerGraphNodeVersions(nodeId).map { item ->
+        return graphRepository.getCustomerGraphNodeVersions(nodeId).map { item ->
             GraphNodeVersionResponse(
                 nodeId = item[NODE_ID_KEY]?.s() ?: nodeId,
                 version = item[VERSION_KEY]?.n()?.toInt() ?: 0,
@@ -99,10 +99,10 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
     }
 
     suspend fun rollbackGraphNode(customerId: String, nodeId: String, toVersion: Int): GraphNodeResponse {
-        val current = dynamoDBProvider.getCustomerGraphNode(nodeId)
+        val current = graphRepository.getCustomerGraphNode(nodeId)
             ?: error("Graph node $nodeId not found")
         requireOwnership(current, customerId, "node", nodeId)
-        val updated = dynamoDBProvider.rollbackCustomerGraphNode(nodeId, toVersion)
+        val updated = graphRepository.rollbackCustomerGraphNode(nodeId, toVersion)
         return nodeItemToResponse(updated)
     }
 
@@ -110,7 +110,7 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
 
     suspend fun createGraph(customerId: String, req: CreateCustomerGraphRequest): CustomerGraphResponse {
         val graphId = generateGraphId()
-        dynamoDBProvider.createCustomerGraph(
+        graphRepository.createCustomerGraph(
             customerId = customerId,
             graphId = graphId,
             name = req.name,
@@ -135,11 +135,11 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
     }
 
     suspend fun updateGraph(customerId: String, graphId: String, req: UpdateCustomerGraphRequest): CustomerGraphResponse {
-        val current = dynamoDBProvider.getCustomerGraph(graphId)
+        val current = graphRepository.getCustomerGraph(graphId)
             ?: error("Graph $graphId not found")
         requireOwnership(current, customerId, "graph", graphId)
 
-        val updated = dynamoDBProvider.updateCustomerGraph(
+        val updated = graphRepository.updateCustomerGraph(
             graphId = graphId,
             name = req.name ?: current[GRAPH_NAME_KEY]!!.s(),
             isDefault = req.isDefault ?: current[GRAPH_IS_DEFAULT_KEY]!!.bool(),
@@ -152,27 +152,27 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
     }
 
     suspend fun getGraph(customerId: String, graphId: String): CustomerGraphResponse {
-        val item = dynamoDBProvider.getCustomerGraph(graphId)
+        val item = graphRepository.getCustomerGraph(graphId)
             ?: error("Graph $graphId not found")
         requireOwnership(item, customerId, "graph", graphId)
         return graphItemToResponse(item)
     }
 
     suspend fun deleteGraph(customerId: String, graphId: String) {
-        val item = dynamoDBProvider.getCustomerGraph(graphId)
+        val item = graphRepository.getCustomerGraph(graphId)
             ?: error("Graph $graphId not found")
         requireOwnership(item, customerId, "graph", graphId)
-        dynamoDBProvider.deleteCustomerGraph(graphId)
+        graphRepository.deleteCustomerGraph(graphId)
     }
 
     suspend fun listGraphs(customerId: String): List<CustomerGraphResponse> =
-        dynamoDBProvider.listCustomerGraphs(customerId).map { graphItemToResponse(it) }
+        graphRepository.listCustomerGraphs(customerId).map { graphItemToResponse(it) }
 
     suspend fun getGraphVersions(customerId: String, graphId: String): List<CustomerGraphVersionResponse> {
-        val current = dynamoDBProvider.getCustomerGraph(graphId)
+        val current = graphRepository.getCustomerGraph(graphId)
             ?: error("Graph $graphId not found")
         requireOwnership(current, customerId, "graph", graphId)
-        return dynamoDBProvider.getCustomerGraphVersions(graphId).map { item ->
+        return graphRepository.getCustomerGraphVersions(graphId).map { item ->
             CustomerGraphVersionResponse(
                 graphId = item[GRAPH_ID_KEY]?.s() ?: graphId,
                 version = item[VERSION_KEY]?.n()?.toInt() ?: 0,
@@ -188,10 +188,10 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
     }
 
     suspend fun rollbackGraph(customerId: String, graphId: String, toVersion: Int): CustomerGraphResponse {
-        val current = dynamoDBProvider.getCustomerGraph(graphId)
+        val current = graphRepository.getCustomerGraph(graphId)
             ?: error("Graph $graphId not found")
         requireOwnership(current, customerId, "graph", graphId)
-        val updated = dynamoDBProvider.rollbackCustomerGraph(graphId, toVersion)
+        val updated = graphRepository.rollbackCustomerGraph(graphId, toVersion)
         return graphItemToResponse(updated)
     }
 
@@ -204,9 +204,9 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
      * of customers owning a small number of graphs and nodes.
      */
     suspend fun getCustomerAgents(customerId: String): GetCustomerAgentsResponse {
-        val graphs = dynamoDBProvider.listCustomerGraphs(customerId)
+        val graphs = graphRepository.listCustomerGraphs(customerId)
         // One round-trip to fetch all nodes for this customer.
-        val allNodes = dynamoDBProvider.listCustomerGraphNodes(customerId)
+        val allNodes = graphRepository.listCustomerGraphNodes(customerId)
         val nodeById = allNodes.associateBy { it[NODE_ID_KEY]?.s() ?: "" }
 
         val agents = graphs.map { graphItem ->
@@ -258,14 +258,14 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
         req: UpdateAgentRequest,
     ): AgentResponse {
         // ── 1. Load current graph ─────────────────────────────────────────────
-        val currentGraph = dynamoDBProvider.getCustomerGraph(graphId)
+        val currentGraph = graphRepository.getCustomerGraph(graphId)
             ?: throw IllegalStateException("Agent (graph) '$graphId' not found.")
         requireOwnership(currentGraph, customerId, "graph", graphId)
 
         val nodeIds = currentGraph[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
 
         // ── 2. Load all nodes belonging to this graph ─────────────────────────
-        val allCustomerNodes = dynamoDBProvider.listCustomerGraphNodes(customerId)
+        val allCustomerNodes = graphRepository.listCustomerGraphNodes(customerId)
         val nodeById = allCustomerNodes
             .filter { it[NODE_ID_KEY]?.s() in nodeIds }
             .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
@@ -287,7 +287,7 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
             ?.toMap() ?: emptyMap()
 
         // Determine whether this is the customer's only graph (for isDefault guard).
-        val allGraphs = dynamoDBProvider.listCustomerGraphs(customerId)
+        val allGraphs = graphRepository.listCustomerGraphs(customerId)
         val isOnlyGraph = allGraphs.size == 1
 
         // ── 4. Validate merged state ──────────────────────────────────────────
@@ -308,7 +308,7 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
             val existingNode = nodeById[patch.nodeId]
                 ?: throw IllegalArgumentException("Node '${patch.nodeId}' is not part of graph '$graphId'.")
             if (patch.name != null || patch.config != null) {
-                dynamoDBProvider.updateCustomerGraphNode(
+                graphRepository.updateCustomerGraphNode(
                     nodeId   = patch.nodeId,
                     nodeType = existingNode[NODE_TYPE_KEY]?.s() ?: "",
                     name     = patch.name   ?: existingNode[NODE_NAME_KEY]?.s()   ?: "",
@@ -319,7 +319,7 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
         }
 
         // ── 6. Apply graph patch ──────────────────────────────────────────────
-        val updatedGraph = dynamoDBProvider.updateCustomerGraph(
+        val updatedGraph = graphRepository.updateCustomerGraph(
             graphId       = graphId,
             name          = mergedName,
             isDefault     = mergedIsDefault,
@@ -331,7 +331,7 @@ class GraphService(private val dynamoDBProvider: DynamoDBProvider) {
         logger.info { "Updated agent $graphId for customer $customerId" }
 
         // ── 7. Re-fetch updated nodes and build hydrated response ─────────────
-        val refreshedNodes = dynamoDBProvider.listCustomerGraphNodes(customerId)
+        val refreshedNodes = graphRepository.listCustomerGraphNodes(customerId)
             .filter { it[NODE_ID_KEY]?.s() in nodeIds }
         val refreshedById = refreshedNodes.associateBy { it[NODE_ID_KEY]?.s() ?: "" }
 

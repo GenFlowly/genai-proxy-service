@@ -3,7 +3,7 @@ package com.genflowly.activity.customer
 import com.genflowly.Routes
 import com.genflowly.models.api.CustomerProfileResponse
 import com.genflowly.models.api.ErrorResponse
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.CustomerProfileRepository
 import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -16,7 +16,7 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 fun Route.registerGetProfileRoutes(
-    dynamoDBProvider: DynamoDBProvider
+    customerProfileRepository: CustomerProfileRepository
 ) {
     authenticate("auth0") {
         get(Routes.GET_PROFILE, {
@@ -42,7 +42,7 @@ fun Route.registerGetProfileRoutes(
             val client = "REACT_APP"
             
             try {
-                val profile = dynamoDBProvider.getCustomerProfile(sub, client)
+                val profile = customerProfileRepository.getCustomerProfile(sub, client)
                 if (profile == null) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Profile not found"))
                     return@get

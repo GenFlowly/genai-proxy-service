@@ -47,7 +47,7 @@ import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.CustomerProfileRepository
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -111,7 +111,7 @@ fun Application.configureRouting(
     conversationService: ConversationService,
     aiModelsService: AIModelsService,
     graphService: GraphService,
-    dynamoDBProvider: DynamoDBProvider,
+    customerProfileRepository: CustomerProfileRepository,
     s3Provider: com.genflowly.providers.S3Provider,
     notesService: com.genflowly.service.NotesService,
     developerApiKeyService: DeveloperApiKeyService,
@@ -165,14 +165,14 @@ fun Application.configureRouting(
         registerUpdateAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerProfileService)
         
-        registerCustomerProfileSettingsRoutes(dynamoDBProvider)
-        registerSearchRoutes(dynamoDBProvider)
-        registerGetProfileRoutes(dynamoDBProvider)
+        registerCustomerProfileSettingsRoutes(customerProfileRepository)
+        registerSearchRoutes(customerProfileRepository)
+        registerGetProfileRoutes(customerProfileRepository)
         registerAttachmentRoutes(s3Provider, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerSystemVendorApiKeysRoutes(
-            systemApiKeyService, customerProfileService, aiModelsService, dynamoDBProvider, modelCatalogService
+            systemApiKeyService, customerProfileService, aiModelsService, customerProfileRepository, modelCatalogService
         )
         registerVoiceSessionRoutes(customerProfileService, conversationService, aiRequestManager, retrievalServerClient, json)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)

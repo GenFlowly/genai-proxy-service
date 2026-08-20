@@ -1,8 +1,17 @@
 package com.genflowly.di
 
 import com.genflowly.config.AppConfig
-import com.genflowly.providers.DynamoDBProvider
 import com.genflowly.providers.KMSProvider
+import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.CustomerCredentialsRepository
+import com.genflowly.repository.CustomerProfileRepository
+import com.genflowly.repository.DeveloperApiKeyRepository
+import com.genflowly.repository.GraphRepository
+import com.genflowly.repository.InstructionRepository
+import com.genflowly.repository.ModelCatalogRepository
+import com.genflowly.repository.NotesRepository
+import com.genflowly.repository.ShareRepository
+import com.genflowly.repository.SystemApiKeyRepository
 import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationService
 import kotlinx.serialization.json.Json
@@ -82,18 +91,41 @@ fun appModule(): Module = module {
             .build()
     }
 
-    single { DynamoDBProvider(get(), get()) }
     single { KMSProvider(get(), get(), get<AppConfig>().kmsKeyId) }
     single { S3Provider(get(), get(), get(), get<AppConfig>().attachmentsBucket) }
     single { RetrievalServerClient(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
     single { EncodingServerClient(get(), get(), get<AppConfig>().encodingServerUrl) }
+
+    // Per-domain repositories (the dissolved DynamoDBProvider)
+    single { ConversationRepository(get(), get()) }
+    single { CustomerProfileRepository(get(), get()) }
+    single { ShareRepository(get(), get(), get()) }
+    single { CustomerCredentialsRepository(get(), get()) }
+    single { DeveloperApiKeyRepository(get(), get()) }
+    single { SystemApiKeyRepository(get(), get()) }
+    single { ModelCatalogRepository(get(), get()) }
+    single { NotesRepository(get(), get()) }
+    single { InstructionRepository(get(), get()) }
+    single { GraphRepository(get(), get()) }
+
     single { AIRequestService() }
-    single { CustomerProfileService(get(), get(), get(), get()) }
-    single { ConversationService(get()) }
+    single {
+        CustomerProfileService(
+            kmsProvider = get(),
+            customerProfileRepository = get(),
+            customerCredentialsRepository = get(),
+            instructionRepository = get(),
+            shareRepository = get(),
+            graphRepository = get(),
+            encodingServerClient = get(),
+            appScope = get()
+        )
+    }
+    single { ConversationService(get(), get()) }
     single { AIRequestManager(get(), get(), get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
     single { GraphService(get()) }
-    single { com.genflowly.service.NotesService(get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.SystemApiKeyService(get(), get()) }
     single { com.genflowly.service.SystemAIFailoverService(get()) }
