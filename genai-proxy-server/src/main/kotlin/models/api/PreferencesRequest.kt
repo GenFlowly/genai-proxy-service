@@ -14,6 +14,11 @@ data class PreferencesRequest(
 data class AIConfigPreferences(
     val preferredModels: List<AIConfig>? = null,
     val preferredGenerativeMode: AIMode? = null,
+    // Embedding delivery for notes: "realtime" (synchronous /encode-notes) or
+    // "batch" (swept from CustomerNotes into a Voyage batch job). Defaults to
+    // realtime when unset. embeddingModel names the batch model (e.g. voyage-4-large).
+    val embeddingMode: String? = null,
+    val embeddingModel: String? = null,
 )
 
 @Serializable

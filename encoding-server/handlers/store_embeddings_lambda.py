@@ -52,13 +52,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 
                 if note_key:
                     table_name = os.getenv('CUSTOMER_NOTES_TABLE', 'CustomerNotes')
+                    # Mark synced AND drop the note out of the batch work queue by
+                    # removing embedding_status (sparse-GSI key). REMOVE of an
+                    # absent attribute is a no-op, so this is safe for the realtime
+                    # path too (those notes never carry embedding_status).
                     dynamodb.update_item(
                         TableName=table_name,
                         Key={
                             'customerId': {'S': customer_id},
                             'noteKey': {'S': note_key}
                         },
-                        UpdateExpression="SET is_synced_with_milvus = :val, milvus_ids = :ids",
+                        UpdateExpression=(
+                            "SET is_synced_with_milvus = :val, milvus_ids = :ids "
+                            "REMOVE embedding_status, embedding_batch_id"
+                        ),
                         ExpressionAttributeValues={
                             ':val': {'BOOL': True},
                             ':ids': {'L': [{'S': str(mid)} for mid in milvus_ids]}
