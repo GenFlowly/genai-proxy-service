@@ -6,7 +6,14 @@ import com.genflowly.aicallerlib.models.claude.ClaudeUsageMetadata
 import com.genflowly.aicallerlib.models.gemini.GeminiUsageMetadata
 import com.genflowly.aicallerlib.models.openai.OpenAIUsageMetadata
 import com.genflowly.models.api.InstructionResponse
+import com.genflowly.providers.ConversationMessage
+import com.genflowly.providers.ImageRef
+import com.genflowly.providers.PayloadToolDefinition
+import com.genflowly.providers.PayloadToolResult
+import com.genflowly.providers.PayloadToolResultImage
+import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.providers.S3Provider
+import com.genflowly.providers.StreamChunk
 import models.AIConfig
 import models.AIGenerateResult
 import models.AttachmentRef
@@ -40,7 +47,7 @@ class AIRequestManager(
     private val aiRequestService: AIRequestService,
     private val customerProfileService: CustomerProfileService,
     private val conversationService: ConversationService,
-    private val retrievalService: RetrievalService,
+    private val retrievalService: RetrievalServerClient,
     private val s3Provider: S3Provider,
     private val systemAIFailoverService: SystemAIFailoverService,
     private val modelCatalogService: ModelCatalogService
@@ -110,7 +117,7 @@ class AIRequestManager(
                 toolCallId = r.toolCallId,
                 content = r.content,
                 images = r.images.map { img ->
-                    com.genflowly.service.PayloadToolResultImage(data = img.data, s3Key = img.s3Key, mediaType = img.mediaType)
+                    PayloadToolResultImage(data = img.data, s3Key = img.s3Key, mediaType = img.mediaType)
                 }
             )
         }
@@ -129,9 +136,9 @@ class AIRequestManager(
                     content = r.content,
                     images = r.images.map { img ->
                         if (img.data != null) {
-                            com.genflowly.service.PayloadToolResultImage(mediaType = img.mediaType, omitted = true)
+                            PayloadToolResultImage(mediaType = img.mediaType, omitted = true)
                         } else {
-                            com.genflowly.service.PayloadToolResultImage(s3Key = img.s3Key, mediaType = img.mediaType)
+                            PayloadToolResultImage(s3Key = img.s3Key, mediaType = img.mediaType)
                         }
                     }
                 )

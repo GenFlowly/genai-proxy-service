@@ -2,17 +2,13 @@ package com.genflowly.service
 
 import com.genflowly.di.AppScope
 import com.genflowly.providers.DynamoDBProvider
-import io.ktor.client.HttpClient
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.request.header
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import com.genflowly.providers.EncodingNoteData
+import com.genflowly.providers.EncodingSaveNoteRequest
+import com.genflowly.providers.EncodingServerClient
+import com.genflowly.providers.RetrievalServerClient
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 
 @Serializable
 data class NoteData(
@@ -58,42 +54,16 @@ data class DeleteNoteResponse(
     val status: String
 )
 
-@Serializable
-data class DeleteNoteVectorsRequest(
-    val customer_id: String,
-    val note_key: String
-)
-
 class NoteNotFoundException(noteKey: String) : Exception("Note $noteKey not found")
 
-@Serializable
-data class EncodingNoteData(
-    val note_key: String,
-    val noteKey: String,
-    val note_id: String,
-    val note_value: String,
-    val noteValue: String,
-    val title: String,
-    val created_at: String,
-    val createdAt: String
-)
-
-@Serializable
-data class EncodingSaveNoteRequest(
-    val dataType: String,
-    val client: String,
-    val data: EncodingNoteData
-)
-
 class NotesService(
-    private val httpClient: HttpClient,
+    private val encodingServerClient: EncodingServerClient,
+    private val retrievalServerClient: RetrievalServerClient,
     private val dynamoDBProvider: DynamoDBProvider,
     private val aiRequestManager: AIRequestManager,
     private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
-    private val encodingServerUrl = System.getenv("ENCODING_SERVER_URL") ?: "https://api-encode-development.genflowly.com"
-    private val retrievalServerUrl = System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001"
 
     suspend fun getNotes(customerId: String): GetNotesResponse {
         val items = dynamoDBProvider.getNotes(customerId)
@@ -172,40 +142,22 @@ class NotesService(
         }
 
         // Realtime: async call to encoding server
+        val encodingRequest = EncodingSaveNoteRequest(
+            dataType = "NOTE",
+            client = request.client,
+            data = EncodingNoteData(
+                note_key = request.data.note_key,
+                noteKey = request.data.note_key,
+                note_id = request.data.note_key,
+                note_value = request.data.note_value,
+                noteValue = request.data.note_value,
+                title = effectiveTitle ?: request.data.title,
+                created_at = request.data.created_at,
+                createdAt = request.data.created_at
+            )
+        )
         appScope.launch {
-            try {
-                val url = "$encodingServerUrl/encode-notes"
-                logger.info("Sending note to encoding server asynchronously: $url")
-
-                val encodingRequest = EncodingSaveNoteRequest(
-                    dataType = "NOTE",
-                    client = request.client,
-                    data = EncodingNoteData(
-                        note_key = request.data.note_key,
-                        noteKey = request.data.note_key,
-                        note_id = request.data.note_key,
-                        note_value = request.data.note_value,
-                        noteValue = request.data.note_value,
-                        title = effectiveTitle ?: request.data.title,
-                        created_at = request.data.created_at,
-                        createdAt = request.data.created_at
-                    )
-                )
-
-                val response = httpClient.post(url) {
-                    contentType(ContentType.Application.Json)
-                    header("Authorization", "Bearer $token")
-                    setBody(encodingRequest)
-                }
-
-                if (response.status.isSuccess()) {
-                    logger.info("Successfully sent note to encoding server")
-                } else {
-                    logger.error("Failed to send note to encoding server: ${response.status} ${response.bodyAsText()}")
-                }
-            } catch (e: Exception) {
-                logger.error("Error sending note to encoding server asynchronously", e)
-            }
+            encodingServerClient.encodeNote(encodingRequest, token)
         }
 
         return effectiveTitle
@@ -228,19 +180,7 @@ class NotesService(
         // vectors behind but never blocks or fails the delete itself
         appScope.launch {
             try {
-                val url = "$retrievalServerUrl/delete-note-vectors"
-                logger.info("Requesting vector deletion for note $noteKey: $url")
-
-                val response = httpClient.post(url) {
-                    contentType(ContentType.Application.Json)
-                    setBody(DeleteNoteVectorsRequest(customer_id = customerId, note_key = noteKey))
-                }
-
-                if (response.status.isSuccess()) {
-                    logger.info("Successfully deleted vectors for note $noteKey")
-                } else {
-                    logger.error("Failed to delete vectors for note $noteKey: ${response.status} ${response.bodyAsText()}")
-                }
+                retrievalServerClient.deleteNoteVectors(customerId, noteKey)
             } catch (e: Exception) {
                 logger.error("Error deleting vectors for note $noteKey", e)
             }
