@@ -9,7 +9,11 @@ import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.AIMode
 import com.genflowly.di.AppScope
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.CustomerCredentialsRepository
+import com.genflowly.repository.CustomerProfileRepository
+import com.genflowly.repository.GraphRepository
+import com.genflowly.repository.InstructionRepository
+import com.genflowly.repository.ShareRepository
 import com.genflowly.providers.EncodingServerClient
 import com.genflowly.providers.KMSProvider
 import java.util.*
@@ -24,7 +28,11 @@ private val logger = KotlinLogging.logger {}
 
 class CustomerProfileService(
     private val kmsProvider: KMSProvider,
-    private val dynamoDBProvider: DynamoDBProvider,
+    private val customerProfileRepository: CustomerProfileRepository,
+    private val customerCredentialsRepository: CustomerCredentialsRepository,
+    private val instructionRepository: InstructionRepository,
+    private val shareRepository: ShareRepository,
+    private val graphRepository: GraphRepository,
     private val encodingServerClient: EncodingServerClient,
     private val appScope: AppScope
 ) {
@@ -39,7 +47,7 @@ class CustomerProfileService(
         preferredInstructionId: String? = null,
         instructionFallbackMode: String? = null
     ) {
-        dynamoDBProvider.savePreferences(
+        customerProfileRepository.savePreferences(
             customerId,
             preferredModels,
             preferredGenerativeMode,
@@ -58,27 +66,27 @@ class CustomerProfileService(
      * resolves (caller then proceeds with no instruction).
      */
     suspend fun resolveDefaultInstruction(customerId: String): InstructionResponse? {
-        val prefs = dynamoDBProvider.getAIConfigPreferences(customerId)
+        val prefs = customerProfileRepository.getAIConfigPreferences(customerId)
 
         // Preferred mode (default): use the customer's preferred instruction.
         if (prefs?.instructionFallbackMode != "lastUsed") {
             val pid = prefs?.preferredInstructionId
             if (!pid.isNullOrBlank()) {
-                val v = dynamoDBProvider.getLatestInstructionVersion(pid)
+                val v = instructionRepository.getLatestInstructionVersion(pid)
                 if (v != null) getInstructionVersion(customerId, pid, v)?.let { return it }
             }
         } else {
             // Last-used mode.
-            val lastId = dynamoDBProvider.getLastUsedInstructionId(customerId)
+            val lastId = instructionRepository.getLastUsedInstructionId(customerId)
             if (!lastId.isNullOrBlank()) {
-                val v = dynamoDBProvider.getLatestInstructionVersion(lastId)
+                val v = instructionRepository.getLatestInstructionVersion(lastId)
                 if (v != null) getInstructionVersion(customerId, lastId, v)?.let { return it }
             }
         }
 
         // Ultimate fallback: the global SYSTEM default instruction. getDefaultSystemInstruction
         // already fetched it in full — map it directly rather than re-fetching.
-        val system = dynamoDBProvider.getDefaultSystemInstruction() ?: return null
+        val system = instructionRepository.getDefaultSystemInstruction() ?: return null
         return InstructionResponse(
             id = system.id,
             version = system.version ?: 1,
@@ -101,14 +109,14 @@ class CustomerProfileService(
         authHeader: String? = null
     ): models.CustomerProfile {
         // Check if customer exists
-        val existingCustomer = dynamoDBProvider.getCustomerProfile(sub, client)
+        val existingCustomer = customerProfileRepository.getCustomerProfile(sub, client)
         if (existingCustomer != null) {
             val existingCustomerId = existingCustomer["customerId"]?.s()
                 ?: error("Customer profile exists but missing customerId field")
 
             logger.info { "User already onboarded with customerId=$existingCustomerId" }
 
-            val hasDefaultGraph = dynamoDBProvider.getDefaultCustomerGraph(existingCustomerId) != null
+            val hasDefaultGraph = graphRepository.getDefaultCustomerGraph(existingCustomerId) != null
             if (!hasDefaultGraph) {
                 logger.info { "No default graph found for customerId=$existingCustomerId — seeding now" }
                 seedDefaultGraph(existingCustomerId)
@@ -149,7 +157,7 @@ class CustomerProfileService(
         authHeader: String?
     ): models.CustomerProfile {
         val newCustomerId = generateCustomerId()
-        val generatedUsername = dynamoDBProvider.onboardCustomer(
+        val generatedUsername = customerProfileRepository.onboardCustomer(
             sub,
             client,
             newCustomerId,
@@ -160,7 +168,7 @@ class CustomerProfileService(
         
         // Initialize API key entries for all vendors as INVALID (false)
         AIVendor.entries.forEach { vendor ->
-            dynamoDBProvider.initCustomerApiKey(newCustomerId, vendor.name)
+            customerCredentialsRepository.initCustomerApiKey(newCustomerId, vendor.name)
         }
 
         // Note: no per-customer default instruction is seeded here. The global
@@ -190,7 +198,7 @@ class CustomerProfileService(
         customerId: String, aiVendor: String, apiKey: String
     ): Boolean {
         val encrypted = kmsProvider.encrypt(apiKey)
-        dynamoDBProvider.saveCustomerApiKey(customerId, aiVendor, encrypted)
+        customerCredentialsRepository.saveCustomerApiKey(customerId, aiVendor, encrypted)
         return true
     }
 
@@ -202,7 +210,7 @@ class CustomerProfileService(
     ): Boolean {
         val encryptedEndpoint = kmsProvider.encrypt(endpoint)
         val encryptedToken = kmsProvider.encrypt(token)
-        dynamoDBProvider.saveCustomerVectorDBConfig(customerId, vendor, encryptedEndpoint, encryptedToken)
+        customerCredentialsRepository.saveCustomerVectorDBConfig(customerId, vendor, encryptedEndpoint, encryptedToken)
         return true
     }
 
@@ -215,24 +223,24 @@ class CustomerProfileService(
         val encryptedEndpoint = kmsProvider.encrypt(endpoint)
         val encryptedToken = kmsProvider.encrypt(token)
         val encryptedPassword = kmsProvider.encrypt(password)
-        dynamoDBProvider.saveCustomerSupabaseConfig(customerId, encryptedEndpoint, encryptedToken, encryptedPassword)
+        customerCredentialsRepository.saveCustomerSupabaseConfig(customerId, encryptedEndpoint, encryptedToken, encryptedPassword)
         return true
     }
 
 
     suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<models.VectorDBConfigStatus> {
-        return dynamoDBProvider.getCustomerVectorDBConfigStatusList(customerId)
+        return customerCredentialsRepository.getCustomerVectorDBConfigStatusList(customerId)
     }
 
     suspend fun getCustomerSupabaseConfigStatus(customerId: String): models.SupabaseConfigStatus? {
-        return dynamoDBProvider.getCustomerSupabaseConfigStatus(customerId)
+        return customerCredentialsRepository.getCustomerSupabaseConfigStatus(customerId)
     }
 
     suspend fun getCustomerApiKeyForVendor(
         vendor: AIVendor,
         customerId: String
     ): String? {
-        val apiKey = dynamoDBProvider.getCustomerApiKey(vendor.name, customerId)
+        val apiKey = customerCredentialsRepository.getCustomerApiKey(vendor.name, customerId)
         val decrypted = apiKey?.let { kmsProvider.decrypt(it) }
         
         if (decrypted.isNullOrBlank()) {
@@ -249,16 +257,16 @@ class CustomerProfileService(
      * @return customerId if profile exists, null otherwise
      */
     suspend fun getCustomerIdBySub(sub: String): String? {
-        val profile = dynamoDBProvider.queryCustomerProfileBySub(sub)
+        val profile = customerProfileRepository.queryCustomerProfileBySub(sub)
         return profile?.get("customerId")?.s()
     }
 
     suspend fun getAIConfigPreferences(customerId: String): AIConfigPreferences? {
-        return dynamoDBProvider.getAIConfigPreferences(customerId)
+        return customerProfileRepository.getAIConfigPreferences(customerId)
     }
 
     suspend fun getAIVendorAPIKeyStatusList(customerId: String): List<models.AIVendorAPIKeyStatus> {
-        val storedKeys = dynamoDBProvider.getCustomerApiKeys(customerId)
+        val storedKeys = customerCredentialsRepository.getCustomerApiKeys(customerId)
         val storedMap = storedKeys.associateBy { it.aiVendor }
 
         return AIVendor.entries.map { vendor ->
@@ -287,12 +295,12 @@ class CustomerProfileService(
         var role = "OWNER"
 
         if (instructionId != null) {
-            val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId) ?: 0
+            val latestVersion = instructionRepository.getLatestInstructionVersion(instructionId) ?: 0
             if (latestVersion > 0) {
-                val existingInstruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+                val existingInstruction = instructionRepository.getInstruction(instructionId, latestVersion)
                 if (existingInstruction != null && existingInstruction.creator != customerId) {
                     // Check if they have EDIT role
-                    val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+                    val sharedUsers = shareRepository.getUsersWithSharedEntity(instructionId)
                     val specificShare = sharedUsers.find { it.customerId == customerId }
                     val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
                     val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
@@ -328,7 +336,7 @@ class CustomerProfileService(
             category = category
         )
 
-        dynamoDBProvider.saveInstruction(newInstruction)
+        instructionRepository.saveInstruction(newInstruction)
 
         return InstructionResponse(
             id = newInstruction.id,
@@ -344,10 +352,10 @@ class CustomerProfileService(
     }
 
     suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse {
-        val ownedInstructions = dynamoDBProvider.getInstructionsByCreator(customerId)
+        val ownedInstructions = instructionRepository.getInstructionsByCreator(customerId)
         
-        val sharedInstructionIds = dynamoDBProvider.getSharedEntityIdsForCustomer(customerId, "INS-")
-        val publicInstructionIds = dynamoDBProvider.getSharedEntityIdsForCustomer("PUBLIC", "INS-")
+        val sharedInstructionIds = shareRepository.getSharedEntityIdsForCustomer(customerId, "INS-")
+        val publicInstructionIds = shareRepository.getSharedEntityIdsForCustomer("PUBLIC", "INS-")
 
         val roleMap = mutableMapOf<String, String>()
         publicInstructionIds.forEach { (id, role) -> roleMap[id] = role }
@@ -359,9 +367,9 @@ class CustomerProfileService(
         
         val sharedInstructions = mutableListOf<models.Instruction>()
         for (id in roleMap.keys) {
-            val latestVersion = dynamoDBProvider.getLatestInstructionVersion(id)
+            val latestVersion = instructionRepository.getLatestInstructionVersion(id)
             if (latestVersion != null) {
-                val instruction = dynamoDBProvider.getInstruction(id, latestVersion)
+                val instruction = instructionRepository.getInstruction(id, latestVersion)
                 if (instruction != null) {
                     sharedInstructions.add(instruction)
                 }
@@ -394,11 +402,11 @@ class CustomerProfileService(
     }
 
     suspend fun shareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String, role: String) {
-        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
-        val instruction = if (latestVersion != null) dynamoDBProvider.getInstruction(instructionId, latestVersion) else null
+        val latestVersion = instructionRepository.getLatestInstructionVersion(instructionId)
+        val instruction = if (latestVersion != null) instructionRepository.getInstruction(instructionId, latestVersion) else null
 
         if (instruction?.creator != sharedByCustomerId) {
-            val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+            val sharedUsers = shareRepository.getUsersWithSharedEntity(instructionId)
             val specificShare = sharedUsers.find { it.customerId == sharedByCustomerId }
             val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
             val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
@@ -406,15 +414,15 @@ class CustomerProfileService(
                 throw SecurityException("Customer $sharedByCustomerId does not own or have EDIT rights to instruction $instructionId")
             }
         }
-        dynamoDBProvider.shareEntityWithCustomer(instructionId, targetCustomerId, sharedByCustomerId, role)
+        shareRepository.shareEntityWithCustomer(instructionId, targetCustomerId, sharedByCustomerId, role)
     }
 
     suspend fun unshareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String) {
-        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
-        val instruction = if (latestVersion != null) dynamoDBProvider.getInstruction(instructionId, latestVersion) else null
+        val latestVersion = instructionRepository.getLatestInstructionVersion(instructionId)
+        val instruction = if (latestVersion != null) instructionRepository.getInstruction(instructionId, latestVersion) else null
 
         if (instruction?.creator != sharedByCustomerId) {
-            val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+            val sharedUsers = shareRepository.getUsersWithSharedEntity(instructionId)
             val specificShare = sharedUsers.find { it.customerId == sharedByCustomerId }
             val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
             val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
@@ -422,17 +430,17 @@ class CustomerProfileService(
                 throw SecurityException("Customer $sharedByCustomerId does not own or have EDIT rights to instruction $instructionId")
             }
         }
-        dynamoDBProvider.unshareEntityWithCustomer(instructionId, targetCustomerId)
+        shareRepository.unshareEntityWithCustomer(instructionId, targetCustomerId)
     }
 
     suspend fun getSharedUsersForInstruction(customerId: String, instructionId: String): List<models.CustomerProfile> {
-        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
+        val latestVersion = instructionRepository.getLatestInstructionVersion(instructionId)
         if (latestVersion != null) {
-            val instruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+            val instruction = instructionRepository.getInstruction(instructionId, latestVersion)
             
             val isOwner = instruction != null && instruction.creator == customerId
             if (!isOwner) {
-                val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+                val sharedUsers = shareRepository.getUsersWithSharedEntity(instructionId)
                 val specificShare = sharedUsers.find { it.customerId == customerId }
                 val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
                 val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
@@ -442,7 +450,7 @@ class CustomerProfileService(
                 return sharedUsers
             }
             
-            return dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+            return shareRepository.getUsersWithSharedEntity(instructionId)
         }
         return emptyList()
     }
@@ -451,11 +459,11 @@ class CustomerProfileService(
         // Optional: verify ownership before deleting.
         // If the instruction is shared with them, they can't delete it globally, maybe only un-share it.
         // For now, we will verify they own the latest version.
-        val latestVersion = dynamoDBProvider.getLatestInstructionVersion(instructionId)
+        val latestVersion = instructionRepository.getLatestInstructionVersion(instructionId)
         if (latestVersion != null) {
-            val instruction = dynamoDBProvider.getInstruction(instructionId, latestVersion)
+            val instruction = instructionRepository.getInstruction(instructionId, latestVersion)
             if (instruction != null && instruction.creator == customerId) {
-                dynamoDBProvider.deleteInstruction(instructionId)
+                instructionRepository.deleteInstruction(instructionId)
             } else {
                 throw SecurityException("Customer $customerId does not own instruction $instructionId or it does not exist")
             }
@@ -489,15 +497,15 @@ class CustomerProfileService(
             val resultRankerConfig = """{"system_prompt":"You are a result ranking expert. Given a query and retrieved document chunks, re-rank them by relevance and remove irrelevant ones. Return ONLY a JSON array of 0-based indices in order of relevance (most relevant first). Include only indices of relevant results. Example: [2, 0, 4]","input_template":"Query: {query}\n\nChunks:\n{chunks_text}","output_key":"ranked_results","response_format":"json_indices","json_indices_source_key":"retrieval_results"}"""
             val responseGeneratorConfig = """{"input_template":"Context:\n{context}\n\nQuestion: {query}","output_key":"generated_response","response_format":"text","include_conversation_history":true,"is_streaming":true}"""
 
-            dynamoDBProvider.createCustomerGraphNode(customerId, queryAnalyzerId, "QUERY_ANALYZER", "Query Analyzer", queryAnalyzerConfig)
-            dynamoDBProvider.createCustomerGraphNode(customerId, queryRewriterId, "QUERY_REWRITER", "Query Rewriter", queryRewriterConfig)
-            dynamoDBProvider.createCustomerGraphNode(customerId, retrievalId, "RETRIEVAL", "Retrieval", "{}")
-            dynamoDBProvider.createCustomerGraphNode(customerId, resultRankerId, "RESULT_RANKER", "Result Ranker", resultRankerConfig)
-            dynamoDBProvider.createCustomerGraphNode(customerId, responseGeneratorId, "RESPONSE_GENERATOR", "Response Generator", responseGeneratorConfig)
+            graphRepository.createCustomerGraphNode(customerId, queryAnalyzerId, "QUERY_ANALYZER", "Query Analyzer", queryAnalyzerConfig)
+            graphRepository.createCustomerGraphNode(customerId, queryRewriterId, "QUERY_REWRITER", "Query Rewriter", queryRewriterConfig)
+            graphRepository.createCustomerGraphNode(customerId, retrievalId, "RETRIEVAL", "Retrieval", "{}")
+            graphRepository.createCustomerGraphNode(customerId, resultRankerId, "RESULT_RANKER", "Result Ranker", resultRankerConfig)
+            graphRepository.createCustomerGraphNode(customerId, responseGeneratorId, "RESPONSE_GENERATOR", "Response Generator", responseGeneratorConfig)
 
             val edges = """{"edges":[{"from":"$queryRewriterId","to":"$retrievalId"},{"from":"$retrievalId","to":"$resultRankerId"},{"from":"$resultRankerId","to":"$responseGeneratorId"},{"from":"$responseGeneratorId","to":"__end__"}],"conditional_edges":[{"from":"$queryAnalyzerId","condition_key":"needs_rewrite","routes":{"true":"$queryRewriterId","false":"$retrievalId"}}]}"""
 
-            dynamoDBProvider.createCustomerGraph(
+            graphRepository.createCustomerGraph(
                 customerId = customerId,
                 graphId = generateGraphId(),
                 name = "Default Graph",
@@ -517,13 +525,13 @@ class CustomerProfileService(
         instructionId: String,
         version: Int
     ): InstructionResponse? {
-        val instruction = dynamoDBProvider.getInstruction(instructionId, version)
+        val instruction = instructionRepository.getInstruction(instructionId, version)
         
         if (instruction == null) return null
 
         var role = "OWNER"
         if (instruction.creator != customerId) {
-            val sharedUsers = dynamoDBProvider.getUsersWithSharedEntity(instructionId)
+            val sharedUsers = shareRepository.getUsersWithSharedEntity(instructionId)
             val specificShare = sharedUsers.find { it.customerId == customerId }
             val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
             
@@ -556,7 +564,7 @@ class CustomerProfileService(
     ): StoreToolCredentialsResponse {
         val credentialsJson = Json.encodeToString(credentials)
         val encrypted = kmsProvider.encrypt(credentialsJson)
-        dynamoDBProvider.saveCustomerToolCredentials(customerId, toolType, authType, encrypted)
+        customerCredentialsRepository.saveCustomerToolCredentials(customerId, toolType, authType, encrypted)
         return StoreToolCredentialsResponse(
             toolCredentialStatus = ToolCredentialStatus(
                 toolType = toolType,
@@ -567,14 +575,14 @@ class CustomerProfileService(
     }
 
     suspend fun getToolCredentials(customerId: String, toolType: String): Map<String, String>? {
-        val item = dynamoDBProvider.getCustomerToolCredentials(customerId, toolType) ?: return null
+        val item = customerCredentialsRepository.getCustomerToolCredentials(customerId, toolType) ?: return null
         val encrypted = item["credentials"]?.s() ?: return null
         val decrypted = kmsProvider.decrypt(encrypted)
         return Json.decodeFromString(decrypted)
     }
 
     suspend fun listToolCredentialStatuses(customerId: String): GetToolCredentialStatusListResponse {
-        val statuses = dynamoDBProvider.listCustomerToolCredentials(customerId).map { item ->
+        val statuses = customerCredentialsRepository.listCustomerToolCredentials(customerId).map { item ->
             ToolCredentialStatus(
                 toolType = item["toolType"]?.s() ?: "",
                 authType = item["authType"]?.s() ?: "api_key",
@@ -586,7 +594,7 @@ class CustomerProfileService(
     }
 
     suspend fun removeToolCredentials(customerId: String, toolType: String) {
-        dynamoDBProvider.deleteCustomerToolCredentials(customerId, toolType)
+        customerCredentialsRepository.deleteCustomerToolCredentials(customerId, toolType)
     }
 
     /**
@@ -607,12 +615,12 @@ class CustomerProfileService(
         instructionId: String
     ) {
         try {
-            val isNew = dynamoDBProvider.markInstructionUsageSeenIfNew(
+            val isNew = instructionRepository.markInstructionUsageSeenIfNew(
                 customerId, conversationId, instructionId
             )
             if (isNew) {
                 val now = java.time.Instant.now().toString()
-                dynamoDBProvider.incrementInstructionUsage(customerId, instructionId, now)
+                instructionRepository.incrementInstructionUsage(customerId, instructionId, now)
             }
         } catch (e: Exception) {
             logger.warn { "Failed to track instruction usage for instructionId=$instructionId customerId=$customerId: ${e.message}" }
@@ -627,7 +635,7 @@ class CustomerProfileService(
             try {
                 for (instructionRes in instructionsToCheck) {
                     if (instructionRes.icon == null || instructionRes.category == null) {
-                        val existing = dynamoDBProvider.getInstruction(instructionRes.id, instructionRes.version)
+                        val existing = instructionRepository.getInstruction(instructionRes.id, instructionRes.version)
                         if (existing != null) {
                             val generatedPersona = aiRequestManager.generateInstructionPersona(existing.instructions, customerId)
                             val backfilled = existing.copy(
@@ -636,7 +644,7 @@ class CustomerProfileService(
                                 color = generatedPersona.color,
                                 tags = generatedPersona.tags
                             )
-                            dynamoDBProvider.saveInstruction(backfilled)
+                            instructionRepository.saveInstruction(backfilled)
                             logger.info { "AI backfilled instruction ${existing.id} for $customerId" }
                         }
                     }

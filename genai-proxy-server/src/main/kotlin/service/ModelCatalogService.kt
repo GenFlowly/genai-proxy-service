@@ -1,7 +1,7 @@
 package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.ModelCatalogRepository
 import com.genflowly.providers.RetrievalServerClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +25,7 @@ private val logger = KotlinLogging.logger {}
  */
 class ModelCatalogService(
     private val systemApiKeyService: SystemApiKeyService,
-    private val dynamoDBProvider: DynamoDBProvider,
+    private val modelCatalogRepository: ModelCatalogRepository,
     private val retrievalServerClient: RetrievalServerClient
 ) {
     companion object {
@@ -90,7 +90,7 @@ class ModelCatalogService(
             }
             val entries = vendorMetadata.models
             if (entries.isEmpty()) continue
-            dynamoDBProvider.saveModelCatalogEntries(vendor.name, entries)
+            modelCatalogRepository.saveModelCatalogEntries(vendor.name, entries)
             entries.forEach { entry ->
                 cache[cacheKey(vendor, entry.model)] =
                     CacheEntry(entry, System.currentTimeMillis())
@@ -112,7 +112,7 @@ class ModelCatalogService(
             return cached.entry
         }
         val entry = try {
-            dynamoDBProvider.getModelCatalogEntry(vendor.name, model)
+            modelCatalogRepository.getModelCatalogEntry(vendor.name, model)
         } catch (e: Exception) {
             logger.warn(e) { "Model catalog lookup failed for ${vendor.name}/$model" }
             // Don't poison the negative cache on transient DDB errors

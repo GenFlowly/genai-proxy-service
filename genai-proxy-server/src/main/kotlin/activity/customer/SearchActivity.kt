@@ -3,7 +3,7 @@ package com.genflowly.activity.customer
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.SearchCustomerResponse
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.CustomerProfileRepository
 import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -16,7 +16,7 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 fun Route.registerSearchRoutes(
-    dynamoDBProvider: DynamoDBProvider
+    customerProfileRepository: CustomerProfileRepository
 ) {
     authenticate("auth0") {
         get(Routes.SEARCH_USERS, {
@@ -56,10 +56,10 @@ fun Route.registerSearchRoutes(
             val client = "REACT_APP"
             
             try {
-                val currentUserProfile = dynamoDBProvider.getCustomerProfile(sub, client)
+                val currentUserProfile = customerProfileRepository.getCustomerProfile(sub, client)
                 val currentCustomerId = currentUserProfile?.get("customerId")?.s()
                 
-                val response = dynamoDBProvider.searchByUsername(username)
+                val response = customerProfileRepository.searchByUsername(username)
                 val filteredResponse = response.filter { it.customerId != currentCustomerId }
                 
                 call.respond(HttpStatusCode.OK, filteredResponse)

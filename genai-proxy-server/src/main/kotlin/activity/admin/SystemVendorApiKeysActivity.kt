@@ -2,7 +2,7 @@ package com.genflowly.activity.admin
 
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.SystemApiKeyService
@@ -38,7 +38,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
     systemApiKeyService: SystemApiKeyService,
     customerProfileService: CustomerProfileService,
     aiModelsService: AIModelsService,
-    dynamoDBProvider: DynamoDBProvider,
+    customerProfileRepository: CustomerProfileRepository,
     modelCatalogService: com.genflowly.service.ModelCatalogService
 ) {
     authenticate("auth0") {
@@ -46,7 +46,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
         // e.g. right after a new system key is stored or a vendor ships a model.
         post(Routes.ADMIN_MODEL_CATALOG_REFRESH, { hidden = true }) {
             try {
-                val customerId = call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                val customerId = call.requireAdminCustomerId(customerProfileService, customerProfileRepository)
                 logger.info("Admin {} triggering model catalog refresh", customerId)
                 val counts = modelCatalogService.refreshCatalog()
                 call.respond(mapOf("modelsStored" to counts.mapValues { it.value.toString() }))
@@ -63,7 +63,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         post(Routes.ADMIN_SYSTEM_API_KEYS, { hidden = true }) {
             try {
-                val customerId = call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                val customerId = call.requireAdminCustomerId(customerProfileService, customerProfileRepository)
                 val request = call.receive<StoreSystemVendorApiKeyRequest>()
 
                 val aiVendor = try {
@@ -124,7 +124,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         get(Routes.ADMIN_SYSTEM_API_KEYS, { hidden = true }) {
             try {
-                call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                call.requireAdminCustomerId(customerProfileService, customerProfileRepository)
                 val statuses = systemApiKeyService.getSystemApiKeyStatusList()
                 call.respond(GetSystemVendorApiKeyStatusListResponse(apiKeyStatuses = statuses))
             } catch (e: IllegalStateException) {
@@ -140,7 +140,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         get(Routes.ADMIN_SYSTEM_API_KEY_MODELS, { hidden = true }) {
             try {
-                call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                call.requireAdminCustomerId(customerProfileService, customerProfileRepository)
                 val vendorParam = call.parameters["aiVendor"]
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -182,7 +182,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         post(Routes.ADMIN_SYSTEM_API_KEY_CONFIG, { hidden = true }) {
             try {
-                val customerId = call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                val customerId = call.requireAdminCustomerId(customerProfileService, customerProfileRepository)
                 val request = call.receive<StoreSystemVendorConfigRequest>()
 
                 val aiVendor = try {
@@ -235,7 +235,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         delete(Routes.ADMIN_SYSTEM_API_KEY, { hidden = true }) {
             try {
-                val customerId = call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                val customerId = call.requireAdminCustomerId(customerProfileService, customerProfileRepository)
                 val vendorParam = call.parameters["aiVendor"]
                     ?: return@delete call.respond(
                         HttpStatusCode.BadRequest,

@@ -1,6 +1,6 @@
 package com.genflowly.utils
 
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.service.CustomerProfileService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -24,7 +24,7 @@ private fun envList(name: String): Set<String> =
 
 suspend fun isAdminCustomer(
     customerId: String,
-    dynamoDBProvider: DynamoDBProvider
+    customerProfileRepository: CustomerProfileRepository
 ): Boolean {
     val adminCustomerIds = envList("ADMIN_CUSTOMER_IDS")
     if (customerId.lowercase() in adminCustomerIds) return true
@@ -32,7 +32,7 @@ suspend fun isAdminCustomer(
     val adminEmails = envList("ADMIN_EMAILS")
     if (adminEmails.isEmpty()) return false
 
-    val profile = dynamoDBProvider.getCustomerProfileByCustomerId(customerId) ?: return false
+    val profile = customerProfileRepository.getCustomerProfileByCustomerId(customerId) ?: return false
     val email = profile["email"]?.s()?.trim()?.lowercase() ?: return false
     return email in adminEmails
 }
@@ -43,11 +43,11 @@ suspend fun isAdminCustomer(
  */
 suspend fun ApplicationCall.requireAdminCustomerId(
     customerProfileService: CustomerProfileService,
-    dynamoDBProvider: DynamoDBProvider
+    customerProfileRepository: CustomerProfileRepository
 ): String {
     val customerId = requireAuthenticatedCustomerId(customerProfileService)
 
-    if (!isAdminCustomer(customerId, dynamoDBProvider)) {
+    if (!isAdminCustomer(customerId, customerProfileRepository)) {
         respond(HttpStatusCode.Forbidden, mapOf("error" to "Admin access required"))
         error("Customer $customerId is not an admin")
     }

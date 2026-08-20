@@ -1,7 +1,8 @@
 package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.ShareRepository
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -24,8 +25,9 @@ class ConversationHistoryMergeTest {
     private val conv = "conv-1"
     private val owner = "cust-owner"
 
-    private val ddb = mockk<DynamoDBProvider>(relaxed = true)
-    private val service = ConversationService(ddb)
+    private val conversationRepo = mockk<ConversationRepository>(relaxed = true)
+    private val shareRepo = mockk<ShareRepository>(relaxed = true)
+    private val service = ConversationService(conversationRepo, shareRepo)
 
     private fun userMsg(id: String, text: String, seq: Int, prev: String? = null, createdAt: String? = null) = Message(
         messageId = id, conversationId = conv, text = text, client = "REACT_APP", role = "user",
@@ -40,10 +42,10 @@ class ConversationHistoryMergeTest {
     )
 
     private fun stubConversation(messages: List<Message>) {
-        coEvery { ddb.getConversationById(conv) } returns Conversation(conversationId = conv, customerId = owner, client = "REACT_APP")
-        coEvery { ddb.getMessagesForConversation(conv) } returns messages
-        coEvery { ddb.getConversationTitle(conv, owner) } returns "My chat"
-        coEvery { ddb.getConversationShare(any(), any()) } returns null
+        coEvery { conversationRepo.getConversationById(conv) } returns Conversation(conversationId = conv, customerId = owner, client = "REACT_APP")
+        coEvery { conversationRepo.getMessagesForConversation(conv) } returns messages
+        coEvery { conversationRepo.getConversationTitle(conv, owner) } returns "My chat"
+        coEvery { shareRepo.getConversationShare(any(), any()) } returns null
     }
 
     @Test
@@ -170,14 +172,14 @@ class ConversationHistoryMergeTest {
 
         assertEquals("OWNER", service.getConversationRole(conv, owner))
 
-        coEvery { ddb.getConversationShare(conv, "cust-viewer") } returns "VIEW"
+        coEvery { shareRepo.getConversationShare(conv, "cust-viewer") } returns "VIEW"
         assertEquals("VIEW", service.getConversationRole(conv, "cust-viewer"))
 
-        coEvery { ddb.getConversationShare(conv, "cust-anon") } returns null
-        coEvery { ddb.getConversationShare(conv, "PUBLIC") } returns "VIEW"
+        coEvery { shareRepo.getConversationShare(conv, "cust-anon") } returns null
+        coEvery { shareRepo.getConversationShare(conv, "PUBLIC") } returns "VIEW"
         assertEquals("VIEW", service.getConversationRole(conv, "cust-anon"))
 
-        coEvery { ddb.getConversationShare(conv, "PUBLIC") } returns null
+        coEvery { shareRepo.getConversationShare(conv, "PUBLIC") } returns null
         assertNull(service.getConversationRole(conv, "cust-anon"))
     }
 
@@ -187,7 +189,7 @@ class ConversationHistoryMergeTest {
             userMsg("u1", "q", seq = 1),
             assistantMsg("a1", "r", seq = 2, AIVendor.OPENAI, "m", prev = "u1")
         ))
-        coEvery { ddb.getConversationShare(conv, "cust-viewer") } returns "EDIT"
+        coEvery { shareRepo.getConversationShare(conv, "cust-viewer") } returns "EDIT"
 
         val result = service.getConversationHistory(conv, "cust-viewer")
 

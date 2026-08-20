@@ -1,4 +1,4 @@
-package com.genflowly.providers
+package com.genflowly.repository
 
 import com.genflowly.DynamoDBConstants
 import io.mockk.every
@@ -24,7 +24,10 @@ import kotlin.test.assertTrue
 class SharingResolutionTest {
 
     private val client = mockk<DynamoDbClient>()
-    private val provider = DynamoDBProvider(client, mockk<KLogger>(relaxed = true))
+    private val provider = ShareRepository(
+        client, mockk<KLogger>(relaxed = true),
+        CustomerProfileRepository(client, mockk<KLogger>(relaxed = true))
+    )
 
     private fun s(v: String): AttributeValue = AttributeValue.builder().s(v).build()
     private fun b(v: Boolean): AttributeValue = AttributeValue.builder().bool(v).build()

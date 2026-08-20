@@ -1,4 +1,4 @@
-package com.genflowly.providers
+package com.genflowly.repository
 
 import com.genflowly.DynamoDBConstants
 import io.mockk.every
@@ -28,7 +28,7 @@ import kotlin.test.assertTrue
 class InstructionUsageDedupTest {
 
     private val client = mockk<DynamoDbClient>()
-    private val provider = DynamoDBProvider(client, mockk<KLogger>(relaxed = true))
+    private val provider = InstructionRepository(client, mockk<KLogger>(relaxed = true))
 
     @Test
     fun `first occurrence writes conditional put with composite key and returns true`() = runTest {
