@@ -2,22 +2,11 @@ package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.repository.SystemApiKeyRepository
+import com.genflowly.models.SystemAIProviderConfig
 import com.genflowly.providers.KMSProvider
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-
-/**
- * One usable system AI provider: a vendor with a valid stored key, an
- * admin-selected model and a failover priority (1 = primary).
- * Carries decrypted key material — server-side only, never serialized.
- */
-data class SystemAIProviderConfig(
-    val aiVendor: AIVendor,
-    val model: String,
-    val apiKey: String,
-    val priority: Int
-)
 
 /**
  * System-wide (not per-customer) AI vendor API keys, managed through the
@@ -48,23 +37,23 @@ class SystemApiKeyService(
         vendor: AIVendor,
         apiKey: String,
         updatedBy: String
-    ): models.AIVendorAPIKeyStatus {
+    ): com.genflowly.models.AIVendorAPIKeyStatus {
         val isKeyValid = retrievalServerClient.validateApiKey(vendor, apiKey)
 
         return if (isKeyValid) {
             storeSystemApiKey(aiVendor = vendor.name, apiKey = apiKey, updatedBy = updatedBy)
-            models.AIVendorAPIKeyStatus(
+            com.genflowly.models.AIVendorAPIKeyStatus(
                 aiVendor = vendor,
                 isAPIKeyValid = true,
-                status = models.APIKeyStatus.VALID,
+                status = com.genflowly.models.APIKeyStatus.VALID,
                 updateSuccessful = true
             )
         } else {
             logger.warn { "Invalid system API key provided for vendor $vendor. Not saving." }
-            models.AIVendorAPIKeyStatus(
+            com.genflowly.models.AIVendorAPIKeyStatus(
                 aiVendor = vendor,
                 isAPIKeyValid = false,
-                status = models.APIKeyStatus.INVALID,
+                status = com.genflowly.models.APIKeyStatus.INVALID,
                 updateSuccessful = false
             )
         }
@@ -88,17 +77,17 @@ class SystemApiKeyService(
      * Status per vendor (never the key material itself) plus the admin-selected
      * model and failover priority. One GetItem per known vendor.
      */
-    suspend fun getSystemApiKeyStatusList(): List<models.SystemVendorApiKeyInfo> {
+    suspend fun getSystemApiKeyStatusList(): List<com.genflowly.models.SystemVendorApiKeyInfo> {
         return AIVendor.entries.map { vendor ->
             val item = systemApiKeyRepository.getSystemApiKeyItem(vendor.name)
             val hasKey = !item?.get("apiKey")?.s().isNullOrBlank()
             val isStoredValid = item?.get("isAPIKeyValid")?.bool() ?: false
             val status = when {
-                !hasKey -> models.APIKeyStatus.NOT_SET
-                isStoredValid -> models.APIKeyStatus.VALID
-                else -> models.APIKeyStatus.INVALID
+                !hasKey -> com.genflowly.models.APIKeyStatus.NOT_SET
+                isStoredValid -> com.genflowly.models.APIKeyStatus.VALID
+                else -> com.genflowly.models.APIKeyStatus.INVALID
             }
-            models.SystemVendorApiKeyInfo(
+            com.genflowly.models.SystemVendorApiKeyInfo(
                 aiVendor = vendor,
                 isAPIKeyValid = hasKey && isStoredValid,
                 status = status,

@@ -1,8 +1,8 @@
 package com.genflowly.models.api
 
 import kotlinx.serialization.Serializable
-import models.AIConfig
-import models.Prompt
+import com.genflowly.models.AIConfig
+import com.genflowly.models.Prompt
 
 @Serializable
 data class GenerateTextStreamRequest(
@@ -14,9 +14,9 @@ data class GenerateTextStreamRequest(
     // false → direct LLM generation: skip the agent graph (no retrieval/RAG)
     val agentic: Boolean = true,
     /** Caller-defined tools the model may call; works across all vendors */
-    val tools: List<models.ToolDefinition> = emptyList(),
+    val tools: List<com.genflowly.models.ToolDefinition> = emptyList(),
     /** "auto" (default), "required", or a specific tool name */
     val toolChoice: String? = null,
     /** Results for the previous assistant message's tool calls — continues the turn */
-    val toolResults: List<models.ToolResult> = emptyList()
+    val toolResults: List<com.genflowly.models.ToolResult> = emptyList()
 )

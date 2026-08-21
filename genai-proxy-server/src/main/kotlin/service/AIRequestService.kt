@@ -24,7 +24,7 @@ import com.openai.models.responses.ResponseInputContent
 import com.openai.models.responses.ResponseInputItem
 import com.openai.models.responses.ResponseCreateParams.Input
 import java.time.Duration
-import models.Message
+import com.genflowly.models.Message
 import org.koin.core.component.KoinComponent
 import org.koin.core.parameter.parametersOf
 import org.koin.core.qualifier.named

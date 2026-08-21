@@ -1,4 +1,4 @@
-package models
+package com.genflowly.models
 
 /**
  * One row of the AIModelCatalog table: token limits and pricing for a

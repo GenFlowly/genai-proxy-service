@@ -10,7 +10,7 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.http.HttpHeaders
-import models.OnboardCustomerRequest
+import com.genflowly.models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("OnboardCustomerRoute")

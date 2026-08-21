@@ -1,5 +1,6 @@
 package com.genflowly.service
 
+import com.genflowly.models.SystemAIProviderConfig
 import kotlinx.coroutines.CancellationException
 import mu.KotlinLogging
 

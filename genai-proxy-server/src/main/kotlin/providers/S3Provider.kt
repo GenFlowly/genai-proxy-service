@@ -1,5 +1,6 @@
 package com.genflowly.providers
 
+import com.genflowly.models.AttachmentObjectInfo
 import java.time.Duration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,14 +14,6 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest
-
-/**
- * Metadata of an uploaded attachment object, as reported by S3.
- */
-data class AttachmentObjectInfo(
-    val sizeBytes: Long,
-    val contentType: String?
-)
 
 class S3Provider(
     private val s3Client: S3Client,

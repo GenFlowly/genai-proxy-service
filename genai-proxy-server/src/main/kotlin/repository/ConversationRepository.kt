@@ -15,8 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import models.Conversation
-import models.Message
+import com.genflowly.models.Conversation
+import com.genflowly.models.Message
 import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
@@ -446,7 +446,7 @@ class ConversationRepository(
     }
 
     private fun attachmentsToAttributeValue(
-        attachments: List<models.AttachmentRef>
+        attachments: List<com.genflowly.models.AttachmentRef>
     ): AttributeValue =
         AttributeValue.builder()
             .l(
@@ -466,12 +466,12 @@ class ConversationRepository(
 
     private fun attributeValueToAttachments(
         attributeValue: AttributeValue?
-    ): List<models.AttachmentRef> =
+    ): List<com.genflowly.models.AttachmentRef> =
         attributeValue?.l()?.mapNotNull { av ->
             val map = av.m()
             val attachmentId = map["attachmentId"]?.s() ?: return@mapNotNull null
             val s3Key = map["s3Key"]?.s() ?: return@mapNotNull null
             val mediaType = map["mediaType"]?.s() ?: return@mapNotNull null
-            models.AttachmentRef(attachmentId = attachmentId, s3Key = s3Key, mediaType = mediaType)
+            com.genflowly.models.AttachmentRef(attachmentId = attachmentId, s3Key = s3Key, mediaType = mediaType)
         } ?: emptyList()
 }

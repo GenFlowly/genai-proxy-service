@@ -11,7 +11,7 @@ import com.genflowly.models.api.AIMode
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import models.AIConfig
+import com.genflowly.models.AIConfig
 import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue

@@ -5,7 +5,7 @@ import com.genflowly.DynamoDBConstants.AI_VENDOR_KEY
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import models.ModelCatalogEntry
+import com.genflowly.models.ModelCatalogEntry
 import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue

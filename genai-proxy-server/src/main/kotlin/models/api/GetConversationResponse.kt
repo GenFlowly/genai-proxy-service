@@ -1,8 +1,8 @@
 package com.genflowly.models.api
 
 import kotlinx.serialization.Serializable
-import models.GenerateTextResponse
-import models.Prompt
+import com.genflowly.models.GenerateTextResponse
+import com.genflowly.models.Prompt
 
 @Serializable
 data class GetConversationResponse(

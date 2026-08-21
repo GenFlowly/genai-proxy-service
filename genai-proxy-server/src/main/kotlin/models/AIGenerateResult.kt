@@ -1,4 +1,4 @@
-package models
+package com.genflowly.models
 
 /**
  * Wraps the result of a single AI generation call, carrying both the generated

@@ -14,16 +14,16 @@ class SharedUsersResolver(
     private val customerProfileRepository: CustomerProfileRepository
 ) {
 
-    suspend fun getUsersWithSharedEntity(entityId: String): List<models.CustomerProfile> =
+    suspend fun getUsersWithSharedEntity(entityId: String): List<com.genflowly.models.CustomerProfile> =
         resolve(shareRepository.getSharesForEntity(entityId))
 
-    suspend fun getUsersWithSharedConversation(conversationId: String): List<models.CustomerProfile> =
+    suspend fun getUsersWithSharedConversation(conversationId: String): List<com.genflowly.models.CustomerProfile> =
         resolve(shareRepository.getSharesForConversation(conversationId))
 
-    private suspend fun resolve(shares: List<Pair<String, String>>): List<models.CustomerProfile> =
+    private suspend fun resolve(shares: List<Pair<String, String>>): List<com.genflowly.models.CustomerProfile> =
         shares.mapNotNull { (customerId, role) ->
             if (customerId == "PUBLIC") {
-                return@mapNotNull models.CustomerProfile(
+                return@mapNotNull com.genflowly.models.CustomerProfile(
                     customerId = "PUBLIC",
                     sub = "",
                     client = "",
@@ -38,7 +38,7 @@ class SharedUsersResolver(
 
             val profileItem = customerProfileRepository.getCustomerProfileByCustomerId(customerId)
             if (profileItem != null) {
-                models.CustomerProfile(
+                com.genflowly.models.CustomerProfile(
                     customerId = customerId,
                     sub = profileItem["sub"]?.s() ?: "",
                     client = profileItem["client"]?.s() ?: "",

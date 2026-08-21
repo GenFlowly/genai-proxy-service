@@ -16,11 +16,11 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import kotlinx.serialization.SerializationException
-import models.GetSystemVendorApiKeyStatusListResponse
-import models.StoreSystemVendorApiKeyRequest
-import models.StoreSystemVendorApiKeyResponse
-import models.StoreSystemVendorConfigRequest
-import models.SystemVendorModelsResponse
+import com.genflowly.models.GetSystemVendorApiKeyStatusListResponse
+import com.genflowly.models.StoreSystemVendorApiKeyRequest
+import com.genflowly.models.StoreSystemVendorApiKeyResponse
+import com.genflowly.models.StoreSystemVendorConfigRequest
+import com.genflowly.models.SystemVendorModelsResponse
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("SystemVendorApiKeysActivity")

@@ -1,5 +1,5 @@
 
-package models
+package com.genflowly.models
 
 import kotlinx.serialization.Serializable
 

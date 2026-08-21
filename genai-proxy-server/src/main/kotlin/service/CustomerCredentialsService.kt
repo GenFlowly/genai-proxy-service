@@ -48,24 +48,24 @@ class CustomerCredentialsService(
         customerId: String,
         vendor: AIVendor,
         apiKey: String
-    ): models.AIVendorAPIKeyStatus {
+    ): com.genflowly.models.AIVendorAPIKeyStatus {
         val isKeyValid = retrievalServerClient.validateApiKey(vendor, apiKey)
 
         return if (isKeyValid) {
             val stored = storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
             logger.info { "API Key validated and stored for vendor $vendor: $stored" }
-            models.AIVendorAPIKeyStatus(
+            com.genflowly.models.AIVendorAPIKeyStatus(
                 aiVendor = vendor,
                 isAPIKeyValid = true,
-                status = models.APIKeyStatus.VALID,
+                status = com.genflowly.models.APIKeyStatus.VALID,
                 updateSuccessful = true
             )
         } else {
             logger.warn { "Invalid API Key provided for vendor $vendor. Not saving." }
-            models.AIVendorAPIKeyStatus(
+            com.genflowly.models.AIVendorAPIKeyStatus(
                 aiVendor = vendor,
                 isAPIKeyValid = false,
-                status = models.APIKeyStatus.INVALID,
+                status = com.genflowly.models.APIKeyStatus.INVALID,
                 updateSuccessful = false
             )
         }
@@ -85,15 +85,15 @@ class CustomerCredentialsService(
         return decrypted
     }
 
-    suspend fun getAIVendorAPIKeyStatusList(customerId: String): List<models.AIVendorAPIKeyStatus> {
+    suspend fun getAIVendorAPIKeyStatusList(customerId: String): List<com.genflowly.models.AIVendorAPIKeyStatus> {
         val storedKeys = customerCredentialsRepository.getCustomerApiKeys(customerId)
         val storedMap = storedKeys.associateBy { it.aiVendor }
 
         return AIVendor.entries.map { vendor ->
-            storedMap[vendor] ?: models.AIVendorAPIKeyStatus(
+            storedMap[vendor] ?: com.genflowly.models.AIVendorAPIKeyStatus(
                 aiVendor = vendor,
                 isAPIKeyValid = false,
-                status = models.APIKeyStatus.NOT_SET
+                status = com.genflowly.models.APIKeyStatus.NOT_SET
             )
         }
     }
@@ -132,11 +132,11 @@ class CustomerCredentialsService(
         return true
     }
 
-    suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<models.VectorDBConfigStatus> {
+    suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<com.genflowly.models.VectorDBConfigStatus> {
         return customerCredentialsRepository.getCustomerVectorDBConfigStatusList(customerId)
     }
 
-    suspend fun getCustomerSupabaseConfigStatus(customerId: String): models.SupabaseConfigStatus? {
+    suspend fun getCustomerSupabaseConfigStatus(customerId: String): com.genflowly.models.SupabaseConfigStatus? {
         return customerCredentialsRepository.getCustomerSupabaseConfigStatus(customerId)
     }
 

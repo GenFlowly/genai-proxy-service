@@ -5,7 +5,7 @@ import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.http.*
 import io.ktor.server.response.*
-import models.ApiKeyPrincipal
+import com.genflowly.models.ApiKeyPrincipal
 import com.genflowly.service.CustomerProfileService
 
 /**

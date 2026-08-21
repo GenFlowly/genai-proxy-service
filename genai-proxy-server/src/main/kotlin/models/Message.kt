@@ -1,4 +1,4 @@
-package models
+package com.genflowly.models
 
 import com.genflowly.aicallerlib.models.AIVendor
 import java.util.UUID

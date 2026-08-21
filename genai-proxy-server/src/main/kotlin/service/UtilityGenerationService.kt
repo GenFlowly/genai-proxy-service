@@ -5,8 +5,8 @@ import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.aicallerlib.models.claude.ClaudeUsageMetadata
 import com.genflowly.aicallerlib.models.gemini.GeminiUsageMetadata
 import com.genflowly.aicallerlib.models.openai.OpenAIUsageMetadata
-import models.AIGenerateResult
-import models.Message
+import com.genflowly.models.AIGenerateResult
+import com.genflowly.models.Message
 import org.slf4j.LoggerFactory
 
 /**

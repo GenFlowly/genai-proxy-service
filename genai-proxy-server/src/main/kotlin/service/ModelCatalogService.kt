@@ -7,7 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import models.ModelCatalogEntry
+import com.genflowly.models.ModelCatalogEntry
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
 

@@ -3,15 +3,15 @@ package com.genflowly.service
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ShareRepository
-import models.AIConfig
+import com.genflowly.models.AIConfig
 import org.slf4j.LoggerFactory
 import com.genflowly.models.api.GetConversationResponse
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.models.api.PromptAndResponse
-import models.Conversation
-import models.GenerateTextResponse
-import models.Message
-import models.Prompt
+import com.genflowly.models.Conversation
+import com.genflowly.models.GenerateTextResponse
+import com.genflowly.models.Message
+import com.genflowly.models.Prompt
 
 class ConversationAccessDeniedException(message: String) : Exception(message)
 class ConversationArchivedException(message: String) : Exception(message)
@@ -189,7 +189,7 @@ class ConversationService(
     suspend fun getSharedUsersForConversation(
         conversationId: String,
         callerCustomerId: String
-    ): List<models.CustomerProfile> {
+    ): List<com.genflowly.models.CustomerProfile> {
         requireEditOrOwner(conversationId, callerCustomerId, action = "list-shares")
         return sharedUsersResolver.getUsersWithSharedConversation(conversationId)
     }

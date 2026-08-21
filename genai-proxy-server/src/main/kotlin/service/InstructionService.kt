@@ -8,23 +8,14 @@ import com.genflowly.repository.InstructionRepository
 import com.genflowly.repository.ShareRepository
 import java.util.UUID
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import models.AIConfig
-import models.Message
+import com.genflowly.models.AIConfig
+import com.genflowly.models.GeneratedPersona
+import com.genflowly.models.Message
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-
-@Serializable
-data class GeneratedPersona(
-    val name: String,
-    val icon: String,
-    val color: String,
-    val category: String,
-    val tags: List<String>
-)
 
 /**
  * The instruction (persona) domain: CRUD with immutable versioning, sharing
@@ -161,7 +152,7 @@ class InstructionService(
             version = 1
         }
 
-        val newInstruction = models.Instruction(
+        val newInstruction = com.genflowly.models.Instruction(
             id = instructionId!!,
             creator = creator,
             name = instructionName,
@@ -238,7 +229,7 @@ class InstructionService(
             }
         }
 
-        val sharedInstructions = mutableListOf<models.Instruction>()
+        val sharedInstructions = mutableListOf<com.genflowly.models.Instruction>()
         for (id in roleMap.keys) {
             val latestVersion = instructionRepository.getLatestInstructionVersion(id)
             if (latestVersion != null) {
@@ -253,7 +244,7 @@ class InstructionService(
 
         // Return all versions, sorted by ID and version desc
         val responseItems = allInstructions.sortedWith(
-            compareBy<models.Instruction> { it.id }.thenByDescending { it.version }
+            compareBy<com.genflowly.models.Instruction> { it.id }.thenByDescending { it.version }
         ).map { instruction ->
             val role = if (instruction.creator == customerId) "OWNER" else roleMap[instruction.id] ?: "VIEW"
             InstructionResponse(
@@ -307,7 +298,7 @@ class InstructionService(
         }
     }
 
-    suspend fun getSharedUsersForInstruction(customerId: String, instructionId: String): List<models.CustomerProfile> {
+    suspend fun getSharedUsersForInstruction(customerId: String, instructionId: String): List<com.genflowly.models.CustomerProfile> {
         val latestVersion = instructionRepository.getLatestInstructionVersion(instructionId)
         if (latestVersion != null) {
             val instruction = instructionRepository.getInstruction(instructionId, latestVersion)

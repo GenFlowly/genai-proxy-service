@@ -2,7 +2,7 @@ package com.genflowly.repository
 
 import java.time.Instant
 import kotlinx.coroutines.delay
-import models.AIConfig
+import com.genflowly.models.AIConfig
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
