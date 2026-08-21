@@ -361,6 +361,7 @@ fun Application.module() {
     val instructionService = get<InstructionService>()
     val customerProfileService = get<CustomerProfileService>()
     val conversationService = get<ConversationService>()
+    val conversationManagementService = get<com.genflowly.service.ConversationManagementService>()
     val aiModelsService = get<AIModelsService>()
     val graphService = get<GraphService>()
     val attachmentService = get<com.genflowly.service.AttachmentService>()
@@ -376,5 +377,5 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, appConfig)
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, appConfig)
 }

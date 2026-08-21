@@ -4,7 +4,7 @@ import com.genflowly.Routes
 import com.genflowly.models.api.CreateConversationShareRequest
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.StatusResponse
-import com.genflowly.service.ConversationService
+import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.delete
@@ -20,7 +20,7 @@ private val logger = LoggerFactory.getLogger("CreateConversationShareRoute")
 
 fun Route.registerCreateConversationShareRoutes(
     customerProfileService: CustomerProfileService,
-    conversationService: ConversationService
+    conversationManagementService: ConversationManagementService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.CREATE_CONVERSATION_SHARE, {
@@ -56,7 +56,7 @@ fun Route.registerCreateConversationShareRoutes(
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val request = call.receive<CreateConversationShareRequest>()
 
-                conversationService.shareConversation(
+                conversationManagementService.shareConversation(
                     conversationId = request.conversationId,
                     targetCustomerId = request.targetCustomerId,
                     sharedByCustomerId = customerId,
@@ -124,7 +124,7 @@ fun Route.registerCreateConversationShareRoutes(
                     )
                 }
 
-                conversationService.unshareConversation(
+                conversationManagementService.unshareConversation(
                     conversationId = conversationId,
                     targetCustomerId = targetCustomerId,
                     sharedByCustomerId = customerId
