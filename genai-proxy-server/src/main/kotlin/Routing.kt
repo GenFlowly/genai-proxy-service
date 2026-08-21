@@ -123,7 +123,6 @@ fun Application.configureRouting(
     developerApiKeyService: DeveloperApiKeyService,
     systemApiKeyService: com.genflowly.service.SystemApiKeyService,
     modelCatalogService: com.genflowly.service.ModelCatalogService,
-    retrievalServerClient: com.genflowly.providers.RetrievalServerClient,
     appConfig: AppConfig,
 ) {
     routing {
@@ -180,7 +179,7 @@ fun Application.configureRouting(
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService
         )
-        registerVoiceSessionRoutes(customerProfileService, voiceSessionService, retrievalServerClient)
+        registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }
 }

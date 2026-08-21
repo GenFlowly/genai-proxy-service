@@ -122,7 +122,7 @@ fun appModule(): Module = module {
     single { ConversationService(get(), get(), get(), get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
-    single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
     single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }

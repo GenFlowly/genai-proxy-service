@@ -35,10 +35,11 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
  * Versioning scheme (see constants.kt): version=0 is the live record;
  * version=1,2,... are immutable history snapshots.
  *
- * NOTE (Phase 4): next-version computation, rollback fallback-merges and
- * default-graph selection currently live here verbatim from the old
- * DynamoDBProvider; they ascend to GraphService in the service-decomposition
- * phase, leaving only row primitives here.
+ * The version bookkeeping (next-version computation, rollback fallback-merge)
+ * stays here deliberately: it is inseparable from how the rows are laid out,
+ * and lifting it into GraphService would drag AttributeValue construction up
+ * into the domain layer. Domain policy (ownership checks, validation,
+ * response mapping) lives in GraphService.
  */
 class GraphRepository(
     private val dynamoDbClient: DynamoDbClient,

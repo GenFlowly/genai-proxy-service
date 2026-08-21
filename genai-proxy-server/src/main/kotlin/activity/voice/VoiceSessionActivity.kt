@@ -1,7 +1,6 @@
 package com.genflowly.activity.voice
 
 import com.genflowly.Routes
-import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.VoiceSessionService
 import com.genflowly.utils.getAuthenticatedCustomerId
@@ -127,8 +126,7 @@ fun voiceSessionSpecPath(): io.swagger.v3.oas.models.PathItem =
  */
 fun Route.registerVoiceSessionRoutes(
     customerProfileService: CustomerProfileService,
-    voiceSessionService: VoiceSessionService,
-    retrievalServerClient: RetrievalServerClient
+    voiceSessionService: VoiceSessionService
 ) {
     authenticate("auth0", "apiKey") {
         route(Routes.VOICE_SESSION, {
@@ -173,7 +171,7 @@ fun Route.registerVoiceSessionRoutes(
                 }
 
                 try {
-                    retrievalServerClient.voiceSession {
+                    voiceSessionService.connectUpstream {
                         val upstream = this
                         upstream.send(Frame.Text(session.upstreamInit.toString()))
 

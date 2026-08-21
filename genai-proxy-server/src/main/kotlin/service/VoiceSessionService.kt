@@ -1,6 +1,8 @@
 package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.providers.RetrievalServerClient
+import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -32,9 +34,14 @@ class VoiceSessionService(
     private val generationOrchestrator: GenerationOrchestrator,
     private val instructionService: InstructionService,
     private val customerCredentialsService: CustomerCredentialsService,
+    private val retrievalServerClient: RetrievalServerClient,
     private val json: Json
 ) {
     private val logger = LoggerFactory.getLogger("VoiceSessionService")
+
+    /** Opens the upstream retrieval-server voice WebSocket and runs [handler] on it. */
+    suspend fun connectUpstream(handler: suspend DefaultClientWebSocketSession.() -> Unit) =
+        retrievalServerClient.voiceSession(handler)
 
     sealed class SessionInitResult {
         /** Handshake invalid — send the message to the client and close. */

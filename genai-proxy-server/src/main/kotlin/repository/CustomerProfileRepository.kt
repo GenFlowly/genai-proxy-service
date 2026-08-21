@@ -26,9 +26,11 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
  * Data access for the CustomerProfile, UsernameLookup and CustomerPreferences
  * tables.
  *
- * NOTE (Phase 4): username generation/reservation policy and the lazy
- * backfill-on-read currently live here verbatim from the old DynamoDBProvider;
- * they ascend to CustomerProfileService in the service-decomposition phase.
+ * Username generation/reservation (conditional-put uniqueness with retry) and
+ * the lazy backfill-on-read stay here deliberately: they are storage-level
+ * uniqueness/consistency invariants of the UsernameLookup table, exercised on
+ * both write and read paths. Profile domain policy lives in
+ * CustomerProfileService.
  */
 class CustomerProfileRepository(
     private val dynamoDbClient: DynamoDbClient,
