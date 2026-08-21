@@ -196,20 +196,14 @@ class GenerationOrchestrator(
             // just created above have no shares yet, so this check only applies when
             // continuing an existing one.
             val role = conversationService.getConversationRole(conversationId, customerId)
-            if (role != "OWNER" && role != "EDIT") {
+            if (role == null || !role.canEdit) {
                 throw ConversationAccessDeniedException("Customer $customerId cannot write to conversation $conversationId")
             }
             conversationId
         }
         return activeConversationId
     }
-
-    /**
-     * Resolve the effective (instructionId, version) for a generation request.
-     * An explicit selection is returned as-is; a blank selection falls back to
-     * the customer's default (preferred / last-used / SYSTEM). Returns the
-     * original blank values if nothing resolves — safe, yields no instruction.
-     */
+    
     /**
      * Resolve the instruction to use for a generation request, returning the full
      * instruction (no second fetch downstream). An explicit selection is fetched

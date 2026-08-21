@@ -1,5 +1,6 @@
 package com.genflowly.models.api
 
+import com.genflowly.models.ShareRole
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -8,7 +9,7 @@ data class ConversationSummary(
     val title: String?,
     val createdAt: String?,
     val updatedAt: String?,
-    val role: String = "OWNER",
+    val role: ShareRole = ShareRole.OWNER,
     val archivedAt: String? = null,
     val vendors: List<String>? = null
 )

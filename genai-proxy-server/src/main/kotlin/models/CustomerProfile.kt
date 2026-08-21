@@ -12,5 +12,5 @@ data class CustomerProfile(
     val picture: String? = null,
     val username: String? = null,
     val isDiscoverable: Boolean = false,
-    val role: String? = null
+    val role: ShareRole? = null
 )
