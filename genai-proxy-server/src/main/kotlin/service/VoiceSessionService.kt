@@ -10,10 +10,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import models.AIConfig
-import models.Message
-import models.toCredentialKey
-import models.toProviderString
+import com.genflowly.models.AIConfig
+import com.genflowly.models.Message
+import com.genflowly.models.toCredentialKey
+import com.genflowly.models.toProviderString
 import org.slf4j.LoggerFactory
 
 private data class VoiceTurnUsage(

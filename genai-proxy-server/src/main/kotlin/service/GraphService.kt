@@ -15,19 +15,19 @@ import com.genflowly.DynamoDBConstants.NODE_NAME_KEY
 import com.genflowly.DynamoDBConstants.NODE_TYPE_KEY
 import com.genflowly.DynamoDBConstants.VERSION_KEY
 import com.genflowly.repository.GraphRepository
-import models.api.AgentNodeResponse
-import models.api.AgentResponse
-import models.api.CreateCustomerGraphRequest
-import models.api.CreateGraphNodeRequest
-import models.api.CustomerGraphResponse
-import models.api.CustomerGraphVersionResponse
-import models.api.GetCustomerAgentsResponse
-import models.api.GraphNodeResponse
-import models.api.GraphNodeVersionResponse
-import models.api.UpdateAgentNodePatch
-import models.api.UpdateAgentRequest
-import models.api.UpdateCustomerGraphRequest
-import models.api.UpdateGraphNodeRequest
+import com.genflowly.models.api.AgentNodeResponse
+import com.genflowly.models.api.AgentResponse
+import com.genflowly.models.api.CreateCustomerGraphRequest
+import com.genflowly.models.api.CreateGraphNodeRequest
+import com.genflowly.models.api.CustomerGraphResponse
+import com.genflowly.models.api.CustomerGraphVersionResponse
+import com.genflowly.models.api.GetCustomerAgentsResponse
+import com.genflowly.models.api.GraphNodeResponse
+import com.genflowly.models.api.GraphNodeVersionResponse
+import com.genflowly.models.api.UpdateAgentNodePatch
+import com.genflowly.models.api.UpdateAgentRequest
+import com.genflowly.models.api.UpdateCustomerGraphRequest
+import com.genflowly.models.api.UpdateGraphNodeRequest
 import mu.KotlinLogging
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
@@ -52,11 +52,11 @@ class GraphService(private val graphRepository: GraphRepository) {
      */
     suspend fun seedDefaultGraph(customerId: String) {
         try {
-            val queryAnalyzerId = models.generateNodeId()
-            val queryRewriterId = models.generateNodeId()
-            val retrievalId = models.generateNodeId()
-            val resultRankerId = models.generateNodeId()
-            val responseGeneratorId = models.generateNodeId()
+            val queryAnalyzerId = com.genflowly.models.generateNodeId()
+            val queryRewriterId = com.genflowly.models.generateNodeId()
+            val retrievalId = com.genflowly.models.generateNodeId()
+            val resultRankerId = com.genflowly.models.generateNodeId()
+            val responseGeneratorId = com.genflowly.models.generateNodeId()
 
             val queryAnalyzerConfig = """{"system_prompt":"You are a query analysis expert for a vector similarity search system. Analyze the user query and determine the intent and whether it needs rewriting to improve retrieval. Return ONLY valid JSON: {\"intent\": \"<brief description>\", \"needs_rewrite\": <true|false>}","input_template":"Query: {original_query}","response_format":"json","json_output_mapping":{"intent":"query_intent","needs_rewrite":"needs_rewrite"}}"""
             val queryRewriterConfig = """{"system_prompt":"You are a query rewriting expert for a vector similarity search system. Rewrite the query to be more specific and retrievable: expand abbreviations, add missing context, clarify ambiguity. Return ONLY the rewritten query text, nothing else.","input_template":"Original query: {original_query}\nIntent: {query_intent}","output_key":"rewritten_query","response_format":"text"}"""
@@ -73,7 +73,7 @@ class GraphService(private val graphRepository: GraphRepository) {
 
             graphRepository.createCustomerGraph(
                 customerId = customerId,
-                graphId = models.generateGraphId(),
+                graphId = com.genflowly.models.generateGraphId(),
                 name = "Default Graph",
                 isDefault = true,
                 nodeIds = listOf(queryAnalyzerId, queryRewriterId, retrievalId, resultRankerId, responseGeneratorId),
@@ -89,7 +89,7 @@ class GraphService(private val graphRepository: GraphRepository) {
     // ─── Graph Nodes ──────────────────────────────────────────────────────────
 
     suspend fun createGraphNode(customerId: String, req: CreateGraphNodeRequest): GraphNodeResponse {
-        val nodeId = models.generateNodeId()
+        val nodeId = com.genflowly.models.generateNodeId()
         graphRepository.createCustomerGraphNode(customerId, nodeId, req.nodeType, req.name, req.config)
         logger.info { "Created graph node $nodeId for customer $customerId" }
         return GraphNodeResponse(
@@ -160,7 +160,7 @@ class GraphService(private val graphRepository: GraphRepository) {
     // ─── Graphs ───────────────────────────────────────────────────────────────
 
     suspend fun createGraph(customerId: String, req: CreateCustomerGraphRequest): CustomerGraphResponse {
-        val graphId = models.generateGraphId()
+        val graphId = com.genflowly.models.generateGraphId()
         graphRepository.createCustomerGraph(
             customerId = customerId,
             graphId = graphId,

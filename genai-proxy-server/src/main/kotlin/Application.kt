@@ -30,7 +30,7 @@ import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.InstructionService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
-import models.ApiKeyPrincipal
+import com.genflowly.models.ApiKeyPrincipal
 import com.genflowly.service.DeveloperApiKeyService
 import com.genflowly.service.GraphService
 import com.genflowly.service.NotesService

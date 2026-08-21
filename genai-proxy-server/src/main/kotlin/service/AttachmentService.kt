@@ -2,17 +2,11 @@ package com.genflowly.service
 
 import com.genflowly.providers.S3Provider
 import java.util.UUID
-import models.ALLOWED_ATTACHMENT_MEDIA_TYPES
-import models.MAX_ATTACHMENT_SIZE_BYTES
-import models.attachmentS3Key
+import com.genflowly.models.ALLOWED_ATTACHMENT_MEDIA_TYPES
+import com.genflowly.models.AttachmentUpload
+import com.genflowly.models.MAX_ATTACHMENT_SIZE_BYTES
+import com.genflowly.models.attachmentS3Key
 import org.slf4j.LoggerFactory
-
-/** Result of preparing an attachment upload: identifiers plus the presigned PUT URL. */
-data class AttachmentUpload(
-    val attachmentId: String,
-    val s3Key: String,
-    val uploadUrl: String
-)
 
 /**
  * Attachment uploads/downloads: media-type and size validation, id minting,

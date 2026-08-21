@@ -1,4 +1,4 @@
-package models
+package com.genflowly.models
 
 import kotlinx.serialization.Serializable
 
@@ -24,3 +24,18 @@ data class AttachmentRef(
 
 fun attachmentS3Key(customerId: String, attachmentId: String): String =
     "customers/$customerId/attachments/$attachmentId"
+
+/**
+ * Metadata of an uploaded attachment object, as reported by S3.
+ */
+data class AttachmentObjectInfo(
+    val sizeBytes: Long,
+    val contentType: String?
+)
+
+/** Result of preparing an attachment upload: identifiers plus the presigned PUT URL. */
+data class AttachmentUpload(
+    val attachmentId: String,
+    val s3Key: String,
+    val uploadUrl: String
+)

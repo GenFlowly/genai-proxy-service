@@ -21,78 +21,17 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import models.ModelCatalogEntry
-import models.aiVendorFromProviderString
-import models.toProviderString
+import com.genflowly.models.ModelCatalogEntry
+import com.genflowly.models.retrieval.ConversationMessage
+import com.genflowly.models.retrieval.ImageRef
+import com.genflowly.models.retrieval.PayloadToolDefinition
+import com.genflowly.models.retrieval.PayloadToolResult
+import com.genflowly.models.retrieval.RetrievalResult
+import com.genflowly.models.retrieval.StreamChunk
+import com.genflowly.models.retrieval.VendorModelMetadata
+import com.genflowly.models.aiVendorFromProviderString
+import com.genflowly.models.toProviderString
 import mu.KLogger
-
-sealed class StreamChunk {
-    data class Content(val text: String) : StreamChunk()
-    data class Thinking(val text: String) : StreamChunk()
-    /** Request receipt on the retrieval server → first generated token, in ms */
-    data class ThinkingDuration(val millis: Long) : StreamChunk()
-    /** Raw JSON array of tool calls the model made: [{"id","name","args"}] */
-    data class ToolCalls(val json: String) : StreamChunk()
-    data class Usage(
-        val inputTokens: Int,
-        val outputTokens: Int,
-        val totalTokens: Int,
-        val tokensReadFromCache: Int
-    ) : StreamChunk()
-}
-
-data class RetrievalResult(
-    val text: String?,
-    val inputTokens: Int?,
-    val outputTokens: Int?,
-    val totalTokens: Int?,
-    val tokensReadFromCache: Int?,
-    /** JSON array of tool calls the model made, null when it answered directly */
-    val toolCallsJson: String? = null
-)
-
-/** Image reference passed to the retrieval-server, which fetches the bytes from S3 itself. */
-@Serializable
-data class ImageRef(
-    @SerialName("s3_key") val s3Key: String,
-    @SerialName("media_type") val mediaType: String
-)
-
-@Serializable
-data class ConversationMessage(
-    val role: String,
-    val content: String,
-    val images: List<ImageRef> = emptyList(),
-    /** Assistant turns: [{"id","name","args"}] tool calls the model made */
-    @SerialName("tool_calls") val toolCalls: kotlinx.serialization.json.JsonElement? = null,
-    /** User turns: [{"tool_call_id","content"}] results the caller executed */
-    @SerialName("tool_results") val toolResults: kotlinx.serialization.json.JsonElement? = null
-)
-
-@Serializable
-data class PayloadToolDefinition(
-    val name: String,
-    val description: String = "",
-    val parameters: kotlinx.serialization.json.JsonObject? = null,
-    val type: String? = null,
-    val options: kotlinx.serialization.json.JsonObject? = null
-)
-
-@Serializable
-data class PayloadToolResult(
-    @SerialName("tool_call_id") val toolCallId: String,
-    val content: String,
-    val images: List<PayloadToolResultImage> = emptyList()
-)
-
-@Serializable
-data class PayloadToolResultImage(
-    val data: String? = null,
-    @SerialName("s3_key") val s3Key: String? = null,
-    @SerialName("media_type") val mediaType: String = "image/png",
-    /** true when a base64 screenshot was stripped at persistence time (history replay) */
-    val omitted: Boolean = false
-)
 
 @Serializable
 private data class RetrievalAgentPayload(
@@ -178,14 +117,6 @@ private data class WireVendorModelMetadata(
 
 @Serializable
 private data class ModelMetadataResponse(val vendor_models: List<WireVendorModelMetadata>)
-
-/** Per-vendor model metadata as returned by the retrieval-server's /models/metadata. */
-data class VendorModelMetadata(
-    val vendor: AIVendor,
-    val models: List<ModelCatalogEntry>,
-    /** Non-null when the vendor fetch failed on the retrieval-server side. */
-    val error: String? = null
-)
 
 /**
  * The single HTTP/WebSocket client for the Python retrieval-server. All

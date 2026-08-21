@@ -10,10 +10,10 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import kotlinx.serialization.SerializationException
-import models.BatchGenerateTextResponse
-import models.GenerateTextRequest
-import models.GenerateTextResponse
-import models.Message
+import com.genflowly.models.BatchGenerateTextResponse
+import com.genflowly.models.GenerateTextRequest
+import com.genflowly.models.GenerateTextResponse
+import com.genflowly.models.Message
 import org.slf4j.LoggerFactory
 import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.CustomerProfileService

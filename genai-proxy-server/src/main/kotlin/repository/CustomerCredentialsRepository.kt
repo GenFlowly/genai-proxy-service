@@ -97,7 +97,7 @@ class CustomerCredentialsRepository(
         }
     }
 
-    suspend fun getCustomerApiKeys(customerId: String): List<models.AIVendorAPIKeyStatus> =
+    suspend fun getCustomerApiKeys(customerId: String): List<com.genflowly.models.AIVendorAPIKeyStatus> =
         withContext(Dispatchers.IO) {
             val request = QueryRequest.builder()
                 .tableName(CUSTOMER_API_KEY_TABLE)
@@ -129,14 +129,14 @@ class CustomerCredentialsRepository(
                 }
 
                 val status = if (!hasKey) {
-                    models.APIKeyStatus.NOT_SET
+                    com.genflowly.models.APIKeyStatus.NOT_SET
                 } else if (isValid) {
-                    models.APIKeyStatus.VALID
+                    com.genflowly.models.APIKeyStatus.VALID
                 } else {
-                    models.APIKeyStatus.INVALID
+                    com.genflowly.models.APIKeyStatus.INVALID
                 }
 
-                models.AIVendorAPIKeyStatus(
+                com.genflowly.models.AIVendorAPIKeyStatus(
                     aiVendor = aiVendor,
                     isAPIKeyValid = isValid,
                     status = status
@@ -202,7 +202,7 @@ class CustomerCredentialsRepository(
         }
     }
 
-    suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<models.VectorDBConfigStatus> = withContext(Dispatchers.IO) {
+    suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<com.genflowly.models.VectorDBConfigStatus> = withContext(Dispatchers.IO) {
         try {
             val getReq = GetItemRequest.builder()
                 .tableName(CUSTOMER_VECTOR_DB_CONFIG_TABLE)
@@ -216,13 +216,13 @@ class CustomerCredentialsRepository(
             if (response.hasItem()) {
                 val item = response.item()
                 val status = if (item["isConfigValid"]?.bool() == true) {
-                    models.VectorDBConfigStatusValue.PRESENT
+                    com.genflowly.models.VectorDBConfigStatusValue.PRESENT
                 } else {
-                    models.VectorDBConfigStatusValue.NOT_SET
+                    com.genflowly.models.VectorDBConfigStatusValue.NOT_SET
                 }
 
                 listOf(
-                    models.VectorDBConfigStatus(
+                    com.genflowly.models.VectorDBConfigStatus(
                         vendor = item[VENDOR_KEY]?.s() ?: "Zilliz",
                         isConfigValid = item["isConfigValid"]?.bool() ?: false,
                         status = status,
@@ -238,7 +238,7 @@ class CustomerCredentialsRepository(
         }
     }
 
-    suspend fun getCustomerSupabaseConfigStatus(customerId: String): models.SupabaseConfigStatus? = withContext(Dispatchers.IO) {
+    suspend fun getCustomerSupabaseConfigStatus(customerId: String): com.genflowly.models.SupabaseConfigStatus? = withContext(Dispatchers.IO) {
         try {
             val getReq = GetItemRequest.builder()
                 .tableName(DynamoDBConstants.CUSTOMER_SUPABASE_CONFIG_TABLE)
@@ -252,12 +252,12 @@ class CustomerCredentialsRepository(
             if (response.hasItem()) {
                 val item = response.item()
                 val status = if (item["isConfigValid"]?.bool() == true) {
-                    models.SupabaseConfigStatusValue.PRESENT
+                    com.genflowly.models.SupabaseConfigStatusValue.PRESENT
                 } else {
-                    models.SupabaseConfigStatusValue.NOT_SET
+                    com.genflowly.models.SupabaseConfigStatusValue.NOT_SET
                 }
 
-                models.SupabaseConfigStatus(
+                com.genflowly.models.SupabaseConfigStatus(
                     isConfigValid = item["isConfigValid"]?.bool() ?: false,
                     status = status,
                     updateSuccessful = true

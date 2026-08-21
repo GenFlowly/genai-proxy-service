@@ -6,9 +6,9 @@ import com.genflowly.repository.ShareRepository
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import models.AIConfig
-import models.Conversation
-import models.Message
+import com.genflowly.models.AIConfig
+import com.genflowly.models.Conversation
+import com.genflowly.models.Message
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

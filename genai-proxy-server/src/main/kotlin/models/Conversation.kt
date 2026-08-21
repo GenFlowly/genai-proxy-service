@@ -1,4 +1,4 @@
-package models
+package com.genflowly.models
 
 import java.util.UUID
 

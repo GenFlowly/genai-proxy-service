@@ -8,8 +8,8 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import models.StoreCustomerVendorApiKeyResponse
-import models.StoreCustomerVendorApiKeyRequest
+import com.genflowly.models.StoreCustomerVendorApiKeyResponse
+import com.genflowly.models.StoreCustomerVendorApiKeyRequest
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService

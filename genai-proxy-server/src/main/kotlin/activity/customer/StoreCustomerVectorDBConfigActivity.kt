@@ -8,10 +8,10 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import models.StoreCustomerVectorDBConfigRequest
-import models.StoreCustomerVectorDBConfigResponse
-import models.VectorDBConfigStatus
-import models.VectorDBConfigStatusValue
+import com.genflowly.models.StoreCustomerVectorDBConfigRequest
+import com.genflowly.models.StoreCustomerVectorDBConfigResponse
+import com.genflowly.models.VectorDBConfigStatus
+import com.genflowly.models.VectorDBConfigStatusValue
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService

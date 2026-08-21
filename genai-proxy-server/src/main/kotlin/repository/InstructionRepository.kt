@@ -34,7 +34,7 @@ class InstructionRepository(
     // Instruction content cache. A given (id, version) is IMMUTABLE — editing an
     // instruction creates a new version — so cached content never goes stale and
     // needs no invalidation. Positive-only (misses are not cached). Soft-capped.
-    private val instructionCache = ConcurrentHashMap<String, models.Instruction>()
+    private val instructionCache = ConcurrentHashMap<String, com.genflowly.models.Instruction>()
     private val INSTRUCTION_CACHE_MAX = 10_000
 
     suspend fun getLatestInstructionVersion(id: String): Int? =
@@ -58,7 +58,7 @@ class InstructionRepository(
             item[INSTRUCTION_VERSION_KEY]?.n()?.toInt()
         }
 
-    suspend fun getInstruction(instructionId: String, version: Int): models.Instruction? =
+    suspend fun getInstruction(instructionId: String, version: Int): com.genflowly.models.Instruction? =
         withContext(Dispatchers.IO) {
             // Guard: DynamoDB rejects an empty string as a key attribute value.
             // A blank instructionId means "no instruction selected" — treat as
@@ -92,7 +92,7 @@ class InstructionRepository(
             }
         }
 
-    suspend fun saveInstruction(instruction: models.Instruction) = withContext(Dispatchers.IO) {
+    suspend fun saveInstruction(instruction: com.genflowly.models.Instruction) = withContext(Dispatchers.IO) {
         try {
             val itemMap = mutableMapOf(
                 INSTRUCTION_ID_KEY to AttributeValue.builder().s(instruction.id).build(),
@@ -131,7 +131,7 @@ class InstructionRepository(
         }
     }
 
-    suspend fun getInstructionsByCreator(creatorId: String): List<models.Instruction> =
+    suspend fun getInstructionsByCreator(creatorId: String): List<com.genflowly.models.Instruction> =
         withContext(Dispatchers.IO) {
             val request = QueryRequest.builder()
                 .tableName(INSTRUCTION_TABLE)
@@ -154,7 +154,7 @@ class InstructionRepository(
     // Resolved fresh each call so a newly published System version takes effect
     // immediately. The lookup is a single indexed query; the resolved version's
     // content is then served from the immutable instruction cache downstream.
-    suspend fun getDefaultSystemInstruction(): models.Instruction? =
+    suspend fun getDefaultSystemInstruction(): com.genflowly.models.Instruction? =
         getInstructionsByCreator(DynamoDBConstants.SYSTEM_INSTRUCTION_CREATOR)
             .maxByOrNull { it.version ?: 0 }
 
@@ -207,8 +207,8 @@ class InstructionRepository(
         }
     }
 
-    private fun itemToInstruction(item: Map<String, AttributeValue>): models.Instruction? {
-        return models.Instruction(
+    private fun itemToInstruction(item: Map<String, AttributeValue>): com.genflowly.models.Instruction? {
+        return com.genflowly.models.Instruction(
             id = item[INSTRUCTION_ID_KEY]?.s() ?: return null,
             creator = item[INSTRUCTION_CREATOR_KEY]?.s() ?: return null,
             name = item[INSTRUCTION_NAME_KEY]?.s() ?: "",

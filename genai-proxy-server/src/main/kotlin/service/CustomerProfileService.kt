@@ -6,8 +6,8 @@ import com.genflowly.models.api.OnboardCustomerResponse
 import com.genflowly.repository.CustomerProfileRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import models.AIConfig
-import models.generateCustomerId
+import com.genflowly.models.AIConfig
+import com.genflowly.models.generateCustomerId
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -69,7 +69,7 @@ class CustomerProfileService(
         name: String?,
         picture: String?,
         authHeader: String? = null
-    ): models.CustomerProfile {
+    ): com.genflowly.models.CustomerProfile {
         // Check if customer exists
         val existingCustomer = customerProfileRepository.getCustomerProfile(sub, client)
         if (existingCustomer != null) {
@@ -82,7 +82,7 @@ class CustomerProfileService(
 
             customerCredentialsService.ensureCollectionsExistAsync(existingCustomerId, authHeader)
 
-            return models.CustomerProfile(
+            return com.genflowly.models.CustomerProfile(
                 customerId = existingCustomerId,
                 sub = sub,
                 client = client,
@@ -105,7 +105,7 @@ class CustomerProfileService(
         name: String?,
         picture: String?,
         authHeader: String?
-    ): models.CustomerProfile {
+    ): com.genflowly.models.CustomerProfile {
         val newCustomerId = generateCustomerId()
         val generatedUsername = customerProfileRepository.onboardCustomer(
             sub,
@@ -130,7 +130,7 @@ class CustomerProfileService(
 
         customerCredentialsService.ensureCollectionsExistAsync(newCustomerId, authHeader)
 
-        return models.CustomerProfile(
+        return com.genflowly.models.CustomerProfile(
             customerId = newCustomerId,
             sub = sub,
             client = client,
