@@ -2,7 +2,6 @@ package com.genflowly
 
 
 import com.auth0.jwk.JwkProviderBuilder
-import com.genflowly.aicallerlib.di.commonModule
 import com.genflowly.di.AppScope
 import com.genflowly.di.appModule
 import io.github.smiley4.ktoropenapi.OpenApi
@@ -274,8 +273,7 @@ fun Application.module() {
     // Koin must start before Authentication: the apiKey provider needs DeveloperApiKeyService
     startKoin {
         modules(
-            appModule(),
-            commonModule()
+            appModule()
         )
     }
 

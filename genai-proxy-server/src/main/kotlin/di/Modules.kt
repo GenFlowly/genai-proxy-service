@@ -12,7 +12,6 @@ import com.genflowly.repository.ModelCatalogRepository
 import com.genflowly.repository.NotesRepository
 import com.genflowly.repository.ShareRepository
 import com.genflowly.repository.SystemApiKeyRepository
-import com.genflowly.service.AIRequestService
 import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.ConversationService
 import kotlinx.serialization.json.Json
@@ -114,10 +113,9 @@ fun appModule(): Module = module {
     single { InstructionRepository(get(), get()) }
     single { GraphRepository(get(), get()) }
 
-    single { AIRequestService() }
     single { SharedUsersResolver(get(), get()) }
     single { CustomerCredentialsService(get(), get(), get(), get(), get()) }
-    single { UtilityGenerationService(get(), get()) }
+    single { UtilityGenerationService(get(), get(), get()) }
     single { GraphService(get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }

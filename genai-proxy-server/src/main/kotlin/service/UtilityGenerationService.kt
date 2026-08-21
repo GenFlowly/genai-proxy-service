@@ -1,26 +1,32 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIUsageMetadata
 import com.genflowly.aicallerlib.models.AIVendor
-import com.genflowly.aicallerlib.models.claude.ClaudeUsageMetadata
-import com.genflowly.aicallerlib.models.gemini.GeminiUsageMetadata
-import com.genflowly.aicallerlib.models.openai.OpenAIUsageMetadata
 import com.genflowly.models.AIGenerateResult
 import com.genflowly.models.Message
+import com.genflowly.models.retrieval.toConversationMessage
+import com.genflowly.models.toCredentialKey
+import com.genflowly.models.toProviderString
+import com.genflowly.providers.RetrievalServerClient
 import org.slf4j.LoggerFactory
 
 /**
- * One-shot utility generations over the direct vendor-SDK path (aicallerlib) —
- * conversation titles, instruction personas and similar internal calls. The
- * primary chat path goes through the retrieval-server instead (see
- * GenerationOrchestrator); keep real user traffic off this class.
+ * One-shot utility generations (conversation titles, instruction personas and
+ * similar internal calls), routed through the retrieval-server like all other
+ * generation traffic. Runs with agentic=false, so the server executes a single
+ * direct-LLM node instead of the customer's agent graph.
  */
 class UtilityGenerationService(
-    private val aiRequestService: AIRequestService,
-    private val customerCredentialsService: CustomerCredentialsService
+    private val retrievalServerClient: RetrievalServerClient,
+    private val customerCredentialsService: CustomerCredentialsService,
+    private val modelCatalogService: ModelCatalogService
 ) {
     private val logger = LoggerFactory.getLogger("UtilityGenerationService")
 
+    /**
+     * Generates with the customer's stored vendor key. Failures return an
+     * empty-text result (never an error message as text), so callers can treat
+     * blank output as "no result".
+     */
     suspend fun generateText(
         aiVendor: AIVendor,
         model: String,
@@ -28,22 +34,21 @@ class UtilityGenerationService(
         systemPrompt: String?,
         customerId: String
     ): AIGenerateResult {
-        try {
-            // Step 1: Fetch API key for 3rd party AI vendor
+        return try {
             val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, customerId)
                 ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
-            return generateTextWithApiKey(aiVendor, model, messages, systemPrompt, apiKey)
+            generateTextWithApiKey(aiVendor, model, messages, systemPrompt, apiKey)
         } catch (e: Exception) {
-            val errorText = "Error occurred while generating response from $aiVendor - ${e.message}"
-            return AIGenerateResult(text = errorText, inputTokens = null, outputTokens = null, totalTokens = null, tokensReadFromCache = null)
+            logger.warn("Utility generation failed for vendor {}: {}", aiVendor, e.message)
+            AIGenerateResult(text = "", inputTokens = null, outputTokens = null, totalTokens = null, tokensReadFromCache = null)
         }
     }
 
     /**
      * Generate text with an explicitly provided API key (e.g. a system key).
      * Unlike [generateText] this THROWS on any generation failure instead of
-     * returning error text, so callers like the system-key failover can react.
+     * returning empty text, so callers like the system-key failover can react.
      */
     suspend fun generateTextWithApiKey(
         aiVendor: AIVendor,
@@ -52,93 +57,34 @@ class UtilityGenerationService(
         systemPrompt: String?,
         apiKey: String
     ): AIGenerateResult {
-        val startTime = System.currentTimeMillis()
+        val lastMessage = messages.lastOrNull()
+            ?: throw IllegalArgumentException("No message to generate from")
+        val history = messages.dropLast(1).map { it.toConversationMessage() }
 
-        val aiResponse = when (aiVendor) {
-            AIVendor.OPENAI -> {
-                val params = aiRequestService.buildOpenAIRequest(
-                    messages,
-                    model,
-                    systemPrompt ?: ""
-                )
-                val httpClient = aiRequestService.getOpenAIProvider(apiKey)
-                httpClient.generateResponse(
-                    com.genflowly.aicallerlib.models.openai.OpenAIRequest(
-                        params
-                    )
-                )
-            }
-
-            AIVendor.GEMINI -> {
-                val params = aiRequestService.buildGeminiRequest(
-                    messages,
-                    model,
-                    systemPrompt ?: ""
-                )
-                val httpClient = aiRequestService.getGeminiProvider(apiKey)
-                httpClient.generateResponse(
-                    com.genflowly.aicallerlib.models.gemini.GeminiRequest(
-                        params
-                    )
-                )
-            }
-
-            AIVendor.CLAUDE -> {
-                val params = aiRequestService.buildClaudeRequest(
-                    messages,
-                    model,
-                    systemPrompt ?: ""
-                )
-                val httpClient = aiRequestService.getClaudeProvider(apiKey)
-                httpClient.generateResponse(
-                    com.genflowly.aicallerlib.models.claude.ClaudeRequest(
-                        params
-                    )
-                )
-            }
-        }
-
-        val durationMs = System.currentTimeMillis() - startTime
-
-        val responseText = aiResponse.getText() ?: ""
-        val metadata = aiResponse.getUsageMetadata()
-        val (inputTokens, outputTokens) = extractTokens(metadata)
-        val totalTokens = metadata?.getTotalTokenCount()?.toInt()
-        val tokensReadFromCache = metadata?.getTokenCountReadFromCache()?.toInt()
-
-        logger.info(
-            "AI response received: vendor={}, model={}, " +
-                    "responseText={}, durationMs={}, inputTokens={}, outputTokens={}",
-            aiVendor,
-            model,
-            responseText,
-            durationMs,
-            inputTokens,
-            outputTokens
+        val result = retrievalServerClient.retrieveAndGenerate(
+            customerId = lastMessage.customerId,
+            client = "internal",
+            query = lastMessage.text,
+            llmCredentials = mapOf(aiVendor.toCredentialKey() to apiKey),
+            llmProvider = aiVendor.toProviderString(),
+            llmModel = model,
+            llmMaxTokens = modelCatalogService.resolveMaxTokens(
+                vendor = aiVendor, model = model, requested = null, streaming = false
+            ),
+            conversationHistory = history,
+            systemPrompt = systemPrompt,
+            agentic = false
         )
+
+        val text = result.text
+            ?: throw IllegalStateException("No response from retrieval server for ${aiVendor.name}/$model")
+
         return AIGenerateResult(
-            text = responseText,
-            inputTokens = inputTokens,
-            outputTokens = outputTokens,
-            totalTokens = totalTokens,
-            tokensReadFromCache = tokensReadFromCache
+            text = text,
+            inputTokens = result.inputTokens,
+            outputTokens = result.outputTokens,
+            totalTokens = result.totalTokens,
+            tokensReadFromCache = result.tokensReadFromCache
         )
-    }
-
-    /**
-     * Normalises provider-specific [AIUsageMetadata] into a simple
-     * (inputTokens, outputTokens) pair usable by the rest of the server.
-     */
-    private fun extractTokens(metadata: AIUsageMetadata?): Pair<Int?, Int?> {
-        if (metadata == null) return Pair(null, null)
-        return when (metadata) {
-            is GeminiUsageMetadata -> Pair(metadata.promptTokens, metadata.completionTokens)
-            is OpenAIUsageMetadata -> Pair(metadata.inputTokens, metadata.outputTokens)
-            is ClaudeUsageMetadata -> Pair(
-                metadata.inputTokens?.toInt(),
-                metadata.outputTokens?.toInt()
-            )
-            else -> Pair(null, null)
-        }
     }
 }
