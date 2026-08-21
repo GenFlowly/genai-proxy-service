@@ -3,7 +3,7 @@ package com.genflowly.activity.conversation
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.StatusResponse
-import com.genflowly.service.ConversationService
+import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.post
@@ -17,7 +17,7 @@ private val logger = LoggerFactory.getLogger("UnarchiveConversationRoute")
 
 fun Route.registerUnarchiveConversationRoutes(
     customerProfileService: CustomerProfileService,
-    conversationService: ConversationService
+    conversationManagementService: ConversationManagementService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.UNARCHIVE_CONVERSATION, {
@@ -58,7 +58,7 @@ fun Route.registerUnarchiveConversationRoutes(
                     )
                 }
 
-                conversationService.unarchiveConversation(
+                conversationManagementService.unarchiveConversation(
                     conversationId = conversationId,
                     customerId = customerId
                 )

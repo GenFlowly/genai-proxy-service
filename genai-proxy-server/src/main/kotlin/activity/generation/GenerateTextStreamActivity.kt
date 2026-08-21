@@ -16,12 +16,12 @@ import kotlinx.serialization.SerializationException
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GenerateTextStreamRequest
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
+import com.genflowly.service.GenerationOrchestrator
 
 private val logger = LoggerFactory.getLogger("GenerateTextStreamRoute")
 
 fun Route.registerGenerateTextStreamRoutes(
-    aiRequestManager: AIRequestManager,
+    generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -84,7 +84,7 @@ fun Route.registerGenerateTextStreamRoutes(
                 call.response.header("Connection", "keep-alive")
                 call.response.header("X-Accel-Buffering", "no")
 
-                val streamResult = aiRequestManager.processTextGenerateStreamRequest(
+                val streamResult = generationOrchestrator.processTextGenerateStreamRequest(
                     listOf(request.aiConfig),
                     request.prompt.instructionId,
                     request.prompt.instructionVersion,

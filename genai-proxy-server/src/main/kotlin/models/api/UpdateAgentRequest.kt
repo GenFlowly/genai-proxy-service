@@ -1,4 +1,4 @@
-package models.api
+package com.genflowly.models.api
 
 import kotlinx.serialization.Serializable
 

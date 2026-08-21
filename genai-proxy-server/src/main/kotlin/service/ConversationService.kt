@@ -1,46 +1,52 @@
 package com.genflowly.service
 
-import com.genflowly.providers.DynamoDBProvider
-import com.genflowly.providers.KMSProvider
+import com.genflowly.models.Conversation
+import com.genflowly.models.GenerateTextResponse
+import com.genflowly.models.Message
+import com.genflowly.models.Prompt
+import com.genflowly.models.ShareRole
 import com.genflowly.models.api.GetConversationResponse
-import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.models.api.PromptAndResponse
-import models.Conversation
-import models.GenerateTextResponse
-import models.Message
-import models.Prompt
+import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.ShareRepository
 
 class ConversationAccessDeniedException(message: String) : Exception(message)
 class ConversationArchivedException(message: String) : Exception(message)
 
+/**
+ * The conversational content domain: role resolution, history assembly and
+ * message persistence — everything the generation and voice flows need per
+ * turn. Lifecycle administration (titles, archiving, listing, sharing) lives
+ * in ConversationManagementService.
+ */
 class ConversationService(
-    private val kmsProvider: KMSProvider,
-    private val dynamoDBProvider: DynamoDBProvider
+    private val conversationRepository: ConversationRepository,
+    private val shareRepository: ShareRepository
 ) {
 
     /**
      * Returns the effective role [callerCustomerId] has on [conversationId]:
-     * "OWNER" if they own it, otherwise the role from a direct share, otherwise
-     * the PUBLIC role if one exists, otherwise null (no access).
+     * [ShareRole.OWNER] if they own it, otherwise the role from a direct share,
+     * otherwise the PUBLIC role if one exists, otherwise null (no access).
      */
-    suspend fun getConversationRole(conversationId: String, callerCustomerId: String): String? {
-        val conversation = dynamoDBProvider.getConversationById(conversationId) ?: return null
-        if (conversation.customerId == callerCustomerId) return "OWNER"
+    suspend fun getConversationRole(conversationId: String, callerCustomerId: String): ShareRole? {
+        val conversation = conversationRepository.getConversationById(conversationId) ?: return null
+        if (conversation.customerId == callerCustomerId) return ShareRole.OWNER
 
-        val directShareRole = dynamoDBProvider.getConversationShare(conversationId, callerCustomerId)
+        val directShareRole = shareRepository.getConversationShare(conversationId, callerCustomerId)
         if (directShareRole != null) return directShareRole
 
-        return dynamoDBProvider.getConversationShare(conversationId, "PUBLIC")
+        return shareRepository.getConversationShare(conversationId, "PUBLIC")
     }
 
     suspend fun getConversationHistory(conversationId: String, customerId: String): GetConversationResponse {
         val role = getConversationRole(conversationId, customerId)
             ?: throw ConversationAccessDeniedException("Conversation not found or access denied")
 
-        val owner = dynamoDBProvider.getConversationById(conversationId)
+        val owner = conversationRepository.getConversationById(conversationId)
             ?: throw ConversationAccessDeniedException("Conversation not found")
 
-        val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
+        val messages = conversationRepository.getMessagesForConversation(conversationId)
             .sortedBy { it.sequence }
 
         val pairs = mutableListOf<PromptAndResponse>()
@@ -99,48 +105,9 @@ class ConversationService(
             i++
         }
 
-        val title = dynamoDBProvider.getConversationTitle(conversationId, owner.customerId)
+        val title = conversationRepository.getConversationTitle(conversationId, owner.customerId)
 
         return GetConversationResponse(pairs, title, role)
-    }
-
-    suspend fun shareConversation(
-        conversationId: String,
-        targetCustomerId: String,
-        sharedByCustomerId: String,
-        role: String
-    ) {
-        requireEditOrOwner(conversationId, sharedByCustomerId, action = "share")
-        val owner = dynamoDBProvider.getConversationById(conversationId)
-            ?: throw ConversationAccessDeniedException("Conversation not found")
-        if (dynamoDBProvider.isConversationArchived(conversationId, owner.customerId)) {
-            throw ConversationArchivedException("Cannot share an archived conversation")
-        }
-        dynamoDBProvider.shareConversationWithCustomer(conversationId, targetCustomerId, sharedByCustomerId, role)
-    }
-
-    suspend fun unshareConversation(
-        conversationId: String,
-        targetCustomerId: String,
-        sharedByCustomerId: String
-    ) {
-        requireEditOrOwner(conversationId, sharedByCustomerId, action = "unshare")
-        dynamoDBProvider.unshareConversationWithCustomer(conversationId, targetCustomerId)
-    }
-
-    suspend fun getSharedUsersForConversation(
-        conversationId: String,
-        callerCustomerId: String
-    ): List<models.CustomerProfile> {
-        requireEditOrOwner(conversationId, callerCustomerId, action = "list-shares")
-        return dynamoDBProvider.getUsersWithSharedConversation(conversationId)
-    }
-
-    private suspend fun requireEditOrOwner(conversationId: String, callerCustomerId: String, action: String) {
-        val role = getConversationRole(conversationId, callerCustomerId)
-        if (role != "OWNER" && role != "EDIT") {
-            throw SecurityException("Customer $callerCustomerId cannot $action conversation $conversationId")
-        }
     }
 
     suspend fun createConversation(
@@ -151,63 +118,47 @@ class ConversationService(
             customerId = customerId, client =
             client
         )
-        dynamoDBProvider.createConversation(conversation)
+        conversationRepository.createConversation(conversation)
         return conversation.conversationId
     }
 
-    suspend fun updateConversationTitle(
-        conversationId: String,
+    /**
+     * Returns a conversation id the caller may write to: creates a fresh
+     * conversation when none is given, otherwise enforces write access
+     * (OWNER/EDIT) on the existing one.
+     */
+    suspend fun resolveWritableConversationId(
         customerId: String,
-        title: String
-    ) {
-        // Title update must be authorized by role, then persisted against the true owner
-        // (the underlying row is keyed by owner customerId).
-        requireEditOrOwner(conversationId, customerId, action = "rename")
-        val owner = dynamoDBProvider.getConversationById(conversationId) ?: return
-        dynamoDBProvider.updateConversationTitle(conversationId, owner.customerId, title)
+        client: String,
+        conversationId: String? = null
+    ): String {
+        if (conversationId.isNullOrBlank()) {
+            return createConversation(customerId, client)
+        }
+        // Enforce that the caller can write to this conversation. New conversations
+        // just created above have no shares yet, so this check only applies when
+        // continuing an existing one.
+        val role = getConversationRole(conversationId, customerId)
+        if (role == null || !role.canEdit) {
+            throw ConversationAccessDeniedException("Customer $customerId cannot write to conversation $conversationId")
+        }
+        return conversationId
     }
 
-    suspend fun archiveConversation(
-        conversationId: String,
-        customerId: String
-    ) {
-        requireEditOrOwner(conversationId, customerId, action = "archive")
-        val owner = dynamoDBProvider.getConversationById(conversationId)
-            ?: throw ConversationAccessDeniedException("Conversation not found")
-        dynamoDBProvider.archiveConversation(conversationId, owner.customerId)
-        dynamoDBProvider.unshareAllConversationWithCustomer(conversationId)
-    }
-
-    suspend fun unarchiveConversation(
-        conversationId: String,
-        customerId: String
-    ) {
-        requireEditOrOwner(conversationId, customerId, action = "unarchive")
-        val owner = dynamoDBProvider.getConversationById(conversationId)
-            ?: throw ConversationAccessDeniedException("Conversation not found")
-        dynamoDBProvider.unarchiveConversation(conversationId, owner.customerId)
-    }
-
-    suspend fun getCustomerConversationsPaginated(
-        customerId: String,
-        pageSize: Int = 10,
-        exclusiveStartKey: String? = null
-    ): GetCustomerConversationsResponse {
-        return dynamoDBProvider.getConversationsByCustomerPaginated(customerId, pageSize, exclusiveStartKey)
-    }
+    // ─── Messages ─────────────────────────────────────────────────────────────
 
     private suspend fun getMessage(
         conversationId: String,
         previousMessageId: String
     ): Message? {
-        return dynamoDBProvider.getMessage(conversationId, previousMessageId)
+        return conversationRepository.getMessage(conversationId, previousMessageId)
     }
 
     suspend fun getMessageUsage(
         conversationId: String,
         messageId: String
     ): Map<String, Int?>? {
-        val message = dynamoDBProvider.getMessage(conversationId, messageId) ?: return null
+        val message = conversationRepository.getMessage(conversationId, messageId) ?: return null
         return mapOf(
             "inputTokens" to message.inputTokens,
             "outputTokens" to message.outputTokens,
@@ -239,7 +190,7 @@ class ConversationService(
     ): String {
         val updateSequenceMessage =
             updateSequenceOfMessageInConversation(message)
-        dynamoDBProvider.createMessage(updateSequenceMessage)
+        conversationRepository.createMessage(updateSequenceMessage)
         return updateSequenceMessage.messageId
     }
 
@@ -255,7 +206,7 @@ class ConversationService(
     }
 
     suspend fun getLatestMessageId(conversationId: String): String? {
-        val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
+        val messages = conversationRepository.getMessagesForConversation(conversationId)
         return messages.maxByOrNull { it.sequence ?: 0 }?.messageId
     }
 
@@ -272,7 +223,7 @@ class ConversationService(
         attachmentIds: List<String> = emptyList(),
         toolResultsJson: String? = null
     ): Message? {
-        val messages = dynamoDBProvider.getMessagesForConversation(conversationId)
+        val messages = conversationRepository.getMessagesForConversation(conversationId)
         val latest = messages.maxByOrNull { it.sequence ?: 0 } ?: return null
         return latest.takeIf {
             it.role == "user" && it.text == promptText &&

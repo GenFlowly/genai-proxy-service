@@ -2,7 +2,6 @@ package com.genflowly.activity.customer
 
 import com.genflowly.Routes
 import com.genflowly.models.api.OnboardCustomerResponse
-import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.service.CustomerProfileService
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
@@ -11,17 +10,13 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.http.HttpHeaders
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import models.OnboardCustomerRequest
+import com.genflowly.models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
 
 private val logger = LoggerFactory.getLogger("OnboardCustomerRoute")
 
 fun Route.registerOnboardCustomerRoutes(
-    customerProfileService: CustomerProfileService,
-    aiRequestManager: AIRequestManager
+    customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
         post(Routes.ONBOARD_CUSTOMER, {
@@ -56,7 +51,7 @@ fun Route.registerOnboardCustomerRoutes(
 
             val authHeader = call.request.headers[HttpHeaders.Authorization]
 
-            val customerProfile = customerProfileService.onboardCustomer(
+            val response = customerProfileService.onboardAndBootstrap(
                 sub = request.sub,
                 client = request.client,
                 email = request.email,
@@ -64,30 +59,6 @@ fun Route.registerOnboardCustomerRoutes(
                 picture = request.picture,
                 authHeader = authHeader
             )
-
-            // Fetch additional details — independent reads keyed only by
-            // customerId, so run them concurrently
-            val response = coroutineScope {
-                val aiConfigPreferences = async { customerProfileService.getAIConfigPreferences(customerProfile.customerId) }
-                val aiVendorAPIKeyStatusList = async { customerProfileService.getAIVendorAPIKeyStatusList(customerProfile.customerId) }
-                val vectorDBConfigStatusList = async { customerProfileService.getCustomerVectorDBConfigStatusList(customerProfile.customerId) }
-                val supabaseConfigStatus = async { customerProfileService.getCustomerSupabaseConfigStatus(customerProfile.customerId) }
-                val customerInstructions = async { customerProfileService.getLatestCustomerInstructions(customerProfile.customerId) }
-
-                // Fire and forget backfill missing categories/icons using AI
-                customerProfileService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await(), aiRequestManager)
-
-                OnboardCustomerResponse(
-                    customerId = customerProfile.customerId,
-                    aiConfigPreferences = aiConfigPreferences.await() ?: AIConfigPreferences(),
-                    aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList.await(),
-                    customerName = customerProfile.name ?: "User",
-                    customerPicture = customerProfile.picture,
-                    customerInstructions = customerInstructions.await(),
-                    vectorDBConfigStatusList = vectorDBConfigStatusList.await(),
-                    supabaseConfigStatus = supabaseConfigStatus.await()
-                )
-            }
 
             call.respond(response)
         }

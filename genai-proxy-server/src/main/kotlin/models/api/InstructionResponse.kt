@@ -1,5 +1,6 @@
 package com.genflowly.models.api
 
+import com.genflowly.models.ShareRole
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -12,5 +13,5 @@ data class InstructionResponse(
     val color: String? = null,
     val tags: List<String>? = null,
     val category: String? = null,
-    val role: String = "OWNER"
+    val role: ShareRole = ShareRole.OWNER
 )

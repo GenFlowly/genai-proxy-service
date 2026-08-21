@@ -8,19 +8,17 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import models.StoreCustomerVendorApiKeyResponse
-import models.StoreCustomerVendorApiKeyRequest
+import com.genflowly.models.StoreCustomerVendorApiKeyResponse
+import com.genflowly.models.StoreCustomerVendorApiKeyRequest
 import org.slf4j.LoggerFactory
+import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService
-import com.genflowly.service.AIModelsService
-import models.AIVendorAPIKeyStatus
-import models.APIKeyStatus
 
 private val logger = LoggerFactory.getLogger("StoreCustomerVendorApiKeyRoute")
 
 fun Route.registerStoreApiKeyRoutes(
-    customerProfileService: CustomerProfileService,
-    aiModelsService: AIModelsService
+    customerCredentialsService: CustomerCredentialsService,
+    customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.STORE_API_KEY, {
@@ -51,45 +49,16 @@ fun Route.registerStoreApiKeyRoutes(
             
             logger.info("Received SaveApiKeyRequest from customerId {}: {}", customerId, request)
 
-            val aiVendor = com.genflowly.aicallerlib.models.AIVendor.valueOf(request.aiVendor)
+            val aiVendor = com.genflowly.models.AIVendor.valueOf(request.aiVendor)
 
-            // Validate API Key with a real vendor call (model listing is
-            // catalog-based and would accept any key)
-            val isKeyValid = aiModelsService.validateApiKey(aiVendor, request.apiKey)
+            // Validate against the vendor before storing; invalid keys are rejected
+            val apiKeyStatus = customerCredentialsService.validateAndStoreVendorKey(
+                customerId = customerId,
+                vendor = aiVendor,
+                apiKey = request.apiKey
+            )
 
-            if (isKeyValid) {
-                // Key is valid -> Store it
-                val stored = customerProfileService.storeApiKey(
-                    customerId = customerId,
-                    aiVendor = request.aiVendor,
-                    apiKey = request.apiKey
-                )
-                
-                logger.info("API Key validated and stored for vendor {}: {}", aiVendor, stored)
-
-                val response = StoreCustomerVendorApiKeyResponse(
-                    apiKeyStatus = AIVendorAPIKeyStatus(
-                        aiVendor = aiVendor,
-                        isAPIKeyValid = true,
-                        status = APIKeyStatus.VALID,
-                        updateSuccessful = true
-                    )
-                )
-                call.respond(response)
-            } else {
-                // Key is invalid -> Do NOT store
-                logger.warn("Invalid API Key provided for vendor {}. Not saving.", aiVendor)
-
-                val response = StoreCustomerVendorApiKeyResponse(
-                    apiKeyStatus = AIVendorAPIKeyStatus(
-                        aiVendor = aiVendor,
-                        isAPIKeyValid = false,
-                        status = APIKeyStatus.INVALID,
-                        updateSuccessful = false
-                    )
-                )
-                call.respond(response)
-            }
+            call.respond(StoreCustomerVendorApiKeyResponse(apiKeyStatus = apiKeyStatus))
         }
     }
 }

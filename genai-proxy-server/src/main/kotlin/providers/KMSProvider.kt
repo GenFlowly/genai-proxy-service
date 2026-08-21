@@ -10,11 +10,9 @@ import software.amazon.awssdk.services.kms.model.EncryptRequest
 
 class KMSProvider(
     private val kmsClient: KmsClient,
-    private val logger: KLogger
+    private val logger: KLogger,
+    private val keyId: String
 ) {
-    private val keyId =
-        System.getenv("KMS_KEY_ID") ?: error("KMS_KEY_ID is not set")
-
 
     suspend fun encrypt(plainText: String): String =
         withContext(Dispatchers.IO) {

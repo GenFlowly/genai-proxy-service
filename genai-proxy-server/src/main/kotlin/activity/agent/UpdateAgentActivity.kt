@@ -11,8 +11,8 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import models.api.AgentResponse
-import models.api.UpdateAgentRequest
+import com.genflowly.models.api.AgentResponse
+import com.genflowly.models.api.UpdateAgentRequest
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("UpdateAgentActivity")
