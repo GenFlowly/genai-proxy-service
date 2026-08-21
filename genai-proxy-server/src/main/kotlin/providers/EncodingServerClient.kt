@@ -43,13 +43,8 @@ data class EncodingSaveNoteRequest(
 class EncodingServerClient(
     private val httpClient: HttpClient,
     private val logger: KLogger,
-    /** ENCODING_SERVER_URL, or null when unset. */
     private val configuredUrl: String?
 ) {
-    companion object {
-        /** Historic fallback used by the notes path when ENCODING_SERVER_URL is unset. */
-        private const val DEFAULT_NOTES_URL = "https://api-encode-development.genflowly.com"
-    }
 
     /**
      * Ensures the customer's vector collections exist. Skips (with a warning)
@@ -84,7 +79,12 @@ class EncodingServerClient(
      * Transport failures are logged, not thrown — encoding is best-effort.
      */
     suspend fun encodeNote(request: EncodingSaveNoteRequest, bearerToken: String) {
-        val url = "${configuredUrl ?: DEFAULT_NOTES_URL}/encode-notes"
+        val baseUrl = configuredUrl
+        if (baseUrl == null) {
+            logger.warn { "ENCODING_SERVER_URL is not set. Skipping note encoding for note ${request.data.noteKey}." }
+            return
+        }
+        val url = "$baseUrl/encode-notes"
         try {
             logger.info { "Sending note to encoding server: $url" }
             val response = httpClient.post(url) {
