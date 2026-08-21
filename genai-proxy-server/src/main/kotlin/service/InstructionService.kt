@@ -188,6 +188,34 @@ class InstructionService(
         )
     }
 
+    /**
+     * Generates persona metadata (icon, color, tags, category — and the name
+     * unless one was provided) via AI, then creates the instruction/version.
+     */
+    suspend fun createInstructionWithGeneratedPersona(
+        customerId: String,
+        instructionName: String?,
+        instruction: String,
+        existingInstructionId: String?
+    ): InstructionResponse {
+        // Always generate the persona metadata (icon, color, tags) via AI
+        val generatedPersona = generateInstructionPersona(instruction, customerId)
+
+        // Use user-provided name if available, otherwise use AI-generated name
+        val effectiveName = if (!instructionName.isNullOrBlank()) instructionName else generatedPersona.name
+
+        return createInstruction(
+            customerId = customerId,
+            instructionName = effectiveName,
+            instruction = instruction,
+            existingInstructionId = existingInstructionId,
+            icon = generatedPersona.icon,
+            color = generatedPersona.color,
+            tags = generatedPersona.tags,
+            category = generatedPersona.category
+        )
+    }
+
     /** True when [customerId] has EDIT via a direct or PUBLIC share on [instructionId]. */
     private suspend fun hasEditAccess(customerId: String, instructionId: String): Boolean {
         val sharedUsers = sharedUsersResolver.getUsersWithSharedEntity(instructionId)

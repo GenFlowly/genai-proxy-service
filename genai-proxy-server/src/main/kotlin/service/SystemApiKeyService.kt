@@ -27,7 +27,8 @@ data class SystemAIProviderConfig(
  */
 class SystemApiKeyService(
     private val kmsProvider: KMSProvider,
-    private val systemApiKeyRepository: SystemApiKeyRepository
+    private val systemApiKeyRepository: SystemApiKeyRepository,
+    private val retrievalServerClient: com.genflowly.providers.RetrievalServerClient
 ) {
 
     suspend fun storeSystemApiKey(
@@ -37,6 +38,36 @@ class SystemApiKeyService(
     ) {
         val encrypted = kmsProvider.encrypt(apiKey)
         systemApiKeyRepository.saveSystemApiKey(aiVendor, encrypted, updatedBy)
+    }
+
+    /**
+     * Validates the key against the vendor before storing; invalid keys are
+     * rejected and never stored. Returns the resulting status either way.
+     */
+    suspend fun validateAndStoreSystemKey(
+        vendor: AIVendor,
+        apiKey: String,
+        updatedBy: String
+    ): models.AIVendorAPIKeyStatus {
+        val isKeyValid = retrievalServerClient.validateApiKey(vendor, apiKey)
+
+        return if (isKeyValid) {
+            storeSystemApiKey(aiVendor = vendor.name, apiKey = apiKey, updatedBy = updatedBy)
+            models.AIVendorAPIKeyStatus(
+                aiVendor = vendor,
+                isAPIKeyValid = true,
+                status = models.APIKeyStatus.VALID,
+                updateSuccessful = true
+            )
+        } else {
+            logger.warn { "Invalid system API key provided for vendor $vendor. Not saving." }
+            models.AIVendorAPIKeyStatus(
+                aiVendor = vendor,
+                isAPIKeyValid = false,
+                status = models.APIKeyStatus.INVALID,
+                updateSuccessful = false
+            )
+        }
     }
 
     /**

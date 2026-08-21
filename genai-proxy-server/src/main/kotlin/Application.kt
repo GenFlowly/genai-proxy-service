@@ -364,12 +364,12 @@ fun Application.module() {
     val conversationService = get<ConversationService>()
     val aiModelsService = get<AIModelsService>()
     val graphService = get<GraphService>()
-    val customerProfileRepository = get<com.genflowly.repository.CustomerProfileRepository>()
-    val s3Provider = get<com.genflowly.providers.S3Provider>()
+    val attachmentService = get<com.genflowly.service.AttachmentService>()
+    val voiceSessionService = get<com.genflowly.service.VoiceSessionService>()
+    val appConfig = get<com.genflowly.config.AppConfig>()
     val notesService = get<NotesService>()
 
     val retrievalServerClient = get<com.genflowly.providers.RetrievalServerClient>()
-    val json = get<kotlinx.serialization.json.Json>()
 
     val systemApiKeyService = get<com.genflowly.service.SystemApiKeyService>()
 
@@ -378,5 +378,5 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, aiModelsService, graphService, customerProfileRepository, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, retrievalServerClient, json)
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, retrievalServerClient, appConfig)
 }
