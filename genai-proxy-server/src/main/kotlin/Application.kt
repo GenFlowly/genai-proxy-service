@@ -44,9 +44,7 @@ fun main(args: Array<String>) {
 private val logger = LoggerFactory.getLogger("Application")
 
 
-fun validateCredentials(credential: JWTCredential): JWTPrincipal? {
-    val auth0Audience = System.getenv("AUTH0_API_AUDIENCE")
-        ?: error("AUTH0_API_AUDIENCE not set")
+fun validateCredentials(credential: JWTCredential, auth0Audience: String): JWTPrincipal? {
     val containsAudience = credential.payload.audience.contains(auth0Audience)
 
     if (containsAudience) {
@@ -281,8 +279,9 @@ fun Application.module() {
         )
     }
 
-    val auth0Domain = System.getenv("AUTH0_SPA_DOMAIN")
-        ?: error("AUTH0_SPA_DOMAIN not set")
+    val auth0Config = get<com.genflowly.config.AppConfig>()
+    val auth0Domain = auth0Config.auth0Domain ?: error("AUTH0_SPA_DOMAIN not set")
+    val auth0Audience = auth0Config.auth0Audience ?: error("AUTH0_API_AUDIENCE not set")
 
     val issuer = "https://$auth0Domain/"
 
@@ -308,7 +307,7 @@ fun Application.module() {
                 }
             }
             verifier(jwkProvider, issuer)
-            validate { credential -> validateCredentials(credential) }
+            validate { credential -> validateCredentials(credential, auth0Audience) }
         }
         // Developer API keys (gfy_...) sent as a bearer token; routes opt in via
         // authenticate("auth0", "apiKey") so both JWTs and API keys are accepted
@@ -369,7 +368,6 @@ fun Application.module() {
     val appConfig = get<com.genflowly.config.AppConfig>()
     val notesService = get<NotesService>()
 
-    val retrievalServerClient = get<com.genflowly.providers.RetrievalServerClient>()
 
     val systemApiKeyService = get<com.genflowly.service.SystemApiKeyService>()
 
@@ -378,5 +376,5 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, retrievalServerClient, appConfig)
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, appConfig)
 }

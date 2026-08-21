@@ -3,8 +3,8 @@ package models
 import com.genflowly.aicallerlib.models.AIVendor
 
 /**
- * Single home for AIVendor <-> external-identifier mappings, previously
- * triplicated across AIRequestManager, AIModelsService and ModelCatalogService.
+ * Single home for AIVendor <-> external-identifier mappings (LiteLLM provider
+ * strings and llm_credentials keys used by the retrieval-server).
  */
 
 /** LiteLLM provider string used in retrieval-server payloads. */

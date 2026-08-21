@@ -14,7 +14,11 @@ data class AppConfig(
     /** Empty when ATTACHMENTS_BUCKET is unset — attachment presigning then fails at call time. */
     val attachmentsBucket: String,
     val adminEmails: Set<String>,
-    val adminCustomerIds: Set<String>
+    val adminCustomerIds: Set<String>,
+    /** Auth0 SPA tenant domain (JWKS issuer host). Null only when auth is unconfigured. */
+    val auth0Domain: String?,
+    /** Expected Auth0 API audience on incoming JWTs. Null only when auth is unconfigured. */
+    val auth0Audience: String?
 ) {
     companion object {
         fun fromEnv(): AppConfig = AppConfig(
@@ -24,7 +28,9 @@ data class AppConfig(
             kmsKeyId = System.getenv("KMS_KEY_ID") ?: error("KMS_KEY_ID is not set"),
             attachmentsBucket = System.getenv("ATTACHMENTS_BUCKET") ?: "",
             adminEmails = envList("ADMIN_EMAILS"),
-            adminCustomerIds = envList("ADMIN_CUSTOMER_IDS")
+            adminCustomerIds = envList("ADMIN_CUSTOMER_IDS"),
+            auth0Domain = System.getenv("AUTH0_SPA_DOMAIN"),
+            auth0Audience = System.getenv("AUTH0_API_AUDIENCE")
         )
 
         private fun envList(name: String): Set<String> =
