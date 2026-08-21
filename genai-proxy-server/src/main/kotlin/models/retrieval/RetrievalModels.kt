@@ -1,6 +1,6 @@
 package com.genflowly.models.retrieval
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.models.ModelCatalogEntry
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

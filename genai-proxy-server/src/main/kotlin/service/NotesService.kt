@@ -9,7 +9,7 @@ import com.genflowly.models.encoding.EncodingSaveNoteRequest
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.NotesRepository
 import com.genflowly.providers.EncodingServerClient
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.providers.RetrievalServerClient
 import kotlinx.coroutines.launch
 import com.genflowly.models.toCredentialKey

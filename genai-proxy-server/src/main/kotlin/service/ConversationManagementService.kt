@@ -1,6 +1,6 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.models.AIConfig
 import com.genflowly.models.Message
 import com.genflowly.models.ShareRole
@@ -27,9 +27,10 @@ class ConversationManagementService(
     private val titleAIVendor: AIVendor = AIVendor.OPENAI
 
     /**
-     * Uses AI (direct SDK path) to generate and store a short title for the
-     * conversation based on the first prompt and instruction name. Returns the
-     * title, or null when generation failed or produced nothing usable.
+     * Uses AI (via the retrieval-server) to generate and store a short title
+     * for the conversation based on the first prompt and instruction name.
+     * Returns the title, or null when generation failed or produced nothing
+     * usable.
      */
     suspend fun createConversationTitle(
         conversationId: String,

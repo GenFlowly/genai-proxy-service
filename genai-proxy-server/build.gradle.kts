@@ -15,14 +15,6 @@ application {
 
 repositories {
     mavenCentral()
-    maven {
-        name = "GitHubPackages"
-        url = uri("https://maven.pkg.github.com/genflowly/ai-caller-lib")
-        credentials {
-            username = "nkirit"
-            password = "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"
-        }
-    }
 }
 
 dependencies {
@@ -71,8 +63,6 @@ dependencies {
     implementation("software.amazon.awssdk:s3")
     // Core HTTP client (Netty works well in Ktor)
     implementation("software.amazon.awssdk:url-connection-client")
-
-    implementation("com.genflowly:ai-caller-lib:0.0.34")
 
     implementation("io.ktor:ktor-server-auth-jvm:3.0.0")
     implementation("io.ktor:ktor-server-auth-jwt-jvm:3.0.0")

@@ -1,6 +1,6 @@
 package com.genflowly.models
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 
 /**
  * One usable system AI provider: a vendor with a valid stored key, an

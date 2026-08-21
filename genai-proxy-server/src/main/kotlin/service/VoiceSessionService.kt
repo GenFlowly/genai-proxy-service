@@ -1,6 +1,6 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.providers.RetrievalServerClient
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import kotlinx.serialization.json.Json

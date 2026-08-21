@@ -1,6 +1,6 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.models.AIGenerateResult
 import com.genflowly.models.Message
 import com.genflowly.models.retrieval.toConversationMessage

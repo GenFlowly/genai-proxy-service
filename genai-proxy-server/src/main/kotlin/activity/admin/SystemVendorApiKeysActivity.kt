@@ -65,7 +65,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
                 val request = call.receive<StoreSystemVendorApiKeyRequest>()
 
                 val aiVendor = try {
-                    com.genflowly.aicallerlib.models.AIVendor.valueOf(request.aiVendor)
+                    com.genflowly.models.AIVendor.valueOf(request.aiVendor)
                 } catch (e: IllegalArgumentException) {
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -121,7 +121,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
                     )
 
                 val aiVendor = try {
-                    com.genflowly.aicallerlib.models.AIVendor.valueOf(vendorParam)
+                    com.genflowly.models.AIVendor.valueOf(vendorParam)
                 } catch (e: IllegalArgumentException) {
                     return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -159,7 +159,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
                 val request = call.receive<StoreSystemVendorConfigRequest>()
 
                 val aiVendor = try {
-                    com.genflowly.aicallerlib.models.AIVendor.valueOf(request.aiVendor)
+                    com.genflowly.models.AIVendor.valueOf(request.aiVendor)
                 } catch (e: IllegalArgumentException) {
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -216,7 +216,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
                     )
 
                 val aiVendor = try {
-                    com.genflowly.aicallerlib.models.AIVendor.valueOf(vendorParam)
+                    com.genflowly.models.AIVendor.valueOf(vendorParam)
                 } catch (e: IllegalArgumentException) {
                     return@delete call.respond(
                         HttpStatusCode.BadRequest,

@@ -1,6 +1,6 @@
 package com.genflowly.models
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 
 /**
  * Single home for AIVendor <-> external-identifier mappings (LiteLLM provider

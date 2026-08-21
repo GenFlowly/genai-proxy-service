@@ -6,7 +6,7 @@ import com.genflowly.DynamoDBConstants.CUSTOMER_API_KEY_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_VECTOR_DB_CONFIG_TABLE
 import com.genflowly.DynamoDBConstants.VENDOR_KEY
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mu.KLogger

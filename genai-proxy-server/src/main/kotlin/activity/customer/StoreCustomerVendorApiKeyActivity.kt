@@ -49,7 +49,7 @@ fun Route.registerStoreApiKeyRoutes(
             
             logger.info("Received SaveApiKeyRequest from customerId {}: {}", customerId, request)
 
-            val aiVendor = com.genflowly.aicallerlib.models.AIVendor.valueOf(request.aiVendor)
+            val aiVendor = com.genflowly.models.AIVendor.valueOf(request.aiVendor)
 
             // Validate against the vendor before storing; invalid keys are rejected
             val apiKeyStatus = customerCredentialsService.validateAndStoreVendorKey(
