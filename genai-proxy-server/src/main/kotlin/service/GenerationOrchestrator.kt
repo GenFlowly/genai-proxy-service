@@ -2,31 +2,24 @@ package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.InstructionResponse
-import com.genflowly.models.retrieval.ConversationMessage
-import com.genflowly.models.retrieval.ImageRef
-import com.genflowly.models.retrieval.PayloadToolDefinition
-import com.genflowly.models.retrieval.PayloadToolResult
-import com.genflowly.models.retrieval.PayloadToolResultImage
-import com.genflowly.models.retrieval.StreamChunk
-import com.genflowly.providers.RetrievalServerClient
-import com.genflowly.providers.S3Provider
-import com.genflowly.models.AIConfig
-import com.genflowly.models.AttachmentRef
-import com.genflowly.models.GenerateTextRequest
-import com.genflowly.models.MAX_ATTACHMENTS_PER_MESSAGE
-import com.genflowly.models.MAX_ATTACHMENT_SIZE_BYTES
-import com.genflowly.models.Message
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
+import com.genflowly.models.retrieval.StreamChunk
+import com.genflowly.models.retrieval.toConversationMessage
+import com.genflowly.models.retrieval.toImageRefs
+import com.genflowly.models.retrieval.toPayloadToolResults
+import com.genflowly.models.retrieval.toPayloadTools
+import com.genflowly.models.retrieval.toResultsJson
+import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.models.AIConfig
+import com.genflowly.models.AttachmentRef
+import com.genflowly.models.Message
 import com.genflowly.models.toCredentialKey
 import com.genflowly.models.toProviderString
 import org.slf4j.LoggerFactory
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
 
 /**
  * Orchestrates the primary text-generation flows (batch + streaming): request
@@ -40,7 +33,7 @@ class GenerationOrchestrator(
     private val instructionService: InstructionService,
     private val conversationService: ConversationService,
     private val retrievalService: RetrievalServerClient,
-    private val s3Provider: S3Provider,
+    private val requestValidator: GenerationRequestValidator,
     private val modelCatalogService: ModelCatalogService
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
@@ -52,158 +45,6 @@ class GenerationOrchestrator(
         return conversationService.getMessageThread(conversationId, messageId)
     }
 
-    /**
-     * Rejects attachments the caller doesn't own (key must sit under the
-     * authenticated customer's prefix) or that were never actually uploaded /
-     * exceed the size limit. Runs only for the current turn's attachments —
-     * history attachments were validated when their message was created.
-     */
-    private suspend fun validateAttachments(attachments: List<AttachmentRef>, customerId: String) {
-        if (attachments.isEmpty()) return
-        require(attachments.size <= MAX_ATTACHMENTS_PER_MESSAGE) {
-            "At most $MAX_ATTACHMENTS_PER_MESSAGE attachments are allowed per message"
-        }
-        val ownedPrefix = "customers/$customerId/"
-        for (attachment in attachments) {
-            require(attachment.s3Key.startsWith(ownedPrefix)) {
-                "Attachment ${attachment.attachmentId} does not belong to the authenticated customer"
-            }
-            val info = s3Provider.head(attachment.s3Key)
-                ?: throw IllegalArgumentException("Attachment ${attachment.attachmentId} has not been uploaded")
-            require(info.sizeBytes <= MAX_ATTACHMENT_SIZE_BYTES) {
-                "Attachment ${attachment.attachmentId} exceeds the $MAX_ATTACHMENT_SIZE_BYTES byte limit"
-            }
-        }
-    }
-
-    private fun List<AttachmentRef>.toImageRefs(): List<ImageRef> =
-        map { ImageRef(s3Key = it.s3Key, mediaType = it.mediaType) }
-
-    private fun Message.toConversationMessage(): ConversationMessage =
-        ConversationMessage(
-            role = role,
-            content = text,
-            images = attachments.toImageRefs(),
-            toolCalls = toolCallsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
-            toolResults = toolResultsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() }
-        )
-
-    private fun List<ToolDefinition>.toPayloadTools(): List<PayloadToolDefinition> =
-        map {
-            PayloadToolDefinition(
-                name = it.name,
-                description = it.description,
-                parameters = it.parameters,
-                type = it.type,
-                options = it.options
-            )
-        }
-
-    private fun List<ToolResult>.toPayloadToolResults(): List<PayloadToolResult> =
-        map { r ->
-            PayloadToolResult(
-                toolCallId = r.toolCallId,
-                content = r.content,
-                images = r.images.map { img ->
-                    PayloadToolResultImage(data = img.data, s3Key = img.s3Key, mediaType = img.mediaType)
-                }
-            )
-        }
-
-    /**
-     * Snake-cased JSON of tool results as persisted on the user Message and replayed
-     * in later turns. Inline base64 screenshots are stripped (marked omitted) — raw
-     * screenshots would blow DynamoDB's 400 KB item limit, and stale screenshots
-     * shouldn't be replayed anyway. S3-referenced images keep their reference.
-     */
-    private fun List<ToolResult>.toResultsJson(): String? =
-        takeIf { it.isNotEmpty() }?.let { results ->
-            jsonParser.encodeToString(results.map { r ->
-                PayloadToolResult(
-                    toolCallId = r.toolCallId,
-                    content = r.content,
-                    images = r.images.map { img ->
-                        if (img.data != null) {
-                            PayloadToolResultImage(mediaType = img.mediaType, omitted = true)
-                        } else {
-                            PayloadToolResultImage(s3Key = img.s3Key, mediaType = img.mediaType)
-                        }
-                    }
-                )
-            })
-        }
-
-    /**
-     * Native tool types (computer use etc.) are Anthropic-only; tool-result image
-     * S3 keys must belong to the authenticated customer.
-     */
-    private fun validateTools(
-        tools: List<ToolDefinition>,
-        toolResults: List<ToolResult>,
-        vendors: List<AIVendor>,
-        customerId: String
-    ) {
-        val nativeTypes = tools.mapNotNull { it.type }.filter { it != "function" }
-        if (nativeTypes.isNotEmpty()) {
-            require(vendors.all { it == AIVendor.CLAUDE }) {
-                "Native tool types $nativeTypes are supported on Claude only — use function tools for other vendors"
-            }
-        }
-        val ownedPrefix = "customers/$customerId/"
-        for (result in toolResults) {
-            for (img in result.images) {
-                require(img.data != null || img.s3Key != null) {
-                    "Tool result image must provide either data or s3Key"
-                }
-                img.s3Key?.let {
-                    require(it.startsWith(ownedPrefix)) {
-                        "Tool result image s3Key does not belong to the authenticated customer"
-                    }
-                }
-            }
-        }
-    }
-
-
-    suspend fun getConversationId(
-        request: GenerateTextRequest,
-        customerId: String,
-        client: String
-    ): String {
-        val activeConversationId = if (request.conversationId.isNullOrBlank()) {
-            conversationService.createConversation(
-                customerId,
-                client
-            )
-        } else {
-            request.conversationId
-        }
-        return activeConversationId
-    }
-
-    suspend fun getConversationId(
-        customerId: String,
-        client: String,
-        conversationId: String? = null
-    ): String {
-        val activeConversationId = if (conversationId.isNullOrBlank()) {
-            conversationService.createConversation(
-                customerId,
-                client
-            )
-        } else {
-            // Enforce that the caller can write to this conversation. New conversations
-            // just created above have no shares yet, so this check only applies when
-            // continuing an existing one.
-            val role = conversationService.getConversationRole(conversationId, customerId)
-            if (role == null || !role.canEdit) {
-                throw ConversationAccessDeniedException("Customer $customerId cannot write to conversation $conversationId")
-            }
-            conversationId
-        }
-        return activeConversationId
-    }
-    
     /**
      * Resolve the instruction to use for a generation request, returning the full
      * instruction (no second fetch downstream). An explicit selection is fetched
@@ -244,8 +85,8 @@ class GenerationOrchestrator(
 
     ): List<Message> {
 
-        validateAttachments(attachments, customerId)
-        validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
+        requestValidator.validateAttachments(attachments, customerId)
+        requestValidator.validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
 
         // An explicit selection wins; otherwise resolve the customer's default
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
@@ -257,7 +98,7 @@ class GenerationOrchestrator(
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =
-            getConversationId(customerId, client, conversationId)
+            conversationService.resolveWritableConversationId(customerId, client, conversationId)
 
         var actualPreviousMessageId = selectedResponseId
         if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
@@ -396,8 +237,8 @@ class GenerationOrchestrator(
         toolResults: List<ToolResult> = emptyList()
     ): StreamExecutionResult {
 
-        validateAttachments(attachments, customerId)
-        validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
+        requestValidator.validateAttachments(attachments, customerId)
+        requestValidator.validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
 
         // An explicit selection wins; otherwise resolve the customer's default
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
@@ -408,7 +249,7 @@ class GenerationOrchestrator(
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
-        val activeConversationId = getConversationId(customerId, client, conversationId)
+        val activeConversationId = conversationService.resolveWritableConversationId(customerId, client, conversationId)
 
         var actualPreviousMessageId = selectedResponseId
         // A parallel per-vendor stream call for the same turn may have already
@@ -585,9 +426,6 @@ class GenerationOrchestrator(
         )
     }
 
-    companion object {
-        private val jsonParser = Json { ignoreUnknownKeys = true }
-    }
 }
 
 private fun String.toJsonStringValue(): String = buildString {
