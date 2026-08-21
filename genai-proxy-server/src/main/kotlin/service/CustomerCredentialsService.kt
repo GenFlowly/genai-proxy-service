@@ -7,6 +7,7 @@ import com.genflowly.models.api.StoreToolCredentialsResponse
 import com.genflowly.models.api.ToolCredentialStatus
 import com.genflowly.providers.EncodingServerClient
 import com.genflowly.providers.KMSProvider
+import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.repository.CustomerCredentialsRepository
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -24,6 +25,7 @@ class CustomerCredentialsService(
     private val kmsProvider: KMSProvider,
     private val customerCredentialsRepository: CustomerCredentialsRepository,
     private val encodingServerClient: EncodingServerClient,
+    private val retrievalServerClient: RetrievalServerClient,
     private val appScope: AppScope
 ) {
 
@@ -35,6 +37,38 @@ class CustomerCredentialsService(
         val encrypted = kmsProvider.encrypt(apiKey)
         customerCredentialsRepository.saveCustomerApiKey(customerId, aiVendor, encrypted)
         return true
+    }
+
+    /**
+     * Validates the key against the vendor (one cheap authenticated call via
+     * the retrieval-server) and stores it encrypted only when valid. Returns
+     * the resulting status either way — invalid keys are never stored.
+     */
+    suspend fun validateAndStoreVendorKey(
+        customerId: String,
+        vendor: AIVendor,
+        apiKey: String
+    ): models.AIVendorAPIKeyStatus {
+        val isKeyValid = retrievalServerClient.validateApiKey(vendor, apiKey)
+
+        return if (isKeyValid) {
+            val stored = storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
+            logger.info { "API Key validated and stored for vendor $vendor: $stored" }
+            models.AIVendorAPIKeyStatus(
+                aiVendor = vendor,
+                isAPIKeyValid = true,
+                status = models.APIKeyStatus.VALID,
+                updateSuccessful = true
+            )
+        } else {
+            logger.warn { "Invalid API Key provided for vendor $vendor. Not saving." }
+            models.AIVendorAPIKeyStatus(
+                aiVendor = vendor,
+                isAPIKeyValid = false,
+                status = models.APIKeyStatus.INVALID,
+                updateSuccessful = false
+            )
+        }
     }
 
     suspend fun getCustomerApiKeyForVendor(

@@ -2,7 +2,10 @@ package com.genflowly.service
 
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.AIMode
+import com.genflowly.models.api.OnboardCustomerResponse
 import com.genflowly.repository.CustomerProfileRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import models.AIConfig
 import models.generateCustomerId
 import mu.KotlinLogging
@@ -18,6 +21,7 @@ private val logger = KotlinLogging.logger {}
 class CustomerProfileService(
     private val customerProfileRepository: CustomerProfileRepository,
     private val customerCredentialsService: CustomerCredentialsService,
+    private val instructionService: InstructionService,
     private val graphService: GraphService
 ) {
 
@@ -138,6 +142,47 @@ class CustomerProfileService(
         )
     }
 
+    /**
+     * Onboards (or re-fetches) the customer and assembles the full bootstrap
+     * state the web app needs: preferences, key statuses, instructions and
+     * config statuses. Independent reads run concurrently; the AI persona
+     * backfill is fired and forgotten.
+     */
+    suspend fun onboardAndBootstrap(
+        sub: String,
+        client: String,
+        email: String?,
+        name: String?,
+        picture: String?,
+        authHeader: String? = null
+    ): OnboardCustomerResponse {
+        val customerProfile = onboardCustomer(sub, client, email, name, picture, authHeader)
+
+        // Fetch additional details — independent reads keyed only by
+        // customerId, so run them concurrently
+        return coroutineScope {
+            val aiConfigPreferences = async { getAIConfigPreferences(customerProfile.customerId) }
+            val aiVendorAPIKeyStatusList = async { customerCredentialsService.getAIVendorAPIKeyStatusList(customerProfile.customerId) }
+            val vectorDBConfigStatusList = async { customerCredentialsService.getCustomerVectorDBConfigStatusList(customerProfile.customerId) }
+            val supabaseConfigStatus = async { customerCredentialsService.getCustomerSupabaseConfigStatus(customerProfile.customerId) }
+            val customerInstructions = async { instructionService.getLatestCustomerInstructions(customerProfile.customerId) }
+
+            // Fire and forget backfill missing categories/icons using AI
+            instructionService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await())
+
+            OnboardCustomerResponse(
+                customerId = customerProfile.customerId,
+                aiConfigPreferences = aiConfigPreferences.await() ?: AIConfigPreferences(),
+                aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList.await(),
+                customerName = customerProfile.name ?: "User",
+                customerPicture = customerProfile.picture,
+                customerInstructions = customerInstructions.await(),
+                vectorDBConfigStatusList = vectorDBConfigStatusList.await(),
+                supabaseConfigStatus = supabaseConfigStatus.await()
+            )
+        }
+    }
+
     // ─── Profile settings & search (thin delegations for the API layer) ───────
 
     suspend fun getProfile(sub: String, client: String) =
@@ -151,4 +196,7 @@ class CustomerProfileService(
 
     suspend fun searchByUsername(usernamePrefix: String) =
         customerProfileRepository.searchByUsername(usernamePrefix)
+
+    suspend fun getProfileByCustomerId(customerId: String) =
+        customerProfileRepository.getCustomerProfileByCustomerId(customerId)
 }

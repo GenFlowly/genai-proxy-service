@@ -114,17 +114,19 @@ fun appModule(): Module = module {
 
     single { AIRequestService() }
     single { SharedUsersResolver(get(), get()) }
-    single { CustomerCredentialsService(get(), get(), get(), get()) }
+    single { CustomerCredentialsService(get(), get(), get(), get(), get()) }
     single { UtilityGenerationService(get(), get()) }
     single { GraphService(get()) }
-    single { CustomerProfileService(get(), get(), get()) }
+    single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get(), get(), get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.AttachmentService(get()) }
+    single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
     single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
-    single { com.genflowly.service.SystemApiKeyService(get(), get()) }
+    single { com.genflowly.service.SystemApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.SystemAIFailoverService(get()) }
     single { com.genflowly.service.ModelCatalogService(get(), get(), get()) }
 }

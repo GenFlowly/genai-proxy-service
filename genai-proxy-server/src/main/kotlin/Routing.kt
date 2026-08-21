@@ -49,7 +49,9 @@ import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
-import com.genflowly.repository.CustomerProfileRepository
+import com.genflowly.config.AppConfig
+import com.genflowly.service.AttachmentService
+import com.genflowly.service.VoiceSessionService
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -115,14 +117,14 @@ fun Application.configureRouting(
     conversationService: ConversationService,
     aiModelsService: AIModelsService,
     graphService: GraphService,
-    customerProfileRepository: CustomerProfileRepository,
-    s3Provider: com.genflowly.providers.S3Provider,
+    attachmentService: AttachmentService,
+    voiceSessionService: VoiceSessionService,
     notesService: com.genflowly.service.NotesService,
     developerApiKeyService: DeveloperApiKeyService,
     systemApiKeyService: com.genflowly.service.SystemApiKeyService,
     modelCatalogService: com.genflowly.service.ModelCatalogService,
     retrievalServerClient: com.genflowly.providers.RetrievalServerClient,
-    json: kotlinx.serialization.json.Json,
+    appConfig: AppConfig,
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -145,10 +147,10 @@ fun Application.configureRouting(
 
         registerGenerateTextRoutes(generationOrchestrator, customerProfileService)
         registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService)
-        registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService, aiModelsService)
+        registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)
-        registerOnboardCustomerRoutes(customerProfileService, customerCredentialsService, instructionService)
+        registerOnboardCustomerRoutes(customerProfileService)
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
@@ -169,16 +171,16 @@ fun Application.configureRouting(
         registerUpdateAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
         
-        registerCustomerProfileSettingsRoutes(customerProfileRepository)
-        registerSearchRoutes(customerProfileRepository)
-        registerGetProfileRoutes(customerProfileRepository)
-        registerAttachmentRoutes(s3Provider, customerProfileService)
+        registerCustomerProfileSettingsRoutes(customerProfileService)
+        registerSearchRoutes(customerProfileService)
+        registerGetProfileRoutes(customerProfileService)
+        registerAttachmentRoutes(attachmentService, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerSystemVendorApiKeysRoutes(
-            systemApiKeyService, customerProfileService, aiModelsService, customerProfileRepository, modelCatalogService
+            systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService
         )
-        registerVoiceSessionRoutes(customerProfileService, conversationService, generationOrchestrator, instructionService, customerCredentialsService, retrievalServerClient, json)
+        registerVoiceSessionRoutes(customerProfileService, voiceSessionService, retrievalServerClient)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }
 }
