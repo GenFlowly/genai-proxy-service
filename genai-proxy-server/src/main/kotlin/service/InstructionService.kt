@@ -2,6 +2,7 @@ package com.genflowly.service
 
 import com.genflowly.di.AppScope
 import com.genflowly.models.api.GetCustomerInstructionListResponse
+import com.genflowly.models.ShareRole
 import com.genflowly.models.api.InstructionResponse
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.InstructionRepository
@@ -69,7 +70,7 @@ class InstructionService(
             color = system.color,
             category = system.category,
             tags = system.tags,
-            role = "VIEW"
+            role = ShareRole.VIEW
         )
     }
 
@@ -82,7 +83,7 @@ class InstructionService(
 
         if (instruction == null) return null
 
-        var role = "OWNER"
+        var role = ShareRole.OWNER
         if (instruction.creator != customerId) {
             val sharedUsers = sharedUsersResolver.getUsersWithSharedEntity(instructionId)
             val specificShare = sharedUsers.find { it.customerId == customerId }
@@ -93,7 +94,7 @@ class InstructionService(
 
             val specificRole = specificShare?.role
             val publicRole = publicShare?.role
-            role = if (specificRole == "EDIT" || publicRole == "EDIT") "EDIT" else "VIEW"
+            role = if (specificRole == ShareRole.EDIT || publicRole == ShareRole.EDIT) ShareRole.EDIT else ShareRole.VIEW
         }
 
         return InstructionResponse(
@@ -123,7 +124,7 @@ class InstructionService(
         var version = 1
 
         var creator = customerId
-        var role = "OWNER"
+        var role = ShareRole.OWNER
 
         if (instructionId != null) {
             val latestVersion = instructionRepository.getLatestInstructionVersion(instructionId) ?: 0
@@ -135,7 +136,7 @@ class InstructionService(
                     if (hasEdit) {
                         version = latestVersion + 1
                         creator = existingInstruction.creator
-                        role = "EDIT"
+                        role = ShareRole.EDIT
                     } else {
                         // Branch off into a private copy if they only have VIEW or no access
                         instructionId = "INS-${UUID.randomUUID()}"
@@ -212,7 +213,7 @@ class InstructionService(
         val sharedUsers = sharedUsersResolver.getUsersWithSharedEntity(instructionId)
         val specificShare = sharedUsers.find { it.customerId == customerId }
         val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
-        return specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
+        return specificShare?.role == ShareRole.EDIT || publicShare?.role == ShareRole.EDIT
     }
 
     suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse {
@@ -221,10 +222,10 @@ class InstructionService(
         val sharedInstructionIds = shareRepository.getSharedEntityIdsForCustomer(customerId, "INS-")
         val publicInstructionIds = shareRepository.getSharedEntityIdsForCustomer("PUBLIC", "INS-")
 
-        val roleMap = mutableMapOf<String, String>()
+        val roleMap = mutableMapOf<String, ShareRole>()
         publicInstructionIds.forEach { (id, role) -> roleMap[id] = role }
         sharedInstructionIds.forEach { (id, role) ->
-            if (role == "EDIT" || !roleMap.containsKey(id)) {
+            if (role == ShareRole.EDIT || !roleMap.containsKey(id)) {
                 roleMap[id] = role
             }
         }
@@ -246,7 +247,7 @@ class InstructionService(
         val responseItems = allInstructions.sortedWith(
             compareBy<com.genflowly.models.Instruction> { it.id }.thenByDescending { it.version }
         ).map { instruction ->
-            val role = if (instruction.creator == customerId) "OWNER" else roleMap[instruction.id] ?: "VIEW"
+            val role = if (instruction.creator == customerId) ShareRole.OWNER else roleMap[instruction.id] ?: ShareRole.VIEW
             InstructionResponse(
                 id = instruction.id,
                 name = instruction.name,
@@ -279,7 +280,7 @@ class InstructionService(
             .sortedByDescending { it.version }
     }
 
-    suspend fun shareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String, role: String) {
+    suspend fun shareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String, role: ShareRole) {
         requireOwnerOrEdit(sharedByCustomerId, instructionId)
         shareRepository.shareEntityWithCustomer(instructionId, targetCustomerId, sharedByCustomerId, role)
     }
@@ -308,7 +309,7 @@ class InstructionService(
                 val sharedUsers = sharedUsersResolver.getUsersWithSharedEntity(instructionId)
                 val specificShare = sharedUsers.find { it.customerId == customerId }
                 val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
-                val hasEdit = specificShare?.role == "EDIT" || publicShare?.role == "EDIT"
+                val hasEdit = specificShare?.role == ShareRole.EDIT || publicShare?.role == ShareRole.EDIT
                 if (!hasEdit) {
                     throw SecurityException("Customer $customerId does not own or have EDIT rights to instruction $instructionId")
                 }

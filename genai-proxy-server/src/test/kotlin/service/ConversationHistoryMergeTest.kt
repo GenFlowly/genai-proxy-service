@@ -1,6 +1,7 @@
 package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.ShareRole
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ShareRepository
 import io.mockk.coEvery
@@ -61,7 +62,7 @@ class ConversationHistoryMergeTest {
 
         val result = service.getConversationHistory(conv, owner)
 
-        assertEquals("OWNER", result.role)
+        assertEquals(ShareRole.OWNER, result.role)
         assertEquals("My chat", result.title)
         assertEquals(1, result.promptAndResponseList.size)
         val pair = result.promptAndResponseList[0]
@@ -174,14 +175,14 @@ class ConversationHistoryMergeTest {
     fun `role resolution - owner wins, then direct share, then PUBLIC, else null`() = runTest {
         stubConversation(emptyList())
 
-        assertEquals("OWNER", service.getConversationRole(conv, owner))
+        assertEquals(ShareRole.OWNER, service.getConversationRole(conv, owner))
 
-        coEvery { shareRepo.getConversationShare(conv, "cust-viewer") } returns "VIEW"
-        assertEquals("VIEW", service.getConversationRole(conv, "cust-viewer"))
+        coEvery { shareRepo.getConversationShare(conv, "cust-viewer") } returns ShareRole.VIEW
+        assertEquals(ShareRole.VIEW, service.getConversationRole(conv, "cust-viewer"))
 
         coEvery { shareRepo.getConversationShare(conv, "cust-anon") } returns null
-        coEvery { shareRepo.getConversationShare(conv, "PUBLIC") } returns "VIEW"
-        assertEquals("VIEW", service.getConversationRole(conv, "cust-anon"))
+        coEvery { shareRepo.getConversationShare(conv, "PUBLIC") } returns ShareRole.VIEW
+        assertEquals(ShareRole.VIEW, service.getConversationRole(conv, "cust-anon"))
 
         coEvery { shareRepo.getConversationShare(conv, "PUBLIC") } returns null
         assertNull(service.getConversationRole(conv, "cust-anon"))
@@ -193,11 +194,11 @@ class ConversationHistoryMergeTest {
             userMsg("u1", "q", seq = 1),
             assistantMsg("a1", "r", seq = 2, AIVendor.OPENAI, "m", prev = "u1")
         ))
-        coEvery { shareRepo.getConversationShare(conv, "cust-viewer") } returns "EDIT"
+        coEvery { shareRepo.getConversationShare(conv, "cust-viewer") } returns ShareRole.EDIT
 
         val result = service.getConversationHistory(conv, "cust-viewer")
 
-        assertEquals("EDIT", result.role)
+        assertEquals(ShareRole.EDIT, result.role)
         assertEquals(1, result.promptAndResponseList.size)
     }
 }

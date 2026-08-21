@@ -1,6 +1,7 @@
 package com.genflowly.service
 
 import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.ShareRole
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ShareRepository
 import com.genflowly.models.AIConfig
@@ -78,12 +79,12 @@ class ConversationService(
 
     /**
      * Returns the effective role [callerCustomerId] has on [conversationId]:
-     * "OWNER" if they own it, otherwise the role from a direct share, otherwise
-     * the PUBLIC role if one exists, otherwise null (no access).
+     * [ShareRole.OWNER] if they own it, otherwise the role from a direct share,
+     * otherwise the PUBLIC role if one exists, otherwise null (no access).
      */
-    suspend fun getConversationRole(conversationId: String, callerCustomerId: String): String? {
+    suspend fun getConversationRole(conversationId: String, callerCustomerId: String): ShareRole? {
         val conversation = conversationRepository.getConversationById(conversationId) ?: return null
-        if (conversation.customerId == callerCustomerId) return "OWNER"
+        if (conversation.customerId == callerCustomerId) return ShareRole.OWNER
 
         val directShareRole = shareRepository.getConversationShare(conversationId, callerCustomerId)
         if (directShareRole != null) return directShareRole
@@ -166,7 +167,7 @@ class ConversationService(
         conversationId: String,
         targetCustomerId: String,
         sharedByCustomerId: String,
-        role: String
+        role: ShareRole
     ) {
         requireEditOrOwner(conversationId, sharedByCustomerId, action = "share")
         val owner = conversationRepository.getConversationById(conversationId)
@@ -196,7 +197,7 @@ class ConversationService(
 
     private suspend fun requireEditOrOwner(conversationId: String, callerCustomerId: String, action: String) {
         val role = getConversationRole(conversationId, callerCustomerId)
-        if (role != "OWNER" && role != "EDIT") {
+        if (role == null || !role.canEdit) {
             throw SecurityException("Customer $callerCustomerId cannot $action conversation $conversationId")
         }
     }

@@ -3,6 +3,7 @@ package com.genflowly.repository
 import com.genflowly.DynamoDBConstants
 import com.genflowly.DynamoDBConstants.CONVERSATION_ID_KEY
 import com.genflowly.DynamoDBConstants.INSTRUCTION_ID_KEY
+import com.genflowly.models.ShareRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mu.KLogger
@@ -23,13 +24,13 @@ class ShareRepository(
     private val logger: KLogger
 ) {
 
-    suspend fun shareEntityWithCustomer(entityId: String, sharedWithCustomerId: String, sharedByCustomerId: String, role: String) = withContext(Dispatchers.IO) {
+    suspend fun shareEntityWithCustomer(entityId: String, sharedWithCustomerId: String, sharedByCustomerId: String, role: ShareRole) = withContext(Dispatchers.IO) {
         try {
             val item = withTimestamps(mapOf(
                 DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
                 INSTRUCTION_ID_KEY to AttributeValue.builder().s(entityId).build(),
                 DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedByCustomerId).build(),
-                DynamoDBConstants.ENTITY_ROLE_KEY to AttributeValue.builder().s(role).build()
+                DynamoDBConstants.ENTITY_ROLE_KEY to AttributeValue.builder().s(role.name).build()
             ))
 
             val putReq = PutItemRequest.builder()
@@ -65,7 +66,7 @@ class ShareRepository(
         }
     }
 
-    suspend fun getSharedEntityIdsForCustomer(customerId: String, prefix: String? = null): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun getSharedEntityIdsForCustomer(customerId: String, prefix: String? = null): List<Pair<String, ShareRole>> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
             .keyConditionExpression("${DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY} = :cid")
@@ -77,13 +78,13 @@ class ShareRepository(
         val response = dynamoDbClient.query(request)
         response.items().mapNotNull { item ->
             val id = item[INSTRUCTION_ID_KEY]?.s()
-            val role = item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+            val role = ShareRole.fromDb(item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s())
             if (id != null) id to role else null
         }.filter { prefix == null || it.first.startsWith(prefix) }
     }
 
     /** Raw (sharedWithCustomerId, role) pairs for an entity, role defaulting to VIEW. */
-    suspend fun getSharesForEntity(entityId: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun getSharesForEntity(entityId: String): List<Pair<String, ShareRole>> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE)
             .indexName(DynamoDBConstants.SHARED_INSTRUCTIONS_GSI_KEY)
@@ -95,7 +96,7 @@ class ShareRepository(
 
         dynamoDbClient.query(request).items().mapNotNull { item ->
             val customerId = item[DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
-            customerId to (item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW")
+            customerId to ShareRole.fromDb(item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s())
         }
     }
 
@@ -103,14 +104,14 @@ class ShareRepository(
         conversationId: String,
         sharedWithCustomerId: String,
         sharedByCustomerId: String,
-        role: String
+        role: ShareRole
     ) = withContext(Dispatchers.IO) {
         try {
             val item = withTimestamps(mapOf(
                 DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedWithCustomerId).build(),
                 CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build(),
                 DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY to AttributeValue.builder().s(sharedByCustomerId).build(),
-                DynamoDBConstants.ENTITY_ROLE_KEY to AttributeValue.builder().s(role).build()
+                DynamoDBConstants.ENTITY_ROLE_KEY to AttributeValue.builder().s(role.name).build()
             ))
 
             val putReq = PutItemRequest.builder()
@@ -181,7 +182,7 @@ class ShareRepository(
      * Returns (conversationId, role) pairs for every conversation shared with [customerId],
      * including any PUBLIC entries the customer inherits.
      */
-    suspend fun getSharedConversationIdsForCustomer(customerId: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun getSharedConversationIdsForCustomer(customerId: String): List<Pair<String, ShareRole>> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
             .keyConditionExpression("${DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY} = :cid")
@@ -193,7 +194,7 @@ class ShareRepository(
         val response = dynamoDbClient.query(request)
         response.items().mapNotNull { item ->
             val id = item[CONVERSATION_ID_KEY]?.s()
-            val role = item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW"
+            val role = ShareRole.fromDb(item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s())
             if (id != null) id to role else null
         }
     }
@@ -203,7 +204,7 @@ class ShareRepository(
      * SharedConversations lookup, or null if no share exists. Does NOT consider PUBLIC —
      * callers should check PUBLIC separately.
      */
-    suspend fun getConversationShare(conversationId: String, customerId: String): String? = withContext(Dispatchers.IO) {
+    suspend fun getConversationShare(conversationId: String, customerId: String): ShareRole? = withContext(Dispatchers.IO) {
         val request = GetItemRequest.builder()
             .tableName(DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
             .key(mapOf(
@@ -213,11 +214,11 @@ class ShareRepository(
             .build()
         val item = dynamoDbClient.getItem(request).item()
         if (item.isNullOrEmpty()) null
-        else item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s()
+        else ShareRole.fromDb(item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s())
     }
 
     /** Raw (sharedWithCustomerId, role) pairs for a conversation, role defaulting to VIEW. */
-    suspend fun getSharesForConversation(conversationId: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun getSharesForConversation(conversationId: String): List<Pair<String, ShareRole>> = withContext(Dispatchers.IO) {
         val request = QueryRequest.builder()
             .tableName(DynamoDBConstants.SHARED_CONVERSATIONS_TABLE)
             .indexName(DynamoDBConstants.SHARED_CONVERSATIONS_GSI_KEY)
@@ -229,7 +230,7 @@ class ShareRepository(
 
         dynamoDbClient.query(request).items().mapNotNull { item ->
             val customerId = item[DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY]?.s() ?: return@mapNotNull null
-            customerId to (item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s() ?: "VIEW")
+            customerId to ShareRole.fromDb(item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s())
         }
     }
 }

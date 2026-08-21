@@ -1,5 +1,6 @@
 package com.genflowly.service
 
+import com.genflowly.models.ShareRole
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.ShareRepository
 
@@ -20,7 +21,7 @@ class SharedUsersResolver(
     suspend fun getUsersWithSharedConversation(conversationId: String): List<com.genflowly.models.CustomerProfile> =
         resolve(shareRepository.getSharesForConversation(conversationId))
 
-    private suspend fun resolve(shares: List<Pair<String, String>>): List<com.genflowly.models.CustomerProfile> =
+    private suspend fun resolve(shares: List<Pair<String, ShareRole>>): List<com.genflowly.models.CustomerProfile> =
         shares.mapNotNull { (customerId, role) ->
             if (customerId == "PUBLIC") {
                 return@mapNotNull com.genflowly.models.CustomerProfile(

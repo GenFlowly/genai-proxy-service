@@ -1,6 +1,7 @@
 package com.genflowly.repository
 
 import com.genflowly.DynamoDBConstants
+import com.genflowly.models.ShareRole
 import com.genflowly.service.SharedUsersResolver
 import io.mockk.every
 import io.mockk.mockk
@@ -88,13 +89,13 @@ class SharingResolutionTest {
         assertEquals("Public", public.name)
         assertEquals("Public", public.username)
         assertEquals(true, public.isDiscoverable)
-        assertEquals("EDIT", public.role)
+        assertEquals(ShareRole.EDIT, public.role)
         assertEquals("", public.sub)
 
         val alice = users[1]
         assertEquals("cust-2", alice.customerId)
         assertEquals("alice", alice.name)
-        assertEquals("VIEW", alice.role)
+        assertEquals(ShareRole.VIEW, alice.role)
         assertEquals("cust-2@example.com", alice.email)
     }
 
@@ -113,8 +114,8 @@ class SharingResolutionTest {
 
         assertEquals(2, users.size)
         assertEquals("PUBLIC", users[0].customerId)
-        assertEquals("VIEW", users[0].role) // missing role attribute defaults to VIEW
-        assertEquals("EDIT", users[1].role)
+        assertEquals(ShareRole.VIEW, users[0].role) // missing role attribute defaults to VIEW
+        assertEquals(ShareRole.EDIT, users[1].role)
         assertEquals("bob", users[1].name)
     }
 
@@ -131,7 +132,7 @@ class SharingResolutionTest {
         )
 
         val all = shareRepository.getSharedEntityIdsForCustomer("cust-1")
-        assertEquals(listOf("inst-a" to "EDIT", "inst-b" to "VIEW", "note-c" to "VIEW"), all)
+        assertEquals(listOf("inst-a" to ShareRole.EDIT, "inst-b" to ShareRole.VIEW, "note-c" to ShareRole.VIEW), all)
 
         val onlyInst = shareRepository.getSharedEntityIdsForCustomer("cust-1", prefix = "inst-")
         assertTrue(onlyInst.all { it.first.startsWith("inst-") })
@@ -150,7 +151,7 @@ class SharingResolutionTest {
             }
         }
 
-        assertEquals("EDIT", shareRepository.getConversationShare("conv-1", "cust-2"))
+        assertEquals(ShareRole.EDIT, shareRepository.getConversationShare("conv-1", "cust-2"))
         assertEquals(null, shareRepository.getConversationShare("conv-1", "cust-other"))
     }
 }
