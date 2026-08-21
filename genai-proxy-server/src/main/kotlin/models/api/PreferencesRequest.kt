@@ -2,7 +2,7 @@ package com.genflowly.models.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import models.AIConfig
+import com.genflowly.models.AIConfig
 
 @Serializable
 data class PreferencesRequest(

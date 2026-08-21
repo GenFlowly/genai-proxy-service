@@ -5,7 +5,7 @@ import com.genflowly.models.api.CreateAttachmentUploadRequest
 import com.genflowly.models.api.CreateAttachmentUploadResponse
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GetAttachmentUrlResponse
-import com.genflowly.providers.S3Provider
+import com.genflowly.service.AttachmentService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.get
@@ -15,17 +15,13 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import java.util.UUID
 import kotlinx.serialization.SerializationException
-import models.ALLOWED_ATTACHMENT_MEDIA_TYPES
-import models.MAX_ATTACHMENT_SIZE_BYTES
-import models.attachmentS3Key
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("AttachmentRoutes")
 
 fun Route.registerAttachmentRoutes(
-    s3Provider: S3Provider,
+    attachmentService: AttachmentService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -55,36 +51,19 @@ fun Route.registerAttachmentRoutes(
                 val request = call.receive<CreateAttachmentUploadRequest>()
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 
-                if (request.mediaType !in ALLOWED_ATTACHMENT_MEDIA_TYPES) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("error" to "Unsupported media type '${request.mediaType}'. Allowed: $ALLOWED_ATTACHMENT_MEDIA_TYPES")
-                    )
+                val upload = try {
+                    attachmentService.createUploadUrl(customerId, request.mediaType, request.sizeBytes)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid attachment")))
                     return@post
                 }
-                if (request.sizeBytes <= 0 || request.sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("error" to "Attachment size must be between 1 byte and $MAX_ATTACHMENT_SIZE_BYTES bytes")
-                    )
-                    return@post
-                }
-
-                val attachmentId = UUID.randomUUID().toString()
-                val s3Key = attachmentS3Key(customerId, attachmentId)
-                val uploadUrl = s3Provider.presignPut(s3Key, request.mediaType)
-
-                logger.info(
-                    "Presigned attachment upload for customer {}: id={} mediaType={} sizeBytes={}",
-                    customerId, attachmentId, request.mediaType, request.sizeBytes
-                )
 
                 call.respond(
                     CreateAttachmentUploadResponse(
-                        attachmentId = attachmentId,
-                        s3Key = s3Key,
+                        attachmentId = upload.attachmentId,
+                        s3Key = upload.s3Key,
                         mediaType = request.mediaType,
-                        uploadUrl = uploadUrl
+                        uploadUrl = upload.uploadUrl
                     )
                 )
             } catch (e: SerializationException) {
@@ -124,15 +103,13 @@ fun Route.registerAttachmentRoutes(
                 }
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 
-                // The key embeds the authenticated customerId, so a customer can only
-                // ever address their own objects — no cross-customer lookup possible.
-                val s3Key = attachmentS3Key(customerId, attachmentId)
-                if (s3Provider.head(s3Key) == null) {
+                val url = attachmentService.getViewUrl(customerId, attachmentId)
+                if (url == null) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Attachment not found"))
                     return@get
                 }
 
-                call.respond(GetAttachmentUrlResponse(attachmentId = attachmentId, url = s3Provider.presignGet(s3Key)))
+                call.respond(GetAttachmentUrlResponse(attachmentId = attachmentId, url = url))
             } catch (e: Exception) {
                 logger.error("Unexpected error creating attachment view URL: {}", e.message, e)
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Internal server error: ${e.message}"))

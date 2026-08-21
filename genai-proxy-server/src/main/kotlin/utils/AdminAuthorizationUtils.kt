@@ -1,40 +1,31 @@
 package com.genflowly.utils
 
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.config.AppConfig
 import com.genflowly.service.CustomerProfileService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
 
 /**
- * Admin access is an env-configured allowlist checked after normal
+ * Admin access is a config-driven allowlist checked after normal
  * authentication:
- *  - ADMIN_EMAILS: comma-separated emails (case-insensitive), matched against
+ *  - AppConfig.adminEmails (ADMIN_EMAILS): matched case-insensitively against
  *    the customer's profile email
- *  - ADMIN_CUSTOMER_IDS: comma-separated customerIds
+ *  - AppConfig.adminCustomerIds (ADMIN_CUSTOMER_IDS)
  * A customer matching either list is an admin.
  */
-private fun envList(name: String): Set<String> =
-    System.getenv(name)
-        ?.split(",")
-        ?.map { it.trim().lowercase() }
-        ?.filter { it.isNotEmpty() }
-        ?.toSet()
-        ?: emptySet()
-
 suspend fun isAdminCustomer(
     customerId: String,
-    dynamoDBProvider: DynamoDBProvider
+    customerProfileService: CustomerProfileService,
+    appConfig: AppConfig
 ): Boolean {
-    val adminCustomerIds = envList("ADMIN_CUSTOMER_IDS")
-    if (customerId.lowercase() in adminCustomerIds) return true
+    if (customerId.lowercase() in appConfig.adminCustomerIds) return true
 
-    val adminEmails = envList("ADMIN_EMAILS")
-    if (adminEmails.isEmpty()) return false
+    if (appConfig.adminEmails.isEmpty()) return false
 
-    val profile = dynamoDBProvider.getCustomerProfileByCustomerId(customerId) ?: return false
+    val profile = customerProfileService.getProfileByCustomerId(customerId) ?: return false
     val email = profile["email"]?.s()?.trim()?.lowercase() ?: return false
-    return email in adminEmails
+    return email in appConfig.adminEmails
 }
 
 /**
@@ -43,11 +34,11 @@ suspend fun isAdminCustomer(
  */
 suspend fun ApplicationCall.requireAdminCustomerId(
     customerProfileService: CustomerProfileService,
-    dynamoDBProvider: DynamoDBProvider
+    appConfig: AppConfig
 ): String {
     val customerId = requireAuthenticatedCustomerId(customerProfileService)
 
-    if (!isAdminCustomer(customerId, dynamoDBProvider)) {
+    if (!isAdminCustomer(customerId, customerProfileService, appConfig)) {
         respond(HttpStatusCode.Forbidden, mapOf("error" to "Admin access required"))
         error("Customer $customerId is not an admin")
     }

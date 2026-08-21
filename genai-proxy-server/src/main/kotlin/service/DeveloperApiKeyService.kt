@@ -1,15 +1,14 @@
 package com.genflowly.service
 
+import com.genflowly.di.AppScope
 import com.genflowly.models.api.DeveloperApiKeyCreatedResponse
 import com.genflowly.models.api.DeveloperApiKeySummary
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.repository.DeveloperApiKeyRepository
 import com.genflowly.providers.KMSProvider
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.UUID
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
@@ -21,8 +20,9 @@ import org.slf4j.LoggerFactory
  * the key itself is stored KMS-encrypted (same key as the AI vendor API keys table).
  */
 class DeveloperApiKeyService(
-    private val dynamoDBProvider: DynamoDBProvider,
-    private val kmsProvider: KMSProvider
+    private val developerApiKeyRepository: DeveloperApiKeyRepository,
+    private val kmsProvider: KMSProvider,
+    private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger("DeveloperApiKeyService")
     private val secureRandom = SecureRandom()
@@ -43,7 +43,7 @@ class DeveloperApiKeyService(
         val createdAt = Instant.now().toString()
 
         val encryptedKey = kmsProvider.encrypt(apiKey)
-        dynamoDBProvider.saveDeveloperApiKey(
+        developerApiKeyRepository.saveDeveloperApiKey(
             keyHash = sha256(apiKey),
             keyId = keyId,
             customerId = customerId,
@@ -64,7 +64,7 @@ class DeveloperApiKeyService(
     }
 
     suspend fun listKeys(customerId: String): List<DeveloperApiKeySummary> {
-        return dynamoDBProvider.queryDeveloperApiKeysByCustomer(customerId).map { item ->
+        return developerApiKeyRepository.queryDeveloperApiKeysByCustomer(customerId).map { item ->
             DeveloperApiKeySummary(
                 keyId = item["keyId"]?.s() ?: "",
                 name = item["name"]?.s() ?: "",
@@ -80,12 +80,12 @@ class DeveloperApiKeyService(
      * @return true if a key was deleted, false if no such key exists for this customer
      */
     suspend fun revokeKey(customerId: String, keyId: String): Boolean {
-        val item = dynamoDBProvider.queryDeveloperApiKeysByCustomer(customerId)
+        val item = developerApiKeyRepository.queryDeveloperApiKeysByCustomer(customerId)
             .firstOrNull { it["keyId"]?.s() == keyId }
             ?: return false
 
         val keyHash = item["keyHash"]?.s() ?: return false
-        dynamoDBProvider.deleteDeveloperApiKey(keyHash)
+        developerApiKeyRepository.deleteDeveloperApiKey(keyHash)
         logger.info("Revoked developer API key {} for customer {}", keyId, customerId)
         return true
     }
@@ -99,14 +99,14 @@ class DeveloperApiKeyService(
 
         return try {
             val keyHash = sha256(apiKey)
-            val item = dynamoDBProvider.getDeveloperApiKeyByHash(keyHash) ?: return null
+            val item = developerApiKeyRepository.getDeveloperApiKeyByHash(keyHash) ?: return null
             if (item["revoked"]?.bool() == true) return null
 
             val customerId = item["customerId"]?.s() ?: return null
 
             // Best-effort usage tracking; must not block or fail the request
-            CoroutineScope(Dispatchers.IO).launch {
-                dynamoDBProvider.updateDeveloperApiKeyLastUsed(keyHash)
+            appScope.launch {
+                developerApiKeyRepository.updateDeveloperApiKeyLastUsed(keyHash)
             }
 
             customerId
@@ -122,6 +122,3 @@ class DeveloperApiKeyService(
         return digest.joinToString("") { "%02x".format(it) }
     }
 }
-
-/** Principal attached to calls authenticated with a developer API key. */
-data class ApiKeyPrincipal(val customerId: String)

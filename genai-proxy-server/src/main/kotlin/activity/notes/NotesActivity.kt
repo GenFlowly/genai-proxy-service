@@ -2,12 +2,12 @@ package com.genflowly.activity.notes
 
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
-import com.genflowly.service.DeleteNoteResponse
-import com.genflowly.service.GetNotesResponse
+import com.genflowly.models.api.DeleteNoteResponse
+import com.genflowly.models.api.GetNotesResponse
 import com.genflowly.service.NoteNotFoundException
 import com.genflowly.service.NotesService
-import com.genflowly.service.SaveNoteRequest
-import com.genflowly.service.SaveNoteResponse
+import com.genflowly.models.api.SaveNoteRequest
+import com.genflowly.models.api.SaveNoteResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.delete

@@ -4,6 +4,7 @@ import com.genflowly.Routes
 import com.genflowly.models.api.GetCustomerInstructionListResponse
 import com.genflowly.utils.getAuthenticatedCustomerId
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.InstructionService
 import io.github.smiley4.ktoropenapi.get
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("GetCustomerInstructionListRoute")
 
 fun Route.registerGetCustomerInstructionListRoutes(
+    instructionService: InstructionService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey", optional = true) {
@@ -37,7 +39,7 @@ fun Route.registerGetCustomerInstructionListRoutes(
             try {
                 val customerId = call.getAuthenticatedCustomerId(customerProfileService) ?: "PUBLIC"
 
-                val response = customerProfileService.getCustomerInstructions(customerId)
+                val response = instructionService.getCustomerInstructions(customerId)
                 call.respond(response)
 
             } catch (e: Exception) {

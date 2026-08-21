@@ -1,7 +1,6 @@
 package com.genflowly.activity.instruction
 
 import com.genflowly.Routes
-import com.genflowly.aicallerlib.models.AIVendor
 import com.genflowly.models.api.CreateInstructionRequest
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.InstructionResponse
@@ -13,16 +12,14 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
-import models.Message
-import models.AIConfig
+import com.genflowly.service.InstructionService
 
 import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("CreateInstructionRoute")
 
 fun Route.registerCreateInstructionRoutes(
-    aiRequestManager: AIRequestManager,
+    instructionService: InstructionService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -53,25 +50,11 @@ fun Route.registerCreateInstructionRoutes(
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val request = call.receive<CreateInstructionRequest>()
 
-                // Always generate the persona metadata (icon, color, tags) via AI
-                val generatedPersona = aiRequestManager.generateInstructionPersona(request.instruction, customerId)
-
-                // Use user-provided name if available, otherwise use AI-generated name
-                val instructionName = if (!request.instructionName.isNullOrBlank()) {
-                    request.instructionName
-                } else {
-                    generatedPersona.name
-                }
-
-                val response = customerProfileService.createInstruction(
+                val response = instructionService.createInstructionWithGeneratedPersona(
                     customerId = customerId,
-                    instructionName = instructionName,
+                    instructionName = request.instructionName,
                     instruction = request.instruction,
-                    existingInstructionId = request.existingInstructionId,
-                    icon = generatedPersona.icon,
-                    color = generatedPersona.color,
-                    tags = generatedPersona.tags,
-                    category = generatedPersona.category
+                    existingInstructionId = request.existingInstructionId
                 )
 
                 call.respond(response)

@@ -34,7 +34,6 @@ import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
 import com.genflowly.activity.voice.registerVoiceSessionRoutes
-import com.genflowly.service.AIRequestService
 import com.genflowly.service.DeveloperApiKeyService
 import io.github.smiley4.ktoropenapi.get
 import io.github.smiley4.ktoropenapi.openApi
@@ -43,12 +42,17 @@ import io.ktor.http.ContentType
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import service.AIRequestManager
+import com.genflowly.service.CustomerCredentialsService
+import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.InstructionService
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.config.AppConfig
+import com.genflowly.service.AttachmentService
+import com.genflowly.service.VoiceSessionService
 
 object Routes {
     private const val API_V1 = "/api/v1"
@@ -107,20 +111,21 @@ object Routes {
 
 
 fun Application.configureRouting(
-    aiRequestService: AIRequestService,
-    aiRequestManager: AIRequestManager,
+    generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService,
+    customerCredentialsService: CustomerCredentialsService,
+    instructionService: InstructionService,
     conversationService: ConversationService,
+    conversationManagementService: ConversationManagementService,
     aiModelsService: AIModelsService,
     graphService: GraphService,
-    dynamoDBProvider: DynamoDBProvider,
-    s3Provider: com.genflowly.providers.S3Provider,
+    attachmentService: AttachmentService,
+    voiceSessionService: VoiceSessionService,
     notesService: com.genflowly.service.NotesService,
     developerApiKeyService: DeveloperApiKeyService,
     systemApiKeyService: com.genflowly.service.SystemApiKeyService,
     modelCatalogService: com.genflowly.service.ModelCatalogService,
-    httpClient: io.ktor.client.HttpClient,
-    json: kotlinx.serialization.json.Json,
+    appConfig: AppConfig,
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -141,42 +146,42 @@ fun Application.configureRouting(
             call.respondText(scalarDocsHtml, ContentType.Text.Html)
         }
 
-        registerGenerateTextRoutes(aiRequestManager, customerProfileService)
-        registerGenerateTextStreamRoutes(aiRequestManager, customerProfileService)
-        registerStoreApiKeyRoutes(customerProfileService, aiModelsService)
-        registerStoreVectorDBConfigRoutes(customerProfileService)
-        registerStoreSupabaseConfigRoutes(customerProfileService)
-        registerOnboardCustomerRoutes(customerProfileService, aiRequestManager)
+        registerGenerateTextRoutes(generationOrchestrator, customerProfileService)
+        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService)
+        registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
+        registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
+        registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)
+        registerOnboardCustomerRoutes(customerProfileService)
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
-        registerCreateInstructionRoutes(aiRequestManager, customerProfileService)
-        registerCreateInstructionShareRoutes(customerProfileService)
-        registerCreateConversationShareRoutes(customerProfileService, conversationService)
-        registerGetConversationSharedUsersRoutes(customerProfileService, conversationService)
-        registerDeleteInstructionRoutes(customerProfileService)
-        registerGetCustomerInstructionListRoutes(customerProfileService)
-        registerGetInstructionVersionRoutes(customerProfileService)
-        registerGetInstructionSharedUsersRoutes(customerProfileService)
-        registerCreateConversationTitleRoutes(aiRequestManager, customerProfileService)
+        registerCreateInstructionRoutes(instructionService, customerProfileService)
+        registerCreateInstructionShareRoutes(instructionService, customerProfileService)
+        registerCreateConversationShareRoutes(customerProfileService, conversationManagementService)
+        registerGetConversationSharedUsersRoutes(customerProfileService, conversationManagementService)
+        registerDeleteInstructionRoutes(instructionService, customerProfileService)
+        registerGetCustomerInstructionListRoutes(instructionService, customerProfileService)
+        registerGetInstructionVersionRoutes(instructionService, customerProfileService)
+        registerGetInstructionSharedUsersRoutes(instructionService, customerProfileService)
+        registerCreateConversationTitleRoutes(conversationManagementService, customerProfileService)
         registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
-        registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)
-        registerDeleteConversationRoutes(customerProfileService, conversationService)
-        registerUnarchiveConversationRoutes(customerProfileService, conversationService)
+        registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationManagementService)
+        registerDeleteConversationRoutes(customerProfileService, conversationManagementService)
+        registerUnarchiveConversationRoutes(customerProfileService, conversationManagementService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)
-        registerToolCredentialsRoutes(customerProfileService)
+        registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
         
-        registerCustomerProfileSettingsRoutes(dynamoDBProvider)
-        registerSearchRoutes(dynamoDBProvider)
-        registerGetProfileRoutes(dynamoDBProvider)
-        registerAttachmentRoutes(s3Provider, customerProfileService)
+        registerCustomerProfileSettingsRoutes(customerProfileService)
+        registerSearchRoutes(customerProfileService)
+        registerGetProfileRoutes(customerProfileService)
+        registerAttachmentRoutes(attachmentService, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerSystemVendorApiKeysRoutes(
-            systemApiKeyService, customerProfileService, aiModelsService, dynamoDBProvider, modelCatalogService
+            systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService
         )
-        registerVoiceSessionRoutes(customerProfileService, conversationService, aiRequestManager, httpClient, json)
+        registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }
 }
