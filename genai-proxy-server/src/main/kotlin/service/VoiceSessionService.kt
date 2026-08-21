@@ -31,7 +31,6 @@ private data class VoiceTurnUsage(
  */
 class VoiceSessionService(
     private val conversationService: ConversationService,
-    private val generationOrchestrator: GenerationOrchestrator,
     private val instructionService: InstructionService,
     private val customerCredentialsService: CustomerCredentialsService,
     private val retrievalServerClient: RetrievalServerClient,
@@ -97,7 +96,7 @@ class VoiceSessionService(
         // --- Resolve or create the conversation (enforces write access) ---
         val requestedConversationId = init["conversationId"]?.jsonPrimitive?.content
         val conversationId = try {
-            generationOrchestrator.getConversationId(customerId, client, requestedConversationId)
+            conversationService.resolveWritableConversationId(customerId, client, requestedConversationId)
         } catch (e: Exception) {
             return SessionInitResult.Rejected("Cannot use conversation: ${e.message}")
         }

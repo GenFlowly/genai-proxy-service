@@ -22,6 +22,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.GenerationRequestValidator
 import com.genflowly.service.InstructionService
 import com.genflowly.service.SharedUsersResolver
 import com.genflowly.service.UtilityGenerationService
@@ -122,9 +123,10 @@ fun appModule(): Module = module {
     single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get()) }
+    single { GenerationRequestValidator(get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
-    single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
     single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }

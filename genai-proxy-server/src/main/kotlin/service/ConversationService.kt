@@ -122,6 +122,29 @@ class ConversationService(
         return conversation.conversationId
     }
 
+    /**
+     * Returns a conversation id the caller may write to: creates a fresh
+     * conversation when none is given, otherwise enforces write access
+     * (OWNER/EDIT) on the existing one.
+     */
+    suspend fun resolveWritableConversationId(
+        customerId: String,
+        client: String,
+        conversationId: String? = null
+    ): String {
+        if (conversationId.isNullOrBlank()) {
+            return createConversation(customerId, client)
+        }
+        // Enforce that the caller can write to this conversation. New conversations
+        // just created above have no shares yet, so this check only applies when
+        // continuing an existing one.
+        val role = getConversationRole(conversationId, customerId)
+        if (role == null || !role.canEdit) {
+            throw ConversationAccessDeniedException("Customer $customerId cannot write to conversation $conversationId")
+        }
+        return conversationId
+    }
+
     // ─── Messages ─────────────────────────────────────────────────────────────
 
     private suspend fun getMessage(
