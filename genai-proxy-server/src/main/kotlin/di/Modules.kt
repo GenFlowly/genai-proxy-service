@@ -13,6 +13,7 @@ import com.genflowly.repository.NotesRepository
 import com.genflowly.repository.ShareRepository
 import com.genflowly.repository.SystemApiKeyRepository
 import com.genflowly.service.AIRequestService
+import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.ConversationService
 import kotlinx.serialization.json.Json
 import mu.KLogger
@@ -119,7 +120,8 @@ fun appModule(): Module = module {
     single { GraphService(get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
-    single { ConversationService(get(), get(), get(), get()) }
+    single { ConversationService(get(), get()) }
+    single { ConversationManagementService(get(), get(), get(), get(), get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
     single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get(), get()) }

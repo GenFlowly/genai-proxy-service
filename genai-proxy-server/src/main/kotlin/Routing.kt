@@ -46,6 +46,7 @@ import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.InstructionService
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.ConversationService
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.GraphService
@@ -115,6 +116,7 @@ fun Application.configureRouting(
     customerCredentialsService: CustomerCredentialsService,
     instructionService: InstructionService,
     conversationService: ConversationService,
+    conversationManagementService: ConversationManagementService,
     aiModelsService: AIModelsService,
     graphService: GraphService,
     attachmentService: AttachmentService,
@@ -155,17 +157,17 @@ fun Application.configureRouting(
         registerGetConversationRoutes(customerProfileService, conversationService)
         registerCreateInstructionRoutes(instructionService, customerProfileService)
         registerCreateInstructionShareRoutes(instructionService, customerProfileService)
-        registerCreateConversationShareRoutes(customerProfileService, conversationService)
-        registerGetConversationSharedUsersRoutes(customerProfileService, conversationService)
+        registerCreateConversationShareRoutes(customerProfileService, conversationManagementService)
+        registerGetConversationSharedUsersRoutes(customerProfileService, conversationManagementService)
         registerDeleteInstructionRoutes(instructionService, customerProfileService)
         registerGetCustomerInstructionListRoutes(instructionService, customerProfileService)
         registerGetInstructionVersionRoutes(instructionService, customerProfileService)
         registerGetInstructionSharedUsersRoutes(instructionService, customerProfileService)
-        registerCreateConversationTitleRoutes(conversationService, customerProfileService)
+        registerCreateConversationTitleRoutes(conversationManagementService, customerProfileService)
         registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
-        registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationService)
-        registerDeleteConversationRoutes(customerProfileService, conversationService)
-        registerUnarchiveConversationRoutes(customerProfileService, conversationService)
+        registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationManagementService)
+        registerDeleteConversationRoutes(customerProfileService, conversationManagementService)
+        registerUnarchiveConversationRoutes(customerProfileService, conversationManagementService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)

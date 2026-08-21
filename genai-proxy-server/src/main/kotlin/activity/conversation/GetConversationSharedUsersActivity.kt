@@ -3,7 +3,7 @@ package com.genflowly.activity.conversation
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.SearchCustomerResponse
-import com.genflowly.service.ConversationService
+import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.get
@@ -17,7 +17,7 @@ private val logger = LoggerFactory.getLogger("GetConversationSharedUsersActivity
 
 fun Route.registerGetConversationSharedUsersRoutes(
     customerProfileService: CustomerProfileService,
-    conversationService: ConversationService
+    conversationManagementService: ConversationManagementService
 ) {
     authenticate("auth0", "apiKey") {
         get(Routes.GET_CONVERSATION_SHARED_USERS, {
@@ -55,7 +55,7 @@ fun Route.registerGetConversationSharedUsersRoutes(
                         mapOf("error" to "Missing conversationId")
                     )
 
-                val profiles = conversationService.getSharedUsersForConversation(conversationId, customerId)
+                val profiles = conversationManagementService.getSharedUsersForConversation(conversationId, customerId)
 
                 val responseList = profiles.map {
                     SearchCustomerResponse(
