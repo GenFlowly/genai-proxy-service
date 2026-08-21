@@ -1,6 +1,6 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.repository.SystemApiKeyRepository
 import com.genflowly.models.SystemAIProviderConfig
 import com.genflowly.providers.KMSProvider

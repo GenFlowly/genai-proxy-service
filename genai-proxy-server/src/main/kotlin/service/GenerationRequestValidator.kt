@@ -1,6 +1,6 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.models.AttachmentRef
 import com.genflowly.models.MAX_ATTACHMENTS_PER_MESSAGE
 import com.genflowly.models.MAX_ATTACHMENT_SIZE_BYTES

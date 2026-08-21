@@ -1,6 +1,6 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.models.api.AIVendorModelList
 import com.genflowly.providers.RetrievalServerClient
 import org.slf4j.LoggerFactory

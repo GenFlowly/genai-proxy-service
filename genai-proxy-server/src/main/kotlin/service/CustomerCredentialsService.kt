@@ -1,6 +1,6 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import com.genflowly.di.AppScope
 import com.genflowly.models.api.GetToolCredentialStatusListResponse
 import com.genflowly.models.api.StoreToolCredentialsResponse

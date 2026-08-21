@@ -83,7 +83,7 @@ class SystemAIFailoverService(
      * [executeWithFailover] when any configured provider will do.
      */
     suspend fun <T> executeWithVendorOrNull(
-        vendor: com.genflowly.aicallerlib.models.AIVendor,
+        vendor: com.genflowly.models.AIVendor,
         operationName: String = "ai-generation",
         block: suspend (SystemAIProviderConfig) -> T
     ): T? {

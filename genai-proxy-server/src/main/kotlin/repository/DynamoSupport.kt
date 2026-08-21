@@ -7,7 +7,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 
 /**
  * Cross-repository DynamoDB mechanics. Nothing in here may contain domain
