@@ -214,6 +214,92 @@ describe('Request Widget Component', () => {
         localStorage.removeItem(storageKey);
     });
 
+    describe('keyboard-open scroll behavior', () => {
+        let resizeHandler: (() => void) | undefined
+        let viewportHeight: number
+
+        beforeEach(() => {
+            jest.useFakeTimers()
+            resizeHandler = undefined
+            viewportHeight = 800
+            Object.defineProperty(window, 'visualViewport', {
+                configurable: true,
+                value: {
+                    get height() { return viewportHeight },
+                    addEventListener: (event: string, cb: () => void) => {
+                        if (event === 'resize') resizeHandler = cb
+                    },
+                    removeEventListener: jest.fn()
+                }
+            })
+        })
+
+        afterEach(() => {
+            jest.useRealTimers()
+            Object.defineProperty(window, 'visualViewport', {
+                configurable: true,
+                value: undefined
+            })
+        })
+
+        const openKeyboard = (newHeight: number) => {
+            viewportHeight = newHeight
+            act(() => {
+                resizeHandler?.()
+                jest.advanceTimersByTime(200)
+            })
+        }
+
+        test('scrolls the widget to the top when the keyboard opens while the editor is focused', () => {
+            render(<Request blockId="block-1" />)
+            const container = screen.getByTestId('request-widget-container')
+            container.scrollIntoView = jest.fn()
+
+            screen.getByTestId('text-editor').focus()
+            openKeyboard(400)
+
+            expect(container.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
+        })
+
+        test('does not scroll when focus is outside the editor', () => {
+            render(<Request blockId="block-1" />)
+            const container = screen.getByTestId('request-widget-container')
+            container.scrollIntoView = jest.fn()
+
+            openKeyboard(400)
+
+            expect(container.scrollIntoView).not.toHaveBeenCalled()
+        })
+
+        test('does not scroll on small viewport changes (browser chrome, not keyboard)', () => {
+            render(<Request blockId="block-1" />)
+            const container = screen.getByTestId('request-widget-container')
+            container.scrollIntoView = jest.fn()
+
+            screen.getByTestId('text-editor').focus()
+            openKeyboard(750)
+
+            expect(container.scrollIntoView).not.toHaveBeenCalled()
+        })
+
+        test('keeps the caret line visible inside the shrunken editor', () => {
+            render(<Request blockId="block-1" />)
+            const container = screen.getByTestId('request-widget-container')
+            container.scrollIntoView = jest.fn()
+
+            const caretLine = screen.getByTestId('text-editor')
+            caretLine.scrollIntoView = jest.fn()
+            jest.spyOn(window, 'getSelection').mockReturnValue({
+                anchorNode: caretLine
+            } as unknown as Selection)
+
+            caretLine.focus()
+            openKeyboard(400)
+
+            expect(caretLine.scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+        })
+    })
+
     describe('image paste-to-upload', () => {
         const mockUploadAttachment = uploadAttachment as jest.Mock;
 

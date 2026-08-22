@@ -51,6 +51,56 @@ export default function Request({
     const {showToast} = useToast()
     const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
 
+    const containerRef = React.useRef<HTMLDivElement | null>(null)
+
+    // When the on-screen keyboard opens (the visual viewport shrinks while the
+    // editor is focused), the container's --vvh-based height collapses around
+    // the editor. Pin the widget to the top of the scroll container so the
+    // whole editor stays on screen, and re-reveal the caret's line inside the
+    // editor's own scroller.
+    useEffect(() => {
+        const viewport = window.visualViewport
+        if (!viewport) return
+
+        let lastHeight = viewport.height
+        let scrollTimer: ReturnType<typeof setTimeout> | null = null
+
+        const handleViewportResize = () => {
+            const previousHeight = lastHeight
+            lastHeight = viewport.height
+
+            // A sharp height drop while the editor owns focus = keyboard opened
+            const keyboardOpened = viewport.height < previousHeight - 100
+            if (!keyboardOpened) return
+            if (!containerRef.current?.contains(document.activeElement)) return
+
+            if (scrollTimer) clearTimeout(scrollTimer)
+            // Wait out the container's 150ms height transition so we scroll
+            // against the final layout
+            scrollTimer = setTimeout(() => {
+                const container = containerRef.current
+                if (!container) return
+
+                container.scrollIntoView({block: 'start', behavior: 'smooth'})
+
+                // Keep the line being edited visible inside the shrunken editor
+                const anchorNode = window.getSelection()?.anchorNode
+                if (anchorNode && container.contains(anchorNode)) {
+                    const line = anchorNode instanceof Element
+                        ? anchorNode
+                        : anchorNode.parentElement
+                    line?.scrollIntoView({block: 'nearest'})
+                }
+            }, 200)
+        }
+
+        viewport.addEventListener('resize', handleViewportResize)
+        return () => {
+            viewport.removeEventListener('resize', handleViewportResize)
+            if (scrollTimer) clearTimeout(scrollTimer)
+        }
+    }, [])
+
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === blockId)
 
     // ✅ Local draft state to prevent global re-renders on typing
@@ -247,6 +297,7 @@ export default function Request({
     return (
 
         <div className={styles.container}
+             ref={containerRef}
              onPasteCapture={handlePasteCapture}
              data-testid={testId || "request-widget-container"}>
             <TextEditor
