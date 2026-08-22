@@ -2,6 +2,7 @@
   "name": "genai-react-app",
   "version": "0.1.0",
   "private": true,
+  "proxy": "http://127.0.0.1:8080",
   "dependencies": {
     "@auth0/auth0-react": "^2.11.0",
     "@genflowly/component-library": "^0.1.12",

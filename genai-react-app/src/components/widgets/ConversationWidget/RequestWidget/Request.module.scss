@@ -28,6 +28,9 @@
         // Generate button stays visible above it. 100dvh fallback for browsers
         // without VisualViewport support.
         height: calc(var(--vvh, 100dvh) - 64px - 10rem);
+        // Floor: two editor lines + the Generate button must always fit, even
+        // on short viewports with the keyboard open (see .textEditorFullscreen)
+        min-height: 12rem;
         // The keyboard open/close resize lands as discrete events; ease the
         // height change so it doesn't snap
         transition: height 150ms ease;
@@ -125,6 +128,12 @@
 
     :global(.w-md-editor-content) {
         height: 100% !important;
+    }
+
+    @include respond-to-mobile {
+        // Never shrink below two lines of text (2 × 1.6rem line-height) plus
+        // the editor's vertical padding, however small --vvh gets
+        min-height: calc(2 * 1.6rem + 2 * 1.5rem + 4px);
     }
 }
 
