@@ -51,10 +51,15 @@ export default function App() {
                         Object.keys(localStorage)
                             .filter((k) => k.startsWith('a0.spajs') || k.startsWith('@@auth0'))
                             .forEach((k) => localStorage.removeItem(k))
-                        window.location.assign(window.location.origin)
+                        // Clearing local state isn't enough after access_denied:
+                        // the rejected account's SSO session cookie survives at
+                        // the Auth0 tenant, so a plain retry silently reuses it
+                        // and is denied again. End the Auth0 session so the next
+                        // sign-in shows a fresh account prompt.
+                        logout({ logoutParams: { returnTo: window.location.origin } })
                     }}
                 >
-                    Reset and try again
+                    Sign in with a different account
                 </button>
             </div>
         )

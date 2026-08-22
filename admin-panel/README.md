@@ -30,9 +30,13 @@ gives single sign-on with separated accounts:
   `client: 'ADMIN_PANEL'` (see `src/services/onboardService.ts`). The server
   binds `sub` to the JWT, lets the token's `azp` override the body's `client`,
   and creates the admin-panel account.
-- **Domain restriction.** Admin-panel onboarding is rejected (403) unless the
-  email is on the domain configured by `ADMIN_EMAIL_DOMAIN` (default
-  `genflowly.com`). The same domain check is enforced on every `/api/v1/admin/*`
+- **Domain restriction.** Enforced at two layers. At **login**, an Auth0
+  post-login Action (`auth0/post-login-action.js`) denies admin-panel logins
+  unless the email is on the allowed domain **and verified** — verification is
+  what stops a database-connection signup from claiming a fake on-domain
+  address. On the **backend**, admin-panel onboarding is rejected (403) unless
+  the email is on the domain configured by `ADMIN_EMAIL_DOMAIN` (default
+  `genflowly.com`), and the same domain check runs on every `/api/v1/admin/*`
   request inside `isAdminCustomer`.
 - **Admin allowlist.** Domain membership alone does not grant admin rights.
   The server additionally requires the profile email (or customerId) to be on
@@ -47,6 +51,7 @@ Request flow:
 
 ```
 Auth0 SPA login (admin-panel clientId)
+        │  post-login Action: deny unless verified @genflowly.com
         │  access token: sub = user identity, azp = admin-panel clientId
         ▼
 genai-proxy-server auth ("auth0" JWT verify: issuer + audience)
@@ -72,7 +77,28 @@ In the Auth0 dashboard (same tenant as the react app), create a new
 - Do **not** reuse the react-app clientId: the whole account separation hinges
   on the two apps having distinct clientIds (distinct `azp` values).
 
-### 2. Configure this frontend
+### 2. Install the post-login Action (domain restriction)
+
+In the Auth0 dashboard: **Actions → Library → Create Action** — name it
+"Restrict admin panel to genflowly.com", trigger **Login / Post Login**, and
+paste [`auth0/post-login-action.js`](auth0/post-login-action.js). In the
+editor's **Secrets** panel (🔑) add:
+
+| Key | Value |
+|---|---|
+| `ADMIN_CLIENT_IDS` | comma-separated admin-panel clientIds, e.g. `<dev-id>,<prod-id>` |
+| `ADMIN_EMAIL_DOMAIN` | `genflowly.com` |
+
+**Deploy**, then drag the action into the Login flow (**Actions → Flows →
+Login**). Re-deploying an action already in the flow updates it in place.
+
+Caveats: only the applications in `ADMIN_CLIENT_IDS` are affected (react-app
+logins are untouched, SSO preserved); if that secret is unset the action
+no-ops for every application (fails open), so verify it saved. The backend
+re-enforces the same domain plus the `ADMIN_EMAILS` allowlist, so the Action
+is the front door, not the only lock.
+
+### 3. Configure this frontend
 
 ```bash
 cp .env.example .env.local
@@ -85,7 +111,7 @@ VITE_AUTH0_AUDIENCE=https://api-development.genflowly.com
 VITE_BACKEND_URL=http://127.0.0.1:8080
 ```
 
-### 3. Configure the backend
+### 4. Configure the backend
 
 Set both mapping vars **together** (in `genai-proxy-server/.env` for local
 docker-compose; as GitHub secrets `AUTH0_REACT_APP_CLIENT_IDS` /
@@ -109,7 +135,7 @@ tokens fall back to sub-only resolution and resolve to the `REACT_APP`
 profile — the panel will then operate on the web-app account, so complete this
 step before relying on account separation.
 
-### 4. First login
+### 5. First login
 
 Log out and back in after switching clientIds so a token issued to the new
 application (with the new `azp`) replaces any cached one. On first login the
