@@ -11,8 +11,9 @@ import com.genflowly.service.CustomerProfileService
 /**
  * Resolve the authenticated customerId from either auth method:
  * - Developer API key: the ApiKeyPrincipal already carries the customerId
- * - Auth0 JWT: extract sub and fetch customerId from CustomerProfileService
- *   (queries by sub only, does not require client)
+ * - Auth0 JWT: resolve via (sub, azp) — the azp claim identifies which app
+ *   (web app vs admin panel) the token was issued to, and each app has its
+ *   own customer account for the same identity
  *
  * @param customerProfileService Service to fetch customer profile
  * @return customerId if found, null otherwise
@@ -25,13 +26,22 @@ suspend fun ApplicationCall.getAuthenticatedCustomerId(
 
     // Extract JWT principal
     val principal = principal<JWTPrincipal>() ?: return null
-    
+
     // Get sub claim from JWT
     val sub = principal.payload.getClaim("sub").asString() ?: return null
-    
-    // Fetch customerId via service (queries by sub only)
-    return customerProfileService.getCustomerIdBySub(sub)
+
+    val azp = principal.payload.getClaim("azp").asString()
+
+    return customerProfileService.getCustomerIdForToken(sub, azp)
 }
+
+/** The Auth0 sub claim of the authenticated JWT, or null for API-key auth. */
+fun ApplicationCall.authenticatedSub(): String? =
+    principal<JWTPrincipal>()?.payload?.getClaim("sub")?.asString()
+
+/** The Auth0 azp claim (application clientId) of the authenticated JWT. */
+fun ApplicationCall.authenticatedAzp(): String? =
+    principal<JWTPrincipal>()?.payload?.getClaim("azp")?.asString()
 
 /**
  * Extract sub from JWT and fetch customerId, responding with 403 if not found

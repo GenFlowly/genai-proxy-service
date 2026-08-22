@@ -22,7 +22,8 @@ class CustomerProfileService(
     private val customerProfileRepository: CustomerProfileRepository,
     private val customerCredentialsService: CustomerCredentialsService,
     private val instructionService: InstructionService,
-    private val graphService: GraphService
+    private val graphService: GraphService,
+    private val appConfig: com.genflowly.config.AppConfig
 ) {
 
     suspend fun savePreferences(
@@ -49,6 +50,23 @@ class CustomerProfileService(
 
     suspend fun getAIConfigPreferences(customerId: String): AIConfigPreferences? {
         return customerProfileRepository.getAIConfigPreferences(customerId)
+    }
+
+    /**
+     * Resolve the customerId for an Auth0 token. The same person (sub) holds a
+     * separate customer account per app, so when the token's azp maps to a known
+     * app the lookup is keyed by (sub, client) — an admin-panel token can never
+     * resolve to the web-app account or vice versa. An unmapped azp falls back
+     * to sub-only resolution for backward compatibility.
+     */
+    suspend fun getCustomerIdForToken(sub: String, azp: String?): String? {
+        val client = appConfig.clientAppForAzp(azp)
+        if (client != null) {
+            // No cross-app fallback: a missing profile means this app's account
+            // doesn't exist yet and the frontend must onboard it.
+            return customerProfileRepository.getCustomerProfile(sub, client)?.get("customerId")?.s()
+        }
+        return getCustomerIdBySub(sub)
     }
 
     /**

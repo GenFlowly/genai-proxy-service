@@ -117,7 +117,7 @@ fun appModule(): Module = module {
     single { CustomerCredentialsService(get(), get(), get(), get(), get()) }
     single { UtilityGenerationService(get(), get(), get()) }
     single { GraphService(get()) }
-    single { CustomerProfileService(get(), get(), get(), get()) }
+    single { CustomerProfileService(get(), get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get()) }

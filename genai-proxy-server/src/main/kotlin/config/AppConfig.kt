@@ -18,9 +18,32 @@ data class AppConfig(
     /** Auth0 SPA tenant domain (JWKS issuer host). Null only when auth is unconfigured. */
     val auth0Domain: String?,
     /** Expected Auth0 API audience on incoming JWTs. Null only when auth is unconfigured. */
-    val auth0Audience: String?
+    val auth0Audience: String?,
+    /** Auth0 application clientIds whose tokens belong to the web app (matched against azp). */
+    val reactAppAuth0ClientIds: Set<String>,
+    /** Auth0 application clientIds whose tokens belong to the admin panel (matched against azp). */
+    val adminPanelAuth0ClientIds: Set<String>,
+    /** Email domain required for admin-panel accounts (no leading @). */
+    val adminEmailDomain: String
 ) {
+    /**
+     * Maps a JWT azp claim (the Auth0 application the token was issued to) to
+     * the profile client identifier, or null when the azp is not configured —
+     * callers then fall back to sub-only resolution.
+     */
+    fun clientAppForAzp(azp: String?): String? {
+        val normalized = azp?.trim()?.lowercase() ?: return null
+        return when (normalized) {
+            in reactAppAuth0ClientIds -> CLIENT_REACT_APP
+            in adminPanelAuth0ClientIds -> CLIENT_ADMIN_PANEL
+            else -> null
+        }
+    }
+
     companion object {
+        const val CLIENT_REACT_APP = "REACT_APP"
+        const val CLIENT_ADMIN_PANEL = "ADMIN_PANEL"
+
         fun fromEnv(): AppConfig = AppConfig(
             awsRegion = System.getenv("AWS_REGION") ?: "us-east-1",
             retrievalServerUrl = System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001",
@@ -30,7 +53,11 @@ data class AppConfig(
             adminEmails = envList("ADMIN_EMAILS"),
             adminCustomerIds = envList("ADMIN_CUSTOMER_IDS"),
             auth0Domain = System.getenv("AUTH0_SPA_DOMAIN"),
-            auth0Audience = System.getenv("AUTH0_API_AUDIENCE")
+            auth0Audience = System.getenv("AUTH0_API_AUDIENCE"),
+            reactAppAuth0ClientIds = envList("AUTH0_REACT_APP_CLIENT_IDS"),
+            adminPanelAuth0ClientIds = envList("AUTH0_ADMIN_PANEL_CLIENT_IDS"),
+            adminEmailDomain = System.getenv("ADMIN_EMAIL_DOMAIN")?.trim()?.removePrefix("@")?.lowercase()
+                ?.takeIf { it.isNotEmpty() } ?: "genflowly.com"
         )
 
         private fun envList(name: String): Set<String> =

@@ -289,11 +289,16 @@ class CustomerProfileRepository(
                 .expressionAttributeValues(
                     mapOf(":sub" to AttributeValue.builder().s(sub).build())
                 )
-                .limit(1)  // Only need the first result
                 .build()
 
             val response = dynamoDbClient.query(request)
-            return@withContext response.items().firstOrNull()
+            // A sub can hold one profile per app (client sort key). Sub-only
+            // resolution is a legacy fallback — prefer the web-app profile so an
+            // additionally-created ADMIN_PANEL row (which sorts first) can't
+            // hijack web-app requests.
+            val items = response.items()
+            return@withContext items.firstOrNull { it[CLIENT_SORT_KEY]?.s() == "REACT_APP" }
+                ?: items.firstOrNull()
         }
 
     // ─── Preferences ──────────────────────────────────────────────────────────

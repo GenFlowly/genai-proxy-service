@@ -9,6 +9,8 @@ import io.ktor.server.response.respond
 /**
  * Admin access is a config-driven allowlist checked after normal
  * authentication:
+ *  - the customer's profile email must be on AppConfig.adminEmailDomain
+ *    (customerId-allowlisted accounts are exempt from the domain check)
  *  - AppConfig.adminEmails (ADMIN_EMAILS): matched case-insensitively against
  *    the customer's profile email
  *  - AppConfig.adminCustomerIds (ADMIN_CUSTOMER_IDS)
@@ -25,6 +27,7 @@ suspend fun isAdminCustomer(
 
     val profile = customerProfileService.getProfileByCustomerId(customerId) ?: return false
     val email = profile["email"]?.s()?.trim()?.lowercase() ?: return false
+    if (email.substringAfterLast('@', "") != appConfig.adminEmailDomain) return false
     return email in appConfig.adminEmails
 }
 
