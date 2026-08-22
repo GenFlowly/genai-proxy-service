@@ -1,8 +1,11 @@
 package com.genflowly.activity.customer
 
 import com.genflowly.Routes
+import com.genflowly.config.AppConfig
 import com.genflowly.models.api.OnboardCustomerResponse
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.utils.authenticatedAzp
+import com.genflowly.utils.authenticatedSub
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -16,7 +19,8 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("OnboardCustomerRoute")
 
 fun Route.registerOnboardCustomerRoutes(
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    appConfig: AppConfig
 ) {
     authenticate("auth0") {
         post(Routes.ONBOARD_CUSTOMER, {
@@ -41,9 +45,40 @@ fun Route.registerOnboardCustomerRoutes(
             }
         }) {
             val request = call.receive<OnboardCustomerRequest>()
+
+            // The profile identity comes from the token, never the body — a
+            // caller must not be able to onboard (or read) another sub's profile.
+            val tokenSub = call.authenticatedSub()
+            if (tokenSub == null || tokenSub != request.sub) {
+                logger.warn("Onboarding sub mismatch: body sub={} token sub={}", request.sub, tokenSub)
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "sub does not match token"))
+                return@post
+            }
+
+            // When the token's azp maps to a known app, it decides which app's
+            // account this is — the body's client is only a legacy fallback.
+            val azpClient = appConfig.clientAppForAzp(call.authenticatedAzp())
+            if (azpClient != null && azpClient != request.client) {
+                logger.warn("Onboarding client mismatch: body client={} azp client={}", request.client, azpClient)
+            }
+            val client = azpClient ?: request.client
+
+            if (client == AppConfig.CLIENT_ADMIN_PANEL) {
+                val emailDomain = request.email?.substringAfterLast('@', "")?.lowercase()
+                if (emailDomain != appConfig.adminEmailDomain) {
+                    logger.warn("Rejected admin-panel onboarding for email {}", request.email ?: "not provided")
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Admin panel requires a @${appConfig.adminEmailDomain} account")
+                    )
+                    return@post
+                }
+            }
+
             logger.info(
-                "Onboarding user: sub={}, email={}, name={}, picture={}",
+                "Onboarding user: sub={}, client={}, email={}, name={}, picture={}",
                 request.sub,
+                client,
                 request.email ?: "not provided",
                 request.name ?: "not provided",
                 request.picture ?: "not provided",
@@ -53,7 +88,7 @@ fun Route.registerOnboardCustomerRoutes(
 
             val response = customerProfileService.onboardAndBootstrap(
                 sub = request.sub,
-                client = request.client,
+                client = client,
                 email = request.email,
                 name = request.name,
                 picture = request.picture,
