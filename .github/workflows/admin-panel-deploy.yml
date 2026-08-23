@@ -31,6 +31,12 @@ jobs:
         with:
           node-version: 20
 
+      - name: Create .npmrc file
+        working-directory: admin-panel
+        run: |
+          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}" >> .npmrc
+
       - name: Deploy
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
