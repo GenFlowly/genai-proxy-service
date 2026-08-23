@@ -1,19 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import SystemApiKeysPage from './pages/SystemApiKeysPage'
 import InstructionsPage from './pages/InstructionsPage'
+import InstructionDetailPage from './pages/InstructionDetailPage'
 import { onboardCustomer } from './services/onboardService'
 
-type PageId = 'SYSTEM_API_KEYS' | 'INSTRUCTIONS'
-
-const NAV_ITEMS: { id: PageId; label: string }[] = [
-    { id: 'SYSTEM_API_KEYS', label: 'System AI Vendor API Keys' },
-    { id: 'INSTRUCTIONS', label: 'Instructions' },
+const NAV_ITEMS: { path: string; label: string }[] = [
+    { path: '/system-api-keys', label: 'System AI Vendor API Keys' },
+    { path: '/instructions', label: 'Instructions' },
 ]
 
 export default function App() {
     const { isAuthenticated, isLoading, error, loginWithRedirect, logout, user, getAccessTokenSilently } = useAuth0()
-    const [page, setPage] = useState<PageId>('SYSTEM_API_KEYS')
     const [onboarded, setOnboarded] = useState(false)
     const [onboardError, setOnboardError] = useState<string | null>(null)
     const onboardStartedRef = useRef(false)
@@ -99,13 +98,13 @@ export default function App() {
             <div className="app-body">
                 <nav className="sidebar">
                     {NAV_ITEMS.map((item) => (
-                        <button
-                            key={item.id}
-                            className={`nav-item ${page === item.id ? 'active' : ''}`}
-                            onClick={() => setPage(item.id)}
+                        <NavLink
+                            key={item.path}
+                            to={item.path}
+                            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                         >
                             {item.label}
-                        </button>
+                        </NavLink>
                     ))}
                 </nav>
                 <main>
@@ -114,8 +113,12 @@ export default function App() {
                             Account sync failed: {onboardError} — some actions may not work.
                         </div>
                     )}
-                    {page === 'SYSTEM_API_KEYS' && <SystemApiKeysPage />}
-                    {page === 'INSTRUCTIONS' && <InstructionsPage />}
+                    <Routes>
+                        <Route path="/system-api-keys" element={<SystemApiKeysPage />} />
+                        <Route path="/instructions" element={<InstructionsPage />} />
+                        <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
+                        <Route path="*" element={<Navigate to="/system-api-keys" replace />} />
+                    </Routes>
                 </main>
             </div>
         </div>

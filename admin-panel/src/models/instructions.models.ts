@@ -4,6 +4,10 @@ export interface CreateInstructionRequest {
     existingInstructionId?: string
 }
 
+export interface GetCustomerInstructionListResponse {
+    instructions: InstructionResponse[]
+}
+
 export interface InstructionResponse {
     id: string
     name: string

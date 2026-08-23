@@ -14,9 +14,14 @@ import com.genflowly.DynamoDBConstants.NODE_ID_KEY
 import com.genflowly.DynamoDBConstants.NODE_NAME_KEY
 import com.genflowly.DynamoDBConstants.NODE_TYPE_KEY
 import com.genflowly.DynamoDBConstants.VERSION_KEY
+import com.genflowly.GENERATION_NODE_TYPE
+import com.genflowly.models.GenerationNodeConfig
+import com.genflowly.models.NodeModelPreference
 import com.genflowly.repository.GraphRepository
+import com.genflowly.repository.InstructionRepository
 import com.genflowly.models.api.AgentNodeResponse
 import com.genflowly.models.api.AgentResponse
+import com.genflowly.models.api.CreateAgentRequest
 import com.genflowly.models.api.CreateCustomerGraphRequest
 import com.genflowly.models.api.CreateGraphNodeRequest
 import com.genflowly.models.api.CustomerGraphResponse
@@ -33,7 +38,74 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
 private val logger = KotlinLogging.logger {}
 
-class GraphService(private val graphRepository: GraphRepository) {
+class GraphService(
+    private val graphRepository: GraphRepository,
+    private val instructionRepository: InstructionRepository,
+) {
+
+    private val nodeConfigJson = kotlinx.serialization.json.Json { encodeDefaults = false }
+
+    // ─── Generation agents (1-node graphs behind the request-agent map) ───────
+
+    /**
+     * Creates a 1-node GENERATION agent owned by [customerId]: a graph whose
+     * single node references the instruction holding the system-prompt
+     * template. Used by the admin panel for the global request-agent map, and
+     * later by customers building their own agents.
+     *
+     * @throws IllegalArgumentException on a blank name or missing instruction.
+     */
+    suspend fun createGenerationAgent(customerId: String, req: CreateAgentRequest): AgentResponse {
+        require(req.name.isNotBlank()) { "name must not be blank" }
+        val instructionVersion = req.instructionVersion
+            ?: instructionRepository.getLatestInstructionVersion(req.instructionId)
+        requireNotNull(instructionVersion) { "instruction ${req.instructionId} not found" }
+        requireNotNull(instructionRepository.getInstruction(req.instructionId, instructionVersion)) {
+            "instruction ${req.instructionId} v$instructionVersion not found"
+        }
+
+        val nodeConfig = GenerationNodeConfig(
+            instructionId = req.instructionId,
+            instructionVersion = req.instructionVersion,
+            inputTemplate = req.inputTemplate,
+            outputFormat = req.outputFormat,
+            modelPreference = req.modelPreference?.let {
+                NodeModelPreference(vendor = it.aiVendor.name, model = it.model)
+            },
+            maxTokens = req.maxTokens
+        )
+        val configJson = nodeConfigJson.encodeToString(GenerationNodeConfig.serializer(), nodeConfig)
+
+        val nodeId = com.genflowly.models.generateNodeId()
+        val graphId = com.genflowly.models.generateGraphId()
+        val edges = """{"edges":[{"from":"$nodeId","to":"__end__"}]}"""
+        graphRepository.createCustomerGraphNode(customerId, nodeId, GENERATION_NODE_TYPE, req.name, configJson)
+        graphRepository.createCustomerGraph(
+            customerId = customerId,
+            graphId = graphId,
+            name = req.name,
+            isDefault = false,
+            nodeIds = listOf(nodeId),
+            edges = edges,
+            entryPoint = nodeId,
+            maxIterations = 1,
+        )
+        logger.info { "Created generation agent $graphId ('${req.name}') → instruction ${req.instructionId} for $customerId" }
+
+        return AgentResponse(
+            graphId = graphId,
+            name = req.name,
+            isDefault = false,
+            entryPoint = nodeId,
+            maxIterations = 1,
+            edges = edges,
+            nodes = listOf(
+                AgentNodeResponse(nodeId = nodeId, nodeType = GENERATION_NODE_TYPE, name = req.name, config = configJson)
+            ),
+            createdAt = null,
+            updatedAt = null,
+        )
+    }
 
     // ─── Default graph seeding (used during onboarding) ───────────────────────
 

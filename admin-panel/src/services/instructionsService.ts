@@ -1,8 +1,27 @@
 import { endpoints } from '../config/endpoints'
 import {
     CreateInstructionRequest,
+    GetCustomerInstructionListResponse,
     InstructionResponse,
 } from '../models/instructions.models'
+
+export async function getCustomerInstructions(
+    token: string
+): Promise<GetCustomerInstructionListResponse> {
+    const response = await fetch(endpoints.getCustomerInstructions, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Get instructions failed: ${response.status} ${response.statusText}`)
+    }
+
+    return response.json()
+}
 
 export async function createInstruction(
     token: string,
@@ -22,6 +41,20 @@ export async function createInstruction(
     }
 
     return response.json()
+}
+
+export async function deleteInstruction(token: string, instructionId: string): Promise<void> {
+    const response = await fetch(`${endpoints.createInstruction}/${instructionId}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Delete instruction failed: ${response.status} ${response.statusText}`)
+    }
 }
 
 /**

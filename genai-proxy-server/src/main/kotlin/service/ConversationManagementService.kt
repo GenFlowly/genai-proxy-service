@@ -1,8 +1,6 @@
 package com.genflowly.service
 
-import com.genflowly.models.AIVendor
-import com.genflowly.models.AIConfig
-import com.genflowly.models.Message
+import com.genflowly.models.RequestType
 import com.genflowly.models.ShareRole
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.repository.ConversationRepository
@@ -19,18 +17,17 @@ class ConversationManagementService(
     private val conversationRepository: ConversationRepository,
     private val shareRepository: ShareRepository,
     private val sharedUsersResolver: SharedUsersResolver,
-    private val utilityGenerationService: UtilityGenerationService
+    private val agentResolutionService: AgentResolutionService,
+    private val generationAgentExecutor: GenerationAgentExecutor
 ) {
     private val logger = LoggerFactory.getLogger("ConversationManagementService")
-
-    private val titleAIModel: String = "gpt-5"
-    private val titleAIVendor: AIVendor = AIVendor.OPENAI
 
     /**
      * Uses AI (via the retrieval-server) to generate and store a short title
      * for the conversation based on the first prompt and instruction name.
-     * Returns the title, or null when generation failed or produced nothing
-     * usable.
+     * The prompt template and model come from the CONVERSATION_TITLE agent
+     * (RequestAgentMap, or the bundled default). Returns the title, or null
+     * when generation failed or produced nothing usable.
      */
     suspend fun createConversationTitle(
         conversationId: String,
@@ -39,26 +36,15 @@ class ConversationManagementService(
         instructionName: String? = null
     ): String? {
         return try {
-            val titleMessage = Message(
-                conversationId = "title-generation",
-                text = "I am starting a conversation with $instructionName " +
-                        "using" +
-                        "this prompt - $prompt. Create a short title for this" +
-                        "conversation. Just give the title",
-                client = "internal",
-                role = "user",
+            val agent = agentResolutionService.resolve(RequestType.CONVERSATION_TITLE)
+            val result = generationAgentExecutor.executeWithCustomerKey(
+                agent = agent,
+                variables = mapOf(
+                    "instructionName" to (instructionName ?: "no specific instruction"),
+                    "prompt" to prompt
+                ),
                 customerId = customerId,
-                systemPrompt = "",
-                aiConfig = listOf(AIConfig(titleAIVendor, titleAIModel)),
-                previousMessageId = null
-            )
-
-            val result = utilityGenerationService.generateText(
-                titleAIVendor,
-                titleAIModel,
-                listOf(titleMessage),
-                "",
-                customerId
+                conversationId = "title-generation"
             )
 
             // Strip any surrounding quotes the LLM may include (e.g. "My Title" -> My Title)

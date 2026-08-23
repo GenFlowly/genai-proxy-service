@@ -8,7 +8,6 @@ import { ToastProvider } from '../../context/ToastContext';
 import LeftSidebar from '../../components/sections/LeftSidebar/LeftSidebar';
 import RightSidebar from '../../components/sections/RightSidebar/RightSidebar';
 import InstructionSidebarWidget from '../../components/widgets/SidebarWidgets/InstructionSidebarWidget/InstructionSidebarWidget';
-import InstructionWidget from '../../components/widgets/InstructionWidget/InstructionWidget';
 import { MemoryRouter } from 'react-router-dom';
 
 // Mock child widgets to avoid deep rendering complexity
@@ -126,44 +125,6 @@ describe('LayoutContext UI Integration', () => {
         expect(sidebar.className).toContain('collapsed');
     });
 
-    test('InstructionWidget expands by clicking Edit button', () => {
-        customRender(<InstructionWidget />);
-
-        // Starts collapsed (default false)
-        // Should show "Edit instruction" button
-        const editBtn = screen.getByTestId('instruction-edit-button');
-        expect(editBtn).toBeInTheDocument();
-
-        // Click Edit
-        fireEvent.click(editBtn);
-
-        // Now should be expanded
-        // Should show "Looks good" button
-        const looksGoodBtn = screen.getByTestId('instruction-looks-good-button');
-        expect(looksGoodBtn).toBeInTheDocument();
-
-        // "Edit instruction" button should NOT be present (it's in the collapsed view)
-        expect(screen.queryByTestId('instruction-edit-button')).not.toBeInTheDocument();
-    });
-
-    test('InstructionWidget collapses by clicking Looks good button', () => {
-        customRender(<InstructionWidget />);
-
-        // Precondition: Expand it first
-        const editBtn = screen.getByTestId('instruction-edit-button');
-        fireEvent.click(editBtn);
-
-        // Verify expanded
-        const looksGoodBtn = screen.getByTestId('instruction-looks-good-button');
-        expect(looksGoodBtn).toBeInTheDocument();
-
-        // Action: Click "Looks good"
-        fireEvent.click(looksGoodBtn);
-
-        // Verify Collapsed
-        expect(screen.queryByTestId('instruction-looks-good-button')).not.toBeInTheDocument();
-        expect(screen.getByTestId('instruction-edit-button')).toBeInTheDocument();
-    });
 });
 
 describe('LayoutContext Responsive Initialization', () => {

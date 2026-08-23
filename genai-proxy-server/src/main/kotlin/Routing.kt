@@ -1,5 +1,6 @@
 package com.genflowly
 
+import com.genflowly.activity.agent.registerCreateAgentRoutes
 import com.genflowly.activity.agent.registerGetCustomerAgentsRoutes
 import com.genflowly.activity.agent.registerUpdateAgentRoutes
 import com.genflowly.activity.conversation.registerCreateConversationShareRoutes
@@ -26,9 +27,12 @@ import com.genflowly.activity.instruction.registerCreateInstructionRoutes
 import com.genflowly.activity.instruction.registerCreateInstructionShareRoutes
 import com.genflowly.activity.instruction.registerDeleteInstructionRoutes
 import com.genflowly.activity.instruction.registerGetCustomerInstructionListRoutes
+import com.genflowly.activity.instruction.registerSearchInstructionsRoutes
+import com.genflowly.activity.instruction.registerGetRecentInstructionsRoutes
 import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoutes
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
+import com.genflowly.activity.admin.registerRequestAgentMapRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
@@ -75,6 +79,8 @@ object Routes {
     const val GET_INSTRUCTION_SHARED_USERS = "$API_V1/instruction/{instructionId}/shared"
     const val DELETE_INSTRUCTION = "$API_V1/instruction/{instructionId}"
     const val GET_CUSTOMER_INSTRUCTIONS = "$API_V1/instructions"
+    const val SEARCH_INSTRUCTIONS = "$API_V1/instructions/search"
+    const val GET_RECENT_INSTRUCTIONS = "$API_V1/instructions/recent"
     const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction"
     const val CREATE_CONVERSATION_TITLE = "$API_V1/conversation/title"
     const val CREATE_CONVERSATION_SHARE = "$API_V1/conversation/share"
@@ -89,6 +95,7 @@ object Routes {
     const val TOOL_CREDENTIAL = "$API_V1/tool-credentials/{toolType}"
 
     const val GET_CUSTOMER_AGENTS = "$API_V1/agents"
+    const val CREATE_AGENT = "$API_V1/agents"
     const val UPDATE_AGENT = "$API_V1/agents/{graphId}"
 
     const val DEVELOPER_API_KEYS = "$API_V1/developer/api-keys"
@@ -99,6 +106,9 @@ object Routes {
     const val ADMIN_SYSTEM_API_KEY = "$API_V1/admin/system-api-keys/{aiVendor}"
     const val ADMIN_SYSTEM_API_KEY_MODELS = "$API_V1/admin/system-api-keys/{aiVendor}/models"
     const val ADMIN_MODEL_CATALOG_REFRESH = "$API_V1/admin/model-catalog/refresh"
+
+    const val ADMIN_REQUEST_AGENT_MAP = "$API_V1/admin/request-agent-map"
+    const val ADMIN_REQUEST_AGENT_MAP_ENTRY = "$API_V1/admin/request-agent-map/{requestType}"
 
     const val VOICE_SESSION = "$API_V1/voice/session"
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
@@ -125,6 +135,7 @@ fun Application.configureRouting(
     developerApiKeyService: DeveloperApiKeyService,
     systemApiKeyService: com.genflowly.service.SystemApiKeyService,
     modelCatalogService: com.genflowly.service.ModelCatalogService,
+    requestAgentMapAdminService: com.genflowly.service.RequestAgentMapAdminService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -161,6 +172,8 @@ fun Application.configureRouting(
         registerGetConversationSharedUsersRoutes(customerProfileService, conversationManagementService)
         registerDeleteInstructionRoutes(instructionService, customerProfileService)
         registerGetCustomerInstructionListRoutes(instructionService, customerProfileService)
+        registerSearchInstructionsRoutes(instructionService, customerProfileService)
+        registerGetRecentInstructionsRoutes(instructionService, customerProfileService)
         registerGetInstructionVersionRoutes(instructionService, customerProfileService)
         registerGetInstructionSharedUsersRoutes(instructionService, customerProfileService)
         registerCreateConversationTitleRoutes(conversationManagementService, customerProfileService)
@@ -169,6 +182,7 @@ fun Application.configureRouting(
         registerDeleteConversationRoutes(customerProfileService, conversationManagementService)
         registerUnarchiveConversationRoutes(customerProfileService, conversationManagementService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
+        registerCreateAgentRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
         
@@ -181,6 +195,7 @@ fun Application.configureRouting(
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService
         )
+        registerRequestAgentMapRoutes(requestAgentMapAdminService, customerProfileService, appConfig)
         registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }

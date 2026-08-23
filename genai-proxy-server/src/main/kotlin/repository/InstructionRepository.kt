@@ -175,6 +175,25 @@ class InstructionRepository(
                 ?.get(INSTRUCTION_ID_KEY)?.s()
         }
 
+    /**
+     * The customer's most-recently-used instruction ids ordered by lastUsedAt
+     * descending, at most [limit] entries. Backs the "recently used" picker.
+     */
+    suspend fun getRecentlyUsedInstructionIds(customerId: String, limit: Int): List<String> =
+        withContext(Dispatchers.IO) {
+            val request = QueryRequest.builder()
+                .tableName(DynamoDBConstants.INSTRUCTION_USAGE_TABLE)
+                .keyConditionExpression("$CUSTOMER_ID_KEY = :cid")
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                .build()
+
+            dynamoDbClient.query(request).items()
+                .sortedByDescending { it[DynamoDBConstants.INSTRUCTION_LAST_USED_KEY]?.s() ?: "" }
+                .mapNotNull { it[INSTRUCTION_ID_KEY]?.s() }
+                .distinct()
+                .take(limit)
+        }
+
     suspend fun deleteInstruction(instructionId: String) = withContext(Dispatchers.IO) {
         try {
             // Get all versions of this instruction to delete them

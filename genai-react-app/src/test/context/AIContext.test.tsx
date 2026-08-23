@@ -7,7 +7,6 @@ import { ToastProvider } from '../../context/ToastContext';
 import { ConversationProvider } from '../../context/ConversationContext';
 import { AIVendor } from '../../constants/vendors';
 import AIVendorWidget from '../../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget';
-import InstructionWidget from '../../components/widgets/InstructionWidget/InstructionWidget';
 import { getTextGenerationModels } from '../../services/getTextGenerationModelsService';
 import { MemoryRouter } from 'react-router-dom';
 import { APIKeyStatus } from '../../models/storeCustomerVendorAPIKeys.models';
@@ -116,27 +115,42 @@ describe('AIContext UI Integration', () => {
     });
 
     test('Manages System Prompt and Instructions', async () => {
+        const { useAI } = require('../../context/AIContext');
+        function AIConsumer() {
+            const { systemPrompt, setSystemPrompt, selectedInstructionId, setSelectedInstructionId } = useAI();
+            return (
+                <div>
+                    <div data-testid="selected-id">{selectedInstructionId ?? 'none'}</div>
+                    <input
+                        data-testid="system-prompt-input"
+                        value={systemPrompt}
+                        onChange={(e) => setSystemPrompt(e.target.value)}
+                    />
+                    <button
+                        data-testid="select-instruction"
+                        onClick={() => {
+                            setSelectedInstructionId('inst-1');
+                            setSystemPrompt('System Prompt 1');
+                        }}
+                    >
+                        select
+                    </button>
+                </div>
+            );
+        }
+
         await act(async () => {
-            customRender(<InstructionWidget />);
+            customRender(<AIConsumer />);
         });
 
-        // 1. Select Existing Instruction
-        // The widget usually starts collapsed or expanded depending on state.
-        // Assuming default empty AI context, selectedInstructionId is null -> collapsed.
-        const instructionSelect = screen.getByTestId('instruction-selector-collapsed');
-        fireEvent.change(instructionSelect, { target: { value: 'inst-1' } });
+        expect(screen.getByTestId('selected-id')).toHaveTextContent('none');
 
-        // 2. Expand to verify System Prompt
-        const editBtn = screen.getByTestId('instruction-edit-button');
-        fireEvent.click(editBtn);
+        fireEvent.click(screen.getByTestId('select-instruction'));
+        expect(screen.getByTestId('selected-id')).toHaveTextContent('inst-1');
+        expect(screen.getByTestId('system-prompt-input')).toHaveValue('System Prompt 1');
 
-        // Verify System Prompt matches instruction
-        const textEditor = await screen.findByTestId('system-text-editor');
-        expect(textEditor).toHaveValue('System Prompt 1');
-
-        // 3. Edit System Prompt
-        fireEvent.change(textEditor, { target: { value: 'Updated Prompt' } });
-        expect(textEditor).toHaveValue('Updated Prompt');
+        fireEvent.change(screen.getByTestId('system-prompt-input'), { target: { value: 'Updated Prompt' } });
+        expect(screen.getByTestId('system-prompt-input')).toHaveValue('Updated Prompt');
     });
 
     test('Refresh Models triggers API call', async () => {

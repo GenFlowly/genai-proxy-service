@@ -392,6 +392,22 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Maps a request type (e.g. INSTRUCTION_PERSONA) to the agent graph
+        // that serves it. PK=scope ("SYSTEM" for the global defaults, a
+        // customerId for future per-customer overrides), SK=requestType, so
+        // resolution is a single O(1) GetItem per scope.
+        const requestAgentMapTableProps: CreateTableProps = {
+            tableName: 'RequestAgentMap',
+            partitionKey: {
+                name: 'scope',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'requestType',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         const customerDeveloperApiKeyTableProps: CreateTableProps = {
             tableName: 'CustomerDeveloperApiKeys',
             // SHA-256 hash of the key is the lookup key; the key itself is stored KMS-encrypted
@@ -432,6 +448,7 @@ export class DynamoDBStack extends cdk.Stack {
         const usernameLookupTable = createDefaultDynamoDbTable(this, usernameLookupTableProps);
         const customerNotesTable = createDefaultDynamoDbTable(this, customerNotesTableProps);
         const customerDeveloperApiKeyTable = createDefaultDynamoDbTable(this, customerDeveloperApiKeyTableProps);
+        const requestAgentMapTable = createDefaultDynamoDbTable(this, requestAgentMapTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
@@ -440,7 +457,8 @@ export class DynamoDBStack extends cdk.Stack {
             customerGraphNodesTable, customerGraphsTable,
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
-            usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable
+            usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
+            requestAgentMapTable
         );
     }
 }

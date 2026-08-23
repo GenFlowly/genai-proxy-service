@@ -1,11 +1,14 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth0 } from '@auth0/auth0-react'
 import ShareModal, { VisibilityMode } from '../../common/ShareModal/ShareModal'
+import InstructionPickerModal from '../../common/InstructionPickerModal/InstructionPickerModal'
 import { PillButton } from '@genflowly/component-library'
 import { PageHeader, pageHeaderStyles } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
+import { useAI } from '../../../context/AIContext'
 import { useConversation } from '../../../context/ConversationContext'
+import styles from './ConversationHeader.module.scss'
 import { useToast } from '../../../context/ToastContext'
 import {
     shareConversation,
@@ -19,7 +22,16 @@ export default function ConversationHeader(): React.ReactElement | null {
     const { t } = useTranslation()
     const { conversationId, conversationTitle, conversationRole, resetConversation } = useConversation()
     const { getAccessTokenSilently } = useAuth0()
-    const { entitlements } = useAuth()
+    const { entitlements, customerInstructions } = useAuth()
+    const { selectedInstructionId, setSelectedInstructionId, setSystemPrompt } = useAI()
+    const [isPickerOpen, setPickerOpen] = useState(false)
+
+    // Latest version of the instruction loaded into this conversation
+    const loadedInstruction = useMemo(() => {
+        if (!selectedInstructionId) return null
+        const matching = (customerInstructions ?? []).filter(i => i.id === selectedInstructionId)
+        return matching.sort((a, b) => b.version - a.version)[0] ?? null
+    }, [selectedInstructionId, customerInstructions])
     const { showToast } = useToast()
     const [isShareModalOpen, setShareModalOpen] = useState(false)
 
@@ -52,6 +64,23 @@ export default function ConversationHeader(): React.ReactElement | null {
     return (
         <PageHeader
             title={displayTitle}
+            center={
+                loadedInstruction ? (
+                    <button
+                        className={styles.instructionBadge}
+                        title={loadedInstruction.name}
+                        onClick={() => setPickerOpen(true)}
+                        data-testid="loaded-instruction"
+                    >
+                        {loadedInstruction.icon && (
+                            <span aria-hidden="true">{loadedInstruction.icon}</span>
+                        )}
+                        <span className={styles.instructionName}>
+                            {loadedInstruction.name}
+                        </span>
+                    </button>
+                ) : undefined
+            }
             actions={(
                 <>
                     <PillButton
@@ -74,6 +103,15 @@ export default function ConversationHeader(): React.ReactElement | null {
                 </>
             )}
         >
+            <InstructionPickerModal
+                isOpen={isPickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={(instruction) => {
+                    setSelectedInstructionId(instruction.id)
+                    setSystemPrompt(instruction.instruction)
+                    setPickerOpen(false)
+                }}
+            />
             <ShareModal
                 isOpen={isShareModalOpen}
                 onClose={() => setShareModalOpen(false)}

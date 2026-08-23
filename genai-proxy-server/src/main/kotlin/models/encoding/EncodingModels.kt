@@ -19,9 +19,21 @@ data class EncodingNoteData(
     val createdAt: String
 )
 
+/**
+ * Body for /create-collections. The model determines the vector dimension the
+ * collections are created with, so it must match the model used for encoding.
+ */
+@Serializable
+data class EncodingCreateCollectionsRequest(
+    val modelType: String,
+    val modelName: String
+)
+
 @Serializable
 data class EncodingSaveNoteRequest(
     val dataType: String,
     val client: String,
+    val modelType: String? = null,
+    val modelName: String? = null,
     val data: EncodingNoteData
 )
