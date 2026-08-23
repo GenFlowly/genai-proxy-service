@@ -83,9 +83,18 @@ class ApiClient:
             
             # Convert emails to dict format
             emails_data = [email.to_dict() for email in emails]
-            
-            # Send as array of emails (backend expects this format)
-            payload = emails_data
+
+            # The ingest lambda requires a {client, data} envelope per item and
+            # reads the embedding model from top-level modelType/modelName
+            payload = [
+                {
+                    "client": config.API_CLIENT_NAME,
+                    "modelType": config.EMBEDDING_MODEL_TYPE,
+                    "modelName": config.EMBEDDING_MODEL_NAME,
+                    "data": email_data,
+                }
+                for email_data in emails_data
+            ]
             
             auth_status = "with auth" if self.access_token else "no auth"
             
