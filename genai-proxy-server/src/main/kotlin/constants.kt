@@ -125,7 +125,35 @@ object DynamoDBConstants {
 
     // GSI on SharedInstructions keyed by instructionId (who is an entity shared with).
     const val SHARED_INSTRUCTIONS_GSI_KEY = "instructionIdIndex"
+
+    // Request-type → agent-graph mapping. PK=scope ("SYSTEM" for global
+    // defaults, a customerId for future per-customer overrides), SK=requestType.
+    const val REQUEST_AGENT_MAP_TABLE = "RequestAgentMap"
+    const val REQUEST_AGENT_SCOPE_KEY = "scope"
+    const val REQUEST_AGENT_REQUEST_TYPE_KEY = "requestType"
+    const val REQUEST_AGENT_MAP_KEY = "mapKey"
+    const val REQUEST_AGENT_GRAPH_ID_KEY = "graphId"
+    const val REQUEST_AGENT_ENABLED_KEY = "enabled"
+    const val REQUEST_AGENT_UPDATED_BY_KEY = "updatedBy"
 }
+
+// Scope value in RequestAgentMap for the global default mappings. The agents
+// and instructions those mappings reference are ordinary customer-owned
+// resources (owned by the mapping admin's account).
+const val SYSTEM_SCOPE = "SYSTEM"
+
+// Platform-standard embedding model, sent explicitly on every encoding-server
+// call. Collection creation and note encoding must agree on this: the model
+// fixes the vector dimension baked into the Milvus collection schema, and
+// retrieval resolves the query encoder from the collection's stored metadata.
+object EmbeddingConstants {
+    const val MODEL_TYPE = "voyage"
+    const val MODEL_NAME = "voyage-4-large"
+}
+
+// Node type of a locally-executed single-LLM-call graph node whose config
+// references the instruction (system prompt) to use.
+const val GENERATION_NODE_TYPE = "GENERATION"
 @Serializable
 data class PersonaCategory(
     val categoryName: String,

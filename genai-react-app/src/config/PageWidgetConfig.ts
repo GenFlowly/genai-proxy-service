@@ -12,7 +12,7 @@ export const PAGE_WIDGET_CONFIG: PageConfig[] = [
         pageId: 'CHAT_PAGE',
         leftSidebar: ['CONVERSATION_HISTORY_SIDEBAR_WIDGET', 'THREAD_LIST'],
         rightSidebar: ['AI_VENDOR', 'TOKEN_COUNTER'],
-        centerSection: ['INSTRUCTION_WIDGET', 'CONVERSATION_LIST'],
+        centerSection: ['CONVERSATION_LIST'],
     },
     {
         pageId: 'MEMORY_PAGE',

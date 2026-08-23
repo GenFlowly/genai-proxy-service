@@ -11,9 +11,8 @@ import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import com.genflowly.models.AIConfig
 import com.genflowly.models.GeneratedPersona
-import com.genflowly.models.Message
+import com.genflowly.models.RequestType
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -28,8 +27,8 @@ class InstructionService(
     private val shareRepository: ShareRepository,
     private val customerProfileRepository: CustomerProfileRepository,
     private val sharedUsersResolver: SharedUsersResolver,
-    private val utilityGenerationService: UtilityGenerationService,
-    private val systemAIFailoverService: SystemAIFailoverService,
+    private val agentResolutionService: AgentResolutionService,
+    private val generationAgentExecutor: GenerationAgentExecutor,
     private val appScope: AppScope
 ) {
 
@@ -280,6 +279,42 @@ class InstructionService(
             .sortedByDescending { it.version }
     }
 
+    /**
+     * Case-insensitive search over the latest version of every instruction the
+     * customer can access, matching name, category, tags or the instruction
+     * text. A blank query returns all latest instructions.
+     */
+    suspend fun searchInstructions(customerId: String, query: String): GetCustomerInstructionListResponse {
+        val latest = getLatestCustomerInstructions(customerId)
+        val q = query.trim().lowercase()
+
+        val matches = if (q.isEmpty()) latest else latest.filter { instruction ->
+            instruction.name.lowercase().contains(q) ||
+                (instruction.category?.lowercase()?.contains(q) ?: false) ||
+                (instruction.tags?.any { it.lowercase().contains(q) } ?: false) ||
+                instruction.instruction.lowercase().contains(q)
+        }
+
+        return GetCustomerInstructionListResponse(instructions = matches)
+    }
+
+    /**
+     * The latest versions of the customer's most-recently-used instructions,
+     * ordered by recency. Instructions the customer can no longer access
+     * (deleted or unshared) are silently dropped.
+     */
+    suspend fun getRecentlyUsedInstructions(customerId: String, limit: Int): GetCustomerInstructionListResponse {
+        val recentIds = instructionRepository.getRecentlyUsedInstructionIds(customerId, limit)
+        if (recentIds.isEmpty()) {
+            return GetCustomerInstructionListResponse(instructions = emptyList())
+        }
+
+        val accessibleById = getLatestCustomerInstructions(customerId).associateBy { it.id }
+        return GetCustomerInstructionListResponse(
+            instructions = recentIds.mapNotNull { accessibleById[it] }
+        )
+    }
+
     suspend fun shareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String, role: ShareRole) {
         requireOwnerOrEdit(sharedByCustomerId, instructionId)
         shareRepository.shareEntityWithCustomer(instructionId, targetCustomerId, sharedByCustomerId, role)
@@ -365,46 +400,22 @@ class InstructionService(
 
         val categoryJson = Json.encodeToString(com.genflowly.PERSONA_CATEGORIES)
 
-        val prompt = """
-            Create a persona for these system instructions.
-            You must return a valid JSON object with exactly these five keys: "name", "icon", "color", "category", and "tags". Do not include any other text or markdown formatting.
-
-            1. "category": You MUST pick exactly one categoryName from the following JSON list of allowed categories. Do not invent a new category.
-            $categoryJson
-
-            2. "icon": You MUST use the exact 'baseIcon' for the category you picked, but you may append a secondary emoji to differentiate it (e.g. 💻🚀).
-
-            3. "color": You MUST use the exact 'baseColor' for the category you picked.
-
-            4. "name": A 2-3 word display name. Make names scannable. Put the distinguishing word first (e.g., "Security Risk Reviewer", not "Reviewer for Security Risks"). Use the naming formula: Domain + Role (e.g., "Python Debugging Coach").
-
-            5. "tags": An array of 3-5 string metadata tags to support searching/filtering in large collections. Include tags for domain, task, tone, or tool (e.g., ["coding", "python", "debugging", "helpful"]).
-        """.trimIndent()
+        val agent = agentResolutionService.resolve(RequestType.INSTRUCTION_PERSONA)
 
         // Persona generation runs on the SYSTEM API keys (admin-configured
         // vendor/model pairs), trying providers in priority order. A JSON
         // parse failure also counts as a generation failure and moves on to
         // the next provider.
-        return systemAIFailoverService.executeWithFailover("persona-generation") { config ->
-            val responseText = utilityGenerationService.generateTextWithApiKey(
-                config.aiVendor,
-                config.model,
-                listOf(
-                    Message(
-                        conversationId = "instruction-creation",
-                        text = instructionText,
-                        client = "internal",
-                        role = "user",
-                        customerId = customerId,
-                        systemPrompt = "",
-                        aiConfig = listOf(AIConfig(config.aiVendor, config.model)),
-                        previousMessageId = null
-                    )
-                ),
-                prompt,
-                config.apiKey
-            ).text
-
+        return generationAgentExecutor.executeWithSystemFailover(
+            agent = agent,
+            variables = mapOf(
+                "categoryJson" to categoryJson,
+                "instructionText" to instructionText
+            ),
+            customerId = customerId,
+            conversationId = "instruction-creation",
+            operationName = "persona-generation"
+        ) { responseText ->
             val jsonString = responseText.substringAfter("{").substringBeforeLast("}")
             jsonParser.decodeFromString<GeneratedPersona>("{$jsonString}")
         }

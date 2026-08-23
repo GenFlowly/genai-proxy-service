@@ -187,6 +187,16 @@
         }
     },
     "conversation": {
+        "instructionPicker": {
+            "error": "Failed to load instructions. Please try again.",
+            "loading": "Loading…",
+            "noRecent": "No recently used instructions yet.",
+            "noResults": "No instructions match your search.",
+            "recentlyUsed": "Recently used",
+            "searchPlaceholder": "Search instructions by name, tag or category",
+            "searchResults": "Search results",
+            "title": "Choose Instruction"
+        },
         "conversationHeader": {
             "newChat": "New Chat",
             "share": "Share",
@@ -296,14 +306,21 @@
             "instructionPrompt": "Instruction Prompt",
             "nameHint": "Name",
             "namePlaceholder": "e.g., Code Reviewer Persona",
+            "accessLevel": "Access Level",
+            "breadcrumbInstructions": "Instructions",
+            "latestTooltip": "latest version",
             "noAccessAlert": "You do not have access to this instruction or it doesn't exist.",
+            "pageTitle": "Instruction Editor",
             "readonlyBanner": "You are viewing a shared instruction. You cannot make changes.",
             "save": "Save",
             "saveFailedAlert": "Failed to save instruction",
             "savingLabel": "Saving...",
             "share": "Share",
             "shareFailedAlert": "Failed to share instruction. Make sure you own it.",
-            "shareUpdatedAlert": "Instruction share settings updated successfully!"
+            "shareUpdatedAlert": "Instruction share settings updated successfully!",
+            "versionsEmpty": "No versions yet.",
+            "versionsError": "Failed to load versions.",
+            "versionsTitle": "Versions"
         }
     },
     "instructionWidget": {

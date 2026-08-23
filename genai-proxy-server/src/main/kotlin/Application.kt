@@ -375,5 +375,12 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, appConfig)
+    // Eagerly load the bundled request-agent defaults (the fallback when the
+    // RequestAgentMap table has no usable entry) so a broken bundle fails
+    // startup, not the first persona/title generation.
+    get<com.genflowly.service.RequestAgentDefaultsLoader>().defaults
+
+    val requestAgentMapAdminService = get<com.genflowly.service.RequestAgentMapAdminService>()
+
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, appConfig)
 }

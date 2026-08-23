@@ -1,96 +1,76 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
-import { createInstruction, shareInstructionPublic } from '../services/instructionsService'
+import { useNavigate } from 'react-router-dom'
+import { InstructionTile } from '@genflowly/component-library'
+import { getCustomerInstructions } from '../services/instructionsService'
 import { InstructionResponse } from '../models/instructions.models'
 
 export default function InstructionsPage() {
-    const { getAccessTokenSilently } = useAuth0()
-    const [name, setName] = useState('')
-    const [instruction, setInstruction] = useState('')
-    const [saving, setSaving] = useState(false)
+    const { getAccessTokenSilently, user } = useAuth0()
+    const navigate = useNavigate()
+    const [instructions, setInstructions] = useState<InstructionResponse[]>([])
+    const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [created, setCreated] = useState<InstructionResponse[]>([])
 
-    const handleSave = async () => {
-        const trimmed = instruction.trim()
-        if (!trimmed) {
-            setError('Instruction text is required')
-            return
-        }
-        setSaving(true)
-        setError(null)
-        try {
-            const token = await getAccessTokenSilently()
-            const response = await createInstruction(token, {
-                instruction: trimmed,
-                instructionName: name.trim() || undefined,
+    useEffect(() => {
+        let cancelled = false
+        void (async () => {
+            try {
+                const token = await getAccessTokenSilently()
+                const response = await getCustomerInstructions(token)
+                if (!cancelled) setInstructions(response.instructions)
+            } catch (e) {
+                if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load instructions')
+            } finally {
+                if (!cancelled) setIsLoading(false)
+            }
+        })()
+        return () => { cancelled = true }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    // Latest version of each instruction this account owns
+    const ownInstructions = useMemo(() => {
+        const latest = new Map<string, InstructionResponse>()
+        instructions
+            .filter((i) => i.role === 'OWNER')
+            .forEach((i) => {
+                const existing = latest.get(i.id)
+                if (!existing || i.version > existing.version) latest.set(i.id, i)
             })
-            // Public by default: share the new instruction with "PUBLIC"
-            await shareInstructionPublic(token, response.id)
-            setCreated((prev) => [response, ...prev])
-            setName('')
-            setInstruction('')
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Failed to save instruction')
-        } finally {
-            setSaving(false)
-        }
-    }
+        return Array.from(latest.values())
+    }, [instructions])
 
     return (
         <section className="page">
-            <h2>Instructions</h2>
-            <p className="page-description">
-                Create instructions (personas). Instructions saved here are made{' '}
-                <strong>public</strong> automatically — visible to all users.
-            </p>
+            <div className="page-title-row">
+                <h2>Instructions</h2>
+                <button className="primary" onClick={() => navigate('/instructions/new')}>
+                    + New instruction
+                </button>
+            </div>
 
             {error && <div className="banner error">{error}</div>}
 
-            <div className="form-card">
-                <label>
-                    Name <span className="optional">(optional)</span>
-                    <input
-                        type="text"
-                        placeholder="e.g. Marketing copy editor"
-                        value={name}
-                        disabled={saving}
-                        onChange={(e) => setName(e.target.value)}
-                    />
-                </label>
-                <label>
-                    Instruction
-                    <textarea
-                        placeholder="You are a helpful assistant that…"
-                        rows={10}
-                        value={instruction}
-                        disabled={saving}
-                        onChange={(e) => setInstruction(e.target.value)}
-                    />
-                </label>
-                <div className="form-actions">
-                    <button
-                        className="primary"
-                        disabled={saving || !instruction.trim()}
-                        onClick={() => void handleSave()}
-                    >
-                        {saving ? 'Saving…' : 'Save as public instruction'}
-                    </button>
-                </div>
-            </div>
-
-            {created.length > 0 && (
-                <div className="created-list">
-                    <h3>Created this session</h3>
-                    {created.map((item) => (
-                        <div className="created-item" key={`${item.id}-${item.version}`}>
-                            <div>
-                                <strong>{item.name}</strong>
-                                <span className="created-meta">
-                                    {item.id} · v{item.version} · public
-                                </span>
-                            </div>
-                        </div>
+            {isLoading ? (
+                <p className="page-description">Loading…</p>
+            ) : ownInstructions.length === 0 ? (
+                <p className="page-description">No instructions yet. Create one to get started.</p>
+            ) : (
+                <div className="tile-grid">
+                    {ownInstructions.map((instruction) => (
+                        <InstructionTile
+                            key={instruction.id}
+                            title={instruction.name || 'Untitled instruction'}
+                            detail={instruction.instruction}
+                            icon={instruction.icon || undefined}
+                            color={instruction.color || undefined}
+                            tags={instruction.tags || undefined}
+                            version={instruction.version}
+                            owner={user?.name ? { name: user.name, avatarUrl: user.picture } : undefined}
+                            onClick={() => navigate(`/instructions/${instruction.id}`)}
+                            data-testid={`instruction-tile-${instruction.id}`}
+                        />
                     ))}
                 </div>
             )}

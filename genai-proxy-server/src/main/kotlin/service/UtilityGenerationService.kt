@@ -32,13 +32,14 @@ class UtilityGenerationService(
         model: String,
         messages: List<Message>,
         systemPrompt: String?,
-        customerId: String
+        customerId: String,
+        maxTokens: Int? = null
     ): AIGenerateResult {
         return try {
             val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, customerId)
                 ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
 
-            generateTextWithApiKey(aiVendor, model, messages, systemPrompt, apiKey)
+            generateTextWithApiKey(aiVendor, model, messages, systemPrompt, apiKey, maxTokens)
         } catch (e: Exception) {
             logger.warn("Utility generation failed for vendor {}: {}", aiVendor, e.message)
             AIGenerateResult(text = "", inputTokens = null, outputTokens = null, totalTokens = null, tokensReadFromCache = null)
@@ -55,7 +56,8 @@ class UtilityGenerationService(
         model: String,
         messages: List<Message>,
         systemPrompt: String?,
-        apiKey: String
+        apiKey: String,
+        maxTokens: Int? = null
     ): AIGenerateResult {
         val lastMessage = messages.lastOrNull()
             ?: throw IllegalArgumentException("No message to generate from")
@@ -69,7 +71,7 @@ class UtilityGenerationService(
             llmProvider = aiVendor.toProviderString(),
             llmModel = model,
             llmMaxTokens = modelCatalogService.resolveMaxTokens(
-                vendor = aiVendor, model = model, requested = null, streaming = false
+                vendor = aiVendor, model = model, requested = maxTokens, streaming = false
             ),
             conversationHistory = history,
             systemPrompt = systemPrompt,

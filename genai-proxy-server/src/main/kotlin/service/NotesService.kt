@@ -1,5 +1,6 @@
 package com.genflowly.service
 
+import com.genflowly.EmbeddingConstants
 import com.genflowly.di.AppScope
 import com.genflowly.models.api.SaveNoteRequest
 import com.genflowly.models.api.CustomerNote
@@ -9,11 +10,9 @@ import com.genflowly.models.encoding.EncodingSaveNoteRequest
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.NotesRepository
 import com.genflowly.providers.EncodingServerClient
-import com.genflowly.models.AIVendor
+import com.genflowly.models.RequestType
 import com.genflowly.providers.RetrievalServerClient
 import kotlinx.coroutines.launch
-import com.genflowly.models.toCredentialKey
-import com.genflowly.models.toProviderString
 import org.slf4j.LoggerFactory
 
 class NoteNotFoundException(noteKey: String) : Exception("Note $noteKey not found")
@@ -23,49 +22,29 @@ class NotesService(
     private val retrievalServerClient: RetrievalServerClient,
     private val notesRepository: NotesRepository,
     private val customerProfileRepository: CustomerProfileRepository,
-    private val customerCredentialsService: CustomerCredentialsService,
-    private val modelCatalogService: ModelCatalogService,
+    private val agentResolutionService: AgentResolutionService,
+    private val generationAgentExecutor: GenerationAgentExecutor,
     private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
 
-    private val titleAIModel: String = "gpt-5"
-    private val titleAIVendor: AIVendor = AIVendor.OPENAI
-
     /**
-     * Generates a short descriptive title for a note via the retrieval-server,
-     * or null when no key is stored / generation produced nothing usable.
+     * Generates a short descriptive title for a note via the NOTE_TITLE agent
+     * (RequestAgentMap, or the bundled default), or null when no key is stored
+     * / generation produced nothing usable.
      */
     private suspend fun createNoteTitle(customerId: String, noteContent: String): String? {
         return try {
-            val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(titleAIVendor, customerId)
-            if (apiKey == null) {
-                logger.warn("No $titleAIVendor API key for $customerId; skipping note title generation")
-                return null
-            }
-
-            val result = retrievalServerClient.retrieveAndGenerate(
+            val agent = agentResolutionService.resolve(RequestType.NOTE_TITLE)
+            val result = generationAgentExecutor.executeWithCustomerKey(
+                agent = agent,
+                variables = mapOf("noteContent" to noteContent.take(4000)),
                 customerId = customerId,
-                client = "internal",
-                query = noteContent.take(4000),
-                llmCredentials = mapOf(titleAIVendor.toCredentialKey() to apiKey),
-                llmProvider = titleAIVendor.toProviderString(),
-                llmModel = titleAIModel,
-                // Reasoning models (gpt-5) spend completion tokens on internal
-                // reasoning before any visible text; a tight cap yields an
-                // empty response, so keep the same headroom as chat requests
-                llmMaxTokens = modelCatalogService.resolveMaxTokens(
-                    vendor = titleAIVendor,
-                    model = titleAIModel,
-                    requested = null,
-                    streaming = false
-                ),
-                systemPrompt = "Create a short descriptive title (at most 8 words) for the note the user sends. " +
-                        "Respond with the title only - no quotes, no trailing punctuation, no extra text."
+                conversationId = "note-title-generation"
             )
 
-            val title = result.text?.trim()?.removePrefix("\"")?.removeSuffix("\"")?.trim()?.take(200)
-            if (title.isNullOrBlank()) null else title
+            val title = result.text.trim().removePrefix("\"").removeSuffix("\"").trim().take(200)
+            if (title.isBlank()) null else title
         } catch (e: Exception) {
             logger.warn("Failed to generate note title for customer $customerId: ${e.message}")
             null
@@ -138,9 +117,9 @@ class NotesService(
             null
         }
         if (prefs?.embeddingMode == "batch") {
-            val model = prefs.embeddingModel ?: "voyage-4-large"
+            val model = prefs.embeddingModel ?: EmbeddingConstants.MODEL_NAME
             try {
-                notesRepository.markNotePendingEmbedding(customerId, request.data.note_key, "voyage", model)
+                notesRepository.markNotePendingEmbedding(customerId, request.data.note_key, EmbeddingConstants.MODEL_TYPE, model)
                 logger.info("Flagged note ${request.data.note_key} for batch embedding ($model)")
             } catch (e: Exception) {
                 logger.error("Failed to flag note ${request.data.note_key} for batch embedding", e)
@@ -152,6 +131,8 @@ class NotesService(
         val encodingRequest = EncodingSaveNoteRequest(
             dataType = "NOTE",
             client = request.client,
+            modelType = EmbeddingConstants.MODEL_TYPE,
+            modelName = prefs?.embeddingModel ?: EmbeddingConstants.MODEL_NAME,
             data = EncodingNoteData(
                 note_key = request.data.note_key,
                 noteKey = request.data.note_key,

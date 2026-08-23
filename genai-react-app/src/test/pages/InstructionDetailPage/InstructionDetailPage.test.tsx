@@ -27,16 +27,47 @@ jest.mock('@auth0/auth0-react', () => ({
     })
 }));
 
-// Mock the TextEditor since it relies on UIW Markdown editor which can be tricky in JSDOM
+// Mock InstructionEditor: its internal TextEditor relies on the UIW Markdown
+// editor which can be tricky in JSDOM. The fake mirrors the real component's
+// action-visibility rules (covered by the component-library's own tests) so
+// these tests can exercise the page's wiring.
 jest.mock('@genflowly/component-library', () => ({
     ...jest.requireActual('@genflowly/component-library'),
-    TextEditor: function MockTextEditor(props: any) {
+    InstructionEditor: function MockInstructionEditor(props: any) {
+        const showDelete = !props.readOnly && !props.isNew && props.canDelete && !!props.onDelete;
         return (
-            <textarea
-                data-testid="mock-text-editor"
-                value={props.value}
-                onChange={(e) => props.onChange(e.target.value)}
-            />
+            <div>
+                {showDelete && <button onClick={props.onDelete}>{props.labels?.delete ?? 'Delete'}</button>}
+                {!props.readOnly && (
+                    <button onClick={props.onSave} disabled={props.isLoading || !props.instructionText.trim()}>
+                        {props.isLoading ? (props.labels?.saving ?? 'Saving…') : (props.labels?.save ?? 'Save')}
+                    </button>
+                )}
+                <input
+                    placeholder={props.labels?.namePlaceholder}
+                    value={props.name}
+                    disabled={props.readOnly}
+                    onChange={(e) => props.onNameChange(e.target.value)}
+                />
+                <textarea
+                    data-testid="mock-text-editor"
+                    value={props.instructionText}
+                    readOnly={props.readOnly}
+                    onChange={(e) => props.onInstructionTextChange(e.target.value)}
+                />
+                <ul data-testid="mock-versions">
+                    {(props.versions ?? []).map((v: any) => (
+                        <li key={v.version}>
+                            <button
+                                aria-current={v.version === props.selectedVersion}
+                                onClick={() => props.onSelectVersion?.(v.version)}
+                            >
+                                {`v${v.version}`}
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            </div>
         );
     },
 }));
@@ -103,7 +134,6 @@ describe('InstructionDetailPage', () => {
     test('loads existing instruction data when ID is provided', () => {
         renderWithRoute('/instructions/inst-1');
         
-        expect(screen.getByText('Edit Instruction')).toBeInTheDocument();
         expect(screen.getByDisplayValue('Existing')).toBeInTheDocument();
         expect(screen.getByTestId('mock-text-editor')).toHaveValue('Original text');
     });
@@ -111,7 +141,6 @@ describe('InstructionDetailPage', () => {
     test('renders new instruction form when ID is "new"', () => {
         renderWithRoute('/instructions/new');
         
-        expect(screen.getByText('Create Instruction')).toBeInTheDocument();
         expect(screen.getByPlaceholderText('e.g., Code Reviewer Persona')).toHaveValue('');
         expect(screen.getByTestId('mock-text-editor')).toHaveValue('');
         // Share and Delete should not be present
@@ -155,7 +184,6 @@ describe('InstructionDetailPage', () => {
 
         renderWithRoute('/instructions/inst-1');
 
-        expect(screen.getByText('Edit Instruction')).toBeInTheDocument();
         expect(screen.queryByText('Share')).not.toBeInTheDocument();
     });
 
@@ -209,13 +237,29 @@ describe('InstructionDetailPage', () => {
         });
     });
 
-    test('back button navigates to instructions list', async () => {
+    test('lists all versions and loads an older version when selected', async () => {
+        (useAuth as jest.Mock).mockReturnValue({
+            customerInstructions: [
+                { id: 'inst-1', name: 'Old name', instruction: 'Old text', version: 1, role: 'OWNER' },
+                { id: 'inst-1', name: 'Existing', instruction: 'Original text', version: 2, role: 'OWNER' }
+            ],
+            refreshInstructions: mockRefresh,
+            updateInstruction: mockUpdate,
+            isAuthenticated: true,
+            entitlements: { canShare: true }
+        });
+
         renderWithRoute('/instructions/inst-1');
-        
-        const backButton = screen.getByText('← Back');
-        await userEvent.click(backButton);
-        
-        expect(mockNavigate).toHaveBeenCalledWith('/instructions');
+
+        // Latest version is loaded by default, newest listed first
+        expect(screen.getByTestId('mock-text-editor')).toHaveValue('Original text');
+        const versionButtons = screen.getAllByText(/^v\d+$/);
+        expect(versionButtons.map(b => b.textContent)).toEqual(['v2', 'v1']);
+
+        await userEvent.click(screen.getByText('v1'));
+
+        expect(screen.getByTestId('mock-text-editor')).toHaveValue('Old text');
+        expect(screen.getByDisplayValue('Old name')).toBeInTheDocument();
     });
 
     test('ShareModal PUBLIC mode saves successfully', async () => {

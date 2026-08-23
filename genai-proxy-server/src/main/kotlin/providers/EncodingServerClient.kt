@@ -8,6 +8,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import com.genflowly.EmbeddingConstants
+import com.genflowly.models.encoding.EncodingCreateCollectionsRequest
 import com.genflowly.models.encoding.EncodingSaveNoteRequest
 import mu.KLogger
 
@@ -37,6 +39,13 @@ class EncodingServerClient(
             logger.info { "Ensuring collections exist for customerId=$customerId on encoding server $baseUrl" }
             val createRes = httpClient.post("$baseUrl/create-collections") {
                 header("Authorization", authHeader)
+                contentType(ContentType.Application.Json)
+                setBody(
+                    EncodingCreateCollectionsRequest(
+                        modelType = EmbeddingConstants.MODEL_TYPE,
+                        modelName = EmbeddingConstants.MODEL_NAME
+                    )
+                )
             }
             val createBody = createRes.bodyAsText()
 

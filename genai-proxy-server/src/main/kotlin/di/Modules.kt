@@ -11,8 +11,13 @@ import com.genflowly.repository.InstructionRepository
 import com.genflowly.repository.ModelCatalogRepository
 import com.genflowly.repository.NotesRepository
 import com.genflowly.repository.ShareRepository
+import com.genflowly.repository.RequestAgentMapRepository
 import com.genflowly.repository.SystemApiKeyRepository
+import com.genflowly.service.AgentResolutionService
 import com.genflowly.service.ConversationManagementService
+import com.genflowly.service.GenerationAgentExecutor
+import com.genflowly.service.RequestAgentDefaultsLoader
+import com.genflowly.service.RequestAgentMapAdminService
 import com.genflowly.service.ConversationService
 import kotlinx.serialization.json.Json
 import mu.KLogger
@@ -112,15 +117,20 @@ fun appModule(): Module = module {
     single { NotesRepository(get(), get()) }
     single { InstructionRepository(get(), get()) }
     single { GraphRepository(get(), get()) }
+    single { RequestAgentMapRepository(get(), get()) }
 
     single { SharedUsersResolver(get(), get()) }
     single { CustomerCredentialsService(get(), get(), get(), get(), get()) }
     single { UtilityGenerationService(get(), get(), get()) }
-    single { GraphService(get()) }
+    single { GraphService(get(), get()) }
+    single { RequestAgentDefaultsLoader() }
+    single { AgentResolutionService(get(), get(), get(), get()) }
+    single { GenerationAgentExecutor(get(), get()) }
+    single { RequestAgentMapAdminService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get()) }
-    single { ConversationManagementService(get(), get(), get(), get(), get()) }
+    single { ConversationManagementService(get(), get(), get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
