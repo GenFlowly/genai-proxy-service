@@ -14,6 +14,7 @@ os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp/joblib_tmp"
 
 from fastapi import FastAPI
 
+from routes.conversations import router as conversations_router
 from routes.model_metadata import router as model_metadata_router
 from routes.models import router as models_router
 from routes.notes import router as notes_router
@@ -44,6 +45,7 @@ app.include_router(retrieve_router)
 app.include_router(models_router)
 app.include_router(model_metadata_router)
 app.include_router(notes_router)
+app.include_router(conversations_router)
 app.include_router(voice_router)
 app.include_router(validate_key_router)
 

@@ -10,6 +10,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import com.genflowly.EmbeddingConstants
 import com.genflowly.models.encoding.EncodingCreateCollectionsRequest
+import com.genflowly.models.encoding.EncodingSaveConversationRequest
 import com.genflowly.models.encoding.EncodingSaveMemoryRequest
 import com.genflowly.models.encoding.EncodingSaveNoteRequest
 import mu.KLogger
@@ -115,6 +116,35 @@ class EncodingServerClient(
             }
         } catch (e: Exception) {
             logger.error(e) { "Error sending memory to encoding server" }
+        }
+    }
+
+    /**
+     * Pushes a completed conversation exchange into the realtime embedding
+     * pipeline (/encode-conversations). Transport failures are logged, not
+     * thrown — indexing is best-effort; the Message table is the source of truth.
+     */
+    suspend fun encodeConversation(request: EncodingSaveConversationRequest, bearerToken: String) {
+        val baseUrl = configuredUrl
+        if (baseUrl == null) {
+            logger.warn { "ENCODING_SERVER_URL is not set. Skipping conversation encoding for ${request.data.messageKey}." }
+            return
+        }
+        val url = "$baseUrl/encode-conversations"
+        try {
+            val response = httpClient.post(url) {
+                contentType(ContentType.Application.Json)
+                header("Authorization", "Bearer $bearerToken")
+                setBody(request)
+            }
+            if (response.status.isSuccess()) {
+                logger.info { "Successfully sent conversation exchange ${request.data.messageKey} to encoding server" }
+            } else {
+                val errorBody = response.bodyAsText()
+                logger.error { "Failed to send conversation exchange to encoding server: ${response.status} $errorBody" }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Error sending conversation exchange to encoding server" }
         }
     }
 }
