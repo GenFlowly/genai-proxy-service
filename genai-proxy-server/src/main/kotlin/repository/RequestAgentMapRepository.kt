@@ -42,9 +42,11 @@ class RequestAgentMapRepository(
 
     suspend fun listMapEntries(scope: String): List<RequestAgentMapEntry> =
         withContext(Dispatchers.IO) {
+            // "scope" is a DynamoDB reserved keyword — alias it in the expression
             val request = QueryRequest.builder()
                 .tableName(REQUEST_AGENT_MAP_TABLE)
-                .keyConditionExpression("$REQUEST_AGENT_SCOPE_KEY = :scope")
+                .keyConditionExpression("#scope = :scope")
+                .expressionAttributeNames(mapOf("#scope" to REQUEST_AGENT_SCOPE_KEY))
                 .expressionAttributeValues(
                     mapOf(":scope" to AttributeValue.builder().s(scope).build())
                 )

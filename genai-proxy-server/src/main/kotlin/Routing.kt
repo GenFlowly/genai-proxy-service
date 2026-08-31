@@ -1,6 +1,7 @@
 package com.genflowly
 
 import com.genflowly.activity.agent.registerCreateAgentRoutes
+import com.genflowly.activity.agent.registerDeleteAgentRoutes
 import com.genflowly.activity.agent.registerGetCustomerAgentsRoutes
 import com.genflowly.activity.agent.registerUpdateAgentRoutes
 import com.genflowly.activity.conversation.registerCreateConversationShareRoutes
@@ -97,6 +98,7 @@ object Routes {
     const val GET_CUSTOMER_AGENTS = "$API_V1/agents"
     const val CREATE_AGENT = "$API_V1/agents"
     const val UPDATE_AGENT = "$API_V1/agents/{graphId}"
+    const val DELETE_AGENT = "$API_V1/agents/{graphId}"
 
     const val DEVELOPER_API_KEYS = "$API_V1/developer/api-keys"
     const val DEVELOPER_API_KEY = "$API_V1/developer/api-keys/{keyId}"
@@ -184,6 +186,7 @@ fun Application.configureRouting(
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerCreateAgentRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)
+        registerDeleteAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
         
         registerCustomerProfileSettingsRoutes(customerProfileService)

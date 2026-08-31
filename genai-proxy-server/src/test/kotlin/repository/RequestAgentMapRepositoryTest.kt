@@ -59,6 +59,33 @@ class RequestAgentMapRepositoryTest {
     }
 
     @Test
+    fun `listMapEntries aliases the reserved keyword scope in the query`() = runTest {
+        val queries = mutableListOf<software.amazon.awssdk.services.dynamodb.model.QueryRequest>()
+        every { client.query(capture(queries)) } returns
+            software.amazon.awssdk.services.dynamodb.model.QueryResponse.builder()
+                .items(
+                    mapOf(
+                        DynamoDBConstants.REQUEST_AGENT_SCOPE_KEY to s(SYSTEM_SCOPE),
+                        DynamoDBConstants.REQUEST_AGENT_REQUEST_TYPE_KEY to s("NOTE_TITLE"),
+                        DynamoDBConstants.REQUEST_AGENT_GRAPH_ID_KEY to s("GRP1")
+                    )
+                )
+                .build()
+
+        val entries = repository.listMapEntries(SYSTEM_SCOPE)
+
+        assertTrue(entries.single().graphId == "GRP1")
+        val query = queries.single()
+        // "scope" is a DynamoDB reserved keyword — the raw name in the
+        // expression is rejected by DynamoDB with a 400
+        assertEquals("#scope = :scope", query.keyConditionExpression())
+        assertEquals(
+            DynamoDBConstants.REQUEST_AGENT_SCOPE_KEY,
+            query.expressionAttributeNames()["#scope"]
+        )
+    }
+
+    @Test
     fun `putMapEntry upserts all fields and preserves createdAt`() = runTest {
         val updates = mutableListOf<UpdateItemRequest>()
         every { client.updateItem(capture(updates)) } returns UpdateItemResponse.builder().build()

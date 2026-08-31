@@ -1,18 +1,8 @@
 name: Development Admin Panel Deploy
 
+# Manual-only: the admin panel is deliberately excluded from the push-triggered
+# pipeline. Deploy from the Actions tab (always builds the development branch).
 on:
-  workflow_call:
-    secrets:
-      NETLIFY_AUTH_TOKEN:
-        required: false
-      NETLIFY_ADMIN_PANEL_SITE_ID:
-        required: false
-      AUTH0_SPA_DOMAIN:
-        required: false
-      AUTH0_ADMIN_PANEL_CLIENT_ID:
-        required: false
-      AUTH0_API_AUDIENCE:
-        required: false
   workflow_dispatch:
 
 jobs:

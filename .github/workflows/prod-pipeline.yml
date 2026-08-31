@@ -32,7 +32,6 @@ jobs:
       encoding-server: ${{ steps.filter.outputs.encoding-server }}
       encoding-library: ${{ steps.filter.outputs.encoding-library }}
       react-app: ${{ steps.filter.outputs.react-app }}
-      admin-panel: ${{ steps.filter.outputs.admin-panel }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,10 +60,6 @@ jobs:
               - 'genai-react-app/**'
               - '.github/workflows/prod-pipeline.yml'
               - '.github/workflows/prod-react-app-deploy.yml'
-            admin-panel:
-              - 'admin-panel/**'
-              - '.github/workflows/prod-pipeline.yml'
-              - '.github/workflows/prod-admin-panel-deploy.yml'
 
   proxy-server-production:
     name: Proxy Service
@@ -94,9 +89,3 @@ jobs:
     uses: ./.github/workflows/prod-react-app-deploy.yml
     secrets: inherit
 
-  admin-panel-production:
-    name: Admin Panel
-    needs: detect-changes
-    if: needs.detect-changes.outputs.admin-panel == 'true' && github.event_name == 'pull_request' && github.event.pull_request.merged == true
-    uses: ./.github/workflows/prod-admin-panel-deploy.yml
-    secrets: inherit
