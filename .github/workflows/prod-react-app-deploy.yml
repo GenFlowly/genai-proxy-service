@@ -1,20 +1,11 @@
 name: Production React App Deploy
 
+# Deploys the react app to Netlify (always builds main).
+# Runs on the weekly cron or manual dispatch, mirroring the dev setup.
 on:
-  workflow_call:
-    secrets:
-      NETLIFY_AUTH_TOKEN:
-        required: false
-      NETLIFY_SITE_ID:
-        required: false
-      GH_PAT_TOKEN_FOR_FREE_ACCOUNT:
-        required: false
-      AUTH0_SPA_DOMAIN:
-        required: false
-      AUTH0_SPA_CLIENT_ID:
-        required: false
-      AUTH0_API_AUDIENCE:
-        required: false
+  schedule:
+    # Runs at 00:00 UTC every Friday
+    - cron: '0 0 * * 5'
   workflow_dispatch:
 
 jobs:
@@ -25,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

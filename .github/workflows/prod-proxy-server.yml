@@ -1,32 +1,16 @@
 name: Production Proxy Server
 
+# Deploys the proxy server (AWS/CDK) and the retrieval server (Fly.io).
+# Self-triggered: runs only when these services (or this workflow) change.
 on:
-  workflow_call:
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: false
-      AWS_SECRET_ACCESS_KEY:
-        required: false
-      GH_PAT_TOKEN_FOR_FREE_ACCOUNT:
-        required: false
-      FLY_API_TOKEN:
-        required: false
-      AUTH0_SPA_DOMAIN:
-        required: false
-      AUTH0_SPA_CLIENT_ID:
-        required: false
-      AUTH0_API_AUDIENCE:
-        required: false
-      NETLIFY_AUTH_TOKEN:
-        required: false
-      NETLIFY_SITE_ID:
-        required: false
-      ADMIN_EMAILS:
-        required: false
-      AUTH0_REACT_APP_CLIENT_IDS:
-        required: false
-      AUTH0_ADMIN_PANEL_CLIENT_IDS:
-        required: false
+  push:
+    branches: [main]
+    paths:
+      - 'genai-proxy-server/**'
+      - 'genai-proxy-server-cdk/**'
+      - 'retrieval-server/**'
+      - '.github/workflows/prod-proxy-server.yml'
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
