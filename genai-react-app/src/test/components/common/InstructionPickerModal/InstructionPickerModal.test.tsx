@@ -4,9 +4,11 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import InstructionPickerModal from '../../../../components/common/InstructionPickerModal/InstructionPickerModal';
 import * as instructionService from '../../../../services/instructionService';
+import { loadRecentInstructionsCache, saveRecentInstructionsCache, clearRecentInstructionsCache } from '../../../../components/common/InstructionPickerModal/recentInstructionsCache';
 
-jest.mock('@auth0/auth0-react', () => ({
-    useAuth0: () => ({
+jest.mock('../../../../context/AuthContext', () => ({
+    useAuth: () => ({
+        customerId: 'cust-1',
         getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token')
     })
 }));
@@ -28,6 +30,7 @@ const searchedInstruction = {
 describe('InstructionPickerModal', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        clearRecentInstructionsCache(); // The module-level SWR cache must not leak between tests
         mockGetRecent.mockResolvedValue({ instructions: [recentInstruction] });
         mockSearch.mockResolvedValue({ instructions: [searchedInstruction] });
     });
@@ -62,5 +65,37 @@ describe('InstructionPickerModal', () => {
         render(<InstructionPickerModal isOpen={false} onClose={jest.fn()} onSelect={jest.fn()} />);
         expect(screen.queryByText('Choose Instruction')).not.toBeInTheDocument();
         expect(mockGetRecent).not.toHaveBeenCalled();
+    });
+
+    test('paints cached instructions instantly while refreshing in the background', () => {
+        saveRecentInstructionsCache('cust-1', [recentInstruction]);
+        // Keep the refresh pending: the cached tiles must show without a loading state
+        mockGetRecent.mockReturnValue(new Promise(() => {}));
+
+        render(<InstructionPickerModal isOpen onClose={jest.fn()} onSelect={jest.fn()} />);
+
+        expect(screen.getByText('Physics Wave Expert')).toBeInTheDocument();
+        expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    });
+
+    test('replaces the cached list once the refresh lands and mirrors it to the cache', async () => {
+        saveRecentInstructionsCache('cust-1', [{ ...recentInstruction, id: 'stale-1', name: 'Stale Instruction' }]);
+        mockGetRecent.mockResolvedValue({ instructions: [recentInstruction] });
+
+        render(<InstructionPickerModal isOpen onClose={jest.fn()} onSelect={jest.fn()} />);
+
+        expect(await screen.findByText('Physics Wave Expert')).toBeInTheDocument();
+        expect(screen.queryByText('Stale Instruction')).not.toBeInTheDocument();
+        expect(loadRecentInstructionsCache('cust-1')).toEqual([recentInstruction]);
+    });
+
+    test('keeps showing the stale list when the background refresh fails', async () => {
+        saveRecentInstructionsCache('cust-1', [recentInstruction]);
+        mockGetRecent.mockRejectedValue(new Error('network down'));
+
+        render(<InstructionPickerModal isOpen onClose={jest.fn()} onSelect={jest.fn()} />);
+
+        await waitFor(() => expect(mockGetRecent).toHaveBeenCalled());
+        expect(screen.getByText('Physics Wave Expert')).toBeInTheDocument();
     });
 });

@@ -21,6 +21,7 @@ describe('SavedNotesWidget', () => {
         jest.clearAllMocks()
         clearNotesCache() // The module-level SWR cache must not leak between tests
         mockUseAuth.mockReturnValue({
+            customerId: 'cust-1',
             getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token'),
         })
     })
@@ -201,7 +202,7 @@ describe('SavedNotesWidget', () => {
     })
 
     test('paints cached notes instantly while refreshing in the background', async () => {
-        saveNotesCache([
+        saveNotesCache('cust-1', [
             { noteKey: 'k1', noteValue: 'cached body', title: 'Cached note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
         ])
         // Keep the refresh pending: the cached list must show without a skeleton
@@ -214,7 +215,7 @@ describe('SavedNotesWidget', () => {
     })
 
     test('replaces the cached list once the refresh lands and mirrors it to the cache', async () => {
-        saveNotesCache([
+        saveNotesCache('cust-1', [
             { noteKey: 'k1', noteValue: 'cached body', title: 'Stale note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
         ])
         const fresh = [
@@ -228,11 +229,11 @@ describe('SavedNotesWidget', () => {
             expect(screen.getByText('Fresh note')).toBeInTheDocument()
         })
         expect(screen.queryByText('Stale note')).not.toBeInTheDocument()
-        expect(loadNotesCache()).toEqual(fresh)
+        expect(loadNotesCache('cust-1')).toEqual(fresh)
     })
 
     test('keeps showing the stale list when the background refresh fails', async () => {
-        saveNotesCache([
+        saveNotesCache('cust-1', [
             { noteKey: 'k1', noteValue: 'cached body', title: 'Cached note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
         ])
         mockGetNotes.mockRejectedValue(new Error('network down'))

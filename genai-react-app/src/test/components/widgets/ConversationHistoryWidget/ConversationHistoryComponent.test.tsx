@@ -37,6 +37,7 @@ function setupMocks({
     mockGetAccessTokenSilently.mockResolvedValue('mock-token')
     ;(useAuth as jest.Mock).mockReturnValue({
         isAuthenticated,
+        customerId: 'cust-1',
         getAccessTokenSilently: mockGetAccessTokenSilently,
     })
     ;(useConversation as jest.Mock).mockReturnValue({

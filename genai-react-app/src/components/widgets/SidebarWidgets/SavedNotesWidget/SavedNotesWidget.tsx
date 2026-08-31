@@ -20,12 +20,12 @@ const noteLabel = (note: SavedNote): string => {
 
 export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
     const { t } = useTranslation()
-    const { getAccessTokenSilently } = useAuth()
+    const { getAccessTokenSilently, customerId } = useAuth()
     const { openNote, activeNote, updatedNote, clearActiveNote } = useNotes()
 
     // Stale-while-revalidate: paint the last known list immediately (if any),
     // then refresh from the API in the background
-    const cached = useMemo(loadNotesCache, [])
+    const cached = useMemo(() => loadNotesCache(customerId), [customerId])
     const [notes, setNotes] = useState<SavedNote[]>(cached ?? [])
     const [isLoading, setIsLoading] = useState(true)
     const [hasError, setHasError] = useState(false)
@@ -61,8 +61,8 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
     // the cache so the next mount paints instantly
     useEffect(() => {
         if (!hasLoadedRef.current) return
-        saveNotesCache(notes)
-    }, [notes])
+        saveNotesCache(customerId, notes)
+    }, [customerId, notes])
 
     // Keep the list in sync with autosaves published by the editor: update
     // saved notes in place, and surface brand-new notes at the top

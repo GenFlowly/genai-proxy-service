@@ -30,7 +30,6 @@ jobs:
     outputs:
       proxy-server: ${{ steps.filter.outputs.proxy-server }}
       encoding-server: ${{ steps.filter.outputs.encoding-server }}
-      encoding-library: ${{ steps.filter.outputs.encoding-library }}
       react-app: ${{ steps.filter.outputs.react-app }}
     steps:
       - name: Checkout repository
@@ -52,10 +51,6 @@ jobs:
               - 'encoding-server-cdk/**'
               - '.github/workflows/prod-pipeline.yml'
               - '.github/workflows/prod-encoding-server.yml'
-            encoding-library:
-              - 'encoding-library/**'
-              - '.github/workflows/prod-pipeline.yml'
-              - '.github/workflows/prod-publish-encoding-library.yml'
             react-app:
               - 'genai-react-app/**'
               - '.github/workflows/prod-pipeline.yml'
@@ -75,12 +70,6 @@ jobs:
     uses: ./.github/workflows/prod-encoding-server.yml
     secrets: inherit
 
-  encoding-library-production:
-    name: Encoding Library
-    needs: detect-changes
-    if: needs.detect-changes.outputs.encoding-library == 'true' && github.event_name == 'pull_request' && github.event.pull_request.merged == true
-    uses: ./.github/workflows/prod-publish-encoding-library.yml
-    secrets: inherit
 
   react-app-production:
     name: React App
