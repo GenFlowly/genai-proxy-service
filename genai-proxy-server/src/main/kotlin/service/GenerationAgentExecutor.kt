@@ -21,13 +21,17 @@ import com.genflowly.utils.PromptTemplateRenderer
  */
 class GenerationAgentExecutor(
     private val utilityGenerationService: UtilityGenerationService,
-    private val systemAIFailoverService: SystemAIFailoverService
+    private val systemAIFailoverService: SystemAIFailoverService,
+    private val defaultsLoader: RequestAgentDefaultsLoader
 ) {
 
     /**
      * Generates with the customer's stored vendor key using the agent's model
-     * preference. Failures yield empty text (see [UtilityGenerationService.generateText]),
-     * so callers treat blank output as "no result".
+     * preference — or, when the agent doesn't set one, the bundled default's
+     * model for the request type ("no preference" means "platform default",
+     * not "broken"). Failures yield empty text (see
+     * [UtilityGenerationService.generateText]), so callers treat blank output
+     * as "no result".
      */
     suspend fun executeWithCustomerKey(
         agent: ResolvedAgent,
@@ -35,9 +39,11 @@ class GenerationAgentExecutor(
         customerId: String,
         conversationId: String
     ): AIGenerateResult {
-        val modelPreference = requireNotNull(agent.modelPreference) {
-            "Agent '${agent.mapKey}' (${agent.requestType}) has no model preference; " +
-                    "customer-key execution requires one"
+        val modelPreference = agent.modelPreference
+            ?: defaultsLoader.defaults[agent.requestType]?.modelPreference
+        requireNotNull(modelPreference) {
+            "Agent '${agent.mapKey}' (${agent.requestType}) has no model preference and " +
+                    "the bundled default for this request type has none either"
         }
         val systemPrompt = PromptTemplateRenderer.render(agent.systemPromptTemplate, variables)
         val userMessage = PromptTemplateRenderer.render(agent.userMessageTemplate, variables)

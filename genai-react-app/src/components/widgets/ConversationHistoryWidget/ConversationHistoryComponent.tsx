@@ -3,7 +3,14 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { useConversation } from '../../../context/ConversationContext'
-import { getCustomerConversations, archiveConversation } from '../../../services/conversationHistoryService'
+import { useToast } from '../../../context/ToastContext'
+import {
+    getCustomerConversations,
+    getPinnedConversations,
+    archiveConversation,
+    pinConversation,
+    unpinConversation,
+} from '../../../services/conversationHistoryService'
 import { ConversationSummary } from '../../../models/conversationHistory.models'
 import { CollapsedOpenAIBrandName, CollapsedClaudeBrandName, CollapsedGeminiBrandName } from '../../common/BrandName/BrandName'
 import { AIVendor } from '../../../constants/vendors'
@@ -22,6 +29,7 @@ export default function ConversationHistoryComponent() {
     const { t } = useTranslation()
     const { getAccessTokenSilently, isAuthenticated, customerId } = useAuth()
     const { conversationId, conversationTitle } = useConversation()
+    const { showToast } = useToast()
     const navigate = useNavigate()
     const { conversationId: activeId } = useParams<{ conversationId: string }>()
 
@@ -29,6 +37,7 @@ export default function ConversationHistoryComponent() {
     // then refresh from the API in the background
     const cached = useMemo(() => loadHistoryCache(customerId), [customerId])
     const [items, setItems] = useState<ConversationSummary[]>(cached?.items ?? [])
+    const [pinned, setPinned] = useState<ConversationSummary[]>(cached?.pinned ?? [])
     const [lastKey, setLastKey] = useState<string | null>(cached?.lastKey ?? null)
     const [isLoading, setIsLoading] = useState(false)
     const [hasMore, setHasMore] = useState(!!cached?.hasMore)
@@ -56,17 +65,32 @@ export default function ConversationHistoryComponent() {
         }
     }, [isAuthenticated, getAccessTokenSilently])
 
+    // The pinned list has no pagination; the server is the source of truth for
+    // which conversations belong in the Pinned section
+    const fetchPinned = useCallback(async () => {
+        if (!isAuthenticated) return
+        try {
+            const token = await getAccessTokenSilently()
+            const resp = await getPinnedConversations(token)
+            setPinned(resp.conversations)
+        } catch {
+            // Keep whatever pinned state we already have (cache or optimistic);
+            // a failed pinned refresh must not take down the history list
+        }
+    }, [isAuthenticated, getAccessTokenSilently])
+
     // Load first page on mount / auth change (background refresh when cached)
     useEffect(() => {
         fetchPage(null)
-    }, [fetchPage])
+        fetchPinned()
+    }, [fetchPage, fetchPinned])
 
-    // Mirror every loaded/mutated state (fetch, archive, title patch) to the
-    // cache so the next mount paints instantly
+    // Mirror every loaded/mutated state (fetch, archive, pin, title patch) to
+    // the cache so the next mount paints instantly
     useEffect(() => {
         if (!hasLoadedRef.current) return
-        saveHistoryCache(customerId, { items, lastKey, hasMore })
-    }, [customerId, items, lastKey, hasMore])
+        saveHistoryCache(customerId, { items, pinned, lastKey, hasMore })
+    }, [customerId, items, pinned, lastKey, hasMore])
 
     // Patch title in list when the active conversation gets a generated title
     useEffect(() => {
@@ -78,6 +102,13 @@ export default function ConversationHistoryComponent() {
                 return [{ conversationId, title: conversationTitle, createdAt: null, updatedAt: null }, ...prev]
             }
             if (prev[idx].title === conversationTitle) return prev
+            const next = [...prev]
+            next[idx] = { ...next[idx], title: conversationTitle }
+            return next
+        })
+        setPinned(prev => {
+            const idx = prev.findIndex(c => c.conversationId === conversationId)
+            if (idx === -1 || prev[idx].title === conversationTitle) return prev
             const next = [...prev]
             next[idx] = { ...next[idx], title: conversationTitle }
             return next
@@ -96,6 +127,8 @@ export default function ConversationHistoryComponent() {
             const token = await getAccessTokenSilently()
             await archiveConversation(token, convId)
             setItems(prev => prev.filter(c => c.conversationId !== convId))
+            // The pinned endpoint excludes archived conversations, so drop it locally too
+            setPinned(prev => prev.filter(c => c.conversationId !== convId))
             // If the archived conversation is currently active, navigate away
             if (convId === activeId) {
                 navigate('/chat')
@@ -105,9 +138,54 @@ export default function ConversationHistoryComponent() {
         }
     }
 
+    const handlePin = async (e: React.MouseEvent, conv: ConversationSummary) => {
+        e.stopPropagation()
+        // Optimistic: surface it in the Pinned section right away; the item
+        // stays in `items` and is excluded from the date groups while pinned
+        setPinned(prev => [
+            { ...conv, pinnedAt: new Date().toISOString() },
+            ...prev.filter(c => c.conversationId !== conv.conversationId),
+        ])
+        try {
+            const token = await getAccessTokenSilently()
+            await pinConversation(token, conv.conversationId)
+            showToast(t('conversation.conversationHistory.pinnedToast'))
+        } catch (err) {
+            console.error('Failed to pin conversation:', err)
+            setPinned(prev => prev.filter(c => c.conversationId !== conv.conversationId))
+            showToast(t('conversation.conversationHistory.pinFailed'))
+        }
+    }
+
+    const handleUnpin = async (e: React.MouseEvent, conv: ConversationSummary) => {
+        e.stopPropagation()
+        const previousPinned = pinned
+        setPinned(prev => prev.filter(c => c.conversationId !== conv.conversationId))
+        // A pinned conversation older than the loaded pages may not be in
+        // `items` yet — put it back so it lands in the right date group
+        setItems(prev => {
+            if (prev.some(c => c.conversationId === conv.conversationId)) return prev
+            return [...prev, conv].sort((a, b) =>
+                (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '')
+            )
+        })
+        try {
+            const token = await getAccessTokenSilently()
+            await unpinConversation(token, conv.conversationId)
+            showToast(t('conversation.conversationHistory.unpinnedToast'))
+        } catch (err) {
+            console.error('Failed to unpin conversation:', err)
+            setPinned(previousPinned)
+            showToast(t('conversation.conversationHistory.unpinFailed'))
+        }
+    }
+
+    // Pinned conversations render only in the Pinned section, never in the
+    // date groups, even though they stay in `items`
+    const pinnedIds = useMemo(() => new Set(pinned.map(c => c.conversationId)), [pinned])
     const groupedItems = useMemo(
-        () => groupByDate(items, conv => conv.updatedAt || conv.createdAt),
-        [items]
+        () => groupByDate(items.filter(c => !pinnedIds.has(c.conversationId)), conv => conv.updatedAt || conv.createdAt),
+        [items, pinnedIds]
     )
 
     const groupLabels: Record<DateGroupId, string> = {
@@ -117,7 +195,7 @@ export default function ConversationHistoryComponent() {
         older: t('common.dateGroups.older'),
     }
 
-    const renderDetails = (conv: ConversationSummary, groupId: DateGroupId) => (
+    const renderDetails = (conv: ConversationSummary, groupId: DateGroupId | 'pinned') => (
         <>
             <div className={styles.vendorIcons}>
                 {[...(conv.vendors || [])].sort().map((v, idx) => {
@@ -141,28 +219,50 @@ export default function ConversationHistoryComponent() {
         </>
     )
 
-    const groups: SidebarListGroup[] = groupedItems.map(group => ({
-        id: group.id,
-        label: groupLabels[group.id],
-        items: group.items.map(conv => {
-            const label = conv.title?.trim() || conv.conversationId
-            return {
-                id: conv.conversationId,
-                label,
-                details: renderDetails(conv, group.id),
-                isActive: conv.conversationId === activeId,
-                ariaCurrent: 'page' as const,
-                onSelect: () => handleNavigate(conv.conversationId),
-                testId: `conv-history-item-${conv.conversationId}`,
-                action: {
+    const toRow = (conv: ConversationSummary, groupId: DateGroupId | 'pinned') => {
+        const isPinned = groupId === 'pinned'
+        return {
+            id: conv.conversationId,
+            label: conv.title?.trim() || conv.conversationId,
+            details: renderDetails(conv, groupId),
+            isActive: conv.conversationId === activeId,
+            ariaCurrent: 'page' as const,
+            onSelect: () => handleNavigate(conv.conversationId),
+            testId: `conv-history-item-${conv.conversationId}`,
+            actions: [
+                {
+                    icon: <Icon src={isPinned ? ICONS.PIN_OFF : ICONS.PIN} size={14} aria-hidden={true} />,
+                    label: isPinned
+                        ? t('conversation.conversationHistory.unpinConversation')
+                        : t('conversation.conversationHistory.pinConversation'),
+                    onClick: (e: React.MouseEvent) => (isPinned ? handleUnpin(e, conv) : handlePin(e, conv)),
+                    revealOnHover: true,
+                    testId: `conv-${isPinned ? 'unpin' : 'pin'}-btn-${conv.conversationId}`,
+                },
+                {
                     icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
                     label: t('conversation.conversationHistory.archiveConversation'),
                     onClick: (e: React.MouseEvent) => handleArchive(e, conv.conversationId),
                     testId: `conv-archive-btn-${conv.conversationId}`,
                 },
-            }
-        }),
-    }))
+            ],
+        }
+    }
+
+    const groups: SidebarListGroup[] = [
+        ...(pinned.length > 0
+            ? [{
+                id: 'pinned',
+                label: t('conversation.conversationHistory.pinned'),
+                items: pinned.map(conv => toRow(conv, 'pinned')),
+            }]
+            : []),
+        ...groupedItems.map(group => ({
+            id: group.id,
+            label: groupLabels[group.id],
+            items: group.items.map(conv => toRow(conv, group.id)),
+        })),
+    ]
 
     return (
         <SidebarListPanel

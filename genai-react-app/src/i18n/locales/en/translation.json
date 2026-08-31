@@ -211,7 +211,14 @@
             "loadMore": "Load more",
             "loading": "Loading…",
             "noConversationsYet": "No conversations yet",
-            "title": "History"
+            "pinConversation": "Pin conversation",
+            "pinFailed": "Failed to pin conversation",
+            "pinned": "Pinned",
+            "pinnedToast": "Conversation pinned",
+            "title": "History",
+            "unpinConversation": "Unpin conversation",
+            "unpinFailed": "Failed to unpin conversation",
+            "unpinnedToast": "Conversation unpinned"
         },
         "request": {
             "generate": "Generate",

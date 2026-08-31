@@ -76,6 +76,7 @@ object DynamoDBConstants {
     const val LATEST_VERSION_KEY = "latestVersion"
     const val DELETED_AT_KEY = "deletedAt"
     const val ARCHIVED_AT_KEY = "archivedAt"
+    const val PINNED_AT_KEY = "pinnedAt"
 
     // Tool credentials — per-customer, per-toolType
     const val CUSTOMER_TOOL_CREDENTIALS_TABLE = "CustomerToolCredentials"
