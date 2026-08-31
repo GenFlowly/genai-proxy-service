@@ -24,6 +24,7 @@ class NotesService(
     private val customerProfileRepository: CustomerProfileRepository,
     private val agentResolutionService: AgentResolutionService,
     private val generationAgentExecutor: GenerationAgentExecutor,
+    private val memoryExtractionService: MemoryExtractionService,
     private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
@@ -88,6 +89,12 @@ class NotesService(
         if (!request.encode) {
             return requestTitle
         }
+
+        // Fire-and-forget: learn about the user from the finished note (the
+        // encode flag already marks end-of-editing, so no extra debounce here)
+        memoryExtractionService.maybeExtractFromNoteAsync(
+            customerId, request.data.note_key, request.data.title, request.data.note_value, token
+        )
 
         // 2. Title generation via the retrieval server, only while the note
         // still has no real title. Awaited so the response carries the title

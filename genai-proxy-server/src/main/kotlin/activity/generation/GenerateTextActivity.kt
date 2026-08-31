@@ -17,12 +17,14 @@ import com.genflowly.models.Message
 import org.slf4j.LoggerFactory
 import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.MemoryExtractionService
 
 private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
 fun Route.registerGenerateTextRoutes(
     generationOrchestrator: GenerationOrchestrator,
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    memoryExtractionService: MemoryExtractionService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT, {
@@ -114,6 +116,15 @@ fun Route.registerGenerateTextRoutes(
 
                 responseMessageList.forEach { message ->
                     generateTextResponseList.add(createResponse(message))
+                }
+
+                // Fire-and-forget: learn about the user from the completed
+                // exchange (debounced inside the service).
+                responseMessageList.firstOrNull()?.let { message ->
+                    val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+                    memoryExtractionService.maybeExtractFromConversationAsync(
+                        customerId, message.conversationId, bearerToken
+                    )
                 }
 
                 call.respond(BatchGenerateTextResponse(results = generateTextResponseList))

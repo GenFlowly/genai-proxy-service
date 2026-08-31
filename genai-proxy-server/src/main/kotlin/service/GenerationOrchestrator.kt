@@ -34,7 +34,8 @@ class GenerationOrchestrator(
     private val conversationService: ConversationService,
     private val retrievalService: RetrievalServerClient,
     private val requestValidator: GenerationRequestValidator,
-    private val modelCatalogService: ModelCatalogService
+    private val modelCatalogService: ModelCatalogService,
+    private val memoryService: MemoryService
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
@@ -92,7 +93,9 @@ class GenerationOrchestrator(
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
         // returns the full instruction, so there is no second fetch here.
         val instructionResp = resolveInstruction(customerId, instructionId, instructionVersion)
-        val systemPrompt = instructionResp?.instruction ?: ""
+        // Learned CORE memories ride on the system prompt so durable user facts
+        // shape every response, with or without retrieval.
+        val systemPrompt = memoryService.withMemoryBlock(customerId, instructionResp?.instruction ?: "")
         val effectiveInstructionId = instructionResp?.id ?: ""
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 
@@ -244,7 +247,9 @@ class GenerationOrchestrator(
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
         // returns the full instruction, so there is no second fetch here.
         val instructionResp = resolveInstruction(customerId, instructionId, instructionVersion)
-        val systemPrompt = instructionResp?.instruction ?: ""
+        // Learned CORE memories ride on the system prompt so durable user facts
+        // shape every response, with or without retrieval.
+        val systemPrompt = memoryService.withMemoryBlock(customerId, instructionResp?.instruction ?: "")
         val effectiveInstructionId = instructionResp?.id ?: ""
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 

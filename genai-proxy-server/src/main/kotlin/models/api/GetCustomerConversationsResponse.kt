@@ -11,7 +11,13 @@ data class ConversationSummary(
     val updatedAt: String?,
     val role: ShareRole = ShareRole.OWNER,
     val archivedAt: String? = null,
+    val pinnedAt: String? = null,
     val vendors: List<String>? = null
+)
+
+@Serializable
+data class GetPinnedConversationsResponse(
+    val conversations: List<ConversationSummary>
 )
 
 @Serializable

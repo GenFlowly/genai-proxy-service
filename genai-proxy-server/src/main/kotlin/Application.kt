@@ -381,6 +381,8 @@ fun Application.module() {
     get<com.genflowly.service.RequestAgentDefaultsLoader>().defaults
 
     val requestAgentMapAdminService = get<com.genflowly.service.RequestAgentMapAdminService>()
+    val memoryService = get<com.genflowly.service.MemoryService>()
+    val memoryExtractionService = get<com.genflowly.service.MemoryExtractionService>()
 
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, appConfig)
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, memoryService, memoryExtractionService, appConfig)
 }

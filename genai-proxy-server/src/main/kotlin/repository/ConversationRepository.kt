@@ -8,6 +8,7 @@ import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
+import com.genflowly.DynamoDBConstants.PINNED_AT_KEY
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import java.time.Instant
@@ -127,6 +128,56 @@ class ConversationRepository(
             logger.info("Unarchived conversation $conversationId for customer $customerId")
         } catch (e: Exception) {
             logger.error("Failed to unarchive conversation $conversationId", e)
+            throw e
+        }
+    }
+
+    suspend fun pinConversation(
+        conversationId: String,
+        customerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("SET #pa = :now")
+                    // Guard against creating a phantom row for a conversation that doesn't exist
+                    .conditionExpression("attribute_exists($CONVERSATION_ID_KEY)")
+                    .expressionAttributeNames(mapOf("#pa" to PINNED_AT_KEY))
+                    .expressionAttributeValues(mapOf(":now" to AttributeValue.builder().s(Instant.now().toString()).build()))
+                    .build()
+            )
+            logger.info("Pinned conversation $conversationId for customer $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to pin conversation $conversationId", e)
+            throw e
+        }
+    }
+
+    suspend fun unpinConversation(
+        conversationId: String,
+        customerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("REMOVE #pa")
+                    .conditionExpression("attribute_exists($CONVERSATION_ID_KEY)")
+                    .expressionAttributeNames(mapOf("#pa" to PINNED_AT_KEY))
+                    .build()
+            )
+            logger.info("Unpinned conversation $conversationId for customer $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to unpin conversation $conversationId", e)
             throw e
         }
     }
@@ -263,6 +314,65 @@ class ConversationRepository(
         } else null
 
         GetCustomerConversationsResponse(conversations = conversations, lastEvaluatedKey = nextPageToken)
+    }
+
+    /**
+     * Fetches all pinned (and not archived) conversations for the customer,
+     * most recently pinned first.
+     *
+     * Queries the base table (not the customerId GSI) because the GSI projection
+     * doesn't include [PINNED_AT_KEY] — the base table returns full items, so the
+     * pinned filter can be evaluated without an index change.
+     */
+    suspend fun getPinnedConversationsByCustomer(
+        customerId: String,
+        maxItems: Int = 50
+    ): List<ConversationSummary> = withContext(Dispatchers.IO) {
+        val pinnedItems = mutableListOf<Map<String, AttributeValue>>()
+        var startKey: Map<String, AttributeValue>? = null
+
+        // A filtered query can return empty pages with a lastEvaluatedKey, so
+        // keep paging until the key is absent (or we have enough items).
+        do {
+            val queryBuilder = QueryRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .keyConditionExpression("#cid = :cid")
+                .filterExpression("attribute_exists(#pa) AND attribute_not_exists(#aa)")
+                .expressionAttributeNames(mapOf(
+                    "#cid" to CUSTOMER_ID_KEY,
+                    "#pa" to PINNED_AT_KEY,
+                    "#aa" to ARCHIVED_AT_KEY
+                ))
+                .expressionAttributeValues(mapOf(
+                    ":cid" to AttributeValue.builder().s(customerId).build()
+                ))
+            startKey?.let { queryBuilder.exclusiveStartKey(it) }
+
+            val response = dynamoDbClient.query(queryBuilder.build())
+            pinnedItems += response.items()
+            startKey = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
+                response.lastEvaluatedKey()
+            } else null
+        } while (startKey != null && pinnedItems.size < maxItems)
+
+        pinnedItems
+            .sortedByDescending { it[PINNED_AT_KEY]?.s() ?: "" }
+            .take(maxItems)
+            .mapNotNull { item ->
+                val convId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
+
+                val messages = getMessagesForConversation(convId)
+                val vendors = messages.flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+
+                ConversationSummary(
+                    conversationId = convId,
+                    title = item["title"]?.s(),
+                    createdAt = item["createdAt"]?.s(),
+                    updatedAt = item["updatedAt"]?.s(),
+                    pinnedAt = item[PINNED_AT_KEY]?.s(),
+                    vendors = vendors
+                )
+            }
     }
 
     // ─── Messages ─────────────────────────────────────────────────────────────

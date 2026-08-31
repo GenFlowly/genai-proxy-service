@@ -10,7 +10,10 @@ import com.genflowly.activity.conversation.registerDeleteConversationRoutes
 import com.genflowly.activity.conversation.registerGetConversationRoutes
 import com.genflowly.activity.conversation.registerGetConversationSharedUsersRoutes
 import com.genflowly.activity.conversation.registerGetCustomerConversationsPaginatedRoutes
+import com.genflowly.activity.conversation.registerGetPinnedConversationsRoutes
+import com.genflowly.activity.conversation.registerPinConversationRoutes
 import com.genflowly.activity.conversation.registerUnarchiveConversationRoutes
+import com.genflowly.activity.conversation.registerUnpinConversationRoutes
 import com.genflowly.activity.customer.registerCustomerProfileSettingsRoutes
 import com.genflowly.activity.customer.registerGetProfileRoutes
 import com.genflowly.activity.customer.registerOnboardCustomerRoutes
@@ -36,6 +39,7 @@ import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
 import com.genflowly.activity.admin.registerRequestAgentMapRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
+import com.genflowly.activity.memory.registerMemoryRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
 import com.genflowly.activity.voice.registerVoiceSessionRoutes
@@ -90,6 +94,9 @@ object Routes {
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
     const val DELETE_CONVERSATION = "$API_V1/conversation/{conversationId}"
     const val UNARCHIVE_CONVERSATION = "$API_V1/conversation/{conversationId}/unarchive"
+    const val PIN_CONVERSATION = "$API_V1/conversation/{conversationId}/pin"
+    const val UNPIN_CONVERSATION = "$API_V1/conversation/{conversationId}/unpin"
+    const val GET_PINNED_CONVERSATIONS = "$API_V1/conversations/pinned"
     const val GET_PROFILE = "$API_V1/profile"
 
     const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
@@ -117,6 +124,9 @@ object Routes {
 
     const val CREATE_ATTACHMENT = "$API_V1/attachments"
     const val GET_ATTACHMENT_URL = "$API_V1/attachments/{attachmentId}/url"
+
+    const val GET_MEMORIES = "$API_V1/memories"
+    const val DELETE_MEMORY = "$API_V1/memories/{memoryId}"
 }
 
 
@@ -138,6 +148,8 @@ fun Application.configureRouting(
     systemApiKeyService: com.genflowly.service.SystemApiKeyService,
     modelCatalogService: com.genflowly.service.ModelCatalogService,
     requestAgentMapAdminService: com.genflowly.service.RequestAgentMapAdminService,
+    memoryService: com.genflowly.service.MemoryService,
+    memoryExtractionService: com.genflowly.service.MemoryExtractionService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -159,8 +171,8 @@ fun Application.configureRouting(
             call.respondText(scalarDocsHtml, ContentType.Text.Html)
         }
 
-        registerGenerateTextRoutes(generationOrchestrator, customerProfileService)
-        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService)
+        registerGenerateTextRoutes(generationOrchestrator, customerProfileService, memoryExtractionService)
+        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, memoryExtractionService)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)
@@ -183,6 +195,9 @@ fun Application.configureRouting(
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationManagementService)
         registerDeleteConversationRoutes(customerProfileService, conversationManagementService)
         registerUnarchiveConversationRoutes(customerProfileService, conversationManagementService)
+        registerPinConversationRoutes(customerProfileService, conversationManagementService)
+        registerUnpinConversationRoutes(customerProfileService, conversationManagementService)
+        registerGetPinnedConversationsRoutes(customerProfileService, conversationManagementService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerCreateAgentRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)
@@ -194,6 +209,7 @@ fun Application.configureRouting(
         registerGetProfileRoutes(customerProfileService)
         registerAttachmentRoutes(attachmentService, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
+        registerMemoryRoutes(memoryService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService

@@ -99,6 +99,15 @@ export class ApiGatewayStack extends cdk.Stack {
             authorizer: authorizer,
         });
 
+        // Long-term user memories share the notes ingest handler — the payload's
+        // dataType (MEMORY) selects the processor/collection downstream.
+        this.api.addRoutes({
+            path: '/encode-memories',
+            methods: [apigatewayv2.HttpMethod.POST],
+            integration: ingestNotesIntegration,
+            authorizer: authorizer,
+        });
+
         const createCollectionsIntegration = new HttpLambdaIntegration(
             'CreateCollectionsIntegration',
             props.createCollectionsLambda

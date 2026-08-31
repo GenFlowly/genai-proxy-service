@@ -2,6 +2,7 @@ package com.genflowly.service
 
 import com.genflowly.models.RequestType
 import com.genflowly.models.ShareRole
+import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ShareRepository
@@ -95,6 +96,32 @@ class ConversationManagementService(
         conversationRepository.unarchiveConversation(conversationId, owner.customerId)
     }
 
+    /**
+     * Pinning is owner-only and writes to the caller's own row: pin state is
+     * per-customer, and the pinned list is queried on the caller's partition,
+     * so pinning on behalf of the owner (as edit-shared actions do) would be
+     * both a privacy leak and invisible to the caller.
+     */
+    suspend fun pinConversation(
+        conversationId: String,
+        customerId: String
+    ) {
+        requireOwner(conversationId, customerId, action = "pin")
+        conversationRepository.pinConversation(conversationId, customerId)
+    }
+
+    suspend fun unpinConversation(
+        conversationId: String,
+        customerId: String
+    ) {
+        requireOwner(conversationId, customerId, action = "unpin")
+        conversationRepository.unpinConversation(conversationId, customerId)
+    }
+
+    suspend fun getPinnedConversations(customerId: String): List<ConversationSummary> {
+        return conversationRepository.getPinnedConversationsByCustomer(customerId)
+    }
+
     suspend fun getCustomerConversationsPaginated(
         customerId: String,
         pageSize: Int = 10,
@@ -135,6 +162,13 @@ class ConversationManagementService(
     ): List<com.genflowly.models.CustomerProfile> {
         requireEditOrOwner(conversationId, callerCustomerId, action = "list-shares")
         return sharedUsersResolver.getUsersWithSharedConversation(conversationId)
+    }
+
+    private suspend fun requireOwner(conversationId: String, callerCustomerId: String, action: String) {
+        val role = conversationService.getConversationRole(conversationId, callerCustomerId)
+        if (role != ShareRole.OWNER) {
+            throw SecurityException("Customer $callerCustomerId cannot $action conversation $conversationId")
+        }
     }
 
     private suspend fun requireEditOrOwner(conversationId: String, callerCustomerId: String, action: String) {

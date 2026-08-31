@@ -4,11 +4,20 @@ import '@testing-library/jest-dom'
 import ConversationHistoryComponent from '../../../../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent'
 import { useAuth } from '../../../../context/AuthContext'
 import { useConversation } from '../../../../context/ConversationContext'
-import { getCustomerConversations, archiveConversation } from '../../../../services/conversationHistoryService'
+import {
+    getCustomerConversations,
+    getPinnedConversations,
+    archiveConversation,
+    pinConversation,
+    unpinConversation,
+} from '../../../../services/conversationHistoryService'
 import { clearHistoryCache } from '../../../../components/widgets/ConversationHistoryWidget/historyCache'
 
 jest.mock('../../../../context/AuthContext')
 jest.mock('../../../../context/ConversationContext')
+jest.mock('../../../../context/ToastContext', () => ({
+    useToast: () => ({ showToast: mockShowToast }),
+}))
 jest.mock('../../../../services/conversationHistoryService')
 let mockParams = { conversationId: undefined as string | undefined }
 
@@ -19,8 +28,10 @@ jest.mock('react-router-dom', () => ({
 jest.mock('../../../../components/widgets/ConversationHistoryWidget/ConversationHistory.module.scss', () => ({}), { virtual: true })
 
 const mockNavigate = jest.fn()
+const mockShowToast = jest.fn()
 const mockGetAccessTokenSilently = jest.fn().mockResolvedValue('mock-token')
 const mockGetCustomerConversations = getCustomerConversations as jest.Mock
+const mockGetPinnedConversations = getPinnedConversations as jest.Mock
 
 const defaultConversations = [
     { conversationId: 'conv-1', title: 'First Chat', createdAt: null, updatedAt: null },
@@ -55,6 +66,7 @@ describe('ConversationHistoryComponent', () => {
             conversations: defaultConversations,
             lastEvaluatedKey: null,
         })
+        mockGetPinnedConversations.mockResolvedValue({ conversations: [] })
     })
 
     test('renders history header', async () => {
@@ -305,5 +317,140 @@ describe('ConversationHistoryComponent', () => {
         })
 
         expect(mockNavigate).not.toHaveBeenCalledWith('/')
+    })
+
+    describe('pinned conversations', () => {
+        test('renders Pinned section first and excludes pinned items from date groups', async () => {
+            mockGetPinnedConversations.mockResolvedValue({
+                conversations: [
+                    { conversationId: 'conv-1', title: 'First Chat', createdAt: null, updatedAt: null, pinnedAt: '2026-08-30T00:00:00Z' },
+                ],
+            })
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByText('Pinned')).toBeInTheDocument()
+            })
+
+            // conv-1 appears exactly once (in the Pinned group), conv-2 stays in date groups
+            expect(screen.getAllByTestId('conv-history-item-conv-1')).toHaveLength(1)
+            expect(screen.getByTestId('conv-unpin-btn-conv-1')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-pin-btn-conv-2')).toBeInTheDocument()
+            // Pinned group renders before the date groups
+            const pinnedHeader = screen.getByText('Pinned')
+            const item = screen.getByTestId('conv-history-item-conv-2')
+            expect(pinnedHeader.compareDocumentPosition(item)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+        })
+
+        test('pinning moves the item to Pinned and shows a toast', async () => {
+            ;(pinConversation as jest.Mock).mockResolvedValue(undefined)
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-pin-btn-conv-1')).toBeInTheDocument()
+            })
+
+            fireEvent.click(screen.getByTestId('conv-pin-btn-conv-1'))
+
+            await waitFor(() => {
+                expect(pinConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+            })
+            await waitFor(() => {
+                expect(mockShowToast).toHaveBeenCalledWith('Conversation pinned')
+            })
+
+            expect(screen.getByText('Pinned')).toBeInTheDocument()
+            // Now in the Pinned section: unpin button replaces the pin button
+            expect(screen.getByTestId('conv-unpin-btn-conv-1')).toBeInTheDocument()
+            expect(screen.queryByTestId('conv-pin-btn-conv-1')).not.toBeInTheDocument()
+            expect(screen.getAllByTestId('conv-history-item-conv-1')).toHaveLength(1)
+        })
+
+        test('failed pin reverts the optimistic move and shows an error toast', async () => {
+            ;(pinConversation as jest.Mock).mockRejectedValue(new Error('nope'))
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-pin-btn-conv-1')).toBeInTheDocument()
+            })
+
+            fireEvent.click(screen.getByTestId('conv-pin-btn-conv-1'))
+
+            await waitFor(() => {
+                expect(mockShowToast).toHaveBeenCalledWith('Failed to pin conversation')
+            })
+
+            expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
+            expect(screen.getByTestId('conv-pin-btn-conv-1')).toBeInTheDocument()
+        })
+
+        test('unpinning returns the item to the date groups and shows a toast', async () => {
+            mockGetPinnedConversations.mockResolvedValue({
+                conversations: [
+                    { conversationId: 'conv-9', title: 'Pinned Chat', createdAt: null, updatedAt: null, pinnedAt: '2026-08-30T00:00:00Z' },
+                ],
+            })
+            ;(unpinConversation as jest.Mock).mockResolvedValue(undefined)
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-unpin-btn-conv-9')).toBeInTheDocument()
+            })
+
+            fireEvent.click(screen.getByTestId('conv-unpin-btn-conv-9'))
+
+            await waitFor(() => {
+                expect(unpinConversation).toHaveBeenCalledWith('mock-token', 'conv-9')
+            })
+            await waitFor(() => {
+                expect(mockShowToast).toHaveBeenCalledWith('Conversation unpinned')
+            })
+
+            // Pinned section disappears; conv-9 (not in the loaded pages) was
+            // inserted into the date-grouped list
+            expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-item-conv-9')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-pin-btn-conv-9')).toBeInTheDocument()
+        })
+
+        test('archiving a pinned conversation removes it from the Pinned section', async () => {
+            mockGetPinnedConversations.mockResolvedValue({
+                conversations: [
+                    { conversationId: 'conv-1', title: 'First Chat', createdAt: null, updatedAt: null, pinnedAt: '2026-08-30T00:00:00Z' },
+                ],
+            })
+            ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByText('Pinned')).toBeInTheDocument()
+            })
+
+            fireEvent.click(screen.getByTestId('conv-archive-btn-conv-1'))
+
+            await waitFor(() => {
+                expect(archiveConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+            })
+            await waitFor(() => {
+                expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
+            })
+            expect(screen.queryByTestId('conv-history-item-conv-1')).not.toBeInTheDocument()
+        })
+
+        test('a failed pinned fetch does not break the history list', async () => {
+            mockGetPinnedConversations.mockRejectedValue(new Error('boom'))
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+            })
+            expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
+        })
     })
 })

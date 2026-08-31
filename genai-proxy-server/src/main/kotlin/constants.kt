@@ -76,6 +76,7 @@ object DynamoDBConstants {
     const val LATEST_VERSION_KEY = "latestVersion"
     const val DELETED_AT_KEY = "deletedAt"
     const val ARCHIVED_AT_KEY = "archivedAt"
+    const val PINNED_AT_KEY = "pinnedAt"
 
     // Tool credentials — per-customer, per-toolType
     const val CUSTOMER_TOOL_CREDENTIALS_TABLE = "CustomerToolCredentials"
@@ -112,6 +113,15 @@ object DynamoDBConstants {
 
     const val CUSTOMER_NOTES_TABLE = "CustomerNotes"
     const val NOTE_KEY = "noteKey"
+
+    // Long-term memories learned about a customer from conversations and notes.
+    // PK=customerId, SK=memoryId. Memory items use the "MEM#" sort-key prefix;
+    // "META#CONV#<conversationId>" items carry per-conversation extraction
+    // bookkeeping (debounce state) and never appear in listings.
+    const val CUSTOMER_MEMORY_TABLE = "CustomerMemory"
+    const val MEMORY_ID_KEY = "memoryId"
+    const val MEMORY_ITEM_PREFIX = "MEM#"
+    const val MEMORY_CONV_META_PREFIX = "META#CONV#"
 
     // Username reservation/lookup — PK=username; recordTypeIndex GSI supports
     // prefix search across USER records.

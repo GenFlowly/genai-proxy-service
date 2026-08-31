@@ -115,6 +115,7 @@ fun appModule(): Module = module {
     single { SystemApiKeyRepository(get(), get()) }
     single { ModelCatalogRepository(get(), get()) }
     single { NotesRepository(get(), get()) }
+    single { com.genflowly.repository.MemoryRepository(get(), get()) }
     single { InstructionRepository(get(), get()) }
     single { GraphRepository(get(), get()) }
     single { RequestAgentMapRepository(get(), get()) }
@@ -125,18 +126,20 @@ fun appModule(): Module = module {
     single { GraphService(get(), get()) }
     single { RequestAgentDefaultsLoader() }
     single { AgentResolutionService(get(), get(), get(), get()) }
-    single { GenerationAgentExecutor(get(), get()) }
+    single { GenerationAgentExecutor(get(), get(), get()) }
     single { RequestAgentMapAdminService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
-    single { GenerationOrchestrator(get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
+    single { com.genflowly.service.MemoryExtractionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
     single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
-    single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.SystemApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.SystemAIFailoverService(get()) }
