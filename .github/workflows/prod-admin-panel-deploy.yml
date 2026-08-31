@@ -1,18 +1,8 @@
 name: Production Admin Panel Deploy
 
+# Manual-only: the admin panel is deliberately excluded from the merge-triggered
+# production pipeline. Deploy from the Actions tab (always builds main).
 on:
-  workflow_call:
-    secrets:
-      NETLIFY_AUTH_TOKEN:
-        required: false
-      NETLIFY_ADMIN_PANEL_SITE_ID:
-        required: false
-      AUTH0_SPA_DOMAIN:
-        required: false
-      AUTH0_ADMIN_PANEL_CLIENT_ID:
-        required: false
-      AUTH0_API_AUDIENCE:
-        required: false
   workflow_dispatch:
 
 jobs:
@@ -23,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

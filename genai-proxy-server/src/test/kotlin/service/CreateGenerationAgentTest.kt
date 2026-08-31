@@ -69,6 +69,42 @@ class CreateGenerationAgentTest {
     }
 
     @Test
+    fun `deleteAgent removes the graph and its nodes`() = runTest {
+        coEvery { graphRepo.getCustomerGraph("GRP1") } returns mapOf(
+            "customerId" to av("CU1"),
+            com.genflowly.DynamoDBConstants.GRAPH_IS_DEFAULT_KEY to
+                software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().bool(false).build(),
+            com.genflowly.DynamoDBConstants.GRAPH_NODE_IDS_KEY to
+                software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder()
+                    .l(av("NOD1"), av("NOD2")).build(),
+        )
+
+        service.deleteAgent("CU1", "GRP1")
+
+        coVerify { graphRepo.deleteCustomerGraphNode("NOD1") }
+        coVerify { graphRepo.deleteCustomerGraphNode("NOD2") }
+        coVerify { graphRepo.deleteCustomerGraph("GRP1") }
+    }
+
+    @Test
+    fun `deleteAgent blocks the default graph and hides foreign graphs`() = runTest {
+        coEvery { graphRepo.getCustomerGraph("GRP-default") } returns mapOf(
+            "customerId" to av("CU1"),
+            com.genflowly.DynamoDBConstants.GRAPH_IS_DEFAULT_KEY to
+                software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().bool(true).build(),
+        )
+        assertFailsWith<IllegalArgumentException> { service.deleteAgent("CU1", "GRP-default") }
+
+        coEvery { graphRepo.getCustomerGraph("GRP-foreign") } returns mapOf("customerId" to av("CU-other"))
+        assertFailsWith<IllegalStateException> { service.deleteAgent("CU1", "GRP-foreign") }
+
+        coVerify(exactly = 0) { graphRepo.deleteCustomerGraph(any()) }
+    }
+
+    private fun av(v: String) =
+        software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().s(v).build()
+
+    @Test
     fun `rejects unknown instruction and blank name`() = runTest {
         coEvery { instructionRepo.getLatestInstructionVersion("INS-missing") } returns null
 

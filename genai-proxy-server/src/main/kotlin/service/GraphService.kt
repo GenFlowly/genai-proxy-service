@@ -43,7 +43,10 @@ class GraphService(
     private val instructionRepository: InstructionRepository,
 ) {
 
-    private val nodeConfigJson = kotlinx.serialization.json.Json { encodeDefaults = false }
+    private val nodeConfigJson = kotlinx.serialization.json.Json {
+        encodeDefaults = false
+        ignoreUnknownKeys = true
+    }
 
     // ─── Generation agents (1-node graphs behind the request-agent map) ───────
 
@@ -156,6 +159,28 @@ class GraphService(
         } catch (e: Exception) {
             logger.warn { "Failed to seed default graph for customerId=$customerId: ${e.message}" }
         }
+    }
+
+    /**
+     * Deletes an agent: the graph and every node it owns. Guarded against the
+     * default graph — deleting that would break agentic chat for the customer.
+     * @throws IllegalStateException when not found / not owned (→ 404).
+     * @throws IllegalArgumentException for the default graph (→ 400).
+     */
+    suspend fun deleteAgent(customerId: String, graphId: String) {
+        val graph = graphRepository.getCustomerGraph(graphId)
+        // Not-owned deliberately reads as not-found (no resource-existence leak)
+        if (graph == null || graph["customerId"]?.s() != customerId) {
+            throw IllegalStateException("Agent (graph) '$graphId' not found.")
+        }
+        require(graph[GRAPH_IS_DEFAULT_KEY]?.bool() != true) {
+            "Cannot delete the default graph."
+        }
+
+        val nodeIds = graph[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
+        nodeIds.forEach { graphRepository.deleteCustomerGraphNode(it) }
+        graphRepository.deleteCustomerGraph(graphId)
+        logger.info { "Deleted agent $graphId (+${nodeIds.size} node(s)) for customer $customerId" }
     }
 
     // ─── Graph Nodes ──────────────────────────────────────────────────────────
@@ -425,6 +450,27 @@ class GraphService(
             isOnlyGraph      = isOnlyGraph,
             nodePatchConfigs = nodePatchConfigs,
         )
+
+        // ── 4b. GENERATION-specific validation ────────────────────────────────
+        // A patched GENERATION node config must parse and reference an existing
+        // instruction — otherwise a mapped request-agent would silently degrade
+        // to the bundled default at resolution time.
+        for ((nodeId, configJson) in nodePatchConfigs) {
+            if (nodeTypeById[nodeId] != GENERATION_NODE_TYPE) continue
+            val config = try {
+                nodeConfigJson.decodeFromString(GenerationNodeConfig.serializer(), configJson)
+            } catch (e: Exception) {
+                throw IllegalArgumentException(
+                    "Node '$nodeId' config is not a valid GENERATION config: ${e.message}"
+                )
+            }
+            val version = config.instructionVersion
+                ?: instructionRepository.getLatestInstructionVersion(config.instructionId)
+                ?: throw IllegalArgumentException("Instruction ${config.instructionId} not found.")
+            requireNotNull(instructionRepository.getInstruction(config.instructionId, version)) {
+                "Instruction ${config.instructionId} v$version not found."
+            }
+        }
 
         // ── 5. Apply node patches ─────────────────────────────────────────────
         req.nodes?.forEach { patch ->
