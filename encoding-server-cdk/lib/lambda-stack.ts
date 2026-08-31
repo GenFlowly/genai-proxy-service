@@ -43,7 +43,6 @@ export class LambdaStack extends cdk.Stack {
     public readonly embedLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
     public readonly createCollectionsLambda: DockerImageFunction;
-    public readonly submitVoyageBatchLambda: DockerImageFunction;
     public readonly pollVoyageBatchesLambda: DockerImageFunction;
     public readonly accumulateVoyageNotesLambda: DockerImageFunction;
     public readonly voyageBatchJobsTable: dynamodb.Table;
@@ -110,6 +109,20 @@ export class LambdaStack extends cdk.Stack {
          * Split into 4 steps: ParseAndChunk -> Encode -> Store Zilliz -> Store S3
          */
 
+        // Per-model embedding config (chunkSize/chunkOverlap tokens), tunable
+        // without a code deploy. PK=modelType, SK=modelName. Read at chunking
+        // time by parse-and-chunk (realtime) and the notes accumulator (batch);
+        // missing rows fall back to code defaults. Seed via
+        // encoding-server/scripts/seed_model_registry.py.
+        const embeddingModelRegistryTable = new dynamodb.Table(this, 'EmbeddingModelRegistryTable', {
+            tableName: 'EmbeddingModelRegistry',
+            partitionKey: { name: 'modelType', type: dynamodb.AttributeType.STRING },
+            sortKey: { name: 'modelName', type: dynamodb.AttributeType.STRING },
+            billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+            removalPolicy: cdk.RemovalPolicy.RETAIN, // operator-managed config
+        });
+        const modelRegistryEnv = { EMBEDDING_MODEL_REGISTRY_TABLE: embeddingModelRegistryTable.tableName };
+
         // 0. Parse And Chunk Lambda
         this.parseAndChunkLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-parse-and-chunk-lambda`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-parse-and-chunk-lambda`,
@@ -122,12 +135,14 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
             environment: {
                 JOBLIB_TEMP_FOLDER: '/tmp',
+                ...modelRegistryEnv,
                 // API keys for hosted embedding providers (voyage/openai model types).
                 // Only needed by semantic chunking here; sourced from the deploy environment.
                 ...(process.env.VOYAGE_API_KEY ? { VOYAGE_API_KEY: process.env.VOYAGE_API_KEY } : {}),
                 ...(process.env.OPENAI_API_KEY ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY } : {}),
             },
         });
+        embeddingModelRegistryTable.grantReadData(this.parseAndChunkLambda);
 
         // 1. Embed Lambda natively decoupled
         this.embedLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-embeddings-lambda`, {
@@ -172,10 +187,13 @@ export class LambdaStack extends cdk.Stack {
         }));
 
         /**
-         * Voyage Batch pathway (processing_mode == "batch") — Option A:
-         * submit ends the SFN execution after recording a tracking row; a
-         * scheduled poller reconciles jobs when they complete. Polling cost is
-         * flat (one poller per tick) regardless of how many jobs are in flight.
+         * Voyage Batch pathway — customer-level batch embedding only: the
+         * scheduled accumulator sweeps pending batch-mode notes into one Voyage
+         * job, and a scheduled poller reconciles jobs when they complete.
+         * Polling cost is flat (one poller per tick) regardless of how many
+         * jobs are in flight. There is deliberately NO per-request batch route
+         * through the ingestion pipeline — per-note batch jobs would cost the
+         * full realtime compute plus batch bookkeeping.
          * Both Lambdas ride in the store-embeddings image (milvus-base) via cmd.
          */
         const voyageApiKeyEnv: Record<string, string> = props.voyageApiKey ? { VOYAGE_API_KEY: props.voyageApiKey } : {};
@@ -194,28 +212,13 @@ export class LambdaStack extends cdk.Stack {
         });
 
         // Per-customer document store. Durable per-note/email objects live at
-        // {customerId}/notes|emails/{id}.json; transient per-job staging (legacy
-        // per-doc submit) lives under _staging/{batchId}.json.
+        // {customerId}/notes|emails/{id}.json; transient per-job staging lives
+        // under _staging/{batchId}.json.
         const documentsEnv: Record<string, string> = {
             DOCUMENTS_BUCKET: props.customerDocumentsBucket.bucketName,
             STAGING_PREFIX: '_staging/',
             VOYAGE_BATCH_TABLE: this.voyageBatchJobsTable.tableName,
         };
-
-        // Submit: create the Voyage batch job, stage payload to S3, record a row.
-        this.submitVoyageBatchLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-submit-voyage-batch-lambda`, {
-            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-submit-voyage-batch-lambda`,
-            code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
-                tagOrDigest: props.storeEmbeddingsImageTag || 'store-embeddings-latest',
-                cmd: ['handlers.submit_voyage_batch_lambda.handler'],
-            }),
-            memorySize: 512,
-            timeout: cdk.Duration.seconds(900),
-            architecture: lambda.Architecture.X86_64,
-            environment: { ...voyageApiKeyEnv, ...documentsEnv },
-        });
-        props.customerDocumentsBucket.grantReadWrite(this.submitVoyageBatchLambda);
-        this.voyageBatchJobsTable.grantReadWriteData(this.submitVoyageBatchLambda);
 
         // Poller: reconciles all in-flight jobs; on completion downloads results
         // and stores them (reuses store logic → needs Zilliz creds + KMS + config).
@@ -262,10 +265,12 @@ export class LambdaStack extends cdk.Stack {
             environment: {
                 CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
                 NOTES_EMBEDDING_STATUS_INDEX,
+                ...modelRegistryEnv,
                 ...voyageApiKeyEnv,
                 ...documentsEnv,
             },
         });
+        embeddingModelRegistryTable.grantReadData(this.accumulateVoyageNotesLambda);
         props.customerDocumentsBucket.grantReadWrite(this.accumulateVoyageNotesLambda);
         this.voyageBatchJobsTable.grantReadWriteData(this.accumulateVoyageNotesLambda);
         customerNotesTable.grantReadWriteData(this.accumulateVoyageNotesLambda);

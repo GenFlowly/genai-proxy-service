@@ -1,10 +1,9 @@
 FROM milvus-base:latest
 
 # Copy application code. This image backs the store step and the Voyage batch
-# branch (submit + scheduled poller), which reuse store logic + pymilvus + requests.
+# lambdas (scheduled accumulator + poller), which reuse store logic + pymilvus + requests.
 COPY handlers/store_embeddings_lambda.py ${LAMBDA_TASK_ROOT}/handlers/store_embeddings_lambda.py
 COPY handlers/voyage_batch_store.py ${LAMBDA_TASK_ROOT}/handlers/voyage_batch_store.py
-COPY handlers/submit_voyage_batch_lambda.py ${LAMBDA_TASK_ROOT}/handlers/submit_voyage_batch_lambda.py
 COPY handlers/poll_voyage_batches_lambda.py ${LAMBDA_TASK_ROOT}/handlers/poll_voyage_batches_lambda.py
 COPY handlers/accumulate_voyage_notes_lambda.py ${LAMBDA_TASK_ROOT}/handlers/accumulate_voyage_notes_lambda.py
 

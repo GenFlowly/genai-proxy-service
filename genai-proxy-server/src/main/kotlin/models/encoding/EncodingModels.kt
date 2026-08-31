@@ -35,5 +35,9 @@ data class EncodingSaveNoteRequest(
     val client: String,
     val modelType: String? = null,
     val modelName: String? = null,
+    // Optional chunking overrides (tokens); unset means the encoding server
+    // resolves per-model values from its EmbeddingModelRegistry table
+    val chunkSize: Int? = null,
+    val chunkOverlap: Int? = null,
     val data: EncodingNoteData
 )

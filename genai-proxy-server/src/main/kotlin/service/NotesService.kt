@@ -133,6 +133,8 @@ class NotesService(
             client = request.client,
             modelType = EmbeddingConstants.MODEL_TYPE,
             modelName = prefs?.embeddingModel ?: EmbeddingConstants.MODEL_NAME,
+            chunkSize = request.chunkSize,
+            chunkOverlap = request.chunkOverlap,
             data = EncodingNoteData(
                 note_key = request.data.note_key,
                 noteKey = request.data.note_key,
