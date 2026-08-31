@@ -69,7 +69,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         already_existed = []
 
         # 2. Define target types to create
-        data_types = ['Email', 'NOTE', 'MEMORY']
+        data_types = ['Email', 'NOTE', 'MEMORY', 'CONVERSATION']
 
         for data_type in data_types:
             # Create a dummy state just to resolve the correct processor and schema
