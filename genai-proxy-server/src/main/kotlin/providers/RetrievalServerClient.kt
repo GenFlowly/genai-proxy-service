@@ -462,6 +462,34 @@ class RetrievalServerClient(
     }
 
     /**
+     * Semantic search over the customer's conversation collections via
+     * /search-conversations. Returns chunk hits already grouped to one entry
+     * per conversation (best snippet + score). Throws on transport errors —
+     * callers decide whether that is fatal.
+     */
+    suspend fun searchConversations(customerId: String, query: String, topN: Int): List<ConversationVectorHit> {
+        val response = httpClient.post("$retrievalServerUrl/search-conversations") {
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(SearchConversationsPayload(customer_id = customerId, query = query, top_n = topN)))
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            logger.error { "Conversation search failed for customer $customerId: ${response.status} $errorBody" }
+            return emptyList()
+        }
+        val wire = json.decodeFromString<SearchConversationsWireResponse>(response.bodyAsText())
+        return wire.conversations.map {
+            ConversationVectorHit(
+                conversationId = it.conversation_key,
+                score = it.score,
+                snippet = it.snippet,
+                matchedChunks = it.matched_chunks,
+                createdAt = it.created_at
+            )
+        }
+    }
+
+    /**
      * Hard-deletes a memory's embeddings in the vector DB via
      * /delete-memory-vectors. Throws on transport errors — callers decide
      * whether that is fatal.
@@ -486,3 +514,29 @@ private data class DeleteNoteVectorsPayload(val customer_id: String, val note_ke
 
 @Serializable
 private data class DeleteMemoryVectorsPayload(val customer_id: String, val memory_key: String)
+
+@Serializable
+private data class SearchConversationsPayload(val customer_id: String, val query: String, val top_n: Int)
+
+@Serializable
+private data class SearchConversationsWireHit(
+    val conversation_key: String,
+    val score: Double,
+    val snippet: String = "",
+    val message_key: String = "",
+    val created_at: String = "",
+    val client: String = "",
+    val matched_chunks: Int = 1
+)
+
+@Serializable
+private data class SearchConversationsWireResponse(val conversations: List<SearchConversationsWireHit> = emptyList())
+
+/** A conversation-level semantic search hit, decoupled from the wire format. */
+data class ConversationVectorHit(
+    val conversationId: String,
+    val score: Double,
+    val snippet: String,
+    val matchedChunks: Int,
+    val createdAt: String
+)

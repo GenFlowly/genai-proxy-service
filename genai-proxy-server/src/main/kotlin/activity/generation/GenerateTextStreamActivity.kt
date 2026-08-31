@@ -16,6 +16,7 @@ import kotlinx.serialization.SerializationException
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GenerateTextStreamRequest
 import org.slf4j.LoggerFactory
+import com.genflowly.service.ConversationIndexingService
 import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.MemoryExtractionService
 
@@ -24,7 +25,8 @@ private val logger = LoggerFactory.getLogger("GenerateTextStreamRoute")
 fun Route.registerGenerateTextStreamRoutes(
     generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService,
-    memoryExtractionService: MemoryExtractionService
+    memoryExtractionService: MemoryExtractionService,
+    conversationIndexingService: ConversationIndexingService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT_STREAM, {
@@ -131,11 +133,20 @@ fun Route.registerGenerateTextStreamRoutes(
                 }
 
                 // Fire-and-forget: learn about the user from the completed
-                // exchange (debounced inside the service). The bearer token is
-                // only needed for the embedding push and may be absent.
+                // exchange (debounced inside the service) and index the
+                // exchange for semantic conversation search. The bearer token
+                // is only needed for the embedding pushes and may be absent.
                 val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
                 memoryExtractionService.maybeExtractFromConversationAsync(
                     customerId, streamResult.conversationId, bearerToken
+                )
+                conversationIndexingService.indexExchangeAsync(
+                    customerId = customerId,
+                    conversationId = streamResult.conversationId,
+                    client = request.client,
+                    userText = request.prompt.prompt,
+                    responseMessageId = streamResult.responseMessageId,
+                    bearerToken = bearerToken
                 )
 
             } catch (e: SerializationException) {
