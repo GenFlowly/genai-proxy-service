@@ -1,0 +1,7 @@
+Existing memories (JSON array of {memoryId, kind, category, text}):
+{{existingMemories}}
+
+New content (source: {{sourceType}}):
+{{content}}
+
+Return the JSON operations object.

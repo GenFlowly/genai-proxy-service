@@ -26,6 +26,8 @@ import laptopIcon from '../assets/icons/laptop.svg'
 import moonIcon from '../assets/icons/moon.svg'
 import loginIcon from '../assets/icons/login.svg'
 import archiveIcon from '../assets/icons/archive.svg'
+import pinIcon from '../assets/icons/pin.svg'
+import pinOffIcon from '../assets/icons/pin-off.svg'
 import historyIcon from '../assets/icons/history.svg'
 import sunIcon from '../assets/icons/sun.svg'
 
@@ -57,5 +59,7 @@ export const ICONS = {
     SUN: sunIcon,
     LOGIN: loginIcon,
     ARCHIVE: archiveIcon,
+    PIN: pinIcon,
+    PIN_OFF: pinOffIcon,
     HISTORY: historyIcon,
 }

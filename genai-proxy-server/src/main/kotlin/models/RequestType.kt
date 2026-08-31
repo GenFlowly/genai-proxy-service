@@ -12,5 +12,6 @@ import kotlinx.serialization.Serializable
 enum class RequestType {
     INSTRUCTION_PERSONA,
     CONVERSATION_TITLE,
-    NOTE_TITLE
+    NOTE_TITLE,
+    MEMORY_EXTRACTION
 }

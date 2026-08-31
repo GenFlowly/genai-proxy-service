@@ -10,6 +10,7 @@ import { ConversationSummary } from '../../../models/conversationHistory.models'
 
 export interface HistoryCacheState {
     items: ConversationSummary[]
+    pinned: ConversationSummary[]
     lastKey: string | null
     hasMore: boolean
 }
@@ -30,6 +31,8 @@ export function loadHistoryCache(customerId: string | null): HistoryCacheState |
             if (parsed && Array.isArray(parsed.items)) {
                 cache = {
                     items: parsed.items,
+                    // Entries written before the Pinned feature have no pinned array
+                    pinned: Array.isArray(parsed.pinned) ? parsed.pinned : [],
                     lastKey: parsed.lastKey ?? null,
                     hasMore: !!parsed.hasMore,
                 }

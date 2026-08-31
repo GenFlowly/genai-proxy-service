@@ -418,4 +418,16 @@ class CustomerProfileRepository(
                 instructionFallbackMode = item["instructionFallbackMode"]?.s()
             )
         }
+
+    /** Free-form key/value preferences (e.g. memoryEnabled) — empty map when none stored. */
+    suspend fun getOtherPreferences(customerId: String): Map<String, String> =
+        withContext(Dispatchers.IO) {
+            val request = GetItemRequest.builder()
+                .tableName(CUSTOMER_PREFERENCES_TABLE)
+                .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
+                .build()
+
+            val item = dynamoDbClient.getItem(request).item() ?: return@withContext emptyMap()
+            item["otherPreferences"]?.m()?.mapValues { it.value.s() ?: "" } ?: emptyMap()
+        }
 }
