@@ -20,6 +20,8 @@ class NoteProcessor(DataProcessor):
     Processor for Note data.
     """
 
+    HEAVY_RAW_FIELDS = frozenset({'note_value', 'noteValue'})
+
     def validate(self, state: MemoryRequestInternalState) -> bool:
         """
         Validate that the state contains valid note data.

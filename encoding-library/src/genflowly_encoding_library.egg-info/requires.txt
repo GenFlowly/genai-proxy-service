@@ -1,6 +1,12 @@
 requests>=2.31.0
 boto3
 pydantic
+langchain-text-splitters
+tiktoken
+langchain-experimental
+langchain-huggingface
+langchain-openai
+langchain-voyageai
 
 [dev]
 pytest

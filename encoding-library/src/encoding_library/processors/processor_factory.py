@@ -1,3 +1,4 @@
+from encoding_library.processors.conversation_processor import ConversationProcessor
 from encoding_library.processors.data_processor import DataProcessor
 from encoding_library.processors.email_processor import EmailProcessor
 from encoding_library.processors.memory_processor import MemoryProcessor
@@ -28,6 +29,8 @@ class ProcessorFactory:
                     return NoteProcessor()
                 elif data_type_enum == DataType.MEMORY:
                     return MemoryProcessor()
+                elif data_type_enum == DataType.CONVERSATION:
+                    return ConversationProcessor()
 
             except ValueError:
                 pass
