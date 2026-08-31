@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAuth0 } from '@auth0/auth0-react'
+import { useAuth } from '../../../context/AuthContext'
 import { Modal, InputTextWithHint, InstructionTile } from '@genflowly/component-library'
 import { searchInstructions, getRecentInstructions } from '../../../services/instructionService'
 import { InstructionResponse } from '../../../models/instruction.models'
+import { loadRecentInstructionsCache, saveRecentInstructionsCache } from './recentInstructionsCache'
 import styles from './InstructionPickerModal.module.scss'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -21,7 +22,7 @@ export default function InstructionPickerModal({
     onSelect,
 }: InstructionPickerModalProps) {
     const { t } = useTranslation()
-    const { getAccessTokenSilently } = useAuth0()
+    const { getAccessTokenSilently, customerId } = useAuth()
 
     const [query, setQuery] = useState('')
     const [recent, setRecent] = useState<InstructionResponse[]>([])
@@ -31,22 +32,31 @@ export default function InstructionPickerModal({
 
     const isSearching = query.trim().length > 0
 
-    // Load the recently used instructions whenever the picker opens
+    // Load the recently used instructions whenever the picker opens:
+    // stale-while-revalidate — paint the last known list immediately (if
+    // any), then refresh from the API in the background
     useEffect(() => {
         if (!isOpen) return
         setQuery('')
         setResults([])
         setHasError(false)
+        const cached = loadRecentInstructionsCache(customerId)
+        if (cached) setRecent(cached)
         let cancelled = false
         void (async () => {
             setIsLoading(true)
             try {
                 const token = await getAccessTokenSilently()
                 const response = await getRecentInstructions(token, RECENT_LIMIT)
-                if (!cancelled) setRecent(response.instructions)
+                if (!cancelled) {
+                    setRecent(response.instructions)
+                    saveRecentInstructionsCache(customerId, response.instructions)
+                }
             } catch (error) {
                 console.error('Failed to load recent instructions', error)
-                if (!cancelled) setHasError(true)
+                // Keep showing the stale list; only surface the error when
+                // there is nothing to show instead
+                if (!cancelled && !cached) setHasError(true)
             } finally {
                 if (!cancelled) setIsLoading(false)
             }
@@ -55,7 +65,7 @@ export default function InstructionPickerModal({
         // getAccessTokenSilently is intentionally omitted: it is not
         // referentially stable and would re-trigger the fetch on renders
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen])
+    }, [isOpen, customerId])
 
     // Debounced server-side search
     useEffect(() => {

@@ -1,22 +1,15 @@
-name: Encoding Server
+name: Development Encoding Server
 
+# Deploys the encoding server images + CDK stacks.
+# Self-triggered: runs only when the encoding service (or this workflow) changes.
 on:
-  workflow_call:
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: false
-      AWS_SECRET_ACCESS_KEY:
-        required: false
-      GH_PAT_TOKEN_FOR_FREE_ACCOUNT:
-        required: false
-      AUTH0_SPA_DOMAIN:
-        required: false
-      ZILLIZ_ENDPOINT:
-        required: false
-      ZILLIZ_TOKEN:
-        required: false
-      VOYAGE_API_KEY:
-        required: false
+  push:
+    branches: [development]
+    paths:
+      - 'encoding-server/**'
+      - 'encoding-server-cdk/**'
+      - '.github/workflows/dev-encoding-server.yml'
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1

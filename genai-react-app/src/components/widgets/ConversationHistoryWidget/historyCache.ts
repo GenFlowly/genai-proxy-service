@@ -1,13 +1,11 @@
 import { ConversationSummary } from '../../../models/conversationHistory.models'
 
 /**
- * Stale-while-revalidate store for the conversation-history list.
- *
- * The history panel unmounts every time it's hidden (toggle, auto-hide on
- * generation, page navigation), so component state alone forces a skeleton +
- * full refetch on every appearance. This module keeps the last known list in
- * memory (and mirrors it to sessionStorage to survive full page reloads), so
- * the panel paints instantly and refreshes quietly in the background.
+ * Stale-while-revalidate store for the conversation-history list, following
+ * the same pattern as the AuthContext preference/instruction caches:
+ * localStorage keyed per customer, so the panel paints instantly even on a
+ * fresh browser session and refreshes quietly in the background. The last
+ * known list is also kept in memory to skip re-parsing on every mount.
  */
 
 export interface HistoryCacheState {
@@ -16,14 +14,17 @@ export interface HistoryCacheState {
     hasMore: boolean
 }
 
-const SESSION_KEY = 'conversation_history_cache_v1'
+const KEY_SUFFIX = '_conversation_history_cache_v1'
+const storageKey = (customerId: string) => `${customerId}${KEY_SUFFIX}`
 
 let cache: HistoryCacheState | null = null
+let cacheCustomerId: string | null = null
 
-export function loadHistoryCache(): HistoryCacheState | null {
-    if (cache) return cache
+export function loadHistoryCache(customerId: string | null): HistoryCacheState | null {
+    if (!customerId) return null
+    if (cache && cacheCustomerId === customerId) return cache
     try {
-        const raw = sessionStorage.getItem(SESSION_KEY)
+        const raw = localStorage.getItem(storageKey(customerId))
         if (raw) {
             const parsed = JSON.parse(raw)
             if (parsed && Array.isArray(parsed.items)) {
@@ -32,29 +33,35 @@ export function loadHistoryCache(): HistoryCacheState | null {
                     lastKey: parsed.lastKey ?? null,
                     hasMore: !!parsed.hasMore,
                 }
+                cacheCustomerId = customerId
                 return cache
             }
         }
     } catch {
-        // sessionStorage unavailable or corrupted entry — treat as no cache
+        // localStorage unavailable or corrupted entry — treat as no cache
     }
     return null
 }
 
-export function saveHistoryCache(next: HistoryCacheState): void {
+export function saveHistoryCache(customerId: string | null, next: HistoryCacheState): void {
+    if (!customerId) return
     cache = next
+    cacheCustomerId = customerId
     try {
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(next))
+        localStorage.setItem(storageKey(customerId), JSON.stringify(next))
     } catch {
         // Best-effort persistence only
     }
 }
 
-/** Test helper / logout hook: forget everything. */
+/** Logout hook / test helper: forget everything, for every customer. */
 export function clearHistoryCache(): void {
     cache = null
+    cacheCustomerId = null
     try {
-        sessionStorage.removeItem(SESSION_KEY)
+        Object.keys(localStorage).forEach(key => {
+            if (key.endsWith(KEY_SUFFIX)) localStorage.removeItem(key)
+        })
     } catch {
         // ignore
     }

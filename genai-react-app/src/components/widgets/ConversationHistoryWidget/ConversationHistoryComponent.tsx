@@ -20,14 +20,14 @@ const PAGE_SIZE = 15
 
 export default function ConversationHistoryComponent() {
     const { t } = useTranslation()
-    const { getAccessTokenSilently, isAuthenticated } = useAuth()
+    const { getAccessTokenSilently, isAuthenticated, customerId } = useAuth()
     const { conversationId, conversationTitle } = useConversation()
     const navigate = useNavigate()
     const { conversationId: activeId } = useParams<{ conversationId: string }>()
 
     // Stale-while-revalidate: paint the last known list immediately (if any),
     // then refresh from the API in the background
-    const cached = useMemo(loadHistoryCache, [])
+    const cached = useMemo(() => loadHistoryCache(customerId), [customerId])
     const [items, setItems] = useState<ConversationSummary[]>(cached?.items ?? [])
     const [lastKey, setLastKey] = useState<string | null>(cached?.lastKey ?? null)
     const [isLoading, setIsLoading] = useState(false)
@@ -65,8 +65,8 @@ export default function ConversationHistoryComponent() {
     // cache so the next mount paints instantly
     useEffect(() => {
         if (!hasLoadedRef.current) return
-        saveHistoryCache({ items, lastKey, hasMore })
-    }, [items, lastKey, hasMore])
+        saveHistoryCache(customerId, { items, lastKey, hasMore })
+    }, [customerId, items, lastKey, hasMore])
 
     // Patch title in list when the active conversation gets a generated title
     useEffect(() => {
