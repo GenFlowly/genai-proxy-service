@@ -20,7 +20,9 @@ class GenerationAgentExecutorTest {
 
     private val utility = mockk<UtilityGenerationService>()
     private val systemApiKeyService = mockk<SystemApiKeyService>()
-    private val executor = GenerationAgentExecutor(utility, SystemAIFailoverService(systemApiKeyService))
+    private val executor = GenerationAgentExecutor(
+        utility, SystemAIFailoverService(systemApiKeyService), RequestAgentDefaultsLoader()
+    )
 
     private fun agent(
         systemPrompt: String = "System {{a}}",
@@ -105,14 +107,20 @@ class GenerationAgentExecutorTest {
     }
 
     @Test
-    fun `customer-key execution requires a model preference`() = runTest {
-        assertFailsWith<IllegalArgumentException> {
-            executor.executeWithCustomerKey(
-                agent = agent(modelPreference = null),
-                variables = mapOf("a" to "x", "b" to "y"),
-                customerId = "CU1",
-                conversationId = "conv"
-            )
-        }
+    fun `customer-key execution without a model preference falls back to the bundled default model`() = runTest {
+        // NOTE_TITLE's bundled default carries OPENAI/gpt-5
+        coEvery {
+            utility.generateText(AIVendor.OPENAI, "gpt-5", any(), any(), "CU1", null)
+        } returns result("A Title")
+
+        val out = executor.executeWithCustomerKey(
+            agent = agent(modelPreference = null),
+            variables = mapOf("a" to "x", "b" to "y"),
+            customerId = "CU1",
+            conversationId = "conv"
+        )
+
+        assertEquals("A Title", out.text)
+        coVerify { utility.generateText(AIVendor.OPENAI, "gpt-5", any(), "System x", "CU1", null) }
     }
 }

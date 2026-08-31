@@ -80,7 +80,10 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.toString()
                 )
 
-                call.response.header("Cache-Control", "no-cache")
+                // no-transform is load-bearing: compressing middlewares (e.g. the
+                // CRA dev-server proxy's gzip) buffer chunked responses unless the
+                // response opts out, which turns the stream into one big lump.
+                call.response.header("Cache-Control", "no-cache, no-transform")
                 call.response.header("Connection", "keep-alive")
                 call.response.header("X-Accel-Buffering", "no")
 

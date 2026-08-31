@@ -10,7 +10,10 @@ import com.genflowly.activity.conversation.registerDeleteConversationRoutes
 import com.genflowly.activity.conversation.registerGetConversationRoutes
 import com.genflowly.activity.conversation.registerGetConversationSharedUsersRoutes
 import com.genflowly.activity.conversation.registerGetCustomerConversationsPaginatedRoutes
+import com.genflowly.activity.conversation.registerGetPinnedConversationsRoutes
+import com.genflowly.activity.conversation.registerPinConversationRoutes
 import com.genflowly.activity.conversation.registerUnarchiveConversationRoutes
+import com.genflowly.activity.conversation.registerUnpinConversationRoutes
 import com.genflowly.activity.customer.registerCustomerProfileSettingsRoutes
 import com.genflowly.activity.customer.registerGetProfileRoutes
 import com.genflowly.activity.customer.registerOnboardCustomerRoutes
@@ -90,6 +93,9 @@ object Routes {
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
     const val DELETE_CONVERSATION = "$API_V1/conversation/{conversationId}"
     const val UNARCHIVE_CONVERSATION = "$API_V1/conversation/{conversationId}/unarchive"
+    const val PIN_CONVERSATION = "$API_V1/conversation/{conversationId}/pin"
+    const val UNPIN_CONVERSATION = "$API_V1/conversation/{conversationId}/unpin"
+    const val GET_PINNED_CONVERSATIONS = "$API_V1/conversations/pinned"
     const val GET_PROFILE = "$API_V1/profile"
 
     const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
@@ -183,6 +189,9 @@ fun Application.configureRouting(
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationManagementService)
         registerDeleteConversationRoutes(customerProfileService, conversationManagementService)
         registerUnarchiveConversationRoutes(customerProfileService, conversationManagementService)
+        registerPinConversationRoutes(customerProfileService, conversationManagementService)
+        registerUnpinConversationRoutes(customerProfileService, conversationManagementService)
+        registerGetPinnedConversationsRoutes(customerProfileService, conversationManagementService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerCreateAgentRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)

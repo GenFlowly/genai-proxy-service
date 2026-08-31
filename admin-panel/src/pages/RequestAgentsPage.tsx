@@ -560,7 +560,7 @@ export default function RequestAgentsPage() {
                                 void loadModelsForVendor(e.target.value)
                             }}
                         >
-                            <option value="">None (system failover decides)</option>
+                            <option value="">Platform default (persona: system failover)</option>
                             {Object.values(AIVendor).map((vendor) => (
                                 <option key={vendor} value={vendor}>
                                     {VENDOR_LABELS[vendor]}
