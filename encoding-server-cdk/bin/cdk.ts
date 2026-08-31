@@ -49,7 +49,6 @@ const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENC
     parseAndChunkLambda: lambdaStack.parseAndChunkLambda,
     embedLambda: lambdaStack.embedLambda,
     storeEmbeddingsLambda: lambdaStack.storeEmbeddingsLambda,
-    submitVoyageBatchLambda: lambdaStack.submitVoyageBatchLambda,
 });
 
 

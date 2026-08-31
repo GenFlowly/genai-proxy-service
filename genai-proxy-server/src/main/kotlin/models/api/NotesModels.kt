@@ -16,7 +16,12 @@ data class SaveNoteRequest(
     val data: NoteData,
     // Autosaves send encode=false to skip the embedding pipeline; only the
     // final save of an editing session (idle/blur/tab close) encodes.
-    val encode: Boolean = true
+    val encode: Boolean = true,
+    // Optional chunking overrides (tokens) forwarded to the encoding server
+    // for experimentation; when unset, the per-model defaults from the
+    // EmbeddingModelRegistry table apply.
+    val chunkSize: Int? = null,
+    val chunkOverlap: Int? = null
 )
 
 @Serializable

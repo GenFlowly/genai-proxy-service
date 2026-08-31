@@ -7,6 +7,7 @@ from encoding_library.chunkers.enums import ChunkingType
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.utils.embedding_utils import create_chunks, get_embedding_model
+from encoding_library.utils.model_registry import get_chunking_params
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -37,11 +38,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 memory_request_internal_state.model_type,
                 memory_request_internal_state.model_name,
             )
+        # Request overrides win; otherwise per-model values from the
+        # EmbeddingModelRegistry table (falling back to code defaults)
+        chunk_size, chunk_overlap = get_chunking_params(
+            memory_request_internal_state.model_type,
+            memory_request_internal_state.model_name,
+            memory_request_internal_state.chunk_size,
+            memory_request_internal_state.chunk_overlap,
+        )
         chunks = create_chunks(
             text_to_encode,
             encoder,
             chunking_type=chunking_type,
             chunking_technique=memory_request_internal_state.chunking_technique,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
         )
 
         logger.info(f"Chunked into {len(chunks)} pieces across batch_size={BATCH_SIZE}.")
@@ -62,23 +73,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 chunking_type=memory_request_internal_state.chunking_type,
                 chunking_technique=memory_request_internal_state.chunking_technique,
                 data_chunks=chunks[i:i + BATCH_SIZE],
-                processing_mode=memory_request_internal_state.processing_mode,
             )
             batches.append(batch_state.to_dict())
 
-        # Surface processing_mode at the top level so the Step Functions Choice
-        # state can route between the realtime Map and the Voyage batch branch.
-        # Batch mode is voyage-only; anything else falls back to realtime.
-        processing_mode = (memory_request_internal_state.processing_mode or "realtime").lower()
-        if processing_mode == "batch" and (memory_request_internal_state.model_type or "") != "voyage":
-            logger.warning(
-                "processing_mode=batch is only supported for model_type=voyage; "
-                "falling back to realtime."
-            )
-            processing_mode = "realtime"
-
-        logger.info(f"Returning {len(batches)} batches (processing_mode={processing_mode}).")
-        return {"batches": batches, "processing_mode": processing_mode}
+        logger.info(f"Returning {len(batches)} batches.")
+        return {"batches": batches}
 
     except Exception as e:
         logger.error(f"Error in parse_and_chunk_lambda: {str(e)}")

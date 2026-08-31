@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.utils.embedding_utils import create_chunks
-from encoding_library.utils.model_registry import resolve_model
+from encoding_library.utils.model_registry import resolve_model, get_chunking_params
 from encoding_library.utils.voyage_batch import (
     build_embeddings_jsonl,
     upload_batch_file,
@@ -135,7 +135,7 @@ def _submit_group(model_name: str, states: List[Dict[str, Any]], refs: List[Dict
     the ordered ref list ({customer_id, note_key, s3_key}) so the poller can
     download them in JSONL order and map results by custom_id b{i}c{j}.
     """
-    jsonl = build_embeddings_jsonl(states)
+    jsonl = build_embeddings_jsonl(states, model_name)
     file_id = upload_batch_file(jsonl)
     batch = create_batch(file_id, model_name)
     batch_id = batch["id"]
@@ -195,7 +195,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         processor = ProcessorFactory.get_processor(state)
         text = processor.get_text_to_encode(state)
-        chunks = create_chunks(text, None, chunking_type="recursive", chunking_technique="token")
+        # Per-model chunking params from the EmbeddingModelRegistry table
+        # (cached per process; falls back to code defaults)
+        chunk_size, chunk_overlap = get_chunking_params(state.model_type, state.model_name)
+        chunks = create_chunks(
+            text, None, chunking_type="recursive", chunking_technique="token",
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+        )
         if not chunks:
             _reset_note(customer_id, note_key)
             continue
