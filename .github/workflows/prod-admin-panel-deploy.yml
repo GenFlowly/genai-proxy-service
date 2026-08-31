@@ -1,0 +1,44 @@
+name: Production Admin Panel Deploy
+
+# Manual-only: the admin panel is deliberately excluded from the merge-triggered
+# production pipeline. Deploy from the Actions tab (always builds main).
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create .npmrc file
+        working-directory: admin-panel
+        run: |
+          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}" >> .npmrc
+
+      - name: Deploy
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_ADMIN_PANEL_SITE_ID }}
+          VITE_AUTH0_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+          # The admin panel's own Auth0 application — NOT the react-app clientId.
+          # The backend maps this azp to the ADMIN_PANEL account (see admin-panel/README.md).
+          VITE_AUTH0_CLIENT_ID: ${{ secrets.AUTH0_ADMIN_PANEL_CLIENT_ID }}
+          VITE_AUTH0_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
+          VITE_BACKEND_URL: "https://api.genflowly.com"
+        working-directory: admin-panel
+        run: |
+          npm ci
+          npm run build
+          npx netlify-cli deploy --prod --dir=dist --site=$NETLIFY_SITE_ID

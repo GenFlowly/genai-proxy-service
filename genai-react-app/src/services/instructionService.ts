@@ -25,6 +25,39 @@ export async function getCustomerInstructions(token: string): Promise<GetCustome
     return (await response.json()) as GetCustomerInstructionListResponse
 }
 
+export async function searchInstructions(token: string, query: string): Promise<GetCustomerInstructionListResponse> {
+    const url = `${endpoints.searchInstructions}?q=${encodeURIComponent(query)}`
+    const response = await fetchWithRetry(url, {
+        method: HttpMethod.GET,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Search Instructions failed: ${response.status} ${response.statusText}`)
+    }
+
+    return (await response.json()) as GetCustomerInstructionListResponse
+}
+
+export async function getRecentInstructions(token: string, limit = 3): Promise<GetCustomerInstructionListResponse> {
+    const response = await fetchWithRetry(`${endpoints.getRecentInstructions}?limit=${limit}`, {
+        method: HttpMethod.GET,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Get Recent Instructions failed: ${response.status} ${response.statusText}`)
+    }
+
+    return (await response.json()) as GetCustomerInstructionListResponse
+}
+
 export async function createInstruction(
     token: string,
     request: CreateInstructionRequest

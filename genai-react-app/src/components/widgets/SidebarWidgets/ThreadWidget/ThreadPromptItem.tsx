@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import Tooltip from '../../../common/Tooltip/Tooltip'
+import { Tooltip } from '@genflowly/component-library'
 import styles from './ThreadPromptItem.module.scss'
-import { Icon } from '../../../common/Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
 import { useConversation } from '../../../../context/ConversationContext'
 
@@ -37,7 +37,7 @@ export default function ThreadPromptItem({ conversationBlockId, prompt, collapse
     if (collapsed) {
         return (
             <Tooltip content={prompt || t('sidebar.threadPromptItem.newPrompt')} fullWidth>
-                <button ref={itemRef} className={`${styles.promptItem} ${styles.collapsed} ${isActive ? styles.activeViewport : ''}`} onClick={handleClick} data-testid={testId || "thread-prompt-item-collapsed"}>
+                <button ref={itemRef} className={`${styles.promptItem} ${styles.collapsed} ${isActive ? styles.activeViewport : ''}`} onClick={handleClick} aria-label={prompt || t('sidebar.threadPromptItem.newPrompt')} data-testid={testId || "thread-prompt-item-collapsed"}>
                     <span className={styles.icon}>
                         <Icon src={ICONS.PROMPT_ICON} />
                     </span>

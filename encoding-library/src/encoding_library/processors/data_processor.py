@@ -50,9 +50,11 @@ class DataProcessor(ABC):
         pass
 
     @abstractmethod
-    def get_collection_schema(self) -> Any:
+    def get_collection_schema(self, dim: int = 384, description: str = "") -> Any:
         """
         Get the Milvus schema definition for this data type.
+        dim sizes the vector field for the embedding model in use; description
+        carries the model metadata JSON (see model_registry.build_collection_description).
         Returns a tuple of (schema, index_params).
         """
         pass

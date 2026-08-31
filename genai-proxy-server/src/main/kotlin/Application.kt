@@ -2,9 +2,8 @@ package com.genflowly
 
 
 import com.auth0.jwk.JwkProviderBuilder
-import com.genflowly.aicallerlib.di.commonModule
+import com.genflowly.di.AppScope
 import com.genflowly.di.appModule
-import com.genflowly.service.AIRequestService
 import io.github.smiley4.ktoropenapi.OpenApi
 import io.github.smiley4.ktoropenapi.config.AuthScheme
 import io.github.smiley4.ktoropenapi.config.AuthType
@@ -25,10 +24,12 @@ import java.util.concurrent.TimeUnit
 import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
+import com.genflowly.service.CustomerCredentialsService
+import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.InstructionService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
-import com.genflowly.service.ApiKeyPrincipal
+import com.genflowly.models.ApiKeyPrincipal
 import com.genflowly.service.DeveloperApiKeyService
 import com.genflowly.service.GraphService
 import com.genflowly.service.NotesService
@@ -42,9 +43,7 @@ fun main(args: Array<String>) {
 private val logger = LoggerFactory.getLogger("Application")
 
 
-fun validateCredentials(credential: JWTCredential): JWTPrincipal? {
-    val auth0Audience = System.getenv("AUTH0_API_AUDIENCE")
-        ?: error("AUTH0_API_AUDIENCE not set")
+fun validateCredentials(credential: JWTCredential, auth0Audience: String): JWTPrincipal? {
     val containsAudience = credential.payload.audience.contains(auth0Audience)
 
     if (containsAudience) {
@@ -274,13 +273,13 @@ fun Application.module() {
     // Koin must start before Authentication: the apiKey provider needs DeveloperApiKeyService
     startKoin {
         modules(
-            appModule(),
-            commonModule()
+            appModule()
         )
     }
 
-    val auth0Domain = System.getenv("AUTH0_SPA_DOMAIN")
-        ?: error("AUTH0_SPA_DOMAIN not set")
+    val auth0Config = get<com.genflowly.config.AppConfig>()
+    val auth0Domain = auth0Config.auth0Domain ?: error("AUTH0_SPA_DOMAIN not set")
+    val auth0Audience = auth0Config.auth0Audience ?: error("AUTH0_API_AUDIENCE not set")
 
     val issuer = "https://$auth0Domain/"
 
@@ -306,7 +305,7 @@ fun Application.module() {
                 }
             }
             verifier(jwkProvider, issuer)
-            validate { credential -> validateCredentials(credential) }
+            validate { credential -> validateCredentials(credential, auth0Audience) }
         }
         // Developer API keys (gfy_...) sent as a bearer token; routes opt in via
         // authenticate("auth0", "apiKey") so both JWTs and API keys are accepted
@@ -350,18 +349,24 @@ fun Application.module() {
     }
 
 
-    val aiRequestService = get<AIRequestService>()
-    val aiRequestManager = get<AIRequestManager>()
+    // Cancel supervised background work (embedding sync, backfills, usage
+    // tracking) when the server stops.
+    val appScope = get<AppScope>()
+    monitor.subscribe(ApplicationStopping) { appScope.shutdown() }
+
+    val generationOrchestrator = get<GenerationOrchestrator>()
+    val customerCredentialsService = get<CustomerCredentialsService>()
+    val instructionService = get<InstructionService>()
     val customerProfileService = get<CustomerProfileService>()
     val conversationService = get<ConversationService>()
+    val conversationManagementService = get<com.genflowly.service.ConversationManagementService>()
     val aiModelsService = get<AIModelsService>()
     val graphService = get<GraphService>()
-    val dynamoDBProvider = get<com.genflowly.providers.DynamoDBProvider>()
-    val s3Provider = get<com.genflowly.providers.S3Provider>()
+    val attachmentService = get<com.genflowly.service.AttachmentService>()
+    val voiceSessionService = get<com.genflowly.service.VoiceSessionService>()
+    val appConfig = get<com.genflowly.config.AppConfig>()
     val notesService = get<NotesService>()
 
-    val httpClient = get<io.ktor.client.HttpClient>()
-    val json = get<kotlinx.serialization.json.Json>()
 
     val systemApiKeyService = get<com.genflowly.service.SystemApiKeyService>()
 
@@ -370,5 +375,12 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
-    configureRouting(aiRequestService, aiRequestManager, customerProfileService, conversationService, aiModelsService, graphService, dynamoDBProvider, s3Provider, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, httpClient, json)
+    // Eagerly load the bundled request-agent defaults (the fallback when the
+    // RequestAgentMap table has no usable entry) so a broken bundle fails
+    // startup, not the first persona/title generation.
+    get<com.genflowly.service.RequestAgentDefaultsLoader>().defaults
+
+    val requestAgentMapAdminService = get<com.genflowly.service.RequestAgentMapAdminService>()
+
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, appConfig)
 }

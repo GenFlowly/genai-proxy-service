@@ -1,6 +1,6 @@
 import React from 'react'
 import { useAuth } from '../../../context/AuthContext'
-import { Icon } from '../Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { VectorDBConfigStatusValue } from '../../../models/storeCustomerVectorDBConfig.models'
 

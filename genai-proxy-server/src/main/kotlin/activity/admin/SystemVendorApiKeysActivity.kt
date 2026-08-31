@@ -2,7 +2,7 @@ package com.genflowly.activity.admin
 
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.config.AppConfig
 import com.genflowly.service.AIModelsService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.SystemApiKeyService
@@ -16,13 +16,11 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import kotlinx.serialization.SerializationException
-import models.AIVendorAPIKeyStatus
-import models.APIKeyStatus
-import models.GetSystemVendorApiKeyStatusListResponse
-import models.StoreSystemVendorApiKeyRequest
-import models.StoreSystemVendorApiKeyResponse
-import models.StoreSystemVendorConfigRequest
-import models.SystemVendorModelsResponse
+import com.genflowly.models.GetSystemVendorApiKeyStatusListResponse
+import com.genflowly.models.StoreSystemVendorApiKeyRequest
+import com.genflowly.models.StoreSystemVendorApiKeyResponse
+import com.genflowly.models.StoreSystemVendorConfigRequest
+import com.genflowly.models.SystemVendorModelsResponse
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("SystemVendorApiKeysActivity")
@@ -38,7 +36,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
     systemApiKeyService: SystemApiKeyService,
     customerProfileService: CustomerProfileService,
     aiModelsService: AIModelsService,
-    dynamoDBProvider: DynamoDBProvider,
+    appConfig: AppConfig,
     modelCatalogService: com.genflowly.service.ModelCatalogService
 ) {
     authenticate("auth0") {
@@ -46,7 +44,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
         // e.g. right after a new system key is stored or a vendor ships a model.
         post(Routes.ADMIN_MODEL_CATALOG_REFRESH, { hidden = true }) {
             try {
-                val customerId = call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                val customerId = call.requireAdminCustomerId(customerProfileService, appConfig)
                 logger.info("Admin {} triggering model catalog refresh", customerId)
                 val counts = modelCatalogService.refreshCatalog()
                 call.respond(mapOf("modelsStored" to counts.mapValues { it.value.toString() }))
@@ -63,11 +61,11 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         post(Routes.ADMIN_SYSTEM_API_KEYS, { hidden = true }) {
             try {
-                val customerId = call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                val customerId = call.requireAdminCustomerId(customerProfileService, appConfig)
                 val request = call.receive<StoreSystemVendorApiKeyRequest>()
 
                 val aiVendor = try {
-                    com.genflowly.aicallerlib.models.AIVendor.valueOf(request.aiVendor)
+                    com.genflowly.models.AIVendor.valueOf(request.aiVendor)
                 } catch (e: IllegalArgumentException) {
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -78,37 +76,12 @@ fun Route.registerSystemVendorApiKeysRoutes(
                 logger.info("Admin {} storing system API key for vendor {}", customerId, aiVendor)
 
                 // Validate against the vendor before storing; invalid keys are rejected
-                val isKeyValid = aiModelsService.validateApiKey(aiVendor, request.apiKey)
-
-                if (isKeyValid) {
-                    systemApiKeyService.storeSystemApiKey(
-                        aiVendor = aiVendor.name,
-                        apiKey = request.apiKey,
-                        updatedBy = customerId
-                    )
-                    call.respond(
-                        StoreSystemVendorApiKeyResponse(
-                            apiKeyStatus = AIVendorAPIKeyStatus(
-                                aiVendor = aiVendor,
-                                isAPIKeyValid = true,
-                                status = APIKeyStatus.VALID,
-                                updateSuccessful = true
-                            )
-                        )
-                    )
-                } else {
-                    logger.warn("Invalid system API key provided for vendor {}. Not saving.", aiVendor)
-                    call.respond(
-                        StoreSystemVendorApiKeyResponse(
-                            apiKeyStatus = AIVendorAPIKeyStatus(
-                                aiVendor = aiVendor,
-                                isAPIKeyValid = false,
-                                status = APIKeyStatus.INVALID,
-                                updateSuccessful = false
-                            )
-                        )
-                    )
-                }
+                val apiKeyStatus = systemApiKeyService.validateAndStoreSystemKey(
+                    vendor = aiVendor,
+                    apiKey = request.apiKey,
+                    updatedBy = customerId
+                )
+                call.respond(StoreSystemVendorApiKeyResponse(apiKeyStatus = apiKeyStatus))
             } catch (e: SerializationException) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse(error = "Invalid request format"))
             } catch (e: IllegalStateException) {
@@ -124,7 +97,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         get(Routes.ADMIN_SYSTEM_API_KEYS, { hidden = true }) {
             try {
-                call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                call.requireAdminCustomerId(customerProfileService, appConfig)
                 val statuses = systemApiKeyService.getSystemApiKeyStatusList()
                 call.respond(GetSystemVendorApiKeyStatusListResponse(apiKeyStatuses = statuses))
             } catch (e: IllegalStateException) {
@@ -140,7 +113,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         get(Routes.ADMIN_SYSTEM_API_KEY_MODELS, { hidden = true }) {
             try {
-                call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                call.requireAdminCustomerId(customerProfileService, appConfig)
                 val vendorParam = call.parameters["aiVendor"]
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -148,7 +121,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
                     )
 
                 val aiVendor = try {
-                    com.genflowly.aicallerlib.models.AIVendor.valueOf(vendorParam)
+                    com.genflowly.models.AIVendor.valueOf(vendorParam)
                 } catch (e: IllegalArgumentException) {
                     return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -182,11 +155,11 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         post(Routes.ADMIN_SYSTEM_API_KEY_CONFIG, { hidden = true }) {
             try {
-                val customerId = call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                val customerId = call.requireAdminCustomerId(customerProfileService, appConfig)
                 val request = call.receive<StoreSystemVendorConfigRequest>()
 
                 val aiVendor = try {
-                    com.genflowly.aicallerlib.models.AIVendor.valueOf(request.aiVendor)
+                    com.genflowly.models.AIVendor.valueOf(request.aiVendor)
                 } catch (e: IllegalArgumentException) {
                     return@post call.respond(
                         HttpStatusCode.BadRequest,
@@ -235,7 +208,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
 
         delete(Routes.ADMIN_SYSTEM_API_KEY, { hidden = true }) {
             try {
-                val customerId = call.requireAdminCustomerId(customerProfileService, dynamoDBProvider)
+                val customerId = call.requireAdminCustomerId(customerProfileService, appConfig)
                 val vendorParam = call.parameters["aiVendor"]
                     ?: return@delete call.respond(
                         HttpStatusCode.BadRequest,
@@ -243,7 +216,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
                     )
 
                 val aiVendor = try {
-                    com.genflowly.aicallerlib.models.AIVendor.valueOf(vendorParam)
+                    com.genflowly.models.AIVendor.valueOf(vendorParam)
                 } catch (e: IllegalArgumentException) {
                     return@delete call.respond(
                         HttpStatusCode.BadRequest,

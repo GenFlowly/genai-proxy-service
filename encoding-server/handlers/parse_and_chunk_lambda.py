@@ -3,9 +3,11 @@ import json
 import logging
 from typing import Dict, Any
 
+from encoding_library.chunkers.enums import ChunkingType
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.utils.embedding_utils import create_chunks, get_embedding_model
+from encoding_library.utils.model_registry import get_chunking_params
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -27,15 +29,30 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         processor = ProcessorFactory.get_processor(memory_request_internal_state)
         text_to_encode = processor.get_text_to_encode(memory_request_internal_state)
 
-        encoder = get_embedding_model(
+        # Only semantic chunking needs the embedding model; recursive chunking
+        # should not pay the model load (or require API keys) here.
+        chunking_type = memory_request_internal_state.chunking_type or ChunkingType.RECURSIVE.value
+        encoder = None
+        if chunking_type == ChunkingType.SEMANTIC.value:
+            encoder = get_embedding_model(
+                memory_request_internal_state.model_type,
+                memory_request_internal_state.model_name,
+            )
+        # Request overrides win; otherwise per-model values from the
+        # EmbeddingModelRegistry table (falling back to code defaults)
+        chunk_size, chunk_overlap = get_chunking_params(
             memory_request_internal_state.model_type,
             memory_request_internal_state.model_name,
+            memory_request_internal_state.chunk_size,
+            memory_request_internal_state.chunk_overlap,
         )
         chunks = create_chunks(
             text_to_encode,
             encoder,
-            chunking_type=memory_request_internal_state.chunking_type,
+            chunking_type=chunking_type,
             chunking_technique=memory_request_internal_state.chunking_technique,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
         )
 
         logger.info(f"Chunked into {len(chunks)} pieces across batch_size={BATCH_SIZE}.")
@@ -59,7 +76,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
             batches.append(batch_state.to_dict())
 
-        logger.info(f"Returning {len(batches)} batches to Map state.")
+        logger.info(f"Returning {len(batches)} batches.")
         return {"batches": batches}
 
     except Exception as e:

@@ -1,15 +1,14 @@
-import React from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
-import LoginIcon from '../icons/LoginIcon'
 import styles from './Navbar.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { ICONS } from '../../constants/icons'
-import { Icon } from '../common/Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 
 import logo from '../../assets/icons/logo.png'
-import { UserAvatarButton } from '../common/UserAvatarButton/UserAvatarButton'
+import { UserAvatarButton } from '@genflowly/component-library'
 import { NavbarMenu } from '../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../common/ThemeToggle/ThemeToggle'
 import { useWindowSize } from '../../hooks/useWindowSize'
@@ -29,6 +28,21 @@ export default function Navbar(): React.ReactElement {
     const displayPicture = customerPicture || user?.picture
     const displayName = customerName || user?.name || t("layout.navbar.account")
 
+    // Pin the mobile menu directly below the navbar, whatever its rendered height is
+    const navRef = useRef<HTMLElement>(null)
+    const [menuTopOffset, setMenuTopOffset] = useState(0)
+    const isMobileMenuOpen = isMobile && isLeftSidebarExpanded
+
+    useLayoutEffect(() => {
+        if (!isMobileMenuOpen) return
+        const measure = () => {
+            setMenuTopOffset(navRef.current ? Math.max(0, navRef.current.getBoundingClientRect().bottom) : 0)
+        }
+        measure()
+        window.addEventListener('resize', measure)
+        return () => window.removeEventListener('resize', measure)
+    }, [isMobileMenuOpen])
+
     const handleSettingsClick = () => {
         React.startTransition(() => {
             navigate('/settings')
@@ -38,10 +52,10 @@ export default function Navbar(): React.ReactElement {
 
     return (
         <>
-        <nav className={styles.navbar}>
+        <nav className={styles.navbar} ref={navRef}>
             <div className={styles.container}>
                 <div className={styles.leftControls}>
-                    <button onClick={toggleLeftSidebar} className={styles.mobileToggle} data-testid="mobile-left-sidebar-toggle">
+                    <button onClick={toggleLeftSidebar} className={styles.mobileToggle} aria-label={t("layout.mobileMenu.menu")} data-testid="mobile-left-sidebar-toggle">
                         <Icon src={ICONS.MENU} size={24} />
                     </button>
                     <Link to="/" className={styles.logoLink} title={t("layout.navbar.home")} data-testid="navbar-logo-link">
@@ -70,7 +84,7 @@ export default function Navbar(): React.ReactElement {
                                 className={styles.loginButton}
                                 data-testid="login-button"
                             >
-                                <LoginIcon />
+                                <Icon src={ICONS.LOGIN} size={20} aria-hidden={true} />
                                 <span>{t("layout.navbar.login")}</span>
                             </button>
                         ) : (
@@ -85,15 +99,15 @@ export default function Navbar(): React.ReactElement {
                         )}
                     </div>
                     {isChatPage && (
-                        <button onClick={toggleRightSidebar} className={styles.mobileToggle} data-testid="mobile-right-sidebar-toggle">
+                        <button onClick={toggleRightSidebar} className={styles.mobileToggle} aria-label={t("layout.mobileFullPageModal.aiSettings")} data-testid="mobile-right-sidebar-toggle">
                             <Icon src={ICONS.MODELS} size={24} />
                         </button>
                     )}
                 </div>
             </div>
         </nav>
-        {isMobile && isLeftSidebarExpanded && (
-            <div className={styles.mobileMenuOverlay}>
+        {isMobileMenuOpen && (
+            <div className={styles.mobileMenuOverlay} style={{ top: menuTopOffset }}>
                 <MobileMenuContent />
             </div>
         )}

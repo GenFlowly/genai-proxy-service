@@ -8,16 +8,18 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import models.StoreCustomerSupabaseConfigRequest
-import models.StoreCustomerSupabaseConfigResponse
-import models.SupabaseConfigStatus
-import models.SupabaseConfigStatusValue
+import com.genflowly.models.StoreCustomerSupabaseConfigRequest
+import com.genflowly.models.StoreCustomerSupabaseConfigResponse
+import com.genflowly.models.SupabaseConfigStatus
+import com.genflowly.models.SupabaseConfigStatusValue
 import org.slf4j.LoggerFactory
+import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("StoreCustomerSupabaseConfigActivity")
 
 fun Route.registerStoreSupabaseConfigRoutes(
+    customerCredentialsService: CustomerCredentialsService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -47,7 +49,7 @@ fun Route.registerStoreSupabaseConfigRoutes(
             
             logger.info("Received StoreCustomerSupabaseConfigRequest from customerId {}", customerId)
 
-            val stored = customerProfileService.storeCustomerSupabaseConfig(
+            val stored = customerCredentialsService.storeCustomerSupabaseConfig(
                 customerId = customerId,
                 endpoint = request.endpoint,
                 token = request.token,

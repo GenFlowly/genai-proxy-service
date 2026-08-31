@@ -3,7 +3,6 @@ import React, { lazy } from 'react'
 import InstructionSidebarWidget from '../components/widgets/SidebarWidgets/InstructionSidebarWidget/InstructionSidebarWidget'
 import ConversationHistorySidebarWidget from '../components/widgets/SidebarWidgets/ConversationHistorySidebarWidget/ConversationHistorySidebarWidget'
 // @ts-ignore
-import InstructionWidget from '../components/widgets/InstructionWidget/InstructionWidget'
 import ThreadWidget from '../components/widgets/SidebarWidgets/ThreadWidget/ThreadWidget'
 import NewChatWidget from '../components/widgets/SidebarWidgets/NewChatWidget/NewChatWidget'
 import AIVendorWidget from '../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget'
@@ -63,10 +62,6 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
         // isVisible: (context) => !!context.isPaid 
     },
     // Center Section Widgets
-    'INSTRUCTION_WIDGET': {
-        id: 'INSTRUCTION_WIDGET',
-        component: InstructionWidget,
-    },
     'CONVERSATION_LIST': {
         id: 'CONVERSATION_LIST',
         component: ConversationListWidget,

@@ -1,7 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../../context/ThemeContext'
-import { Icon } from '../Icon/Icon'
+import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import styles from './ThemeToggle.module.scss'
 

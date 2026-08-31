@@ -1,7 +1,11 @@
 FROM milvus-base:latest
 
-# Copy application code
+# Copy application code. This image backs the store step and the Voyage batch
+# lambdas (scheduled accumulator + poller), which reuse store logic + pymilvus + requests.
 COPY handlers/store_embeddings_lambda.py ${LAMBDA_TASK_ROOT}/handlers/store_embeddings_lambda.py
+COPY handlers/voyage_batch_store.py ${LAMBDA_TASK_ROOT}/handlers/voyage_batch_store.py
+COPY handlers/poll_voyage_batches_lambda.py ${LAMBDA_TASK_ROOT}/handlers/poll_voyage_batches_lambda.py
+COPY handlers/accumulate_voyage_notes_lambda.py ${LAMBDA_TASK_ROOT}/handlers/accumulate_voyage_notes_lambda.py
 
-# Set the handler
+# Default handler; the batch Lambdas override this via the CDK `cmd` field.
 CMD [ "handlers.store_embeddings_lambda.handler" ]

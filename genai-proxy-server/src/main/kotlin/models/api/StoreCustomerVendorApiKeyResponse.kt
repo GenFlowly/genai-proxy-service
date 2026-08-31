@@ -1,6 +1,6 @@
-package models
+package com.genflowly.models
 
-import com.genflowly.aicallerlib.models.AIVendor
+import com.genflowly.models.AIVendor
 import kotlinx.serialization.Serializable
 
 import kotlinx.serialization.SerialName

@@ -4,6 +4,7 @@ import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.InstructionResponse
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.InstructionService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
@@ -11,11 +12,11 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
 
 private val logger = LoggerFactory.getLogger("GetInstructionVersionRoute")
 
 fun Route.registerGetInstructionVersionRoutes(
+    instructionService: InstructionService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -61,7 +62,7 @@ fun Route.registerGetInstructionVersionRoutes(
                     return@get
                 }
 
-                val response = customerProfileService.getInstructionVersion(customerId, instructionId, version)
+                val response = instructionService.getInstructionVersion(customerId, instructionId, version)
                 
                 if (response != null) {
                     call.respond(response)

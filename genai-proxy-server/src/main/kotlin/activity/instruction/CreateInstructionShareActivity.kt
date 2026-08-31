@@ -14,10 +14,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.InstructionService
 
 private val logger = LoggerFactory.getLogger("CreateInstructionShareRoute")
 
 fun Route.registerCreateInstructionShareRoutes(
+    instructionService: InstructionService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -45,7 +47,7 @@ fun Route.registerCreateInstructionShareRoutes(
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val request = call.receive<CreateInstructionShareRequest>()
 
-                customerProfileService.shareInstruction(
+                instructionService.shareInstruction(
                     instructionId = request.instructionId,
                     targetCustomerId = request.targetCustomerId,
                     sharedByCustomerId = customerId,
@@ -100,7 +102,7 @@ fun Route.registerCreateInstructionShareRoutes(
                     return@delete call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing instructionId or targetCustomerId"))
                 }
 
-                customerProfileService.unshareInstruction(
+                instructionService.unshareInstruction(
                     instructionId = instructionId,
                     targetCustomerId = targetCustomerId,
                     sharedByCustomerId = customerId

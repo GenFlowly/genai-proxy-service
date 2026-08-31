@@ -10,7 +10,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import models.api.GetCustomerAgentsResponse
+import com.genflowly.models.api.GetCustomerAgentsResponse
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("GetCustomerAgentsActivity")

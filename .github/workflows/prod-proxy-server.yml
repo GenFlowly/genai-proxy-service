@@ -23,6 +23,10 @@ on:
         required: false
       ADMIN_EMAILS:
         required: false
+      AUTH0_REACT_APP_CLIENT_IDS:
+        required: false
+      AUTH0_ADMIN_PANEL_CLIENT_IDS:
+        required: false
 
 env:
   AWS_REGION: us-east-1
@@ -32,6 +36,8 @@ env:
   AUTH0_SPA_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
   AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
   ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
+  AUTH0_REACT_APP_CLIENT_IDS: ${{ secrets.AUTH0_REACT_APP_CLIENT_IDS }}
+  AUTH0_ADMIN_PANEL_CLIENT_IDS: ${{ secrets.AUTH0_ADMIN_PANEL_CLIENT_IDS }}
   STAGE: production
 
 jobs:
@@ -104,6 +110,12 @@ jobs:
 
           # Set secrets and deploy
           flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET
+
+          # API key for hosted embedding providers (voyage model type); staged so the deploy below picks it up
+          if [ -n "${{ secrets.VOYAGE_API_KEY }}" ]; then
+            flyctl secrets set --app $APP_NAME --stage VOYAGE_API_KEY="${{ secrets.VOYAGE_API_KEY }}"
+          fi
+
           flyctl deploy --app $APP_NAME --yes
 
       - name: Deploy Proxy Server to Fly.io
@@ -122,6 +134,6 @@ jobs:
           ATTACHMENTS_BUCKET=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-S3Stack --query "Stacks[0].Outputs[?OutputKey=='AttachmentsBucketName'].OutputValue" --output text)
 
           # Set secrets and deploy
-          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.internal:5001" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET ADMIN_EMAILS="${{ env.ADMIN_EMAILS }}"
+          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.internal:5001" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET ADMIN_EMAILS="${{ env.ADMIN_EMAILS }}" AUTH0_REACT_APP_CLIENT_IDS="${{ env.AUTH0_REACT_APP_CLIENT_IDS }}" AUTH0_ADMIN_PANEL_CLIENT_IDS="${{ env.AUTH0_ADMIN_PANEL_CLIENT_IDS }}"
 
           flyctl deploy --config fly.production.toml --app $APP_NAME --yes

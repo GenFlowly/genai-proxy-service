@@ -15,6 +15,7 @@ import { InstructionResponse } from '../models/instruction.models'
 import { StoreCustomerVectorDBConfigResponse } from '../models/storeCustomerVectorDBConfig.models'
 import { clearHistoryCache } from '../components/widgets/ConversationHistoryWidget/historyCache'
 import { clearNotesCache } from '../components/widgets/SidebarWidgets/SavedNotesWidget/notesCache'
+import { clearRecentInstructionsCache } from '../components/common/InstructionPickerModal/recentInstructionsCache'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
@@ -104,6 +105,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     }, [customerId])
 
     const logout = useCallback(({ returnTo, localOnly }: { returnTo: string; localOnly?: boolean }): void => {
+        // Every per-customer localStorage entry (preferences, instructions,
+        // vendor key statuses, model lists, system prompt, prompt drafts, …)
+        // is keyed `${customerId}_…` — wipe them all so no user data survives
+        // the session on this machine
+        const departingCustomerId = localStorage.getItem('customerId')
+        if (departingCustomerId) {
+            try {
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith(`${departingCustomerId}_`)) {
+                        localStorage.removeItem(key)
+                    }
+                })
+            } catch (e) {
+                console.warn('Failed to clear per-customer caches on logout', e)
+            }
+        }
         setCustomerId(null)
         setAiVendorAPIKeyStatusList([])
         setAiConfigPreferences(null)
@@ -113,6 +130,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         localStorage.removeItem('customerId')
         clearHistoryCache() // Cached conversation list is user data — never carry across accounts
         clearNotesCache() // Same for the cached saved-notes list
+        clearRecentInstructionsCache() // Same for the cached recently-used instructions
 
         auth0Logout({
             logoutParams: { returnTo },

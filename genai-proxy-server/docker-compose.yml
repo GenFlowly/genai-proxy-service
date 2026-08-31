@@ -28,6 +28,14 @@ services:
       AUTH0_SPA_DOMAIN: "auth.genflowly.com"
       AUTH0_SPA_CLIENT_ID: "VSKaAyEXLKM0LuZzJVhvH6RTT11LiNgE"
       AUTH0_API_AUDIENCE: "https://api-development.genflowly.com"
+      # Per-app account resolution: JWT azp (Auth0 application clientId) → app.
+      # Set BOTH together once the admin panel has its own Auth0 application;
+      # while they share a clientId, leave both unset so resolution falls back
+      # to sub-only (which prefers the REACT_APP profile).
+      AUTH0_REACT_APP_CLIENT_IDS: "${AUTH0_REACT_APP_CLIENT_IDS:-}"
+      AUTH0_ADMIN_PANEL_CLIENT_IDS: "${AUTH0_ADMIN_PANEL_CLIENT_IDS:-}"
+      # Email domain required for admin-panel accounts (defaults to genflowly.com)
+      ADMIN_EMAIL_DOMAIN: "genflowly.com"
       RETRIEVAL_SERVER_URL: "http://retrieval-server:5001"
       ATTACHMENTS_BUCKET: "gen-ai-proxy-service-development-attachments"
       ENCODING_SERVER_URL: "${ENCODING_SERVER_URL:-}"

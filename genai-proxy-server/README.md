@@ -45,7 +45,7 @@ dependency is updated.
 ### How text generation works
 
 `POST /api/v1/generate-text` and `POST /api/v1/generate-text-stream`
-(`AIRequestManager` → `RetrievalService`):
+(`GenerationOrchestrator` → `RetrievalServerClient`):
 
 1. **Resolve context** — the instruction (persona) version becomes the system
    prompt; the conversation is fetched or created (with OWNER/EDIT write-access

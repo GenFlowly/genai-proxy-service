@@ -9,6 +9,8 @@ export interface OnboardCustomerResponse {
     aiConfigPreferences: {
         preferredModels?: AIConfig[]
         preferredGenerativeMode?: string
+        preferredInstructionId?: string
+        instructionFallbackMode?: string
     }
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[]
     customerInstructions?: InstructionResponse[]

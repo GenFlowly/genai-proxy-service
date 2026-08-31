@@ -1,0 +1,13 @@
+Create a persona for these system instructions.
+You must return a valid JSON object with exactly these five keys: "name", "icon", "color", "category", and "tags". Do not include any other text or markdown formatting.
+
+1. "category": You MUST pick exactly one categoryName from the following JSON list of allowed categories. Do not invent a new category.
+{{categoryJson}}
+
+2. "icon": You MUST use the exact 'baseIcon' for the category you picked, but you may append a secondary emoji to differentiate it (e.g. 💻🚀).
+
+3. "color": You MUST use the exact 'baseColor' for the category you picked.
+
+4. "name": A 2-3 word display name. Make names scannable. Put the distinguishing word first (e.g., "Security Risk Reviewer", not "Reviewer for Security Risks"). Use the naming formula: Domain + Role (e.g., "Python Debugging Coach").
+
+5. "tags": An array of 3-5 string metadata tags to support searching/filtering in large collections. Include tags for domain, task, tone, or tool (e.g., ["coding", "python", "debugging", "helpful"]).

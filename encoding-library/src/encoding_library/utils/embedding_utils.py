@@ -1,34 +1,105 @@
 import math
 from typing import Any, Dict, List, Optional
 
+
+class VoyageContextualizedEmbeddings:
+    """
+    Encoder for Voyage contextualized chunk embedding models (voyage-context-*),
+    exposing the same embed_documents/embed_query interface as the Langchain
+    encoders so it is a drop-in for create_embeddings and retrieval.
+
+    embed_documents treats the given texts as the chunks of ONE document and
+    embeds them in a single API call, so each chunk's vector captures the whole
+    document's context. Callers must not mix chunks of different documents in
+    one call. Limits per call: 32K tokens / document, 1000 inputs, 120K tokens.
+    """
+
+    ENDPOINT = "https://api.voyageai.com/v1/contextualizedembeddings"
+
+    def __init__(self, model: str):
+        self.model = model
+
+    def _call(self, inputs: List[List[str]], input_type: str) -> List[List[List[float]]]:
+        import os
+        import requests
+        api_key = os.environ.get("VOYAGE_API_KEY")
+        if not api_key:
+            raise ValueError("VOYAGE_API_KEY environment variable is not set")
+        response = requests.post(
+            self.ENDPOINT,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": self.model, "inputs": inputs, "input_type": input_type},
+            timeout=300,
+        )
+        response.raise_for_status()
+        docs = sorted(response.json()["data"], key=lambda d: d["index"])
+        return [
+            [c["embedding"] for c in sorted(doc["data"], key=lambda c: c["index"])]
+            for doc in docs
+        ]
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        if not texts:
+            return []
+        return self._call([texts], input_type="document")[0]
+
+    def embed_query(self, text: str) -> List[float]:
+        return self._call([[text]], input_type="query")[0][0]
+
+
 def get_embedding_model(model_type_str: Optional[str] = None, model_name_str: Optional[str] = None) -> Any:
     """
     Instantiates and returns the appropriate Langchain embedding model.
     Defaults to sentence-transformer / all-MiniLM-L6-v2 if not specified.
     """
-    model_type = model_type_str or "sentence-transformer"
-    model_name = model_name_str or "all-MiniLM-L6-v2"
+    from encoding_library.utils.model_registry import resolve_model, is_contextualized_model
+    model_type, model_name = resolve_model(model_type_str, model_name_str)
 
     if model_type == "sentence-transformer":
         from langchain_huggingface import HuggingFaceEmbeddings
         return HuggingFaceEmbeddings(model_name=model_name)
     elif model_type == "openai":
+        # Requires OPENAI_API_KEY in the environment
         from langchain_openai import OpenAIEmbeddings
         return OpenAIEmbeddings(model=model_name)
+    elif model_type == "voyage":
+        # Requires VOYAGE_API_KEY in the environment
+        if is_contextualized_model(model_name):
+            return VoyageContextualizedEmbeddings(model=model_name)
+        from langchain_voyageai import VoyageAIEmbeddings
+        return VoyageAIEmbeddings(model=model_name)
     else:
         raise ValueError(f"Unknown language model type specified: {model_type}")
 
-def create_chunks(text_to_encode: str, encoder: Any, chunking_type: Optional[str] = None, chunking_technique: Optional[str] = None) -> List[str]:
+def create_chunks(
+    text_to_encode: str,
+    encoder: Any,
+    chunking_type: Optional[str] = None,
+    chunking_technique: Optional[str] = None,
+    chunk_size: Optional[int] = None,
+    chunk_overlap: Optional[int] = None,
+) -> List[str]:
     """
     Creates chunks for the given text using the specified chunking strategy.
+    chunk_size/chunk_overlap (tokens) apply to recursive chunking only;
+    semantic chunking derives boundaries from the embeddings instead.
     """
     from encoding_library.chunkers.factory import ChunkerFactory
     from encoding_library.chunkers.enums import ChunkingType, RecursiveTechnique
 
+    resolved_type = chunking_type or ChunkingType.RECURSIVE.value
+    size_kwargs = {}
+    if resolved_type == ChunkingType.RECURSIVE.value:
+        if chunk_size is not None:
+            size_kwargs["chunk_size"] = int(chunk_size)
+        if chunk_overlap is not None:
+            size_kwargs["chunk_overlap"] = int(chunk_overlap)
+
     chunker = ChunkerFactory.get_chunker(
-        chunking_type=chunking_type or ChunkingType.RECURSIVE.value,
+        chunking_type=resolved_type,
         technique=chunking_technique or RecursiveTechnique.TOKEN.value,
-        encoder=encoder
+        encoder=encoder,
+        **size_kwargs
     )
 
     return chunker.chunk(text_to_encode)

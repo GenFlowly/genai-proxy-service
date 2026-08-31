@@ -3,7 +3,7 @@ import { useSidebarMenu } from '../../../../context/SidebarMenuContext'
 import { SIDEBAR_MENU_REGISTRY, SidebarMenuItem } from '../../../../config/SidebarMenuConfig'
 import { useLayout } from '../../../../context/LayoutContext'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
-import Tooltip from '../../../common/Tooltip/Tooltip'
+import { Tooltip } from '@genflowly/component-library'
 import styles from './SidebarMenu.module.scss'
 
 export default function SidebarMenu(): React.ReactElement {

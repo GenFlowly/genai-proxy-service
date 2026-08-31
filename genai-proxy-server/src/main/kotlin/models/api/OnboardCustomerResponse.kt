@@ -1,9 +1,9 @@
 package com.genflowly.models.api
 
 import kotlinx.serialization.Serializable
-import models.AIVendorAPIKeyStatus
-import models.VectorDBConfigStatus
-import models.SupabaseConfigStatus
+import com.genflowly.models.AIVendorAPIKeyStatus
+import com.genflowly.models.VectorDBConfigStatus
+import com.genflowly.models.SupabaseConfigStatus
 
 @Serializable
 data class OnboardCustomerResponse(

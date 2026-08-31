@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react'
-import { Toast, ToastMessage } from '../components/common/Toast/Toast'
-import styles from '../components/common/Toast/Toast.module.scss'
+import { Toast, ToastContainer, ToastMessage } from '@genflowly/component-library'
 
 interface ToastContextType {
     showToast: (message: string, duration?: number) => void
@@ -23,7 +22,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
     return (
         <ToastContext.Provider value={{ showToast }}>
             {children}
-            <div className={styles.toastContainer}>
+            <ToastContainer>
                 {toasts.map((toast) => (
                     <Toast
                         key={toast.id}
@@ -31,7 +30,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
                         onRemove={removeToast}
                     />
                 ))}
-            </div>
+            </ToastContainer>
         </ToastContext.Provider>
     )
 }

@@ -50,11 +50,15 @@ export class StepFunctionsV2Stack extends cdk.Stack {
         const processBatchesMap = new sfn.Map(this, 'Process Batches Concurrently', {
             maxConcurrency: 3, // Set due to OpenAI API rate limits
             itemsPath: sfn.JsonPath.stringAt('$.batches'),
+            resultPath: sfn.JsonPath.DISCARD, // keep the state shape stable at the join
         });
 
         processBatchesMap.itemProcessor(processBatchDefinition);
 
-        // Define Master Sequence Chain
+        // Define Master Sequence Chain. This pipeline is realtime-only: Voyage
+        // batch embedding is customer-level (embeddingMode=batch preference) and
+        // runs entirely through the scheduled notes accumulator + poller in
+        // LambdaStack — never through per-request executions here.
         const definition = parseAndChunkTask.next(processBatchesMap);
 
         // Define State Machine (Standard Workflow for extended timeout limits)

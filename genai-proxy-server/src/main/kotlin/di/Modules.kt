@@ -1,15 +1,35 @@
 package com.genflowly.di
 
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.config.AppConfig
 import com.genflowly.providers.KMSProvider
-import com.genflowly.service.AIRequestService
+import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.CustomerCredentialsRepository
+import com.genflowly.repository.CustomerProfileRepository
+import com.genflowly.repository.DeveloperApiKeyRepository
+import com.genflowly.repository.GraphRepository
+import com.genflowly.repository.InstructionRepository
+import com.genflowly.repository.ModelCatalogRepository
+import com.genflowly.repository.NotesRepository
+import com.genflowly.repository.ShareRepository
+import com.genflowly.repository.RequestAgentMapRepository
+import com.genflowly.repository.SystemApiKeyRepository
+import com.genflowly.service.AgentResolutionService
+import com.genflowly.service.ConversationManagementService
+import com.genflowly.service.GenerationAgentExecutor
+import com.genflowly.service.RequestAgentDefaultsLoader
+import com.genflowly.service.RequestAgentMapAdminService
 import com.genflowly.service.ConversationService
 import kotlinx.serialization.json.Json
 import mu.KLogger
 import mu.KotlinLogging.logger
 import org.koin.core.module.Module
 import org.koin.dsl.module
-import service.AIRequestManager
+import com.genflowly.service.CustomerCredentialsService
+import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.GenerationRequestValidator
+import com.genflowly.service.InstructionService
+import com.genflowly.service.SharedUsersResolver
+import com.genflowly.service.UtilityGenerationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
 import io.ktor.client.*
@@ -20,18 +40,19 @@ import io.ktor.serialization.kotlinx.json.*
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
-import software.amazon.awssdk.services.lambda.LambdaClient
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
+import com.genflowly.providers.EncodingServerClient
+import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.providers.S3Provider
 import com.genflowly.service.GraphService
-import com.genflowly.service.PromptGenerationService
-import com.genflowly.service.RetrievalService
 
 fun appModule(): Module = module {
     single { provideJson() }
     single<KLogger> { logger("Logger") }
-    
+    single { AppConfig.fromEnv() }
+    single { AppScope() }
+
     single {
         HttpClient(CIO) {
             engine {
@@ -58,51 +79,68 @@ fun appModule(): Module = module {
 
     single {
         DynamoDbClient.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .region(Region.of(get<AppConfig>().awsRegion))
             .build()
     }
 
     single {
         KmsClient.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
-            .build()
-    }
-
-    single {
-        LambdaClient.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .region(Region.of(get<AppConfig>().awsRegion))
             .build()
     }
 
     single {
         S3Client.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .region(Region.of(get<AppConfig>().awsRegion))
             .build()
     }
 
     single {
         S3Presigner.builder()
-            .region(Region.of(System.getenv("AWS_REGION") ?: "us-east-1"))
+            .region(Region.of(get<AppConfig>().awsRegion))
             .build()
     }
 
-    single { DynamoDBProvider(get(), get()) }
-    single { KMSProvider(get(), get()) }
-    single { S3Provider(get(), get(), get()) }
-    single { AIRequestService(get()) }
-    single { CustomerProfileService(get(), get(), get()) }
-    single { ConversationService(get(), get()) }
-    single { AIRequestManager(get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { AIModelsService(get(), get(), get()) }
-    single { RetrievalService(get(), get(), get()) }
-    single { PromptGenerationService() }
-    single { GraphService(get()) }
-    single { com.genflowly.service.NotesService(get(), get(), get()) }
-    single { com.genflowly.service.DeveloperApiKeyService(get(), get()) }
-    single { com.genflowly.service.SystemApiKeyService(get(), get()) }
-    single { com.genflowly.service.SystemAIFailoverService(get()) }
-    single { com.genflowly.service.ModelCatalogService(get(), get(), get(), get()) }
+    single { KMSProvider(get(), get(), get<AppConfig>().kmsKeyId) }
+    single { S3Provider(get(), get(), get(), get<AppConfig>().attachmentsBucket) }
+    single { RetrievalServerClient(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
+    single { EncodingServerClient(get(), get(), get<AppConfig>().encodingServerUrl) }
 
+    // Per-domain repositories (the dissolved DynamoDBProvider)
+    single { ConversationRepository(get(), get()) }
+    single { CustomerProfileRepository(get(), get()) }
+    single { ShareRepository(get(), get()) }
+    single { CustomerCredentialsRepository(get(), get()) }
+    single { DeveloperApiKeyRepository(get(), get()) }
+    single { SystemApiKeyRepository(get(), get()) }
+    single { ModelCatalogRepository(get(), get()) }
+    single { NotesRepository(get(), get()) }
+    single { InstructionRepository(get(), get()) }
+    single { GraphRepository(get(), get()) }
+    single { RequestAgentMapRepository(get(), get()) }
+
+    single { SharedUsersResolver(get(), get()) }
+    single { CustomerCredentialsService(get(), get(), get(), get(), get()) }
+    single { UtilityGenerationService(get(), get(), get()) }
+    single { GraphService(get(), get()) }
+    single { RequestAgentDefaultsLoader() }
+    single { AgentResolutionService(get(), get(), get(), get()) }
+    single { GenerationAgentExecutor(get(), get()) }
+    single { RequestAgentMapAdminService(get(), get(), get()) }
+    single { CustomerProfileService(get(), get(), get(), get(), get()) }
+    single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
+    single { ConversationService(get(), get()) }
+    single { ConversationManagementService(get(), get(), get(), get(), get(), get()) }
+    single { GenerationRequestValidator(get()) }
+    single { GenerationOrchestrator(get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.AttachmentService(get()) }
+    single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get()) }
+    single { AIModelsService(get(), get()) }
+    single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
+    single { com.genflowly.service.SystemApiKeyService(get(), get(), get()) }
+    single { com.genflowly.service.SystemAIFailoverService(get()) }
+    single { com.genflowly.service.ModelCatalogService(get(), get(), get()) }
 }
 
 fun provideJson(): Json {
@@ -111,5 +149,3 @@ fun provideJson(): Json {
         isLenient = true
     }
 }
-
-

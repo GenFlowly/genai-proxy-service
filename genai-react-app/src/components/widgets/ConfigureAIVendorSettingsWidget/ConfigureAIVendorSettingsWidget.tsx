@@ -3,14 +3,14 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
 import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendorApiKeysService'
-import PillButton from '../../common/PillButton/PillButton'
+import { PillButton } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import {
     OpenAIBrandName,
     ClaudeBrandName,
     GeminiBrandName
 } from '../../common/BrandName/BrandName'
-import { InputTextWithHint } from '../../common/InputTextWithHint/InputTextWithHint'
+import { InputTextWithHint } from '@genflowly/component-library'
 import { VendorAPIKeyStatus } from '../../common/VendorAPIKeyStatus/VendorAPIKeyStatus'
 import { useToast } from '../../../context/ToastContext'
 import styles from './ConfigureAIVendorSettingsWidget.module.scss'

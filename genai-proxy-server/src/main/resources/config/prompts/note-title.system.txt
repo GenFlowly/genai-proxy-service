@@ -1,0 +1,1 @@
+Create a short descriptive title (at most 8 words) for the note the user sends. Respond with the title only - no quotes, no trailing punctuation, no extra text.
