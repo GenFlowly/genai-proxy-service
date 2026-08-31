@@ -6,7 +6,7 @@ describe('PageWidgetConfig', () => {
         expect(config).toBeDefined();
         expect(config.pageId).toBe('CHAT_PAGE');
         expect(config.leftSidebar.length).toBeGreaterThan(0);
-        expect(config.centerSection).toContain('INSTRUCTION_WIDGET');
+        expect(config.centerSection).toContain('CONVERSATION_LIST');
     });
 
     test('getPageConfig returns correct config for MEMORY_PAGE', () => {

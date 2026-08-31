@@ -5,7 +5,7 @@ import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.SuccessResponse
 import com.genflowly.models.api.UpdateUsernameRequest
 import com.genflowly.models.api.UpdateDiscoverabilityRequest
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.service.CustomerProfileService
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -19,7 +19,7 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 fun Route.registerCustomerProfileSettingsRoutes(
-    dynamoDBProvider: DynamoDBProvider
+    customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0") {
         post(Routes.UPDATE_USERNAME, {
@@ -58,7 +58,7 @@ fun Route.registerCustomerProfileSettingsRoutes(
             val request = call.receive<UpdateUsernameRequest>()
             
             try {
-                val profile = dynamoDBProvider.getCustomerProfile(sub, client)
+                val profile = customerProfileService.getProfile(sub, client)
                 if (profile == null) {
                     call.respond(HttpStatusCode.NotFound, "Profile not found")
                     return@post
@@ -67,7 +67,7 @@ fun Route.registerCustomerProfileSettingsRoutes(
                 val customerId = profile["customerId"]?.s() ?: return@post call.respond(HttpStatusCode.InternalServerError)
                 val oldUsername = profile["username"]?.s()
                 
-                dynamoDBProvider.updateUsername(sub, client, customerId, oldUsername, request.username)
+                customerProfileService.updateUsername(sub, client, customerId, oldUsername, request.username)
                 call.respond(HttpStatusCode.OK, mapOf("success" to true))
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.Conflict, mapOf("error" to "Username is already taken"))
@@ -105,7 +105,7 @@ fun Route.registerCustomerProfileSettingsRoutes(
             val request = call.receive<UpdateDiscoverabilityRequest>()
             
             try {
-                dynamoDBProvider.updateDiscoverability(sub, client, request.isDiscoverable)
+                customerProfileService.updateDiscoverability(sub, client, request.isDiscoverable)
                 call.respond(HttpStatusCode.OK, mapOf("success" to true))
             } catch (e: Exception) {
                 logger.error("Failed to update discoverability", e)

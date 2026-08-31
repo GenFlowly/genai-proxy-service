@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import PromptEditor from '../../PromptEditorWidget/PromptEditor'
+import { TextEditor } from '@genflowly/component-library'
 import styles from './KeyValueNotes.module.scss'
 import { useAuth } from '../../../../context/AuthContext'
 import { useNotes } from '../../../../context/NotesContext'
@@ -43,7 +43,7 @@ export default function KeyValueNotes() {
     return (
         <>
             <div className={styles.keyEditorWrapper}>
-                <PromptEditor
+                <TextEditor
                     id="notes-widget-key-editor"
                     value={keyPrompt}
                     onChange={setKeyPrompt}
@@ -52,7 +52,7 @@ export default function KeyValueNotes() {
                 />
             </div>
             <div className={styles.valueEditorWrapper} onBlur={() => flush()}>
-                <PromptEditor
+                <TextEditor
                     id="notes-widget-value-editor"
                     value={valuePrompt}
                     onChange={setValuePrompt}

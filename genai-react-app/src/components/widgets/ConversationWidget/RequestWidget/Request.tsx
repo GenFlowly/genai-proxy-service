@@ -1,14 +1,13 @@
 import React, {useEffect} from 'react'
 import {useTranslation} from 'react-i18next'
 import {ICONS} from '../../../../constants/icons'
-import PromptEditor from '../../PromptEditorWidget/PromptEditor'
-import MultiPurposeButton
-    from '../../../common/MultiPurposeButton/MultiPurposeButton'
-import Tooltip from '../../../common/Tooltip/Tooltip'
+import { TextEditor } from '@genflowly/component-library'
+import { RectangleButton } from '@genflowly/component-library'
+import { Tooltip } from '@genflowly/component-library'
 import {useConversation} from '../../../../context/ConversationContext'
 import {useAuth} from '../../../../context/AuthContext'
 import {useToast} from '../../../../context/ToastContext'
-import TextContainer from '../../../common/TextContainer/TextContainer'
+import { TextContainer } from '@genflowly/component-library'
 import styles from './Request.module.scss'
 import {
     UserBrandName
@@ -51,6 +50,56 @@ export default function Request({
     } = useAuth()
     const {showToast} = useToast()
     const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
+
+    const containerRef = React.useRef<HTMLDivElement | null>(null)
+
+    // When the on-screen keyboard opens (the visual viewport shrinks while the
+    // editor is focused), the container's --vvh-based height collapses around
+    // the editor. Pin the widget to the top of the scroll container so the
+    // whole editor stays on screen, and re-reveal the caret's line inside the
+    // editor's own scroller.
+    useEffect(() => {
+        const viewport = window.visualViewport
+        if (!viewport) return
+
+        let lastHeight = viewport.height
+        let scrollTimer: ReturnType<typeof setTimeout> | null = null
+
+        const handleViewportResize = () => {
+            const previousHeight = lastHeight
+            lastHeight = viewport.height
+
+            // A sharp height drop while the editor owns focus = keyboard opened
+            const keyboardOpened = viewport.height < previousHeight - 100
+            if (!keyboardOpened) return
+            if (!containerRef.current?.contains(document.activeElement)) return
+
+            if (scrollTimer) clearTimeout(scrollTimer)
+            // Wait out the container's 150ms height transition so we scroll
+            // against the final layout
+            scrollTimer = setTimeout(() => {
+                const container = containerRef.current
+                if (!container) return
+
+                container.scrollIntoView({block: 'start', behavior: 'smooth'})
+
+                // Keep the line being edited visible inside the shrunken editor
+                const anchorNode = window.getSelection()?.anchorNode
+                if (anchorNode && container.contains(anchorNode)) {
+                    const line = anchorNode instanceof Element
+                        ? anchorNode
+                        : anchorNode.parentElement
+                    line?.scrollIntoView({block: 'nearest'})
+                }
+            }, 200)
+        }
+
+        viewport.addEventListener('resize', handleViewportResize)
+        return () => {
+            viewport.removeEventListener('resize', handleViewportResize)
+            if (scrollTimer) clearTimeout(scrollTimer)
+        }
+    }, [])
 
     const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === blockId)
 
@@ -129,7 +178,7 @@ export default function Request({
         files.forEach(uploadPastedImage)
     }, [uploadPastedImage])
 
-    // Dependencies moved from PromptEditor
+    // Dependencies moved from TextEditor
     const {customerId} = useAuth()
     const storageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
     const contextTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -161,7 +210,7 @@ export default function Request({
     }, [conversationBlock?.prompt])
 
     // ✅ Sync AI Context on mount (or when blockId changes)
-    // This restores the logic previously in PromptEditor that ensures
+    // This restores the logic previously in TextEditor that ensures
     // the Token Counter knows about this block immediately.
     useEffect(() => {
         // Only sync if we are the "active" editing block (no responses yet)
@@ -248,15 +297,16 @@ export default function Request({
     return (
 
         <div className={styles.container}
+             ref={containerRef}
              onPasteCapture={handlePasteCapture}
              data-testid={testId || "request-widget-container"}>
-            <PromptEditor
+            <TextEditor
                 id={blockId}
                 value={draftPrompt}
                 onChange={handleEditorChange}
                 height="100%"
-                className={styles.promptEditorFullscreen}
-                data-testid="prompt-editor"
+                className={styles.textEditorFullscreen}
+                data-testid="text-editor"
             />
 
             <AttachmentPreviewStrip
@@ -269,7 +319,7 @@ export default function Request({
                 <Tooltip content={!hasAnyValidApiKey ? t('conversation.request.noApiKeysSet') : ""}>
                     <div
                         style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
-                        <MultiPurposeButton
+                        <RectangleButton
                             onClick={() => {
                                 if (!hasAnyValidApiKey) return
                                 if (pendingAttachments.some(a => a.status === 'uploading')) {

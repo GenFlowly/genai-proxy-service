@@ -1,0 +1,50 @@
+// Badge showing the instruction loaded into the conversation; sits on the
+// header band, so it uses the band's text color with a translucent surface
+.instructionBadge {
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    display: inline-flex;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.24);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-conversation-header-text);
+        outline-offset: 2px;
+    }
+    align-items: center;
+    gap: 0.35rem;
+    height: 38px; // Matches PillButton so header controls line up
+    padding: 0 1rem;
+    border-radius: 100px;
+    white-space: nowrap; // Keep multi-emoji icons on one line
+    background-color: rgba(255, 255, 255, 0.14);
+    color: var(--color-conversation-header-text);
+    font-size: 0.8rem;
+    font-weight: 500;
+    max-width: 16rem;
+}
+
+.instructionName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 📱 Mobile: icon-only badge, mirroring the header's circular action buttons.
+   Only collapses when the instruction actually has an icon — otherwise the
+   name stays as the badge content. */
+@media (max-width: 768px) {
+    .instructionBadge:has(> [aria-hidden='true']) {
+        // Multi-emoji icons stay on one line; single emoji yields a circle
+        min-width: 38px;
+        padding: 0 0.5rem;
+        justify-content: center;
+
+        .instructionName {
+            display: none;
+        }
+    }
+}

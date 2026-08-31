@@ -1,0 +1,28 @@
+{
+  "defaults": [
+    {
+      "requestType": "INSTRUCTION_PERSONA",
+      "mapKey": "InstructionRequestDefault",
+      "outputFormat": "JSON",
+      "modelPreference": null,
+      "systemPromptResource": "config/prompts/instruction-persona.system.txt",
+      "userMessageResource": "config/prompts/instruction-persona.user.txt"
+    },
+    {
+      "requestType": "CONVERSATION_TITLE",
+      "mapKey": "ConversationTitleDefault",
+      "outputFormat": "TEXT",
+      "modelPreference": { "aiVendor": "OPENAI", "model": "gpt-5" },
+      "systemPromptResource": "config/prompts/conversation-title.system.txt",
+      "userMessageResource": "config/prompts/conversation-title.user.txt"
+    },
+    {
+      "requestType": "NOTE_TITLE",
+      "mapKey": "NoteTitleDefault",
+      "outputFormat": "TEXT",
+      "modelPreference": { "aiVendor": "OPENAI", "model": "gpt-5" },
+      "systemPromptResource": "config/prompts/note-title.system.txt",
+      "userMessageResource": "config/prompts/note-title.user.txt"
+    }
+  ]
+}

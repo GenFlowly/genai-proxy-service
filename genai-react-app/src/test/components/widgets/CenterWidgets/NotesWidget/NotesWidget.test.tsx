@@ -16,6 +16,6 @@ describe('NotesWidget', () => {
 
     test('does not render a mode toggle', () => {
         render(<NotesWidget />);
-        expect(screen.queryByTestId('toggle-group-button')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('pill-button-group')).not.toBeInTheDocument();
     });
 });

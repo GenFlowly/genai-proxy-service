@@ -3,16 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { useAuth0 } from '@auth0/auth0-react';
-import { 
-    createInstruction, 
-    shareInstruction, 
+import {
+    createInstruction,
+    shareInstruction,
     unshareInstruction,
     deleteInstruction,
     getInstructionSharedUsers
 } from '../../services/instructionService';
-import PromptEditor from '../../components/widgets/PromptEditorWidget/PromptEditor';
-import PillButton from '../../components/common/PillButton/PillButton';
-import { InputTextWithHint } from '../../components/common/InputTextWithHint/InputTextWithHint';
+import {
+    InstructionEditor,
+    Breadcrumbs,
+    BreadcrumbItem,
+    PillButton,
+    pageHeaderStyles,
+} from '@genflowly/component-library';
 import ShareModal, { VisibilityMode } from '../../components/common/ShareModal/ShareModal';
 import { SearchUserResponse } from '../../models/user.models';
 import styles from './InstructionDetailPage.module.scss';
@@ -26,27 +30,58 @@ export default function InstructionDetailPage() {
     const { customerInstructions, refreshInstructions, updateInstruction, isAuthenticated, isInstructionsLoaded, loginWithRedirect, entitlements } = useAuth();
 
     const isNew = instructionId === 'new';
-    
+
     const [name, setName] = useState('');
     const [instructionText, setInstructionText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [role, setRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER');
+    // null = follow the latest version; a number pins an older version
+    const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
+
+    // Newest first; the page shows this as the version-history sidebar
+    const versionHistory = customerInstructions
+        .filter(i => i.id === instructionId)
+        .sort((a, b) => b.version - a.version);
+
+    // The version currently shown in the editor (pinned or latest)
+    const currentVersion = (selectedVersion !== null
+        ? versionHistory.find(v => v.version === selectedVersion)
+        : undefined) ?? versionHistory[0];
+
+    // Header trail: Instructions › <instruction name | Create Instruction>
+    const breadcrumbItems: BreadcrumbItem[] = [
+        {
+            label: t('instructionDetail.instructionDetailPage.breadcrumbInstructions'),
+            onClick: () => navigate('/instructions'),
+        },
+        {
+            label: isNew
+                ? t('instructionDetail.instructionDetailPage.createTitle')
+                : currentVersion?.name || t('instructionDetail.instructionDetailPage.editTitle'),
+        },
+    ];
 
     useEffect(() => {
         refreshInstructions();
     }, [refreshInstructions]);
 
     useEffect(() => {
+        setSelectedVersion(null);
+    }, [instructionId]);
+
+    useEffect(() => {
         if (!isNew && instructionId) {
-            // Find the latest version of this instruction
             const matching = customerInstructions.filter(i => i.id === instructionId);
             const latest = matching.sort((a, b) => b.version - a.version)[0];
-            
-            if (latest) {
-                setName(latest.name || '');
-                setInstructionText(latest.instruction || '');
-                setRole(latest.role || 'VIEW');
+            const current = (selectedVersion !== null
+                ? matching.find(i => i.version === selectedVersion)
+                : undefined) ?? latest;
+
+            if (current) {
+                setName(current.name || '');
+                setInstructionText(current.instruction || '');
+                setRole(current.role || 'VIEW');
             } else if (isInstructionsLoaded) {
                 if (!isAuthenticated) {
                     loginWithRedirect({ appState: { returnTo: window.location.pathname } });
@@ -61,7 +96,7 @@ export default function InstructionDetailPage() {
             }
             setRole('OWNER');
         }
-    }, [instructionId, isNew, customerInstructions, isInstructionsLoaded, isAuthenticated, loginWithRedirect, navigate, t]);
+    }, [instructionId, isNew, customerInstructions, selectedVersion, isInstructionsLoaded, isAuthenticated, loginWithRedirect, navigate, t]);
 
     const handleSave = async () => {
         if (!instructionText.trim()) return;
@@ -77,6 +112,7 @@ export default function InstructionDetailPage() {
             if (response.id) {
                 updateInstruction(response);
                 refreshInstructions();
+                setSelectedVersion(null); // Jump back to the latest version
                 if (isNew || response.id !== instructionId) { // Handles branching
                     navigate(`/instructions/${response.id}`, { replace: true });
                 }
@@ -87,10 +123,6 @@ export default function InstructionDetailPage() {
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const handleShareClick = () => {
-        setIsShareModalOpen(true);
     };
 
     const handleShareSave = async (mode: VisibilityMode, users: SearchUserResponse[], removedUsers: SearchUserResponse[]) => {
@@ -114,7 +146,7 @@ export default function InstructionDetailPage() {
 
     const handleDelete = async () => {
         if (!window.confirm(t('instructionDetail.instructionDetailPage.deleteConfirm'))) return;
-        
+
         setIsLoading(true);
         try {
             const token = await getAccessTokenSilently();
@@ -133,85 +165,70 @@ export default function InstructionDetailPage() {
         <div className={styles.page}>
             <Navbar />
             <div className={styles.pageContainer}>
-                <div className={styles.header}>
-                <div className={styles.titleGroup}>
-                    <button className={styles.backButton} onClick={() => navigate('/instructions')}>
-                        &larr; {t('instructionDetail.instructionDetailPage.back')}
-                    </button>
-                    <h2>{isNew ? t('instructionDetail.instructionDetailPage.createTitle') : t('instructionDetail.instructionDetailPage.editTitle')}</h2>
-                </div>
-                
-                <div className={styles.actions}>
-                    {role !== 'VIEW' && !isNew && (
-                        <>
-                            {entitlements.canShare && (
-                                <PillButton
-                                    label={t('instructionDetail.instructionDetailPage.share')}
-                                    variant="secondary"
-                                    onClick={handleShareClick}
-                                    disabled={isLoading}
-                                />
-                            )}
-                            {role === 'OWNER' && (
-                                <PillButton
-                                    label={t('instructionDetail.instructionDetailPage.delete')}
-                                    variant="danger"
-                                    onClick={handleDelete} 
-                                    disabled={isLoading}
-                                />
-                            )}
-                        </>
-                    )}
-                    {role !== 'VIEW' && (
-                        <PillButton
-                            label={isLoading ? t('instructionDetail.instructionDetailPage.savingLabel') : t('instructionDetail.instructionDetailPage.save')}
-                            variant="primary" 
-                            onClick={handleSave} 
-                            disabled={isLoading || !instructionText.trim()}
-                        />
-                    )}
-                </div>
-            </div>
-
-            <div className={styles.content}>
-                {role === 'VIEW' && (
-                    <div className={styles.readonlyBanner}>
-                        {t('instructionDetail.instructionDetailPage.readonlyBanner')}
+                <div className={pageHeaderStyles.header}>
+                    <Breadcrumbs items={breadcrumbItems} variant="onHeader" />
+                    <div className={pageHeaderStyles.actions}>
+                        {!isNew && role !== 'VIEW' && entitlements.canShare && (
+                            <PillButton
+                                label={t('instructionDetail.instructionDetailPage.share')}
+                                variant="secondary"
+                                className={styles.shareButton}
+                                onClick={() => setIsShareModalOpen(true)}
+                                disabled={isLoading}
+                            />
+                        )}
                     </div>
-                )}
-                <div className={styles.inputGroup}>
-                    <InputTextWithHint
-                        hint={t('instructionDetail.instructionDetailPage.nameHint')}
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder={t('instructionDetail.instructionDetailPage.namePlaceholder')}
-                        disabled={role === 'VIEW'}
-                    />
                 </div>
-                
-                <div className={styles.editorContainer}>
-                    <label className={styles.editorLabel}>{t('instructionDetail.instructionDetailPage.instructionPrompt')}</label>
-                    <PromptEditor
-                        id="instruction-detail-editor"
-                        value={instructionText}
-                        onChange={setInstructionText}
-                        disableCache={true}
-                        height="100%"
-                    />
-                </div>
-            </div>
+                <InstructionEditor
+                    name={name}
+                    onNameChange={setName}
+                    instructionText={instructionText}
+                    onInstructionTextChange={setInstructionText}
+                    isNew={isNew}
+                    readOnly={role === 'VIEW'}
+                    isLoading={isLoading}
+                    canDelete={role === 'OWNER'}
+                    onSave={handleSave}
+                    onDelete={handleDelete}
+                    editorId="instruction-detail-editor"
+                    versions={versionHistory.map(v => ({
+                        version: v.version,
+                        details: v.name || undefined,
+                    }))}
+                    icon={currentVersion?.icon || undefined}
+                    color={currentVersion?.color || undefined}
+                    role={currentVersion?.role}
+                    category={currentVersion?.category || undefined}
+                    tags={currentVersion?.tags || undefined}
+                    selectedVersion={selectedVersion ?? versionHistory[0]?.version}
+                    onSelectVersion={setSelectedVersion}
+                    versionsLoading={!isNew && !isInstructionsLoaded && versionHistory.length === 0}
+                    labels={{
+                        delete: t('instructionDetail.instructionDetailPage.delete'),
+                        save: t('instructionDetail.instructionDetailPage.save'),
+                        saving: t('instructionDetail.instructionDetailPage.savingLabel'),
+                        readonlyBanner: t('instructionDetail.instructionDetailPage.readonlyBanner'),
+                        nameHint: t('instructionDetail.instructionDetailPage.nameHint'),
+                        namePlaceholder: t('instructionDetail.instructionDetailPage.namePlaceholder'),
+                        versionsTitle: t('instructionDetail.instructionDetailPage.versionsTitle'),
+                        versionsEmpty: t('instructionDetail.instructionDetailPage.versionsEmpty'),
+                        versionsError: t('instructionDetail.instructionDetailPage.versionsError'),
+                        accessLevel: t('instructionDetail.instructionDetailPage.accessLevel'),
+                        latestTooltip: t('instructionDetail.instructionDetailPage.latestTooltip'),
+                    }}
+                />
 
-            <ShareModal
-                isOpen={isShareModalOpen}
-                onClose={() => setIsShareModalOpen(false)}
-                onSave={handleShareSave}
-                entityId={!isNew ? instructionId : undefined}
-                fetchSharedUsers={async (id) => {
-                    const token = await getAccessTokenSilently();
-                    return getInstructionSharedUsers(token, id);
-                }}
-            />
-        </div>
+                <ShareModal
+                    isOpen={isShareModalOpen}
+                    onClose={() => setIsShareModalOpen(false)}
+                    onSave={handleShareSave}
+                    entityId={!isNew ? instructionId : undefined}
+                    fetchSharedUsers={async (id) => {
+                        const token = await getAccessTokenSilently();
+                        return getInstructionSharedUsers(token, id);
+                    }}
+                />
+            </div>
         </div>
     );
 }

@@ -54,6 +54,10 @@ class EmailProcessor(DataProcessor):
         """
         email_model = EmailModel.from_dict(state.raw_data)
 
+        # TODO(multi-chunk): only the first chunk's vector is stored and chunk text
+        # is not persisted, so emails longer than one chunk lose recall and cannot
+        # be re-embedded server-side. Before email ingestion gets real clients,
+        # store one record per chunk with its text, like NoteProcessor does.
         embedding_vector = embeddings[0]['vector'] if embeddings else []
 
         record = {
@@ -66,7 +70,10 @@ class EmailProcessor(DataProcessor):
             "folder": email_model.folder[:100],
             "thread_id": (email_model.thread_id or "")[:200],
             "in_reply_to": (email_model.in_reply_to or "")[:200],
-            "s3_key": f"emails/{email_model.folder}/{email_model.message_id}.json"
+            # Points at the per-email document in the customer-documents bucket
+            # ({customerId}/emails/{messageId}.json). TODO(s3): the email ingestion
+            # path does not write this object yet — pointer is forward-looking.
+            "s3_key": f"{state.customer_id}/emails/{email_model.message_id}.json"
         }
 
         return [record]
@@ -84,7 +91,7 @@ class EmailProcessor(DataProcessor):
         safe_model_name = model_name.replace('-', '_')
         return f"{state.customer_id}_email_{safe_model_name}"
 
-    def get_collection_schema(self) -> Any:
+    def get_collection_schema(self, dim: int = 384, description: str = "") -> Any:
         """
         Get the Milvus schema definition for email type.
         """
@@ -95,9 +102,9 @@ class EmailProcessor(DataProcessor):
             sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             from pymilvus import MilvusClient, DataType
 
-        schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=True)
+        schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=True, description=description)
         schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
-        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=384)
+        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=dim)
         schema.add_field(field_name="subject", datatype=DataType.VARCHAR, max_length=512)
         schema.add_field(field_name="from_email", datatype=DataType.VARCHAR, max_length=256)
         schema.add_field(field_name="to_email", datatype=DataType.VARCHAR, max_length=256)

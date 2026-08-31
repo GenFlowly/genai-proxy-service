@@ -1,8 +1,8 @@
-package models
+package com.genflowly.models
 
 /**
  * Wraps the result of a single AI generation call, carrying both the generated
- * text and normalized token-usage counts extracted from [AIResponse.getUsageMetadata].
+ * text and normalized token-usage counts.
  */
 data class AIGenerateResult(
     val text: String,

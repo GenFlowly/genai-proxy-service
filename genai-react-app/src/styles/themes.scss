@@ -108,6 +108,7 @@
 [data-theme="dark"] {
     // Primary Colors (keeping blue visible in dark mode)
     --color-primary: #0a84ff;
+  --color-button-primary: #0070e0; // darker than accent so white text keeps >=4.5:1 contrast
     --color-primary-hover: #0070e0;
     --color-primary-light: #1c2a3a;
 
@@ -160,6 +161,7 @@
 // SCSS Variables for backwards compatibility
 // Color variables reference CSS variables
 $color-primary: var(--color-primary);
+$color-button-primary: var(--color-button-primary);
 $color-primary-hover: var(--color-primary-hover);
 $color-primary-hover-alt: var(--color-primary-hover-alt);
 $color-primary-pressed: var(--color-primary-pressed);

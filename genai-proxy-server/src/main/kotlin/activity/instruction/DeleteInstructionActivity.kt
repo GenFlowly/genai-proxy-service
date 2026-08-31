@@ -11,10 +11,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.service.InstructionService
 
 private val logger = LoggerFactory.getLogger("DeleteInstructionRoute")
 
 fun Route.registerDeleteInstructionRoutes(
+    instructionService: InstructionService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -54,7 +56,7 @@ fun Route.registerDeleteInstructionRoutes(
                     return@delete
                 }
 
-                customerProfileService.deleteInstruction(customerId, instructionId)
+                instructionService.deleteInstruction(customerId, instructionId)
 
                 call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
 

@@ -7,9 +7,10 @@ import { getCustomerConversations, archiveConversation } from '../../../services
 import { ConversationSummary } from '../../../models/conversationHistory.models'
 import { CollapsedOpenAIBrandName, CollapsedClaudeBrandName, CollapsedGeminiBrandName } from '../../common/BrandName/BrandName'
 import { AIVendor } from '../../../constants/vendors'
-import ArchiveIcon from '../../icons/ArchiveIcon'
-import SidebarListPanel, { SidebarListGroup, SidebarListLoadMore } from '../../common/SidebarListPanel/SidebarListPanel'
-import panelStyles from '../../common/SidebarListPanel/SidebarListPanel.module.scss'
+import { Icon } from '@genflowly/component-library'
+import { ICONS } from '../../../constants/icons'
+import { SidebarListPanel, SidebarListGroup, SidebarListLoadMore } from '@genflowly/component-library'
+import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
 import { loadHistoryCache, saveHistoryCache } from './historyCache'
 import { formatServerDateTime, formatServerTime } from '../../../utils/timeUtils'
@@ -19,14 +20,14 @@ const PAGE_SIZE = 15
 
 export default function ConversationHistoryComponent() {
     const { t } = useTranslation()
-    const { getAccessTokenSilently, isAuthenticated } = useAuth()
+    const { getAccessTokenSilently, isAuthenticated, customerId } = useAuth()
     const { conversationId, conversationTitle } = useConversation()
     const navigate = useNavigate()
     const { conversationId: activeId } = useParams<{ conversationId: string }>()
 
     // Stale-while-revalidate: paint the last known list immediately (if any),
     // then refresh from the API in the background
-    const cached = useMemo(loadHistoryCache, [])
+    const cached = useMemo(() => loadHistoryCache(customerId), [customerId])
     const [items, setItems] = useState<ConversationSummary[]>(cached?.items ?? [])
     const [lastKey, setLastKey] = useState<string | null>(cached?.lastKey ?? null)
     const [isLoading, setIsLoading] = useState(false)
@@ -64,8 +65,8 @@ export default function ConversationHistoryComponent() {
     // cache so the next mount paints instantly
     useEffect(() => {
         if (!hasLoadedRef.current) return
-        saveHistoryCache({ items, lastKey, hasMore })
-    }, [items, lastKey, hasMore])
+        saveHistoryCache(customerId, { items, lastKey, hasMore })
+    }, [customerId, items, lastKey, hasMore])
 
     // Patch title in list when the active conversation gets a generated title
     useEffect(() => {
@@ -154,7 +155,7 @@ export default function ConversationHistoryComponent() {
                 onSelect: () => handleNavigate(conv.conversationId),
                 testId: `conv-history-item-${conv.conversationId}`,
                 action: {
-                    icon: <ArchiveIcon />,
+                    icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
                     label: t('conversation.conversationHistory.archiveConversation'),
                     onClick: (e: React.MouseEvent) => handleArchive(e, conv.conversationId),
                     testId: `conv-archive-btn-${conv.conversationId}`,

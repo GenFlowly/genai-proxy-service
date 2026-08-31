@@ -197,13 +197,6 @@ export default function SystemApiKeysPage() {
     return (
         <section className="page">
             <h2>System AI Vendor API Keys</h2>
-            <p className="page-description">
-                System-wide keys used by the proxy for internal services. Keys are validated
-                against the vendor before being stored (KMS-encrypted) and are never shown
-                again after saving. For each vendor with a valid key, pick the model to use
-                and its failover priority — the system uses priority 1 first, then falls back
-                to priority 2, and so on.
-            </p>
 
             {loadError && <div className="banner error">{loadError}</div>}
 

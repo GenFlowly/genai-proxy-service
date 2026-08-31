@@ -15,10 +15,10 @@ import { APIKeyStatus } from '../../../../models/storeCustomerVendorAPIKeys.mode
 
 import { saveAIConfigPreferences } from '../../../../services/saveAIConfigService'
 import styles from './AIVendorWidget.module.scss'
-import Tooltip from '../../../common/Tooltip/Tooltip'
-import { Icon } from '../../../common/Icon/Icon'
+import { Tooltip } from '@genflowly/component-library'
+import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
-import PillButton from '../../../common/PillButton/PillButton'
+import { PillButton } from '@genflowly/component-library'
 import {
     OpenAIBrandName,
     ClaudeBrandName,

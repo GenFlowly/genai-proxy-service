@@ -29,3 +29,12 @@ AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "https://pzf0twaaq5.execute-api.us-
 # Change based on environment (dev, staging, production)
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api-development.genflowly.com")
 API_BATCH_ENDPOINT = os.getenv("API_BATCH_ENDPOINT", "/encode-email")
+
+# Client identifier sent in the request envelope (the server requires one)
+API_CLIENT_NAME = os.getenv("API_CLIENT_NAME", "EMAIL_SYNC_MAC")
+
+# Embedding model requested for email encoding. Must match the model the
+# customer's collections were created with — the collection name embeds the
+# model and its schema fixes the vector dimension.
+EMBEDDING_MODEL_TYPE = os.getenv("EMBEDDING_MODEL_TYPE", "voyage")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "voyage-4-large")

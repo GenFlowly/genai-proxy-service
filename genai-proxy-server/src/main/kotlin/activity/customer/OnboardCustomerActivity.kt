@@ -1,9 +1,11 @@
 package com.genflowly.activity.customer
 
 import com.genflowly.Routes
+import com.genflowly.config.AppConfig
 import com.genflowly.models.api.OnboardCustomerResponse
-import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.utils.authenticatedAzp
+import com.genflowly.utils.authenticatedSub
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -11,17 +13,14 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.http.HttpHeaders
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import models.OnboardCustomerRequest
+import com.genflowly.models.OnboardCustomerRequest
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
 
 private val logger = LoggerFactory.getLogger("OnboardCustomerRoute")
 
 fun Route.registerOnboardCustomerRoutes(
     customerProfileService: CustomerProfileService,
-    aiRequestManager: AIRequestManager
+    appConfig: AppConfig
 ) {
     authenticate("auth0") {
         post(Routes.ONBOARD_CUSTOMER, {
@@ -46,9 +45,40 @@ fun Route.registerOnboardCustomerRoutes(
             }
         }) {
             val request = call.receive<OnboardCustomerRequest>()
+
+            // The profile identity comes from the token, never the body — a
+            // caller must not be able to onboard (or read) another sub's profile.
+            val tokenSub = call.authenticatedSub()
+            if (tokenSub == null || tokenSub != request.sub) {
+                logger.warn("Onboarding sub mismatch: body sub={} token sub={}", request.sub, tokenSub)
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to "sub does not match token"))
+                return@post
+            }
+
+            // When the token's azp maps to a known app, it decides which app's
+            // account this is — the body's client is only a legacy fallback.
+            val azpClient = appConfig.clientAppForAzp(call.authenticatedAzp())
+            if (azpClient != null && azpClient != request.client) {
+                logger.warn("Onboarding client mismatch: body client={} azp client={}", request.client, azpClient)
+            }
+            val client = azpClient ?: request.client
+
+            if (client == AppConfig.CLIENT_ADMIN_PANEL) {
+                val emailDomain = request.email?.substringAfterLast('@', "")?.lowercase()
+                if (emailDomain != appConfig.adminEmailDomain) {
+                    logger.warn("Rejected admin-panel onboarding for email {}", request.email ?: "not provided")
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Admin panel requires a @${appConfig.adminEmailDomain} account")
+                    )
+                    return@post
+                }
+            }
+
             logger.info(
-                "Onboarding user: sub={}, email={}, name={}, picture={}",
+                "Onboarding user: sub={}, client={}, email={}, name={}, picture={}",
                 request.sub,
+                client,
                 request.email ?: "not provided",
                 request.name ?: "not provided",
                 request.picture ?: "not provided",
@@ -56,38 +86,14 @@ fun Route.registerOnboardCustomerRoutes(
 
             val authHeader = call.request.headers[HttpHeaders.Authorization]
 
-            val customerProfile = customerProfileService.onboardCustomer(
+            val response = customerProfileService.onboardAndBootstrap(
                 sub = request.sub,
-                client = request.client,
+                client = client,
                 email = request.email,
                 name = request.name,
                 picture = request.picture,
                 authHeader = authHeader
             )
-
-            // Fetch additional details — independent reads keyed only by
-            // customerId, so run them concurrently
-            val response = coroutineScope {
-                val aiConfigPreferences = async { customerProfileService.getAIConfigPreferences(customerProfile.customerId) }
-                val aiVendorAPIKeyStatusList = async { customerProfileService.getAIVendorAPIKeyStatusList(customerProfile.customerId) }
-                val vectorDBConfigStatusList = async { customerProfileService.getCustomerVectorDBConfigStatusList(customerProfile.customerId) }
-                val supabaseConfigStatus = async { customerProfileService.getCustomerSupabaseConfigStatus(customerProfile.customerId) }
-                val customerInstructions = async { customerProfileService.getLatestCustomerInstructions(customerProfile.customerId) }
-
-                // Fire and forget backfill missing categories/icons using AI
-                customerProfileService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await(), aiRequestManager)
-
-                OnboardCustomerResponse(
-                    customerId = customerProfile.customerId,
-                    aiConfigPreferences = aiConfigPreferences.await() ?: AIConfigPreferences(),
-                    aiVendorAPIKeyStatusList = aiVendorAPIKeyStatusList.await(),
-                    customerName = customerProfile.name ?: "User",
-                    customerPicture = customerProfile.picture,
-                    customerInstructions = customerInstructions.await(),
-                    vectorDBConfigStatusList = vectorDBConfigStatusList.await(),
-                    supabaseConfigStatus = supabaseConfigStatus.await()
-                )
-            }
 
             call.respond(response)
         }

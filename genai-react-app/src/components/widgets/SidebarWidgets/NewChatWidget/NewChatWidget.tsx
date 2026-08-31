@@ -2,11 +2,11 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
-import PillButton from '../../../common/PillButton/PillButton'
+import { PillButton } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
 import styles from './NewChatWidget.module.scss'
-import Tooltip from '../../../common/Tooltip/Tooltip'
-import { Icon } from '../../../common/Icon/Icon'
+import { Tooltip } from '@genflowly/component-library'
+import { Icon } from '@genflowly/component-library'
 
 export default function NewChatWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
     const { t } = useTranslation()
@@ -18,6 +18,7 @@ export default function NewChatWidget({ 'data-testid': testId }: { 'data-testid'
             <button
                 className={styles.collapsedButton}
                 onClick={resetConversation}
+                aria-label={t('sidebar.newChatWidget.newChat')}
                 data-testid="new-chat-button-collapsed"
             >
                 <Icon src={ICONS.PLUS} size={20} />

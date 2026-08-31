@@ -3,7 +3,7 @@ package com.genflowly.activity.conversation
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GetCustomerConversationsResponse
-import com.genflowly.service.ConversationService
+import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.get
@@ -17,7 +17,7 @@ private val logger = LoggerFactory.getLogger("GetCustomerConversationsPaginatedR
 
 fun Route.registerGetCustomerConversationsPaginatedRoutes(
     customerProfileService: CustomerProfileService,
-    conversationService: ConversationService
+    conversationManagementService: ConversationManagementService
 ) {
     authenticate("auth0", "apiKey") {
         get(Routes.GET_CUSTOMER_CONVERSATIONS_PAGINATED, {
@@ -58,7 +58,7 @@ fun Route.registerGetCustomerConversationsPaginatedRoutes(
                     customerId, pageSize, exclusiveStartKey != null
                 )
 
-                val response = conversationService.getCustomerConversationsPaginated(
+                val response = conversationManagementService.getCustomerConversationsPaginated(
                     customerId = customerId,
                     pageSize = pageSize,
                     exclusiveStartKey = exclusiveStartKey

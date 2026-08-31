@@ -1,5 +1,6 @@
 package com.genflowly.models.api
 
+import com.genflowly.models.ShareRole
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -18,7 +19,7 @@ data class SearchCustomerResponse(
     val name: String?,
     val username: String,
     val picture: String?,
-    val role: String? = null
+    val role: ShareRole? = null
 )
 
 @Serializable

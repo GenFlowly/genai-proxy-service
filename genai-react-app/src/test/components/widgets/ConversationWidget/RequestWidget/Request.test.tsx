@@ -16,21 +16,23 @@ jest.mock('../../../../../context/ToastContext', () => ({
 jest.mock('../../../../../services/attachmentService');
 
 // Mock child components
-jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', () => ({
-    value,
-    onChange,
-    'data-testid': testId
-}: any) => (
-    <textarea
-        data-testid={testId}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-    />
-));
-
-jest.mock('../../../../../components/common/TextContainer/TextContainer', () => ({ content }: { content: string }) => (
-    <div data-testid="text-container">{content}</div>
-));
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    TextEditor: ({
+        value,
+        onChange,
+        'data-testid': testId
+    }: any) => (
+        <textarea
+            data-testid={testId}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    ),
+    TextContainer: ({ content }: { content: string }) => (
+        <div data-testid="text-container">{content}</div>
+    ),
+}));
 
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
     UserBrandName: () => <span data-testid="user-brand-name">User</span>
@@ -74,7 +76,7 @@ describe('Request Widget Component', () => {
     test('renders in Editor mode when no responses', () => {
         render(<Request blockId="block-1" data-testid="request-comp" />);
         expect(screen.getByTestId('request-comp')).toBeInTheDocument();
-        expect(screen.getByTestId('prompt-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('text-editor')).toBeInTheDocument();
         expect(screen.getByTestId('generate-button')).toBeInTheDocument();
     });
 
@@ -99,7 +101,7 @@ describe('Request Widget Component', () => {
         // Should show resolved content
         expect(screen.getByTestId('text-container')).toHaveTextContent('Resolved Prompt');
         // Editor and button should NOT be there
-        expect(screen.queryByTestId('prompt-editor')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('text-editor')).not.toBeInTheDocument();
     });
 
     test('handles focus and typing (Active state)', () => {
@@ -107,7 +109,7 @@ describe('Request Widget Component', () => {
         jest.useFakeTimers();
 
         render(<Request blockId="block-1" />);
-        const editor = screen.getByTestId('prompt-editor');
+        const editor = screen.getByTestId('text-editor');
 
         // Test Focus (implicit by typing)
         editor.focus();
@@ -171,7 +173,7 @@ describe('Request Widget Component', () => {
 
         render(<Request blockId="block-1" />);
         // Editor should NOT be visible, TextContainer should be visible
-        expect(screen.queryByTestId('prompt-editor')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('text-editor')).not.toBeInTheDocument();
         expect(screen.getByTestId('resolved-request-wrapper')).toBeInTheDocument();
 
         // No Stop Generating (or any) button in the Request widget while
@@ -204,13 +206,99 @@ describe('Request Widget Component', () => {
         localStorage.setItem(storageKey, 'Restored Draft');
 
         render(<Request blockId="block-1" />);
-        const editor = screen.getByTestId('prompt-editor');
+        const editor = screen.getByTestId('text-editor');
 
         expect(editor).toHaveValue('Restored Draft');
 
         // Clean up
         localStorage.removeItem(storageKey);
     });
+
+    describe('keyboard-open scroll behavior', () => {
+        let resizeHandler: (() => void) | undefined
+        let viewportHeight: number
+
+        beforeEach(() => {
+            jest.useFakeTimers()
+            resizeHandler = undefined
+            viewportHeight = 800
+            Object.defineProperty(window, 'visualViewport', {
+                configurable: true,
+                value: {
+                    get height() { return viewportHeight },
+                    addEventListener: (event: string, cb: () => void) => {
+                        if (event === 'resize') resizeHandler = cb
+                    },
+                    removeEventListener: jest.fn()
+                }
+            })
+        })
+
+        afterEach(() => {
+            jest.useRealTimers()
+            Object.defineProperty(window, 'visualViewport', {
+                configurable: true,
+                value: undefined
+            })
+        })
+
+        const openKeyboard = (newHeight: number) => {
+            viewportHeight = newHeight
+            act(() => {
+                resizeHandler?.()
+                jest.advanceTimersByTime(200)
+            })
+        }
+
+        test('scrolls the widget to the top when the keyboard opens while the editor is focused', () => {
+            render(<Request blockId="block-1" />)
+            const container = screen.getByTestId('request-widget-container')
+            container.scrollIntoView = jest.fn()
+
+            screen.getByTestId('text-editor').focus()
+            openKeyboard(400)
+
+            expect(container.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
+        })
+
+        test('does not scroll when focus is outside the editor', () => {
+            render(<Request blockId="block-1" />)
+            const container = screen.getByTestId('request-widget-container')
+            container.scrollIntoView = jest.fn()
+
+            openKeyboard(400)
+
+            expect(container.scrollIntoView).not.toHaveBeenCalled()
+        })
+
+        test('does not scroll on small viewport changes (browser chrome, not keyboard)', () => {
+            render(<Request blockId="block-1" />)
+            const container = screen.getByTestId('request-widget-container')
+            container.scrollIntoView = jest.fn()
+
+            screen.getByTestId('text-editor').focus()
+            openKeyboard(750)
+
+            expect(container.scrollIntoView).not.toHaveBeenCalled()
+        })
+
+        test('keeps the caret line visible inside the shrunken editor', () => {
+            render(<Request blockId="block-1" />)
+            const container = screen.getByTestId('request-widget-container')
+            container.scrollIntoView = jest.fn()
+
+            const caretLine = screen.getByTestId('text-editor')
+            caretLine.scrollIntoView = jest.fn()
+            jest.spyOn(window, 'getSelection').mockReturnValue({
+                anchorNode: caretLine
+            } as unknown as Selection)
+
+            caretLine.focus()
+            openKeyboard(400)
+
+            expect(caretLine.scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+        })
+    })
 
     describe('image paste-to-upload', () => {
         const mockUploadAttachment = uploadAttachment as jest.Mock;

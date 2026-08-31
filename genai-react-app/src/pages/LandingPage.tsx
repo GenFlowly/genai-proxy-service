@@ -6,7 +6,7 @@ import ConversationHistoryComponent from '../components/widgets/ConversationHist
 import ConversationHeader from '../components/widgets/ConversationHeader/ConversationHeader'
 import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
 import CenterSection from '../components/sections/CenterSection/CenterSection'
-import ResizableSidebar from '../components/common/ResizableSidebar/ResizableSidebar'
+import { ResizableSidebar } from '@genflowly/component-library'
 import { useConversation } from '../context/ConversationContext'
 import styles from './LandingPage.module.scss'
 import { useLayout } from '../context/LayoutContext'

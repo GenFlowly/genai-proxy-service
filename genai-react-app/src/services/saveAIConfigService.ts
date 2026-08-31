@@ -5,8 +5,10 @@ import { fetchWithRetry } from "../utils/apiUtils";
 
 export interface SaveAIConfigPreferencesRequest {
     aiConfigPreferences: {
-        preferredModels: AIConfig[]
+        preferredModels?: AIConfig[]
         preferredGenerativeMode?: string
+        preferredInstructionId?: string
+        instructionFallbackMode?: string
     }
     otherPreferences?: Record<string, string>
 }

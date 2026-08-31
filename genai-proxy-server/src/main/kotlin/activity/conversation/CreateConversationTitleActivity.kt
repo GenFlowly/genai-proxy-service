@@ -14,12 +14,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import kotlinx.serialization.SerializationException
 import org.slf4j.LoggerFactory
-import service.AIRequestManager
+import com.genflowly.service.ConversationManagementService
 
 private val logger = LoggerFactory.getLogger("CreateConversationTitleRoute")
 
 fun Route.registerCreateConversationTitleRoutes(
-    aiRequestManager: AIRequestManager,
+    conversationManagementService: ConversationManagementService,
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
@@ -59,7 +59,7 @@ fun Route.registerCreateConversationTitleRoutes(
                     request
                 )
 
-                val title = aiRequestManager.createConversationTitle(
+                val title = conversationManagementService.createConversationTitle(
                     request.conversationId,
                     customerId,
                     request.prompt,

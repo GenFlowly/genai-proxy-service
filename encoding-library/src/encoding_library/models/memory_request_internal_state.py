@@ -16,6 +16,8 @@ class MemoryRequestInternalState:
         model_name: Optional[str] = None,
         chunking_type: Optional[str] = None,
         chunking_technique: Optional[str] = None,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
         data_chunks: Optional[List[str]] = None,
         vectors: Optional[List[Any]] = None,
     ):
@@ -27,6 +29,10 @@ class MemoryRequestInternalState:
         self.model_name = model_name
         self.chunking_type = chunking_type
         self.chunking_technique = chunking_technique
+        # Per-request chunking overrides (tokens); when unset, the per-model
+        # values from the EmbeddingModelRegistry table (or code defaults) apply
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
         self.data_chunks = data_chunks
         self.vectors = vectors
 
@@ -41,6 +47,8 @@ class MemoryRequestInternalState:
             "model_name": self.model_name,
             "chunking_type": self.chunking_type,
             "chunking_technique": self.chunking_technique,
+            "chunk_size": self.chunk_size,
+            "chunk_overlap": self.chunk_overlap,
             "data_chunks": self.data_chunks,
             "vectors": self.vectors,
         }
@@ -57,6 +65,8 @@ class MemoryRequestInternalState:
             model_name=data.get('model_name'),
             chunking_type=data.get('chunking_type'),
             chunking_technique=data.get('chunking_technique'),
+            chunk_size=data.get('chunk_size'),
+            chunk_overlap=data.get('chunk_overlap'),
             data_chunks=data.get('data_chunks'),
             vectors=data.get('vectors'),
         )

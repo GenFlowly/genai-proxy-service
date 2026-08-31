@@ -50,9 +50,9 @@
   }
 
   @include respond-to-mobile {
-    // Cards span the full screen width on mobile
-    padding-left: 0;
-    padding-right: 0;
+    // Match the request widget / prompt editor mobile geometry
+    padding-left: $mobile-content-inset;
+    padding-right: $mobile-content-inset;
   }
 }
 
@@ -101,17 +101,14 @@
     border-left: none;
     border-right: none;
 
-    // The TextContainer card — full screen width on mobile
+    // The TextContainer card — match the request widget's mobile geometry
     article {
-      width: 100% !important;
-      max-width: 100% !important;
+      width: $mobile-content-width !important;
+      max-width: $mobile-content-width !important;
       border: none;
+      background: transparent;
     }
   }
-}
-
-.selected {
-  background-color: $color-background-selected;
 }
 
 .responseActionButtonsWrapper {

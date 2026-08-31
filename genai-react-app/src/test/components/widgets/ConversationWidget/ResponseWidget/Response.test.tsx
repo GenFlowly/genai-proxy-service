@@ -18,33 +18,34 @@ jest.mock('../../../../../hooks/useMaxVendors', () => ({
 }));
 
 // Mock child components
-jest.mock('../../../../../components/common/TextContainer/TextContainer', () => (props) => {
-    const { children, title, content, subheader, 'data-testid': testId } = props;
-    return (
-        <div data-testid={testId || 'text-container'}>
-            <div data-testid="tc-title">{title}</div>
-            {subheader}
-            <div data-testid="tc-content">{content}</div>
-            {children}
-        </div>
-    );
-});
-
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    TextContainer: (props) => {
+        const { children, title, content, subheader, 'data-testid': testId } = props;
+        return (
+            <div data-testid={testId || 'text-container'}>
+                <div data-testid="tc-title">{title}</div>
+                {subheader}
+                <div data-testid="tc-content">{content}</div>
+                {children}
+            </div>
+        );
+    },
+    RectangleButton: (props) => {
+        const { label, onClick, disabled, 'data-testid': testId } = props;
+        return (
+            <button data-testid={testId} onClick={onClick} disabled={disabled}>
+                {label}
+            </button>
+        );
+    },
+}));
 
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
     OpenAIBrandName: () => <span>OpenAI</span>,
     ClaudeBrandName: () => <span>Claude</span>,
     GeminiBrandName: () => <span>Gemini</span>
 }));
-
-jest.mock('../../../../../components/common/MultiPurposeButton/MultiPurposeButton', () => (props) => {
-    const { label, onClick, disabled, 'data-testid': testId } = props;
-    return (
-        <button data-testid={testId} onClick={onClick} disabled={disabled}>
-            {label}
-        </button>
-    );
-});
 
 describe('Response Widget Component', () => {
     const mockUseConversation = useConversation as jest.Mock;

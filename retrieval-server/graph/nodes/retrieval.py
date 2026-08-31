@@ -4,6 +4,7 @@ from typing import Any
 from pymilvus import MilvusClient
 
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
+from encoding_library.utils.model_registry import parse_collection_description, resolve_model
 from encoding_library.utils.vector_db import get_zilliz_credentials
 from graph.state import RetrievalState
 
@@ -13,11 +14,37 @@ _embedding_model_cache: dict[tuple[str, str], Any] = {}
 
 
 def _get_cached_embedding_model(model_type: str | None, model_name: str | None) -> Any:
-    key = (model_type or "sentence-transformer", model_name or "all-MiniLM-L6-v2")
+    key = resolve_model(model_type, model_name)
     if key not in _embedding_model_cache:
         logger.info("Loading embedding model type=%s name=%s (first time)", key[0], key[1])
         _embedding_model_cache[key] = get_embedding_model(model_type, model_name)
     return _embedding_model_cache[key]
+
+
+def _discover_collections(
+    client: MilvusClient, customer_id: str, fallback_model: tuple[str | None, str | None]
+) -> dict[tuple[str, str], list[str]]:
+    """
+    Find this customer's collections and group them by embedding model.
+
+    The model is read from the collection-description metadata written at
+    creation time (model_registry.build_collection_description). Legacy
+    collections without metadata fall back to the request-supplied model
+    (or the platform default).
+    """
+    grouped: dict[tuple[str, str], list[str]] = {}
+    for name in client.list_collections():
+        if name != customer_id and not name.startswith(f"{customer_id}_"):
+            continue
+        model = resolve_model(*fallback_model)
+        try:
+            meta = parse_collection_description(client.describe_collection(name).get("description"))
+            if meta:
+                model = resolve_model(meta.get("model_type"), meta.get("model_name"))
+        except Exception as e:
+            logger.warning("Could not read metadata for collection '%s': %s", name, e)
+        grouped.setdefault(model, []).append(name)
+    return grouped
 
 
 async def retrieval(state: RetrievalState) -> dict:
@@ -31,56 +58,60 @@ async def retrieval(state: RetrievalState) -> dict:
         similarity_threshold = config.get("similarity_threshold") or state["similarity_threshold"]
         search_params = config.get("search_params") or state["search_params"]
 
-        logger.info("Node retrieval: creating embeddings (model_type=%s model_name=%s)", state.get("model_type"), state.get("model_name"))
-        encoder = _get_cached_embedding_model(state.get("model_type"), state.get("model_name"))
-        query_embeddings = create_embeddings([query], encoder)
-        if not query_embeddings:
-            logger.error("Node retrieval: embedding creation returned empty result")
-            return {"retrieval_results": [], "error": "Failed to create embeddings"}
-        logger.info("Node retrieval: embeddings created, vector_dim=%d", len(query_embeddings[0].get("vector", [])))
-
-        query_vector = query_embeddings[0].get("vector")
-
         logger.info("Node retrieval: connecting to Zilliz for customer=%s", customer_id)
         zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
         client = MilvusClient(uri=zilliz_endpoint, token=zilliz_token)
         logger.info("Node retrieval: connected to Zilliz")
 
-        collection_names = [customer_id, f"{customer_id}_notes"]
+        grouped = _discover_collections(client, customer_id, (state.get("model_type"), state.get("model_name")))
+        if not grouped:
+            logger.warning("Node retrieval: no collections found for customer=%s", customer_id)
+            return {"retrieval_results": []}
+
         all_results = []
 
-        for collection_name in collection_names:
-            if not client.has_collection(collection_name):
-                logger.warning("Node retrieval: collection '%s' does not exist, skipping", collection_name)
+        # Embed the query once per distinct model, then search that model's collections.
+        # Distances from different models are merged as-is; scores are only strictly
+        # comparable within one model, but COSINE keeps them on the same [0,1]-ish scale.
+        for (model_type, model_name), collection_names in grouped.items():
+            logger.info("Node retrieval: embedding query with model_type=%s model_name=%s for %d collection(s)", model_type, model_name, len(collection_names))
+            encoder = _get_cached_embedding_model(model_type, model_name)
+            query_embeddings = create_embeddings([query], encoder)
+            if not query_embeddings:
+                logger.error("Node retrieval: embedding creation returned empty result for model %s/%s", model_type, model_name)
                 continue
 
-            logger.info("Node retrieval: searching collection '%s' (top_n=%d threshold=%.2f)", collection_name, top_n, similarity_threshold)
-            search_res = client.search(
-                collection_name=collection_name,
-                data=[query_vector],
-                limit=top_n,
-                search_params=search_params,
-                output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"],
-            )
+            query_vector = query_embeddings[0].get("vector")
+            logger.info("Node retrieval: query embedded, vector_dim=%d", len(query_vector or []))
 
-            hits_found = 0
-            hits_discarded = 0
-            for hits in search_res:
-                for hit in hits:
-                    distance = hit.get("distance", 0.0)
-                    if distance >= similarity_threshold:
-                        hits_found += 1
-                        all_results.append({
-                            "id": hit.get("id"),
-                            "distance": distance,
-                            "entity": hit.get("entity", {}),
-                            "source_collection": collection_name,
-                        })
-                    else:
-                        hits_discarded += 1
-                        logger.debug("Node retrieval: discarding hit id=%s distance=%.4f < threshold=%.2f", hit.get("id"), distance, similarity_threshold)
+            for collection_name in collection_names:
+                logger.info("Node retrieval: searching collection '%s' (top_n=%d threshold=%.2f)", collection_name, top_n, similarity_threshold)
+                search_res = client.search(
+                    collection_name=collection_name,
+                    data=[query_vector],
+                    limit=top_n,
+                    search_params=search_params,
+                    output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"],
+                )
 
-            logger.info("Node retrieval: collection '%s' — %d hits kept, %d discarded", collection_name, hits_found, hits_discarded)
+                hits_found = 0
+                hits_discarded = 0
+                for hits in search_res:
+                    for hit in hits:
+                        distance = hit.get("distance", 0.0)
+                        if distance >= similarity_threshold:
+                            hits_found += 1
+                            all_results.append({
+                                "id": hit.get("id"),
+                                "distance": distance,
+                                "entity": hit.get("entity", {}),
+                                "source_collection": collection_name,
+                            })
+                        else:
+                            hits_discarded += 1
+                            logger.debug("Node retrieval: discarding hit id=%s distance=%.4f < threshold=%.2f", hit.get("id"), distance, similarity_threshold)
+
+                logger.info("Node retrieval: collection '%s' — %d hits kept, %d discarded", collection_name, hits_found, hits_discarded)
 
         all_results.sort(key=lambda x: x["distance"], reverse=True)
         top_results = all_results[:top_n]

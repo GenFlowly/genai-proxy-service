@@ -1,52 +1,17 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
-import com.genflowly.providers.DynamoDBProvider
-import com.genflowly.providers.ModelCatalogEntry
-import io.ktor.client.*
-import io.ktor.client.plugins.timeout
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
+import com.genflowly.models.AIVendor
+import com.genflowly.repository.ModelCatalogRepository
+import com.genflowly.providers.RetrievalServerClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import com.genflowly.models.ModelCatalogEntry
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
 
 private val logger = KotlinLogging.logger {}
-
-@Serializable
-private data class MetadataVendorKey(val provider: String, val api_key: String)
-
-@Serializable
-private data class ModelMetadataPayload(val vendors: List<MetadataVendorKey>)
-
-@Serializable
-private data class ModelMetadataEntry(
-    val model: String,
-    val max_output_tokens: Int? = null,
-    val max_input_tokens: Int? = null,
-    // USD per 1M tokens (from LiteLLM's live price map — vendors expose no pricing API)
-    val input_cost_per_mtok: Double? = null,
-    val output_cost_per_mtok: Double? = null,
-    val cache_read_cost_per_mtok: Double? = null,
-    val cache_write_cost_per_mtok: Double? = null
-)
-
-@Serializable
-private data class VendorModelMetadata(
-    val provider: String,
-    val models: List<ModelMetadataEntry>,
-    val error: String? = null
-)
-
-@Serializable
-private data class ModelMetadataResponse(val vendor_models: List<VendorModelMetadata>)
 
 /**
  * Keeps the AIModelCatalog DDB table in sync with the vendors' model APIs and
@@ -60,9 +25,8 @@ private data class ModelMetadataResponse(val vendor_models: List<VendorModelMeta
  */
 class ModelCatalogService(
     private val systemApiKeyService: SystemApiKeyService,
-    private val dynamoDBProvider: DynamoDBProvider,
-    private val httpClient: HttpClient,
-    private val json: Json
+    private val modelCatalogRepository: ModelCatalogRepository,
+    private val retrievalServerClient: RetrievalServerClient
 ) {
     companion object {
         /** Used when the catalog has no entry for a model — safe across all vendors. */
@@ -79,9 +43,6 @@ class ModelCatalogService(
         private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
         private const val REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }
-
-    private val retrievalServerUrl: String =
-        System.getenv("RETRIEVAL_SERVER_URL") ?: "http://retrieval-server:5001"
 
     private data class CacheEntry(val entry: ModelCatalogEntry?, val fetchedAt: Long)
 
@@ -118,47 +79,18 @@ class ModelCatalogService(
             return emptyMap()
         }
 
-        val payload = json.encodeToString(
-            ModelMetadataPayload(
-                vendors = vendorKeys.map { (vendor, key) ->
-                    MetadataVendorKey(provider = vendorToProviderString(vendor), api_key = key)
-                }
-            )
-        )
-
-        val response: HttpResponse = httpClient.post("$retrievalServerUrl/models/metadata") {
-            contentType(ContentType.Application.Json)
-            setBody(payload)
-            timeout { requestTimeoutMillis = 120_000L }
-        }
-        if (!response.status.isSuccess()) {
-            logger.error { "Retrieval server /models/metadata returned ${response.status}" }
-            return emptyMap()
-        }
-
-        val parsed = json.decodeFromString<ModelMetadataResponse>(response.bodyAsText())
         val counts = mutableMapOf<String, Int>()
-        for (vendorMetadata in parsed.vendor_models) {
-            val vendor = providerStringToVendor(vendorMetadata.provider) ?: continue
+        for (vendorMetadata in retrievalServerClient.fetchModelMetadata(vendorKeys)) {
+            val vendor = vendorMetadata.vendor
             if (vendorMetadata.error != null) {
                 logger.warn {
                     "Model metadata fetch failed for ${vendor.name}: ${vendorMetadata.error} — keeping existing catalog rows"
                 }
                 continue
             }
-            val entries = vendorMetadata.models.map {
-                ModelCatalogEntry(
-                    model = it.model,
-                    maxOutputTokens = it.max_output_tokens,
-                    maxInputTokens = it.max_input_tokens,
-                    inputCostPerMTok = it.input_cost_per_mtok,
-                    outputCostPerMTok = it.output_cost_per_mtok,
-                    cacheReadCostPerMTok = it.cache_read_cost_per_mtok,
-                    cacheWriteCostPerMTok = it.cache_write_cost_per_mtok
-                )
-            }
+            val entries = vendorMetadata.models
             if (entries.isEmpty()) continue
-            dynamoDBProvider.saveModelCatalogEntries(vendor.name, entries)
+            modelCatalogRepository.saveModelCatalogEntries(vendor.name, entries)
             entries.forEach { entry ->
                 cache[cacheKey(vendor, entry.model)] =
                     CacheEntry(entry, System.currentTimeMillis())
@@ -180,7 +112,7 @@ class ModelCatalogService(
             return cached.entry
         }
         val entry = try {
-            dynamoDBProvider.getModelCatalogEntry(vendor.name, model)
+            modelCatalogRepository.getModelCatalogEntry(vendor.name, model)
         } catch (e: Exception) {
             logger.warn(e) { "Model catalog lookup failed for ${vendor.name}/$model" }
             // Don't poison the negative cache on transient DDB errors
@@ -225,17 +157,4 @@ class ModelCatalogService(
     }
 
     private fun cacheKey(vendor: AIVendor, model: String) = "${vendor.name}#$model"
-
-    private fun vendorToProviderString(vendor: AIVendor): String = when (vendor) {
-        AIVendor.OPENAI -> "openai"
-        AIVendor.GEMINI -> "gemini"
-        AIVendor.CLAUDE -> "anthropic"
-    }
-
-    private fun providerStringToVendor(provider: String): AIVendor? = when (provider) {
-        "openai" -> AIVendor.OPENAI
-        "gemini" -> AIVendor.GEMINI
-        "anthropic" -> AIVendor.CLAUDE
-        else -> null
-    }
 }

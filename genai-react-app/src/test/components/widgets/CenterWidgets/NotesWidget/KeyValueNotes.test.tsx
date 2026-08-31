@@ -10,9 +10,10 @@ jest.mock('../../../../../services/saveNotesService', () => ({
     saveNote: jest.fn().mockResolvedValue(undefined)
 }));
 
-// Mock PromptEditor to make it testable
-jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', () => {
-    return function MockPromptEditor(props: any) {
+// Mock TextEditor to make it testable
+jest.mock('@genflowly/component-library', () => ({
+    ...jest.requireActual('@genflowly/component-library'),
+    TextEditor: function MockTextEditor(props: any) {
         return (
             <textarea
                 data-testid={props.id}
@@ -20,8 +21,8 @@ jest.mock('../../../../../components/widgets/PromptEditorWidget/PromptEditor', (
                 onChange={(e) => props.onChange(e.target.value)}
             />
         );
-    };
-});
+    },
+}));
 
 describe('KeyValueNotes', () => {
     beforeEach(() => {

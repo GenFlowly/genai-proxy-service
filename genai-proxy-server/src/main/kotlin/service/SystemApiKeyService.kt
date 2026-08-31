@@ -1,23 +1,12 @@
 package com.genflowly.service
 
-import com.genflowly.aicallerlib.models.AIVendor
-import com.genflowly.providers.DynamoDBProvider
+import com.genflowly.models.AIVendor
+import com.genflowly.repository.SystemApiKeyRepository
+import com.genflowly.models.SystemAIProviderConfig
 import com.genflowly.providers.KMSProvider
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-
-/**
- * One usable system AI provider: a vendor with a valid stored key, an
- * admin-selected model and a failover priority (1 = primary).
- * Carries decrypted key material — server-side only, never serialized.
- */
-data class SystemAIProviderConfig(
-    val aiVendor: AIVendor,
-    val model: String,
-    val apiKey: String,
-    val priority: Int
-)
 
 /**
  * System-wide (not per-customer) AI vendor API keys, managed through the
@@ -27,7 +16,8 @@ data class SystemAIProviderConfig(
  */
 class SystemApiKeyService(
     private val kmsProvider: KMSProvider,
-    private val dynamoDBProvider: DynamoDBProvider
+    private val systemApiKeyRepository: SystemApiKeyRepository,
+    private val retrievalServerClient: com.genflowly.providers.RetrievalServerClient
 ) {
 
     suspend fun storeSystemApiKey(
@@ -36,7 +26,37 @@ class SystemApiKeyService(
         updatedBy: String
     ) {
         val encrypted = kmsProvider.encrypt(apiKey)
-        dynamoDBProvider.saveSystemApiKey(aiVendor, encrypted, updatedBy)
+        systemApiKeyRepository.saveSystemApiKey(aiVendor, encrypted, updatedBy)
+    }
+
+    /**
+     * Validates the key against the vendor before storing; invalid keys are
+     * rejected and never stored. Returns the resulting status either way.
+     */
+    suspend fun validateAndStoreSystemKey(
+        vendor: AIVendor,
+        apiKey: String,
+        updatedBy: String
+    ): com.genflowly.models.AIVendorAPIKeyStatus {
+        val isKeyValid = retrievalServerClient.validateApiKey(vendor, apiKey)
+
+        return if (isKeyValid) {
+            storeSystemApiKey(aiVendor = vendor.name, apiKey = apiKey, updatedBy = updatedBy)
+            com.genflowly.models.AIVendorAPIKeyStatus(
+                aiVendor = vendor,
+                isAPIKeyValid = true,
+                status = com.genflowly.models.APIKeyStatus.VALID,
+                updateSuccessful = true
+            )
+        } else {
+            logger.warn { "Invalid system API key provided for vendor $vendor. Not saving." }
+            com.genflowly.models.AIVendorAPIKeyStatus(
+                aiVendor = vendor,
+                isAPIKeyValid = false,
+                status = com.genflowly.models.APIKeyStatus.INVALID,
+                updateSuccessful = false
+            )
+        }
     }
 
     /**
@@ -44,7 +64,7 @@ class SystemApiKeyService(
      * Returns null when no key is set.
      */
     suspend fun getSystemApiKeyForVendor(vendor: AIVendor): String? {
-        val item = dynamoDBProvider.getSystemApiKeyItem(vendor.name) ?: return null
+        val item = systemApiKeyRepository.getSystemApiKeyItem(vendor.name) ?: return null
         val encrypted = item["apiKey"]?.s()
         if (encrypted.isNullOrBlank()) {
             logger.warn { "System API key not set for vendor: ${vendor.name}" }
@@ -57,17 +77,17 @@ class SystemApiKeyService(
      * Status per vendor (never the key material itself) plus the admin-selected
      * model and failover priority. One GetItem per known vendor.
      */
-    suspend fun getSystemApiKeyStatusList(): List<models.SystemVendorApiKeyInfo> {
+    suspend fun getSystemApiKeyStatusList(): List<com.genflowly.models.SystemVendorApiKeyInfo> {
         return AIVendor.entries.map { vendor ->
-            val item = dynamoDBProvider.getSystemApiKeyItem(vendor.name)
+            val item = systemApiKeyRepository.getSystemApiKeyItem(vendor.name)
             val hasKey = !item?.get("apiKey")?.s().isNullOrBlank()
             val isStoredValid = item?.get("isAPIKeyValid")?.bool() ?: false
             val status = when {
-                !hasKey -> models.APIKeyStatus.NOT_SET
-                isStoredValid -> models.APIKeyStatus.VALID
-                else -> models.APIKeyStatus.INVALID
+                !hasKey -> com.genflowly.models.APIKeyStatus.NOT_SET
+                isStoredValid -> com.genflowly.models.APIKeyStatus.VALID
+                else -> com.genflowly.models.APIKeyStatus.INVALID
             }
-            models.SystemVendorApiKeyInfo(
+            com.genflowly.models.SystemVendorApiKeyInfo(
                 aiVendor = vendor,
                 isAPIKeyValid = hasKey && isStoredValid,
                 status = status,
@@ -84,7 +104,7 @@ class SystemApiKeyService(
      * callers can degrade gracefully instead of failing over.
      */
     suspend fun getProviderConfigForVendor(vendor: AIVendor): SystemAIProviderConfig? {
-        val item = dynamoDBProvider.getSystemApiKeyItem(vendor.name)
+        val item = systemApiKeyRepository.getSystemApiKeyItem(vendor.name)
         val encrypted = item?.get("apiKey")?.s()?.takeIf { it.isNotBlank() }
         val isValid = item?.get("isAPIKeyValid")?.bool() ?: false
         val model = item?.get("selectedModel")?.s()?.takeIf { it.isNotBlank() }
@@ -110,7 +130,7 @@ class SystemApiKeyService(
      */
     suspend fun getPrioritizedProviderConfigs(): List<SystemAIProviderConfig> {
         return AIVendor.entries.mapNotNull { vendor ->
-            val item = dynamoDBProvider.getSystemApiKeyItem(vendor.name) ?: return@mapNotNull null
+            val item = systemApiKeyRepository.getSystemApiKeyItem(vendor.name) ?: return@mapNotNull null
             val encrypted = item["apiKey"]?.s()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val isValid = item["isAPIKeyValid"]?.bool() ?: false
             val model = item["selectedModel"]?.s()?.takeIf { it.isNotBlank() }
@@ -133,10 +153,10 @@ class SystemApiKeyService(
      * (1 = primary). Fails if the vendor has no stored key.
      */
     suspend fun updateSystemVendorConfig(aiVendor: String, model: String, priority: Int) {
-        dynamoDBProvider.updateSystemApiKeyConfig(aiVendor, model, priority)
+        systemApiKeyRepository.updateSystemApiKeyConfig(aiVendor, model, priority)
     }
 
     suspend fun deleteSystemApiKey(aiVendor: String) {
-        dynamoDBProvider.deleteSystemApiKey(aiVendor)
+        systemApiKeyRepository.deleteSystemApiKey(aiVendor)
     }
 }
