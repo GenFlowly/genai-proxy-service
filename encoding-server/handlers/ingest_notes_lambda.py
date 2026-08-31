@@ -80,9 +80,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     raise ValueError(f"Payload must contain 'client' and 'data'. Got keys: {list(item_data.keys())}")
 
                 # Build typed internal state directly from the envelope — no flattening
-                # Accept both camelCase (MemoryRequest aliases) and snake_case keys
+                # Accept both camelCase (MemoryRequest aliases) and snake_case keys.
+                # dataType comes from the payload (the proxy already sends it):
+                # NOTE for /encode-notes, MEMORY for /encode-memories — both
+                # routes share this handler.
                 internal_state = MemoryRequestInternalState(
-                    data_type='NOTE',
+                    data_type=item_data.get('dataType', item_data.get('data_type', 'NOTE')),
                     customer_id=customer_id,
                     client=item_data['client'],
                     raw_data=item_data['data'],

@@ -392,6 +392,22 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Long-term memories the system has learned about a customer from
+        // conversations and notes. PK=customerId, SK=memoryId ("MEM#<uuid>" for
+        // memory items; "META#..." items carry per-conversation extraction
+        // bookkeeping and are filtered out of listings by key prefix).
+        const customerMemoryTableProps: CreateTableProps = {
+            tableName: 'CustomerMemory',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'memoryId',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         // Maps a request type (e.g. INSTRUCTION_PERSONA) to the agent graph
         // that serves it. PK=scope ("SYSTEM" for the global defaults, a
         // customerId for future per-customer overrides), SK=requestType, so
@@ -449,6 +465,7 @@ export class DynamoDBStack extends cdk.Stack {
         const customerNotesTable = createDefaultDynamoDbTable(this, customerNotesTableProps);
         const customerDeveloperApiKeyTable = createDefaultDynamoDbTable(this, customerDeveloperApiKeyTableProps);
         const requestAgentMapTable = createDefaultDynamoDbTable(this, requestAgentMapTableProps);
+        const customerMemoryTable = createDefaultDynamoDbTable(this, customerMemoryTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
@@ -458,7 +475,7 @@ export class DynamoDBStack extends cdk.Stack {
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
-            requestAgentMapTable
+            requestAgentMapTable, customerMemoryTable
         );
     }
 }

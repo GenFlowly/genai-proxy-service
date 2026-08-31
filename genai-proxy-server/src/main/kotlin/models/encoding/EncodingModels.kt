@@ -29,6 +29,30 @@ data class EncodingCreateCollectionsRequest(
     val modelName: String
 )
 
+/**
+ * Wire format for a memory pushed into the embedding pipeline. Same dual-case
+ * convention as [EncodingNoteData] for the server's mixed readers.
+ */
+@Serializable
+data class EncodingMemoryData(
+    val memory_key: String,
+    val memoryKey: String,
+    val memory_value: String,
+    val memoryValue: String,
+    val title: String,
+    val created_at: String,
+    val createdAt: String
+)
+
+@Serializable
+data class EncodingSaveMemoryRequest(
+    val dataType: String = "MEMORY",
+    val client: String,
+    val modelType: String? = null,
+    val modelName: String? = null,
+    val data: EncodingMemoryData
+)
+
 @Serializable
 data class EncodingSaveNoteRequest(
     val dataType: String,

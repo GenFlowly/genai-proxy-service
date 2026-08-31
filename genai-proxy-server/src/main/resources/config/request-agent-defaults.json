@@ -23,6 +23,15 @@
       "modelPreference": { "aiVendor": "OPENAI", "model": "gpt-5" },
       "systemPromptResource": "config/prompts/note-title.system.txt",
       "userMessageResource": "config/prompts/note-title.user.txt"
+    },
+    {
+      "requestType": "MEMORY_EXTRACTION",
+      "mapKey": "MemoryExtractionDefault",
+      "outputFormat": "JSON",
+      "modelPreference": { "aiVendor": "OPENAI", "model": "gpt-5" },
+      "maxTokens": 2000,
+      "systemPromptResource": "config/prompts/memory-extraction.system.txt",
+      "userMessageResource": "config/prompts/memory-extraction.user.txt"
     }
   ]
 }

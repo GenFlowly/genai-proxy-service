@@ -460,7 +460,29 @@ class RetrievalServerClient(
         logger.info { "Successfully deleted vectors for note $noteKey" }
         return true
     }
+
+    /**
+     * Hard-deletes a memory's embeddings in the vector DB via
+     * /delete-memory-vectors. Throws on transport errors — callers decide
+     * whether that is fatal.
+     */
+    suspend fun deleteMemoryVectors(customerId: String, memoryKey: String): Boolean {
+        val response = httpClient.post("$retrievalServerUrl/delete-memory-vectors") {
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(DeleteMemoryVectorsPayload(customer_id = customerId, memory_key = memoryKey)))
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            logger.error { "Failed to delete vectors for memory $memoryKey: ${response.status} $errorBody" }
+            return false
+        }
+        logger.info { "Successfully deleted vectors for memory $memoryKey" }
+        return true
+    }
 }
 
 @Serializable
 private data class DeleteNoteVectorsPayload(val customer_id: String, val note_key: String)
+
+@Serializable
+private data class DeleteMemoryVectorsPayload(val customer_id: String, val memory_key: String)

@@ -114,6 +114,15 @@ object DynamoDBConstants {
     const val CUSTOMER_NOTES_TABLE = "CustomerNotes"
     const val NOTE_KEY = "noteKey"
 
+    // Long-term memories learned about a customer from conversations and notes.
+    // PK=customerId, SK=memoryId. Memory items use the "MEM#" sort-key prefix;
+    // "META#CONV#<conversationId>" items carry per-conversation extraction
+    // bookkeeping (debounce state) and never appear in listings.
+    const val CUSTOMER_MEMORY_TABLE = "CustomerMemory"
+    const val MEMORY_ID_KEY = "memoryId"
+    const val MEMORY_ITEM_PREFIX = "MEM#"
+    const val MEMORY_CONV_META_PREFIX = "META#CONV#"
+
     // Username reservation/lookup — PK=username; recordTypeIndex GSI supports
     // prefix search across USER records.
     const val USERNAME_LOOKUP_TABLE = "UsernameLookup"
