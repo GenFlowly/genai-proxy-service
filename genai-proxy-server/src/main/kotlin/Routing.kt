@@ -39,6 +39,7 @@ import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
 import com.genflowly.activity.admin.registerRequestAgentMapRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
+import com.genflowly.activity.memory.registerMemoryRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
 import com.genflowly.activity.voice.registerVoiceSessionRoutes
@@ -123,6 +124,9 @@ object Routes {
 
     const val CREATE_ATTACHMENT = "$API_V1/attachments"
     const val GET_ATTACHMENT_URL = "$API_V1/attachments/{attachmentId}/url"
+
+    const val GET_MEMORIES = "$API_V1/memories"
+    const val DELETE_MEMORY = "$API_V1/memories/{memoryId}"
 }
 
 
@@ -144,6 +148,8 @@ fun Application.configureRouting(
     systemApiKeyService: com.genflowly.service.SystemApiKeyService,
     modelCatalogService: com.genflowly.service.ModelCatalogService,
     requestAgentMapAdminService: com.genflowly.service.RequestAgentMapAdminService,
+    memoryService: com.genflowly.service.MemoryService,
+    memoryExtractionService: com.genflowly.service.MemoryExtractionService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -165,8 +171,8 @@ fun Application.configureRouting(
             call.respondText(scalarDocsHtml, ContentType.Text.Html)
         }
 
-        registerGenerateTextRoutes(generationOrchestrator, customerProfileService)
-        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService)
+        registerGenerateTextRoutes(generationOrchestrator, customerProfileService, memoryExtractionService)
+        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, memoryExtractionService)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)
@@ -203,6 +209,7 @@ fun Application.configureRouting(
         registerGetProfileRoutes(customerProfileService)
         registerAttachmentRoutes(attachmentService, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
+        registerMemoryRoutes(memoryService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService

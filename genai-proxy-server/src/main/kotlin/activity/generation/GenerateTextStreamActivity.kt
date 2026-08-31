@@ -17,12 +17,14 @@ import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GenerateTextStreamRequest
 import org.slf4j.LoggerFactory
 import com.genflowly.service.GenerationOrchestrator
+import com.genflowly.service.MemoryExtractionService
 
 private val logger = LoggerFactory.getLogger("GenerateTextStreamRoute")
 
 fun Route.registerGenerateTextStreamRoutes(
     generationOrchestrator: GenerationOrchestrator,
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    memoryExtractionService: MemoryExtractionService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT_STREAM, {
@@ -127,6 +129,14 @@ fun Route.registerGenerateTextStreamRoutes(
                         logger.error("Error during streaming response", e)
                     }
                 }
+
+                // Fire-and-forget: learn about the user from the completed
+                // exchange (debounced inside the service). The bearer token is
+                // only needed for the embedding push and may be absent.
+                val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+                memoryExtractionService.maybeExtractFromConversationAsync(
+                    customerId, streamResult.conversationId, bearerToken
+                )
 
             } catch (e: SerializationException) {
                 logger.error("Malformed GenerateTextStream request: {}", e.message, e)

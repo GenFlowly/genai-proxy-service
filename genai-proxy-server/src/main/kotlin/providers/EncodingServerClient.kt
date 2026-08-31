@@ -10,6 +10,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import com.genflowly.EmbeddingConstants
 import com.genflowly.models.encoding.EncodingCreateCollectionsRequest
+import com.genflowly.models.encoding.EncodingSaveMemoryRequest
 import com.genflowly.models.encoding.EncodingSaveNoteRequest
 import mu.KLogger
 
@@ -85,6 +86,35 @@ class EncodingServerClient(
             }
         } catch (e: Exception) {
             logger.error(e) { "Error sending note to encoding server" }
+        }
+    }
+
+    /**
+     * Pushes a memory into the realtime embedding pipeline (/encode-memories).
+     * Transport failures are logged, not thrown — memory embedding is
+     * best-effort; the DDB row remains the source of truth.
+     */
+    suspend fun encodeMemory(request: EncodingSaveMemoryRequest, bearerToken: String) {
+        val baseUrl = configuredUrl
+        if (baseUrl == null) {
+            logger.warn { "ENCODING_SERVER_URL is not set. Skipping memory encoding for ${request.data.memoryKey}." }
+            return
+        }
+        val url = "$baseUrl/encode-memories"
+        try {
+            val response = httpClient.post(url) {
+                contentType(ContentType.Application.Json)
+                header("Authorization", "Bearer $bearerToken")
+                setBody(request)
+            }
+            if (response.status.isSuccess()) {
+                logger.info { "Successfully sent memory ${request.data.memoryKey} to encoding server" }
+            } else {
+                val errorBody = response.bodyAsText()
+                logger.error { "Failed to send memory to encoding server: ${response.status} $errorBody" }
+            }
+        } catch (e: Exception) {
+            logger.error(e) { "Error sending memory to encoding server" }
         }
     }
 }

@@ -1,5 +1,6 @@
 from encoding_library.processors.data_processor import DataProcessor
 from encoding_library.processors.email_processor import EmailProcessor
+from encoding_library.processors.memory_processor import MemoryProcessor
 from encoding_library.processors.note_processor import NoteProcessor
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.models.data_type import DataType
@@ -25,6 +26,8 @@ class ProcessorFactory:
                     return EmailProcessor()
                 elif data_type_enum == DataType.NOTE:
                     return NoteProcessor()
+                elif data_type_enum == DataType.MEMORY:
+                    return MemoryProcessor()
 
             except ValueError:
                 pass
