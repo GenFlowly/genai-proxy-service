@@ -16,8 +16,11 @@ class MemoryRequest(BaseModel, Generic[T]):
     model_name: Optional[str] = None
     chunking_type: Optional[str] = None
     chunking_technique: Optional[str] = None
-    processing_mode: Optional[str] = None  # "realtime" (default) | "batch"
-    
+    # Per-request chunking overrides (tokens, recursive chunking only); when
+    # unset, per-model values from the EmbeddingModelRegistry table apply
+    chunk_size: Optional[int] = None
+    chunk_overlap: Optional[int] = None
+
     class Config:
         populate_by_name = True
         alias_generator = lambda string: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(string.split('_')))
