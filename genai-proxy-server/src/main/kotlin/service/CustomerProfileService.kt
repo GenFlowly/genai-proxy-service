@@ -22,7 +22,6 @@ class CustomerProfileService(
     private val customerProfileRepository: CustomerProfileRepository,
     private val customerCredentialsService: CustomerCredentialsService,
     private val instructionService: InstructionService,
-    private val graphService: GraphService,
     private val appConfig: com.genflowly.config.AppConfig
 ) {
 
@@ -96,8 +95,6 @@ class CustomerProfileService(
 
             logger.info { "User already onboarded with customerId=$existingCustomerId" }
 
-            graphService.seedDefaultGraphIfMissing(existingCustomerId)
-
             customerCredentialsService.ensureCollectionsExistAsync(existingCustomerId, authHeader)
 
             return com.genflowly.models.CustomerProfile(
@@ -137,12 +134,10 @@ class CustomerProfileService(
         // Initialize API key entries for all vendors as INVALID (false)
         customerCredentialsService.initCustomerApiKeys(newCustomerId)
 
-        // Note: no per-customer default instruction is seeded here. The global
-        // SYSTEM/PUBLIC instruction (managed via the admin panel) serves as the
-        // default for all customers.
-
-        // Seed the default RAG pipeline graph for this customer
-        graphService.seedDefaultGraph(newCustomerId)
+        // Note: no per-customer default instruction or graph is seeded here.
+        // The global SYSTEM/PUBLIC instruction and the System-published default
+        // graph (both managed via the admin panel) serve as the defaults for
+        // all customers; a customer's first edit forks them a private copy.
 
         logger.info { "New user onboarded with customerId=$newCustomerId" }
 

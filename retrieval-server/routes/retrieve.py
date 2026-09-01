@@ -8,6 +8,7 @@ from langgraph.graph import END, StateGraph
 
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes
+from graph.instruction_loader import get_instruction_text
 from graph.nodes.llm_node import make_llm_node
 from graph.state import RetrievalState
 from models import RetrieveRequest
@@ -106,6 +107,20 @@ def _resolve_graph(customer_id: str) -> tuple:
     streaming_nodes: set[str] = set()
     for n in nodes:
         config = json.loads(n.get("config") or "{}")
+        # Centralized system prompts: an instruction reference beats the
+        # node's inline system_prompt, which beats the hardcoded defaults in
+        # the node implementations. Unresolvable refs degrade gracefully.
+        instruction_id = config.get("instruction_id")
+        if instruction_id:
+            version = config.get("instruction_version")
+            text = get_instruction_text(instruction_id, int(version) if version is not None else None)
+            if text is not None:
+                config["system_prompt"] = text
+            else:
+                logger.warning(
+                    "Node %s: instruction %s v%s unresolvable — using inline prompt",
+                    n["nodeId"], instruction_id, version,
+                )
         node_configs[n["nodeType"]] = config
         if config.get("is_streaming"):
             streaming_nodes.add(n["nodeId"])

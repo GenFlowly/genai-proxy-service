@@ -15,6 +15,7 @@ export const endpoints = {
     agents: `${BASE}${API_PREFIX}/agents`,
     agent: (graphId: string) => `${BASE}${API_PREFIX}/agents/${graphId}`,
     requestAgentMap: `${BASE}${API_PREFIX}/admin/request-agent-map`,
+    defaultGraph: `${BASE}${API_PREFIX}/admin/default-graph`,
     requestAgentMapEntry: (requestType: string) =>
         `${BASE}${API_PREFIX}/admin/request-agent-map/${requestType}`,
 }

@@ -1,8 +1,9 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import styles from './InstructionsPage.module.scss';
 import {
+    InputTextWithHint,
     InstructionTile,
     PageHeader,
     PillButton,
@@ -18,6 +19,7 @@ export default function InstructionsPage() {
     const navigate = useNavigate();
     const { width } = useWindowSize();
     const isMobile = width <= 768;
+    const [search, setSearch] = useState('');
 
     useEffect(() => {
         refreshInstructions();
@@ -35,6 +37,16 @@ export default function InstructionsPage() {
         });
         return Array.from(map.values());
     }, [customerInstructions]);
+
+    // Client-side search over name and instruction text
+    const visibleInstructions = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        if (!query) return uniqueInstructions;
+        return uniqueInstructions.filter(inst =>
+            (inst.name || '').toLowerCase().includes(query) ||
+            (inst.instruction || '').toLowerCase().includes(query)
+        );
+    }, [uniqueInstructions, search]);
 
     return (
         <div className={styles.page}>
@@ -67,13 +79,27 @@ export default function InstructionsPage() {
                 </>
             )}
             <div className={styles.pageContainer}>
+            {uniqueInstructions.length > 0 && (
+                <div className={styles.searchBox}>
+                    <InputTextWithHint
+                        placeholder={t('instructionsPage.instructionsPage.searchPlaceholder')}
+                        value={search}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                        data-testid="instructions-search"
+                    />
+                </div>
+            )}
             {uniqueInstructions.length === 0 ? (
                 <div className={styles.emptyState}>
                     <p>{t('instructionsPage.instructionsPage.emptyState')}</p>
                 </div>
+            ) : visibleInstructions.length === 0 ? (
+                <div className={styles.emptyState}>
+                    <p>{t('instructionsPage.instructionsPage.noSearchResults')}</p>
+                </div>
             ) : (
                 <div className={styles.grid}>
-                    {uniqueInstructions.map(instruction => (
+                    {visibleInstructions.map(instruction => (
                         <InstructionTile
                             key={instruction.id}
                             title={instruction.name || t('common.instructionTile.untitledInstruction')}

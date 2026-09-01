@@ -5,9 +5,11 @@ import com.genflowly.DynamoDBConstants.GRAPH_EDGES_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_ENTRY_POINT_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_ID_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_IS_DEFAULT_KEY
+import com.genflowly.DynamoDBConstants.GRAPH_LAYOUT_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_MAX_ITERATIONS_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_NAME_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_NODE_IDS_KEY
+import com.genflowly.DynamoDBConstants.SYSTEM_GRAPH_OWNER
 import com.genflowly.DynamoDBConstants.LATEST_VERSION_KEY
 import com.genflowly.DynamoDBConstants.NODE_CONFIG_KEY
 import com.genflowly.DynamoDBConstants.NODE_ID_KEY
@@ -22,6 +24,8 @@ import com.genflowly.repository.InstructionRepository
 import com.genflowly.models.api.AgentNodeResponse
 import com.genflowly.models.api.AgentResponse
 import com.genflowly.models.api.CreateAgentRequest
+import com.genflowly.models.api.CreateGraphAgentRequest
+import com.genflowly.models.api.NewAgentNode
 import com.genflowly.models.api.CreateCustomerGraphRequest
 import com.genflowly.models.api.CreateGraphNodeRequest
 import com.genflowly.models.api.CustomerGraphResponse
@@ -33,6 +37,10 @@ import com.genflowly.models.api.UpdateAgentNodePatch
 import com.genflowly.models.api.UpdateAgentRequest
 import com.genflowly.models.api.UpdateCustomerGraphRequest
 import com.genflowly.models.api.UpdateGraphNodeRequest
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
@@ -110,55 +118,88 @@ class GraphService(
         )
     }
 
-    // ─── Default graph seeding (used during onboarding) ───────────────────────
+    // ─── System-published default graph ───────────────────────────────────────
+    //
+    // There is no per-customer seeding. The admin panel authors and publishes a
+    // single default graph owned by SYSTEM_GRAPH_OWNER; every customer without
+    // an own default graph is served that graph (isSystem=true in responses),
+    // and their first edit forks it into a customer-owned copy.
 
-    /** Seeds the default RAG graph only when the customer has none yet. */
-    suspend fun seedDefaultGraphIfMissing(customerId: String) {
-        if (graphRepository.getDefaultCustomerGraph(customerId) == null) {
-            logger.info { "No default graph found for customerId=$customerId — seeding now" }
-            seedDefaultGraph(customerId)
-        }
+    /** The published System default graph, hydrated, or null when unpublished. */
+    suspend fun getSystemDefaultAgentOrNull(): AgentResponse? {
+        val item = graphRepository.getDefaultCustomerGraph(SYSTEM_GRAPH_OWNER) ?: return null
+        val systemNodes = graphRepository.listCustomerGraphNodes(SYSTEM_GRAPH_OWNER)
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+        return agentResponseFrom(item, systemNodes, isSystem = true)
     }
 
     /**
-     * Seeds the default RAG pipeline graph (query analysis → optional rewrite →
-     * retrieval → ranking → response generation). Failures are logged, not
-     * thrown — a customer without the default graph can still chat non-agentically.
+     * Publishes the System default graph for the first time (admin only).
+     * @throws IllegalArgumentException when one is already published.
      */
-    suspend fun seedDefaultGraph(customerId: String) {
-        try {
-            val queryAnalyzerId = com.genflowly.models.generateNodeId()
-            val queryRewriterId = com.genflowly.models.generateNodeId()
-            val retrievalId = com.genflowly.models.generateNodeId()
-            val resultRankerId = com.genflowly.models.generateNodeId()
-            val responseGeneratorId = com.genflowly.models.generateNodeId()
-
-            val queryAnalyzerConfig = """{"system_prompt":"You are a query analysis expert for a vector similarity search system. Analyze the user query and determine the intent and whether it needs rewriting to improve retrieval. Return ONLY valid JSON: {\"intent\": \"<brief description>\", \"needs_rewrite\": <true|false>}","input_template":"Query: {original_query}","response_format":"json","json_output_mapping":{"intent":"query_intent","needs_rewrite":"needs_rewrite"}}"""
-            val queryRewriterConfig = """{"system_prompt":"You are a query rewriting expert for a vector similarity search system. Rewrite the query to be more specific and retrievable: expand abbreviations, add missing context, clarify ambiguity. Return ONLY the rewritten query text, nothing else.","input_template":"Original query: {original_query}\nIntent: {query_intent}","output_key":"rewritten_query","response_format":"text"}"""
-            val resultRankerConfig = """{"system_prompt":"You are a result ranking expert. Given a query and retrieved document chunks, re-rank them by relevance and remove irrelevant ones. Return ONLY a JSON array of 0-based indices in order of relevance (most relevant first). Include only indices of relevant results. Example: [2, 0, 4]","input_template":"Query: {query}\n\nChunks:\n{chunks_text}","output_key":"ranked_results","response_format":"json_indices","json_indices_source_key":"retrieval_results"}"""
-            val responseGeneratorConfig = """{"input_template":"Context:\n{context}\n\nQuestion: {query}","output_key":"generated_response","response_format":"text","include_conversation_history":true,"is_streaming":true}"""
-
-            graphRepository.createCustomerGraphNode(customerId, queryAnalyzerId, "QUERY_ANALYZER", "Query Analyzer", queryAnalyzerConfig)
-            graphRepository.createCustomerGraphNode(customerId, queryRewriterId, "QUERY_REWRITER", "Query Rewriter", queryRewriterConfig)
-            graphRepository.createCustomerGraphNode(customerId, retrievalId, "RETRIEVAL", "Retrieval", "{}")
-            graphRepository.createCustomerGraphNode(customerId, resultRankerId, "RESULT_RANKER", "Result Ranker", resultRankerConfig)
-            graphRepository.createCustomerGraphNode(customerId, responseGeneratorId, "RESPONSE_GENERATOR", "Response Generator", responseGeneratorConfig)
-
-            val edges = """{"edges":[{"from":"$queryRewriterId","to":"$retrievalId"},{"from":"$retrievalId","to":"$resultRankerId"},{"from":"$resultRankerId","to":"$responseGeneratorId"},{"from":"$responseGeneratorId","to":"__end__"}],"conditional_edges":[{"from":"$queryAnalyzerId","condition_key":"needs_rewrite","routes":{"true":"$queryRewriterId","false":"$retrievalId"}}]}"""
-
-            graphRepository.createCustomerGraph(
-                customerId = customerId,
-                graphId = com.genflowly.models.generateGraphId(),
-                name = "Default Graph",
-                isDefault = true,
-                nodeIds = listOf(queryAnalyzerId, queryRewriterId, retrievalId, resultRankerId, responseGeneratorId),
-                edges = edges,
-                entryPoint = queryAnalyzerId
-            )
-            logger.info { "Seeded default graph for customerId=$customerId" }
-        } catch (e: Exception) {
-            logger.warn { "Failed to seed default graph for customerId=$customerId: ${e.message}" }
+    suspend fun publishSystemDefaultGraph(req: CreateGraphAgentRequest): AgentResponse {
+        require(graphRepository.getDefaultCustomerGraph(SYSTEM_GRAPH_OWNER) == null) {
+            "A System default graph is already published — update it instead."
         }
+        return createGraphAgent(SYSTEM_GRAPH_OWNER, req.copy(isDefault = true), isSystem = true)
+    }
+
+    /**
+     * Applies an agent update to the published System default graph (admin only).
+     * isDefault is pinned to true — the System graph must stay the default.
+     * @throws IllegalStateException when no System graph is published yet.
+     */
+    suspend fun updateSystemDefaultGraph(req: UpdateAgentRequest): AgentResponse {
+        val item = graphRepository.getDefaultCustomerGraph(SYSTEM_GRAPH_OWNER)
+            ?: throw IllegalStateException("No System default graph is published yet.")
+        val graphId = item[GRAPH_ID_KEY]?.s()
+            ?: throw IllegalStateException("System default graph is missing its graphId.")
+        return applyAgentUpdate(item, SYSTEM_GRAPH_OWNER, graphId, req.copy(isDefault = null), isSystem = true)
+    }
+
+    /**
+     * Clones the System default graph (and all its nodes) into a customer-owned
+     * copy marked as the customer's default. Returns the new live graph item
+     * plus the System-nodeId → cloned-nodeId map.
+     */
+    private suspend fun forkSystemGraph(
+        customerId: String,
+        systemGraph: Map<String, AttributeValue>,
+    ): Pair<Map<String, AttributeValue>, Map<String, String>> {
+        val oldNodeIds = systemGraph[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
+        val systemNodes = graphRepository.listCustomerGraphNodes(SYSTEM_GRAPH_OWNER)
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+
+        val idMap = oldNodeIds.associateWith { com.genflowly.models.generateNodeId() }
+        oldNodeIds.forEach { oldId ->
+            val node = systemNodes[oldId]
+                ?: throw IllegalStateException("System default graph references missing node '$oldId'.")
+            graphRepository.createCustomerGraphNode(
+                customerId = customerId,
+                nodeId = idMap.getValue(oldId),
+                nodeType = node[NODE_TYPE_KEY]?.s() ?: "",
+                name = node[NODE_NAME_KEY]?.s() ?: "",
+                config = node[NODE_CONFIG_KEY]?.s() ?: "{}",
+            )
+        }
+
+        val newGraphId = com.genflowly.models.generateGraphId()
+        graphRepository.createCustomerGraph(
+            customerId = customerId,
+            graphId = newGraphId,
+            name = systemGraph[GRAPH_NAME_KEY]?.s() ?: "Default Graph",
+            isDefault = true,
+            nodeIds = oldNodeIds.map { idMap.getValue(it) },
+            edges = substituteNodeIds(systemGraph[GRAPH_EDGES_KEY]?.s() ?: "{}", idMap),
+            entryPoint = idMap[systemGraph[GRAPH_ENTRY_POINT_KEY]?.s()]
+                ?: throw IllegalStateException("System default graph has an invalid entryPoint."),
+            maxIterations = systemGraph[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10,
+            layout = systemGraph[GRAPH_LAYOUT_KEY]?.s()?.let { substituteNodeIds(it, idMap) },
+        )
+        logger.info { "Forked System default graph into $newGraphId for customer $customerId" }
+        val forked = graphRepository.getCustomerGraph(newGraphId)
+            ?: throw IllegalStateException("Forked graph $newGraphId not readable after creation.")
+        return forked to idMap
     }
 
     /**
@@ -358,31 +399,105 @@ class GraphService(
         val nodeById = allNodes.associateBy { it[NODE_ID_KEY]?.s() ?: "" }
 
         val agents = graphs.map { graphItem ->
-            val nodeIds = graphItem[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
-            val hydratedNodes = nodeIds.mapNotNull { nid ->
-                nodeById[nid]?.let { nodeItem ->
-                    AgentNodeResponse(
-                        nodeId = nodeItem[NODE_ID_KEY]?.s() ?: nid,
-                        nodeType = nodeItem[NODE_TYPE_KEY]?.s() ?: "",
-                        name = nodeItem[NODE_NAME_KEY]?.s() ?: "",
-                        config = nodeItem[NODE_CONFIG_KEY]?.s() ?: "{}",
-                    )
-                }
-            }
-            AgentResponse(
-                graphId = graphItem[GRAPH_ID_KEY]?.s() ?: "",
-                name = graphItem[GRAPH_NAME_KEY]?.s() ?: "",
-                isDefault = graphItem[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false,
-                entryPoint = graphItem[GRAPH_ENTRY_POINT_KEY]?.s() ?: "",
-                maxIterations = graphItem[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10,
-                edges = graphItem[GRAPH_EDGES_KEY]?.s() ?: "{}",
-                nodes = hydratedNodes,
-                createdAt = graphItem["createdAt"]?.s(),
-                updatedAt = graphItem["updatedAt"]?.s(),
-            )
+            agentResponseFrom(graphItem, nodeById, isSystem = false)
+        }.toMutableList()
+
+        // No own default graph → serve the System-published one as a read-only
+        // fallback. Editing it forks it into a customer-owned copy.
+        if (agents.none { it.isDefault }) {
+            getSystemDefaultAgentOrNull()?.let { agents.add(0, it) }
         }
         logger.info { "Fetched ${agents.size} agent(s) for customer $customerId" }
         return GetCustomerAgentsResponse(agents = agents)
+    }
+
+    /**
+     * A single agent, hydrated. Resolves the customer's own graphs and, as a
+     * read-only fallback, the System-published default graph.
+     * @throws IllegalStateException when not found / not owned (→ 404).
+     */
+    suspend fun getAgent(customerId: String, graphId: String): AgentResponse {
+        val item = graphRepository.getCustomerGraph(graphId)
+            ?: throw IllegalStateException("Agent (graph) '$graphId' not found.")
+        val owner = item["customerId"]?.s()
+        val isSystem = owner == SYSTEM_GRAPH_OWNER
+        if (!isSystem && owner != customerId) {
+            throw IllegalStateException("Agent (graph) '$graphId' not found.")
+        }
+        val nodeById = graphRepository.listCustomerGraphNodes(if (isSystem) SYSTEM_GRAPH_OWNER else customerId)
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+        return agentResponseFrom(item, nodeById, isSystem = isSystem)
+    }
+
+    // ─── Create Agent (multi-node graph from the visual editor) ───────────────
+
+    /**
+     * Creates a multi-node agent graph authored in the visual editor. Node
+     * references in entryPoint/edges/layout use client tempIds, which are
+     * replaced with generated nodeIds before validation.
+     *
+     * @throws IllegalArgumentException on structural validation failure → HTTP 400.
+     */
+    suspend fun createGraphAgent(
+        ownerId: String,
+        req: CreateGraphAgentRequest,
+        isSystem: Boolean = false,
+    ): AgentResponse {
+        require(req.name.isNotBlank()) { "name must not be blank" }
+        require(req.nodes.isNotEmpty()) { "A graph needs at least one node." }
+        validateTempIds(req.nodes)
+
+        val idMap = req.nodes.associate { it.tempId to com.genflowly.models.generateNodeId() }
+        val edges = substituteNodeIds(req.edges, idMap)
+        val layout = req.layout?.let { substituteNodeIds(it, idMap) }
+        val entryPoint = idMap[req.entryPoint] ?: req.entryPoint
+        val nodeIds = req.nodes.map { idMap.getValue(it.tempId) }
+        val nodeTypeById = req.nodes.associate { idMap.getValue(it.tempId) to it.nodeType }
+        val configById = req.nodes.associate { idMap.getValue(it.tempId) to it.config }
+
+        GraphValidationService.validateAgentUpdate(
+            nodeIds          = nodeIds,
+            nodeTypeById     = nodeTypeById,
+            entryPoint       = entryPoint,
+            edgesJson        = edges,
+            maxIterations    = req.maxIterations,
+            name             = req.name,
+            isDefault        = req.isDefault,
+            isOnlyGraph      = false,
+            nodePatchConfigs = configById,
+        )
+        configById.forEach { (nodeId, config) ->
+            validateInstructionRef(nodeId, config, nodeTypeById[nodeId])
+        }
+
+        req.nodes.forEach { node ->
+            graphRepository.createCustomerGraphNode(
+                customerId = ownerId,
+                nodeId = idMap.getValue(node.tempId),
+                nodeType = node.nodeType,
+                name = node.name,
+                config = node.config,
+            )
+        }
+        val graphId = com.genflowly.models.generateGraphId()
+        graphRepository.createCustomerGraph(
+            customerId = ownerId,
+            graphId = graphId,
+            name = req.name,
+            isDefault = req.isDefault,
+            nodeIds = nodeIds,
+            edges = edges,
+            entryPoint = entryPoint,
+            maxIterations = req.maxIterations,
+            layout = layout,
+        )
+        logger.info { "Created graph agent $graphId ('${req.name}', ${nodeIds.size} node(s)) for $ownerId" }
+
+        val nodeById = graphRepository.listCustomerGraphNodes(ownerId)
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+        val created = graphRepository.getCustomerGraph(graphId)
+            ?: throw IllegalStateException("Graph $graphId not readable after creation.")
+        return agentResponseFrom(created, nodeById, isSystem = isSystem)
     }
 
     // ─── Update Agent (graph + nodes, with structural validation) ─────────────
@@ -405,42 +520,103 @@ class GraphService(
         graphId: String,
         req: UpdateAgentRequest,
     ): AgentResponse {
-        // ── 1. Load current graph ─────────────────────────────────────────────
         val currentGraph = graphRepository.getCustomerGraph(graphId)
             ?: throw IllegalStateException("Agent (graph) '$graphId' not found.")
-        requireOwnership(currentGraph, customerId, "graph", graphId)
+        val owner = currentGraph["customerId"]?.s()
 
-        val nodeIds = currentGraph[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
-
-        // ── 2. Load all nodes belonging to this graph ─────────────────────────
-        val allCustomerNodes = graphRepository.listCustomerGraphNodes(customerId)
-        val nodeById = allCustomerNodes
-            .filter { it[NODE_ID_KEY]?.s() in nodeIds }
-            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
-
-        val nodeTypeById: Map<String, String> = nodeById.mapValues { (_, item) ->
-            item[NODE_TYPE_KEY]?.s() ?: ""
+        // Editing the System-published default graph forks it into a
+        // customer-owned copy first, then applies the update to the fork with
+        // every System nodeId reference translated to its cloned counterpart.
+        // The response carries the fork's graphId — clients must switch to it.
+        if (owner == SYSTEM_GRAPH_OWNER) {
+            val (forked, idMap) = forkSystemGraph(customerId, currentGraph)
+            val forkedId = forked[GRAPH_ID_KEY]?.s()
+                ?: throw IllegalStateException("Forked graph is missing its graphId.")
+            val translated = req.copy(
+                // The fork replaces the System graph as this customer's default.
+                isDefault = null,
+                entryPoint = req.entryPoint?.let { idMap[it] ?: it },
+                edges = req.edges?.let { substituteNodeIds(it, idMap) },
+                layout = req.layout?.let { substituteNodeIds(it, idMap) },
+                nodes = req.nodes?.map { patch ->
+                    patch.copy(nodeId = idMap[patch.nodeId]
+                        ?: throw IllegalArgumentException("Node '${patch.nodeId}' is not part of the System default graph."))
+                },
+                removeNodeIds = req.removeNodeIds?.map { rid ->
+                    idMap[rid]
+                        ?: throw IllegalArgumentException("Node '$rid' is not part of the System default graph.")
+                },
+            )
+            return applyAgentUpdate(forked, customerId, forkedId, translated, isSystem = false)
         }
 
-        // ── 3. Merge request over current values ──────────────────────────────
-        val mergedName        = req.name        ?: currentGraph[GRAPH_NAME_KEY]?.s() ?: ""
-        val mergedIsDefault   = req.isDefault   ?: currentGraph[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false
+        requireOwnership(currentGraph, customerId, "graph", graphId)
+        return applyAgentUpdate(currentGraph, customerId, graphId, req, isSystem = false)
+    }
+
+    /**
+     * Core agent-update logic shared by customer edits and admin edits of the
+     * System default graph. Ownership must already be established by callers.
+     */
+    private suspend fun applyAgentUpdate(
+        currentGraph: Map<String, AttributeValue>,
+        ownerId: String,
+        graphId: String,
+        req: UpdateAgentRequest,
+        isSystem: Boolean,
+    ): AgentResponse {
+        val currentNodeIds = currentGraph[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
+
+        val allOwnerNodes = graphRepository.listCustomerGraphNodes(ownerId)
+        val nodeById = allOwnerNodes
+            .filter { it[NODE_ID_KEY]?.s() in currentNodeIds }
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+
+        // ── Structural changes: removals and additions ────────────────────────
+        val removeSet = (req.removeNodeIds ?: emptyList()).toSet()
+        removeSet.forEach { rid ->
+            require(rid in currentNodeIds) { "removeNodeIds: node '$rid' is not part of graph '$graphId'." }
+        }
+        val addNodes = req.addNodes ?: emptyList()
+        validateTempIds(addNodes)
+        addNodes.forEach { n ->
+            require(n.tempId !in currentNodeIds) { "addNodes: tempId '${n.tempId}' collides with an existing nodeId." }
+        }
+        val idMap = addNodes.associate { it.tempId to com.genflowly.models.generateNodeId() }
+
+        val finalNodeIds = currentNodeIds.filter { it !in removeSet } + addNodes.map { idMap.getValue(it.tempId) }
+
+        val nodeTypeById: Map<String, String> =
+            nodeById.filterKeys { it !in removeSet }.mapValues { (_, item) -> item[NODE_TYPE_KEY]?.s() ?: "" } +
+            addNodes.associate { idMap.getValue(it.tempId) to it.nodeType }
+
+        // ── Merge request over current values (tempIds → real ids) ────────────
+        val mergedName        = req.name ?: currentGraph[GRAPH_NAME_KEY]?.s() ?: ""
+        val mergedIsDefault   = req.isDefault ?: currentGraph[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false
         val mergedMaxIter     = req.maxIterations ?: currentGraph[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10
-        val mergedEntryPoint  = req.entryPoint  ?: currentGraph[GRAPH_ENTRY_POINT_KEY]?.s() ?: ""
-        val mergedEdges       = req.edges       ?: currentGraph[GRAPH_EDGES_KEY]?.s() ?: "{}"
+        val mergedEntryPoint  = req.entryPoint?.let { idMap[it] ?: it }
+            ?: currentGraph[GRAPH_ENTRY_POINT_KEY]?.s() ?: ""
+        val mergedEdges       = req.edges?.let { substituteNodeIds(it, idMap) }
+            ?: currentGraph[GRAPH_EDGES_KEY]?.s() ?: "{}"
+        val mergedLayout      = req.layout?.let { substituteNodeIds(it, idMap) }
 
-        // Collect per-node config patches for validation.
-        val nodePatchConfigs: Map<String, String> = req.nodes
-            ?.mapNotNull { patch -> patch.config?.let { patch.nodeId to it } }
-            ?.toMap() ?: emptyMap()
+        // Per-node config validation set: patches on surviving nodes + new nodes.
+        val nodePatchConfigs: Map<String, String> = buildMap {
+            req.nodes?.forEach { patch ->
+                require(patch.nodeId !in removeSet) {
+                    "Node '${patch.nodeId}' is being removed and patched in the same request."
+                }
+                patch.config?.let { put(patch.nodeId, it) }
+            }
+            addNodes.forEach { put(idMap.getValue(it.tempId), it.config) }
+        }
 
-        // Determine whether this is the customer's only graph (for isDefault guard).
-        val allGraphs = graphRepository.listCustomerGraphs(customerId)
-        val isOnlyGraph = allGraphs.size == 1
+        // Determine whether this is the owner's only graph (for the isDefault guard).
+        val isOnlyGraph = isSystem || graphRepository.listCustomerGraphs(ownerId).size == 1
 
-        // ── 4. Validate merged state ──────────────────────────────────────────
+        // ── Validate the merged, post-structural state ────────────────────────
         GraphValidationService.validateAgentUpdate(
-            nodeIds          = nodeIds,
+            nodeIds          = finalNodeIds,
             nodeTypeById     = nodeTypeById,
             entryPoint       = mergedEntryPoint,
             edgesJson        = mergedEdges,
@@ -450,29 +626,20 @@ class GraphService(
             isOnlyGraph      = isOnlyGraph,
             nodePatchConfigs = nodePatchConfigs,
         )
-
-        // ── 4b. GENERATION-specific validation ────────────────────────────────
-        // A patched GENERATION node config must parse and reference an existing
-        // instruction — otherwise a mapped request-agent would silently degrade
-        // to the bundled default at resolution time.
-        for ((nodeId, configJson) in nodePatchConfigs) {
-            if (nodeTypeById[nodeId] != GENERATION_NODE_TYPE) continue
-            val config = try {
-                nodeConfigJson.decodeFromString(GenerationNodeConfig.serializer(), configJson)
-            } catch (e: Exception) {
-                throw IllegalArgumentException(
-                    "Node '$nodeId' config is not a valid GENERATION config: ${e.message}"
-                )
-            }
-            val version = config.instructionVersion
-                ?: instructionRepository.getLatestInstructionVersion(config.instructionId)
-                ?: throw IllegalArgumentException("Instruction ${config.instructionId} not found.")
-            requireNotNull(instructionRepository.getInstruction(config.instructionId, version)) {
-                "Instruction ${config.instructionId} v$version not found."
-            }
+        nodePatchConfigs.forEach { (nodeId, config) ->
+            validateInstructionRef(nodeId, config, nodeTypeById[nodeId])
         }
 
-        // ── 5. Apply node patches ─────────────────────────────────────────────
+        // ── Apply: create added nodes, patch nodes, remove nodes, patch graph ─
+        addNodes.forEach { n ->
+            graphRepository.createCustomerGraphNode(
+                customerId = ownerId,
+                nodeId = idMap.getValue(n.tempId),
+                nodeType = n.nodeType,
+                name = n.name,
+                config = n.config,
+            )
+        }
         req.nodes?.forEach { patch ->
             val existingNode = nodeById[patch.nodeId]
                 ?: throw IllegalArgumentException("Node '${patch.nodeId}' is not part of graph '$graphId'.")
@@ -486,49 +653,139 @@ class GraphService(
                 logger.info { "Updated node ${patch.nodeId} for agent $graphId" }
             }
         }
+        removeSet.forEach { graphRepository.deleteCustomerGraphNode(it) }
 
-        // ── 6. Apply graph patch ──────────────────────────────────────────────
         val updatedGraph = graphRepository.updateCustomerGraph(
             graphId       = graphId,
             name          = mergedName,
             isDefault     = mergedIsDefault,
-            nodeIds       = nodeIds,       // nodeIds are immutable via this endpoint
+            nodeIds       = finalNodeIds,
             edges         = mergedEdges,
             entryPoint    = mergedEntryPoint,
             maxIterations = mergedMaxIter,
+            layout        = mergedLayout,
         )
-        logger.info { "Updated agent $graphId for customer $customerId" }
+        logger.info { "Updated agent $graphId for $ownerId (${addNodes.size} added, ${removeSet.size} removed node(s))" }
 
-        // ── 7. Re-fetch updated nodes and build hydrated response ─────────────
-        val refreshedNodes = graphRepository.listCustomerGraphNodes(customerId)
-            .filter { it[NODE_ID_KEY]?.s() in nodeIds }
-        val refreshedById = refreshedNodes.associateBy { it[NODE_ID_KEY]?.s() ?: "" }
-
-        val hydratedNodes = nodeIds.mapNotNull { nid ->
-            refreshedById[nid]?.let { item ->
-                AgentNodeResponse(
-                    nodeId   = item[NODE_ID_KEY]?.s()   ?: nid,
-                    nodeType = item[NODE_TYPE_KEY]?.s() ?: "",
-                    name     = item[NODE_NAME_KEY]?.s() ?: "",
-                    config   = item[NODE_CONFIG_KEY]?.s() ?: "{}",
-                )
-            }
-        }
-
-        return AgentResponse(
-            graphId       = updatedGraph[GRAPH_ID_KEY]?.s()                    ?: graphId,
-            name          = updatedGraph[GRAPH_NAME_KEY]?.s()                  ?: "",
-            isDefault     = updatedGraph[GRAPH_IS_DEFAULT_KEY]?.bool()         ?: false,
-            entryPoint    = updatedGraph[GRAPH_ENTRY_POINT_KEY]?.s()           ?: "",
-            maxIterations = updatedGraph[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10,
-            edges         = updatedGraph[GRAPH_EDGES_KEY]?.s()                 ?: "{}",
-            nodes         = hydratedNodes,
-            createdAt     = updatedGraph["createdAt"]?.s(),
-            updatedAt     = updatedGraph["updatedAt"]?.s(),
-        )
+        // ── Re-fetch updated nodes and build hydrated response ────────────────
+        val refreshedById = graphRepository.listCustomerGraphNodes(ownerId)
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+        return agentResponseFrom(updatedGraph, refreshedById, isSystem = isSystem)
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private val tempIdPattern = Regex("^[A-Za-z0-9_-]+$")
+
+    private fun validateTempIds(nodes: List<NewAgentNode>) {
+        val seen = mutableSetOf<String>()
+        nodes.forEach { n ->
+            require(tempIdPattern.matches(n.tempId)) {
+                "tempId '${n.tempId}' is invalid — use only letters, digits, '-' and '_'."
+            }
+            require(n.tempId != "__end__") { "tempId must not be '__end__'." }
+            require(seen.add(n.tempId)) { "Duplicate tempId '${n.tempId}'." }
+            require(n.nodeType.isNotBlank()) { "Node '${n.tempId}' is missing nodeType." }
+            require(n.name.isNotBlank()) { "Node '${n.tempId}' is missing a name." }
+        }
+    }
+
+    /**
+     * Replaces node-id references inside a JSON blob (edges or layout) by
+     * substituting each map key as an exact JSON string token ("<id>"). Safe
+     * because ids only appear as full string values / object keys in those
+     * blobs, and both temp and real ids never contain quotes.
+     */
+    private fun substituteNodeIds(json: String, idMap: Map<String, String>): String {
+        var result = json
+        idMap.forEach { (from, to) -> result = result.replace("\"$from\"", "\"$to\"") }
+        return result
+    }
+
+    /**
+     * Validates the instruction reference in a node config, when present.
+     * GENERATION nodes must have a fully valid [GenerationNodeConfig] with a
+     * resolvable instruction; for every other node type instruction_id /
+     * instruction_version are optional but must resolve when provided.
+     */
+    private suspend fun validateInstructionRef(nodeId: String, configJson: String, nodeType: String?) {
+        if (nodeType == GENERATION_NODE_TYPE) {
+            val config = try {
+                nodeConfigJson.decodeFromString(GenerationNodeConfig.serializer(), configJson)
+            } catch (e: Exception) {
+                throw IllegalArgumentException(
+                    "Node '$nodeId' config is not a valid GENERATION config: ${e.message}"
+                )
+            }
+            requireInstructionExists(nodeId, config.instructionId, config.instructionVersion)
+            return
+        }
+        val obj = try {
+            jsonParser.parseToJsonElement(configJson).jsonObject
+        } catch (e: Exception) {
+            return // JSON validity is enforced by GraphValidationService
+        }
+        val instructionId = (obj["instruction_id"] as? JsonPrimitive)?.contentOrNull ?: return
+        val pinnedVersion = (obj["instruction_version"] as? JsonPrimitive)?.intOrNull
+        requireInstructionExists(nodeId, instructionId, pinnedVersion)
+    }
+
+    private suspend fun requireInstructionExists(nodeId: String, instructionId: String, pinnedVersion: Int?) {
+        val version = pinnedVersion
+            ?: instructionRepository.getLatestInstructionVersion(instructionId)
+            ?: throw IllegalArgumentException("Node '$nodeId': instruction $instructionId not found.")
+        requireNotNull(instructionRepository.getInstruction(instructionId, version)) {
+            "Node '$nodeId': instruction $instructionId v$version not found."
+        }
+    }
+
+    /** Display name of the instruction referenced by a node config, or null. */
+    private suspend fun instructionNameFor(configJson: String): String? = try {
+        val obj = jsonParser.parseToJsonElement(configJson).jsonObject
+        (obj["instruction_id"] as? JsonPrimitive)?.contentOrNull?.let { id ->
+            val version = (obj["instruction_version"] as? JsonPrimitive)?.intOrNull
+                ?: instructionRepository.getLatestInstructionVersion(id)
+            version?.let { instructionRepository.getInstruction(id, it)?.name }
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Builds a hydrated [AgentResponse] from a live graph item + the owner's nodes. */
+    private suspend fun agentResponseFrom(
+        graphItem: Map<String, AttributeValue>,
+        nodeById: Map<String, Map<String, AttributeValue>>,
+        isSystem: Boolean,
+    ): AgentResponse {
+        val nodeIds = graphItem[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
+        val hydratedNodes = nodeIds.mapNotNull { nid ->
+            nodeById[nid]?.let { nodeItem ->
+                val config = nodeItem[NODE_CONFIG_KEY]?.s() ?: "{}"
+                AgentNodeResponse(
+                    nodeId = nodeItem[NODE_ID_KEY]?.s() ?: nid,
+                    nodeType = nodeItem[NODE_TYPE_KEY]?.s() ?: "",
+                    name = nodeItem[NODE_NAME_KEY]?.s() ?: "",
+                    config = config,
+                    instructionName = instructionNameFor(config),
+                )
+            }
+        }
+        return AgentResponse(
+            graphId = graphItem[GRAPH_ID_KEY]?.s() ?: "",
+            name = graphItem[GRAPH_NAME_KEY]?.s() ?: "",
+            isDefault = graphItem[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false,
+            entryPoint = graphItem[GRAPH_ENTRY_POINT_KEY]?.s() ?: "",
+            maxIterations = graphItem[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10,
+            edges = graphItem[GRAPH_EDGES_KEY]?.s() ?: "{}",
+            layout = graphItem[GRAPH_LAYOUT_KEY]?.s(),
+            isSystem = isSystem,
+            nodes = hydratedNodes,
+            createdAt = graphItem["createdAt"]?.s(),
+            updatedAt = graphItem["updatedAt"]?.s(),
+        )
+    }
+
+    private val jsonParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     private fun requireOwnership(item: Map<String, AttributeValue>, customerId: String, type: String, id: String) {
         val owner = item["customerId"]?.s()
