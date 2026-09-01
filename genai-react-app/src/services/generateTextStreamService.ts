@@ -8,6 +8,11 @@ export interface StreamMetadata {
     messageId: string | null;
     responseMessageId: string | null;
     aiVendor: string | null;
+    /**
+     * Instruction the server actually applied to this turn — the explicit
+     * selection, or the customer's default when the request sent none.
+     */
+    instructionId?: string | null;
     inputTokens: number | null;
     outputTokens: number | null;
     totalTokens: number | null;
@@ -69,6 +74,7 @@ export async function generateTextStream(
     const messageId = response.headers.get("X-Message-Id");
     const responseMessageId = response.headers.get("X-Response-Message-Id");
     const aiVendor = response.headers.get("X-Ai-Vendor");
+    const instructionId = response.headers.get("X-Instruction-Id");
 
     // Call onMetadata immediately with header-based fields (tokens arrive later via sentinel)
     if (onMetadata) {
@@ -77,6 +83,7 @@ export async function generateTextStream(
             messageId,
             responseMessageId,
             aiVendor,
+            instructionId,
             inputTokens: null,
             outputTokens: null,
             totalTokens: null,

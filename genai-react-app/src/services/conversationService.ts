@@ -125,11 +125,18 @@ export async function getConversation(
         };
     });
 
+    // The conversation's instruction can change mid-stream (e.g. a default was
+    // applied only after some messages existed), so surface the most recent
+    // prompt that carries one rather than the first.
+    const lastPromptWithInstruction = [...data.promptAndResponseList]
+        .reverse()
+        .find(item => item.prompt.instructionId);
+
     return {
         conversationId,
         blocks,
         title: data.title ?? null,
-        instructionId: data.promptAndResponseList[0]?.prompt.instructionId ?? null,
+        instructionId: lastPromptWithInstruction?.prompt.instructionId ?? null,
         role: data.role ?? 'OWNER',
     };
 }

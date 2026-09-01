@@ -171,7 +171,7 @@ describe('conversationService', () => {
         expect(result?.blocks[0].prompt).toBe('Hello');
     });
 
-    test('getConversation returns instructionId from first prompt', async () => {
+    test('getConversation returns instructionId from the latest prompt that has one', async () => {
         const mockBackendResponse = {
             promptAndResponseList: [
                 {
@@ -192,7 +192,36 @@ describe('conversationService', () => {
 
         const result = await getConversation(mockToken, mockConversationId);
 
-        // Should use the instructionId from the first prompt only
+        // The most recent prompt with an instruction wins
+        expect(result?.instructionId).toBe('INS-other');
+    });
+
+    test('getConversation skips trailing prompts with blank instructionId', async () => {
+        const mockBackendResponse = {
+            promptAndResponseList: [
+                {
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'No instruction yet' },
+                    responses: []
+                },
+                {
+                    prompt: { instructionId: 'INS-abc123', instructionVersion: '5', prompt: 'With instruction' },
+                    responses: []
+                },
+                {
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Blank again' },
+                    responses: []
+                }
+            ]
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue(mockBackendResponse)
+        });
+
+        const result = await getConversation(mockToken, mockConversationId);
+
+        // Blank instructionIds never win over an earlier real one
         expect(result?.instructionId).toBe('INS-abc123');
     });
 

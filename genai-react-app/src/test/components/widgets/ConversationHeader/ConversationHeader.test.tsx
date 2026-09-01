@@ -18,11 +18,37 @@ jest.mock('@auth0/auth0-react', () => ({
 }))
 jest.mock('../../../../context/ToastContext')
 jest.mock('../../../../services/conversationService')
+jest.mock('../../../../context/AIContext', () => ({
+    useAI: jest.fn(),
+}))
+jest.mock('../../../../hooks/useWindowSize', () => ({
+    useWindowSize: jest.fn(),
+}))
+jest.mock('../../../../components/common/InstructionPickerModal/InstructionPickerModal', () => ({
+    __esModule: true,
+    default: ({ isOpen }: { isOpen: boolean }) =>
+        isOpen ? <div data-testid="instruction-picker-modal" /> : null,
+}))
+jest.mock('../../../../components/widgets/MobileHeader/MobileHeader', () => ({
+    __esModule: true,
+    default: ({ title, subtitle, onSubtitleClick, children }: any) => (
+        <div data-testid="mobile-header">
+            <span>{title}</span>
+            <button data-testid="mobile-subtitle" onClick={onSubtitleClick}>{subtitle}</button>
+            {children}
+        </div>
+    ),
+}))
+
+import { useAI } from '../../../../context/AIContext'
+import { useWindowSize } from '../../../../hooks/useWindowSize'
 
 const mockUseConversation = useConversation as jest.Mock
 const mockUseAuth = useAuth as jest.Mock
 const mockUseAuth0 = useAuth0 as unknown as jest.Mock
 const mockUseToast = useToast as jest.Mock
+const mockUseAI = useAI as jest.Mock
+const mockUseWindowSize = useWindowSize as jest.Mock
 
 describe('ConversationHeader', () => {
     let showToastMock: jest.Mock
@@ -44,6 +70,14 @@ describe('ConversationHeader', () => {
         // Logged-in customer by default; individual tests override for logged-out cases
         mockUseAuth.mockReturnValue({
             entitlements: { canShare: true },
+        })
+
+        // Desktop viewport and no instruction selected by default
+        mockUseWindowSize.mockReturnValue({ width: 1200, height: 800 })
+        mockUseAI.mockReturnValue({
+            selectedInstructionId: null,
+            setSelectedInstructionId: jest.fn(),
+            setSystemPrompt: jest.fn(),
         })
     })
 
@@ -180,5 +214,119 @@ describe('ConversationHeader', () => {
         await waitFor(() => {
             expect(showToastMock).toHaveBeenCalledWith('Failed to update share settings')
         })
+    })
+
+    test('shows Choose instruction placeholder when none is loaded and opens the picker', () => {
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        const placeholder = screen.getByTestId('choose-instruction')
+        expect(placeholder).toHaveTextContent('Choose instruction')
+        expect(screen.queryByTestId('instruction-picker-modal')).not.toBeInTheDocument()
+
+        fireEvent.click(placeholder)
+        expect(screen.getByTestId('instruction-picker-modal')).toBeInTheDocument()
+    })
+
+    test('shows the latest version of the loaded instruction as a badge and opens the picker', () => {
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+        })
+        mockUseAuth.mockReturnValue({
+            entitlements: { canShare: true },
+            customerInstructions: [
+                { id: 'INS-1', version: 1, name: 'Old Helper', icon: '🤖', instruction: 'v1' },
+                { id: 'INS-1', version: 2, name: 'Smart Helper', icon: '🤖', instruction: 'v2' },
+                { id: 'INS-2', version: 1, name: 'Other', instruction: 'x' },
+            ],
+        })
+        mockUseAI.mockReturnValue({
+            selectedInstructionId: 'INS-1',
+            setSelectedInstructionId: jest.fn(),
+            setSystemPrompt: jest.fn(),
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        const badge = screen.getByTestId('loaded-instruction')
+        expect(badge).toHaveTextContent('Smart Helper')
+        expect(badge).toHaveTextContent('🤖')
+        expect(screen.queryByTestId('choose-instruction')).not.toBeInTheDocument()
+
+        fireEvent.click(badge)
+        expect(screen.getByTestId('instruction-picker-modal')).toBeInTheDocument()
+    })
+
+    test('renders the loaded instruction badge without an icon', () => {
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+        })
+        mockUseAuth.mockReturnValue({
+            entitlements: { canShare: true },
+            customerInstructions: [
+                { id: 'INS-2', version: 1, name: 'Plain Persona', instruction: 'x' },
+            ],
+        })
+        mockUseAI.mockReturnValue({
+            selectedInstructionId: 'INS-2',
+            setSelectedInstructionId: jest.fn(),
+            setSystemPrompt: jest.fn(),
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        expect(screen.getByTestId('loaded-instruction')).toHaveTextContent('Plain Persona')
+    })
+
+    test('mobile: subtitle shows Choose instruction when none is loaded and opens the picker', () => {
+        mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+            resetConversation: jest.fn(),
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        const subtitle = screen.getByTestId('mobile-subtitle')
+        expect(subtitle).toHaveTextContent('Choose instruction')
+
+        fireEvent.click(subtitle)
+        expect(screen.getByTestId('instruction-picker-modal')).toBeInTheDocument()
+    })
+
+    test('mobile: subtitle shows the loaded instruction name', () => {
+        mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+            resetConversation: jest.fn(),
+        })
+        mockUseAuth.mockReturnValue({
+            entitlements: { canShare: false },
+            customerInstructions: [
+                { id: 'INS-1', version: 1, name: 'Smart Helper', icon: '🤖', instruction: 'x' },
+            ],
+        })
+        mockUseAI.mockReturnValue({
+            selectedInstructionId: 'INS-1',
+            setSelectedInstructionId: jest.fn(),
+            setSystemPrompt: jest.fn(),
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        expect(screen.getByTestId('mobile-subtitle')).toHaveTextContent('Smart Helper')
     })
 })
