@@ -1,10 +1,12 @@
 package com.genflowly.service
 
+import com.genflowly.config.AppConfig
 import com.genflowly.models.AIConfig
 import com.genflowly.models.AIGenerateResult
 import com.genflowly.models.CustomerAIProviderConfig
 import com.genflowly.models.Message
 import com.genflowly.models.ResolvedAgent
+import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.utils.PromptTemplateRenderer
 import kotlinx.coroutines.CancellationException
 import mu.KotlinLogging
@@ -27,6 +29,9 @@ class CustomerAIFailoverException(
  * Executes a [ResolvedAgent] (a 1-node generation graph) for internal flows
  * (titles, personas, memory extraction) — always on the CUSTOMER's stored
  * vendor keys, never the system keys: customers pay for their own activity.
+ * The one deliberate exception: ADMIN_PANEL accounts with no keys of their
+ * own fall back to the system keys, since admin operations are ours to pay
+ * for and the admin panel only manages the system key store.
  *
  * Provider candidates, in order:
  *  1. The customer's own prioritized (vendor, model, priority) configs from
@@ -36,6 +41,7 @@ class CustomerAIFailoverException(
  *     remaining keyed vendors with the bundled per-vendor default model — so
  *     a customer who only has, say, a CLAUDE key still gets titles even when
  *     the agent prefers OPENAI.
+ *  3. For keyless ADMIN_PANEL accounts only: the system provider configs.
  *
  * Candidates are tried in order; any generation (or parse) failure moves on
  * to the next one. Templates render eagerly, before any provider call, so a
@@ -44,7 +50,9 @@ class CustomerAIFailoverException(
 class GenerationAgentExecutor(
     private val utilityGenerationService: UtilityGenerationService,
     private val customerCredentialsService: CustomerCredentialsService,
-    private val defaultsLoader: RequestAgentDefaultsLoader
+    private val defaultsLoader: RequestAgentDefaultsLoader,
+    private val systemApiKeyService: SystemApiKeyService,
+    private val customerProfileRepository: CustomerProfileRepository
 ) {
 
     /**
@@ -156,6 +164,15 @@ class GenerationAgentExecutor(
         agent: ResolvedAgent,
         customerId: String
     ): List<CustomerAIProviderConfig> {
+        val ownCandidates = buildOwnKeyCandidates(agent, customerId)
+        if (ownCandidates.isNotEmpty()) return ownCandidates
+        return systemCandidatesForAdminPanelAccount(customerId)
+    }
+
+    private suspend fun buildOwnKeyCandidates(
+        agent: ResolvedAgent,
+        customerId: String
+    ): List<CustomerAIProviderConfig> {
         val configured = customerCredentialsService.getPrioritizedProviderConfigs(customerId)
         if (configured.isNotEmpty()) return configured
 
@@ -176,6 +193,31 @@ class GenerationAgentExecutor(
                     val model = defaultsLoader.vendorDefaultModels[vendor] ?: return@forEach
                     add(CustomerAIProviderConfig(vendor, model, key, priority = size + 1))
                 }
+        }
+    }
+
+    /**
+     * System-key fallback, restricted to ADMIN_PANEL accounts: the admin
+     * panel manages the system key store rather than per-customer keys, and
+     * its internal generations are ours to pay for. Any other account gets
+     * an empty list — customers never silently run on system keys.
+     */
+    private suspend fun systemCandidatesForAdminPanelAccount(
+        customerId: String
+    ): List<CustomerAIProviderConfig> {
+        val client = customerProfileRepository.getCustomerProfileByCustomerId(customerId)
+            ?.get("client")?.s()
+        if (client != AppConfig.CLIENT_ADMIN_PANEL) return emptyList()
+
+        val systemConfigs = systemApiKeyService.getPrioritizedProviderConfigs()
+        if (systemConfigs.isNotEmpty()) {
+            logger.info {
+                "Admin-panel account $customerId has no own AI keys — " +
+                        "falling back to ${systemConfigs.size} system provider config(s)"
+            }
+        }
+        return systemConfigs.map {
+            CustomerAIProviderConfig(it.aiVendor, it.model, it.apiKey, it.priority)
         }
     }
 
