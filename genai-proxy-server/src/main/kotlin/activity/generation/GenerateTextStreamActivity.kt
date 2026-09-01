@@ -41,7 +41,11 @@ fun Route.registerGenerateTextStreamRoutes(
                     "Tool use: pass tools and the model's tool calls arrive as a " +
                     "{\"t\":\"tc\",\"v\":[{id,name,args}]} stream event; execute them and send a " +
                     "follow-up request with toolResults (and selectedResponseId set to the " +
-                    "X-Response-Message-Id header value) to get the final answer."
+                    "X-Response-Message-Id header value) to get the final answer. " +
+                    "Structured output: pass responseSchema (a JSON Schema object) and the " +
+                    "response is guaranteed-parseable JSON matching that schema; because the " +
+                    "JSON is only valid once complete, it arrives as one content chunk when " +
+                    "generation finishes instead of token by token. Mutually exclusive with tools."
             request {
                 body<GenerateTextStreamRequest> {
                     description = "Prompt, a single AI vendor configuration and conversation context"
@@ -104,7 +108,8 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.prompt.attachments,
                     request.tools,
                     request.toolChoice,
-                    request.toolResults
+                    request.toolResults,
+                    request.responseSchema
                 )
 
                 // Send Metadata Headers
