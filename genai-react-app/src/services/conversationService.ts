@@ -2,7 +2,7 @@ import { fetchWithRetry } from "../utils/apiUtils";
 import { config } from '../config/env';
 import { endpoints } from '../config/endpoints';
 import { HttpMethod } from '../constants/http';
-import { ConversationBlock, Message } from '../models/conversation.models';
+import { ConversationBlock, Message, WebSource } from '../models/conversation.models';
 import { AttachmentRef } from '../models/attachment.models';
 import { AIVendor } from '../constants/vendors';
 import { SearchUserResponse } from '../models/user.models';
@@ -29,6 +29,7 @@ interface BackendResponse {
     totalTokens?: number | null;
     tokensReadFromCache?: number | null;
     thinkingDurationMs?: number | null;
+    webSources?: WebSource[] | null;
 }
 
 interface BackendPromptAndResponse {
@@ -103,6 +104,7 @@ export async function getConversation(
                     totalTokens: resp.totalTokens ?? null,
                     tokensReadFromCache: resp.tokensReadFromCache ?? null,
                     thinkingDurationMs: resp.thinkingDurationMs ?? null,
+                    webSources: resp.webSources ?? null,
                 });
             }
         });

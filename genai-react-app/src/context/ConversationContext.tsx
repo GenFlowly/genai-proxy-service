@@ -14,6 +14,7 @@ import {
     ConversationBlock,
     IConversationContext,
     Message,
+    WebSource,
 } from '../models/conversation.models'
 import { AttachmentRef } from '../models/attachment.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
@@ -225,7 +226,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         onThinking?: (step: string) => void,
         signal?: AbortSignal,
         onThinkingDuration?: (millis: number) => void,
-        attachments: AttachmentRef[] = []
+        attachments: AttachmentRef[] = [],
+        onWebSources?: (sources: WebSource[]) => void
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -238,7 +240,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration)
+        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -532,6 +534,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     }))
                 }
 
+                const handleWebSources = (sources: WebSource[]) => {
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, webSources: sources }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
                 // Finish THIS vendor's message only — on failure the streamed
                 // text is kept and the reason is attached; other vendors'
                 // streams are untouched
@@ -634,7 +647,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         handleThinking,
                         abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal,
                         handleThinkingDuration,
-                        attachmentsToUse
+                        attachmentsToUse,
+                        handleWebSources
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer

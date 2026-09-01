@@ -19,6 +19,12 @@ data class Message(
      * [{"tool_call_id","content"}] — answering the previous assistant's calls.
      */
     val toolResultsJson: String? = null,
+    /**
+     * Assistant messages: JSON array of web-search sources backing the [n]
+     * citation markers in the text — [{"index","title","url"}]. Null when no
+     * WEB_SEARCH node ran for the turn.
+     */
+    val webSourcesJson: String? = null,
     val client: String,
     val role: String,
     val customerId: String,

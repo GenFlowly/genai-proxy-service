@@ -21,5 +21,10 @@ data class GenerateTextResponse(
      * results back via toolResults on the next generate request (with
      * selectedResponseId set to this messageId) to continue the turn.
      */
-    val toolCalls: kotlinx.serialization.json.JsonElement? = null
+    val toolCalls: kotlinx.serialization.json.JsonElement? = null,
+    /**
+     * Web-search sources backing the [n] citation markers in the text:
+     * [{"index","title","url"}]. Null when no web search ran for the turn.
+     */
+    val webSources: kotlinx.serialization.json.JsonElement? = null
 )

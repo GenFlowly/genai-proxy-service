@@ -47,6 +47,8 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         request_system_prompt=req.system_prompt,
         retrieval_results=[],
         ranked_results=[],
+        web_search_results=[],
+        web_search_answer=None,
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
         generated_response=None,
         error=None,
@@ -172,6 +174,9 @@ async def retrieve(req: RetrieveRequest):
             "generated_response": result.get("generated_response"),
             "tool_calls": result.get("tool_calls"),
             "retrieval_results": result.get("ranked_results") or result.get("retrieval_results", []),
+            # Numbered to match the [n] citation markers the response generator
+            # emits when a WEB_SEARCH node ran (see _build_web_context).
+            "web_search_results": result.get("web_search_results", []),
             "rewritten_query": result.get("rewritten_query"),
             "error": result.get("error"),
             "usage": usage,

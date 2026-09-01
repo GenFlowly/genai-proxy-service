@@ -6,7 +6,7 @@ import { useLayout } from '../../../../context/LayoutContext'
 import { useConversation } from '../../../../context/ConversationContext'
 import { TextContainer } from '@genflowly/component-library'
 import { Icon } from '@genflowly/component-library'
-import { Message } from "../../../../models/conversation.models";
+import { Message, WebSource } from "../../../../models/conversation.models";
 import { RectangleButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
 import {
@@ -19,6 +19,48 @@ import { useMaxVendors } from '../../../../hooks/useMaxVendors'
 import { ToggleOption } from '@genflowly/component-library'
 import { RadioButtonGroup } from '@genflowly/component-library'
 import { CheckboxButtonGroup } from '@genflowly/component-library'
+
+/**
+ * Turn bare [n] citation markers into markdown links to their web source, so
+ * the markdown renderer makes them clickable. Only indices that exist in
+ * webSources are linked — the model can occasionally emit a stray marker, and
+ * an unknown index is left as plain text rather than a dead link. Markers
+ * already followed by "(" are part of an existing markdown link and skipped.
+ */
+function linkifyCitations(text: string, webSources?: WebSource[] | null): string {
+    if (!text || !webSources || webSources.length === 0) return text
+    const byIndex = new Map(webSources.map(s => [s.index, s.url]))
+    return text.replace(/\[(\d{1,3})\](?!\()/g, (marker, n) => {
+        const url = byIndex.get(Number(n))
+        return url ? `[${marker}](${url})` : marker
+    })
+}
+
+/** Numbered link list rendered under the response text. */
+function SourcesSection({ sources }: { sources: WebSource[] }) {
+    const { t } = useTranslation()
+    return (
+        <div className={styles.sourcesSection} data-testid="sources-section">
+            <div className={styles.sourcesLabel}>{t('conversation.response.sources')}</div>
+            <ul className={styles.sourcesList}>
+                {sources.map(source => (
+                    <li key={source.index}>
+                        <span className={styles.sourceIndex}>[{source.index}]</span>
+                        <a
+                            className={styles.sourceLink}
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={source.url}
+                        >
+                            {source.title || source.url}
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    )
+}
 
 interface ResponseProps {
     blockId: string
@@ -184,7 +226,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             )}
 
             <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
-                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingDurationMs, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
+                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingDurationMs, webSources, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
                     const isSelected = selectedResponseId === messageId
                     const isThinkingPhase = !!isLoading && text.trim().length === 0
 
@@ -211,7 +253,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                         <div key={messageId} className={styles.responseWrapper}>
                             <TextContainer
                                 title={HeaderComponent}
-                                content={text}
+                                content={linkifyCitations(text, webSources)}
                                 subheader={
                                     <ThinkingSection
                                         steps={thinkingSteps ?? []}
@@ -230,6 +272,9 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                             ? t('conversation.response.streamInterrupted', { reason: error })
                                             : t('conversation.response.generationFailed', { reason: error })}
                                     </div>
+                                )}
+                                {!isLoading && webSources && webSources.length > 0 && (
+                                    <SourcesSection sources={webSources} />
                                 )}
                                 {!isLoading && (inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
                                     <div className={styles.tokenBadge}>

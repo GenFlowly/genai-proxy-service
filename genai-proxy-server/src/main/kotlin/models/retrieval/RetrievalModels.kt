@@ -19,6 +19,12 @@ sealed class StreamChunk {
     data class ThinkingDuration(val millis: Long) : StreamChunk()
     /** Raw JSON array of tool calls the model made: [{"id","name","args"}] */
     data class ToolCalls(val json: String) : StreamChunk()
+    /**
+     * Raw JSON array of web-search sources backing the [n] citation markers in
+     * the generated text: [{"index","title","url"}]. Emitted once, when the
+     * WEB_SEARCH graph node completes.
+     */
+    data class WebSources(val json: String) : StreamChunk()
     data class Usage(
         val inputTokens: Int,
         val outputTokens: Int,
