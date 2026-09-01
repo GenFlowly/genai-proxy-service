@@ -97,7 +97,9 @@ export default function LandingPage() {
 
     return (
         <div className={styles.page}>
-            <Navbar />
+            {/* 📱 Mobile: no navbar — ConversationHeader renders a transparent
+                overlay (MobileHeader) over the full-screen content instead */}
+            {!isMobile && <Navbar />}
             <ConversationHeader />
             <LandingPageContent />
         </div>

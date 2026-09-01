@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import ConversationHeader from '../../../../components/widgets/ConversationHeader/ConversationHeader'
+import { LayoutProvider } from '../../../../context/LayoutContext'
 import { useConversation } from '../../../../context/ConversationContext'
 import { useAuth } from '../../../../context/AuthContext'
 import { useAuth0 } from '@auth0/auth0-react'
@@ -53,7 +54,7 @@ describe('ConversationHeader', () => {
             conversationRole: null,
         })
 
-        render(<ConversationHeader />)
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByRole('heading', { name: 'New Chat' })).toBeInTheDocument()
         expect(screen.getByTestId('new-chat-button')).toBeInTheDocument()
@@ -69,7 +70,7 @@ describe('ConversationHeader', () => {
             conversationRole: 'OWNER',
         })
 
-        render(<ConversationHeader />)
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByText('My Test Chat')).toBeInTheDocument()
         const shareButton = screen.getByTestId('conversation-share-button')
@@ -87,7 +88,7 @@ describe('ConversationHeader', () => {
             conversationRole: null,
         })
 
-        render(<ConversationHeader />)
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByRole('heading', { name: 'New Chat' })).toBeInTheDocument()
         expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument()
@@ -103,7 +104,7 @@ describe('ConversationHeader', () => {
             conversationRole: 'OWNER',
         })
 
-        render(<ConversationHeader />)
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByText('My Test Chat')).toBeInTheDocument()
         expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument()
@@ -116,7 +117,7 @@ describe('ConversationHeader', () => {
             conversationRole: 'VIEW',
         })
 
-        render(<ConversationHeader />)
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByText('Untitled conversation')).toBeInTheDocument()
         expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument()
@@ -133,7 +134,7 @@ describe('ConversationHeader', () => {
         ;(conversationService.unshareConversation as jest.Mock).mockResolvedValue({})
         ;(conversationService.getConversationSharedUsers as jest.Mock).mockResolvedValue([])
 
-        render(<ConversationHeader />)
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         const shareButton = screen.getByTestId('conversation-share-button')
         fireEvent.click(shareButton)
@@ -169,7 +170,7 @@ describe('ConversationHeader', () => {
         // Let's make getAccessTokenSilently throw to trigger catch in handleShareSave.
         getAccessTokenSilentlyMock.mockRejectedValue(new Error('Auth error'))
 
-        render(<ConversationHeader />)
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         fireEvent.click(screen.getByTestId('conversation-share-button'))
 
