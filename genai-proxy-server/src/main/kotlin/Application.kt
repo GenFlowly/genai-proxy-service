@@ -384,7 +384,7 @@ fun Application.module() {
     val memoryService = get<com.genflowly.service.MemoryService>()
     val memoryExtractionService = get<com.genflowly.service.MemoryExtractionService>()
     val conversationIndexingService = get<com.genflowly.service.ConversationIndexingService>()
-    val conversationSearchService = get<com.genflowly.service.ConversationSearchService>()
+    val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, memoryService, memoryExtractionService, conversationIndexingService, conversationSearchService, appConfig)
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, memoryService, memoryExtractionService, conversationIndexingService, unifiedSearchService, appConfig)
 }
