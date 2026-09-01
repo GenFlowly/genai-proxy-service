@@ -584,6 +584,15 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                                 }
                             }
 
+                            // The server may have applied the customer's default
+                            // instruction to a request that sent none — reflect it
+                            // so the header badge appears without a reload
+                            if (metadata.instructionId && metadata.instructionId !== selectedInstructionId) {
+                                setSelectedInstructionId(metadata.instructionId)
+                                const applied = customerInstructions.find(i => i.id === metadata.instructionId)
+                                if (applied) setSystemPrompt(applied.instruction)
+                            }
+
                             // Capture currentMsgId BEFORE updating it later in this callback.
                             // Essential because the functional state update below executes asynchronously/later, 
                             // and if we don't capture it here, the closure might see the updated value!

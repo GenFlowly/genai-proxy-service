@@ -339,6 +339,8 @@ fun Application.module() {
         exposeHeader("X-Ai-Vendor")
         exposeHeader("X-Input-Tokens")
         exposeHeader("X-Output-Tokens")
+        exposeHeader("X-Instruction-Id")
+        exposeHeader("X-Instruction-Version")
         
         allowCredentials = true
         allowNonSimpleContentTypes = true

@@ -118,6 +118,14 @@ fun Route.registerGenerateTextStreamRoutes(
                 call.response.header("X-Message-Id", streamResult.messageId) // User Msg ID
                 call.response.header("X-Response-Message-Id", streamResult.responseMessageId) // Assistant Msg ID
                 call.response.header("X-Ai-Vendor", request.aiConfig.aiVendor.toString())
+                // Instruction actually applied to the turn (explicit or the
+                // server-resolved default) so the UI can show it immediately
+                if (streamResult.appliedInstructionId.isNotBlank()) {
+                    call.response.header("X-Instruction-Id", streamResult.appliedInstructionId)
+                    if (streamResult.appliedInstructionVersion.isNotBlank()) {
+                        call.response.header("X-Instruction-Version", streamResult.appliedInstructionVersion)
+                    }
+                }
 
                 call.respondTextWriter(contentType = ContentType.Text.Plain) {
                     try {

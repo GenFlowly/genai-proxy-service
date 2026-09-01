@@ -126,7 +126,11 @@ export default function ConversationHeader(): React.ReactElement | null {
                             {loadedInstruction.name}
                         </span>
                     </>
-                ) : undefined}
+                ) : (
+                    <span className={styles.instructionName}>
+                        {t('conversation.conversationHeader.chooseInstruction')}
+                    </span>
+                )}
                 onSubtitleClick={() => setPickerOpen(true)}
                 menuItems={menuItems}
                 menuTitle={t('conversation.conversationHistory.title')}
@@ -155,7 +159,18 @@ export default function ConversationHeader(): React.ReactElement | null {
                             {loadedInstruction.name}
                         </span>
                     </button>
-                ) : undefined
+                ) : (
+                    <button
+                        className={`${styles.instructionBadge} ${styles.instructionBadgePlaceholder}`}
+                        title={t('conversation.conversationHeader.chooseInstruction')}
+                        onClick={() => setPickerOpen(true)}
+                        data-testid="choose-instruction"
+                    >
+                        <span className={styles.instructionName}>
+                            {t('conversation.conversationHeader.chooseInstruction')}
+                        </span>
+                    </button>
+                )
             }
             actions={(
                 <>
