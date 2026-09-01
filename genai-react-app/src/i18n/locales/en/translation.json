@@ -199,6 +199,7 @@
         },
         "conversationHeader": {
             "aiConfig": "AI Config",
+            "chooseInstruction": "Choose instruction",
             "newChat": "New Chat",
             "share": "Share",
             "shareSettingsUpdateFailed": "Failed to update share settings",

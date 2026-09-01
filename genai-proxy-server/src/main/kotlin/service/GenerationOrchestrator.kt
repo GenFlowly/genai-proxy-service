@@ -228,7 +228,15 @@ class GenerationOrchestrator(
         val conversationId: String,
         val messageId: String,
         val flow: kotlinx.coroutines.flow.Flow<String>,
-        val responseMessageId: String
+        val responseMessageId: String,
+        /**
+         * Instruction actually applied to this turn — the explicit selection or
+         * the server-resolved default. Echoed to the client (X-Instruction-Id)
+         * so the UI can reflect a default the caller never sent. Blank when the
+         * turn ran without an instruction.
+         */
+        val appliedInstructionId: String = "",
+        val appliedInstructionVersion: String = ""
     )
 
     suspend fun processTextGenerateStreamRequest(
@@ -326,7 +334,10 @@ class GenerationOrchestrator(
 
         val config = aiConfig.firstOrNull() ?: run {
             logger.warn("No AI config provided in request")
-            return StreamExecutionResult(activeConversationId, deterministicId, kotlinx.coroutines.flow.emptyFlow(), "")
+            return StreamExecutionResult(
+                activeConversationId, deterministicId, kotlinx.coroutines.flow.emptyFlow(), "",
+                effectiveInstructionId, effectiveInstructionVersion
+            )
         }
 
         // Fetch API key before building the flow so auth errors surface immediately
@@ -439,7 +450,9 @@ class GenerationOrchestrator(
             activeConversationId,
             deterministicId,
             flow,
-            responseMessageId
+            responseMessageId,
+            effectiveInstructionId,
+            effectiveInstructionVersion
         )
     }
 

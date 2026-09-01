@@ -27,6 +27,14 @@
     max-width: 16rem;
 }
 
+// No instruction loaded yet: same pill, dashed outline and muted text so it
+// reads as an empty slot inviting a selection rather than a loaded persona
+.instructionBadgePlaceholder {
+    background-color: transparent;
+    border: 1px dashed rgba(255, 255, 255, 0.45);
+    opacity: 0.85;
+}
+
 .instructionName {
     overflow: hidden;
     text-overflow: ellipsis;
