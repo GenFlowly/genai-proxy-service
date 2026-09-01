@@ -198,6 +198,7 @@
             "title": "Choose Instruction"
         },
         "conversationHeader": {
+            "aiConfig": "AI Config",
             "newChat": "New Chat",
             "share": "Share",
             "shareSettingsUpdateFailed": "Failed to update share settings",
@@ -362,7 +363,7 @@
         },
         "mobileMenu": {
             "account": "Account",
-            "conversationHistory": "Conversation History",
+            "back": "Back",
             "login": "Login",
             "menu": "Menu",
             "signingIn": "Signing in…",
@@ -382,6 +383,9 @@
         "mobileFullPageModal": {
             "aiSettings": "AI Settings",
             "closeSettings": "Close Settings"
+        },
+        "mobileHeader": {
+            "moreActions": "More actions"
         }
     },
     "notes": {
@@ -420,7 +424,14 @@
     "settingsPage": {
         "aiSettings": {
             "apiKeyHint": "API Key",
+            "configModelHint": "Model",
+            "configModelPlaceholder": "Select a model",
+            "configPriorityHint": "Priority (1 = primary)",
+            "configSave": "Save Preference",
+            "configSavedToast": "Model preference saved.",
             "enterValidApiKeyToast": "Please enter a valid API key.",
+            "keyNotSetPill": "Not set",
+            "keySetPill": "Key set",
             "loginFirstToast": "Please log in first.",
             "overwriteApiKey": "Overwrite API Key",
             "save": "Save",

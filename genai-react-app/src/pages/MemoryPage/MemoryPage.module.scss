@@ -1,5 +1,6 @@
 @import '../../styles/variables.scss';
 @import '../../styles/themes.scss';
+@import '../../styles/mixins.scss';
 
 .page {
     height: 100vh;
@@ -22,6 +23,12 @@
     background-color: $color-page-background;
     gap: $widget-gap;
     padding: $widget-gap;
+
+    @include respond-to-mobile {
+        background-color: $background-gray;
+        gap: 0;
+        padding: 0;
+    }
 }
 
 .centerContainer {

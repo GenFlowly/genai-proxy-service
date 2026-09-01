@@ -53,6 +53,33 @@ data class EncodingSaveMemoryRequest(
     val data: EncodingMemoryData
 )
 
+/**
+ * Wire format for a conversation exchange pushed into the embedding pipeline.
+ * Same dual-case convention as [EncodingNoteData] for the server's mixed
+ * readers. conversation_key groups all of a conversation's chunk rows;
+ * message_key (the assistant message id) keys this exchange's chunks.
+ */
+@Serializable
+data class EncodingConversationData(
+    val conversation_key: String,
+    val conversationKey: String,
+    val message_key: String,
+    val messageKey: String,
+    val text: String,
+    val title: String,
+    val created_at: String,
+    val createdAt: String
+)
+
+@Serializable
+data class EncodingSaveConversationRequest(
+    val dataType: String = "CONVERSATION",
+    val client: String,
+    val modelType: String? = null,
+    val modelName: String? = null,
+    val data: EncodingConversationData
+)
+
 @Serializable
 data class EncodingSaveNoteRequest(
     val dataType: String,

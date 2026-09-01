@@ -108,6 +108,15 @@ export class ApiGatewayStack extends cdk.Stack {
             authorizer: authorizer,
         });
 
+        // Conversation exchanges share the same ingest handler — the payload's
+        // dataType (CONVERSATION) selects the processor/collection downstream.
+        this.api.addRoutes({
+            path: '/encode-conversations',
+            methods: [apigatewayv2.HttpMethod.POST],
+            integration: ingestNotesIntegration,
+            authorizer: authorizer,
+        });
+
         const createCollectionsIntegration = new HttpLambdaIntegration(
             'CreateCollectionsIntegration',
             props.createCollectionsLambda

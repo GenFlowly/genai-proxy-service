@@ -23,6 +23,10 @@
 
     @include respond-to-mobile {
         padding: 1.25rem;
+        // Rest below the fixed MobileHeader overlay (3.5rem matches its
+        // height); being inside the scroll container, content still scrolls
+        // all the way to the top beneath the transparent header controls
+        padding-top: 3.5rem;
     }
 }
 
@@ -34,6 +38,11 @@
     justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
+
+    // 📱 The MobileHeader overlay already shows the page title
+    @include respond-to-mobile {
+        display: none;
+    }
 }
 
 .pageTitle {

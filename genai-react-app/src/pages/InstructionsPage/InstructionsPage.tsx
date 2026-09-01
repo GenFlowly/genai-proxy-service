@@ -9,11 +9,15 @@ import {
 } from '@genflowly/component-library';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/navbar/Navbar';
+import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader';
+import { useWindowSize } from '../../hooks/useWindowSize';
 
 export default function InstructionsPage() {
     const { t } = useTranslation();
     const { customerInstructions, refreshInstructions, user } = useAuth();
     const navigate = useNavigate();
+    const { width } = useWindowSize();
+    const isMobile = width <= 768;
 
     useEffect(() => {
         refreshInstructions();
@@ -34,17 +38,34 @@ export default function InstructionsPage() {
 
     return (
         <div className={styles.page}>
-            <Navbar />
-            <PageHeader
-                title={t('instructionsPage.instructionsPage.title')}
-                actions={
-                    <PillButton
-                        label={t('instructionsPage.instructionsPage.createInstruction')}
-                        variant="primary"
-                        onClick={() => navigate('/instructions/new')}
+            {/* 📱 Mobile: no navbar/header band — a transparent overlay header
+                floats over the full-screen content instead */}
+            {isMobile ? (
+                <MobileHeader
+                    title={t('instructionsPage.instructionsPage.title')}
+                    menuItems={[
+                        {
+                            label: t('instructionsPage.instructionsPage.createInstruction'),
+                            onClick: () => navigate('/instructions/new'),
+                            'data-testid': 'create-instruction-button',
+                        },
+                    ]}
+                />
+            ) : (
+                <>
+                    <Navbar />
+                    <PageHeader
+                        title={t('instructionsPage.instructionsPage.title')}
+                        actions={
+                            <PillButton
+                                label={t('instructionsPage.instructionsPage.createInstruction')}
+                                variant="primary"
+                                onClick={() => navigate('/instructions/new')}
+                            />
+                        }
                     />
-                }
-            />
+                </>
+            )}
             <div className={styles.pageContainer}>
             {uniqueInstructions.length === 0 ? (
                 <div className={styles.emptyState}>

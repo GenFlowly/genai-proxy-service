@@ -7,6 +7,7 @@ export const endpoints = {
     onboardCustomer: `${BASE}${API_PREFIX}/onboard`,
     getCustomerProfile: `${BASE}${API_PREFIX}/customer/profile`,
     storeCustomerVendorApiKey: `${BASE}${API_PREFIX}/store-api-key`,
+    storeCustomerVendorConfig: `${BASE}${API_PREFIX}/store-vendor-config`,
     storeCustomerVectorDBConfig: `${BASE}${API_PREFIX}/store-vector-db-config`,
     storeCustomerSupabaseConfig: `${BASE}${API_PREFIX}/store-supabase-config`,
     generateText: `${BASE}${API_PREFIX}/generate-text`,

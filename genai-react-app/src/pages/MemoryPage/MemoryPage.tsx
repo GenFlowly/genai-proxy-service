@@ -27,13 +27,16 @@ export default function MemoryPage() {
         // Un-minimize as well: the chat page hides the left sidebar via the
         // minimized flag (width 0), which would otherwise persist here
         setLeftSidebarMinimized(false)
-        setLeftSidebarExpanded(true)
-    }, [setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized])
+        // On mobile "expanded" means the full-screen menu overlay — keep it closed
+        setLeftSidebarExpanded(!isMobile)
+    }, [setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, isMobile])
 
     return (
         <NotesProvider>
             <div className={styles.page}>
-                <Navbar />
+                {/* 📱 Mobile: no navbar — NotesHeader renders a transparent
+                    overlay (MobileHeader) over the full-screen editor instead */}
+                {!isMobile && <Navbar />}
                 <NotesHeader />
                 <div className={styles.layout}>
                     {/* Saved notes mirror the chat page's conversation-history panel */}

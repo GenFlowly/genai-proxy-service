@@ -2,36 +2,56 @@ package com.genflowly.service
 
 import com.genflowly.models.AIConfig
 import com.genflowly.models.AIGenerateResult
+import com.genflowly.models.CustomerAIProviderConfig
 import com.genflowly.models.Message
 import com.genflowly.models.ResolvedAgent
 import com.genflowly.utils.PromptTemplateRenderer
+import kotlinx.coroutines.CancellationException
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
+
+/** Thrown when the customer has no valid AI vendor API key at all. */
+class NoCustomerAIKeyException(message: String) : RuntimeException(message)
 
 /**
- * Executes a [ResolvedAgent] (a 1-node generation graph) for internal flows.
+ * Thrown when every candidate customer provider failed for an operation.
+ * [failures] holds one "VENDOR/model: reason" entry per attempted provider.
+ */
+class CustomerAIFailoverException(
+    message: String,
+    val failures: List<String>
+) : RuntimeException(message)
+
+/**
+ * Executes a [ResolvedAgent] (a 1-node generation graph) for internal flows
+ * (titles, personas, memory extraction) — always on the CUSTOMER's stored
+ * vendor keys, never the system keys: customers pay for their own activity.
  *
- * Which credential store pays — the customer's stored vendor key vs the
- * admin-configured system keys — is deliberately call-site policy, NOT agent
- * data: an admin-editable map must not be able to silently shift customer
- * traffic onto system keys or vice versa. The agent contributes the prompt
- * templates and (for customer-key flows) the vendor/model preference.
+ * Provider candidates, in order:
+ *  1. The customer's own prioritized (vendor, model, priority) configs from
+ *     their settings, when any are set.
+ *  2. Otherwise, derived from whichever vendors they have a valid key for:
+ *     the agent's preferred vendor first (with the agent's model), then the
+ *     remaining keyed vendors with the bundled per-vendor default model — so
+ *     a customer who only has, say, a CLAUDE key still gets titles even when
+ *     the agent prefers OPENAI.
  *
- * Both paths render the templates eagerly, before any provider call, so a
- * template error (e.g. unresolved placeholder) surfaces immediately instead of
- * burning one failover attempt per configured system provider.
+ * Candidates are tried in order; any generation (or parse) failure moves on
+ * to the next one. Templates render eagerly, before any provider call, so a
+ * template error surfaces immediately instead of burning failover attempts.
  */
 class GenerationAgentExecutor(
     private val utilityGenerationService: UtilityGenerationService,
-    private val systemAIFailoverService: SystemAIFailoverService,
+    private val customerCredentialsService: CustomerCredentialsService,
     private val defaultsLoader: RequestAgentDefaultsLoader
 ) {
 
     /**
-     * Generates with the customer's stored vendor key using the agent's model
-     * preference — or, when the agent doesn't set one, the bundled default's
-     * model for the request type ("no preference" means "platform default",
-     * not "broken"). Failures yield empty text (see
-     * [UtilityGenerationService.generateText]), so callers treat blank output
-     * as "no result".
+     * Generate and give back the raw result, degrading gracefully: failures
+     * yield empty text (never an error message as text), so callers treat
+     * blank output as "no result". Each failure mode is logged distinctly —
+     * no-key vs all-providers-failed — never silently.
      */
     suspend fun executeWithCustomerKey(
         agent: ResolvedAgent,
@@ -39,61 +59,129 @@ class GenerationAgentExecutor(
         customerId: String,
         conversationId: String
     ): AIGenerateResult {
-        val modelPreference = agent.modelPreference
-            ?: defaultsLoader.defaults[agent.requestType]?.modelPreference
-        requireNotNull(modelPreference) {
-            "Agent '${agent.mapKey}' (${agent.requestType}) has no model preference and " +
-                    "the bundled default for this request type has none either"
+        return try {
+            runWithFailover(agent, variables, customerId, conversationId, agent.requestType.name) { it }
+        } catch (e: NoCustomerAIKeyException) {
+            logger.warn { "${agent.requestType}: skipped for customer $customerId — ${e.message}" }
+            emptyResult()
+        } catch (e: CustomerAIFailoverException) {
+            logger.warn { "${agent.requestType}: all providers failed for customer $customerId — ${e.failures}" }
+            emptyResult()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) { "${agent.requestType}: generation failed for customer $customerId" }
+            emptyResult()
         }
-        val systemPrompt = PromptTemplateRenderer.render(agent.systemPromptTemplate, variables)
-        val userMessage = PromptTemplateRenderer.render(agent.userMessageTemplate, variables)
-
-        return utilityGenerationService.generateText(
-            aiVendor = modelPreference.aiVendor,
-            model = modelPreference.model,
-            messages = listOf(
-                buildMessage(conversationId, userMessage, customerId, modelPreference)
-            ),
-            systemPrompt = systemPrompt,
-            customerId = customerId,
-            maxTokens = agent.maxTokens
-        )
     }
 
     /**
-     * Generates on the system keys with provider failover: vendor/model come
-     * from each prioritized system provider config, not the agent. [parse]
-     * runs inside the failover block so a malformed response (e.g. unparseable
-     * persona JSON) counts as a provider failure and advances to the next one.
+     * Generate and [parse] the response text, with provider failover on the
+     * customer's keys. A parse failure (e.g. unparseable persona JSON) counts
+     * as a provider failure and advances to the next candidate. THROWS
+     * ([NoCustomerAIKeyException] / [CustomerAIFailoverException]) when no
+     * candidate succeeds, so callers can react.
      */
-    suspend fun <T> executeWithSystemFailover(
+    suspend fun <T> executeWithCustomerFailover(
         agent: ResolvedAgent,
         variables: Map<String, String>,
         customerId: String,
         conversationId: String,
         operationName: String,
         parse: (String) -> T
+    ): T = runWithFailover(agent, variables, customerId, conversationId, operationName) { parse(it.text) }
+
+    private suspend fun <T> runWithFailover(
+        agent: ResolvedAgent,
+        variables: Map<String, String>,
+        customerId: String,
+        conversationId: String,
+        operationName: String,
+        transform: (AIGenerateResult) -> T
     ): T {
         val systemPrompt = PromptTemplateRenderer.render(agent.systemPromptTemplate, variables)
         val userMessage = PromptTemplateRenderer.render(agent.userMessageTemplate, variables)
 
-        return systemAIFailoverService.executeWithFailover(operationName) { config ->
-            val responseText = utilityGenerationService.generateTextWithApiKey(
-                aiVendor = config.aiVendor,
-                model = config.model,
-                messages = listOf(
-                    buildMessage(
-                        conversationId, userMessage, customerId,
-                        AIConfig(config.aiVendor, config.model)
-                    )
-                ),
-                systemPrompt = systemPrompt,
-                apiKey = config.apiKey,
-                maxTokens = agent.maxTokens
-            ).text
-            parse(responseText)
+        val candidates = buildCandidates(agent, customerId)
+        if (candidates.isEmpty()) {
+            throw NoCustomerAIKeyException(
+                "no valid AI vendor API key stored (operation: $operationName)"
+            )
+        }
+
+        val failures = mutableListOf<String>()
+        for (candidate in candidates) {
+            try {
+                logger.info {
+                    "[$operationName] Trying customer provider ${candidate.aiVendor}/${candidate.model} " +
+                            "(priority ${candidate.priority})"
+                }
+                val result = utilityGenerationService.generateTextWithApiKey(
+                    aiVendor = candidate.aiVendor,
+                    model = candidate.model,
+                    messages = listOf(
+                        buildMessage(
+                            conversationId, userMessage, customerId,
+                            AIConfig(candidate.aiVendor, candidate.model)
+                        )
+                    ),
+                    systemPrompt = systemPrompt,
+                    apiKey = candidate.apiKey,
+                    maxTokens = agent.maxTokens
+                )
+                return transform(result)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.warn(e) {
+                    "[$operationName] Customer provider ${candidate.aiVendor}/${candidate.model} failed — trying next"
+                }
+                failures.add("${candidate.aiVendor}/${candidate.model}: ${e.message}")
+            }
+        }
+
+        throw CustomerAIFailoverException(
+            "All ${candidates.size} customer AI provider(s) failed for $operationName: " +
+                    failures.joinToString("; "),
+            failures = failures
+        )
+    }
+
+    /**
+     * Explicit customer configs win outright; the derived fallback only
+     * applies when the customer configured nothing, so their settings fully
+     * control which vendors/models internal generations use (and pay for).
+     */
+    private suspend fun buildCandidates(
+        agent: ResolvedAgent,
+        customerId: String
+    ): List<CustomerAIProviderConfig> {
+        val configured = customerCredentialsService.getPrioritizedProviderConfigs(customerId)
+        if (configured.isNotEmpty()) return configured
+
+        val usableKeys = customerCredentialsService.getUsableVendorKeys(customerId)
+        if (usableKeys.isEmpty()) return emptyList()
+
+        val preference = agent.modelPreference
+            ?: defaultsLoader.defaults[agent.requestType]?.modelPreference
+
+        return buildList {
+            val preferredKey = preference?.let { usableKeys[it.aiVendor] }
+            if (preference != null && preferredKey != null) {
+                add(CustomerAIProviderConfig(preference.aiVendor, preference.model, preferredKey, priority = 1))
+            }
+            usableKeys
+                .filterKeys { it != preference?.aiVendor }
+                .forEach { (vendor, key) ->
+                    val model = defaultsLoader.vendorDefaultModels[vendor] ?: return@forEach
+                    add(CustomerAIProviderConfig(vendor, model, key, priority = size + 1))
+                }
         }
     }
+
+    private fun emptyResult() = AIGenerateResult(
+        text = "", inputTokens = null, outputTokens = null, totalTokens = null, tokensReadFromCache = null
+    )
 
     private fun buildMessage(
         conversationId: String,
