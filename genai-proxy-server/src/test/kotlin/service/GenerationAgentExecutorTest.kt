@@ -8,10 +8,13 @@ import com.genflowly.models.CustomerAIProviderConfig
 import com.genflowly.models.RequestType
 import com.genflowly.models.ResolvedAgent
 import com.genflowly.models.ResolvedAgentSource
+import com.genflowly.models.SystemAIProviderConfig
+import com.genflowly.repository.CustomerProfileRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -21,7 +24,15 @@ class GenerationAgentExecutorTest {
 
     private val utility = mockk<UtilityGenerationService>()
     private val credentials = mockk<CustomerCredentialsService>()
-    private val executor = GenerationAgentExecutor(utility, credentials, RequestAgentDefaultsLoader())
+    private val systemKeys = mockk<SystemApiKeyService>()
+    private val profiles = mockk<CustomerProfileRepository> {
+        coEvery { getCustomerProfileByCustomerId(any()) } returns null
+    }
+    private val executor =
+        GenerationAgentExecutor(utility, credentials, RequestAgentDefaultsLoader(), systemKeys, profiles)
+
+    private fun profileWithClient(client: String): Map<String, AttributeValue> =
+        mapOf("client" to AttributeValue.builder().s(client).build())
 
     private fun agent(
         systemPrompt: String = "System {{a}}",
@@ -169,6 +180,66 @@ class GenerationAgentExecutorTest {
             ) { it }
         }
         coVerify(exactly = 0) { utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `keyless ADMIN_PANEL account falls back to system provider configs`() = runTest {
+        coEvery { credentials.getPrioritizedProviderConfigs("CUADMIN") } returns emptyList()
+        coEvery { credentials.getUsableVendorKeys("CUADMIN") } returns emptyMap()
+        coEvery { profiles.getCustomerProfileByCustomerId("CUADMIN") } returns profileWithClient("ADMIN_PANEL")
+        coEvery { systemKeys.getPrioritizedProviderConfigs() } returns listOf(
+            SystemAIProviderConfig(AIVendor.CLAUDE, "claude-fable-5", "sys-key-c", 1),
+            SystemAIProviderConfig(AIVendor.OPENAI, "gpt-5", "sys-key-o", 2)
+        )
+        coEvery {
+            utility.generateTextWithApiKey(AIVendor.CLAUDE, "claude-fable-5", any(), "System x", "sys-key-c", null)
+        } returns result("A Persona")
+
+        val out = executor.executeWithCustomerFailover(
+            agent = agent(),
+            variables = mapOf("a" to "x", "b" to "y"),
+            customerId = "CUADMIN",
+            conversationId = "conv",
+            operationName = "persona-generation"
+        ) { it }
+
+        assertEquals("A Persona", out)
+    }
+
+    @Test
+    fun `ADMIN_PANEL account with its own keys never touches system keys`() = runTest {
+        coEvery { credentials.getPrioritizedProviderConfigs("CUADMIN") } returns configuredProviders
+        coEvery {
+            utility.generateTextWithApiKey(AIVendor.OPENAI, "gpt-5", any(), "System x", "key-1", null)
+        } returns result("A Title")
+
+        val out = executor.executeWithCustomerKey(
+            agent = agent(),
+            variables = mapOf("a" to "x", "b" to "y"),
+            customerId = "CUADMIN",
+            conversationId = "conv"
+        )
+
+        assertEquals("A Title", out.text)
+        coVerify(exactly = 0) { systemKeys.getPrioritizedProviderConfigs() }
+    }
+
+    @Test
+    fun `keyless non-admin account never gets system keys and still throws`() = runTest {
+        coEvery { credentials.getPrioritizedProviderConfigs("CU1") } returns emptyList()
+        coEvery { credentials.getUsableVendorKeys("CU1") } returns emptyMap()
+        coEvery { profiles.getCustomerProfileByCustomerId("CU1") } returns profileWithClient("REACT_APP")
+
+        assertFailsWith<NoCustomerAIKeyException> {
+            executor.executeWithCustomerFailover(
+                agent = agent(),
+                variables = mapOf("a" to "x", "b" to "y"),
+                customerId = "CU1",
+                conversationId = "conv",
+                operationName = "test-op"
+            ) { it }
+        }
+        coVerify(exactly = 0) { systemKeys.getPrioritizedProviderConfigs() }
     }
 
     @Test

@@ -31,7 +31,7 @@ def get_zilliz_credentials(customer_id: str) -> Tuple[str, str]:
         item = response.get('Item')
         if not item:
             if GLOBAL_ZILLIZ_ENDPOINT and GLOBAL_ZILLIZ_TOKEN:
-                logger.info(f"No vector DB config for {customer_id}, using environment fallback")
+                logger.info(f"No vector DB config for {customer_id} — using system's vector DB")
                 return GLOBAL_ZILLIZ_ENDPOINT, GLOBAL_ZILLIZ_TOKEN
             raise ValueError(f"No vector DB configuration found for customer {customer_id}")
             
@@ -40,7 +40,7 @@ def get_zilliz_credentials(customer_id: str) -> Tuple[str, str]:
         
         if not encrypted_endpoint or not encrypted_token:
             if GLOBAL_ZILLIZ_ENDPOINT and GLOBAL_ZILLIZ_TOKEN:
-                logger.info(f"Incomplete vector DB config for {customer_id}, using environment fallback")
+                logger.info(f"Incomplete vector DB config for {customer_id} — using system's vector DB")
                 return GLOBAL_ZILLIZ_ENDPOINT, GLOBAL_ZILLIZ_TOKEN
             raise ValueError(f"Incomplete Zilliz configuration for customer {customer_id}")
             
@@ -54,7 +54,7 @@ def get_zilliz_credentials(customer_id: str) -> Tuple[str, str]:
     except Exception as e:
         logger.error(f"Failed to fetch Zilliz credentials for {customer_id}: {str(e)}")
         if GLOBAL_ZILLIZ_ENDPOINT and GLOBAL_ZILLIZ_TOKEN:
-            logger.info(f"Using environment fallback due to error for {customer_id}")
+            logger.info(f"Error fetching vector DB config for {customer_id} — using system's vector DB")
             return GLOBAL_ZILLIZ_ENDPOINT, GLOBAL_ZILLIZ_TOKEN
         raise e
 
