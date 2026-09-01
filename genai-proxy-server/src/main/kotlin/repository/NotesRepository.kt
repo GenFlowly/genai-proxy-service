@@ -9,6 +9,7 @@ import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
+import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 
@@ -205,6 +206,33 @@ class NotesRepository(
         } catch (e: Exception) {
             logger.error("Failed to soft-delete note $noteKey for $customerId", e)
             throw e
+        }
+    }
+
+    /**
+     * Fetches one note row, or null when it doesn't exist or is soft-deleted.
+     */
+    suspend fun getNote(
+        customerId: String,
+        noteKey: String
+    ): Map<String, AttributeValue>? = withContext(Dispatchers.IO) {
+        try {
+            val response = dynamoDbClient.getItem(
+                GetItemRequest.builder()
+                    .tableName(DynamoDBConstants.CUSTOMER_NOTES_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build()
+                    ))
+                    .build()
+            )
+            val item = response.item()
+            if (item.isNullOrEmpty()) return@withContext null
+            if (item["is_delete"]?.bool() == true) return@withContext null
+            item
+        } catch (e: Exception) {
+            logger.error("Failed to fetch note $noteKey for $customerId", e)
+            null
         }
     }
 
