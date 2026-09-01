@@ -68,7 +68,16 @@ object DynamoDBConstants {
     const val GRAPH_EDGES_KEY = "edges"
     const val GRAPH_ENTRY_POINT_KEY = "entryPoint"
     const val GRAPH_MAX_ITERATIONS_KEY = "maxIterations"
+    // Editor canvas layout: JSON {"positions":{"<nodeId>":{"x":n,"y":n}}}. Purely
+    // presentational — never read by the graph runtime.
+    const val GRAPH_LAYOUT_KEY = "layout"
     const val CUSTOMER_GRAPHS_GSI_KEY = "customerIdIndex"
+
+    // Owner (customerId attribute) of the admin-published default graph that
+    // every customer without an own default graph falls back to. Mirrors
+    // SYSTEM_INSTRUCTION_CREATOR: one graph, edited in place via the admin
+    // panel; customer edits fork it into a customer-owned copy.
+    const val SYSTEM_GRAPH_OWNER = "System"
 
     // Shared versioning keys used by both CustomerGraphNodes and CustomerGraphs.
     // version=0 is always the current/live record; version=1,2,... are immutable history.

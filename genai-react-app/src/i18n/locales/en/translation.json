@@ -11,7 +11,9 @@
             "lastUpdated": "Last updated",
             "meta_one": "{{count}} node · max {{maxIterations}} iterations",
             "meta_other": "{{count}} nodes · max {{maxIterations}} iterations",
-            "showDetails": "▼ Show details"
+            "showDetails": "▼ Show details",
+            "systemBadge": "System default",
+            "systemHint": "Shared default agent — editing it creates your own copy."
         },
         "agentsPage": {
             "emptySubtitle": "Agents are created automatically when you onboard. If you see this, try refreshing.",
@@ -21,7 +23,8 @@
             "loadingAriaLabel": "Loading agents",
             "retry": "Retry",
             "subtitle": "AI pipelines powering your conversations",
-            "title": "My Agents"
+            "title": "My Agents",
+            "createAgent": "Create agent"
         },
         "createAgentPanel": {
             "addCustomTool": "+ Add Custom Tool",
@@ -104,23 +107,40 @@
             "saveFailed": "Failed to save agent",
             "savedBadge": "✓ Saved",
             "saving": "Saving…",
+            "systemBadge": "System default",
+            "systemBanner": "This is the shared default agent — saving your changes creates your own copy.",
             "topBarMeta_one": "{{count}} node · max {{maxIterations}} iterations",
             "topBarMeta_other": "{{count}} nodes · max {{maxIterations}} iterations"
         },
         "nodeConfigEditor": {
+            "changeInstruction": "Change instruction",
+            "convertFailed": "Failed to convert to instruction",
+            "convertToInstruction": "Convert to instruction",
+            "converting": "Converting…",
+            "followLatest": "Follow latest",
             "inputTemplate": "Input Template",
             "inputTemplateHint": "Use <1>{query}</1>, <3>{context}</3>, <5>{chunks_text}</5> as placeholders.",
             "inputTemplatePlaceholdersList": "Placeholders: <1>{query}</1> <3>{context}</3> <5>{chunks_text}</5>",
+            "instruction": "Instruction",
+            "instructionSearchAriaLabel": "Search instructions for {{name}}",
+            "instructionSearchPlaceholder": "Search instructions…",
+            "instructionsLoading": "Loading instructions…",
             "invalidJsonBadge": "Invalid JSON",
             "invalidJsonSuffix": "— invalid JSON",
+            "legacyPromptAriaLabel": "Legacy inline system prompt",
+            "legacyPromptHint": "This node still uses an inline system prompt. Convert it to a reusable instruction to manage and version it from the Instructions Hub.",
             "modelOverride": "Model Override",
             "modelOverridePlaceholder": "e.g. gpt-4o, claude-sonnet-4-5",
+            "noInstructionsFound": "No instructions found",
             "nodeName": "Node Name",
             "optional": "(optional)",
+            "pinToVersion": "Pin to version",
+            "pinnedToVersion": "Pinned to v{{version}}",
             "rawConfigJson": "Raw Config JSON",
             "responseNodeHint": "The system prompt and model for this node come from the instruction and model selected at request time.",
             "systemPrompt": "System Prompt",
-            "systemPromptPlaceholder": "You are a helpful assistant."
+            "systemPromptPlaceholder": "You are a helpful assistant.",
+            "versionControlAriaLabel": "Instruction version"
         },
         "nodeTypes": {
             "queryAnalyzer": "Query Analyzer",
@@ -129,6 +149,39 @@
             "responseGenerator": "Response Generator",
             "resultRanker": "Result Ranker",
             "retrieval": "Retrieval"
+        },
+        "graphEditorPage": {
+            "backToAgents": "Back to Agents",
+            "catalog": {
+                "queryAnalyzer": "Query Analyzer",
+                "queryAnalyzerDescription": "Classifies the query intent and decides whether it needs rewriting.",
+                "queryRewriter": "Query Rewriter",
+                "queryRewriterDescription": "Rewrites the query for better retrieval.",
+                "retrieval": "Retrieval",
+                "retrievalDescription": "Fetches matching chunks from your knowledge base.",
+                "webSearch": "Web Search",
+                "webSearchDescription": "Searches the web for up-to-date information.",
+                "resultRanker": "Result Ranker",
+                "resultRankerDescription": "Reranks retrieved chunks by relevance.",
+                "responseGenerator": "Response Generator",
+                "responseGeneratorDescription": "Generates the final answer from the assembled context.",
+                "reflectiveGenerator": "Generator (Reflection)",
+                "reflectiveGeneratorDescription": "Generates an answer and reflects on whether it needs another pass.",
+                "generation": "Generation",
+                "generationDescription": "General-purpose text generation step."
+            },
+            "conditions": {
+                "needsRewrite": "Needs rewrite",
+                "needsMoreContext": "Needs more context",
+                "retrievalResultsEmpty": "Retrieval results empty",
+                "errorOccurred": "Error occurred"
+            },
+            "loadFailed": "Failed to load agent",
+            "loading": "Loading agent…",
+            "mobileCreateBody": "The visual agent editor needs a larger screen. Please open this page on a desktop or a tablet in landscape to create a new agent.",
+            "mobileCreateTitle": "Agent creation needs a larger screen",
+            "saveFailed": "Failed to save agent",
+            "unsavedChangesWarning": "You have unsaved changes. Leave without saving?"
         }
     },
     "common": {
@@ -356,6 +409,8 @@
         "instructionsPage": {
             "createInstruction": "Create Instruction",
             "emptyState": "No instructions found. Create one to get started!",
+            "noSearchResults": "No instructions match your search.",
+            "searchPlaceholder": "Search instructions…",
             "title": "Instructions Hub"
         }
     },

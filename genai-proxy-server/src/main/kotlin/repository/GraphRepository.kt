@@ -10,6 +10,7 @@ import com.genflowly.DynamoDBConstants.GRAPH_EDGES_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_ENTRY_POINT_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_ID_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_IS_DEFAULT_KEY
+import com.genflowly.DynamoDBConstants.GRAPH_LAYOUT_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_MAX_ITERATIONS_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_NAME_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_NODE_IDS_KEY
@@ -254,7 +255,8 @@ class GraphRepository(
         nodeIds: List<String>,
         edges: String,
         entryPoint: String,
-        maxIterations: Int = 10
+        maxIterations: Int = 10,
+        layout: String? = null,
     ) = withContext(Dispatchers.IO) {
         try {
             val now = Instant.now().toString()
@@ -266,7 +268,7 @@ class GraphRepository(
                 GRAPH_EDGES_KEY to AttributeValue.builder().s(edges).build(),
                 GRAPH_ENTRY_POINT_KEY to AttributeValue.builder().s(entryPoint).build(),
                 GRAPH_MAX_ITERATIONS_KEY to AttributeValue.builder().n(maxIterations.toString()).build(),
-            )
+            ) + (layout?.let { mapOf(GRAPH_LAYOUT_KEY to AttributeValue.builder().s(it).build()) } ?: emptyMap())
             val historyItem = baseFields + mapOf(
                 GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),
                 VERSION_KEY to AttributeValue.builder().n("1").build(),
@@ -296,7 +298,8 @@ class GraphRepository(
         nodeIds: List<String>,
         edges: String,
         entryPoint: String,
-        maxIterations: Int
+        maxIterations: Int,
+        layout: String? = null,
     ): Map<String, AttributeValue> = withContext(Dispatchers.IO) {
         val current = getCustomerGraph(graphId) ?: error("Graph $graphId not found")
         val latestVersion = current[LATEST_VERSION_KEY]?.n()?.toInt() ?: 1
@@ -305,6 +308,8 @@ class GraphRepository(
         val createdAt = current["createdAt"]?.s() ?: Instant.now().toString()
         val now = Instant.now().toString()
 
+        // layout=null keeps the stored layout (callers pass it only when it changed)
+        val mergedLayout = layout ?: current[GRAPH_LAYOUT_KEY]?.s()
         val nodeIdAttrList = nodeIds.map { AttributeValue.builder().s(it).build() }
         val baseFields = mapOf(
             GRAPH_NAME_KEY to AttributeValue.builder().s(name).build(),
@@ -313,7 +318,7 @@ class GraphRepository(
             GRAPH_EDGES_KEY to AttributeValue.builder().s(edges).build(),
             GRAPH_ENTRY_POINT_KEY to AttributeValue.builder().s(entryPoint).build(),
             GRAPH_MAX_ITERATIONS_KEY to AttributeValue.builder().n(maxIterations.toString()).build(),
-        )
+        ) + (mergedLayout?.let { mapOf(GRAPH_LAYOUT_KEY to AttributeValue.builder().s(it).build()) } ?: emptyMap())
         val historyItem = baseFields + mapOf(
             GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),
             VERSION_KEY to AttributeValue.builder().n(nextVersion.toString()).build(),
@@ -461,7 +466,8 @@ class GraphRepository(
 
             val restoredFields = listOf(
                 GRAPH_NAME_KEY, GRAPH_IS_DEFAULT_KEY, GRAPH_NODE_IDS_KEY,
-                GRAPH_EDGES_KEY, GRAPH_ENTRY_POINT_KEY, GRAPH_MAX_ITERATIONS_KEY
+                GRAPH_EDGES_KEY, GRAPH_ENTRY_POINT_KEY, GRAPH_MAX_ITERATIONS_KEY,
+                GRAPH_LAYOUT_KEY
             ).mapNotNull { key -> target[key]?.let { key to it } }.toMap()
 
             val historyItem = restoredFields + mapOf(

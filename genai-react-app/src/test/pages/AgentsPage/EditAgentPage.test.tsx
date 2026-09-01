@@ -6,6 +6,7 @@ import '@testing-library/jest-dom';
 import EditAgentPage from '../../../pages/AgentsPage/EditAgentPage/EditAgentPage';
 import { useAuth } from '../../../context/AuthContext';
 import * as agentsService from '../../../services/agentsService';
+import * as instructionService from '../../../services/instructionService';
 
 // ── Static mocks ──────────────────────────────────────────────────────────────
 
@@ -31,8 +32,13 @@ jest.mock('react-router-dom', () => ({
 }));
 
 jest.mock('../../../services/agentsService', () => ({
-    getCustomerAgents: jest.fn(),
+    getAgent: jest.fn(),
     updateAgent: jest.fn(),
+}));
+
+jest.mock('../../../services/instructionService', () => ({
+    getCustomerInstructions: jest.fn(),
+    createInstruction: jest.fn(),
 }));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -59,10 +65,29 @@ const mockAgent = {
             name: 'Retrieval',
             config: '{\n}',
         },
+        {
+            nodeId: 'node-003',
+            nodeType: 'QUERY_REWRITER',
+            name: 'Query Rewriter',
+            config: '{\n  "instruction_id": "inst-1"\n}',
+            instructionName: 'Analyzer Prompt',
+        },
+        {
+            nodeId: 'node-004',
+            nodeType: 'RESULT_RANKER',
+            name: 'Result Ranker',
+            config: '{}',
+        },
     ],
     createdAt: '2025-01-01T00:00:00Z',
     updatedAt: '2025-01-02T00:00:00Z',
 };
+
+const mockInstructions = [
+    { id: 'inst-1', name: 'Analyzer Prompt', version: 2, instruction: 'Old analyzer text' },
+    { id: 'inst-1', name: 'Analyzer Prompt', version: 3, instruction: 'Analyzer text' },
+    { id: 'inst-2', name: 'Rewriter Prompt', version: 1, instruction: 'Rewriter text' },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -76,6 +101,12 @@ function renderPage(graphId = 'graph-001') {
     );
 }
 
+async function expandNode(nodeName: string) {
+    await waitFor(() => expect(screen.getAllByText(nodeName).length).toBeGreaterThan(0));
+    const headerBtn = screen.getAllByText(nodeName)[0].closest('button')!;
+    await userEvent.click(headerBtn);
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('EditAgentPage Component', () => {
@@ -84,38 +115,53 @@ describe('EditAgentPage Component', () => {
         (useAuth as jest.Mock).mockReturnValue({
             getAccessTokenSilently: jest.fn().mockResolvedValue(mockToken),
         });
+        (instructionService.getCustomerInstructions as jest.Mock).mockResolvedValue({
+            instructions: mockInstructions,
+        });
     });
 
     // ── Loading / not found ───────────────────────────────────────────────────
 
     test('shows loading state before agent is fetched', () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockReturnValue(new Promise(() => {}));
+        (agentsService.getAgent as jest.Mock).mockReturnValue(new Promise(() => {}));
         renderPage();
         expect(screen.getByText('Loading agent…')).toBeInTheDocument();
     });
 
-    test('shows "Agent not found" when graphId does not match any agent', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [] });
+    test('loads the agent through the dedicated getAgent endpoint', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        renderPage();
+        await waitFor(() =>
+            expect(agentsService.getAgent).toHaveBeenCalledWith(mockToken, 'graph-001')
+        );
+    });
+
+    test('shows the load error when getAgent fails', async () => {
+        (agentsService.getAgent as jest.Mock).mockRejectedValueOnce(
+            new Error('Get Agent failed: 404 Not Found')
+        );
         renderPage('nonexistent-id');
-        await waitFor(() => expect(screen.getByText('Agent not found.')).toBeInTheDocument());
+        await waitFor(() =>
+            expect(screen.getByText('Get Agent failed: 404 Not Found')).toBeInTheDocument()
+        );
     });
 
     // ── Rendering ─────────────────────────────────────────────────────────────
 
     test('renders navbar', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => expect(screen.getByTestId('navbar')).toBeInTheDocument());
     });
 
     test('renders agent name in top bar after loading', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
     });
 
     test('renders Back to Agents button', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() =>
             expect(screen.getByRole('button', { name: /back to agents/i })).toBeInTheDocument()
@@ -123,14 +169,14 @@ describe('EditAgentPage Component', () => {
     });
 
     test('renders Agent Settings section with name and maxIterations inputs', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument());
         expect(screen.getByLabelText(/Max Iterations/)).toBeInTheDocument();
     });
 
     test('populates name input with agent name', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => {
             const input = screen.getByLabelText('Name') as HTMLInputElement;
@@ -139,7 +185,7 @@ describe('EditAgentPage Component', () => {
     });
 
     test('populates maxIterations input with agent value', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => {
             const input = screen.getByLabelText(/Max Iterations/) as HTMLInputElement;
@@ -148,7 +194,7 @@ describe('EditAgentPage Component', () => {
     });
 
     test('renders a collapsed accordion for each node', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => expect(screen.getAllByText('Query Analyzer').length).toBeGreaterThan(0));
         expect(screen.getAllByText('Retrieval').length).toBeGreaterThan(0);
@@ -157,7 +203,7 @@ describe('EditAgentPage Component', () => {
     // ── Navigation ────────────────────────────────────────────────────────────
 
     test('navigates to /agents when Back button is clicked', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => expect(screen.getByRole('button', { name: /back to agents/i })).toBeInTheDocument());
         await userEvent.click(screen.getByRole('button', { name: /back to agents/i }));
@@ -165,53 +211,230 @@ describe('EditAgentPage Component', () => {
     });
 
     test('navigates to /agents when Discard button is clicked', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => expect(screen.getByRole('button', { name: /discard/i })).toBeInTheDocument());
         await userEvent.click(screen.getByRole('button', { name: /discard/i }));
         expect(mockNavigate).toHaveBeenCalledWith('/agents');
     });
 
-    // ── Node accordion ────────────────────────────────────────────────────────
+    // ── Instruction selector ──────────────────────────────────────────────────
 
-    test('expands node editor when accordion header is clicked', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+    test('shows read-only legacy prompt with Convert button for node with inline system_prompt', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
-        await waitFor(() => expect(screen.getAllByText('Query Analyzer').length).toBeGreaterThan(0));
+        await expandNode('Query Analyzer');
 
-        const headerBtn = screen.getAllByText('Query Analyzer')[0].closest('button')!;
-        await userEvent.click(headerBtn);
-        await waitFor(() => expect(screen.getByLabelText('System Prompt')).toBeInTheDocument());
+        const legacyTextarea = screen.getByTestId('legacy-prompt-node-001') as HTMLTextAreaElement;
+        expect(legacyTextarea.value).toBe('Analyze this query.');
+        expect(legacyTextarea).toHaveAttribute('readonly');
+        expect(screen.getByRole('button', { name: 'Convert to instruction' })).toBeInTheDocument();
     });
 
-    test('shows system prompt field for LLM node', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
-        renderPage();
-        await waitFor(() => expect(screen.getAllByText('Query Analyzer').length).toBeGreaterThan(0));
-
-        const headerBtn = screen.getAllByText('Query Analyzer')[0].closest('button')!;
-        await userEvent.click(headerBtn);
-        await waitFor(() => {
-            const textarea = screen.getByLabelText('System Prompt') as HTMLTextAreaElement;
-            expect(textarea.value).toBe('Analyze this query.');
+    test('converts a legacy prompt into a new instruction and rewrites the config', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        (instructionService.createInstruction as jest.Mock).mockResolvedValueOnce({
+            id: 'inst-new',
+            name: 'Default Graph — Query Analyzer',
+            version: 1,
+            instruction: 'Analyze this query.',
         });
+
+        const { container } = renderPage();
+        await expandNode('Query Analyzer');
+
+        await userEvent.click(screen.getByRole('button', { name: 'Convert to instruction' }));
+
+        await waitFor(() =>
+            expect(instructionService.createInstruction).toHaveBeenCalledWith(mockToken, {
+                instruction: 'Analyze this query.',
+                instructionName: 'Default Graph — Query Analyzer',
+            })
+        );
+
+        // Config JSON now references the new instruction and dropped system_prompt
+        const rawJsonArea = container.querySelector('#raw-config-node-001') as HTMLTextAreaElement;
+        await waitFor(() => expect(rawJsonArea.value).toContain('"instruction_id": "inst-new"'));
+        expect(rawJsonArea.value).not.toContain('system_prompt');
+        expect(rawJsonArea.value).toContain('"input_template": "{query}"');
+        // Selected instruction name is displayed
+        expect(screen.getByTestId('instruction-selected-node-001')).toHaveTextContent('Default Graph — Query Analyzer');
     });
 
-    test('does NOT show system prompt for RETRIEVAL node', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
-        renderPage();
-        await waitFor(() => expect(screen.getAllByText('Retrieval').length).toBeGreaterThan(0));
+    test('shows an error when converting the legacy prompt fails', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        (instructionService.createInstruction as jest.Mock).mockRejectedValueOnce(new Error('Create Instruction failed: 500'));
 
-        const headerBtn = screen.getAllByText('Retrieval')[0].closest('button')!;
-        await userEvent.click(headerBtn);
-        // System Prompt label only appears in one node (the LLM one), not for RETRIEVAL
-        expect(screen.queryByLabelText('System Prompt')).not.toBeInTheDocument();
+        renderPage();
+        await expandNode('Query Analyzer');
+
+        await userEvent.click(screen.getByRole('button', { name: 'Convert to instruction' }));
+        await waitFor(() => expect(screen.getByText('Create Instruction failed: 500')).toBeInTheDocument());
+    });
+
+    test('shows the selected instruction name for a node that already references one', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        renderPage();
+        await expandNode('Query Rewriter');
+
+        expect(screen.getByTestId('instruction-selected-node-003')).toHaveTextContent('Analyzer Prompt');
+        expect(screen.getByLabelText('Follow latest')).toBeChecked();
+    });
+
+    test('falls back to the API-provided instructionName when the instruction is not in the list', async () => {
+        const agentWithUnknownInstruction = {
+            ...mockAgent,
+            nodes: [
+                {
+                    nodeId: 'node-x',
+                    nodeType: 'QUERY_REWRITER',
+                    name: 'Unknown Ref',
+                    config: '{"instruction_id": "inst-unknown"}',
+                    instructionName: 'Server Provided Name',
+                },
+            ],
+        };
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(agentWithUnknownInstruction);
+        renderPage();
+        await expandNode('Unknown Ref');
+
+        expect(screen.getByTestId('instruction-selected-node-x')).toHaveTextContent('Server Provided Name');
+    });
+
+    test('pins the instruction to the latest version and can go back to follow latest', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        const { container } = renderPage();
+        await expandNode('Query Rewriter');
+
+        const rawJsonArea = container.querySelector('#raw-config-node-003') as HTMLTextAreaElement;
+
+        // Pinning requires the instruction list (for the latest version number)
+        await waitFor(() => expect(screen.getByLabelText('Pin to version')).toBeEnabled());
+        await userEvent.click(screen.getByLabelText('Pin to version'));
+        await waitFor(() => expect(rawJsonArea.value).toContain('"instruction_version": 3'));
+        expect(screen.getByLabelText(/Pinned to v3/)).toBeChecked();
+
+        await userEvent.click(screen.getByLabelText('Follow latest'));
+        await waitFor(() => expect(rawJsonArea.value).not.toContain('instruction_version'));
+        expect(rawJsonArea.value).toContain('"instruction_id": "inst-1"');
+    });
+
+    test('selects an instruction from the searchable dropdown for a node without one', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        (agentsService.updateAgent as jest.Mock).mockResolvedValueOnce({ ...mockAgent });
+        const { container } = renderPage();
+        await expandNode('Result Ranker');
+
+        const search = screen.getByTestId('instruction-search-node-004');
+        await userEvent.type(search, 'Rewriter');
+        await waitFor(() =>
+            expect(screen.getByTestId('instruction-option-node-004-inst-2')).toBeInTheDocument()
+        );
+        // Non-matching instructions are filtered out
+        expect(screen.queryByTestId('instruction-option-node-004-inst-1')).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getByTestId('instruction-option-node-004-inst-2'));
+
+        const rawJsonArea = container.querySelector('#raw-config-node-004') as HTMLTextAreaElement;
+        expect(rawJsonArea.value).toContain('"instruction_id": "inst-2"');
+
+        // Saving sends the rewritten config for the node
+        await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        await waitFor(() =>
+            expect(agentsService.updateAgent).toHaveBeenCalledWith(
+                mockToken,
+                'graph-001',
+                expect.objectContaining({
+                    nodes: expect.arrayContaining([
+                        expect.objectContaining({
+                            nodeId: 'node-004',
+                            config: expect.stringContaining('"instruction_id": "inst-2"'),
+                        }),
+                    ]),
+                })
+            )
+        );
+    });
+
+    test('does NOT show instruction controls for RETRIEVAL node', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        renderPage();
+        await expandNode('Retrieval');
+
+        expect(screen.queryByTestId('instruction-search-node-002')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('legacy-prompt-node-002')).not.toBeInTheDocument();
+    });
+
+    test('does NOT show instruction controls for response generator nodes', async () => {
+        const responseAgent = {
+            ...mockAgent,
+            nodes: [
+                {
+                    nodeId: 'node-resp',
+                    nodeType: 'RESPONSE_GENERATOR',
+                    name: 'Response Generator',
+                    config: '{}',
+                },
+            ],
+        };
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(responseAgent);
+        renderPage();
+        await expandNode('Response Generator');
+
+        expect(screen.queryByTestId('instruction-search-node-resp')).not.toBeInTheDocument();
+        expect(
+            screen.getByText('The system prompt and model for this node come from the instruction and model selected at request time.')
+        ).toBeInTheDocument();
+    });
+
+    // ── System default agent ──────────────────────────────────────────────────
+
+    test('shows System default badge and banner for a system agent', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce({ ...mockAgent, isSystem: true });
+        renderPage();
+        await waitFor(() =>
+            expect(
+                screen.getByText('This is the shared default agent — saving your changes creates your own copy.')
+            ).toBeInTheDocument()
+        );
+        expect(screen.getByText('System default')).toBeInTheDocument();
+    });
+
+    test('does not show the system banner for a customer-owned agent', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
+        expect(
+            screen.queryByText('This is the shared default agent — saving your changes creates your own copy.')
+        ).not.toBeInTheDocument();
+    });
+
+    test('navigates (replace) to the forked graphId when saving a system agent', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce({ ...mockAgent, isSystem: true });
+        (agentsService.updateAgent as jest.Mock).mockResolvedValueOnce({
+            ...mockAgent,
+            graphId: 'graph-fork-001',
+            isSystem: false,
+            name: 'My Copy',
+        });
+
+        renderPage();
+        await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument());
+
+        const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
+        await userEvent.clear(nameInput);
+        await userEvent.type(nameInput, 'My Copy');
+        await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() =>
+            expect(mockNavigate).toHaveBeenCalledWith('/agents/graph-fork-001', { replace: true })
+        );
     });
 
     // ── Client-side validation ────────────────────────────────────────────────
 
     test('shows error when name is cleared and Save is clicked', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument());
 
@@ -224,7 +447,7 @@ describe('EditAgentPage Component', () => {
     });
 
     test('shows error when maxIterations is out of range', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         renderPage();
         await waitFor(() => expect(screen.getByLabelText(/Max Iterations/)).toBeInTheDocument());
 
@@ -240,7 +463,7 @@ describe('EditAgentPage Component', () => {
     // ── Save ──────────────────────────────────────────────────────────────────
 
     test('calls updateAgent with changed name on save', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         (agentsService.updateAgent as jest.Mock).mockResolvedValueOnce({
             ...mockAgent,
             name: 'Renamed Agent',
@@ -264,7 +487,7 @@ describe('EditAgentPage Component', () => {
     });
 
     test('shows "Saved" badge on successful save', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         (agentsService.updateAgent as jest.Mock).mockResolvedValueOnce({
             ...mockAgent,
             name: 'Updated Name',
@@ -282,7 +505,7 @@ describe('EditAgentPage Component', () => {
     });
 
     test('shows server error message when updateAgent throws', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         (agentsService.updateAgent as jest.Mock).mockRejectedValueOnce(
             new Error('entryPoint nodeId not in graph')
         );
@@ -300,25 +523,12 @@ describe('EditAgentPage Component', () => {
         );
     });
 
-    test('navigates to /agents when Discard button is clicked instead of save with no diff', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
-        renderPage();
-        await waitFor(() => expect(screen.getByRole('button', { name: /discard/i })).toBeInTheDocument());
-
-        await userEvent.click(screen.getByRole('button', { name: /discard/i }));
-
-        expect(mockNavigate).toHaveBeenCalledWith('/agents');
-    });
-
     test('edits node name, input template, and model override', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         (agentsService.updateAgent as jest.Mock).mockResolvedValueOnce({ ...mockAgent });
 
         renderPage();
-        await waitFor(() => expect(screen.getAllByText('Query Analyzer').length).toBeGreaterThan(0));
-
-        const headerBtn = screen.getAllByText('Query Analyzer')[0].closest('button')!;
-        await userEvent.click(headerBtn);
+        await expandNode('Query Analyzer');
         await waitFor(() => expect(screen.getByPlaceholderText('Query Analyzer')).toBeInTheDocument());
 
         const nodeNameInput = screen.getByPlaceholderText('Query Analyzer') as HTMLInputElement;
@@ -351,12 +561,9 @@ describe('EditAgentPage Component', () => {
     });
 
     test('shows invalid JSON indicator when editing raw config with bad JSON', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         const { container } = renderPage();
-        await waitFor(() => expect(screen.getAllByText('Query Analyzer').length).toBeGreaterThan(0));
-
-        const headerBtn = screen.getAllByText('Query Analyzer')[0].closest('button')!;
-        await userEvent.click(headerBtn);
+        await expandNode('Query Analyzer');
         await waitFor(() => expect(container.querySelector('#raw-config-node-001')).toBeInTheDocument());
 
         const rawJsonArea = container.querySelector('#raw-config-node-001') as HTMLTextAreaElement;
@@ -381,22 +588,22 @@ describe('EditAgentPage Component', () => {
                 },
             ],
         };
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [unknownAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(unknownAgent);
         renderPage();
 
         await waitFor(() => expect(screen.getByText('Custom Node')).toBeInTheDocument());
         expect(screen.getByText('CUSTOM_NODE_TYPE')).toBeInTheDocument();
     });
 
-    test('handles getCustomerAgents error without message property', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockRejectedValueOnce({});
+    test('handles getAgent error without message property', async () => {
+        (agentsService.getAgent as jest.Mock).mockRejectedValueOnce({});
         renderPage();
 
         await waitFor(() => expect(screen.getByText('Failed to load agent')).toBeInTheDocument());
     });
 
     test('handles updateAgent error without message property', async () => {
-        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
         (agentsService.updateAgent as jest.Mock).mockRejectedValueOnce({});
 
         renderPage();
@@ -409,5 +616,16 @@ describe('EditAgentPage Component', () => {
         await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
         await waitFor(() => expect(screen.getByText('Failed to save agent')).toBeInTheDocument());
+    });
+
+    test('keeps working when the instruction list fails to load', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        (instructionService.getCustomerInstructions as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+        renderPage();
+        await expandNode('Result Ranker');
+
+        const search = screen.getByTestId('instruction-search-node-004');
+        await userEvent.click(search);
+        await waitFor(() => expect(screen.getByText('No instructions found')).toBeInTheDocument());
     });
 });

@@ -6,7 +6,7 @@ import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage/SettingsPage'
 import MemoryPage from './pages/MemoryPage/MemoryPage'
 import AgentsPage from './pages/AgentsPage/AgentsPage'
-import EditAgentPage from './pages/AgentsPage/EditAgentPage/EditAgentPage'
+import GraphAgentEditorPage from './pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage'
 import InstructionsPage from './pages/InstructionsPage/InstructionsPage'
 import InstructionDetailPage from './pages/InstructionDetailPage/InstructionDetailPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
@@ -38,7 +38,8 @@ export default function AppContent(): React.ReactElement {
                             <Route path="/history" element={<ProtectedRoute><ConversationHistoryPage /></ProtectedRoute>} />
                             <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
                             <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
-                            <Route path="/agents/:graphId" element={<ProtectedRoute><EditAgentPage /></ProtectedRoute>} />
+                            <Route path="/agents/new" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
+                            <Route path="/agents/:graphId" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
                             <Route path="/instructions" element={<InstructionsPage />} />
                             <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
                         </Routes>
