@@ -82,12 +82,16 @@ class GenerationOrchestrator(
         attachments: List<AttachmentRef> = emptyList(),
         tools: List<ToolDefinition> = emptyList(),
         toolChoice: String? = null,
-        toolResults: List<ToolResult> = emptyList()
+        toolResults: List<ToolResult> = emptyList(),
+        responseSchema: kotlinx.serialization.json.JsonObject? = null
 
     ): List<Message> {
 
         requestValidator.validateAttachments(attachments, customerId)
         requestValidator.validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
+        require(responseSchema == null || tools.isEmpty()) {
+            "responseSchema and tools are mutually exclusive — structured output reserves the vendor's tool channel"
+        }
 
         // An explicit selection wins; otherwise resolve the customer's default
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
@@ -144,7 +148,8 @@ class GenerationOrchestrator(
                         agentic = agentic,
                         tools = tools,
                         toolChoice = toolChoice,
-                        toolResults = toolResults
+                        toolResults = toolResults,
+                        responseSchema = responseSchema
                     )
                 }
             }.awaitAll()
@@ -163,7 +168,8 @@ class GenerationOrchestrator(
         agentic: Boolean = true,
         tools: List<ToolDefinition> = emptyList(),
         toolChoice: String? = null,
-        toolResults: List<ToolResult> = emptyList()
+        toolResults: List<ToolResult> = emptyList(),
+        responseSchema: kotlinx.serialization.json.JsonObject? = null
     ): Message {
         val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, message.customerId)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
@@ -193,7 +199,8 @@ class GenerationOrchestrator(
             queryImages = message.attachments.toImageRefs(),
             tools = tools.toPayloadTools(),
             toolChoice = toolChoice,
-            toolResults = toolResults.toPayloadToolResults()
+            toolResults = toolResults.toPayloadToolResults(),
+            responseSchema = responseSchema
         )
 
         val responseMessage = Message(
@@ -237,11 +244,15 @@ class GenerationOrchestrator(
         attachments: List<AttachmentRef> = emptyList(),
         tools: List<ToolDefinition> = emptyList(),
         toolChoice: String? = null,
-        toolResults: List<ToolResult> = emptyList()
+        toolResults: List<ToolResult> = emptyList(),
+        responseSchema: kotlinx.serialization.json.JsonObject? = null
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
         requestValidator.validateTools(tools, toolResults, aiConfig.map { it.aiVendor }, customerId)
+        require(responseSchema == null || tools.isEmpty()) {
+            "responseSchema and tools are mutually exclusive — structured output reserves the vendor's tool channel"
+        }
 
         // An explicit selection wins; otherwise resolve the customer's default
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
@@ -363,7 +374,8 @@ class GenerationOrchestrator(
                     queryImages = attachments.toImageRefs(),
                     tools = tools.toPayloadTools(),
                     toolChoice = toolChoice,
-                    toolResults = toolResults.toPayloadToolResults()
+                    toolResults = toolResults.toPayloadToolResults(),
+                    responseSchema = responseSchema
                 ).collect { chunk ->
                     when (chunk) {
                         is StreamChunk.Content -> {

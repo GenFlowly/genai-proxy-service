@@ -271,12 +271,20 @@ def make_llm_node(agent_type: str):
 
         effective_model = model_override or state.get("llm_model")
 
+        # Structured output: a caller-supplied JSON Schema the response must
+        # conform to. Only the response generator honors it. Enforced through
+        # LangChain's with_structured_output, which maps to each vendor's
+        # native mechanism (OpenAI json_schema/function calling, Anthropic
+        # forced tool use, Gemini function calling) — the model cannot emit
+        # free-form prose. Mutually exclusive with tools (validated upstream).
+        response_schema = state.get("response_schema") if is_response_node and response_format == "text" else None
+
         # Caller-defined tools bind only to the plain-text response generator;
         # JSON-format nodes and pipeline nodes never see them. Native Anthropic
         # tools (computer use etc.) may require beta headers, which must be set
         # when the client is created — so specs are built before get_llm.
         tools = state.get("tools") or []
-        tools_bound = bool(is_response_node and tools and response_format == "text")
+        tools_bound = bool(is_response_node and tools and response_format == "text" and not response_schema)
         tool_specs: list = []
         llm_betas: list = []
         if tools_bound:
@@ -294,6 +302,33 @@ def make_llm_node(agent_type: str):
             tool_choice = _normalize_tool_choice(state.get("tool_choice"))
             bind_kwargs = {"tool_choice": tool_choice} if tool_choice else {}
             llm = llm.bind_tools(tool_specs, **bind_kwargs)
+
+        # include_raw keeps the AIMessage (and its usage_metadata) alongside the
+        # parsed object. Anthropic gets method="json_schema" — Claude's native
+        # structured-outputs API (grammar-constrained decoding), which takes the
+        # raw JSON Schema and needs a top-level title as the schema name; the
+        # default forced-tool-call method only steers toward the schema. OpenAI
+        # and Gemini default to their own native json_schema methods and accept
+        # the OpenAI function-format spec.
+        structured_llm = None
+        if response_schema:
+            if state["llm_provider"] == "anthropic":
+                structured_llm = llm.with_structured_output(
+                    {"title": "structured_response", **response_schema},
+                    method="json_schema",
+                    include_raw=True,
+                )
+            else:
+                structured_llm = llm.with_structured_output(
+                    {
+                        "name": "structured_response",
+                        "description": response_schema.get(
+                            "description", "Respond with a single object in this exact JSON structure."
+                        ),
+                        "parameters": response_schema,
+                    },
+                    include_raw=True,
+                )
 
         provider = state["llm_provider"]
         # Cache stable prefixes (system prompt + conversation history) on the response
@@ -368,8 +403,17 @@ def make_llm_node(agent_type: str):
         for idx, m in enumerate(messages):
             logger.info("Node %s - Message %d [%s]:\n%s\n---", agent_type, idx, type(m).__name__, _content_summary(m.content))
 
-        response = await llm.ainvoke(messages)
-        logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
+        parsed = None
+        parsing_error = None
+        if structured_llm is not None:
+            wrapped = await structured_llm.ainvoke(messages)
+            response = wrapped["raw"]
+            parsed = wrapped["parsed"]
+            parsing_error = wrapped["parsing_error"]
+            logger.info("Node %s - Received structured response: parsed=%s error=%s", agent_type, parsed is not None, parsing_error)
+        else:
+            response = await llm.ainvoke(messages)
+            logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
 
         meta = getattr(response, "usage_metadata", None) or {}
         details = meta.get("input_token_details") or {}
@@ -420,6 +464,17 @@ def make_llm_node(agent_type: str):
             except (json.JSONDecodeError, TypeError, ValueError):
                 logger.error("Node %s: expected index array, got: %s — using original order", agent_type, _get_text(response.content)[:200])
                 return {output_key: source, "usage": usage}
+
+        if structured_llm is not None:
+            if parsed is not None:
+                return {output_key: json.dumps(parsed), "usage": usage}
+            # Constrained decoding makes this near-unreachable; degrade to the
+            # raw text so the caller's own parse (and failover) can decide.
+            logger.error(
+                "Node %s: structured output parse failed (%s) — returning raw text",
+                agent_type, parsing_error,
+            )
+            return {output_key: _get_text(response.content), "usage": usage}
 
         # response_format == "text"
         result = {output_key: _get_text(response.content), "usage": usage}

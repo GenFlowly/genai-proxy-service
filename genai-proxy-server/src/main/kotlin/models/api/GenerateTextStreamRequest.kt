@@ -18,5 +18,13 @@ data class GenerateTextStreamRequest(
     /** "auto" (default), "required", or a specific tool name */
     val toolChoice: String? = null,
     /** Results for the previous assistant message's tool calls — continues the turn */
-    val toolResults: List<com.genflowly.models.ToolResult> = emptyList()
+    val toolResults: List<com.genflowly.models.ToolResult> = emptyList(),
+    /**
+     * JSON Schema (type=object) the response must conform to. Enforced through
+     * the vendor's native structured-output mechanism. Because the JSON is only
+     * valid once complete, the stream emits it as a single content chunk when
+     * generation finishes (after any thinking events) rather than token by
+     * token. Mutually exclusive with [tools]. Works across all vendors.
+     */
+    val responseSchema: kotlinx.serialization.json.JsonObject? = null
 )
