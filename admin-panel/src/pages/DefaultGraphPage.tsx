@@ -15,128 +15,12 @@ import {
     UpdateDefaultGraphNodePatch,
     UpdateDefaultGraphRequest,
 } from '../models/defaultGraph.models'
-import { createInstruction, getCustomerInstructions } from '../services/instructionsService'
+import { getCustomerInstructions } from '../services/instructionsService'
 import {
     getDefaultGraph,
     publishDefaultGraph,
     updateDefaultGraph,
 } from '../services/defaultGraphService'
-
-// ─── Bootstrap payload for the first-time publish ────────────────────────────
-
-type BootstrapInstructionKey = 'analyzer' | 'rewriter' | 'ranker'
-
-const BOOTSTRAP_INSTRUCTIONS: {
-    key: BootstrapInstructionKey
-    name: string
-    text: string
-}[] = [
-    {
-        key: 'analyzer',
-        name: 'Query Analyzer — default',
-        text:
-            'You are a query analysis expert for a vector similarity search system. ' +
-            'Analyze the user query and determine the intent and whether it needs rewriting to improve retrieval. ' +
-            'Return ONLY valid JSON: {"intent": "<brief description>", "needs_rewrite": <true|false>}',
-    },
-    {
-        key: 'rewriter',
-        name: 'Query Rewriter — default',
-        text:
-            'You are a query rewriting expert for a vector similarity search system. ' +
-            'Rewrite the query to be more specific and retrievable: expand abbreviations, add missing context, clarify ambiguity. ' +
-            'Return ONLY the rewritten query text, nothing else.',
-    },
-    {
-        key: 'ranker',
-        name: 'Result Ranker — default',
-        text:
-            'You are a result ranking expert. Given a query and retrieved document chunks, ' +
-            're-rank them by relevance and remove irrelevant ones. ' +
-            'Return ONLY a JSON array of 0-based indices in order of relevance (most relevant first). ' +
-            'Include only indices of relevant results. Example: [2, 0, 4]',
-    },
-]
-
-function bootstrapPublishRequest(ids: Record<BootstrapInstructionKey, string>) {
-    return {
-        name: 'Default Graph',
-        maxIterations: 10,
-        entryPoint: 'n1',
-        edges: JSON.stringify({
-            edges: [
-                { from: 'n2', to: 'n3' },
-                { from: 'n3', to: 'n4' },
-                { from: 'n4', to: 'n5' },
-                { from: 'n5', to: '__end__' },
-            ],
-            conditional_edges: [
-                {
-                    from: 'n1',
-                    condition_key: 'needs_rewrite',
-                    routes: { true: 'n2', false: 'n3' },
-                },
-            ],
-        }),
-        nodes: [
-            {
-                tempId: 'n1',
-                nodeType: 'QUERY_ANALYZER',
-                name: 'Query Analyzer',
-                config: JSON.stringify({
-                    instruction_id: ids.analyzer,
-                    input_template: 'Query: {original_query}',
-                    response_format: 'json',
-                    json_output_mapping: {
-                        intent: 'query_intent',
-                        needs_rewrite: 'needs_rewrite',
-                    },
-                }),
-            },
-            {
-                tempId: 'n2',
-                nodeType: 'QUERY_REWRITER',
-                name: 'Query Rewriter',
-                config: JSON.stringify({
-                    instruction_id: ids.rewriter,
-                    input_template: 'Original query: {original_query}\nIntent: {query_intent}',
-                    output_key: 'rewritten_query',
-                    response_format: 'text',
-                }),
-            },
-            {
-                tempId: 'n3',
-                nodeType: 'RETRIEVAL',
-                name: 'Retrieval',
-                config: JSON.stringify({}),
-            },
-            {
-                tempId: 'n4',
-                nodeType: 'RESULT_RANKER',
-                name: 'Result Ranker',
-                config: JSON.stringify({
-                    instruction_id: ids.ranker,
-                    input_template: 'Query: {query}\n\nChunks:\n{chunks_text}',
-                    output_key: 'ranked_results',
-                    response_format: 'json_indices',
-                    json_indices_source_key: 'retrieval_results',
-                }),
-            },
-            {
-                tempId: 'n5',
-                nodeType: 'RESPONSE_GENERATOR',
-                name: 'Response Generator',
-                config: JSON.stringify({
-                    input_template: 'Context:\n{context}\n\nQuestion: {query}',
-                    output_key: 'generated_response',
-                    response_format: 'text',
-                    include_conversation_history: true,
-                    is_streaming: true,
-                }),
-            },
-        ],
-    }
-}
 
 // ─── Visual editor catalog ───────────────────────────────────────────────────
 
@@ -365,14 +249,6 @@ export default function DefaultGraphPage() {
     const [visualSaving, setVisualSaving] = useState(false)
     const [visualError, setVisualError] = useState<string | null>(null)
 
-    // Bootstrap state (not-published view). Created instruction ids survive a
-    // failed publish so a retry reuses them instead of creating duplicates.
-    const [bootstrapping, setBootstrapping] = useState(false)
-    const [bootstrapError, setBootstrapError] = useState<string | null>(null)
-    const [createdInstructionIds, setCreatedInstructionIds] = useState<
-        Partial<Record<BootstrapInstructionKey, string>>
-    >({})
-
     const resetForms = (loaded: DefaultGraphResponse) => {
         setGraphName(loaded.name)
         setMaxIterations(String(loaded.maxIterations))
@@ -405,9 +281,9 @@ export default function DefaultGraphPage() {
         void refresh()
     }, [refresh])
 
-    // Instructions for the visual editor's instruction selector.
+    // Instructions for the visual editor's instruction selector — needed for
+    // both the published editor and the blank first-publish canvas.
     useEffect(() => {
-        if (!published) return
         let cancelled = false
         ;(async () => {
             try {
@@ -429,7 +305,7 @@ export default function DefaultGraphPage() {
         return () => {
             cancelled = true
         }
-    }, [published, getAccessTokenSilently])
+    }, [getAccessTokenSilently])
 
     // The AgentGraph fed to the visual editor. Memoized because the editor
     // re-initializes (and drops unsaved work) whenever this reference changes.
@@ -536,32 +412,30 @@ export default function DefaultGraphPage() {
         setSaveMessageKind(null)
     }
 
-    // ── First-time publish: create the three instructions, then the graph ──
-    const handleBootstrap = async () => {
-        setBootstrapping(true)
-        setBootstrapError(null)
-        const ids = { ...createdInstructionIds }
+    // ── First-time publish: the graph authored on the blank canvas ──
+    const handleVisualPublish = async (edited: AgentGraph) => {
+        setVisualSaving(true)
+        setVisualError(null)
         try {
             const token = await getAccessTokenSilently()
-            for (const step of BOOTSTRAP_INSTRUCTIONS) {
-                if (ids[step.key]) continue // reuse ids from a previous failed attempt
-                const created = await createInstruction(token, {
-                    instruction: step.text,
-                    instructionName: step.name,
-                })
-                ids[step.key] = created.id
-                setCreatedInstructionIds({ ...ids })
-            }
-            await publishDefaultGraph(
-                token,
-                bootstrapPublishRequest(ids as Record<BootstrapInstructionKey, string>)
-            )
-            setCreatedInstructionIds({})
+            await publishDefaultGraph(token, {
+                name: edited.name,
+                maxIterations: edited.maxIterations,
+                entryPoint: edited.entryPoint,
+                edges: edited.edges,
+                layout: edited.layout,
+                nodes: edited.nodes.map((node) => ({
+                    tempId: node.nodeId,
+                    nodeType: node.nodeType,
+                    name: node.name,
+                    config: node.config,
+                })),
+            })
             await refresh()
         } catch (e) {
-            setBootstrapError(e instanceof Error ? e.message : 'Publishing the default graph failed')
+            setVisualError(e instanceof Error ? e.message : 'Publishing the default graph failed')
         } finally {
-            setBootstrapping(false)
+            setVisualSaving(false)
         }
     }
 
@@ -583,50 +457,24 @@ export default function DefaultGraphPage() {
             {loadError && <div className="banner error">{loadError}</div>}
 
             {!loadError && !published && (
-                <div className="form-card">
-                    <h4>Publish default RAG graph</h4>
+                <>
                     <p className="page-description">
-                        No system default graph is published yet. Publishing creates three prompt
-                        instructions (query analyzer, query rewriter, result ranker) and a
-                        five-node pipeline: Query Analyzer → Query Rewriter (when needed) →
-                        Retrieval → Result Ranker → Response Generator.
+                        No system default graph is published yet. Build it below: drag nodes from
+                        the palette, connect them, pick the instruction for each prompt-bearing
+                        node, then hit Save to publish it for all customers.
                     </p>
-                    <ul className="bootstrap-steps">
-                        {BOOTSTRAP_INSTRUCTIONS.map((step) => (
-                            <li key={step.key}>
-                                {createdInstructionIds[step.key] ? '✓' : '•'} Create instruction
-                                "{step.name}"
-                                {createdInstructionIds[step.key] && (
-                                    <span className="map-details">
-                                        {' '}
-                                        — created ({createdInstructionIds[step.key]})
-                                    </span>
-                                )}
-                            </li>
-                        ))}
-                        <li>• Publish the "Default Graph" agent (5 nodes)</li>
-                    </ul>
-                    {Object.keys(createdInstructionIds).length > 0 && (
-                        <p className="page-description">
-                            The instructions marked ✓ were already created — retrying reuses them
-                            instead of creating duplicates.
-                        </p>
-                    )}
-                    <div className="form-actions">
-                        <button
-                            className="primary"
-                            disabled={bootstrapping}
-                            onClick={() => void handleBootstrap()}
-                        >
-                            {bootstrapping
-                                ? 'Publishing…'
-                                : Object.keys(createdInstructionIds).length > 0
-                                  ? 'Retry publish (reuse created instructions)'
-                                  : 'Publish default RAG graph'}
-                        </button>
+                    <div className="graph-editor-shell">
+                        <GraphEditor
+                            graph={null}
+                            nodeCatalog={NODE_CATALOG}
+                            instructions={instructionOptions}
+                            conditionOptions={CONDITION_OPTIONS}
+                            saving={visualSaving}
+                            errorMessage={visualError}
+                            onSave={(edited) => void handleVisualPublish(edited)}
+                        />
                     </div>
-                    {bootstrapError && <div className="row-message error">{bootstrapError}</div>}
-                </div>
+                </>
             )}
 
             {graph && (
