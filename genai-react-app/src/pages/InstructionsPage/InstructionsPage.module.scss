@@ -14,6 +14,14 @@
     height: 100%;
     overflow-y: auto;
     width: 100%;
+
+    @include respond-to-mobile {
+        padding: 1rem;
+        // Rest below the fixed MobileHeader overlay (3.5rem matches its
+        // height); being inside the scroll container, content still scrolls
+        // all the way to the top beneath the transparent header controls
+        padding-top: 3.5rem;
+    }
 }
 
 .grid {

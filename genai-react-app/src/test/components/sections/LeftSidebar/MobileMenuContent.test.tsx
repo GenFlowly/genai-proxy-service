@@ -62,16 +62,43 @@ describe('MobileMenuContent', () => {
         expect(screen.queryByText('Login')).not.toBeInTheDocument();
     });
 
-    test('tapping Conversation History closes the menu and opens the history page', () => {
+    test('no longer offers a Conversation History entry (context menus own it)', () => {
         render(
             <MemoryRouter>
                 <MobileMenuContent />
             </MemoryRouter>
         );
 
-        fireEvent.click(screen.getByText('Conversation History'));
+        expect(screen.queryByText('Conversation History')).not.toBeInTheDocument();
+        expect(screen.getByTestId('mock-navbar-menu')).toBeInTheDocument();
+    });
 
+    test('close button closes the menu', () => {
+        render(
+            <MemoryRouter>
+                <MobileMenuContent />
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Close menu'));
         expect(mockToggleLeftSidebar).toHaveBeenCalled();
-        expect(mockNavigate).toHaveBeenCalledWith('/history');
+    });
+
+    test('account button closes the menu and opens settings', () => {
+        (useAuth as jest.Mock).mockReturnValue({
+            loginWithRedirect: jest.fn(),
+            isAuthenticated: true,
+            user: { name: 'Test User' },
+        });
+
+        render(
+            <MemoryRouter>
+                <MobileMenuContent />
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByText('Test User'));
+        expect(mockToggleLeftSidebar).toHaveBeenCalled();
+        expect(mockNavigate).toHaveBeenCalledWith('/settings');
     });
 });

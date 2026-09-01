@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Navbar from '../../components/navbar/Navbar'
+import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader'
 import i18n from '../../i18n'
 import styles from './AgentsPage.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
+import { useWindowSize } from '../../hooks/useWindowSize'
 import { useAuth } from '../../context/AuthContext'
 import { getCustomerAgents } from '../../services/agentsService'
 import { Agent } from '../../models/agents.models'
@@ -139,6 +141,8 @@ export default function AgentsPage() {
     const navigate = useNavigate()
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const { getAccessTokenSilently } = useAuth()
+    const { width } = useWindowSize()
+    const isMobile = width <= 768
     usePageTitle()
 
     const [agents, setAgents] = useState<Agent[]>([])
@@ -171,7 +175,9 @@ export default function AgentsPage() {
 
     return (
         <div className={styles.page}>
-            <Navbar />
+            {/* 📱 Mobile: no navbar — a transparent overlay header floats over
+                the full-screen content instead */}
+            {isMobile ? <MobileHeader title={t('agentsPage.agentsPage.title')} /> : <Navbar />}
 
             <div className={styles.content}>
                 <div className={styles.pageHeader}>

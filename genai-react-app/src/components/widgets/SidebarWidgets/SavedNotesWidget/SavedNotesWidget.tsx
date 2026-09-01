@@ -18,7 +18,13 @@ const noteLabel = (note: SavedNote): string => {
     return firstLine?.trim() || i18n.t('sidebar.savedNotesWidget.untitled')
 }
 
-export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
+interface SavedNotesWidgetProps {
+    /** Called after a note is opened (e.g. to close the mobile menu). */
+    onSelect?: () => void
+    'data-testid'?: string
+}
+
+export default function SavedNotesWidget({ onSelect, 'data-testid': testId }: SavedNotesWidgetProps = {}) {
     const { t } = useTranslation()
     const { getAccessTokenSilently, customerId } = useAuth()
     const { openNote, activeNote, updatedNote, clearActiveNote } = useNotes()
@@ -120,7 +126,10 @@ export default function SavedNotesWidget({ 'data-testid': testId }: { 'data-test
                     ? <span className={panelStyles.timestamp}>{timestamp}</span>
                     : undefined,
                 isActive: activeNote?.noteKey === note.noteKey,
-                onSelect: () => openNote(note),
+                onSelect: () => {
+                    openNote(note)
+                    onSelect?.()
+                },
                 testId: `saved-note-${note.noteKey}`,
                 action: {
                     icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
