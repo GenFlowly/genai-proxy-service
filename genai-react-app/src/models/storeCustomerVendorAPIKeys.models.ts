@@ -15,8 +15,18 @@ export interface AIVendorAPIKeyStatus {
     isAPIKeyValid: boolean
     status: APIKeyStatus
     updateSuccessful: boolean
+    /** Model internal generations (titles, personas, memory) use for this vendor */
+    selectedModel?: string | null
+    /** Failover priority for internal generations (1 = primary) */
+    priority?: number | null
 }
 
 export interface StoreCustomerVendorApiKeyResponse {
     apiKeyStatus: AIVendorAPIKeyStatus
+}
+
+export interface StoreCustomerVendorConfigRequest {
+    aiVendor: string
+    model: string
+    priority: number
 }

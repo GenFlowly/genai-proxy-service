@@ -17,39 +17,14 @@ import org.slf4j.LoggerFactory
  */
 class UtilityGenerationService(
     private val retrievalServerClient: RetrievalServerClient,
-    private val customerCredentialsService: CustomerCredentialsService,
     private val modelCatalogService: ModelCatalogService
 ) {
     private val logger = LoggerFactory.getLogger("UtilityGenerationService")
 
     /**
-     * Generates with the customer's stored vendor key. Failures return an
-     * empty-text result (never an error message as text), so callers can treat
-     * blank output as "no result".
-     */
-    suspend fun generateText(
-        aiVendor: AIVendor,
-        model: String,
-        messages: List<Message>,
-        systemPrompt: String?,
-        customerId: String,
-        maxTokens: Int? = null
-    ): AIGenerateResult {
-        return try {
-            val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, customerId)
-                ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
-
-            generateTextWithApiKey(aiVendor, model, messages, systemPrompt, apiKey, maxTokens)
-        } catch (e: Exception) {
-            logger.warn("Utility generation failed for vendor {}: {}", aiVendor, e.message)
-            AIGenerateResult(text = "", inputTokens = null, outputTokens = null, totalTokens = null, tokensReadFromCache = null)
-        }
-    }
-
-    /**
-     * Generate text with an explicitly provided API key (e.g. a system key).
-     * Unlike [generateText] this THROWS on any generation failure instead of
-     * returning empty text, so callers like the system-key failover can react.
+     * Generate text with an explicitly provided API key. THROWS on any
+     * generation failure instead of returning empty text, so failover
+     * callers can react.
      */
     suspend fun generateTextWithApiKey(
         aiVendor: AIVendor,

@@ -71,6 +71,7 @@ object Routes {
     const val GENERATE_TEXT = "$API_V1/generate-text"
     const val GENERATE_TEXT_STREAM = "$API_V1/generate-text-stream"
     const val STORE_API_KEY = "$API_V1/store-api-key"
+    const val STORE_VENDOR_CONFIG = "$API_V1/store-vendor-config"
     const val STORE_VECTOR_DB_CONFIG = "$API_V1/store-vector-db-config"
     const val STORE_SUPABASE_CONFIG = "$API_V1/store-supabase-config"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"

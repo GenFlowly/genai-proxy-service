@@ -28,5 +28,9 @@ data class AIVendorAPIKeyStatus(
     @Deprecated("Use status instead")
     val isAPIKeyValid: Boolean,
     val status: APIKeyStatus,
-    val updateSuccessful: Boolean = false
+    val updateSuccessful: Boolean = false,
+    // Customer-selected model and failover priority (1 = primary) for
+    // internal generations (titles, personas, memory). Null until configured.
+    val selectedModel: String? = null,
+    val priority: Int? = null
 )

@@ -85,6 +85,73 @@ class CustomerCredentialsService(
         return decrypted
     }
 
+    /**
+     * Store the customer's selected model + failover priority (1 = primary)
+     * for a vendor. Throws ConditionalCheckFailedException when the vendor
+     * has no stored key.
+     */
+    suspend fun updateVendorConfig(
+        customerId: String,
+        vendor: AIVendor,
+        model: String,
+        priority: Int
+    ) {
+        customerCredentialsRepository.updateCustomerVendorConfig(
+            customerId = customerId,
+            aiVendor = vendor.name,
+            selectedModel = model,
+            priority = priority
+        )
+    }
+
+    /**
+     * All fully configured customer providers (valid key + selected model +
+     * priority), decrypted and sorted by priority ascending — the order
+     * internal generations should try them in. Vendors missing any piece of
+     * configuration are skipped; customers who never configured a model or
+     * priority get an empty list.
+     */
+    suspend fun getPrioritizedProviderConfigs(customerId: String): List<com.genflowly.models.CustomerAIProviderConfig> {
+        return customerCredentialsRepository.getCustomerVendorItems(customerId).mapNotNull { item ->
+            val vendor = item[com.genflowly.DynamoDBConstants.AI_VENDOR_KEY]?.s()
+                ?.let { runCatching { AIVendor.valueOf(it) }.getOrNull() }
+                ?: return@mapNotNull null
+            val encrypted = item["apiKey"]?.s()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            // Legacy items may lack the validity flag: a stored key counts as valid.
+            val isValid = item["isAPIKeyValid"]?.bool() ?: true
+            val model = item["selectedModel"]?.s()?.takeIf { it.isNotBlank() }
+            val priority = item["priority"]?.n()?.toIntOrNull()
+            if (!isValid || model == null || priority == null) return@mapNotNull null
+            com.genflowly.models.CustomerAIProviderConfig(
+                aiVendor = vendor,
+                model = model,
+                apiKey = kmsProvider.decrypt(encrypted),
+                priority = priority
+            )
+        }.sortedBy { it.priority }
+    }
+
+    /**
+     * Decrypted keys for every vendor the customer has a usable (present +
+     * valid) key for, in [AIVendor] enum order. Used to build fallback
+     * candidates when no prioritized configs are set.
+     */
+    suspend fun getUsableVendorKeys(customerId: String): Map<AIVendor, String> {
+        val byVendor = customerCredentialsRepository.getCustomerVendorItems(customerId)
+            .mapNotNull { item ->
+                val vendor = item[com.genflowly.DynamoDBConstants.AI_VENDOR_KEY]?.s()
+                    ?.let { runCatching { AIVendor.valueOf(it) }.getOrNull() }
+                    ?: return@mapNotNull null
+                val encrypted = item["apiKey"]?.s()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                // Legacy items may lack the validity flag: a stored key counts as valid.
+                if (item["isAPIKeyValid"]?.bool() == false) return@mapNotNull null
+                vendor to encrypted
+            }.toMap()
+        return AIVendor.entries.mapNotNull { vendor ->
+            byVendor[vendor]?.let { vendor to kmsProvider.decrypt(it) }
+        }.toMap()
+    }
+
     suspend fun getAIVendorAPIKeyStatusList(customerId: String): List<com.genflowly.models.AIVendorAPIKeyStatus> {
         val storedKeys = customerCredentialsRepository.getCustomerApiKeys(customerId)
         val storedMap = storedKeys.associateBy { it.aiVendor }

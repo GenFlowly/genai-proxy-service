@@ -10,7 +10,8 @@ import kotlinx.serialization.json.Json
 
 @Serializable
 private data class RequestAgentDefaultsManifest(
-    val defaults: List<RequestAgentDefaultEntry>
+    val defaults: List<RequestAgentDefaultEntry>,
+    val vendorDefaultModels: Map<String, String> = emptyMap()
 )
 
 @Serializable
@@ -38,6 +39,29 @@ class RequestAgentDefaultsLoader {
     private val json = Json { ignoreUnknownKeys = true }
 
     val defaults: Map<RequestType, ResolvedAgent> by lazy { load() }
+
+    /**
+     * Fallback model per vendor for internal generations, used when a customer
+     * has a valid key for a vendor but never selected a model for it. Fails
+     * fast at startup when a known vendor is missing from the manifest.
+     */
+    val vendorDefaultModels: Map<com.genflowly.models.AIVendor, String> by lazy { loadVendorDefaults() }
+
+    fun loadVendorDefaults(): Map<com.genflowly.models.AIVendor, String> {
+        val manifest = json.decodeFromString<RequestAgentDefaultsManifest>(readResource(MANIFEST_RESOURCE))
+        val parsed = manifest.vendorDefaultModels.mapKeys { (vendorName, _) ->
+            try {
+                com.genflowly.models.AIVendor.valueOf(vendorName)
+            } catch (e: IllegalArgumentException) {
+                throw IllegalStateException("Unknown vendor '$vendorName' in vendorDefaultModels of $MANIFEST_RESOURCE", e)
+            }
+        }
+        val missing = com.genflowly.models.AIVendor.entries.filter { it !in parsed }
+        check(missing.isEmpty()) {
+            "$MANIFEST_RESOURCE vendorDefaultModels is missing vendors: $missing"
+        }
+        return parsed
+    }
 
     fun load(): Map<RequestType, ResolvedAgent> {
         val manifestText = readResource(MANIFEST_RESOURCE)
