@@ -122,7 +122,7 @@ fun appModule(): Module = module {
 
     single { SharedUsersResolver(get(), get()) }
     single { CustomerCredentialsService(get(), get(), get(), get(), get()) }
-    single { UtilityGenerationService(get(), get(), get()) }
+    single { UtilityGenerationService(get(), get()) }
     single { GraphService(get(), get()) }
     single { RequestAgentDefaultsLoader() }
     single { AgentResolutionService(get(), get(), get(), get()) }
@@ -135,6 +135,8 @@ fun appModule(): Module = module {
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
     single { com.genflowly.service.MemoryExtractionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.ConversationIndexingService(get(), get(), get(), get()) }
+    single { com.genflowly.service.UnifiedSearchService(get(), get(), get(), get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
     single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get()) }
@@ -142,7 +144,6 @@ fun appModule(): Module = module {
     single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.SystemApiKeyService(get(), get(), get()) }
-    single { com.genflowly.service.SystemAIFailoverService(get()) }
     single { com.genflowly.service.ModelCatalogService(get(), get(), get()) }
 }
 

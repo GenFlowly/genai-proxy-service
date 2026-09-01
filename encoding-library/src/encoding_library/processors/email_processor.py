@@ -13,6 +13,8 @@ class EmailProcessor(DataProcessor):
     Processor for Email data.
     """
 
+    HEAVY_RAW_FIELDS = frozenset({'body'})
+
     def validate(self, state: MemoryRequestInternalState) -> bool:
         """
         Validate that the state contains valid email data.

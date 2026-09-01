@@ -25,6 +25,8 @@ class MemoryProcessor(DataProcessor):
     replaces note_key as the deletion handle.
     """
 
+    HEAVY_RAW_FIELDS = frozenset({'memory_value', 'memoryValue'})
+
     def validate(self, state: MemoryRequestInternalState) -> bool:
         """
         Validate that the state contains valid memory data.

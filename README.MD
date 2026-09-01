@@ -202,7 +202,7 @@ Go to your GitHub Repository > **Settings** > **Environments** > **production** 
 - `NETLIFY_SITE_ID` (Production Netlify site ID)
 
 ### 5. Trigger CI/CD
-Open a Pull Request against the `main` branch. When it merges, the `.github/workflows/prod-pipeline.yml` will automatically deploy your frontend to Netlify, sync your AWS CDK infrastructure, and push your backend containers to Fly.io Production!
+Open a Pull Request against the `main` branch. When it merges, the per-service production workflows (`.github/workflows/prod-proxy-server.yml`, `.github/workflows/prod-encoding-server.yml`) automatically sync your AWS CDK infrastructure and push your backend containers to Fly.io Production for whichever services changed. The frontend deploys to Netlify via `.github/workflows/prod-react-app-deploy.yml` on a weekly cron or manual dispatch.
 
 
 ## Gotchas 

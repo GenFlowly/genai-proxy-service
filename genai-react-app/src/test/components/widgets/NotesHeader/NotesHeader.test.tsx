@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import NotesHeader from '../../../../components/widgets/NotesHeader/NotesHeader'
 import { NotesProvider, useNotes } from '../../../../context/NotesContext'
+import { LayoutProvider } from '../../../../context/LayoutContext'
 import { SaveStatus } from '../../../../hooks/useAutosave'
 import { SavedNote } from '../../../../services/saveNotesService'
 
@@ -39,8 +40,8 @@ function OpenNote({ note }: { note: SavedNote }) {
 }
 
 describe('NotesHeader', () => {
-    test('renders the New Note title without any context providers', () => {
-        render(<NotesHeader />)
+    test('renders the New Note title without the notes provider', () => {
+        render(<LayoutProvider><NotesHeader /></LayoutProvider>)
 
         expect(screen.getByTestId('notes-header')).toBeInTheDocument()
         expect(screen.getByRole('heading', { name: 'New Note' })).toBeInTheDocument()
@@ -49,10 +50,10 @@ describe('NotesHeader', () => {
 
     test('shows "Saving…" while a save is in flight', () => {
         render(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <SetSaveState status="saving" savedAt={null} />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
 
         expect(screen.getByTestId('notes-save-status')).toHaveTextContent('Saving…')
@@ -61,10 +62,10 @@ describe('NotesHeader', () => {
     test('shows the last saved time after a save', () => {
         const savedAt = new Date('2026-08-10T15:30:00')
         render(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <SetSaveState status="saved" savedAt={savedAt} />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
 
         expect(screen.getByTestId('notes-save-status')).toHaveTextContent(/Saved at/)
@@ -72,18 +73,18 @@ describe('NotesHeader', () => {
 
     test('shows the note title once one is set, falling back to New Note', () => {
         const { rerender } = render(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <SetNoteTitle title={null} />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
         expect(screen.getByRole('heading', { name: 'New Note' })).toBeInTheDocument()
 
         rerender(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <SetNoteTitle title="Grocery List Ideas" />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
         expect(screen.getByText('Grocery List Ideas')).toBeInTheDocument()
         expect(screen.queryByRole('heading', { name: 'New Note' })).not.toBeInTheDocument()
@@ -91,10 +92,10 @@ describe('NotesHeader', () => {
 
     test('shows the stored updated-at timestamp for an opened note before any save', () => {
         render(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <OpenNote note={{ ...untitledNote, updatedAt: '2026-08-08T10:05:00Z' }} />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
 
         expect(screen.getByTestId('notes-save-status')).toHaveTextContent(/Updated/)
@@ -103,11 +104,11 @@ describe('NotesHeader', () => {
     test('prefers the in-session save time over the stored timestamp', () => {
         const savedAt = new Date('2026-08-10T15:30:00')
         render(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <OpenNote note={untitledNote} />
                 <SetSaveState status="saved" savedAt={savedAt} />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
 
         expect(screen.getByTestId('notes-save-status')).toHaveTextContent(/Saved at/)
@@ -115,11 +116,11 @@ describe('NotesHeader', () => {
 
     test('shows Untitled Note for an opened note without a title', () => {
         render(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <OpenNote note={untitledNote} />
                 <SetNoteTitle title={null} />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
 
         expect(screen.getByText('Untitled Note')).toBeInTheDocument()
@@ -128,10 +129,10 @@ describe('NotesHeader', () => {
 
     test('starts a fresh note when the New Note button is clicked', () => {
         render(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <OpenNote note={untitledNote} />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
 
         // A note is open — the header shows its (untitled) state
@@ -146,10 +147,10 @@ describe('NotesHeader', () => {
 
     test('shows an error message when saving fails', () => {
         render(
-            <NotesProvider>
+            <LayoutProvider><NotesProvider>
                 <NotesHeader />
                 <SetSaveState status="error" savedAt={null} />
-            </NotesProvider>
+            </NotesProvider></LayoutProvider>
         )
 
         expect(screen.getByTestId('notes-save-status')).toHaveTextContent("Couldn't save. Retrying…")

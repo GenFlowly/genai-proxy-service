@@ -15,6 +15,7 @@ import com.genflowly.models.GenerateTextRequest
 import com.genflowly.models.GenerateTextResponse
 import com.genflowly.models.Message
 import org.slf4j.LoggerFactory
+import com.genflowly.service.ConversationIndexingService
 import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.MemoryExtractionService
@@ -24,7 +25,8 @@ private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 fun Route.registerGenerateTextRoutes(
     generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService,
-    memoryExtractionService: MemoryExtractionService
+    memoryExtractionService: MemoryExtractionService,
+    conversationIndexingService: ConversationIndexingService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT, {
@@ -119,11 +121,20 @@ fun Route.registerGenerateTextRoutes(
                 }
 
                 // Fire-and-forget: learn about the user from the completed
-                // exchange (debounced inside the service).
+                // exchange (debounced inside the service) and index the
+                // exchange for semantic conversation search.
                 responseMessageList.firstOrNull()?.let { message ->
                     val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
                     memoryExtractionService.maybeExtractFromConversationAsync(
                         customerId, message.conversationId, bearerToken
+                    )
+                    conversationIndexingService.indexExchangeAsync(
+                        customerId = customerId,
+                        conversationId = message.conversationId,
+                        client = client,
+                        userText = request.prompt.prompt,
+                        responseMessageId = message.messageId,
+                        bearerToken = bearerToken
                     )
                 }
 

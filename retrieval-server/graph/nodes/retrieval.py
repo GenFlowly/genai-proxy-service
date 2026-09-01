@@ -36,6 +36,11 @@ def _discover_collections(
     for name in client.list_collections():
         if name != customer_id and not name.startswith(f"{customer_id}_"):
             continue
+        # Conversation collections back the explicit conversation-search
+        # feature (/search-conversations) only — surfacing past chats in
+        # generation context would need its own product decision.
+        if name.startswith(f"{customer_id}_conversation"):
+            continue
         model = resolve_model(*fallback_model)
         try:
             meta = parse_collection_description(client.describe_collection(name).get("description"))

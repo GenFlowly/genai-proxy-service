@@ -11,6 +11,7 @@ import com.genflowly.activity.conversation.registerGetConversationRoutes
 import com.genflowly.activity.conversation.registerGetConversationSharedUsersRoutes
 import com.genflowly.activity.conversation.registerGetCustomerConversationsPaginatedRoutes
 import com.genflowly.activity.conversation.registerGetPinnedConversationsRoutes
+import com.genflowly.activity.search.registerSearchRoutes
 import com.genflowly.activity.conversation.registerPinConversationRoutes
 import com.genflowly.activity.conversation.registerUnarchiveConversationRoutes
 import com.genflowly.activity.conversation.registerUnpinConversationRoutes
@@ -70,6 +71,7 @@ object Routes {
     const val GENERATE_TEXT = "$API_V1/generate-text"
     const val GENERATE_TEXT_STREAM = "$API_V1/generate-text-stream"
     const val STORE_API_KEY = "$API_V1/store-api-key"
+    const val STORE_VENDOR_CONFIG = "$API_V1/store-vendor-config"
     const val STORE_VECTOR_DB_CONFIG = "$API_V1/store-vector-db-config"
     const val STORE_SUPABASE_CONFIG = "$API_V1/store-supabase-config"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
@@ -97,6 +99,7 @@ object Routes {
     const val PIN_CONVERSATION = "$API_V1/conversation/{conversationId}/pin"
     const val UNPIN_CONVERSATION = "$API_V1/conversation/{conversationId}/unpin"
     const val GET_PINNED_CONVERSATIONS = "$API_V1/conversations/pinned"
+    const val SEARCH = "$API_V1/search"
     const val GET_PROFILE = "$API_V1/profile"
 
     const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
@@ -150,6 +153,8 @@ fun Application.configureRouting(
     requestAgentMapAdminService: com.genflowly.service.RequestAgentMapAdminService,
     memoryService: com.genflowly.service.MemoryService,
     memoryExtractionService: com.genflowly.service.MemoryExtractionService,
+    conversationIndexingService: com.genflowly.service.ConversationIndexingService,
+    unifiedSearchService: com.genflowly.service.UnifiedSearchService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -171,8 +176,8 @@ fun Application.configureRouting(
             call.respondText(scalarDocsHtml, ContentType.Text.Html)
         }
 
-        registerGenerateTextRoutes(generationOrchestrator, customerProfileService, memoryExtractionService)
-        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, memoryExtractionService)
+        registerGenerateTextRoutes(generationOrchestrator, customerProfileService, memoryExtractionService, conversationIndexingService)
+        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, memoryExtractionService, conversationIndexingService)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)
@@ -198,6 +203,7 @@ fun Application.configureRouting(
         registerPinConversationRoutes(customerProfileService, conversationManagementService)
         registerUnpinConversationRoutes(customerProfileService, conversationManagementService)
         registerGetPinnedConversationsRoutes(customerProfileService, conversationManagementService)
+        registerSearchRoutes(customerProfileService, unifiedSearchService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerCreateAgentRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)

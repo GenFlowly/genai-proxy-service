@@ -9,6 +9,20 @@ class DataProcessor(ABC):
     All methods operate on a typed MemoryRequestInternalState rather than raw dicts.
     """
 
+    # Raw-data fields that carry the full document text. Everything else is
+    # key/metadata that prepare_for_vector_db (and the store step's DDB
+    # bookkeeping) still needs after chunking.
+    HEAVY_RAW_FIELDS = frozenset()
+
+    def get_retained_raw_data(self, state: MemoryRequestInternalState) -> Dict[str, Any]:
+        """
+        raw_data with the heavy text fields stripped, small enough to travel in
+        every per-batch Step Functions payload. Dropping raw_data entirely
+        would lose the record keys (note_key/memory_key/...), which the store
+        step needs for stable vector ids and delete-by-filter.
+        """
+        return {k: v for k, v in state.raw_data.items() if k not in self.HEAVY_RAW_FIELDS}
+
     @abstractmethod
     def validate(self, state: MemoryRequestInternalState) -> bool:
         """

@@ -32,7 +32,9 @@ class RequestAgentDefaultsLoaderTest {
         val persona = defaults.getValue(RequestType.INSTRUCTION_PERSONA)
         assertEquals("InstructionRequestDefault", persona.mapKey)
         assertEquals(AgentOutputFormat.JSON, persona.outputFormat)
-        assertNull(persona.modelPreference) // system-failover configs pick the model
+        // Persona runs on customer keys and needs a capable default model
+        assertEquals(AIVendor.OPENAI, persona.modelPreference?.aiVendor)
+        assertEquals("gpt-5", persona.modelPreference?.model)
         assertTrue(persona.systemPromptTemplate.contains("{{categoryJson}}"))
         listOf("\"name\"", "\"icon\"", "\"color\"", "\"category\"", "\"tags\"").forEach {
             assertTrue(persona.systemPromptTemplate.contains(it), "persona prompt lost the $it key rule")
@@ -47,12 +49,20 @@ class RequestAgentDefaultsLoaderTest {
         assertTrue(convTitle.userMessageTemplate.contains("{{prompt}}"))
         assertEquals("", convTitle.systemPromptTemplate)
         assertEquals(AIVendor.OPENAI, convTitle.modelPreference?.aiVendor)
-        assertEquals("gpt-5", convTitle.modelPreference?.model)
+        assertEquals("gpt-5-mini", convTitle.modelPreference?.model)
 
         val noteTitle = defaults.getValue(RequestType.NOTE_TITLE)
         assertEquals("{{noteContent}}", noteTitle.userMessageTemplate)
         assertTrue(noteTitle.systemPromptTemplate.contains("at most 8 words"))
         assertEquals(AIVendor.OPENAI, noteTitle.modelPreference?.aiVendor)
-        assertEquals("gpt-5", noteTitle.modelPreference?.model)
+        assertEquals("gpt-5-mini", noteTitle.modelPreference?.model)
+    }
+
+    @Test
+    fun `vendor default models cover every vendor`() {
+        val vendorDefaults = RequestAgentDefaultsLoader().vendorDefaultModels
+        AIVendor.entries.forEach { vendor ->
+            assertTrue(!vendorDefaults[vendor].isNullOrBlank(), "missing vendor default model for $vendor")
+        }
     }
 }

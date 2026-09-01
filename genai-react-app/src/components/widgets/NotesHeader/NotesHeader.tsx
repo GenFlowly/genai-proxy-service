@@ -3,6 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { PageHeader, pageHeaderStyles } from '@genflowly/component-library'
 import { PillButton } from '@genflowly/component-library'
 import { useNotes } from '../../../context/NotesContext'
+import { useLayout } from '../../../context/LayoutContext'
+import { useWindowSize } from '../../../hooks/useWindowSize'
+import MobileHeader from '../MobileHeader/MobileHeader'
+import SavedNotesWidget from '../SidebarWidgets/SavedNotesWidget/SavedNotesWidget'
 import { SaveStatus } from '../../../hooks/useAutosave'
 import { parseServerDate } from '../../../utils/timeUtils'
 import { ICONS } from '../../../constants/icons'
@@ -47,10 +51,33 @@ export default function NotesHeader(): React.ReactElement {
     const { t } = useTranslation()
     const { saveStatus, lastSavedAt, noteTitle, activeNote, startNewNote } = useNotes()
     const label = statusLabel(saveStatus, lastSavedAt, activeNote?.updatedAt ?? null)
+    const { setLeftSidebarExpanded } = useLayout()
+    const { width } = useWindowSize()
+    const isMobile = width <= 768
 
     // No title yet: a fresh editor session is a "New Note"; an opened note
     // whose stored title is missing is an "Untitled Note"
     const title = noteTitle ?? (activeNote ? t('notes.notesHeader.untitledNote') : t('notes.notesHeader.newNote'))
+
+    // 📱 Mobile: no navbar/header band — a transparent overlay on the
+    // full-screen editor carries the title, save status and page actions
+    if (isMobile) {
+        return (
+            <MobileHeader
+                title={title}
+                subtitle={label ?? undefined}
+                menuItems={[
+                    {
+                        label: t('notes.notesHeader.newNote'),
+                        onClick: startNewNote,
+                        'data-testid': 'new-note-button',
+                    },
+                ]}
+                menuTitle={t('sidebar.savedNotesWidget.title')}
+                menuContent={<SavedNotesWidget onSelect={() => setLeftSidebarExpanded(false)} />}
+            />
+        )
+    }
 
     return (
         <PageHeader

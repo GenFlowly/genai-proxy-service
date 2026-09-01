@@ -60,5 +60,55 @@ fun Route.registerStoreApiKeyRoutes(
 
             call.respond(StoreCustomerVendorApiKeyResponse(apiKeyStatus = apiKeyStatus))
         }
+
+        post(Routes.STORE_VENDOR_CONFIG, {
+            tags("Customer")
+            summary = "Store model + failover priority for an AI vendor"
+            description = "Stores which model internal generations (conversation/note titles, " +
+                    "instruction personas, memory extraction) should use for this vendor, and its " +
+                    "failover priority (1 = primary). Requires a stored API key for the vendor."
+            request {
+                body<com.genflowly.models.StoreCustomerVendorConfigRequest> {
+                    description = "AI vendor name, model id and priority (1 = primary)"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) { description = "Config stored" }
+                code(HttpStatusCode.Conflict) { description = "No API key stored for the vendor" }
+            }
+        }) {
+            val request = call.receive<com.genflowly.models.StoreCustomerVendorConfigRequest>()
+            val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+
+            val aiVendor = try {
+                com.genflowly.models.AIVendor.valueOf(request.aiVendor)
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Unknown AI vendor: ${request.aiVendor}")
+                )
+            }
+            if (request.model.isBlank()) {
+                return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Model must not be blank"))
+            }
+            if (request.priority < 1) {
+                return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Priority must be >= 1"))
+            }
+
+            logger.info(
+                "Customer {} setting vendor config for {}: model={} priority={}",
+                customerId, aiVendor, request.model, request.priority
+            )
+            try {
+                customerCredentialsService.updateVendorConfig(customerId, aiVendor, request.model, request.priority)
+            } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
+                return@post call.respond(
+                    HttpStatusCode.Conflict,
+                    mapOf("error" to "No API key stored for vendor ${aiVendor.name}")
+                )
+            }
+            call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
+        }
     }
 }

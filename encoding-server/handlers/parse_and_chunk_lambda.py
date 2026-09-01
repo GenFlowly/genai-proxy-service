@@ -57,9 +57,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         logger.info(f"Chunked into {len(chunks)} pieces across batch_size={BATCH_SIZE}.")
 
-        # Clear raw_data after chunking — the full document text is no longer needed
-        # downstream and would otherwise blow the 256KB Step Functions payload limit.
-        memory_request_internal_state.raw_data = {}
+        # Strip the heavy text fields after chunking — the full document text is
+        # no longer needed downstream and would otherwise blow the 256KB Step
+        # Functions payload limit. The record keys/metadata (note_key,
+        # memory_key, conversation_key, ...) must survive into every batch:
+        # the store step derives vector ids and delete-by-filter handles from them.
+        retained_raw_data = processor.get_retained_raw_data(memory_request_internal_state)
+        memory_request_internal_state.raw_data = retained_raw_data
 
         batches = []
         for i in range(0, len(chunks), BATCH_SIZE):
@@ -67,7 +71,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 data_type=memory_request_internal_state.data_type,
                 customer_id=memory_request_internal_state.customer_id,
                 client=memory_request_internal_state.client,
-                raw_data={},
+                raw_data=retained_raw_data,
                 model_type=memory_request_internal_state.model_type,
                 model_name=memory_request_internal_state.model_name,
                 chunking_type=memory_request_internal_state.chunking_type,
