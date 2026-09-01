@@ -11,6 +11,12 @@ import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import com.genflowly.models.GeneratedPersona
 import com.genflowly.models.RequestType
 import mu.KotlinLogging
@@ -414,10 +420,16 @@ class InstructionService(
             ),
             customerId = customerId,
             conversationId = "instruction-creation",
-            operationName = "persona-generation"
+            operationName = "persona-generation",
+            responseSchema = PERSONA_SCHEMA
         ) { responseText ->
-            val jsonString = responseText.substringAfter("{").substringBeforeLast("}")
-            jsonParser.decodeFromString<GeneratedPersona>("{$jsonString}")
+            // Structured output makes the response guaranteed JSON; the brace
+            // extraction only remains for providers that degrade to raw text.
+            runCatching { jsonParser.decodeFromString<GeneratedPersona>(responseText.trim()) }
+                .getOrElse {
+                    val jsonString = responseText.substringAfter("{").substringBeforeLast("}")
+                    jsonParser.decodeFromString("{$jsonString}")
+                }
         }
     }
 
@@ -452,5 +464,25 @@ class InstructionService(
 
     companion object {
         private val jsonParser = Json { ignoreUnknownKeys = true }
+
+        /** JSON Schema for [GeneratedPersona] — vendor-enforced during persona generation. */
+        private val PERSONA_SCHEMA: JsonObject = buildJsonObject {
+            put("type", "object")
+            put("description", "Persona metadata for a system instruction.")
+            putJsonObject("properties") {
+                putJsonObject("name") { put("type", "string") }
+                putJsonObject("icon") { put("type", "string") }
+                putJsonObject("color") { put("type", "string") }
+                putJsonObject("category") { put("type", "string") }
+                putJsonObject("tags") {
+                    put("type", "array")
+                    putJsonObject("items") { put("type", "string") }
+                }
+            }
+            putJsonArray("required") {
+                add("name"); add("icon"); add("color"); add("category"); add("tags")
+            }
+            put("additionalProperties", false)
+        }
     }
 }

@@ -80,3 +80,9 @@ class RetrieveRequest(BaseModel):
     tool_choice: Optional[str] = None
     # Results for the previous assistant message's tool calls (current turn)
     tool_results: list[ToolResult] = []
+    # JSON Schema the response generator's output must conform to. Enforced via
+    # each vendor's native structured-output mechanism (LangChain
+    # with_structured_output), so the response is guaranteed-parseable JSON.
+    # Mutually exclusive with `tools`. generated_response carries the JSON as a
+    # string; streaming emits it as a single content chunk when generation ends.
+    response_schema: Optional[dict] = None

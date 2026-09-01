@@ -17,7 +17,14 @@ data class GenerateTextRequest(
     /** "auto" (default), "required", or a specific tool name */
     val toolChoice: String? = null,
     /** Results for the previous assistant message's tool calls — continues the turn */
-    val toolResults: List<ToolResult> = emptyList()
+    val toolResults: List<ToolResult> = emptyList(),
+    /**
+     * JSON Schema (type=object) the response must conform to. Enforced through
+     * the vendor's native structured-output mechanism, so the returned text is
+     * guaranteed-parseable JSON matching the schema. Mutually exclusive with
+     * [tools]. Works across all vendors.
+     */
+    val responseSchema: kotlinx.serialization.json.JsonObject? = null
 )
 
 /**
