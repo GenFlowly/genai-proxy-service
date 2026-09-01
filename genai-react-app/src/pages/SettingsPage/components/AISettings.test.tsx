@@ -1,10 +1,11 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AISettings } from './AISettings';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
-import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendorApiKeysService';
+import { storeCustomerVendorApiKey, storeCustomerVendorConfig } from '../../../services/storeCustomerVendorApiKeysService';
+import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService';
 import { AIVendor } from '../../../constants/vendors';
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models';
 
@@ -12,146 +13,162 @@ import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 jest.mock('../../../context/AuthContext');
 jest.mock('../../../context/ToastContext');
 jest.mock('../../../services/storeCustomerVendorApiKeysService');
+jest.mock('../../../services/getTextGenerationModelsService');
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseToast = useToast as jest.Mock;
 const mockStoreCustomerVendorApiKey = storeCustomerVendorApiKey as jest.Mock;
+const mockStoreCustomerVendorConfig = storeCustomerVendorConfig as jest.Mock;
+const mockGetTextGenerationModels = getTextGenerationModels as jest.Mock;
 
 describe('AISettings', () => {
     const mockUpdateVendorApiKeyStatus = jest.fn();
-    const mockShowToast = jest.fn();
     const mockGetAccessTokenSilently = jest.fn();
+
+    const authValue = (overrides: object = {}) => ({
+        customerId: 'cust-123',
+        isAuthenticated: true,
+        getAccessTokenSilently: mockGetAccessTokenSilently,
+        updateVendorApiKeyStatus: mockUpdateVendorApiKeyStatus,
+        aiVendorAPIKeyStatusList: [],
+        ...overrides,
+    });
+
+    const validOpenAIStatus = {
+        aiVendor: AIVendor.OPENAI,
+        status: APIKeyStatus.VALID,
+        isAPIKeyValid: true,
+        updateSuccessful: true,
+        selectedModel: 'gpt-5-mini',
+        priority: 1,
+    };
 
     beforeEach(() => {
         jest.clearAllMocks();
+        localStorage.clear();
         mockGetAccessTokenSilently.mockResolvedValue('test-token');
-        mockUseToast.mockReturnValue({ showToast: mockShowToast });
-        mockUseAuth.mockReturnValue({
-            customerId: 'cust-123',
-            isAuthenticated: true,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-            updateVendorApiKeyStatus: mockUpdateVendorApiKeyStatus,
-            aiVendorAPIKeyStatusList: []
+        mockUseToast.mockReturnValue({ showToast: jest.fn() });
+        mockGetTextGenerationModels.mockResolvedValue({
+            aiVendorModelList: [
+                { aiVendor: AIVendor.OPENAI, modelsList: ['gpt-5', 'gpt-5-mini'] },
+                { aiVendor: AIVendor.CLAUDE, modelsList: ['claude-fable-5'] },
+                { aiVendor: AIVendor.GEMINI, modelsList: [] },
+            ],
         });
+        mockUseAuth.mockReturnValue(authValue());
     });
 
-    test('renders vendor sections', () => {
+    test('renders a card per vendor with key status', () => {
         render(<AISettings />);
-        
+
         expect(screen.getByText('AI Models & Providers')).toBeInTheDocument();
-        expect(screen.getByText('OpenAI')).toBeInTheDocument();
-        expect(screen.getByText('Claude')).toBeInTheDocument();
-        expect(screen.getByText('Gemini')).toBeInTheDocument();
-        
-        // Should have "Save" buttons for all 3 vendors
-        const saveButtons = screen.getAllByText('Save');
-        expect(saveButtons).toHaveLength(3);
-    });
-
-    test('shows Overwrite API Key when vendor has valid status', () => {
-        mockUseAuth.mockReturnValue({
-            customerId: 'cust-123',
-            isAuthenticated: true,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-            updateVendorApiKeyStatus: mockUpdateVendorApiKeyStatus,
-            aiVendorAPIKeyStatusList: [
-                {
-                    aiVendor: AIVendor.OPENAI,
-                    status: APIKeyStatus.VALID,
-                    isAPIKeyValid: true,
-                    updateSuccessful: true
-                }
-            ]
+        (Object.values(AIVendor) as AIVendor[]).forEach(vendor => {
+            expect(screen.getByTestId(`ai-settings-vendors-${vendor}-status-pill`)).toHaveTextContent('Not set');
         });
-
-        render(<AISettings />);
-        
-        // OpenAI button should say "Overwrite API Key"
-        expect(screen.getByText('Overwrite API Key')).toBeInTheDocument();
-        
-        // Other buttons should still say "Save"
-        const saveButtons = screen.getAllByText('Save');
-        expect(saveButtons).toHaveLength(2);
     });
 
-    test('updates api key value on change', async () => {
-        render(<AISettings />);
-        const inputs = screen.getAllByPlaceholderText('sk-...');
-        const openaiInput = inputs[0];
-
-        await userEvent.type(openaiInput, 'test-key');
-        expect(openaiInput).toHaveValue('test-key');
-    });
-
-    test('shows toast if trying to save unauthenticated', async () => {
-        mockUseAuth.mockReturnValue({
-            customerId: null,
-            isAuthenticated: false,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-            updateVendorApiKeyStatus: mockUpdateVendorApiKeyStatus,
-            aiVendorAPIKeyStatusList: []
-        });
+    test('shows model/priority config only for vendors with a valid key', () => {
+        mockUseAuth.mockReturnValue(authValue({ aiVendorAPIKeyStatusList: [validOpenAIStatus] }));
 
         render(<AISettings />);
-        const saveButtons = screen.getAllByText('Save');
-        await userEvent.click(saveButtons[0]);
 
-        expect(mockShowToast).toHaveBeenCalledWith('Please log in first.');
+        expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-status-pill`)).toHaveTextContent('Key set');
+        expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-config`)).toBeInTheDocument();
+        expect(screen.queryByTestId(`ai-settings-vendors-${AIVendor.CLAUDE}-config`)).not.toBeInTheDocument();
+        expect(screen.queryByTestId(`ai-settings-vendors-${AIVendor.GEMINI}-config`)).not.toBeInTheDocument();
+        // No delete endpoint for customers — remove button must not render
+        expect(screen.queryByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-remove-key`)).not.toBeInTheDocument();
     });
 
-    test('shows toast if api key is empty on save', async () => {
-        render(<AISettings />);
-        const saveButtons = screen.getAllByText('Save');
-        await userEvent.click(saveButtons[0]);
-
-        expect(mockShowToast).toHaveBeenCalledWith('Please enter a valid API key.');
-    });
-
-    test('saves API key successfully', async () => {
+    test('saves an API key and updates the auth context', async () => {
         mockStoreCustomerVendorApiKey.mockResolvedValue({
             apiKeyStatus: {
                 aiVendor: AIVendor.OPENAI,
                 updateSuccessful: true,
-                status: 'Key valid',
-                isAPIKeyValid: true
-            }
+                status: APIKeyStatus.VALID,
+                isAPIKeyValid: true,
+            },
         });
 
         render(<AISettings />);
-        const inputs = screen.getAllByPlaceholderText('sk-...');
-        await userEvent.type(inputs[0], 'test-key');
-
-        const saveButtons = screen.getAllByText('Save');
-        await userEvent.click(saveButtons[0]);
+        await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'test-key');
+        await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
 
         await waitFor(() => {
             expect(mockStoreCustomerVendorApiKey).toHaveBeenCalledWith('test-token', {
                 aiVendor: AIVendor.OPENAI,
-                apiKey: 'test-key'
+                apiKey: 'test-key',
             });
-            expect(mockUpdateVendorApiKeyStatus).toHaveBeenCalledWith({
-                aiVendor: AIVendor.OPENAI,
-                updateSuccessful: true,
-                status: 'Key valid',
-                isAPIKeyValid: true
-            });
-            expect(mockShowToast).toHaveBeenCalledWith('Key valid');
-            expect(inputs[0]).toHaveValue('');
+            expect(mockUpdateVendorApiKeyStatus).toHaveBeenCalledWith(
+                expect.objectContaining({ aiVendor: AIVendor.OPENAI, updateSuccessful: true })
+            );
+            expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-message`))
+                .toHaveTextContent(APIKeyStatus.VALID);
         });
     });
 
-    test('shows toast if api key save fails', async () => {
-        mockStoreCustomerVendorApiKey.mockRejectedValue(new Error('Invalid key'));
+    test('shows the rejection message when the vendor rejects the key', async () => {
+        mockStoreCustomerVendorApiKey.mockResolvedValue({
+            apiKeyStatus: {
+                aiVendor: AIVendor.OPENAI,
+                updateSuccessful: false,
+                status: APIKeyStatus.INVALID,
+                isAPIKeyValid: false,
+            },
+        });
 
         render(<AISettings />);
-        const inputs = screen.getAllByPlaceholderText('sk-...');
-        await userEvent.type(inputs[0], 'test-key');
-
-        const saveButtons = screen.getAllByText('Save');
-        await userEvent.click(saveButtons[0]);
+        await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'bad-key');
+        await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
 
         await waitFor(() => {
-            expect(mockShowToast).toHaveBeenCalledWith('Invalid key');
+            expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-message`))
+                .toHaveTextContent(APIKeyStatus.INVALID);
+        });
+        expect(mockUpdateVendorApiKeyStatus).not.toHaveBeenCalled();
+    });
+
+    test('shows a login message when saving unauthenticated', async () => {
+        mockUseAuth.mockReturnValue(authValue({ customerId: null, isAuthenticated: false }));
+
+        render(<AISettings />);
+        await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'test-key');
+        await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
+
+        await waitFor(() => {
+            expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-message`))
+                .toHaveTextContent('Please log in first.');
+        });
+    });
+
+    test('saves model + priority config and merges it into the auth context', async () => {
+        mockStoreCustomerVendorConfig.mockResolvedValue(undefined);
+        mockUseAuth.mockReturnValue(authValue({ aiVendorAPIKeyStatusList: [validOpenAIStatus] }));
+
+        render(<AISettings />);
+
+        const saveConfig = screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-config`);
+        // Prefilled with saved values → not dirty → disabled
+        expect(saveConfig).toBeDisabled();
+
+        // Wait for the fetched model list to populate the dropdown
+        await screen.findByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-model-option-gpt-5`);
+        fireEvent.change(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-model`), {
+            target: { value: 'gpt-5' },
+        });
+        await userEvent.click(saveConfig);
+
+        await waitFor(() => {
+            expect(mockStoreCustomerVendorConfig).toHaveBeenCalledWith('test-token', {
+                aiVendor: AIVendor.OPENAI,
+                model: 'gpt-5',
+                priority: 1,
+            });
+            expect(mockUpdateVendorApiKeyStatus).toHaveBeenCalledWith({
+                ...validOpenAIStatus,
+                selectedModel: 'gpt-5',
+                priority: 1,
+            });
         });
     });
 });

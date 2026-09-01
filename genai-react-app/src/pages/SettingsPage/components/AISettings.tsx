@@ -1,75 +1,101 @@
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { AIVendor } from '../../../constants/vendors'
-import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendorApiKeysService'
+import { storeCustomerVendorApiKey, storeCustomerVendorConfig } from '../../../services/storeCustomerVendorApiKeysService'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
-import { PillButton } from '@genflowly/component-library'
-import { ICONS } from '../../../constants/icons'
+import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
+import { AIVendorModelList } from '../../../models/getTextGenerationModels.models'
+import { VendorApiKeysManager, VendorApiKeyRowData } from '@genflowly/component-library'
 import {
     OpenAIBrandName,
     ClaudeBrandName,
     GeminiBrandName
 } from '../../../components/common/BrandName/BrandName'
-import { InputTextWithHint } from '@genflowly/component-library'
-import { VendorAPIKeyStatus } from '../../../components/common/VendorAPIKeyStatus/VendorAPIKeyStatus'
-import { useToast } from '../../../context/ToastContext'
 import { InstructionDefaultsSettings } from './InstructionDefaultsSettings'
 import styles from './AISettings.module.scss'
+
+const BRAND_LABEL: Record<AIVendor, React.ReactNode> = {
+    [AIVendor.OPENAI]: <OpenAIBrandName className={styles.vendorBrand} />,
+    [AIVendor.CLAUDE]: <ClaudeBrandName className={styles.vendorBrand} />,
+    [AIVendor.GEMINI]: <GeminiBrandName className={styles.vendorBrand} />,
+}
 
 export function AISettings(): React.ReactElement {
     const { t } = useTranslation()
     const { customerId, getAccessTokenSilently, isAuthenticated, updateVendorApiKeyStatus, aiVendorAPIKeyStatusList } = useAuth()
-    const { showToast } = useToast()
 
-    const vendors = Object.values(AIVendor) as AIVendor[]
+    const [vendorModels, setVendorModels] = useState<AIVendorModelList[]>([])
 
-    const [apiKeys, setApiKeys] = useState<Record<AIVendor, string>>({
-        [AIVendor.OPENAI]: '',
-        [AIVendor.CLAUDE]: '',
-        [AIVendor.GEMINI]: '',
-    })
+    const fetchModels = useCallback(async () => {
+        if (!isAuthenticated || !customerId) return
+        // Same localStorage cache as AIVendorWidget / VendorModelSelect
+        const cacheKey = `${customerId}_ai_vendor_models`
+        const cached = localStorage.getItem(cacheKey)
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached)
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setVendorModels(parsed)
+                    return
+                }
+            } catch { /* ignore malformed cache */ }
+        }
+        try {
+            const token = await getAccessTokenSilently()
+            const response = await getTextGenerationModels(token, customerId, { aiVendor: Object.values(AIVendor) })
+            const data = response.aiVendorModelList || []
+            setVendorModels(data)
+            if (data.length > 0) localStorage.setItem(cacheKey, JSON.stringify(data))
+        } catch (err) {
+            console.error('AISettings: failed to fetch models', err)
+        }
+    }, [isAuthenticated, customerId, getAccessTokenSilently])
 
-    const [loading, setLoading] = useState<Record<AIVendor, boolean>>({
-        [AIVendor.OPENAI]: false,
-        [AIVendor.CLAUDE]: false,
-        [AIVendor.GEMINI]: false,
-    })
+    useEffect(() => {
+        fetchModels()
+    }, [fetchModels])
 
-    const handleChange = (vendor: AIVendor, value: string) => {
-        setApiKeys(prev => ({ ...prev, [vendor]: value }))
+    const rows: VendorApiKeyRowData[] = useMemo(() => (
+        (Object.values(AIVendor) as AIVendor[]).map(vendor => {
+            const status = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
+            return {
+                vendor,
+                label: BRAND_LABEL[vendor],
+                keySet: status?.status === APIKeyStatus.VALID || !!status?.isAPIKeyValid,
+                savedModel: status?.selectedModel ?? null,
+                savedPriority: status?.priority ?? null,
+                models: vendorModels.find(vm => vm.aiVendor === vendor)?.modelsList ?? [],
+            }
+        })
+    ), [aiVendorAPIKeyStatusList, vendorModels])
+
+    const requireAuth = () => {
+        if (!isAuthenticated || !customerId) {
+            throw new Error(t('settingsPage.aiSettings.loginFirstToast'))
+        }
     }
 
-    const handleSave = async (vendor: AIVendor) => {
-        if (!isAuthenticated || !customerId) {
-            showToast(t('settingsPage.aiSettings.loginFirstToast'))
-            return
+    const handleSaveKey = async (vendor: string, apiKey: string) => {
+        requireAuth()
+        const token = await getAccessTokenSilently()
+        const response = await storeCustomerVendorApiKey(token, { aiVendor: vendor, apiKey })
+        if (response.apiKeyStatus.updateSuccessful) {
+            updateVendorApiKeyStatus(response.apiKeyStatus)
         }
-
-        const apiKey = apiKeys[vendor]
-        if (!apiKey.trim()) {
-            showToast(t('settingsPage.aiSettings.enterValidApiKeyToast'))
-            return
+        return {
+            success: response.apiKeyStatus.updateSuccessful,
+            message: response.apiKeyStatus.status,
         }
+    }
 
-        try {
-            setLoading(prev => ({ ...prev, [vendor]: true }))
-            const token = await getAccessTokenSilently()
-            const response = await storeCustomerVendorApiKey(token, {
-                aiVendor: vendor,
-                apiKey,
-            })
-
-            if (response.apiKeyStatus.updateSuccessful) {
-                updateVendorApiKeyStatus(response.apiKeyStatus)
-            }
-            setApiKeys(prev => ({ ...prev, [vendor]: '' }))
-            showToast(response.apiKeyStatus.status)
-        } catch (error: any) {
-            console.error(error)
-            showToast(error.message || t('settingsPage.aiSettings.saveErrorToast'))
-        } finally {
-            setLoading(prev => ({ ...prev, [vendor]: false }))
+    const handleSaveConfig = async (vendor: string, model: string, priority: number) => {
+        requireAuth()
+        const token = await getAccessTokenSilently()
+        await storeCustomerVendorConfig(token, { aiVendor: vendor, model, priority })
+        const vendorStatus = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
+        if (vendorStatus) {
+            updateVendorApiKeyStatus({ ...vendorStatus, selectedModel: model, priority })
         }
     }
 
@@ -80,41 +106,27 @@ export function AISettings(): React.ReactElement {
                 <p className={styles.subtitle}>{t('settingsPage.aiSettings.subtitle')}</p>
             </div>
             <div className={styles.form}>
-                {vendors.map(vendor => {
-                    let BrandComponent = <span className={styles.vendorName}>{vendor}</span>
-                    if (vendor === AIVendor.OPENAI) BrandComponent = <OpenAIBrandName className={styles.vendorBrand} />
-                    if (vendor === AIVendor.CLAUDE) BrandComponent = <ClaudeBrandName className={styles.vendorBrand} />
-                    if (vendor === AIVendor.GEMINI) BrandComponent = <GeminiBrandName className={styles.vendorBrand} />
-
-                    const vendorStatus = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
-                    const isCurrentlyValid = vendorStatus?.status === APIKeyStatus.VALID || vendorStatus?.isAPIKeyValid
-
-                    return (
-                        <div key={vendor} className={styles.vendorSection}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                {BrandComponent}
-                                <VendorAPIKeyStatus vendor={vendor} />
-                            </div>
-                            <div className={styles.inputsGroup}>
-                                <InputTextWithHint
-                                    hint={t('settingsPage.aiSettings.apiKeyHint')}
-                                    value={apiKeys[vendor]}
-                                    onChange={e => handleChange(vendor, e.target.value)}
-                                    placeholder="sk-..."
-                                    type="password"
-                                />
-                            </div>
-                            <div className={styles.footer}>
-                                <PillButton
-                                    onClick={() => handleSave(vendor)}
-                                    label={loading[vendor] ? t('settingsPage.aiSettings.savingLabel') : (isCurrentlyValid ? t('settingsPage.aiSettings.overwriteApiKey') : t('settingsPage.aiSettings.save'))}
-                                    icon={ICONS.SAVE_ICON}
-                                    disabled={loading[vendor]}
-                                />
-                            </div>
-                        </div>
-                    )
-                })}
+                <VendorApiKeysManager
+                    rows={rows}
+                    onSaveKey={handleSaveKey}
+                    onSaveConfig={handleSaveConfig}
+                    strings={{
+                        keySetPill: t('settingsPage.aiSettings.keySetPill'),
+                        keyNotSetPill: t('settingsPage.aiSettings.keyNotSetPill'),
+                        keyHint: t('settingsPage.aiSettings.apiKeyHint'),
+                        keyPlaceholder: 'sk-...',
+                        keyReplacePlaceholder: t('settingsPage.aiSettings.overwriteApiKey'),
+                        saveKey: t('settingsPage.aiSettings.save'),
+                        saving: t('settingsPage.aiSettings.savingLabel'),
+                        keyEmpty: t('settingsPage.aiSettings.enterValidApiKeyToast'),
+                        modelHint: t('settingsPage.aiSettings.configModelHint'),
+                        modelPlaceholder: t('settingsPage.aiSettings.configModelPlaceholder'),
+                        priorityHint: t('settingsPage.aiSettings.configPriorityHint'),
+                        saveConfig: t('settingsPage.aiSettings.configSave'),
+                        configSaved: () => t('settingsPage.aiSettings.configSavedToast'),
+                    }}
+                    data-testid="ai-settings-vendors"
+                />
             </div>
 
             <InstructionDefaultsSettings />

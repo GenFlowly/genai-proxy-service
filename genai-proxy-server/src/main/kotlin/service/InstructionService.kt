@@ -402,11 +402,11 @@ class InstructionService(
 
         val agent = agentResolutionService.resolve(RequestType.INSTRUCTION_PERSONA)
 
-        // Persona generation runs on the SYSTEM API keys (admin-configured
-        // vendor/model pairs), trying providers in priority order. A JSON
-        // parse failure also counts as a generation failure and moves on to
-        // the next provider.
-        return generationAgentExecutor.executeWithSystemFailover(
+        // Persona generation runs on the CUSTOMER's API keys (their
+        // prioritized vendor/model configs, or keyed-vendor fallbacks),
+        // trying providers in priority order. A JSON parse failure also
+        // counts as a generation failure and moves on to the next provider.
+        return generationAgentExecutor.executeWithCustomerFailover(
             agent = agent,
             variables = mapOf(
                 "categoryJson" to categoryJson,

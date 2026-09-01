@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 
 /**
  * Data access for the customer secret-config tables: CustomerVendorApiKeys,
@@ -50,27 +51,76 @@ class CustomerCredentialsRepository(
         encryptedKey: String
     ) = withContext(Dispatchers.IO) {
         try {
-            val item = withTimestamps(mapOf(
-                CUSTOMER_ID_KEY to AttributeValue.builder()
-                    .s(customerId).build(),
-                AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor)
-                    .build(),
-                "apiKey" to AttributeValue.builder().s(encryptedKey).build(),
-                "isAPIKeyValid" to AttributeValue.builder().bool(true).build()
-            ))
-
-            val putReq = PutItemRequest.builder()
-                .tableName(CUSTOMER_API_KEY_TABLE)
-                .item(item)
-                .build()
-
-            dynamoDbClient.putItem(putReq)
+            // UpdateItem (not PutItem) so re-saving a key preserves the
+            // customer's selectedModel/priority config on the same item.
+            val now = java.time.Instant.now().toString()
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CUSTOMER_API_KEY_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()
+                    ))
+                    .updateExpression(
+                        "SET apiKey = :k, isAPIKeyValid = :v, updatedAt = :now, " +
+                                "createdAt = if_not_exists(createdAt, :now)"
+                    )
+                    .expressionAttributeValues(mapOf(
+                        ":k" to AttributeValue.builder().s(encryptedKey).build(),
+                        ":v" to AttributeValue.builder().bool(true).build(),
+                        ":now" to AttributeValue.builder().s(now).build()
+                    ))
+                    .build()
+            )
             logger.info("Saved API key for $customerId to DynamoDB")
         } catch (e: Exception) {
             logger.error("Failed to save API key to DynamoDB", e)
             throw e
         }
     }
+
+    /**
+     * Store the customer's selected model and failover priority (1 = primary)
+     * for a vendor. Conditional on a stored key — config for a keyless vendor
+     * is meaningless, so the caller gets ConditionalCheckFailedException.
+     */
+    suspend fun updateCustomerVendorConfig(
+        customerId: String,
+        aiVendor: String,
+        selectedModel: String,
+        priority: Int
+    ) = withContext(Dispatchers.IO) {
+        dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(CUSTOMER_API_KEY_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()
+                ))
+                .updateExpression("SET selectedModel = :m, #p = :p, updatedAt = :now")
+                .conditionExpression("attribute_exists($AI_VENDOR_KEY) AND attribute_exists(apiKey)")
+                .expressionAttributeNames(mapOf("#p" to "priority"))
+                .expressionAttributeValues(mapOf(
+                    ":m" to AttributeValue.builder().s(selectedModel).build(),
+                    ":p" to AttributeValue.builder().n(priority.toString()).build(),
+                    ":now" to AttributeValue.builder().s(java.time.Instant.now().toString()).build()
+                ))
+                .build()
+        )
+        logger.info("Saved vendor config for $customerId/$aiVendor: model=$selectedModel priority=$priority")
+    }
+
+    /** Raw CustomerVendorApiKeys items for one customer (encrypted keys included). */
+    suspend fun getCustomerVendorItems(customerId: String): List<Map<String, AttributeValue>> =
+        withContext(Dispatchers.IO) {
+            val request = QueryRequest.builder()
+                .tableName(CUSTOMER_API_KEY_TABLE)
+                .keyConditionExpression("#cid = :cid")
+                .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                .build()
+            dynamoDbClient.query(request).items()
+        }
 
     suspend fun initCustomerApiKey(
         customerId: String,
@@ -99,16 +149,7 @@ class CustomerCredentialsRepository(
 
     suspend fun getCustomerApiKeys(customerId: String): List<com.genflowly.models.AIVendorAPIKeyStatus> =
         withContext(Dispatchers.IO) {
-            val request = QueryRequest.builder()
-                .tableName(CUSTOMER_API_KEY_TABLE)
-                .keyConditionExpression("#cid = :cid")
-                .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
-                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
-                .build()
-
-            val response = dynamoDbClient.query(request)
-
-            response.items().mapNotNull { item ->
+            getCustomerVendorItems(customerId).mapNotNull { item ->
                 val vendorStr = item[AI_VENDOR_KEY]?.s() ?: return@mapNotNull null
                 val aiVendor = try {
                     AIVendor.valueOf(vendorStr)
@@ -139,7 +180,9 @@ class CustomerCredentialsRepository(
                 com.genflowly.models.AIVendorAPIKeyStatus(
                     aiVendor = aiVendor,
                     isAPIKeyValid = isValid,
-                    status = status
+                    status = status,
+                    selectedModel = item["selectedModel"]?.s(),
+                    priority = item["priority"]?.n()?.toIntOrNull()
                 )
             }
         }

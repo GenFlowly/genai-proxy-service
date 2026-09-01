@@ -420,7 +420,14 @@
     "settingsPage": {
         "aiSettings": {
             "apiKeyHint": "API Key",
+            "configModelHint": "Model",
+            "configModelPlaceholder": "Select a model",
+            "configPriorityHint": "Priority (1 = primary)",
+            "configSave": "Save Preference",
+            "configSavedToast": "Model preference saved.",
             "enterValidApiKeyToast": "Please enter a valid API key.",
+            "keyNotSetPill": "Not set",
+            "keySetPill": "Key set",
             "loginFirstToast": "Please log in first.",
             "overwriteApiKey": "Overwrite API Key",
             "save": "Save",
