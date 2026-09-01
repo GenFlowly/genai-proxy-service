@@ -13,6 +13,8 @@ import com.genflowly.repository.ShareRepository
 class ConversationAccessDeniedException(message: String) : Exception(message)
 class ConversationArchivedException(message: String) : Exception(message)
 
+private val webSourcesJsonParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
 /**
  * The conversational content domain: role resolution, history assembly and
  * message persistence — everything the generation and voice flows need per
@@ -81,7 +83,10 @@ class ConversationService(
                                 outputTokens = nextMsg.outputTokens,
                                 totalTokens = nextMsg.totalTokens,
                                 tokensReadFromCache = nextMsg.tokensReadFromCache,
-                                thinkingDurationMs = nextMsg.thinkingDurationMs
+                                thinkingDurationMs = nextMsg.thinkingDurationMs,
+                                webSources = nextMsg.webSourcesJson?.let {
+                                    runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
+                                }
                             )
                         )
                         i++ // consume next message

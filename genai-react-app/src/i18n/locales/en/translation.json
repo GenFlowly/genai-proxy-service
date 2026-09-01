@@ -240,6 +240,7 @@
             "regenerate": "Regenerate",
             "responseFrom": "Response from {{vendor}}",
             "selected": "Selected",
+            "sources": "Sources",
             "stop": "Stop",
             "streamInterrupted": "Response interrupted: {{reason}}",
             "thinking": "Thinking",

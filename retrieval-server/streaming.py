@@ -11,6 +11,7 @@ _NODE_START_MESSAGES: dict[str, str] = {
     "QUERY_ANALYZER":    "Analyzing your query...",
     "QUERY_REWRITER":    "Rewriting query for better search...",
     "RETRIEVAL":         "Searching knowledge base...",
+    "WEB_SEARCH":        "Searching the web...",
     "RESULT_RANKER":     "Ranking results...",
     "RESPONSE_GENERATOR": "Generating response...",
     "RESPONSE_GENERATOR_WITH_REFLECTION": "Generating response...",
@@ -31,6 +32,9 @@ def _format_node_output(node_type: str, output: dict) -> str | None:
     elif key == "RETRIEVAL":
         results = output.get("retrieval_results", [])
         return f"Found {len(results)} relevant document(s)"
+    elif key == "WEB_SEARCH":
+        results = output.get("web_search_results", [])
+        return f"Found {len(results)} web result(s)"
     elif key == "RESULT_RANKER":
         ranked = output.get("ranked_results", [])
         return f"Ranked to {len(ranked)} most relevant result(s)"
@@ -112,6 +116,16 @@ async def stream_response(
                     msg = _format_node_output(node_type, output)
                     if msg:
                         yield f"data: {json.dumps({'thinking': msg})}\n\n"
+                    # Web sources go to the caller so [n] citation markers in the
+                    # generated text can be rendered as links. Emitted as soon as
+                    # the search node completes — before generation streams.
+                    if node_type and node_type.upper() == "WEB_SEARCH":
+                        sources = [
+                            {"index": i, "title": r.get("title", ""), "url": r.get("url", "")}
+                            for i, r in enumerate(output.get("web_search_results", []), 1)
+                        ]
+                        if sources:
+                            yield f"data: {json.dumps({'web_sources': sources})}\n\n"
                     # Structured output: the guaranteed-JSON response arrives as
                     # one content chunk when the generator node completes.
                     if structured_output and node in streaming_nodes:

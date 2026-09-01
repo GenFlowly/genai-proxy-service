@@ -2,6 +2,16 @@ import { AIVendor } from '../constants/vendors'
 import { AttachmentRef } from './attachment.models'
 
 /**
+ * A web-search source backing an inline [n] citation marker in the response
+ * text. `index` matches the bracketed number the model emits.
+ */
+export interface WebSource {
+    index: number
+    title: string
+    url: string
+}
+
+/**
  * Represents a single AI model's response.
  */
 export interface Message {
@@ -25,6 +35,11 @@ export interface Message {
      * records predating the feature.
      */
     thinkingDurationMs?: number | null
+    /**
+     * Web-search sources for the [n] citation markers in `text`. Streamed live
+     * via the "ws" chunk and persisted in DDB; absent when no web search ran.
+     */
+    webSources?: WebSource[] | null
     inputTokens?: number | null
     outputTokens?: number | null
     totalTokens?: number | null

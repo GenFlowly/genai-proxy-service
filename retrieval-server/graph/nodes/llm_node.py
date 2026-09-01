@@ -32,6 +32,34 @@ def _build_chunks_text(results: list) -> str:
     )
 
 
+# Travels inside {web_context} so it reaches whichever node renders it — the
+# response generator's system prompt is customer-controlled and can't be
+# amended per-node. Override or disable via WEB_SEARCH config
+# "citation_instruction" ("" disables).
+_DEFAULT_CITATION_INSTRUCTION = (
+    "When your answer uses information from the sources above, cite them inline "
+    "with bracketed numbers matching the source list, e.g. [1] or [2][3]."
+)
+
+
+def _build_web_context(results: list, answer: str | None, citation_instruction: str | None = None) -> str:
+    if not results and not answer:
+        return "No web search results available."
+    parts = []
+    if answer:
+        parts.append(f"Web search summary: {answer}")
+    for i, r in enumerate(results, 1):
+        title = r.get("title", "")
+        url = r.get("url", "")
+        content = r.get("content", "")
+        parts.append(f"[{i}] {title} ({url})\n{content}".strip())
+    if results:
+        instruction = _DEFAULT_CITATION_INSTRUCTION if citation_instruction is None else citation_instruction
+        if instruction:
+            parts.append(instruction)
+    return "\n\n".join(parts)
+
+
 def _make_system(text: str, cache: bool) -> SystemMessage:
     if cache:
         return SystemMessage(content=[{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}])
@@ -212,6 +240,11 @@ def _render_template(template: str, state: dict) -> str:
         "context": _build_context(ranked),
         "query": state.get("rewritten_query") or state.get("original_query", ""),
         "chunks_text": _build_chunks_text(state.get("retrieval_results", [])),
+        "web_context": _build_web_context(
+            state.get("web_search_results", []),
+            state.get("web_search_answer"),
+            state.get("node_configs", {}).get("WEB_SEARCH", {}).get("citation_instruction"),
+        ),
     }
     all_vars = {**{k: v for k, v in state.items() if isinstance(v, (str, int, float, bool))}, **computed}
 
@@ -229,7 +262,7 @@ def make_llm_node(agent_type: str):
     Config keys (all optional — sane defaults apply):
       system_prompt                (str)  — SystemMessage content
       input_template               (str)  — HumanMessage with {state_field} placeholders.
-                                            Special vars: {query}, {context}, {chunks_text}
+                                            Special vars: {query}, {context}, {chunks_text}, {web_context}
       output_key                   (str)  — state field to write the response into
       response_format              (str)  — "text" | "json" | "json_indices"
       json_output_mapping          (dict) — {"llm_key": "state_key"} for response_format=json

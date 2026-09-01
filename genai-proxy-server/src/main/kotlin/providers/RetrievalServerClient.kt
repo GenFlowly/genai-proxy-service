@@ -296,6 +296,12 @@ class RetrievalServerClient(
                                 val millis = jsonObj["thinking_duration_ms"]?.jsonPrimitive?.content?.toLongOrNull()
                                 if (millis != null) send(StreamChunk.ThinkingDuration(millis))
                             }
+                            jsonObj.containsKey("web_sources") -> {
+                                val webSources = jsonObj["web_sources"]
+                                if (webSources != null && webSources !is kotlinx.serialization.json.JsonNull) {
+                                    send(StreamChunk.WebSources(webSources.toString()))
+                                }
+                            }
                             jsonObj.containsKey("tool_calls") -> {
                                 val toolCalls = jsonObj["tool_calls"]
                                 if (toolCalls != null && toolCalls !is kotlinx.serialization.json.JsonNull) {
