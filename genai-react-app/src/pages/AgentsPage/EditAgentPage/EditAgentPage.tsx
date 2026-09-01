@@ -6,8 +6,10 @@ import i18n from '../../../i18n'
 import { useLayout } from '../../../context/LayoutContext'
 import { usePageTitle } from '../../../hooks/usePageTitle'
 import { useAuth } from '../../../context/AuthContext'
-import { getCustomerAgents, updateAgent } from '../../../services/agentsService'
+import { getAgent, updateAgent } from '../../../services/agentsService'
+import { createInstruction, getCustomerInstructions } from '../../../services/instructionService'
 import { Agent, AgentNode, UpdateAgentNodePatch, UpdateAgentRequest } from '../../../models/agents.models'
+import { InstructionResponse } from '../../../models/instruction.models'
 import styles from './EditAgentPage.module.scss'
 import { formatServerDateTime } from '../../../utils/timeUtils'
 
@@ -36,21 +38,55 @@ function isValidJson(s: string): boolean {
     try { JSON.parse(s); return true } catch { return false }
 }
 
+/** Latest version of each instruction, for the node instruction selector */
+export interface InstructionSummary {
+    id: string
+    name: string
+    latestVersion: number
+}
+
+function toInstructionSummaries(list: InstructionResponse[]): InstructionSummary[] {
+    const map = new Map<string, InstructionSummary>()
+    list.forEach(inst => {
+        const existing = map.get(inst.id)
+        if (!existing || inst.version > existing.latestVersion) {
+            map.set(inst.id, { id: inst.id, name: inst.name, latestVersion: inst.version })
+        }
+    })
+    return Array.from(map.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+}
+
 // ── NodeConfigEditor (accordion) ──────────────────────────────────────────────
 
 interface NodeConfigEditorProps {
     node: AgentNode
+    agentName: string
     patchName: string
     patchConfig: string
+    instructions: InstructionSummary[] | null
     onNameChange: (val: string) => void
     onConfigChange: (val: string) => void
+    onCreateInstruction: (name: string, text: string) => Promise<InstructionResponse>
 }
 
 const RESPONSE_NODE_TYPES = new Set(['RESPONSE_GENERATOR', 'RESPONSE_GENERATOR_WITH_REFLECTION'])
 
-function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfigChange }: NodeConfigEditorProps) {
+function NodeConfigEditor({
+    node,
+    agentName,
+    patchName,
+    patchConfig,
+    instructions,
+    onNameChange,
+    onConfigChange,
+    onCreateInstruction,
+}: NodeConfigEditorProps) {
     const { t } = useTranslation()
     const [open, setOpen] = useState(false)
+    const [pickerOpen, setPickerOpen] = useState(false)
+    const [pickerQuery, setPickerQuery] = useState('')
+    const [converting, setConverting] = useState(false)
+    const [convertError, setConvertError] = useState<string | null>(null)
     const meta = getNodeMeta(node.nodeType)
     const isResponseNode = RESPONSE_NODE_TYPES.has(node.nodeType)
     const configInvalid = patchConfig.trim() !== '' && !isValidJson(patchConfig)
@@ -58,15 +94,123 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
     let parsedConfig: Record<string, any> = {}
     try { parsedConfig = JSON.parse(patchConfig || '{}') } catch {}
 
-    const systemPrompt: string = parsedConfig.system_prompt ?? ''
+    const instructionId: string | undefined =
+        typeof parsedConfig.instruction_id === 'string' && parsedConfig.instruction_id
+            ? parsedConfig.instruction_id
+            : undefined
+    // null / absent means "follow latest"; a number pins that version
+    const instructionVersion: number | null =
+        typeof parsedConfig.instruction_version === 'number' ? parsedConfig.instruction_version : null
+    const legacyPrompt: string = !instructionId && typeof parsedConfig.system_prompt === 'string'
+        ? parsedConfig.system_prompt
+        : ''
     const inputTemplate: string = parsedConfig.input_template ?? ''
     const modelOverride: string = parsedConfig.model_override ?? ''
+
+    const selectedInstruction = instructionId
+        ? instructions?.find(inst => inst.id === instructionId)
+        : undefined
+    const selectedName = selectedInstruction?.name || node.instructionName || instructionId
+    const instructionsLoading = instructions === null
 
     const updateConfigField = (key: string, value: string) => {
         const updated = { ...parsedConfig, [key]: value }
         if (!value) delete updated[key]
         onConfigChange(JSON.stringify(updated, null, 2))
     }
+
+    // Mutate a copy of the parsed config, preserving every untouched key
+    const applyConfigPatch = (mutate: (cfg: Record<string, any>) => void) => {
+        const updated = { ...parsedConfig }
+        mutate(updated)
+        onConfigChange(JSON.stringify(updated, null, 2))
+    }
+
+    const handleSelectInstruction = (inst: InstructionSummary) => {
+        applyConfigPatch(cfg => {
+            cfg.instruction_id = inst.id
+            delete cfg.system_prompt
+            delete cfg.instruction_version // follow latest on (re)selection
+        })
+        setPickerOpen(false)
+        setPickerQuery('')
+    }
+
+    const handleFollowLatest = () => {
+        applyConfigPatch(cfg => { delete cfg.instruction_version })
+    }
+
+    const handlePinVersion = () => {
+        if (!selectedInstruction) return
+        applyConfigPatch(cfg => { cfg.instruction_version = selectedInstruction.latestVersion })
+    }
+
+    const handleConvertToInstruction = async () => {
+        setConvertError(null)
+        setConverting(true)
+        try {
+            const created = await onCreateInstruction(
+                `${agentName} — ${patchName || node.name}`,
+                legacyPrompt,
+            )
+            applyConfigPatch(cfg => {
+                cfg.instruction_id = created.id
+                delete cfg.system_prompt
+                delete cfg.instruction_version // follow latest
+            })
+        } catch (err: any) {
+            setConvertError(err?.message ?? t('agentsPage.nodeConfigEditor.convertFailed'))
+        } finally {
+            setConverting(false)
+        }
+    }
+
+    const query = pickerQuery.trim().toLowerCase()
+    const filteredInstructions = (instructions ?? []).filter(
+        inst => !query || (inst.name || '').toLowerCase().includes(query),
+    )
+
+    const instructionPicker = (
+        <div className={styles.instructionPicker}>
+            <input
+                type="text"
+                className={styles.fieldInput}
+                value={pickerQuery}
+                onChange={e => { setPickerQuery(e.target.value); setPickerOpen(true) }}
+                onFocus={() => setPickerOpen(true)}
+                placeholder={t('agentsPage.nodeConfigEditor.instructionSearchPlaceholder')}
+                aria-label={t('agentsPage.nodeConfigEditor.instructionSearchAriaLabel', { name: patchName || node.name })}
+                data-testid={`instruction-search-${node.nodeId}`}
+            />
+            {pickerOpen && (
+                <ul className={styles.instructionOptionList} role="listbox">
+                    {instructionsLoading && (
+                        <li className={styles.instructionOptionEmpty}>{t('agentsPage.nodeConfigEditor.instructionsLoading')}</li>
+                    )}
+                    {!instructionsLoading && filteredInstructions.length === 0 && (
+                        <li className={styles.instructionOptionEmpty}>{t('agentsPage.nodeConfigEditor.noInstructionsFound')}</li>
+                    )}
+                    {filteredInstructions.map(inst => (
+                        <li key={inst.id}>
+                            <button
+                                type="button"
+                                role="option"
+                                aria-selected={inst.id === instructionId}
+                                className={styles.instructionOption}
+                                onClick={() => handleSelectInstruction(inst)}
+                                data-testid={`instruction-option-${node.nodeId}-${inst.id}`}
+                            >
+                                <span className={styles.instructionOptionName}>
+                                    {inst.name || t('common.instructionTile.untitledInstruction')}
+                                </span>
+                                <span className={styles.instructionOptionVersion}>v{inst.latestVersion}</span>
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    )
 
     return (
         <div className={styles.nodeEditor}>
@@ -107,15 +251,80 @@ function NodeConfigEditor({ node, patchName, patchConfig, onNameChange, onConfig
                         <>
                             {!isResponseNode && (
                                 <div className={styles.fieldGroup}>
-                                    <label className={styles.fieldLabel} htmlFor={`system-prompt-${node.nodeId}`}>{t('agentsPage.nodeConfigEditor.systemPrompt')}</label>
-                                    <textarea
-                                        id={`system-prompt-${node.nodeId}`}
-                                        className={styles.fieldTextarea}
-                                        rows={6}
-                                        value={systemPrompt}
-                                        onChange={e => updateConfigField('system_prompt', e.target.value)}
-                                        placeholder={t('agentsPage.nodeConfigEditor.systemPromptPlaceholder')}
-                                    />
+                                    <label className={styles.fieldLabel}>{t('agentsPage.nodeConfigEditor.instruction')}</label>
+
+                                    {instructionId && (
+                                        <>
+                                            <div className={styles.instructionSelectedRow}>
+                                                <span
+                                                    className={styles.instructionSelectedName}
+                                                    data-testid={`instruction-selected-${node.nodeId}`}
+                                                >
+                                                    📄 {selectedName}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    className={styles.instructionChangeBtn}
+                                                    onClick={() => setPickerOpen(v => !v)}
+                                                >
+                                                    {t('agentsPage.nodeConfigEditor.changeInstruction')}
+                                                </button>
+                                            </div>
+                                            {pickerOpen && instructionPicker}
+                                            <div className={styles.versionControl} role="radiogroup" aria-label={t('agentsPage.nodeConfigEditor.versionControlAriaLabel')}>
+                                                <label className={styles.versionOption}>
+                                                    <input
+                                                        type="radio"
+                                                        name={`instruction-version-${node.nodeId}`}
+                                                        checked={instructionVersion === null}
+                                                        onChange={handleFollowLatest}
+                                                    />
+                                                    {t('agentsPage.nodeConfigEditor.followLatest')}
+                                                </label>
+                                                <label className={styles.versionOption}>
+                                                    <input
+                                                        type="radio"
+                                                        name={`instruction-version-${node.nodeId}`}
+                                                        checked={instructionVersion !== null}
+                                                        onChange={handlePinVersion}
+                                                        disabled={instructionVersion === null && !selectedInstruction}
+                                                    />
+                                                    {instructionVersion !== null
+                                                        ? t('agentsPage.nodeConfigEditor.pinnedToVersion', { version: instructionVersion })
+                                                        : t('agentsPage.nodeConfigEditor.pinToVersion')}
+                                                </label>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {!instructionId && legacyPrompt && (
+                                        <div className={styles.legacyPromptBox}>
+                                            <p className={styles.fieldHint}>{t('agentsPage.nodeConfigEditor.legacyPromptHint')}</p>
+                                            <textarea
+                                                className={`${styles.fieldTextarea} ${styles.legacyPromptText}`}
+                                                rows={5}
+                                                value={legacyPrompt}
+                                                readOnly
+                                                aria-label={t('agentsPage.nodeConfigEditor.legacyPromptAriaLabel')}
+                                                data-testid={`legacy-prompt-${node.nodeId}`}
+                                            />
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    className={styles.convertBtn}
+                                                    onClick={handleConvertToInstruction}
+                                                    disabled={converting}
+                                                >
+                                                    {converting
+                                                        ? t('agentsPage.nodeConfigEditor.converting')
+                                                        : t('agentsPage.nodeConfigEditor.convertToInstruction')}
+                                                </button>
+                                            </div>
+                                            {convertError && <p className={styles.jsonError}>{convertError}</p>}
+                                        </div>
+                                    )}
+
+                                    {!instructionId && !legacyPrompt && instructionPicker}
                                 </div>
                             )}
                             {isResponseNode && (
@@ -191,6 +400,9 @@ export default function EditAgentPage() {
     const [agent, setAgent] = useState<Agent | null>(null)
     const [loadError, setLoadError] = useState<string | null>(null)
 
+    // Instructions for the node instruction selectors (null = still loading)
+    const [instructions, setInstructions] = useState<InstructionSummary[] | null>(null)
+
     // Form state
     const [name, setName] = useState('')
     const [maxIterations, setMaxIterations] = useState(10)
@@ -208,7 +420,7 @@ export default function EditAgentPage() {
         setRightSidebarExpanded(false)
     }, [setLeftSidebarExpanded, setRightSidebarExpanded])
 
-    // Load agents list and find the one matching graphId
+    // Load the agent via the dedicated GET /agents/{graphId} endpoint
     useEffect(() => {
         if (!graphId) return
         let cancelled = false
@@ -216,13 +428,8 @@ export default function EditAgentPage() {
         const load = async () => {
             try {
                 const token = await getAccessTokenSilently()
-                const data = await getCustomerAgents(token)
+                const found = await getAgent(token, graphId)
                 if (cancelled) return
-                const found = data.agents.find(a => a.graphId === graphId)
-                if (!found) {
-                    setLoadError(t('agentsPage.editAgentPage.agentNotFound'))
-                    return
-                }
                 setAgent(found)
                 setName(found.name)
                 setMaxIterations(found.maxIterations)
@@ -241,6 +448,35 @@ export default function EditAgentPage() {
         load()
         return () => { cancelled = true }
     }, [graphId, getAccessTokenSilently, t])
+
+    // Load the customer's instructions once per page for the node selectors
+    useEffect(() => {
+        let cancelled = false
+        const load = async () => {
+            try {
+                const token = await getAccessTokenSilently()
+                const data = await getCustomerInstructions(token)
+                if (!cancelled) setInstructions(toInstructionSummaries(data.instructions ?? []))
+            } catch (err) {
+                console.error('Failed to load instructions', err)
+                if (!cancelled) setInstructions([])
+            }
+        }
+        load()
+        return () => { cancelled = true }
+    }, [getAccessTokenSilently])
+
+    // Creates an instruction (used by "Convert to instruction") and registers
+    // it in the local list so its name shows up immediately
+    const handleCreateInstruction = useCallback(async (instructionName: string, text: string) => {
+        const token = await getAccessTokenSilently()
+        const created = await createInstruction(token, { instruction: text, instructionName })
+        setInstructions(prev => [
+            ...(prev ?? []).filter(inst => inst.id !== created.id),
+            { id: created.id, name: created.name || instructionName, latestVersion: created.version ?? 1 },
+        ])
+        return created
+    }, [getAccessTokenSilently])
 
     // ── Save handler ──────────────────────────────────────────────────────────
 
@@ -301,6 +537,11 @@ export default function EditAgentPage() {
             setSaved(true)
             clearTimeout(savedTimerRef.current)
             savedTimerRef.current = setTimeout(() => setSaved(false), 3000)
+            // Editing a System agent forks it server-side: the response carries
+            // a new graphId, so move (replace) to the customer's own copy
+            if (updated.graphId !== agent.graphId) {
+                navigate(`/agents/${updated.graphId}`, { replace: true })
+            }
         } catch (err: any) {
             setSaveError(err.message ?? t('agentsPage.editAgentPage.saveFailed'))
         } finally {
@@ -333,6 +574,7 @@ export default function EditAgentPage() {
                                     <p className={styles.topBarMeta}>
                                         {t('agentsPage.editAgentPage.topBarMeta', { count: agent.nodes.length, maxIterations: agent.maxIterations })}
                                         {agent.isDefault && <span className={styles.defaultBadge}>{t('agentsPage.editAgentPage.defaultBadge')}</span>}
+                                        {agent.isSystem && <span className={styles.systemBadge}>{t('agentsPage.editAgentPage.systemBadge')}</span>}
                                     </p>
                                 </div>
                             </div>
@@ -367,6 +609,14 @@ export default function EditAgentPage() {
                         </button>
                     </div>
                 </div>
+
+                {/* System default agent — informational banner */}
+                {agent?.isSystem && (
+                    <div className={styles.systemBanner} role="note">
+                        <span aria-hidden="true">ℹ️</span>
+                        <p>{t('agentsPage.editAgentPage.systemBanner')}</p>
+                    </div>
+                )}
 
                 {/* Content area */}
                 {!agent && !loadError && (
@@ -464,10 +714,13 @@ export default function EditAgentPage() {
                                             <React.Fragment key={node.nodeId}>
                                                 <NodeConfigEditor
                                                     node={node}
+                                                    agentName={agent.name}
                                                     patchName={nodePatchNames[node.nodeId] ?? node.name}
                                                     patchConfig={nodePatchConfigs[node.nodeId] ?? tryPrettyJson(node.config)}
+                                                    instructions={instructions}
                                                     onNameChange={val => setNodePatchNames(p => ({ ...p, [node.nodeId]: val }))}
                                                     onConfigChange={val => setNodePatchConfigs(p => ({ ...p, [node.nodeId]: val }))}
+                                                    onCreateInstruction={handleCreateInstruction}
                                                 />
                                                 {idx < agent.nodes.length - 1 && (
                                                     <div className={styles.pipelineConnector}>

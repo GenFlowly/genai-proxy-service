@@ -65,6 +65,54 @@ describe('InstructionsPage', () => {
         expect(screen.queryByText('Persona A')).not.toBeInTheDocument();
     });
 
+    test('filters instructions with the client-side search box', async () => {
+        const mockInstructions = [
+            { id: 'inst-1', name: 'Physics Tutor', instruction: 'Teach physics', version: 1 },
+            { id: 'inst-2', name: 'Tax Advisor', instruction: 'Advise on taxes', version: 1 },
+        ];
+
+        (useAuth as jest.Mock).mockReturnValue({
+            customerInstructions: mockInstructions,
+            refreshInstructions: jest.fn(),
+        });
+
+        render(
+            <MemoryRouter>
+                <InstructionsPage />
+            </MemoryRouter>
+        );
+
+        expect(screen.getByText('Physics Tutor')).toBeInTheDocument();
+        expect(screen.getByText('Tax Advisor')).toBeInTheDocument();
+
+        await userEvent.type(screen.getByPlaceholderText('Search instructions…'), 'physics');
+
+        expect(screen.getByText('Physics Tutor')).toBeInTheDocument();
+        expect(screen.queryByText('Tax Advisor')).not.toBeInTheDocument();
+    });
+
+    test('shows a no-results message when the search matches nothing', async () => {
+        const mockInstructions = [
+            { id: 'inst-1', name: 'Physics Tutor', instruction: 'Teach physics', version: 1 },
+        ];
+
+        (useAuth as jest.Mock).mockReturnValue({
+            customerInstructions: mockInstructions,
+            refreshInstructions: jest.fn(),
+        });
+
+        render(
+            <MemoryRouter>
+                <InstructionsPage />
+            </MemoryRouter>
+        );
+
+        await userEvent.type(screen.getByPlaceholderText('Search instructions…'), 'zzz-no-match');
+
+        expect(screen.getByText('No instructions match your search.')).toBeInTheDocument();
+        expect(screen.queryByText('Physics Tutor')).not.toBeInTheDocument();
+    });
+
     test('navigates to create new instruction when button clicked', async () => {
         (useAuth as jest.Mock).mockReturnValue({ customerInstructions: [], refreshInstructions: jest.fn() });
 

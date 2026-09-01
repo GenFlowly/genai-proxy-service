@@ -1,5 +1,5 @@
-import { getCustomerAgents, updateAgent } from '../../services/agentsService';
-import { UpdateAgentRequest } from '../../models/agents.models';
+import { createGraphAgent, getAgent, getCustomerAgents, updateAgent } from '../../services/agentsService';
+import { CreateGraphAgentRequest, UpdateAgentRequest } from '../../models/agents.models';
 import { endpoints } from '../../config/endpoints';
 import * as apiUtils from '../../utils/apiUtils';
 
@@ -42,6 +42,90 @@ describe('agentsService', () => {
             });
 
             await expect(getCustomerAgents(mockToken)).rejects.toThrow('Get Customer Agents failed: 403 Forbidden');
+        });
+    });
+
+    describe('getAgent', () => {
+        test('calls the single-agent endpoint with GET and Authorization header', async () => {
+            const mockResponse = { graphId: 'g1', name: 'Agent 1', isSystem: true };
+            (apiUtils.fetchWithRetry as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                json: async () => mockResponse,
+            });
+
+            const result = await getAgent(mockToken, 'g1');
+
+            expect(apiUtils.fetchWithRetry).toHaveBeenCalledWith(endpoints.getAgent('g1'), {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${mockToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+            expect(result).toEqual(mockResponse);
+        });
+
+        test('throws error message on HTTP failure', async () => {
+            (apiUtils.fetchWithRetry as jest.Mock).mockResolvedValueOnce({
+                ok: false,
+                status: 404,
+                statusText: 'Not Found',
+            });
+
+            await expect(getAgent(mockToken, 'missing')).rejects.toThrow('Get Agent failed: 404 Not Found');
+        });
+    });
+
+    describe('createGraphAgent', () => {
+        const createReq: CreateGraphAgentRequest = {
+            name: 'New Graph',
+            maxIterations: 5,
+            entryPoint: 'tmp-1',
+            edges: '{}',
+            layout: '{"tmp-1":{"x":0,"y":0}}',
+            nodes: [{ tempId: 'tmp-1', nodeType: 'QUERY_ANALYZER', name: 'Analyzer', config: '{}' }],
+        };
+
+        test('calls the graph creation endpoint with POST and JSON body', async () => {
+            const mockResponse = { graphId: 'g-new', name: 'New Graph' };
+            (apiUtils.fetchWithRetry as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                json: async () => mockResponse,
+            });
+
+            const result = await createGraphAgent(mockToken, createReq);
+
+            expect(apiUtils.fetchWithRetry).toHaveBeenCalledWith(endpoints.createAgentGraph, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${mockToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(createReq),
+            });
+            expect(result).toEqual(mockResponse);
+        });
+
+        test('throws error message from response body on HTTP failure', async () => {
+            (apiUtils.fetchWithRetry as jest.Mock).mockResolvedValueOnce({
+                ok: false,
+                status: 400,
+                statusText: 'Bad Request',
+                json: async () => ({ error: 'entryPoint tempId not in nodes' }),
+            });
+
+            await expect(createGraphAgent(mockToken, createReq)).rejects.toThrow('entryPoint tempId not in nodes');
+        });
+
+        test('throws fallback status message when error property is missing', async () => {
+            (apiUtils.fetchWithRetry as jest.Mock).mockResolvedValueOnce({
+                ok: false,
+                status: 500,
+                statusText: 'Internal Server Error',
+                json: async () => { throw new Error('not json') },
+            });
+
+            await expect(createGraphAgent(mockToken, createReq)).rejects.toThrow('Create graph agent failed: 500 Internal Server Error');
         });
     });
 

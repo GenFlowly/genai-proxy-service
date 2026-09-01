@@ -17,6 +17,20 @@ data class UpdateAgentNodePatch(
 )
 
 /**
+ * A node created as part of an agent edit. [tempId] is a client-chosen
+ * placeholder (e.g. "new-1") that may be referenced from [UpdateAgentRequest.edges],
+ * [UpdateAgentRequest.entryPoint], and [UpdateAgentRequest.layout]; the server
+ * generates the real nodeId and substitutes it everywhere before validating.
+ */
+@Serializable
+data class NewAgentNode(
+    val tempId: String,
+    val nodeType: String,
+    val name: String,
+    val config: String = "{}",
+)
+
+/**
  * Request body for PUT /api/v1/agents/{graphId}.
  *
  * All fields are optional (partial / PATCH-style update).
@@ -59,4 +73,21 @@ data class UpdateAgentRequest(
 
     /** Per-node patches. Only nodes listed here are updated; others are untouched. */
     val nodes: List<UpdateAgentNodePatch>? = null,
+
+    /**
+     * Nodes to create and attach to this graph. Their tempIds may appear in
+     * [edges], [entryPoint], and [layout]; the server substitutes the generated
+     * real nodeIds before validation.
+     */
+    val addNodes: List<NewAgentNode>? = null,
+
+    /** Nodes to detach from this graph and soft-delete. */
+    val removeNodeIds: List<String>? = null,
+
+    /**
+     * Full replacement of the editor canvas layout JSON:
+     * {"positions":{"<nodeId>":{"x":n,"y":n},"__end__":{"x":n,"y":n}}}
+     * Presentational only — never read by the graph runtime.
+     */
+    val layout: String? = null,
 )

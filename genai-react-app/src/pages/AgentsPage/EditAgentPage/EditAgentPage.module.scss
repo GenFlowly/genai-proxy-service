@@ -108,6 +108,42 @@
     border: 1px solid var(--color-primary);
 }
 
+.systemBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(243, 156, 18, 0.12);
+    color: #b06f00;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border: 1px solid rgba(243, 156, 18, 0.5);
+
+    [data-theme="dark"] & {
+        color: #f5b544;
+    }
+}
+
+// ── System default agent banner ───────────────────────────────────────────────
+
+.systemBanner {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem 2rem;
+    background: rgba(243, 156, 18, 0.08);
+    border-bottom: 1px solid rgba(243, 156, 18, 0.3);
+    font-size: 0.8125rem;
+    color: $color-text-primary;
+    flex-shrink: 0;
+
+    p { margin: 0; line-height: 1.4; }
+
+    @include respond-to-mobile {
+        padding: 0.625rem 1rem;
+    }
+}
+
 .topBarActions {
     display: flex;
     align-items: center;
@@ -398,6 +434,149 @@
 .jsonError {
     color: #e74c3c;
     font-weight: 500;
+}
+
+// ── Instruction selector ──────────────────────────────────────────────────────
+
+.instructionSelectedRow {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.875rem;
+    background: $color-background-tertiary;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+}
+
+.instructionSelectedName {
+    flex: 1;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $color-text-primary;
+    @include ellipsis;
+}
+
+.instructionChangeBtn {
+    @include interactive-base;
+    padding: 0.25rem 0.75rem;
+    background: none;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: $color-text-secondary;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover {
+        background: $color-background-hover;
+        border-color: $color-border-focus;
+    }
+}
+
+.instructionPicker {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.instructionOptionList {
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem;
+    max-height: 14rem;
+    overflow-y: auto;
+    background: $color-background-secondary;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    box-shadow: $shadow-md;
+}
+
+.instructionOption {
+    @include interactive-base;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: none;
+    border: none;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    text-align: left;
+
+    &:hover { background: $color-background-hover; }
+}
+
+.instructionOptionName {
+    font-size: 0.875rem;
+    color: $color-text-primary;
+    @include ellipsis;
+}
+
+.instructionOptionVersion {
+    font-size: 0.7rem;
+    color: $color-text-muted;
+    flex-shrink: 0;
+}
+
+.instructionOptionEmpty {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    color: $color-text-muted;
+}
+
+.versionControl {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.versionOption {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    color: $color-text-secondary;
+    cursor: pointer;
+
+    input { cursor: pointer; }
+    input:disabled { cursor: not-allowed; }
+}
+
+// ── Legacy inline prompt ──────────────────────────────────────────────────────
+
+.legacyPromptBox {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: $color-background-tertiary;
+    border: 1px dashed $color-border;
+    border-radius: $radius-md;
+}
+
+.legacyPromptText {
+    background: $color-background-secondary;
+    color: $color-text-muted;
+}
+
+.convertBtn {
+    @include interactive-base;
+    padding: 0.375rem 0.875rem;
+    background: $color-primary;
+    color: #fff;
+    border: none;
+    border-radius: $radius-md;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover:not(:disabled) { background: $color-primary-hover-alt; }
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
 // ── Error box ─────────────────────────────────────────────────────────────────

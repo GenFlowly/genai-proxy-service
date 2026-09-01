@@ -5,12 +5,14 @@ import SystemApiKeysPage from './pages/SystemApiKeysPage'
 import InstructionsPage from './pages/InstructionsPage'
 import InstructionDetailPage from './pages/InstructionDetailPage'
 import RequestAgentsPage from './pages/RequestAgentsPage'
+import DefaultGraphPage from './pages/DefaultGraphPage'
 import { onboardCustomer } from './services/onboardService'
 
 const NAV_ITEMS: { path: string; label: string }[] = [
     { path: '/system-api-keys', label: 'System AI Vendor API Keys' },
     { path: '/instructions', label: 'Instructions' },
     { path: '/request-agents', label: 'Request Agents' },
+    { path: '/default-graph', label: 'Default Graph' },
 ]
 
 export default function App() {
@@ -120,6 +122,7 @@ export default function App() {
                         <Route path="/instructions" element={<InstructionsPage />} />
                         <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
                         <Route path="/request-agents" element={<RequestAgentsPage />} />
+                        <Route path="/default-graph" element={<DefaultGraphPage />} />
                         <Route path="*" element={<Navigate to="/system-api-keys" replace />} />
                     </Routes>
                 </main>

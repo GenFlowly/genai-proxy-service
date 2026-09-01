@@ -224,6 +224,49 @@ describe('AgentsPage Component', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/agents/graph-001');
     });
 
+    // ── Create agent ──────────────────────────────────────────────────────────
+
+    test('renders a Create agent button that navigates to /agents/new', async () => {
+        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+            agents: [mockAgent],
+        });
+        renderPage();
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: /create agent/i })).toBeInTheDocument()
+        );
+
+        await userEvent.click(screen.getByRole('button', { name: /create agent/i }));
+        expect(mockNavigate).toHaveBeenCalledWith('/agents/new');
+    });
+
+    // ── System default agents ─────────────────────────────────────────────────
+
+    test('shows System default badge and edit hint for a system agent', async () => {
+        const systemAgent = {
+            ...mockAgent,
+            graphId: 'system-graph-001',
+            name: 'Shared Default',
+            isSystem: true,
+        };
+        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+            agents: [systemAgent],
+        });
+        renderPage();
+        await waitFor(() => expect(screen.getByText('System default')).toBeInTheDocument());
+        expect(
+            screen.getByText('Shared default agent — editing it creates your own copy.')
+        ).toBeInTheDocument();
+    });
+
+    test('does not show System default badge for customer agents', async () => {
+        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+            agents: [mockAgent],
+        });
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
+        expect(screen.queryByText('System default')).not.toBeInTheDocument();
+    });
+
     // ── Multiple agents ───────────────────────────────────────────────────────
 
     test('renders multiple agent cards', async () => {

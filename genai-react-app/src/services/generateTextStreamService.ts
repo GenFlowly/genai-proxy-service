@@ -1,6 +1,7 @@
 import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import { GenerateTextStreamRequest } from "../models/generateText.models";
+import { WebSource } from "../models/conversation.models";
 import { fetchWithRetry } from "../utils/apiUtils";
 
 export interface StreamMetadata {
@@ -30,7 +31,8 @@ export async function generateTextStream(
     onMetadata?: (metadata: StreamMetadata) => void,
     onThinking?: (step: string) => void,
     signal?: AbortSignal,
-    onThinkingDuration?: (millis: number) => void
+    onThinkingDuration?: (millis: number) => void,
+    onWebSources?: (sources: WebSource[]) => void
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -109,6 +111,9 @@ export async function generateTextStream(
             else if (msg.t === "kd") {
                 const millis = Number(msg.v);
                 if (Number.isFinite(millis)) onThinkingDuration?.(millis);
+            }
+            else if (msg.t === "ws") {
+                if (Array.isArray(msg.v) && msg.v.length > 0) onWebSources?.(msg.v);
             }
             // other types (heartbeat, etc.) are silently ignored
         } catch {

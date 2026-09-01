@@ -11,6 +11,8 @@ data class AgentNodeResponse(
     val nodeType: String,
     val name: String,
     val config: String,
+    /** Display name of the instruction referenced by config.instruction_id, when present and resolvable. */
+    val instructionName: String? = null,
 )
 
 /**
@@ -25,6 +27,14 @@ data class AgentResponse(
     val maxIterations: Int,
     val edges: String,
     val nodes: List<AgentNodeResponse>,
+    /** Editor canvas layout JSON ({"positions":{...}}); null when never saved from the editor. */
+    val layout: String? = null,
+    /**
+     * True when this is the admin-published System default graph served as a
+     * fallback because the customer has no default graph of their own. Editing
+     * it forks it into a customer-owned copy (the response carries the new graphId).
+     */
+    val isSystem: Boolean = false,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )

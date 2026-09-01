@@ -1,6 +1,13 @@
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
-import { GetCustomerAgentsResponse, UpdateAgentRequest, UpdateAgentResponse } from '../models/agents.models'
+import {
+    Agent,
+    CreateGraphAgentRequest,
+    CreateGraphAgentResponse,
+    GetCustomerAgentsResponse,
+    UpdateAgentRequest,
+    UpdateAgentResponse,
+} from '../models/agents.models'
 import { fetchWithRetry } from '../utils/apiUtils'
 
 export async function getCustomerAgents(token: string): Promise<GetCustomerAgentsResponse> {
@@ -17,6 +24,43 @@ export async function getCustomerAgents(token: string): Promise<GetCustomerAgent
     }
 
     return (await response.json()) as GetCustomerAgentsResponse
+}
+
+export async function getAgent(token: string, graphId: string): Promise<Agent> {
+    const response = await fetchWithRetry(endpoints.getAgent(graphId), {
+        method: HttpMethod.GET,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Get Agent failed: ${response.status} ${response.statusText}`)
+    }
+
+    return (await response.json()) as Agent
+}
+
+export async function createGraphAgent(
+    token: string,
+    req: CreateGraphAgentRequest,
+): Promise<CreateGraphAgentResponse> {
+    const response = await fetchWithRetry(endpoints.createAgentGraph, {
+        method: HttpMethod.POST,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(req),
+    })
+
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body?.error ?? `Create graph agent failed: ${response.status} ${response.statusText}`)
+    }
+
+    return (await response.json()) as CreateGraphAgentResponse
 }
 
 export async function updateAgent(

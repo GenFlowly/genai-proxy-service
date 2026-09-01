@@ -1,7 +1,9 @@
 package com.genflowly
 
 import com.genflowly.activity.agent.registerCreateAgentRoutes
+import com.genflowly.activity.agent.registerCreateGraphAgentRoutes
 import com.genflowly.activity.agent.registerDeleteAgentRoutes
+import com.genflowly.activity.agent.registerGetAgentRoutes
 import com.genflowly.activity.agent.registerGetCustomerAgentsRoutes
 import com.genflowly.activity.agent.registerUpdateAgentRoutes
 import com.genflowly.activity.conversation.registerCreateConversationShareRoutes
@@ -37,6 +39,7 @@ import com.genflowly.activity.instruction.registerGetRecentInstructionsRoutes
 import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoutes
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
+import com.genflowly.activity.admin.registerDefaultGraphRoutes
 import com.genflowly.activity.admin.registerRequestAgentMapRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
@@ -107,6 +110,8 @@ object Routes {
 
     const val GET_CUSTOMER_AGENTS = "$API_V1/agents"
     const val CREATE_AGENT = "$API_V1/agents"
+    const val CREATE_GRAPH_AGENT = "$API_V1/agents/graph"
+    const val GET_AGENT = "$API_V1/agents/{graphId}"
     const val UPDATE_AGENT = "$API_V1/agents/{graphId}"
     const val DELETE_AGENT = "$API_V1/agents/{graphId}"
 
@@ -121,6 +126,7 @@ object Routes {
 
     const val ADMIN_REQUEST_AGENT_MAP = "$API_V1/admin/request-agent-map"
     const val ADMIN_REQUEST_AGENT_MAP_ENTRY = "$API_V1/admin/request-agent-map/{requestType}"
+    const val ADMIN_DEFAULT_GRAPH = "$API_V1/admin/default-graph"
 
     const val VOICE_SESSION = "$API_V1/voice/session"
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
@@ -206,6 +212,8 @@ fun Application.configureRouting(
         registerSearchRoutes(customerProfileService, unifiedSearchService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerCreateAgentRoutes(graphService, customerProfileService)
+        registerCreateGraphAgentRoutes(graphService, customerProfileService)
+        registerGetAgentRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService)
         registerDeleteAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
@@ -221,6 +229,7 @@ fun Application.configureRouting(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService
         )
         registerRequestAgentMapRoutes(requestAgentMapAdminService, customerProfileService, appConfig)
+        registerDefaultGraphRoutes(graphService, customerProfileService, appConfig)
         registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }

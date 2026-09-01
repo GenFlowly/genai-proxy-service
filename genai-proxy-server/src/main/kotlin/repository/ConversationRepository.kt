@@ -473,6 +473,9 @@ class ConversationRepository(
                     message.toolResultsJson?.let {
                         map["toolResultsJson"] = AttributeValue.builder().s(it).build()
                     }
+                    message.webSourcesJson?.let {
+                        map["webSourcesJson"] = AttributeValue.builder().s(it).build()
+                    }
                     message.inputTokens?.let {
                         map["inputTokens"] = AttributeValue.builder().n(it.toString()).build()
                     }
@@ -537,6 +540,7 @@ class ConversationRepository(
             attachments = attributeValueToAttachments(item["attachments"]),
             toolCallsJson = item["toolCallsJson"]?.s()?.takeIf { it.isNotBlank() },
             toolResultsJson = item["toolResultsJson"]?.s()?.takeIf { it.isNotBlank() },
+            webSourcesJson = item["webSourcesJson"]?.s()?.takeIf { it.isNotBlank() },
             client = client,
             role = role,
             customerId = customerId,

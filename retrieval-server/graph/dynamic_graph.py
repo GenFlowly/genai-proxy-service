@@ -7,11 +7,15 @@ from langgraph.graph import END, StateGraph
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.reflection_node import make_reflection_node
 from graph.nodes.retrieval import retrieval
+from graph.nodes.web_search import web_search
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
 
-_graph_cache: dict[str, tuple[Any, int]] = {}  # customer_id -> (compiled_graph, max_iterations)
+# customer_id -> (graph_identity, compiled_graph, max_iterations). The identity
+# is (graphId, latestVersion): a mismatch means the customer's resolved graph
+# changed (edit, fork, or a new System publish) and forces a rebuild.
+_graph_cache: dict[str, tuple[tuple, Any, int]] = {}
 
 # safety cap on how many times the graph can loop through a cycle before LangGraph forcibly aborts the run
 _DEFAULT_MAX_ITERATIONS = 10
@@ -45,6 +49,8 @@ def _make_condition_router(condition: dict, routes: dict[str, str]):
 def _build_node_fn(node_type: str):
     if node_type == "RETRIEVAL":
         return retrieval
+    if node_type == "WEB_SEARCH":
+        return web_search
     if node_type == "RESPONSE_GENERATOR_WITH_REFLECTION":
         return make_reflection_node(node_type)
     return make_llm_node(node_type)
@@ -93,9 +99,13 @@ def build_graph_for_customer(graph_record: dict, nodes: list[dict]):
 
 def get_or_build_graph(customer_id: str, graph_record: dict, nodes: list[dict]) -> tuple[Any, int]:
     """Return (compiled_graph, max_iterations), building and caching if needed."""
-    if customer_id not in _graph_cache:
-        _graph_cache[customer_id] = build_graph_for_customer(graph_record, nodes)
-    return _graph_cache[customer_id]
+    identity = (graph_record.get("graphId"), int(graph_record.get("latestVersion") or 0))
+    cached = _graph_cache.get(customer_id)
+    if cached is None or cached[0] != identity:
+        compiled, max_iterations = build_graph_for_customer(graph_record, nodes)
+        _graph_cache[customer_id] = (identity, compiled, max_iterations)
+        return compiled, max_iterations
+    return cached[1], cached[2]
 
 
 def invalidate_graph_cache(customer_id: str) -> None:

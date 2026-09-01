@@ -361,5 +361,62 @@ describe('Response Widget Component', () => {
         expect(screen.getByText('Response 3 (Latest)')).toBeInTheDocument();
         expect(screen.queryByText('Response 1')).not.toBeInTheDocument();
     });
+
+    describe('web-search citations', () => {
+        const webSources = [
+            { index: 1, title: 'Fed holds rates', url: 'https://example.com/fed' },
+            { index: 2, title: 'Market reaction', url: 'https://example.com/mkt' }
+        ];
+
+        test('linkifies known [n] markers in the content and leaves unknown ones', () => {
+            const messages = [{
+                messageId: 'msg-1',
+                text: 'Rates held [1] and markets rallied [2]. Unknown [9].',
+                aiVendor: AIVendor.OPENAI,
+                isLoading: false,
+                webSources
+            }];
+            render(<Response blockId="block-1" responseMessages={messages} />);
+            // The mocked TextContainer renders the raw content string
+            expect(screen.getByTestId('tc-content')).toHaveTextContent(
+                'Rates held [[1]](https://example.com/fed) and markets rallied [[2]](https://example.com/mkt). Unknown [9].'
+            );
+        });
+
+        test('renders a sources list with links once loading finishes', () => {
+            const messages = [{
+                messageId: 'msg-1',
+                text: 'Cited answer [1]',
+                aiVendor: AIVendor.OPENAI,
+                isLoading: false,
+                webSources
+            }];
+            render(<Response blockId="block-1" responseMessages={messages} />);
+            const section = screen.getByTestId('sources-section');
+            expect(section).toBeInTheDocument();
+            const links = section.querySelectorAll('a');
+            expect(links).toHaveLength(2);
+            expect(links[0]).toHaveAttribute('href', 'https://example.com/fed');
+            expect(links[0]).toHaveTextContent('Fed holds rates');
+            expect(links[1]).toHaveAttribute('href', 'https://example.com/mkt');
+        });
+
+        test('hides the sources list while the message is still streaming', () => {
+            const messages = [{
+                messageId: 'msg-1',
+                text: 'partial [1]',
+                aiVendor: AIVendor.OPENAI,
+                isLoading: true,
+                webSources
+            }];
+            render(<Response blockId="block-1" responseMessages={messages} />);
+            expect(screen.queryByTestId('sources-section')).not.toBeInTheDocument();
+        });
+
+        test('renders no sources section when the message has no web sources', () => {
+            render(<Response blockId="block-1" responseMessages={mockMessages} />);
+            expect(screen.queryByTestId('sources-section')).not.toBeInTheDocument();
+        });
+    });
 });
 
