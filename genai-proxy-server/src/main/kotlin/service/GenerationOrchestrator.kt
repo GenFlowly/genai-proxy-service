@@ -364,6 +364,7 @@ class GenerationOrchestrator(
             var capturedUsage: StreamChunk.Usage? = null
             var capturedThinkingDurationMs: Long? = null
             var capturedToolCallsJson: String? = null
+            var capturedWebSourcesJson: String? = null
             var success = false
             try {
                 retrievalService.retrieveAndGenerateStream(
@@ -405,6 +406,11 @@ class GenerationOrchestrator(
                             // chunk.json is already a JSON array — embed as-is
                             emit("{\"t\":\"tc\",\"v\":${chunk.json}}\n")
                         }
+                        is StreamChunk.WebSources -> {
+                            capturedWebSourcesJson = chunk.json
+                            // chunk.json is already a JSON array — embed as-is
+                            emit("{\"t\":\"ws\",\"v\":${chunk.json}}\n")
+                        }
                         is StreamChunk.Usage -> capturedUsage = chunk
                     }
                 }
@@ -432,6 +438,7 @@ class GenerationOrchestrator(
                         role = "assistant",
                         text = responseText,
                         toolCallsJson = capturedToolCallsJson,
+                        webSourcesJson = capturedWebSourcesJson,
                         previousMessageId = message.messageId,
                         aiConfig = listOf(config),
                         systemPrompt = message.systemPrompt,

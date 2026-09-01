@@ -58,6 +58,9 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
                     {agent.isDefault && (
                         <span className={styles.defaultBadge}>{t('agentsPage.agentCard.defaultBadge')}</span>
                     )}
+                    {agent.isSystem && (
+                        <span className={styles.systemBadge}>{t('agentsPage.agentCard.systemBadge')}</span>
+                    )}
                     <button
                         type="button"
                         className={styles.editBtn}
@@ -68,6 +71,11 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
                     </button>
                 </div>
             </div>
+
+            {/* System default agents are shared — editing forks a private copy */}
+            {agent.isSystem && (
+                <p className={styles.systemHint}>{t('agentsPage.agentCard.systemHint')}</p>
+            )}
 
             {/* Node pipeline */}
             <div className={styles.pipeline}>
@@ -185,6 +193,13 @@ export default function AgentsPage() {
                         <h1 className={styles.pageTitle}>{t('agentsPage.agentsPage.title')}</h1>
                         <p className={styles.pageSubtitle}>{t('agentsPage.agentsPage.subtitle')}</p>
                     </div>
+                    <button
+                        type="button"
+                        className={styles.createBtn}
+                        onClick={() => navigate('/agents/new')}
+                    >
+                        ＋ {t('agentsPage.agentsPage.createAgent')}
+                    </button>
                 </div>
 
                 {loading && (

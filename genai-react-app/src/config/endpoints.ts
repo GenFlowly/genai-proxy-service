@@ -34,6 +34,8 @@ export const endpoints = {
     updateUsername: `${BASE}${API_PREFIX}/profile/username`,
     updateDiscoverability: `${BASE}${API_PREFIX}/profile/discoverability`,
     getCustomerAgents: `${BASE}${API_PREFIX}/agents`,
+    getAgent: (graphId: string) => `${BASE}${API_PREFIX}/agents/${graphId}`,
+    createAgentGraph: `${BASE}${API_PREFIX}/agents/graph`,
     developerApiKeys: `${BASE}${API_PREFIX}/developer/api-keys`,
     developerApiKey: (keyId: string) => `${BASE}${API_PREFIX}/developer/api-keys/${keyId}`,
     attachments: `${BASE}${API_PREFIX}/attachments`,

@@ -8,6 +8,7 @@ from langgraph.graph import END, StateGraph
 
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes
+from graph.instruction_loader import get_instruction_text
 from graph.nodes.llm_node import make_llm_node
 from graph.state import RetrievalState
 from models import RetrieveRequest
@@ -47,6 +48,8 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         request_system_prompt=req.system_prompt,
         retrieval_results=[],
         ranked_results=[],
+        web_search_results=[],
+        web_search_answer=None,
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
         generated_response=None,
         error=None,
@@ -104,6 +107,20 @@ def _resolve_graph(customer_id: str) -> tuple:
     streaming_nodes: set[str] = set()
     for n in nodes:
         config = json.loads(n.get("config") or "{}")
+        # Centralized system prompts: an instruction reference beats the
+        # node's inline system_prompt, which beats the hardcoded defaults in
+        # the node implementations. Unresolvable refs degrade gracefully.
+        instruction_id = config.get("instruction_id")
+        if instruction_id:
+            version = config.get("instruction_version")
+            text = get_instruction_text(instruction_id, int(version) if version is not None else None)
+            if text is not None:
+                config["system_prompt"] = text
+            else:
+                logger.warning(
+                    "Node %s: instruction %s v%s unresolvable — using inline prompt",
+                    n["nodeId"], instruction_id, version,
+                )
         node_configs[n["nodeType"]] = config
         if config.get("is_streaming"):
             streaming_nodes.add(n["nodeId"])
@@ -172,6 +189,9 @@ async def retrieve(req: RetrieveRequest):
             "generated_response": result.get("generated_response"),
             "tool_calls": result.get("tool_calls"),
             "retrieval_results": result.get("ranked_results") or result.get("retrieval_results", []),
+            # Numbered to match the [n] citation markers the response generator
+            # emits when a WEB_SEARCH node ran (see _build_web_context).
+            "web_search_results": result.get("web_search_results", []),
             "rewritten_query": result.get("rewritten_query"),
             "error": result.get("error"),
             "usage": usage,

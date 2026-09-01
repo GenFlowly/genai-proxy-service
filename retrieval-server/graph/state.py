@@ -68,6 +68,11 @@ class RetrievalState(TypedDict):
     # Working data
     retrieval_results: list
     ranked_results: list
+    # Written by the WEB_SEARCH node: [{title, url, content, score}, ...] plus
+    # Tavily's optional synthesized answer. Injected into prompts via the
+    # {web_context} template variable.
+    web_search_results: list
+    web_search_answer: Optional[str]
 
     # Token usage accumulated across all LLM-calling nodes
     usage: Annotated[dict, _merge_usage]
