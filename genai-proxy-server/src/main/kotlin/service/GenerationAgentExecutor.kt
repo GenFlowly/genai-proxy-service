@@ -96,8 +96,10 @@ class GenerationAgentExecutor(
         customerId: String,
         conversationId: String,
         operationName: String,
+        /** JSON Schema for vendor-enforced structured output — makes [parse] failures near-impossible */
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
         parse: (String) -> T
-    ): T = runWithFailover(agent, variables, customerId, conversationId, operationName) { parse(it.text) }
+    ): T = runWithFailover(agent, variables, customerId, conversationId, operationName, responseSchema) { parse(it.text) }
 
     private suspend fun <T> runWithFailover(
         agent: ResolvedAgent,
@@ -105,6 +107,7 @@ class GenerationAgentExecutor(
         customerId: String,
         conversationId: String,
         operationName: String,
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
         transform: (AIGenerateResult) -> T
     ): T {
         val systemPrompt = PromptTemplateRenderer.render(agent.systemPromptTemplate, variables)
@@ -135,7 +138,8 @@ class GenerationAgentExecutor(
                     ),
                     systemPrompt = systemPrompt,
                     apiKey = candidate.apiKey,
-                    maxTokens = agent.maxTokens
+                    maxTokens = agent.maxTokens,
+                    responseSchema = responseSchema
                 )
                 return transform(result)
             } catch (e: CancellationException) {

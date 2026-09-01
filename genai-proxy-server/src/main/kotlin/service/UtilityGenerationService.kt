@@ -32,7 +32,9 @@ class UtilityGenerationService(
         messages: List<Message>,
         systemPrompt: String?,
         apiKey: String,
-        maxTokens: Int? = null
+        maxTokens: Int? = null,
+        /** JSON Schema for vendor-enforced structured output (guaranteed-JSON text) */
+        responseSchema: kotlinx.serialization.json.JsonObject? = null
     ): AIGenerateResult {
         val lastMessage = messages.lastOrNull()
             ?: throw IllegalArgumentException("No message to generate from")
@@ -50,7 +52,8 @@ class UtilityGenerationService(
             ),
             conversationHistory = history,
             systemPrompt = systemPrompt,
-            agentic = false
+            agentic = false,
+            responseSchema = responseSchema
         )
 
         val text = result.text

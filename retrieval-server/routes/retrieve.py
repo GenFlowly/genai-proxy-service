@@ -30,6 +30,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         tools=[t.model_dump() for t in req.tools],
         tool_choice=req.tool_choice,
         query_tool_results=[r.model_dump() for r in req.tool_results],
+        response_schema=req.response_schema,
         tool_calls=None,
         rewritten_query=None,
         needs_rewrite=False,
@@ -131,6 +132,13 @@ async def retrieve(req: RetrieveRequest):
         req.system_prompt,
     )
 
+    if req.response_schema and req.tools:
+        raise HTTPException(
+            status_code=400,
+            detail="response_schema and tools are mutually exclusive — structured output "
+                   "reserves the vendor's tool/format channel for the schema",
+        )
+
     if req.agentic:
         graph, node_type_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id)
     else:
@@ -141,7 +149,7 @@ async def retrieve(req: RetrieveRequest):
     if req.stream:
         logger.info("Returning StreamingResponse for customer=%s", req.customer_id)
         return StreamingResponse(
-            stream_response(state, graph=graph, node_type_map=node_type_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start),
+            stream_response(state, graph=graph, node_type_map=node_type_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start, structured_output=bool(req.response_schema)),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

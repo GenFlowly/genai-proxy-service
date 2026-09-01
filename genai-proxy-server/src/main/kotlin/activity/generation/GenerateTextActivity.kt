@@ -40,7 +40,10 @@ fun Route.registerGenerateTextRoutes(
                     "Tool use: pass tools (name, description, JSON-Schema parameters) and the " +
                     "model may answer with toolCalls instead of text; execute them and send a " +
                     "follow-up request with toolResults (and selectedResponseId set to the " +
-                    "tool-calling message's id) to get the final answer. Works across all vendors."
+                    "tool-calling message's id) to get the final answer. Works across all vendors. " +
+                    "Structured output: pass responseSchema (a JSON Schema object) and the " +
+                    "response text is guaranteed-parseable JSON matching that schema, enforced " +
+                    "by the vendor's native structured-output mechanism. Mutually exclusive with tools."
             request {
                 body<GenerateTextRequest> {
                     description = "Prompt, AI vendor configuration and conversation context"
@@ -110,7 +113,8 @@ fun Route.registerGenerateTextRoutes(
                         request.prompt.attachments,
                         request.tools,
                         request.toolChoice,
-                        request.toolResults
+                        request.toolResults,
+                        request.responseSchema
                     )
 
                 val generateTextResponseList =

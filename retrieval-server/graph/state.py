@@ -51,6 +51,11 @@ class RetrievalState(TypedDict):
     # ToolMessages directly after the assistant turn that made the calls.
     query_tool_results: list
 
+    # JSON Schema the response generator's output must conform to (structured
+    # output). Only the response-generator node honors it; mutually exclusive
+    # with tools. None → free-text generation.
+    response_schema: Optional[dict]
+
     # Per-node config loaded from DDB CustomerGraphNodes.config (keyed by nodeType).
     # Each node reads its own entry and falls back to built-in defaults when absent.
     node_configs: dict  # e.g. {"QUERY_REWRITER": {"system_prompt": "...", "model_override": "gpt-4o"}}

@@ -44,6 +44,7 @@ async def stream_response(
     streaming_nodes: Optional[set[str]] = None,
     recursion_limit: int = 25,
     request_start: Optional[float] = None,
+    structured_output: bool = False,
 ) -> AsyncIterator[str]:
     """
     Stream SSE events from a graph execution.
@@ -57,6 +58,12 @@ async def stream_response(
         request_start:   time.monotonic() taken when the HTTP request was received.
                          Used to emit thinking_duration_ms (request receipt → first
                          generated token) just before the first content chunk.
+        structured_output: True when the request carries a response_schema. Token
+                         deltas are then partial JSON (only valid once complete),
+                         so per-token streaming is suppressed and the finished
+                         JSON object is emitted as a single content chunk when
+                         the generator node completes. Any synthetic schema tool
+                         call is never surfaced as a tool_calls event.
     """
     if graph is None:
         raise ValueError("stream_response requires a compiled graph — no fallback available")
@@ -105,6 +112,16 @@ async def stream_response(
                     msg = _format_node_output(node_type, output)
                     if msg:
                         yield f"data: {json.dumps({'thinking': msg})}\n\n"
+                    # Structured output: the guaranteed-JSON response arrives as
+                    # one content chunk when the generator node completes.
+                    if structured_output and node in streaming_nodes:
+                        content = output.get("generated_response")
+                        if content:
+                            if token_count == 0 and request_start is not None:
+                                thinking_duration_ms = int((time.monotonic() - request_start) * 1000)
+                                yield f"data: {json.dumps({'thinking_duration_ms': thinking_duration_ms})}\n\n"
+                            token_count += 1
+                            yield f"data: {json.dumps({'content': content})}\n\n"
 
             if event_type == "on_chat_model_start":
                 logger.info("Stream: LLM call started in node=%s", node)
@@ -122,8 +139,10 @@ async def stream_response(
                     node, meta, usage,
                 )
                 # Tool calls from the response generator go to the caller, who
-                # executes them and continues the turn via tool_results
-                if node in streaming_nodes:
+                # executes them and continues the turn via tool_results. Under
+                # structured output the only tool call is the schema's synthetic
+                # forced tool — never surface it.
+                if node in streaming_nodes and not structured_output:
                     raw_tool_calls = getattr(output, "tool_calls", None) or []
                     if raw_tool_calls:
                         tool_calls = [
@@ -133,7 +152,7 @@ async def stream_response(
                         logger.info("Stream: emitting %d tool call(s): %s", len(tool_calls), [c["name"] for c in tool_calls])
                         yield f"data: {json.dumps({'tool_calls': tool_calls})}\n\n"
 
-            if event_type == "on_chat_model_stream" and node in streaming_nodes:
+            if event_type == "on_chat_model_stream" and node in streaming_nodes and not structured_output:
                 chunk = event["data"].get("chunk")
                 # With tools bound, providers stream tool-call argument deltas as
                 # block lists — extract only the text so raw blocks never leak
