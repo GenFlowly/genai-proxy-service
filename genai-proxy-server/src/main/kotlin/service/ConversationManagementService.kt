@@ -37,7 +37,7 @@ class ConversationManagementService(
         instructionName: String? = null
     ): String? {
         return try {
-            val agent = agentResolutionService.resolve(RequestType.CONVERSATION_TITLE)
+            val agent = agentResolutionService.resolve(RequestType.CONVERSATION_TITLE, customerId)
             val result = generationAgentExecutor.executeWithCustomerKey(
                 agent = agent,
                 variables = mapOf(

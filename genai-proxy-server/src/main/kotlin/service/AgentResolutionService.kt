@@ -1,5 +1,6 @@
 package com.genflowly.service
 
+import com.genflowly.DynamoDBConstants
 import com.genflowly.DynamoDBConstants.GRAPH_ENTRY_POINT_KEY
 import com.genflowly.DynamoDBConstants.NODE_CONFIG_KEY
 import com.genflowly.DynamoDBConstants.NODE_TYPE_KEY
@@ -50,28 +51,37 @@ class AgentResolutionService(
     private val cache = ConcurrentHashMap<String, CacheEntry>()
 
     suspend fun resolve(requestType: RequestType, customerId: String? = null): ResolvedAgent {
-        // Per-customer overrides are a future addition: they will do a first
-        // lookup with scope = customerId before falling through to SYSTEM.
-        val scope = SYSTEM_SCOPE
+        // Per-customer override first (written when a customer forks a System
+        // request agent), then the global SYSTEM mapping, then bundled defaults.
+        if (customerId != null) {
+            resolveScoped(customerId, requestType)?.let { return it }
+        }
+        return resolveScoped(SYSTEM_SCOPE, requestType) ?: fallback(requestType)
+    }
+
+    /**
+     * Cached resolution for one scope; null when the scope has no usable
+     * (enabled, well-formed) entry. Negative results are cached too; transient
+     * DDB errors return null WITHOUT caching so a healthy table is retried.
+     */
+    private suspend fun resolveScoped(scope: String, requestType: RequestType): ResolvedAgent? {
         val cacheKey = "$scope#${requestType.name}"
 
         cache[cacheKey]?.let { cached ->
             if (System.currentTimeMillis() - cached.fetchedAt < CACHE_TTL_MS) {
-                return cached.agent ?: fallback(requestType)
+                return cached.agent
             }
         }
 
         val resolved = try {
             resolveFromDynamo(scope, requestType)
         } catch (e: Exception) {
-            // Transient DDB errors: fall back without caching so a healthy
-            // table is used again on the next request.
-            logger.warn(e) { "Request-agent resolution failed for $scope/$requestType — using bundled default" }
-            return fallback(requestType)
+            logger.warn(e) { "Request-agent resolution failed for $scope/$requestType" }
+            return null
         }
 
         cache[cacheKey] = CacheEntry(resolved, System.currentTimeMillis())
-        return resolved ?: fallback(requestType)
+        return resolved
     }
 
     /** Drops cached resolutions; called by admin write endpoints. */
@@ -104,10 +114,13 @@ class AgentResolutionService(
     }
 
     /**
-     * Builds a [ResolvedAgent] from a graph, verifying the whole chain
-     * (graph → GENERATION entry node → valid config → existing instruction).
-     * Graph ownership is NOT checked here — the admin write path verifies the
-     * mapping admin owns the graph before an entry is accepted. Throws
+     * Builds a [ResolvedAgent] from a graph. Single-node GENERATION graphs
+     * resolve to the local single-call path after verifying the whole chain
+     * (entry node → valid config → existing instruction); anything else
+     * resolves to graph execution on the retrieval server's LangGraph runtime
+     * — so a request agent the user extended with more nodes runs exactly
+     * like a chat agent. Graph ownership is NOT checked here — the admin
+     * write path verifies it before a map entry is accepted. Throws
      * [IllegalArgumentException] with the broken link as the message — also
      * used by the admin endpoints to validate a graph before accepting a map
      * entry.
@@ -124,8 +137,21 @@ class AgentResolutionService(
         requireNotNull(entryPoint) { "graph $graphId has no entry point" }
         val nodeItem = graphRepository.getCustomerGraphNode(entryPoint)
         requireNotNull(nodeItem) { "entry node $entryPoint not found" }
-        require(nodeItem[NODE_TYPE_KEY]?.s() == GENERATION_NODE_TYPE) {
-            "entry node $entryPoint is not a $GENERATION_NODE_TYPE node"
+
+        val nodeCount = graphItem[DynamoDBConstants.GRAPH_NODE_IDS_KEY]?.l()?.size ?: 1
+        if (nodeCount > 1 || nodeItem[NODE_TYPE_KEY]?.s() != GENERATION_NODE_TYPE) {
+            return ResolvedAgent(
+                requestType = requestType,
+                source = ResolvedAgentSource.DDB,
+                mapKey = mapKey,
+                systemPromptTemplate = "",
+                userMessageTemplate = "",
+                outputFormat = AgentOutputFormat.TEXT,
+                modelPreference = null,
+                maxTokens = null,
+                executeAsGraph = true,
+                graphId = graphId,
+            )
         }
 
         val config = try {

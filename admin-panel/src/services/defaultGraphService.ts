@@ -66,3 +66,30 @@ export async function updateDefaultGraph(
     await assertOk(response, 'Updating default graph')
     return response.json()
 }
+
+/** A single admin-owned agent graph, hydrated (request agents etc.). */
+export async function getAgentGraph(token: string, graphId: string): Promise<DefaultGraphResponse> {
+    const response = await fetch(endpoints.agent(graphId), {
+        headers: { Authorization: `Bearer ${token}` },
+    })
+    await assertOk(response, `Loading agent ${graphId}`)
+    return response.json()
+}
+
+/** Same update semantics as the default graph, addressed by graphId. */
+export async function updateAgentGraph(
+    token: string,
+    graphId: string,
+    payload: UpdateDefaultGraphRequest
+): Promise<DefaultGraphResponse> {
+    const response = await fetch(endpoints.agent(graphId), {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+    })
+    await assertOk(response, `Updating agent ${graphId}`)
+    return response.json()
+}

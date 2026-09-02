@@ -1,5 +1,10 @@
 from typing import TypedDict, Optional, Annotated
 
+def _merge_scratch(current: dict, update: dict) -> dict:
+    """Last-writer-wins merge for the free-form scratch channel."""
+    return {**(current or {}), **(update or {})}
+
+
 def _merge_usage(current: dict, update: dict) -> dict:
     return {
         "input_tokens": current.get("input_tokens", 0) + update.get("input_tokens", 0),
@@ -56,9 +61,11 @@ class RetrievalState(TypedDict):
     # with tools. None → free-text generation.
     response_schema: Optional[dict]
 
-    # Per-node config loaded from DDB CustomerGraphNodes.config (keyed by nodeType).
-    # Each node reads its own entry and falls back to built-in defaults when absent.
-    node_configs: dict  # e.g. {"QUERY_REWRITER": {"system_prompt": "...", "model_override": "gpt-4o"}}
+    # Per-node config loaded from DDB CustomerGraphNodes.config. Keyed by
+    # nodeId (each node instance has its own config — the same nodeType can
+    # appear many times with different purposes) with a nodeType-keyed entry
+    # kept as fallback for the static fallback/voice graphs.
+    node_configs: dict  # e.g. {"NOD123…": {"system_prompt": "...", "model_override": "gpt-4o"}}
                         # Response generators ignore system_prompt/model_override — see llm_node.py.
 
     # Customer instruction forwarded from genai-proxy-server (fetched via instructionId/instructionVersion).
@@ -76,6 +83,12 @@ class RetrievalState(TypedDict):
 
     # Token usage accumulated across all LLM-calling nodes
     usage: Annotated[dict, _merge_usage]
+
+    # Free-form state: node outputs whose output_key is not a first-class
+    # field above land here ({key: value}), readable from any later node's
+    # templates ({key}) and usable as conditional-edge condition keys. The
+    # reducer merges writes so parallel/sequential nodes accumulate keys.
+    scratch: Annotated[dict, _merge_scratch]
 
     # Output
     generated_response: Optional[str]

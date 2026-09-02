@@ -12,7 +12,17 @@ _DEFAULT_MAX_RESULTS = 5
 _REQUEST_TIMEOUT_SECONDS = 15.0
 
 
-async def web_search(state: RetrievalState) -> dict:
+def web_search(node_id: str | None = None):
+    """Factory: web-search node reading its own (nodeId-keyed) config, with a
+    nodeType-keyed fallback for statically-built graphs."""
+    async def node(state: RetrievalState) -> dict:
+        return await _web_search(state, node_id)
+
+    node.__name__ = "web_search"
+    return node
+
+
+async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
     """
     Search the web for the current query and write results into state.
 
@@ -42,7 +52,8 @@ async def web_search(state: RetrievalState) -> dict:
     customer_id = state["customer_id"]
     logger.info("Node web_search: START — customer=%s query='%s'", customer_id, query[:100])
 
-    config = state.get("node_configs", {}).get("WEB_SEARCH", {})
+    configs = state.get("node_configs", {})
+    config = (configs.get(node_id) if node_id else None) or configs.get("WEB_SEARCH", {})
     api_key = config.get("api_key") or os.getenv("TAVILY_API_KEY")
     if not api_key:
         logger.error("Node web_search: no API key in node config or TAVILY_API_KEY env")

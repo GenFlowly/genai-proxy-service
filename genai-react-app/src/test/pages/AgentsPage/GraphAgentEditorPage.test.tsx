@@ -194,12 +194,8 @@ describe('GraphAgentEditorPage', () => {
         expect(types).toEqual([
             'QUERY_ANALYZER',
             'QUERY_REWRITER',
-            'RETRIEVAL',
-            'WEB_SEARCH',
             'RESULT_RANKER',
             'RESPONSE_GENERATOR',
-            'RESPONSE_GENERATOR_WITH_REFLECTION',
-            'GENERATION',
         ]);
         expect(mockGraphEditorProps.conditionOptions).toEqual([
             { key: 'needs_rewrite', type: 'bool', label: 'Needs rewrite' },
@@ -212,7 +208,7 @@ describe('GraphAgentEditorPage', () => {
     test('shows the system banner for a system agent', async () => {
         await renderLoadedEditor({ ...baseAgent, isSystem: true });
         expect(
-            screen.getByText('This is the shared default agent — saving your changes creates your own copy.')
+            screen.getByText('This is a shared system agent — saving your changes creates your own copy.')
         ).toBeInTheDocument();
     });
 

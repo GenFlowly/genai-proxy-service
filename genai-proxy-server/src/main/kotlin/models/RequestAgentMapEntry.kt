@@ -33,7 +33,15 @@ data class ResolvedAgent(
     val userMessageTemplate: String,
     val outputFormat: AgentOutputFormat,
     val modelPreference: AIConfig? = null,
-    val maxTokens: Int? = null
+    val maxTokens: Int? = null,
+    /**
+     * Multi-node (or non-GENERATION-entry) agents execute through the
+     * LangGraph runtime on the retrieval server instead of the local
+     * single-call path; [graphId] identifies the graph to run and the
+     * prompt/message templates above are unused.
+     */
+    val executeAsGraph: Boolean = false,
+    val graphId: String? = null,
 )
 
 enum class ResolvedAgentSource { DDB, CONFIG }

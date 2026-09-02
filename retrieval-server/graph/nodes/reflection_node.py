@@ -36,7 +36,7 @@ _DEFAULT_SYSTEM_PROMPT = _DEFAULT_PERSONA + _JSON_FORMAT_REQUIREMENT
 _DEFAULT_INPUT_TEMPLATE = "Context:\n{context}\n\nQuestion: {query}"
 
 
-def make_reflection_node(node_type: str):
+def make_reflection_node(node_type: str, node_id: str | None = None):
     """
     Platform node for graphs with cycles.
 
@@ -54,7 +54,8 @@ def make_reflection_node(node_type: str):
     resolved instruction and the model from the request's llm_model.
     """
     async def node(state: RetrievalState) -> dict:
-        config = state.get("node_configs", {}).get(node_type, {})
+        configs = state.get("node_configs", {})
+        config = (configs.get(node_id) if node_id else None) or configs.get(node_type, {})
         input_template = config.get("input_template", _DEFAULT_INPUT_TEMPLATE)
         output_key = config.get("output_key", "generated_response")
         include_history: bool = config.get("include_conversation_history", True)

@@ -461,6 +461,58 @@ button.danger {
     border-left: 1px solid var(--border);
 }
 
+/* Default Agents tile grid — every system agent, click to edit. */
+.agent-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.agent-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.agent-tile:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.agent-tile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.agent-tile-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.editor-topbar {
+    margin-bottom: 0.5rem;
+}
+
+.back-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
 .graph-editor-shell {
     height: calc(100vh - 260px);
     min-height: 480px;
