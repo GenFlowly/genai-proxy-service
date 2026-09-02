@@ -40,10 +40,16 @@ const NODE_CATALOG_DEFS: ReadonlyArray<{
     descriptionKey: string
     defaultConfig: string
     hasPrompt: boolean
+    /** i18n keys of the contract lines shown on the palette item. */
+    attributeKeys: string[]
 }> = [
     {
         nodeType: 'QUERY_ANALYZER',
         labelKey: 'agentsPage.graphEditorPage.catalog.queryAnalyzer',
+        attributeKeys: [
+            'agentsPage.graphEditorPage.catalog.contractPrompt',
+            'agentsPage.graphEditorPage.catalog.queryAnalyzerContractOutput',
+        ],
         descriptionKey: 'agentsPage.graphEditorPage.catalog.queryAnalyzerDescription',
         defaultConfig: JSON.stringify({
             input_template: 'Query: {original_query}',
@@ -55,6 +61,10 @@ const NODE_CATALOG_DEFS: ReadonlyArray<{
     {
         nodeType: 'QUERY_REWRITER',
         labelKey: 'agentsPage.graphEditorPage.catalog.queryRewriter',
+        attributeKeys: [
+            'agentsPage.graphEditorPage.catalog.contractPrompt',
+            'agentsPage.graphEditorPage.catalog.queryRewriterContractOutput',
+        ],
         descriptionKey: 'agentsPage.graphEditorPage.catalog.queryRewriterDescription',
         defaultConfig: JSON.stringify({
             input_template: 'Original query: {original_query}\nIntent: {query_intent}',
@@ -64,22 +74,13 @@ const NODE_CATALOG_DEFS: ReadonlyArray<{
         hasPrompt: true,
     },
     {
-        nodeType: 'RETRIEVAL',
-        labelKey: 'agentsPage.graphEditorPage.catalog.retrieval',
-        descriptionKey: 'agentsPage.graphEditorPage.catalog.retrievalDescription',
-        defaultConfig: '{}',
-        hasPrompt: false,
-    },
-    {
-        nodeType: 'WEB_SEARCH',
-        labelKey: 'agentsPage.graphEditorPage.catalog.webSearch',
-        descriptionKey: 'agentsPage.graphEditorPage.catalog.webSearchDescription',
-        defaultConfig: '{}',
-        hasPrompt: false,
-    },
-    {
         nodeType: 'RESULT_RANKER',
         labelKey: 'agentsPage.graphEditorPage.catalog.resultRanker',
+        attributeKeys: [
+            'agentsPage.graphEditorPage.catalog.contractPrompt',
+            'agentsPage.graphEditorPage.catalog.resultRankerContractInput',
+            'agentsPage.graphEditorPage.catalog.resultRankerContractOutput',
+        ],
         descriptionKey: 'agentsPage.graphEditorPage.catalog.resultRankerDescription',
         defaultConfig: JSON.stringify({
             input_template: 'Query: {query}\n\nChunks:\n{chunks_text}',
@@ -92,6 +93,11 @@ const NODE_CATALOG_DEFS: ReadonlyArray<{
     {
         nodeType: 'RESPONSE_GENERATOR',
         labelKey: 'agentsPage.graphEditorPage.catalog.responseGenerator',
+        attributeKeys: [
+            'agentsPage.graphEditorPage.catalog.responseGeneratorContractPersona',
+            'agentsPage.graphEditorPage.catalog.responseGeneratorContractOutput',
+            'agentsPage.graphEditorPage.catalog.responseGeneratorContractStreaming',
+        ],
         descriptionKey: 'agentsPage.graphEditorPage.catalog.responseGeneratorDescription',
         defaultConfig: JSON.stringify({
             input_template: 'Context:\n{context}\n\nQuestion: {query}',
@@ -101,29 +107,6 @@ const NODE_CATALOG_DEFS: ReadonlyArray<{
             is_streaming: true,
         }),
         hasPrompt: false,
-    },
-    {
-        nodeType: 'RESPONSE_GENERATOR_WITH_REFLECTION',
-        labelKey: 'agentsPage.graphEditorPage.catalog.reflectiveGenerator',
-        descriptionKey: 'agentsPage.graphEditorPage.catalog.reflectiveGeneratorDescription',
-        defaultConfig: JSON.stringify({
-            input_template: 'Context:\n{context}\n\nQuestion: {query}',
-            output_key: 'generated_response',
-            response_format: 'text',
-            include_conversation_history: true,
-            is_streaming: true,
-        }),
-        hasPrompt: false,
-    },
-    {
-        nodeType: 'GENERATION',
-        labelKey: 'agentsPage.graphEditorPage.catalog.generation',
-        descriptionKey: 'agentsPage.graphEditorPage.catalog.generationDescription',
-        defaultConfig: JSON.stringify({
-            input_template: '{original_query}',
-            output_format: 'text',
-        }),
-        hasPrompt: true,
     },
 ]
 
@@ -319,6 +302,7 @@ export default function GraphAgentEditorPage() {
             description: t(def.descriptionKey),
             defaultConfig: def.defaultConfig,
             hasPrompt: def.hasPrompt,
+            requiredAttributes: def.attributeKeys.map(key => t(key)),
         })),
         [t],
     )

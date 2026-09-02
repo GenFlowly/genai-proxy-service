@@ -1,5 +1,6 @@
 package com.genflowly.service
 
+import com.genflowly.DynamoDBConstants
 import com.genflowly.DynamoDBConstants.GRAPH_ENTRY_POINT_KEY
 import com.genflowly.DynamoDBConstants.NODE_CONFIG_KEY
 import com.genflowly.DynamoDBConstants.NODE_TYPE_KEY
@@ -113,10 +114,13 @@ class AgentResolutionService(
     }
 
     /**
-     * Builds a [ResolvedAgent] from a graph, verifying the whole chain
-     * (graph → GENERATION entry node → valid config → existing instruction).
-     * Graph ownership is NOT checked here — the admin write path verifies the
-     * mapping admin owns the graph before an entry is accepted. Throws
+     * Builds a [ResolvedAgent] from a graph. Single-node GENERATION graphs
+     * resolve to the local single-call path after verifying the whole chain
+     * (entry node → valid config → existing instruction); anything else
+     * resolves to graph execution on the retrieval server's LangGraph runtime
+     * — so a request agent the user extended with more nodes runs exactly
+     * like a chat agent. Graph ownership is NOT checked here — the admin
+     * write path verifies it before a map entry is accepted. Throws
      * [IllegalArgumentException] with the broken link as the message — also
      * used by the admin endpoints to validate a graph before accepting a map
      * entry.
@@ -133,8 +137,21 @@ class AgentResolutionService(
         requireNotNull(entryPoint) { "graph $graphId has no entry point" }
         val nodeItem = graphRepository.getCustomerGraphNode(entryPoint)
         requireNotNull(nodeItem) { "entry node $entryPoint not found" }
-        require(nodeItem[NODE_TYPE_KEY]?.s() == GENERATION_NODE_TYPE) {
-            "entry node $entryPoint is not a $GENERATION_NODE_TYPE node"
+
+        val nodeCount = graphItem[DynamoDBConstants.GRAPH_NODE_IDS_KEY]?.l()?.size ?: 1
+        if (nodeCount > 1 || nodeItem[NODE_TYPE_KEY]?.s() != GENERATION_NODE_TYPE) {
+            return ResolvedAgent(
+                requestType = requestType,
+                source = ResolvedAgentSource.DDB,
+                mapKey = mapKey,
+                systemPromptTemplate = "",
+                userMessageTemplate = "",
+                outputFormat = AgentOutputFormat.TEXT,
+                modelPreference = null,
+                maxTokens = null,
+                executeAsGraph = true,
+                graphId = graphId,
+            )
         }
 
         val config = try {

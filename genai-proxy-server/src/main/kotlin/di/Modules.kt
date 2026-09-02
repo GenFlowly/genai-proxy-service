@@ -126,7 +126,7 @@ fun appModule(): Module = module {
     single { GraphService(get(), get(), get()) }
     single { RequestAgentDefaultsLoader() }
     single { AgentResolutionService(get(), get(), get(), get()) }
-    single { GenerationAgentExecutor(get(), get(), get(), get(), get()) }
+    single { GenerationAgentExecutor(get(), get(), get(), get(), get(), get()) }
     single { RequestAgentMapAdminService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }

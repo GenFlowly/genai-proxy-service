@@ -57,6 +57,33 @@ class ConversationMessage(BaseModel):
     tool_results: Optional[list] = None
 
 
+class ExecuteAgentGraphRequest(BaseModel):
+    """
+    Run a specific agent graph (by graphId, any owner) through the LangGraph
+    runtime for an internal generation (titles, personas, …). Unifies request
+    agents with the customer-chat pipeline: the proxy server picks the
+    provider/credentials (with its own failover) and reads the final state's
+    generated_response.
+    """
+    graph_id: str
+    customer_id: str
+    client: str = "internal"
+    # Rendered into every node's system_prompt/input_template as {name}
+    # placeholders BEFORE execution (the LangGraph state schema is fixed, so
+    # variables cannot ride through state).
+    variables: dict[str, str] = {}
+    llm_credentials: dict
+    llm_provider: str = "openai"
+    llm_model: Optional[str] = None
+    llm_max_tokens: int = 4096
+    # Embedding config for RETRIEVAL nodes in the graph
+    model_type: Optional[str] = None
+    model_name: Optional[str] = None
+    top_n: int = 3
+    # JSON Schema for vendor-enforced structured output on the response node
+    response_schema: Optional[dict] = None
+
+
 class RetrieveRequest(BaseModel):
     customer_id: str
     client: str

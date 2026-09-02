@@ -26,16 +26,27 @@ def _make_condition_router(condition: dict, routes: dict[str, str]):
     Return a routing function for a conditional edge.
 
     condition fields:
-      condition_key   (str)  — state field to evaluate
-      condition_type  (str)  — "bool" (default) | "list_empty"
-        "bool"       : triggers "true" branch when the field is truthy
-        "list_empty" : triggers "true" branch when the field is an empty list or None
+      condition_key   (str)  — state field to evaluate; first-class state
+                               fields are checked first, then the free-form
+                               scratch channel (custom node output_keys)
+      condition_type  (str)  — "bool" (default) | "list_empty" | "value"
+        "bool"       : routes["true"] when the field is truthy, else routes["false"]
+        "list_empty" : routes["true"] when the field is an empty list or None
+        "value"      : the field's value (as a string) is matched against the
+                       route labels; "__default__" is the fallback route
     """
     key = condition["condition_key"]
     ctype = condition.get("condition_type", "bool")
 
     def router(state: RetrievalState) -> str:
-        val = state.get(key)
+        val = state.get(key, state.get("scratch", {}).get(key))
+        if ctype == "value":
+            label = "" if val is None else str(val)
+            return (
+                routes.get(label)
+                or routes.get("__default__")
+                or next(iter(routes.values()))
+            )
         if ctype == "list_empty":
             triggered = not val
         else:
@@ -46,14 +57,14 @@ def _make_condition_router(condition: dict, routes: dict[str, str]):
     return router
 
 
-def _build_node_fn(node_type: str):
+def _build_node_fn(node_type: str, node_id: str):
     if node_type == "RETRIEVAL":
-        return retrieval
+        return retrieval(node_id)
     if node_type == "WEB_SEARCH":
-        return web_search
+        return web_search(node_id)
     if node_type == "RESPONSE_GENERATOR_WITH_REFLECTION":
-        return make_reflection_node(node_type)
-    return make_llm_node(node_type)
+        return make_reflection_node(node_type, node_id)
+    return make_llm_node(node_type, node_id)
 
 
 def build_graph_for_customer(graph_record: dict, nodes: list[dict]):
@@ -70,7 +81,7 @@ def build_graph_for_customer(graph_record: dict, nodes: list[dict]):
     workflow = StateGraph(RetrievalState)
 
     for node_id, node_type in node_map.items():
-        workflow.add_node(node_id, _build_node_fn(node_type))
+        workflow.add_node(node_id, _build_node_fn(node_type, node_id))
 
     workflow.set_entry_point(graph_record["entryPoint"])
 

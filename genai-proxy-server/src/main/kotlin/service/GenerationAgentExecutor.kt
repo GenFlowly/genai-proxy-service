@@ -1,11 +1,15 @@
 package com.genflowly.service
 
+import com.genflowly.EmbeddingConstants
 import com.genflowly.config.AppConfig
 import com.genflowly.models.AIConfig
 import com.genflowly.models.AIGenerateResult
 import com.genflowly.models.CustomerAIProviderConfig
 import com.genflowly.models.Message
 import com.genflowly.models.ResolvedAgent
+import com.genflowly.models.toCredentialKey
+import com.genflowly.models.toProviderString
+import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.utils.PromptTemplateRenderer
 import kotlinx.coroutines.CancellationException
@@ -52,7 +56,8 @@ class GenerationAgentExecutor(
     private val customerCredentialsService: CustomerCredentialsService,
     private val defaultsLoader: RequestAgentDefaultsLoader,
     private val systemApiKeyService: SystemApiKeyService,
-    private val customerProfileRepository: CustomerProfileRepository
+    private val customerProfileRepository: CustomerProfileRepository,
+    private val retrievalServerClient: RetrievalServerClient
 ) {
 
     /**
@@ -125,22 +130,26 @@ class GenerationAgentExecutor(
             try {
                 logger.info {
                     "[$operationName] Trying customer provider ${candidate.aiVendor}/${candidate.model} " +
-                            "(priority ${candidate.priority})"
+                            "(priority ${candidate.priority}, graph=${agent.executeAsGraph})"
                 }
-                val result = utilityGenerationService.generateTextWithApiKey(
-                    aiVendor = candidate.aiVendor,
-                    model = candidate.model,
-                    messages = listOf(
-                        buildMessage(
-                            conversationId, userMessage, customerId,
-                            AIConfig(candidate.aiVendor, candidate.model)
-                        )
-                    ),
-                    systemPrompt = systemPrompt,
-                    apiKey = candidate.apiKey,
-                    maxTokens = agent.maxTokens,
-                    responseSchema = responseSchema
-                )
+                val result = if (agent.executeAsGraph && agent.graphId != null) {
+                    executeGraph(agent, variables, customerId, candidate, responseSchema)
+                } else {
+                    utilityGenerationService.generateTextWithApiKey(
+                        aiVendor = candidate.aiVendor,
+                        model = candidate.model,
+                        messages = listOf(
+                            buildMessage(
+                                conversationId, userMessage, customerId,
+                                AIConfig(candidate.aiVendor, candidate.model)
+                            )
+                        ),
+                        systemPrompt = systemPrompt,
+                        apiKey = candidate.apiKey,
+                        maxTokens = agent.maxTokens,
+                        responseSchema = responseSchema
+                    )
+                }
                 return transform(result)
             } catch (e: CancellationException) {
                 throw e
@@ -156,6 +165,44 @@ class GenerationAgentExecutor(
             "All ${candidates.size} customer AI provider(s) failed for $operationName: " +
                     failures.joinToString("; "),
             failures = failures
+        )
+    }
+
+    /**
+     * Multi-node request agents run through the retrieval server's LangGraph
+     * runtime — the same engine that serves customer chat — so every node the
+     * user added (retrieval, ranking, extra generations) actually executes.
+     * A blank response counts as a provider failure and advances failover.
+     */
+    private suspend fun executeGraph(
+        agent: ResolvedAgent,
+        variables: Map<String, String>,
+        customerId: String,
+        candidate: CustomerAIProviderConfig,
+        responseSchema: kotlinx.serialization.json.JsonObject?
+    ): AIGenerateResult {
+        val result = retrievalServerClient.executeAgentGraph(
+            graphId = requireNotNull(agent.graphId),
+            customerId = customerId,
+            variables = variables,
+            llmCredentials = mapOf(candidate.aiVendor.toCredentialKey() to candidate.apiKey),
+            llmProvider = candidate.aiVendor.toProviderString(),
+            llmModel = candidate.model,
+            llmMaxTokens = agent.maxTokens ?: 4096,
+            modelType = EmbeddingConstants.MODEL_TYPE,
+            modelName = EmbeddingConstants.MODEL_NAME,
+            responseSchema = responseSchema
+        )
+        val text = result.text
+        check(!text.isNullOrBlank()) {
+            "agent graph ${agent.graphId} produced no response"
+        }
+        return AIGenerateResult(
+            text = text,
+            inputTokens = result.inputTokens,
+            outputTokens = result.outputTokens,
+            totalTokens = result.totalTokens,
+            tokensReadFromCache = result.tokensReadFromCache
         )
     }
 

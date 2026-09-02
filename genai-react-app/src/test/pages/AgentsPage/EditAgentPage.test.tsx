@@ -394,10 +394,10 @@ describe('EditAgentPage Component', () => {
         renderPage();
         await waitFor(() =>
             expect(
-                screen.getByText('This is the shared default agent — saving your changes creates your own copy.')
+                screen.getByText('This is a shared system agent — saving your changes creates your own copy.')
             ).toBeInTheDocument()
         );
-        expect(screen.getByText('System default')).toBeInTheDocument();
+        expect(screen.getByText('System')).toBeInTheDocument();
     });
 
     test('does not show the system banner for a customer-owned agent', async () => {
@@ -405,7 +405,7 @@ describe('EditAgentPage Component', () => {
         renderPage();
         await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
         expect(
-            screen.queryByText('This is the shared default agent — saving your changes creates your own copy.')
+            screen.queryByText('This is a shared system agent — saving your changes creates your own copy.')
         ).not.toBeInTheDocument();
     });
 
