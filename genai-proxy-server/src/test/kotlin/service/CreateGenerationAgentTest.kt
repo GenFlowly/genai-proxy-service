@@ -21,7 +21,8 @@ class CreateGenerationAgentTest {
 
     private val graphRepo = mockk<GraphRepository>(relaxed = true)
     private val instructionRepo = mockk<InstructionRepository>()
-    private val service = GraphService(graphRepo, instructionRepo)
+    private val requestAgentMapRepo = mockk<com.genflowly.repository.RequestAgentMapRepository>(relaxed = true)
+    private val service = GraphService(graphRepo, instructionRepo, requestAgentMapRepo)
 
     private val instruction = Instruction(
         id = "INS1", creator = "CU1", name = "Prompt", instructions = "Do {{x}}", version = 2
@@ -87,18 +88,20 @@ class CreateGenerationAgentTest {
     }
 
     @Test
-    fun `deleteAgent blocks the default graph and hides foreign graphs`() = runTest {
+    fun `deleteAgent allows deleting an owned default graph and hides foreign graphs`() = runTest {
+        // Deleting an owned default graph is a "reset to System default" now
+        // that resolution falls back to the System-published graph.
         coEvery { graphRepo.getCustomerGraph("GRP-default") } returns mapOf(
             "customerId" to av("CU1"),
             com.genflowly.DynamoDBConstants.GRAPH_IS_DEFAULT_KEY to
                 software.amazon.awssdk.services.dynamodb.model.AttributeValue.builder().bool(true).build(),
         )
-        assertFailsWith<IllegalArgumentException> { service.deleteAgent("CU1", "GRP-default") }
+        service.deleteAgent("CU1", "GRP-default")
+        coVerify { graphRepo.deleteCustomerGraph("GRP-default") }
 
         coEvery { graphRepo.getCustomerGraph("GRP-foreign") } returns mapOf("customerId" to av("CU-other"))
         assertFailsWith<IllegalStateException> { service.deleteAgent("CU1", "GRP-foreign") }
-
-        coVerify(exactly = 0) { graphRepo.deleteCustomerGraph(any()) }
+        coVerify(exactly = 0) { graphRepo.deleteCustomerGraph("GRP-foreign") }
     }
 
     private fun av(v: String) =

@@ -233,8 +233,44 @@ def _make_ai(text: str, cache: bool) -> AIMessage:
     return AIMessage(content=text)
 
 
+# State fields nodes may write into directly; any other output_key routes into
+# the free-form `scratch` channel, readable from later templates/conditions.
+_DIRECT_OUTPUT_KEYS = {
+    "generated_response",
+    "rewritten_query",
+    "ranked_results",
+    "retrieval_results",
+    "query_intent",
+    "needs_rewrite",
+    "needs_more_context",
+    "web_search_results",
+    "web_search_answer",
+    "error",
+    "tool_calls",
+}
+
+
+def _route_output(key, value) -> dict:
+    """State-update dict for one output: first-class field or scratch entry."""
+    if key in _DIRECT_OUTPUT_KEYS:
+        return {key: value}
+    return {"scratch": {key: value}}
+
+
+def _merge_outputs(updates: list[dict]) -> dict:
+    """Merge routed outputs, combining their scratch sub-dicts."""
+    merged: dict = {}
+    scratch: dict = {}
+    for update in updates:
+        scratch.update(update.pop("scratch", {}) or {})
+        merged.update(update)
+    if scratch:
+        merged["scratch"] = scratch
+    return merged
+
+
 def _render_template(template: str, state: dict) -> str:
-    """Replace {field_name} placeholders with values from state or computed variables."""
+    """Replace {field_name} placeholders with values from state, scratch or computed variables."""
     ranked = state.get("ranked_results") or state.get("retrieval_results", [])
     computed = {
         "context": _build_context(ranked),
@@ -246,7 +282,8 @@ def _render_template(template: str, state: dict) -> str:
             state.get("node_configs", {}).get("WEB_SEARCH", {}).get("citation_instruction"),
         ),
     }
-    all_vars = {**{k: v for k, v in state.items() if isinstance(v, (str, int, float, bool))}, **computed}
+    scalars = lambda d: {k: v for k, v in d.items() if isinstance(v, (str, int, float, bool))}  # noqa: E731
+    all_vars = {**scalars(state.get("scratch", {}) or {}), **scalars(state), **computed}
 
     def replace(match):
         val = all_vars.get(match.group(1), "")
@@ -255,7 +292,7 @@ def _render_template(template: str, state: dict) -> str:
     return re.sub(r"\{(\w+)\}", replace, template)
 
 
-def make_llm_node(agent_type: str):
+def make_llm_node(agent_type: str, node_id: str | None = None):
     """
     Returns an async LangGraph node function driven entirely by DDB config.
 
@@ -275,7 +312,11 @@ def make_llm_node(agent_type: str):
     instruction as system prompt and the request's llm_model.
     """
     async def node(state: RetrievalState) -> dict:
-        config = state.get("node_configs", {}).get(agent_type, {})
+        # Config keyed by node identity first — the same node type can appear
+        # multiple times with different configs — then by type (fallback and
+        # statically-built graphs).
+        configs = state.get("node_configs", {})
+        config = (configs.get(node_id) if node_id else None) or configs.get(agent_type, {})
 
         input_template = config.get("input_template", "{original_query}")
         output_key = config.get("output_key")
@@ -300,7 +341,7 @@ def make_llm_node(agent_type: str):
             source = state.get(json_indices_source_key, [])
             if not source:
                 logger.info("Node %s: source list is empty — skipping LLM call", agent_type)
-                return {output_key: [], "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
+                return {**_route_output(output_key, []), "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
 
         effective_model = model_override or state.get("llm_model")
 
@@ -477,7 +518,10 @@ def make_llm_node(agent_type: str):
                     content = re.sub(r"^```[a-z]*\n?", "", content)
                     content = re.sub(r"\n?```$", "", content).strip()
                 parsed = json.loads(content)
-                result = {state_key: parsed.get(llm_key) for llm_key, state_key in json_output_mapping.items()}
+                result = _merge_outputs([
+                    _route_output(state_key, parsed.get(llm_key))
+                    for llm_key, state_key in json_output_mapping.items()
+                ])
                 result["usage"] = usage
                 return result
             except json.JSONDecodeError:
@@ -493,24 +537,24 @@ def make_llm_node(agent_type: str):
                     content = re.sub(r"\n?```$", "", content).strip()
                 indices = json.loads(content)
                 reordered = [source[i] for i in indices if i < len(source)]
-                return {output_key: reordered, "usage": usage}
+                return {**_route_output(output_key, reordered), "usage": usage}
             except (json.JSONDecodeError, TypeError, ValueError):
                 logger.error("Node %s: expected index array, got: %s — using original order", agent_type, _get_text(response.content)[:200])
-                return {output_key: source, "usage": usage}
+                return {**_route_output(output_key, source), "usage": usage}
 
         if structured_llm is not None:
             if parsed is not None:
-                return {output_key: json.dumps(parsed), "usage": usage}
+                return {**_route_output(output_key, json.dumps(parsed)), "usage": usage}
             # Constrained decoding makes this near-unreachable; degrade to the
             # raw text so the caller's own parse (and failover) can decide.
             logger.error(
                 "Node %s: structured output parse failed (%s) — returning raw text",
                 agent_type, parsing_error,
             )
-            return {output_key: _get_text(response.content), "usage": usage}
+            return {**_route_output(output_key, _get_text(response.content)), "usage": usage}
 
         # response_format == "text"
-        result = {output_key: _get_text(response.content), "usage": usage}
+        result = {**_route_output(output_key, _get_text(response.content)), "usage": usage}
         if tools_bound:
             raw_tool_calls = getattr(response, "tool_calls", None) or []
             if raw_tool_calls:

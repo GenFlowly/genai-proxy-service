@@ -7,11 +7,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from langgraph.graph import END, StateGraph
 
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
-from graph.graph_loader import get_default_graph_and_nodes
+from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.instruction_loader import get_instruction_text
 from graph.nodes.llm_node import make_llm_node
 from graph.state import RetrievalState
-from models import RetrieveRequest
+from models import ExecuteAgentGraphRequest, RetrieveRequest
 from streaming import stream_response
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         web_search_results=[],
         web_search_answer=None,
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
+        scratch={},
         generated_response=None,
         error=None,
     )
@@ -88,6 +89,41 @@ def _direct_graph() -> tuple:
     return graph, node_type_map, node_configs, streaming_nodes, _DEFAULT_MAX_ITERATIONS
 
 
+def _build_node_configs(nodes: list[dict]) -> tuple[dict, dict, set[str]]:
+    """
+    Per-request node config dicts keyed by nodeId (plus a nodeType-keyed alias
+    for the first node of each type), with centralized system prompts
+    resolved: an instruction reference beats the node's inline system_prompt,
+    which beats the hardcoded defaults in the node implementations.
+    Unresolvable refs degrade gracefully.
+    Returns (node_type_map, node_configs, streaming_node_ids).
+    """
+    node_type_map = {n["nodeId"]: n["nodeType"] for n in nodes}
+    node_configs: dict = {}
+    streaming_nodes: set[str] = set()
+    for n in nodes:
+        config = json.loads(n.get("config") or "{}")
+        instruction_id = config.get("instruction_id")
+        if instruction_id:
+            version = config.get("instruction_version")
+            text = get_instruction_text(instruction_id, int(version) if version is not None else None)
+            if text is not None:
+                config["system_prompt"] = text
+            else:
+                logger.warning(
+                    "Node %s: instruction %s v%s unresolvable — using inline prompt",
+                    n["nodeId"], instruction_id, version,
+                )
+        # Keyed by node identity — the same nodeType can appear many times with
+        # different configs. The first node of each type also lands under the
+        # type key for legacy lookups (e.g. {web_context}'s citation config).
+        node_configs[n["nodeId"]] = config
+        node_configs.setdefault(n["nodeType"], config)
+        if config.get("is_streaming"):
+            streaming_nodes.add(n["nodeId"])
+    return node_type_map, node_configs, streaming_nodes
+
+
 def _resolve_graph(customer_id: str) -> tuple:
     """
     Load the customer's dynamic graph from DDB.
@@ -101,29 +137,7 @@ def _resolve_graph(customer_id: str) -> tuple:
 
     graph_record, nodes = graph_data
     graph, max_iterations = get_or_build_graph(customer_id, graph_record, nodes)
-
-    node_type_map = {n["nodeId"]: n["nodeType"] for n in nodes}
-    node_configs = {}
-    streaming_nodes: set[str] = set()
-    for n in nodes:
-        config = json.loads(n.get("config") or "{}")
-        # Centralized system prompts: an instruction reference beats the
-        # node's inline system_prompt, which beats the hardcoded defaults in
-        # the node implementations. Unresolvable refs degrade gracefully.
-        instruction_id = config.get("instruction_id")
-        if instruction_id:
-            version = config.get("instruction_version")
-            text = get_instruction_text(instruction_id, int(version) if version is not None else None)
-            if text is not None:
-                config["system_prompt"] = text
-            else:
-                logger.warning(
-                    "Node %s: instruction %s v%s unresolvable — using inline prompt",
-                    n["nodeId"], instruction_id, version,
-                )
-        node_configs[n["nodeType"]] = config
-        if config.get("is_streaming"):
-            streaming_nodes.add(n["nodeId"])
+    node_type_map, node_configs, streaming_nodes = _build_node_configs(nodes)
 
     return graph, node_type_map, node_configs, streaming_nodes, max_iterations
 
@@ -198,4 +212,107 @@ async def retrieve(req: RetrieveRequest):
         })
     except Exception as e:
         logger.error("Graph invocation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Graph error: {e}")
+
+
+@router.post("/execute-agent-graph")
+async def execute_agent_graph(req: ExecuteAgentGraphRequest):
+    """
+    Execute a specific agent graph (request agents — titles, personas, …)
+    through the same LangGraph runtime that serves customer chat, so
+    multi-node request agents genuinely run as graphs. The caller supplies
+    provider/credentials (failover stays in the proxy server) and reads the
+    final state's generated_response.
+    """
+    graph_data = get_graph_and_nodes_by_id(req.graph_id)
+    if graph_data is None:
+        raise HTTPException(status_code=404, detail=f"graph {req.graph_id} not found")
+    graph_record, nodes = graph_data
+    graph, max_iterations = get_or_build_graph(f"graph#{req.graph_id}", graph_record, nodes)
+    _, node_configs, _ = _build_node_configs(nodes)
+
+    # node_configs carries each dict under its nodeId AND (first per type) its
+    # nodeType — dedupe to the unique config objects before mutating them.
+    unique_configs = list({id(c): c for c in node_configs.values()}.values())
+
+    # GENERATION nodes store executor-style config keys; adapt each one to the
+    # llm_node contract. Their output is the graph's result by convention.
+    for n in nodes:
+        if n["nodeType"] != "GENERATION":
+            continue
+        config = node_configs[n["nodeId"]]
+        config.setdefault("output_key", "generated_response")
+        config.setdefault("response_format", "text")
+        config.setdefault("include_conversation_history", False)
+
+    # Render {name} variables into every node's prompt templates up front —
+    # the LangGraph state schema is fixed, so variables can't ride through
+    # state. Runtime placeholders ({context}, {query}, custom scratch keys, …)
+    # are left for the node's own _render_template pass.
+    for config in unique_configs:
+        for key in ("system_prompt", "input_template"):
+            template = config.get(key)
+            if isinstance(template, str):
+                for name, value in req.variables.items():
+                    template = template.replace("{%s}" % name, value)
+                config[key] = template
+
+    # Response-producing nodes take their persona from request_system_prompt
+    # (node-level prompts are ignored there, by design of the chat path) —
+    # lift the producing node's resolved prompt into that slot.
+    response_prompt = None
+    for config in unique_configs:
+        if config.get("output_key") == "generated_response" and config.get("system_prompt"):
+            response_prompt = config["system_prompt"]
+            break
+
+    state = RetrievalState(
+        customer_id=req.customer_id,
+        client=req.client,
+        data_type="internal",
+        model_type=req.model_type,
+        model_name=req.model_name,
+        original_query=req.variables.get("original_query", ""),
+        query_images=[],
+        tools=[],
+        tool_choice=None,
+        query_tool_results=[],
+        response_schema=req.response_schema,
+        tool_calls=None,
+        rewritten_query=None,
+        needs_rewrite=False,
+        query_intent=None,
+        top_n=req.top_n,
+        search_params={"metric_type": "COSINE", "params": {"nprobe": 10}},
+        similarity_threshold=0.6,
+        llm_credentials=req.llm_credentials,
+        llm_provider=req.llm_provider,
+        llm_model=req.llm_model,
+        llm_max_tokens=req.llm_max_tokens,
+        conversation_history=[],
+        node_configs=node_configs,
+        request_system_prompt=response_prompt,
+        retrieval_results=[],
+        ranked_results=[],
+        web_search_results=[],
+        web_search_answer=None,
+        usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
+        scratch={},
+        generated_response=None,
+        error=None,
+    )
+
+    logger.info(
+        "Executing agent graph %s for customer=%s (%d node(s), provider=%s)",
+        req.graph_id, req.customer_id, len(nodes), req.llm_provider,
+    )
+    try:
+        result = await graph.ainvoke(state, config={"recursion_limit": max_iterations})
+        return JSONResponse({
+            "generated_response": result.get("generated_response"),
+            "error": result.get("error"),
+            "usage": result.get("usage", {}),
+        })
+    except Exception as e:
+        logger.error("Agent graph %s execution failed: %s", req.graph_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Graph error: {e}")

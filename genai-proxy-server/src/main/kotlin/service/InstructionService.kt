@@ -406,7 +406,7 @@ class InstructionService(
 
         val categoryJson = Json.encodeToString(com.genflowly.PERSONA_CATEGORIES)
 
-        val agent = agentResolutionService.resolve(RequestType.INSTRUCTION_PERSONA)
+        val agent = agentResolutionService.resolve(RequestType.INSTRUCTION_PERSONA, customerId)
 
         // Persona generation runs on the CUSTOMER's API keys (their
         // prioritized vendor/model configs, or keyed-vendor fallbacks),

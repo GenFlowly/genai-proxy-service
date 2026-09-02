@@ -1,6 +1,8 @@
 package com.genflowly.service
 
+import com.genflowly.DynamoDBConstants
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
+import com.genflowly.DynamoDBConstants.SYSTEM_GRAPH_OWNER
 import com.genflowly.SYSTEM_SCOPE
 import com.genflowly.models.RequestAgentMapEntry
 import com.genflowly.models.RequestType
@@ -58,10 +60,12 @@ class RequestAgentMapAdminService(
         require(request.mapKey.isNotBlank()) { "mapKey must not be blank" }
 
         // Ownership gate: a global mapping may only point at a graph the
-        // mapping admin owns — never at some other customer's graph.
+        // mapping admin owns or one that is already System infrastructure —
+        // never at some other customer's graph.
         val graphItem = graphRepository.getCustomerGraph(request.graphId)
         requireNotNull(graphItem) { "graph ${request.graphId} not found" }
-        require(graphItem[CUSTOMER_ID_KEY]?.s() == adminCustomerId) {
+        val owner = graphItem[CUSTOMER_ID_KEY]?.s()
+        require(owner == adminCustomerId || owner == SYSTEM_GRAPH_OWNER) {
             "graph ${request.graphId} is not owned by your account"
         }
 
@@ -72,6 +76,15 @@ class RequestAgentMapAdminService(
             requestType = requestType,
             mapKey = request.mapKey
         )
+
+        // Globally mapped agents follow the instruction ownership model: they
+        // become System-owned, which makes them visible to every customer
+        // (read-only, fork-on-edit) instead of hiding inside the admin account.
+        if (owner == adminCustomerId) {
+            val nodeIds = graphItem[DynamoDBConstants.GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
+            nodeIds.forEach { graphRepository.transferNodeOwnership(it, SYSTEM_GRAPH_OWNER) }
+            graphRepository.transferGraphOwnership(request.graphId, SYSTEM_GRAPH_OWNER)
+        }
 
         requestAgentMapRepository.putMapEntry(
             RequestAgentMapEntry(

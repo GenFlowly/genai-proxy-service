@@ -28,8 +28,9 @@ class GenerationAgentExecutorTest {
     private val profiles = mockk<CustomerProfileRepository> {
         coEvery { getCustomerProfileByCustomerId(any()) } returns null
     }
+    private val retrievalClient = mockk<com.genflowly.providers.RetrievalServerClient>(relaxed = true)
     private val executor =
-        GenerationAgentExecutor(utility, credentials, RequestAgentDefaultsLoader(), systemKeys, profiles)
+        GenerationAgentExecutor(utility, credentials, RequestAgentDefaultsLoader(), systemKeys, profiles, retrievalClient)
 
     private fun profileWithClient(client: String): Map<String, AttributeValue> =
         mapOf("client" to AttributeValue.builder().s(client).build())

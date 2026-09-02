@@ -12,8 +12,8 @@
             "meta_one": "{{count}} node · max {{maxIterations}} iterations",
             "meta_other": "{{count}} nodes · max {{maxIterations}} iterations",
             "showDetails": "▼ Show details",
-            "systemBadge": "System default",
-            "systemHint": "Shared default agent — editing it creates your own copy."
+            "systemBadge": "System",
+            "systemHint": "Shared system agent — editing it creates your own copy."
         },
         "agentsPage": {
             "emptySubtitle": "Agents are created automatically when you onboard. If you see this, try refreshing.",
@@ -107,8 +107,8 @@
             "saveFailed": "Failed to save agent",
             "savedBadge": "✓ Saved",
             "saving": "Saving…",
-            "systemBadge": "System default",
-            "systemBanner": "This is the shared default agent — saving your changes creates your own copy.",
+            "systemBadge": "System",
+            "systemBanner": "This is a shared system agent — saving your changes creates your own copy.",
             "topBarMeta_one": "{{count}} node · max {{maxIterations}} iterations",
             "topBarMeta_other": "{{count}} nodes · max {{maxIterations}} iterations"
         },
@@ -168,7 +168,15 @@
                 "reflectiveGenerator": "Generator (Reflection)",
                 "reflectiveGeneratorDescription": "Generates an answer and reflects on whether it needs another pass.",
                 "generation": "Generation",
-                "generationDescription": "General-purpose text generation step."
+                "generationDescription": "General-purpose text generation step.",
+                "contractPrompt": "Prompt via instruction",
+                "queryAnalyzerContractOutput": "Writes query_intent and needs_rewrite (json_output_mapping)",
+                "queryRewriterContractOutput": "Writes rewritten_query",
+                "resultRankerContractInput": "Reads retrieval_results",
+                "resultRankerContractOutput": "Writes ranked_results (json_indices)",
+                "responseGeneratorContractPersona": "Persona comes from the request-time instruction (node prompt ignored)",
+                "responseGeneratorContractOutput": "Writes generated_response",
+                "responseGeneratorContractStreaming": "Streams the answer"
             },
             "conditions": {
                 "needsRewrite": "Needs rewrite",
