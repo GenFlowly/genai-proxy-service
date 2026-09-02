@@ -36,7 +36,7 @@ class NotesService(
      */
     private suspend fun createNoteTitle(customerId: String, noteContent: String): String? {
         return try {
-            val agent = agentResolutionService.resolve(RequestType.NOTE_TITLE)
+            val agent = agentResolutionService.resolve(RequestType.NOTE_TITLE, customerId)
             val result = generationAgentExecutor.executeWithCustomerKey(
                 agent = agent,
                 variables = mapOf("noteContent" to noteContent.take(4000)),

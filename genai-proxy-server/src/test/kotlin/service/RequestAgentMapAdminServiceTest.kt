@@ -40,12 +40,21 @@ class RequestAgentMapAdminServiceTest {
     }
 
     @Test
-    fun `putMapEntry stores a SYSTEM-scope entry and invalidates the cache`() = runTest {
-        coEvery { graphRepo.getCustomerGraph("GRP1") } returns graphOwnedBy("CU-admin")
+    fun `putMapEntry stores a SYSTEM-scope entry, transfers ownership to System and invalidates`() = runTest {
+        coEvery { graphRepo.getCustomerGraph("GRP1") } returns (graphOwnedBy("CU-admin") + mapOf(
+            DynamoDBConstants.GRAPH_NODE_IDS_KEY to AttributeValue.builder()
+                .l(AttributeValue.builder().s("NOD1").build()).build()
+        ))
+        coEvery { graphRepo.transferNodeOwnership(any(), any()) } returns Unit
+        coEvery { graphRepo.transferGraphOwnership(any(), any()) } returns Unit
 
         service.putMapEntry(RequestType.INSTRUCTION_PERSONA, request, "CU-admin")
 
         coVerify { resolution.buildAgentFromGraph("GRP1", RequestType.INSTRUCTION_PERSONA, "PersonaCustom") }
+        // A globally mapped agent becomes System infrastructure (visible to
+        // every customer read-only, fork-on-edit) — nodes first, then graph.
+        coVerify { graphRepo.transferNodeOwnership("NOD1", DynamoDBConstants.SYSTEM_GRAPH_OWNER) }
+        coVerify { graphRepo.transferGraphOwnership("GRP1", DynamoDBConstants.SYSTEM_GRAPH_OWNER) }
         coVerify {
             mapRepo.putMapEntry(match {
                 it.scope == SYSTEM_SCOPE &&
@@ -55,6 +64,17 @@ class RequestAgentMapAdminServiceTest {
             })
         }
         coVerify { resolution.invalidate(RequestType.INSTRUCTION_PERSONA) }
+    }
+
+    @Test
+    fun `putMapEntry accepts an already System-owned graph without re-transferring`() = runTest {
+        coEvery { graphRepo.getCustomerGraph("GRP1") } returns
+            graphOwnedBy(DynamoDBConstants.SYSTEM_GRAPH_OWNER)
+
+        service.putMapEntry(RequestType.INSTRUCTION_PERSONA, request, "CU-admin")
+
+        coVerify(exactly = 0) { graphRepo.transferGraphOwnership(any(), any()) }
+        coVerify { mapRepo.putMapEntry(match { it.scope == SYSTEM_SCOPE && it.graphId == "GRP1" }) }
     }
 
     @Test
