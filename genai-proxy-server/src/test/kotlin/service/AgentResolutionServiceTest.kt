@@ -102,7 +102,7 @@ class AgentResolutionServiceTest {
     }
 
     @Test
-    fun `disabled entry, missing graph and wrong node type all fall back`() = runTest {
+    fun `disabled entry and missing graph fall back`() = runTest {
         // disabled
         coEvery { mapRepo.getMapEntry(any(), any()) } returns entry.copy(enabled = false)
         assertEquals(ResolvedAgentSource.CONFIG, service.resolve(RequestType.INSTRUCTION_PERSONA).source)
@@ -112,13 +112,19 @@ class AgentResolutionServiceTest {
         coEvery { mapRepo.getMapEntry(any(), any()) } returns entry
         coEvery { graphRepo.getCustomerGraph("GRP1") } returns null
         assertEquals(ResolvedAgentSource.CONFIG, service.resolve(RequestType.INSTRUCTION_PERSONA).source)
-        service.invalidate()
+    }
 
-        // wrong node type
+    @Test
+    fun `non-GENERATION entry node resolves to graph execution instead of falling back`() = runTest {
+        coEvery { mapRepo.getMapEntry(any(), any()) } returns entry
         coEvery { graphRepo.getCustomerGraph("GRP1") } returns graphItem
         coEvery { graphRepo.getCustomerGraphNode("NOD1") } returns
                 nodeItem(type = "RESPONSE_GENERATOR", config = "{}")
-        assertEquals(ResolvedAgentSource.CONFIG, service.resolve(RequestType.INSTRUCTION_PERSONA).source)
+
+        val resolved = service.resolve(RequestType.INSTRUCTION_PERSONA)
+        assertEquals(ResolvedAgentSource.DDB, resolved.source)
+        assertTrue(resolved.executeAsGraph)
+        assertEquals("GRP1", resolved.graphId)
     }
 
     @Test

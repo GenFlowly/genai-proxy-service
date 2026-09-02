@@ -22,9 +22,14 @@ private val logger = KotlinLogging.logger {}
  *  3. Every edge `to` must be in nodeIds or "__end__".
  *  4. Every conditional edge `from` must be in nodeIds; every route target must
  *     be in nodeIds or "__end__".
- *  5. condition_key must be a known RetrievalState field.
- *  6. Cycle safety: if conditional_edges is non-empty, at least one node must
- *     be of type RESPONSE_GENERATOR_WITH_REFLECTION.
+ *  5. condition_key must be non-blank (any state field or custom node
+ *     output_key is legal — custom keys land in the runtime's scratch
+ *     channel). condition_type bool/list_empty needs exactly true+false
+ *     routes; "value" needs at least one route.
+ *  6. Cycle safety: if the graph contains a directed cycle (over plain and
+ *     conditional edges combined), at least one node must be of type
+ *     RESPONSE_GENERATOR_WITH_REFLECTION (the cycle-exit signal writer).
+ *     Acyclic branching needs no reflection node.
  *  7. Every nodeId is reachable from the entryPoint.
  *  8. maxIterations in [1, 100].
  *  9. Node config must be valid JSON when provided.
@@ -33,13 +38,7 @@ private val logger = KotlinLogging.logger {}
  */
 object GraphValidationService {
 
-    /** RetrievalState fields that are legal condition_key values in conditional edges. */
-    private val VALID_CONDITION_KEYS = setOf(
-        "needs_rewrite",
-        "needs_more_context",
-        "retrieval_results",    // used with condition_type=list_empty
-        "error",
-    )
+    private val BOOLEAN_CONDITION_TYPES = setOf("bool", "list_empty")
 
     private val jsonParser = Json { ignoreUnknownKeys = true }
 
@@ -161,15 +160,25 @@ object GraphValidationService {
 
             val conditionKey = cond["condition_key"]?.jsonPrimitive?.content
                 ?: throw IllegalArgumentException("Conditional edge is missing 'condition_key'.")
-            require(conditionKey in VALID_CONDITION_KEYS) {
-                "Unknown condition_key '$conditionKey'. " +
-                "Valid keys: ${VALID_CONDITION_KEYS.joinToString()}."
+            require(conditionKey.isNotBlank()) {
+                "Conditional edge from '$from' has a blank condition_key."
             }
 
             val routes = cond["routes"]?.jsonObject
                 ?: throw IllegalArgumentException(
                     "Conditional edge from '$from' is missing 'routes' map."
                 )
+            val conditionType = cond["condition_type"]?.jsonPrimitive?.content ?: "bool"
+            if (conditionType in BOOLEAN_CONDITION_TYPES) {
+                require(routes.keys == setOf("true", "false")) {
+                    "Conditional edge from '$from' ($conditionType) must have exactly " +
+                    "'true' and 'false' routes."
+                }
+            } else {
+                require(routes.isNotEmpty()) {
+                    "Conditional edge from '$from' needs at least one route."
+                }
+            }
             routes.values.forEach { routeVal ->
                 val target = routeVal.jsonPrimitive.content
                 require(target in nodeIdSet || target == "__end__") {
@@ -181,24 +190,75 @@ object GraphValidationService {
 
     /**
      * Rule 6: Cycle safety.
-     * If the graph has any conditional edges (which can create cycles), at least
-     * one node must be RESPONSE_GENERATOR_WITH_REFLECTION — that is the only node
-     * that writes `needs_more_context` (the cycle-exit signal).
+     * Only a graph that actually contains a directed cycle (over plain and
+     * conditional edges combined) must carry a RESPONSE_GENERATOR_WITH_REFLECTION
+     * node — that is the node that writes `needs_more_context` (the cycle-exit
+     * signal). Acyclic branching, multi-way or not, needs no reflection node.
      */
     private fun validateCycleSafety(
         edgesObj: JsonObject,
         nodeTypeById: Map<String, String>,
     ) {
-        val conditionalEdges = edgesObj["conditional_edges"]?.jsonArray ?: return
-        if (conditionalEdges.isEmpty()) return
+        if (!hasDirectedCycle(buildAdjacency(edgesObj))) return
 
         val hasReflection = nodeTypeById.values.any {
             it == "RESPONSE_GENERATOR_WITH_REFLECTION"
         }
         require(hasReflection) {
-            "A graph with conditional (cyclic) edges must contain a " +
+            "This graph contains a cycle, so it must include a " +
             "RESPONSE_GENERATOR_WITH_REFLECTION node to provide a safe cycle-exit signal."
         }
+    }
+
+    /** Adjacency over plain + conditional edges, "__end__" targets excluded. */
+    private fun buildAdjacency(edgesObj: JsonObject): Map<String, Set<String>> {
+        val adjacency = mutableMapOf<String, MutableSet<String>>()
+        edgesObj["edges"]?.jsonArray?.forEach { el ->
+            val edge = el.jsonObject
+            val from = edge["from"]?.jsonPrimitive?.content ?: return@forEach
+            val to = edge["to"]?.jsonPrimitive?.content ?: return@forEach
+            if (to != "__end__") adjacency.getOrPut(from) { mutableSetOf() }.add(to)
+        }
+        edgesObj["conditional_edges"]?.jsonArray?.forEach { el ->
+            val cond = el.jsonObject
+            val from = cond["from"]?.jsonPrimitive?.content ?: return@forEach
+            cond["routes"]?.jsonObject?.values?.forEach { routeVal ->
+                val target = routeVal.jsonPrimitive.content
+                if (target != "__end__") adjacency.getOrPut(from) { mutableSetOf() }.add(target)
+            }
+        }
+        return adjacency
+    }
+
+    /** Iterative three-color DFS cycle detection. */
+    private fun hasDirectedCycle(adjacency: Map<String, Set<String>>): Boolean {
+        val visited = mutableSetOf<String>()
+        val inStack = mutableSetOf<String>()
+
+        fun dfs(start: String): Boolean {
+            val stack = ArrayDeque<Pair<String, Iterator<String>>>()
+            stack.addLast(start to (adjacency[start] ?: emptySet()).iterator())
+            visited.add(start)
+            inStack.add(start)
+            while (stack.isNotEmpty()) {
+                val (node, neighbours) = stack.last()
+                if (neighbours.hasNext()) {
+                    val next = neighbours.next()
+                    if (next in inStack) return true
+                    if (next !in visited) {
+                        visited.add(next)
+                        inStack.add(next)
+                        stack.addLast(next to (adjacency[next] ?: emptySet()).iterator())
+                    }
+                } else {
+                    stack.removeLast()
+                    inStack.remove(node)
+                }
+            }
+            return false
+        }
+
+        return adjacency.keys.any { it !in visited && dfs(it) }
     }
 
     /**
@@ -210,24 +270,7 @@ object GraphValidationService {
         nodeIdSet: Set<String>,
         edgesObj: JsonObject,
     ) {
-        // Build adjacency list: nodeId -> set of reachable nodeIds
-        val adjacency = mutableMapOf<String, MutableSet<String>>()
-
-        edgesObj["edges"]?.jsonArray?.forEach { el ->
-            val edge = el.jsonObject
-            val from = edge["from"]?.jsonPrimitive?.content ?: return@forEach
-            val to = edge["to"]?.jsonPrimitive?.content ?: return@forEach
-            if (to != "__end__") adjacency.getOrPut(from) { mutableSetOf() }.add(to)
-        }
-
-        edgesObj["conditional_edges"]?.jsonArray?.forEach { el ->
-            val cond = el.jsonObject
-            val from = cond["from"]?.jsonPrimitive?.content ?: return@forEach
-            cond["routes"]?.jsonObject?.values?.forEach { routeVal ->
-                val target = routeVal.jsonPrimitive.content
-                if (target != "__end__") adjacency.getOrPut(from) { mutableSetOf() }.add(target)
-            }
-        }
+        val adjacency = buildAdjacency(edgesObj)
 
         // BFS from entryPoint
         val visited = mutableSetOf<String>()

@@ -62,6 +62,23 @@ private data class AgentRawData(
     val images: List<ImageRef> = emptyList()
 )
 
+// --- /execute-agent-graph wire types ---
+
+@Serializable
+private data class ExecuteAgentGraphPayload(
+    val graph_id: String,
+    val customer_id: String,
+    val client: String = "internal",
+    val variables: Map<String, String> = emptyMap(),
+    val llm_credentials: Map<String, String>,
+    val llm_provider: String,
+    val llm_model: String,
+    val llm_max_tokens: Int = 4096,
+    val model_type: String? = null,
+    val model_name: String? = null,
+    val response_schema: kotlinx.serialization.json.JsonObject? = null
+)
+
 // --- /models and /validate-key wire types ---
 
 @Serializable
@@ -235,6 +252,64 @@ class RetrievalServerClient(
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to call retrieval server (non-streaming)" }
+            RetrievalResult(null, null, null, null, null)
+        }
+    }
+
+    /**
+     * Executes a specific agent graph (request agents) through the LangGraph
+     * runtime. Returns the final state's generated_response + usage; text is
+     * null on any failure so callers can advance their provider failover.
+     */
+    suspend fun executeAgentGraph(
+        graphId: String,
+        customerId: String,
+        variables: Map<String, String>,
+        llmCredentials: Map<String, String>,
+        llmProvider: String,
+        llmModel: String,
+        llmMaxTokens: Int = 4096,
+        modelType: String? = null,
+        modelName: String? = null,
+        responseSchema: kotlinx.serialization.json.JsonObject? = null
+    ): RetrievalResult {
+        logger.info { "Executing agent graph $graphId for customer $customerId (provider $llmProvider, model $llmModel)" }
+        return try {
+            val response: HttpResponse = httpClient.post("$retrievalServerUrl/execute-agent-graph") {
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(ExecuteAgentGraphPayload(
+                    graph_id = graphId,
+                    customer_id = customerId,
+                    variables = variables,
+                    llm_credentials = llmCredentials,
+                    llm_provider = llmProvider,
+                    llm_model = llmModel,
+                    llm_max_tokens = llmMaxTokens,
+                    model_type = modelType,
+                    model_name = modelName,
+                    response_schema = responseSchema
+                )))
+                timeout {
+                    requestTimeoutMillis = 300_000L
+                    socketTimeoutMillis = 300_000L
+                }
+            }
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) {
+                logger.error { "Agent graph execution error ${response.status}: $body" }
+                return RetrievalResult(null, null, null, null, null)
+            }
+            val root = json.parseToJsonElement(body).jsonObject
+            val usageObj = root["usage"]?.jsonObject
+            RetrievalResult(
+                text = root["generated_response"]?.jsonPrimitive?.content,
+                inputTokens = usageObj?.get("input_tokens")?.jsonPrimitive?.intOrNull,
+                outputTokens = usageObj?.get("output_tokens")?.jsonPrimitive?.intOrNull,
+                totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
+                tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
+            )
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to execute agent graph $graphId" }
             RetrievalResult(null, null, null, null, null)
         }
     }

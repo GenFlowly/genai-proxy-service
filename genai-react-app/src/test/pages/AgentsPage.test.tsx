@@ -252,9 +252,9 @@ describe('AgentsPage Component', () => {
             agents: [systemAgent],
         });
         renderPage();
-        await waitFor(() => expect(screen.getByText('System default')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('System')).toBeInTheDocument());
         expect(
-            screen.getByText('Shared default agent — editing it creates your own copy.')
+            screen.getByText('Shared system agent — editing it creates your own copy.')
         ).toBeInTheDocument();
     });
 
@@ -264,7 +264,7 @@ describe('AgentsPage Component', () => {
         });
         renderPage();
         await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
-        expect(screen.queryByText('System default')).not.toBeInTheDocument();
+        expect(screen.queryByText('System')).not.toBeInTheDocument();
     });
 
     // ── Multiple agents ───────────────────────────────────────────────────────

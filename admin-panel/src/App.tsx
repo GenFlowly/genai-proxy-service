@@ -4,15 +4,16 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import SystemApiKeysPage from './pages/SystemApiKeysPage'
 import InstructionsPage from './pages/InstructionsPage'
 import InstructionDetailPage from './pages/InstructionDetailPage'
-import RequestAgentsPage from './pages/RequestAgentsPage'
+import DefaultAgentsPage from './pages/DefaultAgentsPage'
 import DefaultGraphPage from './pages/DefaultGraphPage'
+import AgentGraphEditorPage from './pages/AgentGraphEditorPage'
+import RequestAgentsPage from './pages/RequestAgentsPage'
 import { onboardCustomer } from './services/onboardService'
 
 const NAV_ITEMS: { path: string; label: string }[] = [
     { path: '/system-api-keys', label: 'System AI Vendor API Keys' },
     { path: '/instructions', label: 'Instructions' },
-    { path: '/request-agents', label: 'Request Agents' },
-    { path: '/default-graph', label: 'Default Graph' },
+    { path: '/default-agents', label: 'Default Agents' },
 ]
 
 export default function App() {
@@ -121,8 +122,12 @@ export default function App() {
                         <Route path="/system-api-keys" element={<SystemApiKeysPage />} />
                         <Route path="/instructions" element={<InstructionsPage />} />
                         <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
-                        <Route path="/request-agents" element={<RequestAgentsPage />} />
-                        <Route path="/default-graph" element={<DefaultGraphPage />} />
+                        <Route path="/default-agents" element={<DefaultAgentsPage />} />
+                        <Route path="/default-agents/default-graph" element={<DefaultGraphPage />} />
+                        <Route path="/default-agents/agent/:graphId" element={<AgentGraphEditorPage />} />
+                        <Route path="/default-agents/mappings" element={<RequestAgentsPage />} />
+                        <Route path="/request-agents" element={<Navigate to="/default-agents" replace />} />
+                        <Route path="/default-graph" element={<Navigate to="/default-agents" replace />} />
                         <Route path="*" element={<Navigate to="/system-api-keys" replace />} />
                     </Routes>
                 </main>

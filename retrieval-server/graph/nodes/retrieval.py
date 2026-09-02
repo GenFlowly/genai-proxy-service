@@ -52,13 +52,24 @@ def _discover_collections(
     return grouped
 
 
-async def retrieval(state: RetrievalState) -> dict:
+def retrieval(node_id: str | None = None):
+    """Factory: retrieval node reading its own (nodeId-keyed) config, with a
+    nodeType-keyed fallback for statically-built graphs."""
+    async def node(state: RetrievalState) -> dict:
+        return await _retrieval(state, node_id)
+
+    node.__name__ = "retrieval"
+    return node
+
+
+async def _retrieval(state: RetrievalState, node_id: str | None) -> dict:
     query = state.get("rewritten_query") or state["original_query"]
     customer_id = state["customer_id"]
     logger.info("Node retrieval: START — customer=%s query='%s'", customer_id, query[:100])
 
     try:
-        config = state.get("node_configs", {}).get("RETRIEVAL", {})
+        configs = state.get("node_configs", {})
+        config = (configs.get(node_id) if node_id else None) or configs.get("RETRIEVAL", {})
         top_n = config.get("top_n") or state["top_n"]
         similarity_threshold = config.get("similarity_threshold") or state["similarity_threshold"]
         search_params = config.get("search_params") or state["search_params"]
