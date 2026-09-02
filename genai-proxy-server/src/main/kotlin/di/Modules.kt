@@ -123,7 +123,7 @@ fun appModule(): Module = module {
     single { SharedUsersResolver(get(), get()) }
     single { CustomerCredentialsService(get(), get(), get(), get(), get()) }
     single { UtilityGenerationService(get(), get()) }
-    single { GraphService(get(), get()) }
+    single { GraphService(get(), get(), get()) }
     single { RequestAgentDefaultsLoader() }
     single { AgentResolutionService(get(), get(), get(), get()) }
     single { GenerationAgentExecutor(get(), get(), get(), get(), get()) }

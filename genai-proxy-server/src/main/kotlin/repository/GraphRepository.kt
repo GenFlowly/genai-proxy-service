@@ -425,6 +425,44 @@ class GraphRepository(
             }
         }
 
+    /**
+     * Re-owns a live (v=0) graph row. Used when an admin maps a graph into the
+     * global request-agent map: the graph becomes System infrastructure. The
+     * sparse customerIdIndex GSI follows the attribute automatically.
+     */
+    suspend fun transferGraphOwnership(graphId: String, newOwner: String) = withContext(Dispatchers.IO) {
+        dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(CUSTOMER_GRAPHS_TABLE)
+                .key(mapOf(
+                    GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),
+                    VERSION_KEY to AttributeValue.builder().n("0").build(),
+                ))
+                .updateExpression("SET #cid = :owner")
+                .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+                .expressionAttributeValues(mapOf(":owner" to AttributeValue.builder().s(newOwner).build()))
+                .build()
+        )
+        logger.info("Transferred graph $graphId ownership to $newOwner")
+    }
+
+    /** Node counterpart of [transferGraphOwnership]. */
+    suspend fun transferNodeOwnership(nodeId: String, newOwner: String) = withContext(Dispatchers.IO) {
+        dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(CUSTOMER_GRAPH_NODES_TABLE)
+                .key(mapOf(
+                    NODE_ID_KEY to AttributeValue.builder().s(nodeId).build(),
+                    VERSION_KEY to AttributeValue.builder().n("0").build(),
+                ))
+                .updateExpression("SET #cid = :owner")
+                .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+                .expressionAttributeValues(mapOf(":owner" to AttributeValue.builder().s(newOwner).build()))
+                .build()
+        )
+        logger.info("Transferred node $nodeId ownership to $newOwner")
+    }
+
     suspend fun getCustomerGraphVersions(graphId: String): List<Map<String, AttributeValue>> =
         withContext(Dispatchers.IO) {
             try {

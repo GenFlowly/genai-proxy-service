@@ -128,7 +128,7 @@ class MemoryExtractionService(
             ExistingMemoryView(it.memoryId, it.kind.name, it.category, it.text)
         })
 
-        val agent = agentResolutionService.resolve(RequestType.MEMORY_EXTRACTION)
+        val agent = agentResolutionService.resolve(RequestType.MEMORY_EXTRACTION, customerId)
         val result = generationAgentExecutor.executeWithCustomerKey(
             agent = agent,
             variables = mapOf(

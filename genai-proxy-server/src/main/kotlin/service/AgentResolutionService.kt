@@ -50,28 +50,37 @@ class AgentResolutionService(
     private val cache = ConcurrentHashMap<String, CacheEntry>()
 
     suspend fun resolve(requestType: RequestType, customerId: String? = null): ResolvedAgent {
-        // Per-customer overrides are a future addition: they will do a first
-        // lookup with scope = customerId before falling through to SYSTEM.
-        val scope = SYSTEM_SCOPE
+        // Per-customer override first (written when a customer forks a System
+        // request agent), then the global SYSTEM mapping, then bundled defaults.
+        if (customerId != null) {
+            resolveScoped(customerId, requestType)?.let { return it }
+        }
+        return resolveScoped(SYSTEM_SCOPE, requestType) ?: fallback(requestType)
+    }
+
+    /**
+     * Cached resolution for one scope; null when the scope has no usable
+     * (enabled, well-formed) entry. Negative results are cached too; transient
+     * DDB errors return null WITHOUT caching so a healthy table is retried.
+     */
+    private suspend fun resolveScoped(scope: String, requestType: RequestType): ResolvedAgent? {
         val cacheKey = "$scope#${requestType.name}"
 
         cache[cacheKey]?.let { cached ->
             if (System.currentTimeMillis() - cached.fetchedAt < CACHE_TTL_MS) {
-                return cached.agent ?: fallback(requestType)
+                return cached.agent
             }
         }
 
         val resolved = try {
             resolveFromDynamo(scope, requestType)
         } catch (e: Exception) {
-            // Transient DDB errors: fall back without caching so a healthy
-            // table is used again on the next request.
-            logger.warn(e) { "Request-agent resolution failed for $scope/$requestType — using bundled default" }
-            return fallback(requestType)
+            logger.warn(e) { "Request-agent resolution failed for $scope/$requestType" }
+            return null
         }
 
         cache[cacheKey] = CacheEntry(resolved, System.currentTimeMillis())
-        return resolved ?: fallback(requestType)
+        return resolved
     }
 
     /** Drops cached resolutions; called by admin write endpoints. */

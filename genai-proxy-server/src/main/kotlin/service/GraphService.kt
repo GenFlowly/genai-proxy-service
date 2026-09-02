@@ -19,8 +19,10 @@ import com.genflowly.DynamoDBConstants.VERSION_KEY
 import com.genflowly.GENERATION_NODE_TYPE
 import com.genflowly.models.GenerationNodeConfig
 import com.genflowly.models.NodeModelPreference
+import com.genflowly.SYSTEM_SCOPE
 import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.InstructionRepository
+import com.genflowly.repository.RequestAgentMapRepository
 import com.genflowly.models.api.AgentNodeResponse
 import com.genflowly.models.api.AgentResponse
 import com.genflowly.models.api.CreateAgentRequest
@@ -49,6 +51,7 @@ private val logger = KotlinLogging.logger {}
 class GraphService(
     private val graphRepository: GraphRepository,
     private val instructionRepository: InstructionRepository,
+    private val requestAgentMapRepository: RequestAgentMapRepository,
 ) {
 
     private val nodeConfigJson = kotlinx.serialization.json.Json {
@@ -188,7 +191,10 @@ class GraphService(
             customerId = customerId,
             graphId = newGraphId,
             name = systemGraph[GRAPH_NAME_KEY]?.s() ?: "Default Graph",
-            isDefault = true,
+            // A fork of the System default graph replaces it as the customer's
+            // default; forks of other System agents (request-type generators)
+            // stay non-default and take effect via the per-customer map entry.
+            isDefault = systemGraph[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false,
             nodeIds = oldNodeIds.map { idMap.getValue(it) },
             edges = substituteNodeIds(systemGraph[GRAPH_EDGES_KEY]?.s() ?: "{}", idMap),
             entryPoint = idMap[systemGraph[GRAPH_ENTRY_POINT_KEY]?.s()]
@@ -203,24 +209,29 @@ class GraphService(
     }
 
     /**
-     * Deletes an agent: the graph and every node it owns. Guarded against the
-     * default graph — deleting that would break agentic chat for the customer.
+     * Deletes an agent: the graph and every node it owns. Deleting an owned
+     * default graph is allowed — the customer falls back to the System
+     * default graph (i.e. this doubles as "reset to default").
      * @throws IllegalStateException when not found / not owned (→ 404).
-     * @throws IllegalArgumentException for the default graph (→ 400).
      */
     suspend fun deleteAgent(customerId: String, graphId: String) {
         val graph = graphRepository.getCustomerGraph(graphId)
-        // Not-owned deliberately reads as not-found (no resource-existence leak)
+        // Not-owned deliberately reads as not-found (no resource-existence
+        // leak) and also shields System-owned graphs from customer deletes.
         if (graph == null || graph["customerId"]?.s() != customerId) {
             throw IllegalStateException("Agent (graph) '$graphId' not found.")
-        }
-        require(graph[GRAPH_IS_DEFAULT_KEY]?.bool() != true) {
-            "Cannot delete the default graph."
         }
 
         val nodeIds = graph[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
         nodeIds.forEach { graphRepository.deleteCustomerGraphNode(it) }
         graphRepository.deleteCustomerGraph(graphId)
+
+        // Drop this customer's request-type overrides that pointed at the
+        // deleted graph — resolution reverts to the System mapping.
+        requestAgentMapRepository.listMapEntries(customerId)
+            .filter { it.graphId == graphId }
+            .forEach { requestAgentMapRepository.deleteMapEntry(customerId, it.requestType) }
+
         logger.info { "Deleted agent $graphId (+${nodeIds.size} node(s)) for customer $customerId" }
     }
 
@@ -398,15 +409,33 @@ class GraphService(
         val allNodes = graphRepository.listCustomerGraphNodes(customerId)
         val nodeById = allNodes.associateBy { it[NODE_ID_KEY]?.s() ?: "" }
 
-        val agents = graphs.map { graphItem ->
+        val ownAgents = graphs.map { graphItem ->
             agentResponseFrom(graphItem, nodeById, isSystem = false)
-        }.toMutableList()
-
-        // No own default graph → serve the System-published one as a read-only
-        // fallback. Editing it forks it into a customer-owned copy.
-        if (agents.none { it.isDefault }) {
-            getSystemDefaultAgentOrNull()?.let { agents.add(0, it) }
         }
+
+        // System-owned agents follow the instruction ownership model: they are
+        // visible to every customer read-only, and editing one forks it into a
+        // customer-owned copy. The System DEFAULT graph is only served while
+        // the customer has no default of their own; the non-default System
+        // agents (request-type generators etc.) are always listed.
+        val systemGraphs = graphRepository.listCustomerGraphs(SYSTEM_GRAPH_OWNER)
+        val agents = mutableListOf<AgentResponse>()
+        if (systemGraphs.isNotEmpty()) {
+            val systemNodeById = graphRepository.listCustomerGraphNodes(SYSTEM_GRAPH_OWNER)
+                .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+            val hasOwnDefault = ownAgents.any { it.isDefault }
+            systemGraphs.forEach { graphItem ->
+                val isDefaultGraph = graphItem[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false
+                if (isDefaultGraph && hasOwnDefault) return@forEach
+                val response = agentResponseFrom(graphItem, systemNodeById, isSystem = true)
+                if (isDefaultGraph) agents.add(0, response) else agents.add(response)
+            }
+        }
+        // Own agents go after the System default (when shown) but before the
+        // System request agents, keeping the primary chat agent on top.
+        val insertAt = if (agents.firstOrNull()?.isDefault == true) 1 else 0
+        agents.addAll(insertAt, ownAgents)
+
         logger.info { "Fetched ${agents.size} agent(s) for customer $customerId" }
         return GetCustomerAgentsResponse(agents = agents)
     }
@@ -532,6 +561,23 @@ class GraphService(
             val (forked, idMap) = forkSystemGraph(customerId, currentGraph)
             val forkedId = forked[GRAPH_ID_KEY]?.s()
                 ?: throw IllegalStateException("Forked graph is missing its graphId.")
+
+            // Forking a request-type agent only takes effect through the map:
+            // mirror every SYSTEM mapping of the original as a per-customer
+            // override pointing at the fork. (The default graph needs no map —
+            // its fork wins by being the customer's isDefault graph.)
+            if (currentGraph[GRAPH_IS_DEFAULT_KEY]?.bool() != true) {
+                requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE)
+                    .filter { it.graphId == graphId }
+                    .forEach { entry ->
+                        requestAgentMapRepository.putMapEntry(
+                            entry.copy(scope = customerId, graphId = forkedId, updatedBy = customerId)
+                        )
+                        logger.info {
+                            "Customer $customerId override: ${entry.requestType} → fork $forkedId of $graphId"
+                        }
+                    }
+            }
             val translated = req.copy(
                 // The fork replaces the System graph as this customer's default.
                 isDefault = null,
