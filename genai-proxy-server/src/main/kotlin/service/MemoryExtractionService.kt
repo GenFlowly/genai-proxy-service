@@ -153,7 +153,6 @@ class MemoryExtractionService(
             }
         }
         if (applied > 0) {
-            memoryService.invalidate(customerId)
             logger.info("Applied $applied memory operation(s) for customer $customerId from ${sourceType.name.lowercase()} $sourceId")
         }
     }

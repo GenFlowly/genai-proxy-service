@@ -51,6 +51,15 @@ class ModelCatalogRepository(
                     entry.cacheWriteCostPerMTok?.let {
                         put("cacheWriteCostPerMTok", AttributeValue.builder().n(it.toString()).build())
                     }
+                    entry.inputAudioCostPerMTok?.let {
+                        put("inputAudioCostPerMTok", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    entry.outputAudioCostPerMTok?.let {
+                        put("outputAudioCostPerMTok", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    entry.cacheReadAudioCostPerMTok?.let {
+                        put("cacheReadAudioCostPerMTok", AttributeValue.builder().n(it.toString()).build())
+                    }
                     put("updatedAt", AttributeValue.builder().s(now).build())
                 }
                 WriteRequest.builder()
@@ -82,7 +91,10 @@ class ModelCatalogRepository(
                 inputCostPerMTok = item["inputCostPerMTok"]?.n()?.toDoubleOrNull(),
                 outputCostPerMTok = item["outputCostPerMTok"]?.n()?.toDoubleOrNull(),
                 cacheReadCostPerMTok = item["cacheReadCostPerMTok"]?.n()?.toDoubleOrNull(),
-                cacheWriteCostPerMTok = item["cacheWriteCostPerMTok"]?.n()?.toDoubleOrNull()
+                cacheWriteCostPerMTok = item["cacheWriteCostPerMTok"]?.n()?.toDoubleOrNull(),
+                inputAudioCostPerMTok = item["inputAudioCostPerMTok"]?.n()?.toDoubleOrNull(),
+                outputAudioCostPerMTok = item["outputAudioCostPerMTok"]?.n()?.toDoubleOrNull(),
+                cacheReadAudioCostPerMTok = item["cacheReadAudioCostPerMTok"]?.n()?.toDoubleOrNull()
             )
         }
 }

@@ -14,11 +14,12 @@ const next = require('next')
 const { WebSocket, WebSocketServer } = require('ws')
 
 const dev = process.env.NODE_ENV !== 'production'
-const port = parseInt(process.env.PORT || '3000', 10)
 
 // Load .env.local / .env the same way `next dev` would, so GENFLOWLY_* vars
-// are available to both the relay below and the Next.js route handlers.
+// (and PORT) are available to both the relay below and the route handlers.
 require('@next/env').loadEnvConfig(process.cwd(), dev)
+
+const port = parseInt(process.env.PORT || '3000', 10)
 
 const app = next({ dev })
 const handleRequest = app.getRequestHandler()

@@ -10,6 +10,7 @@ from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.instruction_loader import get_instruction_text
 from graph.nodes.llm_node import make_llm_node
+from graph.nodes.memory import memory
 from graph.state import RetrievalState
 from models import ExecuteAgentGraphRequest, RetrieveRequest
 from streaming import stream_response
@@ -51,6 +52,8 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         web_search_results=[],
         web_search_answer=None,
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
+        memory_enabled=req.memory_enabled,
+        memories_block=None,
         scratch={},
         generated_response=None,
         error=None,
@@ -58,6 +61,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
 
 
 _FALLBACK_NODE_ID = "RESPONSE_GENERATOR"
+_FALLBACK_MEMORY_NODE_ID = "MEMORY"
 _FALLBACK_NODE_TYPE = "RESPONSE_GENERATOR"
 _FALLBACK_CONFIG = {
     "response_format": "text",
@@ -73,17 +77,24 @@ def _get_fallback_graph():
     global _fallback_graph
     if _fallback_graph is None:
         builder = StateGraph(RetrievalState)
+        # MEMORY first so learned user facts reach the persona even on the
+        # direct (non-agentic / graphless) path; inert without consent.
+        builder.add_node(_FALLBACK_MEMORY_NODE_ID, memory(_FALLBACK_MEMORY_NODE_ID))
         builder.add_node(_FALLBACK_NODE_ID, make_llm_node(_FALLBACK_NODE_TYPE))
-        builder.set_entry_point(_FALLBACK_NODE_ID)
+        builder.set_entry_point(_FALLBACK_MEMORY_NODE_ID)
+        builder.add_edge(_FALLBACK_MEMORY_NODE_ID, _FALLBACK_NODE_ID)
         builder.add_edge(_FALLBACK_NODE_ID, END)
         _fallback_graph = builder.compile()
     return _fallback_graph
 
 
 def _direct_graph() -> tuple:
-    """Single-node direct-LLM pipeline: no retrieval, no intermediate nodes."""
+    """Direct-LLM pipeline: memory + one generation node, no retrieval."""
     graph = _get_fallback_graph()
-    node_type_map = {_FALLBACK_NODE_ID: _FALLBACK_NODE_TYPE}
+    node_type_map = {
+        _FALLBACK_MEMORY_NODE_ID: "MEMORY",
+        _FALLBACK_NODE_ID: _FALLBACK_NODE_TYPE,
+    }
     node_configs = {_FALLBACK_NODE_TYPE: _FALLBACK_CONFIG}
     streaming_nodes = {_FALLBACK_NODE_ID}
     return graph, node_type_map, node_configs, streaming_nodes, _DEFAULT_MAX_ITERATIONS
@@ -297,6 +308,8 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
         web_search_results=[],
         web_search_answer=None,
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
+        memory_enabled=req.memory_enabled,
+        memories_block=None,
         scratch={},
         generated_response=None,
         error=None,

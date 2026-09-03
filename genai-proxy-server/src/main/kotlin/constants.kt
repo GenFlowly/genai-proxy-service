@@ -145,6 +145,18 @@ object DynamoDBConstants {
     // GSI on SharedInstructions keyed by instructionId (who is an entity shared with).
     const val SHARED_INSTRUCTIONS_GSI_KEY = "instructionIdIndex"
 
+    // Admin-curated pre-made nodes for the graph editor palette. PK=presetId.
+    // Attributes: name, nodeType, description, config (JSON string),
+    // requiredAttributes (list<string>), sortOrder (number).
+    const val NODE_PRESETS_TABLE = "NodePresets"
+    const val PRESET_ID_KEY = "presetId"
+    const val PRESET_NAME_KEY = "name"
+    const val PRESET_NODE_TYPE_KEY = "nodeType"
+    const val PRESET_DESCRIPTION_KEY = "description"
+    const val PRESET_CONFIG_KEY = "config"
+    const val PRESET_REQUIRED_ATTRIBUTES_KEY = "requiredAttributes"
+    const val PRESET_SORT_ORDER_KEY = "sortOrder"
+
     // Request-type → agent-graph mapping. PK=scope ("SYSTEM" for global
     // defaults, a customerId for future per-customer overrides), SK=requestType.
     const val REQUEST_AGENT_MAP_TABLE = "RequestAgentMap"

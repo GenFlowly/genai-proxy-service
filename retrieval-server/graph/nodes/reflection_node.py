@@ -67,7 +67,12 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
             # the JSON schema requirement is always appended so needs_more_context is
             # emitted regardless of persona (cycle-exit contract).
             request_sp = state.get("request_system_prompt")
-            system_prompt = (request_sp or _DEFAULT_PERSONA) + _JSON_FORMAT_REQUIREMENT
+            persona = request_sp or _DEFAULT_PERSONA
+            # Learned user memories (MEMORY node) ride on the persona.
+            memories_block = state.get("memories_block")
+            if memories_block:
+                persona = f"{persona}\n\n{memories_block}"
+            system_prompt = persona + _JSON_FORMAT_REQUIREMENT
             model_override = None
         else:
             system_prompt = config.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)

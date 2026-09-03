@@ -42,6 +42,15 @@ which makes one cheap authenticated list call to the vendor and reports
 valid/invalid. New models appear when the retrieval-server's `litellm`
 dependency is updated.
 
+The flip side of catalog-based listing: the returned ids are **not guaranteed
+to be usable by the customer's key**. The catalog can carry retired snapshots,
+and project-scoped vendor keys (OpenAI `sk-proj-...`) often have only a subset
+of models enabled — e.g. a project may see just `gpt-realtime-2.1` /
+`gpt-realtime-2.1-mini` while the catalog lists twenty realtime ids. Picking an
+unavailable id fails at generation/session time with the vendor's
+`model_not_found`; the fix is to choose a current-generation id or check the
+vendor's own model list with the stored key.
+
 ### How text generation works
 
 `POST /api/v1/generate-text` and `POST /api/v1/generate-text-stream`
@@ -110,6 +119,28 @@ client ──WS──> genai-proxy-server ──WS──> retrieval-server /voic
 Voice model ids come from `POST /api/v1/voice/models`. Clients must resample
 audio to the rates announced in `session.ready` (OpenAI: 24 kHz in; Gemini:
 16 kHz in; both 24 kHz out).
+
+A complete browser client (Next.js: mic capture via AudioWorklet, streaming
+resampler, gapless playback, barge-in handling, live transcript) lives in
+`examples/realtime-voice-app`.
+
+### Voice troubleshooting
+
+- **Browser + developer API key**: the `access_token` query-parameter fallback
+  is wired to the Auth0 JWT provider only; `gfy_` keys are read exclusively
+  from the `Authorization` header, which browsers cannot set on WebSockets.
+  Browser apps using a developer key must relay the WebSocket through their own
+  backend (the pattern used by `examples/realtime-voice-app`). A `gfy_` key
+  passed via `access_token` yields a 401 on the upgrade.
+- **`Failed to connect to openai: ... model_not_found`** (relayed as an `error`
+  frame, WS close 3003/4004): the vendor rejected the model id at connect time.
+  See the model-listing caveat above — the catalog lists ids the customer's key
+  may not have; `gpt-realtime-2.1` is a safe current default.
+- **`Missing required parameter: 'session.audio.output.format.rate'`**: newer
+  OpenAI realtime models (`gpt-realtime-2.1`+) require an explicit output
+  sample rate in `session.update`; the openai_realtime adapter sends
+  `{"type": "audio/pcm", "rate": 24000}` for both directions. Seeing this
+  error means a retrieval-server older than that fix is running.
 
 ## API documentation
 

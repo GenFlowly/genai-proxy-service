@@ -686,7 +686,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                                             inputTokens: metrics.inputTokens,
                                             outputTokens: metrics.outputTokens,
                                             totalTokens: metrics.totalTokens,
-                                            tokensReadFromCache: metrics.tokensReadFromCache ?? 0
+                                            tokensReadFromCache: metrics.tokensReadFromCache ?? 0,
+                                            costUsd: metrics.costUsd ?? null
                                         }
                                     }
                                     return { ...block, responseMessages: newMsgs }

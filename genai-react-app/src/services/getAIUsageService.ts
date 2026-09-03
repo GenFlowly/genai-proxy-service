@@ -7,6 +7,8 @@ export interface AIUsageMetrics {
     outputTokens?: number;
     totalTokens?: number;
     tokensReadFromCache?: number;
+    /** Exact USD cost of the message, computed and persisted server-side. */
+    costUsd?: number | null;
 }
 
 export async function getAIUsageActivity(
@@ -15,11 +17,13 @@ export async function getAIUsageActivity(
     messageId: string
 ): Promise<AIUsageMetrics | null> {
     try {
-        const urlObj = new URL(endpoints.getAIUsage);
-        urlObj.searchParams.append("conversationId", conversationId);
-        urlObj.searchParams.append("messageId", messageId);
+        // endpoints.* can be relative when the backend base URL is empty
+        // (same-origin / dev proxy setups); new URL() rejects relative URLs,
+        // so build the query string directly like the other services do.
+        const params = new URLSearchParams({ conversationId, messageId });
+        const url = `${endpoints.getAIUsage}?${params.toString()}`;
 
-        const response = await fetchWithRetry(urlObj.toString(), {
+        const response = await fetchWithRetry(url, {
             method: HttpMethod.GET,
             headers: {
                 'Authorization': `Bearer ${token}`

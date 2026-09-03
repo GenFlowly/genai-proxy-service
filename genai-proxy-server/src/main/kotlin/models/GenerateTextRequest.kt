@@ -24,7 +24,12 @@ data class GenerateTextRequest(
      * guaranteed-parseable JSON matching the schema. Mutually exclusive with
      * [tools]. Works across all vendors.
      */
-    val responseSchema: kotlinx.serialization.json.JsonObject? = null
+    val responseSchema: kotlinx.serialization.json.JsonObject? = null,
+
+    /** Consent: learn new memories about the user from this conversation. */
+    val learnFromConversation: Boolean = true,
+    /** Consent: apply already-learned memories/preferences to this response. */
+    val useLearnedPreferences: Boolean = true,
 )
 
 /**
