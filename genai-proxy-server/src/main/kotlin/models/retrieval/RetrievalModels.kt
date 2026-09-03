@@ -29,7 +29,9 @@ sealed class StreamChunk {
         val inputTokens: Int,
         val outputTokens: Int,
         val totalTokens: Int,
-        val tokensReadFromCache: Int
+        val tokensReadFromCache: Int,
+        /** Prompt-cache write (cache_creation) tokens — billed at the cache-write rate. */
+        val tokensWrittenToCache: Int = 0
     ) : StreamChunk()
 }
 
@@ -39,6 +41,8 @@ data class RetrievalResult(
     val outputTokens: Int?,
     val totalTokens: Int?,
     val tokensReadFromCache: Int?,
+    /** Prompt-cache write (cache_creation) tokens — billed at the cache-write rate. */
+    val tokensWrittenToCache: Int? = null,
     /** JSON array of tool calls the model made, null when it answered directly */
     val toolCallsJson: String? = null
 )

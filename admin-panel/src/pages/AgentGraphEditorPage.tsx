@@ -7,11 +7,11 @@ import { getCustomerInstructions } from '../services/instructionsService'
 import { getAgentGraph, updateAgentGraph } from '../services/defaultGraphService'
 import {
     CONDITION_OPTIONS,
-    NODE_CATALOG,
     diffGraphUpdate,
     toEditorGraph,
     toInstructionOptions,
 } from '../lib/agentGraph'
+import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
 
 /** Visual editor for one admin-owned agent graph (request agents etc.). */
 export default function AgentGraphEditorPage() {
@@ -24,6 +24,7 @@ export default function AgentGraphEditorPage() {
     const [instructionOptions, setInstructionOptions] = useState<InstructionOption[]>([])
     const [saving, setSaving] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
+    const { catalog, saveNodeAsPreset, presetNotice } = useNodePresetCatalog(getAccessTokenSilently)
 
     const refresh = useCallback(async () => {
         if (!graphId) return
@@ -90,15 +91,19 @@ export default function AgentGraphEditorPage() {
                     ← All agents
                 </Link>
             </div>
+            {presetNotice && (
+                <div className={`row-message ${presetNotice.kind}`}>{presetNotice.text}</div>
+            )}
             <div className="graph-editor-shell">
                 <GraphEditor
                     graph={editorGraph}
-                    nodeCatalog={NODE_CATALOG}
+                    nodeCatalog={catalog}
                     instructions={instructionOptions}
                     conditionOptions={CONDITION_OPTIONS}
                     saving={saving}
                     errorMessage={saveError}
                     onSave={(edited) => void handleSave(edited)}
+                    onSaveAsPreset={(node) => void saveNodeAsPreset(node)}
                 />
             </div>
         </>

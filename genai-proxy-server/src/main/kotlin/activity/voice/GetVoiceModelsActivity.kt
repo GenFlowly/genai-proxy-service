@@ -28,7 +28,16 @@ fun Route.registerGetVoiceModelsRoutes(
                     "(OpenAI Realtime API models, Gemini Live API models). Anthropic has no " +
                     "realtime voice API, so CLAUDE always returns an empty list. Use these " +
                     "model ids in the session.init message of the voice session WebSocket " +
-                    "(${Routes.VOICE_SESSION})."
+                    "(${Routes.VOICE_SESSION}).\n\n" +
+                    "**Caveat — the list is catalog-based, not account-based.** Ids come from " +
+                    "a static model catalog gated only on *having* a stored vendor key; the " +
+                    "vendor is never asked which models that key can use. The list can " +
+                    "therefore include retired snapshots or models a project-scoped key " +
+                    "(OpenAI `sk-proj-...`) has no access to. If the voice session rejects a " +
+                    "listed model with `model_not_found`, pick another id — you can see what " +
+                    "the stored key really has with the vendor's model list " +
+                    "(e.g. OpenAI `GET /v1/models`). Current-generation ids " +
+                    "(e.g. `gpt-realtime-2.1`) are the safest choice."
             request {
                 body<GetTextGenerationModelsRequest> {
                     description = "AI vendors to list voice models for"

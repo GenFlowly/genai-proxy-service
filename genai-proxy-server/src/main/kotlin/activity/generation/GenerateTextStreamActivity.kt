@@ -109,7 +109,8 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.tools,
                     request.toolChoice,
                     request.toolResults,
-                    request.responseSchema
+                    request.responseSchema,
+                    request.useLearnedPreferences
                 )
 
                 // Send Metadata Headers
@@ -150,9 +151,11 @@ fun Route.registerGenerateTextStreamRoutes(
                 // exchange for semantic conversation search. The bearer token
                 // is only needed for the embedding pushes and may be absent.
                 val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
-                memoryExtractionService.maybeExtractFromConversationAsync(
-                    customerId, streamResult.conversationId, bearerToken
-                )
+                if (request.learnFromConversation) {
+                    memoryExtractionService.maybeExtractFromConversationAsync(
+                        customerId, streamResult.conversationId, bearerToken
+                    )
+                }
                 conversationIndexingService.indexExchangeAsync(
                     customerId = customerId,
                     conversationId = streamResult.conversationId,

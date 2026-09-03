@@ -7,6 +7,8 @@ import com.genflowly.models.Prompt
 import com.genflowly.models.ShareRole
 import com.genflowly.models.api.GetConversationResponse
 import com.genflowly.models.api.PromptAndResponse
+import com.genflowly.models.api.MessageUsageResponse
+import com.genflowly.models.api.VendorUsageTotals
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ShareRepository
 
@@ -83,6 +85,7 @@ class ConversationService(
                                 outputTokens = nextMsg.outputTokens,
                                 totalTokens = nextMsg.totalTokens,
                                 tokensReadFromCache = nextMsg.tokensReadFromCache,
+                                costUsd = nextMsg.costUsd,
                                 thinkingDurationMs = nextMsg.thinkingDurationMs,
                                 webSources = nextMsg.webSourcesJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
@@ -112,7 +115,24 @@ class ConversationService(
 
         val title = conversationRepository.getConversationTitle(conversationId, owner.customerId)
 
-        return GetConversationResponse(pairs, title, role)
+        // Whole-conversation usage + exact cost per vendor, so clients can show
+        // totals instead of only per-turn numbers
+        val vendorTotals = messages
+            .filter { it.role == "assistant" }
+            .groupBy { it.aiConfig.firstOrNull()?.aiVendor?.name ?: "UNKNOWN" }
+            .map { (vendor, msgs) ->
+                VendorUsageTotals(
+                    aiVendor = vendor,
+                    inputTokens = msgs.sumOf { it.inputTokens ?: 0 },
+                    outputTokens = msgs.sumOf { it.outputTokens ?: 0 },
+                    totalTokens = msgs.sumOf { it.totalTokens ?: 0 },
+                    tokensReadFromCache = msgs.sumOf { it.tokensReadFromCache ?: 0 },
+                    costUsd = msgs.mapNotNull { it.costUsd }.takeIf { it.isNotEmpty() }
+                        ?.sum()?.let { Math.round(it * 1e10) / 1e10 }
+                )
+            }
+
+        return GetConversationResponse(pairs, title, role, vendorTotals)
     }
 
     suspend fun createConversation(
@@ -162,13 +182,14 @@ class ConversationService(
     suspend fun getMessageUsage(
         conversationId: String,
         messageId: String
-    ): Map<String, Int?>? {
+    ): MessageUsageResponse? {
         val message = conversationRepository.getMessage(conversationId, messageId) ?: return null
-        return mapOf(
-            "inputTokens" to message.inputTokens,
-            "outputTokens" to message.outputTokens,
-            "totalTokens" to message.totalTokens,
-            "tokensReadFromCache" to message.tokensReadFromCache
+        return MessageUsageResponse(
+            inputTokens = message.inputTokens,
+            outputTokens = message.outputTokens,
+            totalTokens = message.totalTokens,
+            tokensReadFromCache = message.tokensReadFromCache,
+            costUsd = message.costUsd
         )
     }
 

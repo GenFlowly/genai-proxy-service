@@ -61,6 +61,10 @@ class ModelMetadata(BaseModel):
     output_cost_per_mtok: Optional[float] = None
     cache_read_cost_per_mtok: Optional[float] = None
     cache_write_cost_per_mtok: Optional[float] = None
+    # Audio-token rates (realtime voice models bill audio separately from text)
+    input_audio_cost_per_mtok: Optional[float] = None
+    output_audio_cost_per_mtok: Optional[float] = None
+    cache_read_audio_cost_per_mtok: Optional[float] = None
 
 
 class VendorModelMetadata(BaseModel):
@@ -133,6 +137,9 @@ def _catalog_pricing(price_map: dict, provider: str, model: str) -> dict:
         "output_cost_per_mtok": _per_mtok(info, "output_cost_per_token"),
         "cache_read_cost_per_mtok": _per_mtok(info, "cache_read_input_token_cost"),
         "cache_write_cost_per_mtok": _per_mtok(info, "cache_creation_input_token_cost"),
+        "input_audio_cost_per_mtok": _per_mtok(info, "input_cost_per_audio_token"),
+        "output_audio_cost_per_mtok": _per_mtok(info, "output_cost_per_audio_token"),
+        "cache_read_audio_cost_per_mtok": _per_mtok(info, "cache_read_input_audio_token_cost"),
     }
 
 

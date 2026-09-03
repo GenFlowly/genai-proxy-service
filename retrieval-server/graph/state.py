@@ -84,6 +84,14 @@ class RetrievalState(TypedDict):
     # Token usage accumulated across all LLM-calling nodes
     usage: Annotated[dict, _merge_usage]
 
+    # Governance decision from the proxy server: MEMORY nodes may inject the
+    # customer's learned memories (request consent AND account setting).
+    memory_enabled: bool
+
+    # Written by the MEMORY node: the rendered "what you know about this user"
+    # block. The response-generating nodes append it to their persona.
+    memories_block: Optional[str]
+
     # Free-form state: node outputs whose output_key is not a first-class
     # field above land here ({key: value}), readable from any later node's
     # templates ({key}) and usable as conditional-edge condition keys. The

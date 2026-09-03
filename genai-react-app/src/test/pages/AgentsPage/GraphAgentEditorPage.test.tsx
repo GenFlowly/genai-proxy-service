@@ -6,6 +6,7 @@ import GraphAgentEditorPage from '../../../pages/AgentsPage/GraphAgentEditorPage
 import { useAuth } from '../../../context/AuthContext';
 import * as agentsService from '../../../services/agentsService';
 import * as instructionService from '../../../services/instructionService';
+import * as nodePresetsService from '../../../services/nodePresetsService';
 import type { Agent } from '../../../models/agents.models';
 
 // ── Static mocks ──────────────────────────────────────────────────────────────
@@ -19,6 +20,13 @@ jest.mock('@genflowly/component-library', () => ({
         mockGraphEditorProps = props;
         return <div data-testid="graph-editor" />;
     },
+    // Trimmed stand-in for the library's primitive metadata (hasPrompt derivation)
+    DEFAULT_NODE_TYPE_INFOS: [
+        { nodeType: 'GENERATION', label: 'LLM', hasPrompt: true },
+        { nodeType: 'MEMORY', label: 'Memory', hasPrompt: false },
+        { nodeType: 'RETRIEVAL', label: 'Retrieval', hasPrompt: false },
+        { nodeType: 'QUERY_ANALYZER', label: 'LLM', hasPrompt: true },
+    ],
 }));
 
 jest.mock('../../../components/navbar/Navbar', () => () => <div data-testid="navbar" />);
@@ -54,6 +62,10 @@ jest.mock('../../../services/agentsService', () => ({
 
 jest.mock('../../../services/instructionService', () => ({
     getCustomerInstructions: jest.fn(),
+}));
+
+jest.mock('../../../services/nodePresetsService', () => ({
+    getNodePresets: jest.fn(),
 }));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -102,6 +114,36 @@ function emittedFrom(agent: Agent) {
         })),
     };
 }
+
+const mockPresets = [
+    {
+        presetId: 'preset-1',
+        name: 'Query Analyzer',
+        nodeType: 'QUERY_ANALYZER',
+        description: 'Classifies the query intent.',
+        config: '{"response_format":"json"}',
+        requiredAttributes: ['Prompt via instruction', 'Writes query_intent'],
+        sortOrder: 1,
+    },
+    {
+        presetId: 'preset-2',
+        name: 'User Memory',
+        nodeType: 'MEMORY',
+        description: 'Injects learned user memories.',
+        config: '{"max_memories":20}',
+        requiredAttributes: [],
+        sortOrder: 2,
+    },
+    {
+        presetId: 'preset-3',
+        name: 'Shiny New Node',
+        nodeType: 'BRAND_NEW_TYPE',
+        description: 'A preset for a type the library does not know yet.',
+        config: '{}',
+        requiredAttributes: ['Does something new'],
+        sortOrder: 3,
+    },
+];
 
 const mockInstructions = [
     { id: 'inst-1', name: 'Analyzer Prompt', version: 2, instruction: 'Old analyzer text' },
@@ -154,6 +196,9 @@ describe('GraphAgentEditorPage', () => {
         (instructionService.getCustomerInstructions as jest.Mock).mockResolvedValue({
             instructions: mockInstructions,
         });
+        (nodePresetsService.getNodePresets as jest.Mock).mockResolvedValue({
+            presets: mockPresets,
+        });
     });
 
     // ── Desktop: loading + props ──────────────────────────────────────────────
@@ -187,15 +232,39 @@ describe('GraphAgentEditorPage', () => {
         );
     });
 
-    test('passes the node catalog and condition options to the editor', async () => {
+    test('passes the fetched node presets as the catalog and the condition options to the editor', async () => {
         await renderLoadedEditor();
 
-        const types = mockGraphEditorProps.nodeCatalog.map((e: any) => e.nodeType);
-        expect(types).toEqual([
-            'QUERY_ANALYZER',
-            'QUERY_REWRITER',
-            'RESULT_RANKER',
-            'RESPONSE_GENERATOR',
+        expect(nodePresetsService.getNodePresets).toHaveBeenCalledWith(mockToken);
+        await waitFor(() => expect(mockGraphEditorProps.nodeCatalog).toHaveLength(3));
+        expect(mockGraphEditorProps.nodeCatalog).toEqual([
+            {
+                // hasPrompt derived from the library's QUERY_ANALYZER primitive
+                nodeType: 'QUERY_ANALYZER',
+                label: 'Query Analyzer',
+                description: 'Classifies the query intent.',
+                defaultConfig: '{"response_format":"json"}',
+                hasPrompt: true,
+                requiredAttributes: ['Prompt via instruction', 'Writes query_intent'],
+            },
+            {
+                // empty requiredAttributes → undefined, so the primitive's contract shows
+                nodeType: 'MEMORY',
+                label: 'User Memory',
+                description: 'Injects learned user memories.',
+                defaultConfig: '{"max_memories":20}',
+                hasPrompt: false,
+                requiredAttributes: undefined,
+            },
+            {
+                // unknown node type → hasPrompt falls back to false
+                nodeType: 'BRAND_NEW_TYPE',
+                label: 'Shiny New Node',
+                description: 'A preset for a type the library does not know yet.',
+                defaultConfig: '{}',
+                hasPrompt: false,
+                requiredAttributes: ['Does something new'],
+            },
         ]);
         expect(mockGraphEditorProps.conditionOptions).toEqual([
             { key: 'needs_rewrite', type: 'bool', label: 'Needs rewrite' },
@@ -203,6 +272,18 @@ describe('GraphAgentEditorPage', () => {
             { key: 'retrieval_results', type: 'list_empty', label: 'Retrieval results empty' },
             { key: 'error', type: 'bool', label: 'Error occurred' },
         ]);
+    });
+
+    test('renders the editor with an empty catalog when getNodePresets fails', async () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        (nodePresetsService.getNodePresets as jest.Mock).mockRejectedValue(
+            new Error('Get Node Presets failed: 500 Internal Server Error')
+        );
+        await renderLoadedEditor();
+
+        await waitFor(() => expect(mockGraphEditorProps.nodeCatalog).toEqual([]));
+        expect(screen.getByTestId('graph-editor')).toBeInTheDocument();
+        errorSpy.mockRestore();
     });
 
     test('shows the system banner for a system agent', async () => {

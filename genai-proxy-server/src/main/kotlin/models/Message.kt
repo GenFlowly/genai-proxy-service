@@ -38,6 +38,14 @@ data class Message(
     val outputTokens: Int? = null,
     val totalTokens: Int? = null,
     val tokensReadFromCache: Int? = null,
+    /** Prompt-cache write (cache_creation) tokens for this turn; billed at the cache-write rate. */
+    val tokensWrittenToCache: Int? = null,
+    /**
+     * Exact USD cost of this turn: the vendor-reported token buckets (text /
+     * audio / cached, from the API response) priced at the AIModelCatalog
+     * rates. Null when the model has no catalog pricing at persist time.
+     */
+    val costUsd: Double? = null,
     /**
      * How long the retrieval server "thought" before response generation began
      * (request receipt → first generated token), in milliseconds. Assistant

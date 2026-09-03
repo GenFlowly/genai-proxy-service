@@ -5,6 +5,7 @@ import com.genflowly.activity.agent.registerCreateGraphAgentRoutes
 import com.genflowly.activity.agent.registerDeleteAgentRoutes
 import com.genflowly.activity.agent.registerGetAgentRoutes
 import com.genflowly.activity.agent.registerGetCustomerAgentsRoutes
+import com.genflowly.activity.agent.registerNodePresetRoutes
 import com.genflowly.activity.agent.registerUpdateAgentRoutes
 import com.genflowly.activity.conversation.registerCreateConversationShareRoutes
 import com.genflowly.activity.conversation.registerCreateConversationTitleRoutes
@@ -128,6 +129,10 @@ object Routes {
     const val ADMIN_REQUEST_AGENT_MAP_ENTRY = "$API_V1/admin/request-agent-map/{requestType}"
     const val ADMIN_DEFAULT_GRAPH = "$API_V1/admin/default-graph"
 
+    const val NODE_PRESETS = "$API_V1/node-presets"
+    const val ADMIN_NODE_PRESETS = "$API_V1/admin/node-presets"
+    const val ADMIN_NODE_PRESET = "$API_V1/admin/node-presets/{presetId}"
+
     const val VOICE_SESSION = "$API_V1/voice/session"
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
 
@@ -161,6 +166,7 @@ fun Application.configureRouting(
     memoryExtractionService: com.genflowly.service.MemoryExtractionService,
     conversationIndexingService: com.genflowly.service.ConversationIndexingService,
     unifiedSearchService: com.genflowly.service.UnifiedSearchService,
+    nodePresetService: com.genflowly.service.NodePresetService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -230,6 +236,7 @@ fun Application.configureRouting(
         )
         registerRequestAgentMapRoutes(requestAgentMapAdminService, customerProfileService, appConfig)
         registerDefaultGraphRoutes(graphService, customerProfileService, appConfig)
+        registerNodePresetRoutes(nodePresetService, customerProfileService, appConfig)
         registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
     }

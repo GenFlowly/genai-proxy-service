@@ -128,11 +128,32 @@ class GeminiLiveAdapter(VoiceAdapter):
     async def _handle_message(self, message) -> None:
         meta = getattr(message, "usage_metadata", None)
         if meta is not None:
+            def _modality_tokens(detail_list, modality_name: str) -> int:
+                total = 0
+                for d in detail_list or []:
+                    modality = getattr(getattr(d, "modality", None), "name", str(getattr(d, "modality", "")))
+                    if modality_name in modality.upper():
+                        total += getattr(d, "token_count", 0) or 0
+                return total
+
+            prompt_det = getattr(meta, "prompt_tokens_details", None)
+            response_det = getattr(meta, "response_tokens_details", None)
+            cache_det = getattr(meta, "cache_tokens_details", None)
             self._usage = {
                 "input_tokens": meta.prompt_token_count or 0,
                 "output_tokens": meta.response_token_count or 0,
                 "total_tokens": meta.total_token_count or 0,
                 "cache_read_tokens": meta.cached_content_token_count or 0,
+                # Modality breakdown for exact cost computation (audio tokens
+                # are billed at different rates than text tokens)
+                "details": {
+                    "input_text_tokens": _modality_tokens(prompt_det, "TEXT"),
+                    "input_audio_tokens": _modality_tokens(prompt_det, "AUDIO"),
+                    "cached_text_tokens": _modality_tokens(cache_det, "TEXT"),
+                    "cached_audio_tokens": _modality_tokens(cache_det, "AUDIO"),
+                    "output_text_tokens": _modality_tokens(response_det, "TEXT"),
+                    "output_audio_tokens": _modality_tokens(response_det, "AUDIO"),
+                },
             }
 
         if message.data:
