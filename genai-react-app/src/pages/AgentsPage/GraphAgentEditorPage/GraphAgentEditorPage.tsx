@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { GraphEditor } from '@genflowly/component-library'
+import { DEFAULT_NODE_TYPE_INFOS, GraphEditor } from '@genflowly/component-library'
 import type { AgentGraph, ConditionOption, InstructionOption, NodeCatalogEntry } from '@genflowly/component-library'
 import Navbar from '../../../components/navbar/Navbar'
 import MobileHeader from '../../../components/widgets/MobileHeader/MobileHeader'
@@ -11,6 +11,7 @@ import { useLayout } from '../../../context/LayoutContext'
 import { usePageTitle } from '../../../hooks/usePageTitle'
 import { createGraphAgent, getAgent, updateAgent } from '../../../services/agentsService'
 import { getCustomerInstructions } from '../../../services/instructionService'
+import { getNodePresets } from '../../../services/nodePresetsService'
 import {
     Agent,
     CreateGraphAgentRequest,
@@ -19,6 +20,7 @@ import {
     UpdateAgentRequest,
 } from '../../../models/agents.models'
 import { InstructionResponse } from '../../../models/instruction.models'
+import { NodePreset } from '../../../models/nodePresets.models'
 import styles from './GraphAgentEditorPage.module.scss'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -29,86 +31,6 @@ const TEMP_NODE_ID_PREFIX = 'new-'
 const DESKTOP_MIN_WIDTH_QUERY = '(min-width: 900px)'
 
 const INSTRUCTION_PREVIEW_LENGTH = 200
-
-/**
- * Node palette of the visual editor. Labels/descriptions are i18n keys under
- * agentsPage.graphEditorPage.catalog, resolved at render time.
- */
-const NODE_CATALOG_DEFS: ReadonlyArray<{
-    nodeType: string
-    labelKey: string
-    descriptionKey: string
-    defaultConfig: string
-    hasPrompt: boolean
-    /** i18n keys of the contract lines shown on the palette item. */
-    attributeKeys: string[]
-}> = [
-    {
-        nodeType: 'QUERY_ANALYZER',
-        labelKey: 'agentsPage.graphEditorPage.catalog.queryAnalyzer',
-        attributeKeys: [
-            'agentsPage.graphEditorPage.catalog.contractPrompt',
-            'agentsPage.graphEditorPage.catalog.queryAnalyzerContractOutput',
-        ],
-        descriptionKey: 'agentsPage.graphEditorPage.catalog.queryAnalyzerDescription',
-        defaultConfig: JSON.stringify({
-            input_template: 'Query: {original_query}',
-            response_format: 'json',
-            json_output_mapping: { intent: 'query_intent', needs_rewrite: 'needs_rewrite' },
-        }),
-        hasPrompt: true,
-    },
-    {
-        nodeType: 'QUERY_REWRITER',
-        labelKey: 'agentsPage.graphEditorPage.catalog.queryRewriter',
-        attributeKeys: [
-            'agentsPage.graphEditorPage.catalog.contractPrompt',
-            'agentsPage.graphEditorPage.catalog.queryRewriterContractOutput',
-        ],
-        descriptionKey: 'agentsPage.graphEditorPage.catalog.queryRewriterDescription',
-        defaultConfig: JSON.stringify({
-            input_template: 'Original query: {original_query}\nIntent: {query_intent}',
-            output_key: 'rewritten_query',
-            response_format: 'text',
-        }),
-        hasPrompt: true,
-    },
-    {
-        nodeType: 'RESULT_RANKER',
-        labelKey: 'agentsPage.graphEditorPage.catalog.resultRanker',
-        attributeKeys: [
-            'agentsPage.graphEditorPage.catalog.contractPrompt',
-            'agentsPage.graphEditorPage.catalog.resultRankerContractInput',
-            'agentsPage.graphEditorPage.catalog.resultRankerContractOutput',
-        ],
-        descriptionKey: 'agentsPage.graphEditorPage.catalog.resultRankerDescription',
-        defaultConfig: JSON.stringify({
-            input_template: 'Query: {query}\n\nChunks:\n{chunks_text}',
-            output_key: 'ranked_results',
-            response_format: 'json_indices',
-            json_indices_source_key: 'retrieval_results',
-        }),
-        hasPrompt: true,
-    },
-    {
-        nodeType: 'RESPONSE_GENERATOR',
-        labelKey: 'agentsPage.graphEditorPage.catalog.responseGenerator',
-        attributeKeys: [
-            'agentsPage.graphEditorPage.catalog.responseGeneratorContractPersona',
-            'agentsPage.graphEditorPage.catalog.responseGeneratorContractOutput',
-            'agentsPage.graphEditorPage.catalog.responseGeneratorContractStreaming',
-        ],
-        descriptionKey: 'agentsPage.graphEditorPage.catalog.responseGeneratorDescription',
-        defaultConfig: JSON.stringify({
-            input_template: 'Context:\n{context}\n\nQuestion: {query}',
-            output_key: 'generated_response',
-            response_format: 'text',
-            include_conversation_history: true,
-            is_streaming: true,
-        }),
-        hasPrompt: false,
-    },
-]
 
 /** Condition keys the runtime exposes for conditional edges. */
 const CONDITION_DEFS: ReadonlyArray<{ key: string; type: ConditionOption['type']; labelKey: string }> = [
@@ -209,6 +131,7 @@ export default function GraphAgentEditorPage() {
     const [agent, setAgent] = useState<Agent | null>(null)
     const [loadError, setLoadError] = useState<string | null>(null)
     const [instructions, setInstructions] = useState<InstructionOption[]>([])
+    const [presets, setPresets] = useState<NodePreset[]>([])
     const [saving, setSaving] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [dirty, setDirty] = useState(false)
@@ -238,21 +161,34 @@ export default function GraphAgentEditorPage() {
         return () => { cancelled = true }
     }, [graphId, isNew, isDesktop, getAccessTokenSilently, t])
 
-    // Load instructions once for the editor's instruction picker
+    // Load instructions (instruction picker) and node presets (palette) once
     useEffect(() => {
         if (!isDesktop) return
         let cancelled = false
         const load = async () => {
-            try {
-                const token = await getAccessTokenSilently()
-                const data = await getCustomerInstructions(token)
-                if (!cancelled) setInstructions(toInstructionOptions(data.instructions ?? []))
-            } catch (err) {
-                console.error('Failed to load instructions', err)
-                if (!cancelled) setInstructions([])
+            const token = await getAccessTokenSilently()
+            const loadInstructions = async () => {
+                try {
+                    const data = await getCustomerInstructions(token)
+                    if (!cancelled) setInstructions(toInstructionOptions(data.instructions ?? []))
+                } catch (err) {
+                    console.error('Failed to load instructions', err)
+                    if (!cancelled) setInstructions([])
+                }
             }
+            // Non-fatal: without presets the palette's "Node types" primitives still work
+            const loadPresets = async () => {
+                try {
+                    const data = await getNodePresets(token)
+                    if (!cancelled) setPresets(data.presets ?? [])
+                } catch (err) {
+                    console.error('Failed to load node presets', err)
+                    if (!cancelled) setPresets([])
+                }
+            }
+            await Promise.all([loadInstructions(), loadPresets()])
         }
-        load()
+        load().catch(err => console.error('Failed to load editor data', err))
         return () => { cancelled = true }
     }, [isDesktop, getAccessTokenSilently])
 
@@ -295,16 +231,20 @@ export default function GraphAgentEditorPage() {
         }
     }, [agent])
 
+    // Pre-made palette nodes from the API, mapped onto the library's catalog
+    // shape. hasPrompt comes from the underlying primitive; an empty
+    // requiredAttributes list is passed as undefined so the palette falls back
+    // to the primitive's contract lines.
     const nodeCatalog: NodeCatalogEntry[] = useMemo(
-        () => NODE_CATALOG_DEFS.map(def => ({
-            nodeType: def.nodeType,
-            label: t(def.labelKey),
-            description: t(def.descriptionKey),
-            defaultConfig: def.defaultConfig,
-            hasPrompt: def.hasPrompt,
-            requiredAttributes: def.attributeKeys.map(key => t(key)),
+        () => presets.map(preset => ({
+            nodeType: preset.nodeType,
+            label: preset.name,
+            description: preset.description,
+            defaultConfig: preset.config,
+            hasPrompt: DEFAULT_NODE_TYPE_INFOS.find(i => i.nodeType === preset.nodeType)?.hasPrompt ?? false,
+            requiredAttributes: preset.requiredAttributes?.length ? preset.requiredAttributes : undefined,
         })),
-        [t],
+        [presets],
     )
 
     const conditionOptions: ConditionOption[] = useMemo(

@@ -36,8 +36,8 @@ fun Route.registerGetAIUsageActivityRoutes(
             }
             response {
                 code(HttpStatusCode.OK) {
-                    description = "Token usage counters keyed by counter name"
-                    body<Map<String, Int>>()
+                    description = "Token usage counters and exact USD cost for the message"
+                    body<com.genflowly.models.api.MessageUsageResponse>()
                 }
                 code(HttpStatusCode.BadRequest) {
                     description = "Missing conversationId or messageId"

@@ -152,32 +152,6 @@
         },
         "graphEditorPage": {
             "backToAgents": "Back to Agents",
-            "catalog": {
-                "queryAnalyzer": "Query Analyzer",
-                "queryAnalyzerDescription": "Classifies the query intent and decides whether it needs rewriting.",
-                "queryRewriter": "Query Rewriter",
-                "queryRewriterDescription": "Rewrites the query for better retrieval.",
-                "retrieval": "Retrieval",
-                "retrievalDescription": "Fetches matching chunks from your knowledge base.",
-                "webSearch": "Web Search",
-                "webSearchDescription": "Searches the web for up-to-date information.",
-                "resultRanker": "Result Ranker",
-                "resultRankerDescription": "Reranks retrieved chunks by relevance.",
-                "responseGenerator": "Response Generator",
-                "responseGeneratorDescription": "Generates the final answer from the assembled context.",
-                "reflectiveGenerator": "Generator (Reflection)",
-                "reflectiveGeneratorDescription": "Generates an answer and reflects on whether it needs another pass.",
-                "generation": "Generation",
-                "generationDescription": "General-purpose text generation step.",
-                "contractPrompt": "Prompt via instruction",
-                "queryAnalyzerContractOutput": "Writes query_intent and needs_rewrite (json_output_mapping)",
-                "queryRewriterContractOutput": "Writes rewritten_query",
-                "resultRankerContractInput": "Reads retrieval_results",
-                "resultRankerContractOutput": "Writes ranked_results (json_indices)",
-                "responseGeneratorContractPersona": "Persona comes from the request-time instruction (node prompt ignored)",
-                "responseGeneratorContractOutput": "Writes generated_response",
-                "responseGeneratorContractStreaming": "Streams the answer"
-            },
             "conditions": {
                 "needsRewrite": "Needs rewrite",
                 "needsMoreContext": "Needs more context",
@@ -307,10 +281,11 @@
             "thinking": "Thinking",
             "thoughtForSeconds_one": "Thought for {{count}} second",
             "thoughtForSeconds_other": "Thought for {{count}} seconds",
-            "tokensReadFromCache": "Tokens read from cache",
-            "totalInputTokens": "Total Input Tokens",
-            "totalOutputTokens": "Total Output Tokens",
-            "totalTokens": "Total Tokens"
+            "tokensReadFromCache": "Tokens read from cache in this conversation so far (this vendor)",
+            "conversationCostUsd": "Total {{vendor}} cost for this conversation so far (USD)",
+            "totalInputTokens": "Input tokens in this conversation so far (this vendor)",
+            "totalOutputTokens": "Output tokens in this conversation so far (this vendor)",
+            "totalTokens": "Total tokens in this conversation so far (this vendor)"
         }
     },
     "dbSettings": {

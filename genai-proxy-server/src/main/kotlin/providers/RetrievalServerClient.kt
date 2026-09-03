@@ -51,7 +51,9 @@ private data class RetrievalAgentPayload(
     val tool_choice: String? = null,
     val tool_results: List<PayloadToolResult> = emptyList(),
     /** JSON Schema for vendor-enforced structured output; exclusive with tools */
-    val response_schema: kotlinx.serialization.json.JsonObject? = null
+    val response_schema: kotlinx.serialization.json.JsonObject? = null,
+    /** Governance decision: MEMORY nodes may inject learned user memories. */
+    val memory_enabled: Boolean = false
 )
 
 @Serializable
@@ -124,7 +126,10 @@ private data class ModelMetadataEntry(
     val input_cost_per_mtok: Double? = null,
     val output_cost_per_mtok: Double? = null,
     val cache_read_cost_per_mtok: Double? = null,
-    val cache_write_cost_per_mtok: Double? = null
+    val cache_write_cost_per_mtok: Double? = null,
+    val input_audio_cost_per_mtok: Double? = null,
+    val output_audio_cost_per_mtok: Double? = null,
+    val cache_read_audio_cost_per_mtok: Double? = null
 )
 
 @Serializable
@@ -182,7 +187,8 @@ class RetrievalServerClient(
         tools: List<PayloadToolDefinition>,
         toolChoice: String?,
         toolResults: List<PayloadToolResult>,
-        responseSchema: kotlinx.serialization.json.JsonObject?
+        responseSchema: kotlinx.serialization.json.JsonObject?,
+        memoryEnabled: Boolean
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
@@ -200,7 +206,8 @@ class RetrievalServerClient(
             tools = tools,
             tool_choice = toolChoice,
             tool_results = toolResults,
-            response_schema = responseSchema
+            response_schema = responseSchema,
+            memory_enabled = memoryEnabled
         )
     )
 
@@ -219,10 +226,11 @@ class RetrievalServerClient(
         tools: List<PayloadToolDefinition> = emptyList(),
         toolChoice: String? = null,
         toolResults: List<PayloadToolResult> = emptyList(),
-        responseSchema: kotlinx.serialization.json.JsonObject? = null
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
+        memoryEnabled: Boolean = false
     ): RetrievalResult {
         logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -248,6 +256,7 @@ class RetrievalServerClient(
                 outputTokens = usageObj?.get("output_tokens")?.jsonPrimitive?.intOrNull,
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
                 tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
+                tokensWrittenToCache = usageObj?.get("cache_creation_tokens")?.jsonPrimitive?.intOrNull,
                 toolCallsJson = toolCallsElement?.toString(),
             )
         } catch (e: Exception) {
@@ -307,6 +316,7 @@ class RetrievalServerClient(
                 outputTokens = usageObj?.get("output_tokens")?.jsonPrimitive?.intOrNull,
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
                 tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
+                tokensWrittenToCache = usageObj?.get("cache_creation_tokens")?.jsonPrimitive?.intOrNull,
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to execute agent graph $graphId" }
@@ -329,10 +339,11 @@ class RetrievalServerClient(
         tools: List<PayloadToolDefinition> = emptyList(),
         toolChoice: String? = null,
         toolResults: List<PayloadToolResult> = emptyList(),
-        responseSchema: kotlinx.serialization.json.JsonObject? = null
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
+        memoryEnabled: Boolean = false
     ): Flow<StreamChunk> = channelFlow {
         logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -391,6 +402,7 @@ class RetrievalServerClient(
                                         outputTokens = usageObj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                         totalTokens = usageObj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                         tokensReadFromCache = usageObj["cache_read_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                                        tokensWrittenToCache = usageObj["cache_creation_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
                                     )
                                 )
                             }
@@ -522,7 +534,10 @@ class RetrievalServerClient(
                         inputCostPerMTok = it.input_cost_per_mtok,
                         outputCostPerMTok = it.output_cost_per_mtok,
                         cacheReadCostPerMTok = it.cache_read_cost_per_mtok,
-                        cacheWriteCostPerMTok = it.cache_write_cost_per_mtok
+                        cacheWriteCostPerMTok = it.cache_write_cost_per_mtok,
+                        inputAudioCostPerMTok = it.input_audio_cost_per_mtok,
+                        outputAudioCostPerMTok = it.output_audio_cost_per_mtok,
+                        cacheReadAudioCostPerMTok = it.cache_read_audio_cost_per_mtok
                     )
                 },
                 error = vendorMetadata.error

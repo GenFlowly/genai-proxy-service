@@ -23,3 +23,8 @@ fun generateGraphId(): String {
     val uuid = UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
     return "GRP$uuid"
 }
+
+fun generatePresetId(): String {
+    val uuid = UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
+    return "NPR$uuid"
+}

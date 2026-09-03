@@ -11,5 +11,9 @@ data class ModelCatalogEntry(
     val inputCostPerMTok: Double? = null,
     val outputCostPerMTok: Double? = null,
     val cacheReadCostPerMTok: Double? = null,
-    val cacheWriteCostPerMTok: Double? = null
+    val cacheWriteCostPerMTok: Double? = null,
+    // Audio-token rates — realtime voice models bill audio separately from text
+    val inputAudioCostPerMTok: Double? = null,
+    val outputAudioCostPerMTok: Double? = null,
+    val cacheReadAudioCostPerMTok: Double? = null
 )

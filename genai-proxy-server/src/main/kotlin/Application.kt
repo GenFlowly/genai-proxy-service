@@ -364,6 +364,7 @@ fun Application.module() {
     val conversationManagementService = get<com.genflowly.service.ConversationManagementService>()
     val aiModelsService = get<AIModelsService>()
     val graphService = get<GraphService>()
+    val nodePresetService = get<com.genflowly.service.NodePresetService>()
     val attachmentService = get<com.genflowly.service.AttachmentService>()
     val voiceSessionService = get<com.genflowly.service.VoiceSessionService>()
     val appConfig = get<com.genflowly.config.AppConfig>()
@@ -388,5 +389,5 @@ fun Application.module() {
     val conversationIndexingService = get<com.genflowly.service.ConversationIndexingService>()
     val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, memoryService, memoryExtractionService, conversationIndexingService, unifiedSearchService, appConfig)
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, memoryService, memoryExtractionService, conversationIndexingService, unifiedSearchService, nodePresetService, appConfig)
 }

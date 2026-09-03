@@ -14,6 +14,12 @@ data class GenerateTextResponse(
     val outputTokens: Int? = null,
     val totalTokens: Int? = null,
     val tokensReadFromCache: Int? = null,
+    /**
+     * Exact USD cost of this turn (vendor-reported token buckets × catalog
+     * rates). Null for messages persisted before cost tracking or when the
+     * model had no catalog pricing.
+     */
+    val costUsd: Double? = null,
     /** Retrieval-server thinking time (request receipt → first generated token), ms */
     val thinkingDurationMs: Long? = null,
     /**

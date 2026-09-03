@@ -82,6 +82,9 @@ class ExecuteAgentGraphRequest(BaseModel):
     top_n: int = 3
     # JSON Schema for vendor-enforced structured output on the response node
     response_schema: Optional[dict] = None
+    # Governance decision from the proxy server: MEMORY nodes may inject
+    # learned user memories (request consent AND account setting).
+    memory_enabled: bool = False
 
 
 class RetrieveRequest(BaseModel):
@@ -113,3 +116,6 @@ class RetrieveRequest(BaseModel):
     # Mutually exclusive with `tools`. generated_response carries the JSON as a
     # string; streaming emits it as a single content chunk when generation ends.
     response_schema: Optional[dict] = None
+    # Governance decision from the proxy server: MEMORY nodes may inject
+    # learned user memories (request consent AND account setting).
+    memory_enabled: bool = False

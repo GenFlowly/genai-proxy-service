@@ -44,6 +44,12 @@ export interface Message {
     outputTokens?: number | null
     totalTokens?: number | null
     tokensReadFromCache?: number | null
+    /**
+     * Exact USD cost of this response (vendor-reported token buckets priced at
+     * the model-catalog rates, computed server-side and persisted per message).
+     * Null for responses persisted before cost tracking.
+     */
+    costUsd?: number | null
 }
 
 /**

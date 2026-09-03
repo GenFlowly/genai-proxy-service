@@ -17,11 +17,43 @@ import com.genflowly.models.toProviderString
 import org.slf4j.LoggerFactory
 
 private data class VoiceTurnUsage(
-    val inputTokens: Int?,
-    val outputTokens: Int?,
-    val totalTokens: Int?,
-    val cacheReadTokens: Int?
-)
+    val inputTokens: Int = 0,
+    val outputTokens: Int = 0,
+    val totalTokens: Int = 0,
+    val cacheReadTokens: Int = 0,
+    val inputTextTokens: Int = 0,
+    val inputAudioTokens: Int = 0,
+    val cachedTextTokens: Int = 0,
+    val cachedAudioTokens: Int = 0,
+    val outputTextTokens: Int = 0,
+    val outputAudioTokens: Int = 0
+) {
+    /** A turn can produce several usage events (e.g. a tool-call round plus the final response) — sum them. */
+    operator fun plus(other: VoiceTurnUsage) = VoiceTurnUsage(
+        inputTokens + other.inputTokens,
+        outputTokens + other.outputTokens,
+        totalTokens + other.totalTokens,
+        cacheReadTokens + other.cacheReadTokens,
+        inputTextTokens + other.inputTextTokens,
+        inputAudioTokens + other.inputAudioTokens,
+        cachedTextTokens + other.cachedTextTokens,
+        cachedAudioTokens + other.cachedAudioTokens,
+        outputTextTokens + other.outputTextTokens,
+        outputAudioTokens + other.outputAudioTokens
+    )
+
+    fun toBreakdown() = TokenUsageBreakdown(
+        inputTokens = inputTokens,
+        outputTokens = outputTokens,
+        cacheReadTokens = cacheReadTokens,
+        inputTextTokens = inputTextTokens,
+        inputAudioTokens = inputAudioTokens,
+        cachedTextTokens = cachedTextTokens,
+        cachedAudioTokens = cachedAudioTokens,
+        outputTextTokens = outputTextTokens,
+        outputAudioTokens = outputAudioTokens
+    )
+}
 
 /**
  * Business logic behind the realtime voice WebSocket: session.init handshake
@@ -34,6 +66,7 @@ class VoiceSessionService(
     private val instructionService: InstructionService,
     private val customerCredentialsService: CustomerCredentialsService,
     private val retrievalServerClient: RetrievalServerClient,
+    private val costCalculationService: CostCalculationService,
     private val json: Json
 ) {
     private val logger = LoggerFactory.getLogger("VoiceSessionService")
@@ -169,9 +202,10 @@ class VoiceSessionService(
         private val aiConfig: AIConfig,
         private var lastMessageId: String?
     ) {
-        // Latest per-turn usage from the vendor; adapters emit it just before
-        // the assistant transcript.done, so it lands on the assistant message
-        // exactly like the text-generation flow.
+        // Accumulated usage for the turn in progress; adapters emit usage just
+        // before the assistant transcript.done, so it lands on the assistant
+        // message exactly like the text-generation flow. Summed (not replaced)
+        // because a tool-call turn produces one usage event per model round.
         private var capturedUsage: VoiceTurnUsage? = null
 
         /**
@@ -185,12 +219,22 @@ class VoiceSessionService(
                 when (event["type"]?.jsonPrimitive?.content) {
                     "usage" -> {
                         val usage = event["usage"]?.jsonObject
-                        capturedUsage = VoiceTurnUsage(
-                            inputTokens = usage?.get("input_tokens")?.jsonPrimitive?.content?.toIntOrNull(),
-                            outputTokens = usage?.get("output_tokens")?.jsonPrimitive?.content?.toIntOrNull(),
-                            totalTokens = usage?.get("total_tokens")?.jsonPrimitive?.content?.toIntOrNull(),
-                            cacheReadTokens = usage?.get("cache_read_tokens")?.jsonPrimitive?.content?.toIntOrNull()
+                        fun field(obj: JsonObject?, key: String) =
+                            obj?.get(key)?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                        val details = usage?.get("details")?.jsonObject
+                        val turn = VoiceTurnUsage(
+                            inputTokens = field(usage, "input_tokens"),
+                            outputTokens = field(usage, "output_tokens"),
+                            totalTokens = field(usage, "total_tokens"),
+                            cacheReadTokens = field(usage, "cache_read_tokens"),
+                            inputTextTokens = field(details, "input_text_tokens"),
+                            inputAudioTokens = field(details, "input_audio_tokens"),
+                            cachedTextTokens = field(details, "cached_text_tokens"),
+                            cachedAudioTokens = field(details, "cached_audio_tokens"),
+                            outputTextTokens = field(details, "output_text_tokens"),
+                            outputAudioTokens = field(details, "output_audio_tokens")
                         )
+                        capturedUsage = capturedUsage?.plus(turn) ?: turn
                     }
                     "transcript.done" -> persistTranscript(
                         role = event["role"]?.jsonPrimitive?.content ?: "user",
@@ -205,6 +249,9 @@ class VoiceSessionService(
         private suspend fun persistTranscript(role: String, text: String) {
             if (text.isBlank()) return
             val usage = if (role == "assistant") capturedUsage else null
+            val costUsd = usage?.let {
+                costCalculationService.computeCostUsd(aiConfig.aiVendor, aiConfig.model, it.toBreakdown())
+            }
             val message = Message(
                 conversationId = conversationId,
                 customerId = customerId,
@@ -219,7 +266,8 @@ class VoiceSessionService(
                 inputTokens = usage?.inputTokens,
                 outputTokens = usage?.outputTokens,
                 totalTokens = usage?.totalTokens,
-                tokensReadFromCache = usage?.cacheReadTokens
+                tokensReadFromCache = usage?.cacheReadTokens,
+                costUsd = costUsd
             )
             if (role == "assistant") capturedUsage = null
             try {

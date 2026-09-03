@@ -327,6 +327,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # system_prompt/model_override are not honored for them.
         if is_response_node:
             system_prompt = state.get("request_system_prompt") or "You are a helpful assistant."
+            # Learned user memories (MEMORY node) ride on the persona.
+            memories_block = state.get("memories_block")
+            if memories_block:
+                system_prompt = f"{system_prompt}\n\n{memories_block}"
             model_override = None
         else:
             system_prompt = config.get("system_prompt", "You are a helpful assistant.")

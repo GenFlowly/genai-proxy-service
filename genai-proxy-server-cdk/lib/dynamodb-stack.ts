@@ -443,6 +443,15 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Admin-curated pre-made nodes for the graph editor palette.
+        const nodePresetsTableProps: CreateTableProps = {
+            tableName: 'NodePresets',
+            partitionKey: {
+                name: 'presetId',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const systemVendorApiKeyTable = createDefaultDynamoDbTable(this, systemVendorApiKeyTableProps);
@@ -466,6 +475,7 @@ export class DynamoDBStack extends cdk.Stack {
         const customerDeveloperApiKeyTable = createDefaultDynamoDbTable(this, customerDeveloperApiKeyTableProps);
         const requestAgentMapTable = createDefaultDynamoDbTable(this, requestAgentMapTableProps);
         const customerMemoryTable = createDefaultDynamoDbTable(this, customerMemoryTableProps);
+        const nodePresetsTable = createDefaultDynamoDbTable(this, nodePresetsTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
@@ -475,7 +485,7 @@ export class DynamoDBStack extends cdk.Stack {
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
-            requestAgentMapTable, customerMemoryTable
+            requestAgentMapTable, customerMemoryTable, nodePresetsTable
         );
     }
 }

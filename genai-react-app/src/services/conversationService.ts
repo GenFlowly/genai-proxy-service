@@ -28,6 +28,7 @@ interface BackendResponse {
     outputTokens?: number | null;
     totalTokens?: number | null;
     tokensReadFromCache?: number | null;
+    costUsd?: number | null;
     thinkingDurationMs?: number | null;
     webSources?: WebSource[] | null;
 }
@@ -103,6 +104,7 @@ export async function getConversation(
                     outputTokens: resp.outputTokens ?? null,
                     totalTokens: resp.totalTokens ?? null,
                     tokensReadFromCache: resp.tokensReadFromCache ?? null,
+                    costUsd: resp.costUsd ?? null,
                     thinkingDurationMs: resp.thinkingDurationMs ?? null,
                     webSources: resp.webSources ?? null,
                 });

@@ -4,6 +4,7 @@ import type {
     InstructionOption,
     NodeCatalogEntry,
 } from '@genflowly/component-library'
+import { DEFAULT_NODE_TYPE_INFOS } from '@genflowly/component-library'
 import {
     DefaultGraphResponse,
     PublishDefaultGraphNode,
@@ -11,79 +12,31 @@ import {
     UpdateDefaultGraphRequest,
 } from '../models/defaultGraph.models'
 import { InstructionResponse } from '../models/instructions.models'
+import { NodePresetResponse } from '../models/nodePresets.models'
 
 /** Ids the editor assigns to nodes created in the current session. */
 export const TEMP_NODE_ID_PREFIX = 'new-'
 
-const RESPONSE_GENERATOR_DEFAULT_CONFIG = JSON.stringify({
-    input_template: 'Context:\n{context}\n\nQuestion: {query}',
-    output_key: 'generated_response',
-    response_format: 'text',
-    include_conversation_history: true,
-    is_streaming: true,
-})
-
-export const NODE_CATALOG: NodeCatalogEntry[] = [
-    {
-        nodeType: 'QUERY_ANALYZER',
-        label: 'Query Analyzer',
-        description: 'Determines query intent and whether it needs rewriting',
-        hasPrompt: true,
-        requiredAttributes: [
-            'Prompt via instruction',
-            'Writes query_intent and needs_rewrite (json_output_mapping)',
-        ],
-        defaultConfig: JSON.stringify({
-            input_template: 'Query: {original_query}',
-            response_format: 'json',
-            json_output_mapping: {
-                intent: 'query_intent',
-                needs_rewrite: 'needs_rewrite',
-            },
-        }),
-    },
-    {
-        nodeType: 'QUERY_REWRITER',
-        label: 'Query Rewriter',
-        description: 'Rewrites the query to improve retrieval',
-        hasPrompt: true,
-        requiredAttributes: ['Prompt via instruction', 'Writes rewritten_query'],
-        defaultConfig: JSON.stringify({
-            input_template: 'Original query: {original_query}\nIntent: {query_intent}',
-            output_key: 'rewritten_query',
-            response_format: 'text',
-        }),
-    },
-    {
-        nodeType: 'RESULT_RANKER',
-        label: 'Result Ranker',
-        description: 'Re-ranks retrieved chunks and drops irrelevant ones',
-        hasPrompt: true,
-        requiredAttributes: [
-            'Prompt via instruction',
-            'Reads retrieval_results',
-            'Writes ranked_results (json_indices)',
-        ],
-        defaultConfig: JSON.stringify({
-            input_template: 'Query: {query}\n\nChunks:\n{chunks_text}',
-            output_key: 'ranked_results',
-            response_format: 'json_indices',
-            json_indices_source_key: 'retrieval_results',
-        }),
-    },
-    {
-        nodeType: 'RESPONSE_GENERATOR',
-        label: 'Response Generator',
-        description: 'Generates the final answer from the retrieved context',
-        hasPrompt: false,
-        requiredAttributes: [
-            'Persona comes from the request-time instruction (node prompt ignored)',
-            'Writes generated_response',
-            'Streams the answer',
-        ],
-        defaultConfig: RESPONSE_GENERATOR_DEFAULT_CONFIG,
-    },
-]
+/**
+ * Maps the server's pre-made node presets to the palette entries the visual
+ * editor consumes. hasPrompt comes from the library's metadata for the
+ * underlying node type; empty requiredAttributes are omitted so the entry
+ * inherits the type's contract lines.
+ */
+export function toCatalogEntries(presets: NodePresetResponse[]): NodeCatalogEntry[] {
+    return presets.map((preset) => ({
+        nodeType: preset.nodeType,
+        label: preset.name,
+        description: preset.description,
+        defaultConfig: preset.config,
+        ...(preset.requiredAttributes.length > 0
+            ? { requiredAttributes: preset.requiredAttributes }
+            : {}),
+        hasPrompt:
+            DEFAULT_NODE_TYPE_INFOS.find((info) => info.nodeType === preset.nodeType)?.hasPrompt ??
+            false,
+    }))
+}
 
 export const CONDITION_OPTIONS: ConditionOption[] = [
     { key: 'needs_rewrite', type: 'bool', label: 'Needs rewrite' },
