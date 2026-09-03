@@ -69,9 +69,9 @@ def make_graph_tool_executor(init: dict):
 
         try:
             if req.agentic:
-                graph, _, node_configs, _, max_iterations = _resolve_graph(req.customer_id)
+                graph, _, _, node_configs, _, max_iterations = _resolve_graph(req.customer_id)
             else:
-                graph, _, node_configs, _, max_iterations = _direct_graph()
+                graph, _, _, node_configs, _, max_iterations = _direct_graph()
 
             state = _build_state(req, node_configs)
             result = await graph.ainvoke(state, config={"recursion_limit": max_iterations})

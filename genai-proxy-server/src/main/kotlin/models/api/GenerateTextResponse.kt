@@ -32,5 +32,11 @@ data class GenerateTextResponse(
      * Web-search sources backing the [n] citation markers in the text:
      * [{"index","title","url"}]. Null when no web search ran for the turn.
      */
-    val webSources: kotlinx.serialization.json.JsonElement? = null
+    val webSources: kotlinx.serialization.json.JsonElement? = null,
+    /**
+     * Facts learned about the user from this exchange (async memory
+     * extraction): [{"memoryId","text"}]. null = still pending/unknown;
+     * empty array = terminal, nothing learned.
+     */
+    val learnedFacts: kotlinx.serialization.json.JsonElement? = null
 )

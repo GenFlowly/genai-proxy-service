@@ -153,7 +153,8 @@ fun Route.registerGenerateTextStreamRoutes(
                 val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
                 if (request.learnFromConversation) {
                     memoryExtractionService.maybeExtractFromConversationAsync(
-                        customerId, streamResult.conversationId, bearerToken
+                        customerId, streamResult.conversationId, bearerToken,
+                        responseMessageId = streamResult.responseMessageId
                     )
                 }
                 conversationIndexingService.indexExchangeAsync(

@@ -21,9 +21,52 @@ private val logger = LoggerFactory.getLogger("MemoryActivity")
 
 fun Route.registerMemoryRoutes(
     memoryService: MemoryService,
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    conversationService: com.genflowly.service.ConversationService
 ) {
     authenticate("auth0") {
+        get(Routes.GET_LEARNED_FACTS, {
+            tags("Memories")
+            summary = "Facts learned from one exchange"
+            description = "Async memory-extraction outcome for an assistant message. " +
+                    "status=pending until extraction writes its marker; then status=done " +
+                    "with the facts (possibly empty — nothing was learned)."
+            request {
+                pathParameter<String>("conversationId") { description = "Conversation" }
+                pathParameter<String>("messageId") { description = "Assistant message of the exchange" }
+            }
+            response {
+                code(HttpStatusCode.OK) { body<com.genflowly.models.api.LearnedFactsResponse>() }
+                code(HttpStatusCode.NotFound) { body<ErrorResponse>() }
+            }
+        }) {
+            val conversationId = call.parameters["conversationId"]
+            val messageId = call.parameters["messageId"]
+            if (conversationId.isNullOrBlank() || messageId.isNullOrBlank()) {
+                return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing ids"))
+            }
+            try {
+                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                val message = conversationService.getMessage(conversationId, messageId)
+                if (message == null || message.customerId != customerId) {
+                    return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Message not found"))
+                }
+                val factsJson = message.learnedFactsJson
+                if (factsJson == null) {
+                    call.respond(com.genflowly.models.api.LearnedFactsResponse(status = "pending"))
+                } else {
+                    val facts = runCatching {
+                        kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                            .decodeFromString<List<com.genflowly.models.api.LearnedFactView>>(factsJson)
+                    }.getOrDefault(emptyList())
+                    call.respond(com.genflowly.models.api.LearnedFactsResponse(status = "done", facts = facts))
+                }
+            } catch (e: Exception) {
+                logger.error("Error fetching learned facts for $messageId", e)
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to fetch learned facts"))
+            }
+        }
+
         get(Routes.GET_MEMORIES, {
             tags("Memories")
             summary = "List what the assistant has learned about the customer"

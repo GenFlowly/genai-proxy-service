@@ -10,6 +10,14 @@ import '@testing-library/jest-dom';
 jest.mock('../../../../../context/ConversationContext');
 jest.mock('../../../../../context/LayoutContext');
 
+// The learned-facts stat polls via useAuth + the learned-facts service —
+// stub both so tests control the poll results
+jest.mock('../../../../../context/AuthContext', () => ({
+    useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('tok') })
+}));
+jest.mock('../../../../../services/learnedFactsService');
+const { getLearnedFacts, deleteMemoryFact } = require('../../../../../services/learnedFactsService');
+
 // JSDOM's window is 1024px wide, which would cap rendering to 1 vendor.
 // Mock the responsive hook so vendor count is deterministic and adjustable.
 let mockMaxVendors = 3;
@@ -331,6 +339,44 @@ describe('Response Widget Component', () => {
         expect(screen.getByText('step one')).toBeInTheDocument();
     });
 
+    test('renders structured thinking steps (name, detail, items) from thinkingStepList', () => {
+        mockSelection = [AIVendor.OPENAI];
+        const withStructured = [
+            {
+                messageId: 'msg-1', text: 'Answer', aiVendor: AIVendor.OPENAI, isLoading: false, timestamp: 0,
+                thinkingStepList: [
+                    { node: 'retriever', name: 'Document Retriever', kind: 'RETRIEVAL' as const, status: 'done' as const, detail: 'Found 1 relevant document(s)', items: ['Q3 sales report'] }
+                ]
+            }
+        ];
+        render(<Response blockId="block-1" responseMessages={withStructured} />);
+
+        // Completed thinking starts collapsed — expand it
+        fireEvent.click(screen.getByRole('button', { name: /Thinking/ }));
+        expect(screen.getByTestId('thinking-step-list')).toBeInTheDocument();
+        expect(screen.getByText('Document Retriever')).toBeInTheDocument();
+        expect(screen.getByText('Found 1 relevant document(s)')).toBeInTheDocument();
+        expect(screen.getByText('Q3 sales report')).toBeInTheDocument();
+    });
+
+    test('renders legacy flat strings and structured steps together', () => {
+        mockSelection = [AIVendor.OPENAI];
+        const mixed = [
+            {
+                messageId: 'msg-1', text: '', aiVendor: AIVendor.OPENAI, isLoading: true, timestamp: 0,
+                thinkingSteps: ['legacy flat line'],
+                thinkingStepList: [
+                    { node: 'qa', name: 'Query Analyzer', kind: 'LLM' as const, status: 'running' as const, label: 'Query Analyzer: thinking…' }
+                ]
+            }
+        ];
+        render(<Response blockId="block-1" responseMessages={mixed} />);
+
+        // Still thinking → section starts expanded
+        expect(screen.getByText('legacy flat line')).toBeInTheDocument();
+        expect(screen.getByText('Query Analyzer: thinking…')).toBeInTheDocument();
+    });
+
     test('shows the model chip in the card header when the model is known', () => {
         const withModel = [
             { messageId: 'msg-1', text: 'Answer', aiVendor: AIVendor.OPENAI, model: 'gpt-4o', isLoading: false, timestamp: 0 }
@@ -360,6 +406,165 @@ describe('Response Widget Component', () => {
         // Ensure the latest OpenAI message text is what's rendered, not the first
         expect(screen.getByText('Response 3 (Latest)')).toBeInTheDocument();
         expect(screen.queryByText('Response 1')).not.toBeInTheDocument();
+    });
+
+    describe('learned facts stat', () => {
+        const withConversation = (overrides = {}) => {
+            mockUseConversation.mockReturnValue({
+                setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
+                getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
+                getVendorSelectionForBlock: () => mockSelection,
+                setVendorSelectionForBlock: mockSetVendorSelectionForBlock,
+                generateResponsesStream: jest.fn(),
+                stopGenerating: jest.fn(),
+                conversationId: 'conv-1',
+                ...overrides,
+            });
+        };
+
+        const baseMessage = {
+            messageId: '11111111-aaaa-4bbb-8ccc-000000000001',
+            text: 'A response',
+            aiVendor: AIVendor.OPENAI,
+            isLoading: false,
+            inputTokens: 10,
+            outputTokens: 20,
+            totalTokens: 30,
+            tokensReadFromCache: 0,
+        };
+
+        const FACTS = [
+            { memoryId: 'mem-1', text: 'Prefers dark mode' },
+            { memoryId: 'mem-2', text: 'Works in fintech' },
+        ];
+
+        /** Hover helper — the Tooltip's mouse handlers live on its wrapper div */
+        const hoverFactsCount = () => {
+            const trigger = screen.getByTestId('learned-facts-count');
+            fireEvent.mouseEnter(trigger.parentElement);
+        };
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        test('fresh response shows "Learning facts…" then the fact count once extraction finishes', async () => {
+            jest.useFakeTimers();
+            withConversation();
+            getLearnedFacts
+                .mockResolvedValueOnce({ status: 'pending', facts: [] })
+                .mockResolvedValueOnce({ status: 'done', facts: FACTS });
+
+            render(<Response blockId="block-1" responseMessages={[baseMessage]} />);
+
+            expect(screen.getByTestId('learned-facts-pending')).toHaveTextContent('Learning facts…');
+
+            // First (immediate) poll: still pending
+            await act(async () => { await Promise.resolve(); });
+            expect(screen.getByTestId('learned-facts-pending')).toBeInTheDocument();
+
+            // Next poll 4s later: done with 2 facts
+            await act(async () => { jest.advanceTimersByTime(4000); });
+            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('2 facts added to memory');
+            expect(getLearnedFacts).toHaveBeenCalledWith('tok', 'conv-1', baseMessage.messageId);
+        });
+
+        test('fresh response with no learned facts settles on "No new facts"', async () => {
+            withConversation();
+            getLearnedFacts.mockResolvedValue({ status: 'done', facts: [] });
+
+            render(<Response blockId="block-1" responseMessages={[baseMessage]} />);
+
+            await act(async () => { await Promise.resolve(); });
+            expect(screen.getByTestId('learned-facts-none')).toHaveTextContent('No new facts added to memory');
+        });
+
+        test('historical message renders its facts directly without polling', async () => {
+            withConversation();
+
+            render(<Response blockId="block-1" responseMessages={[{ ...baseMessage, learnedFacts: FACTS }]} />);
+
+            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('2 facts added to memory');
+            await act(async () => { await Promise.resolve(); });
+            expect(getLearnedFacts).not.toHaveBeenCalled();
+        });
+
+        test('historical message with a single fact uses the singular label', () => {
+            withConversation();
+
+            render(<Response blockId="block-1" responseMessages={[{ ...baseMessage, learnedFacts: [FACTS[0]] }]} />);
+
+            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('1 fact added to memory');
+        });
+
+        test('historical message with unknown outcome (null) shows "No new facts" without polling', async () => {
+            withConversation();
+
+            render(<Response blockId="block-1" responseMessages={[{ ...baseMessage, learnedFacts: null }]} />);
+
+            expect(screen.getByTestId('learned-facts-none')).toBeInTheDocument();
+            await act(async () => { await Promise.resolve(); });
+            expect(getLearnedFacts).not.toHaveBeenCalled();
+        });
+
+        test('hovering the count reveals a tooltip listing each fact', async () => {
+            withConversation();
+
+            render(<Response blockId="block-1" responseMessages={[{ ...baseMessage, learnedFacts: FACTS }]} />);
+
+            hoverFactsCount();
+
+            const list = await screen.findByTestId('learned-facts-list');
+            expect(list).toBeInTheDocument();
+            expect(screen.getByText('Prefers dark mode')).toBeInTheDocument();
+            expect(screen.getByText('Works in fintech')).toBeInTheDocument();
+            expect(screen.getAllByTestId('learned-fact-delete')).toHaveLength(2);
+        });
+
+        test('clicking ✗ deletes the fact, removes its line and adjusts the count', async () => {
+            withConversation();
+            deleteMemoryFact.mockResolvedValue(undefined);
+
+            render(<Response blockId="block-1" responseMessages={[{ ...baseMessage, learnedFacts: FACTS }]} />);
+
+            hoverFactsCount();
+            await screen.findByTestId('learned-facts-list');
+
+            fireEvent.click(screen.getByRole('button', { name: 'Delete fact from memory: Prefers dark mode' }));
+
+            await act(async () => { await Promise.resolve(); });
+            expect(deleteMemoryFact).toHaveBeenCalledWith('tok', 'mem-1');
+            expect(screen.queryByText('Prefers dark mode')).not.toBeInTheDocument();
+            expect(screen.getByText('Works in fintech')).toBeInTheDocument();
+            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('1 fact added to memory');
+        });
+
+        test('deleting the last fact switches to the none-state', async () => {
+            withConversation();
+            deleteMemoryFact.mockResolvedValue(undefined);
+
+            render(<Response blockId="block-1" responseMessages={[{ ...baseMessage, learnedFacts: [FACTS[0]] }]} />);
+
+            hoverFactsCount();
+            await screen.findByTestId('learned-facts-list');
+
+            fireEvent.click(screen.getByTestId('learned-fact-delete'));
+            await act(async () => { await Promise.resolve(); });
+
+            expect(screen.queryByTestId('learned-facts-count')).not.toBeInTheDocument();
+            expect(screen.getByTestId('learned-facts-none')).toBeInTheDocument();
+        });
+
+        test('does not poll for errored or still-placeholder messages', async () => {
+            withConversation();
+
+            const erroredMsg = { ...baseMessage, error: 'boom' };
+            const abortedMsg = { ...baseMessage, messageId: 'resp-123-0', aiVendor: AIVendor.CLAUDE };
+            render(<Response blockId="block-1" responseMessages={[erroredMsg, abortedMsg]} />);
+
+            await act(async () => { await Promise.resolve(); });
+            expect(getLearnedFacts).not.toHaveBeenCalled();
+        });
     });
 
     describe('web-search citations', () => {

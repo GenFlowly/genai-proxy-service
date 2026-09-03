@@ -2,7 +2,7 @@ import { fetchWithRetry } from "../utils/apiUtils";
 import { config } from '../config/env';
 import { endpoints } from '../config/endpoints';
 import { HttpMethod } from '../constants/http';
-import { ConversationBlock, Message, WebSource } from '../models/conversation.models';
+import { ConversationBlock, LearnedFact, Message, WebSource } from '../models/conversation.models';
 import { AttachmentRef } from '../models/attachment.models';
 import { AIVendor } from '../constants/vendors';
 import { SearchUserResponse } from '../models/user.models';
@@ -31,6 +31,8 @@ interface BackendResponse {
     costUsd?: number | null;
     thinkingDurationMs?: number | null;
     webSources?: WebSource[] | null;
+    /** Facts memory extraction learned from this exchange; null = unknown/pending */
+    learnedFacts?: LearnedFact[] | null;
 }
 
 interface BackendPromptAndResponse {
@@ -107,6 +109,9 @@ export async function getConversation(
                     costUsd: resp.costUsd ?? null,
                     thinkingDurationMs: resp.thinkingDurationMs ?? null,
                     webSources: resp.webSources ?? null,
+                    // Always set for historical messages (null = extraction
+                    // outcome unknown) so the UI knows not to poll for them
+                    learnedFacts: resp.learnedFacts ?? null,
                 });
             }
         });
