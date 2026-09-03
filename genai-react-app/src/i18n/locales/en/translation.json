@@ -268,9 +268,14 @@
             "removeAttachment": "Remove image"
         },
         "response": {
+            "deleteFact": "Delete fact from memory: {{fact}}",
+            "factsAddedToMemory_one": "{{count}} fact added to memory",
+            "factsAddedToMemory_other": "{{count}} facts added to memory",
             "followUp": "Follow up",
             "generationFailed": "Generation failed: {{reason}}",
+            "learningFacts": "Learning facts…",
             "noApiKeysSet": "No API keys set",
+            "noNewFacts": "No new facts added to memory",
             "noResponsesGenerated": "No responses were generated",
             "regenerate": "Regenerate",
             "responseFrom": "Response from {{vendor}}",
@@ -279,6 +284,8 @@
             "stop": "Stop",
             "streamInterrupted": "Response interrupted: {{reason}}",
             "thinking": "Thinking",
+            "thinkingPrompt": "Prompt",
+            "thinkingResponse": "Response",
             "thoughtForSeconds_one": "Thought for {{count}} second",
             "thoughtForSeconds_other": "Thought for {{count}} seconds",
             "tokensReadFromCache": "Tokens read from cache in this conversation so far (this vendor)",

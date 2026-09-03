@@ -41,4 +41,6 @@ export const endpoints = {
     developerApiKey: (keyId: string) => `${BASE}${API_PREFIX}/developer/api-keys/${keyId}`,
     attachments: `${BASE}${API_PREFIX}/attachments`,
     attachmentUrl: (attachmentId: string) => `${BASE}${API_PREFIX}/attachments/${attachmentId}/url`,
+    getLearnedFacts: (conversationId: string, messageId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}/messages/${messageId}/learned-facts`,
+    deleteMemoryFact: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${memoryId}`,
 };

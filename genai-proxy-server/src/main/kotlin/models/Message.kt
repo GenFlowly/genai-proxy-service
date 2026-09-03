@@ -47,6 +47,12 @@ data class Message(
      */
     val costUsd: Double? = null,
     /**
+     * Facts learned about the user from this exchange, written by the async
+     * memory extraction: JSON [{"memoryId","text"},...]. null = extraction
+     * still pending (or never triggered); "[]" = terminal, nothing learned.
+     */
+    val learnedFactsJson: String? = null,
+    /**
      * How long the retrieval server "thought" before response generation began
      * (request receipt → first generated token), in milliseconds. Assistant
      * messages only; null for user messages and pre-feature records.

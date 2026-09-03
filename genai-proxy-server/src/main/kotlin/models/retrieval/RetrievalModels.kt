@@ -15,6 +15,11 @@ import kotlinx.serialization.Serializable
 sealed class StreamChunk {
     data class Content(val text: String) : StreamChunk()
     data class Thinking(val text: String) : StreamChunk()
+    /**
+     * Raw JSON of one structured graph-execution step for the thinking panel:
+     * {"node","name","kind","status","label"?,"detail"?,"items"?,"prompt"?,"response"?}
+     */
+    data class ThinkingStep(val json: String) : StreamChunk()
     /** Request receipt on the retrieval server → first generated token, in ms */
     data class ThinkingDuration(val millis: Long) : StreamChunk()
     /** Raw JSON array of tool calls the model made: [{"id","name","args"}] */

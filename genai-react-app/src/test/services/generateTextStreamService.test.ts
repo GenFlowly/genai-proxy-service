@@ -89,6 +89,99 @@ describe('generateTextStreamService', () => {
 
 
 
+    test('generateTextStream parses "ks" structured thinking steps and still supports legacy "k" strings', async () => {
+        const encoder = new TextEncoder();
+        const runningStep = {
+            node: 'query_analyzer',
+            name: 'Query Analyzer',
+            kind: 'LLM',
+            status: 'running',
+            label: 'Query Analyzer: thinking…'
+        };
+        const doneStep = {
+            node: 'query_analyzer',
+            name: 'Query Analyzer',
+            kind: 'LLM',
+            status: 'done',
+            detail: 'Intent: lookup (needs rewrite: no)',
+            items: ['Doc A', 'Doc B'],
+            prompt: 'rendered prompt',
+            response: 'raw model response'
+        };
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ks","v":${JSON.stringify(runningStep)}}\n`) })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"k","v":"legacy flat step"}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ks","v":${JSON.stringify(doneStep)}}\n`) })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"Answer"}\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            headers: new Map(),
+            body: { getReader: () => mockReader }
+        });
+
+        const onDelta = jest.fn();
+        const onThinking = jest.fn();
+        const onThinkingStep = jest.fn();
+
+        await generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            onDelta,
+            undefined,
+            onThinking,
+            undefined,
+            undefined,
+            undefined,
+            onThinkingStep
+        );
+
+        expect(onThinkingStep).toHaveBeenCalledTimes(2);
+        expect(onThinkingStep).toHaveBeenNthCalledWith(1, runningStep);
+        expect(onThinkingStep).toHaveBeenNthCalledWith(2, doneStep);
+        // Legacy flat strings keep flowing through onThinking, not onThinkingStep
+        expect(onThinking).toHaveBeenCalledTimes(1);
+        expect(onThinking).toHaveBeenCalledWith('legacy flat step');
+        // Steps never leak into the answer text
+        expect(onDelta).toHaveBeenCalledTimes(1);
+        expect(onDelta).toHaveBeenCalledWith('Answer');
+    });
+
+    test('generateTextStream ignores malformed "ks" payloads', async () => {
+        const encoder = new TextEncoder();
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"ks","v":"not an object"}\n{"t":"ks","v":{"name":"missing node id"}}\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            headers: new Map(),
+            body: { getReader: () => mockReader }
+        });
+
+        const onThinkingStep = jest.fn();
+        await generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            jest.fn(),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            onThinkingStep
+        );
+
+        expect(onThinkingStep).not.toHaveBeenCalled();
+    });
+
     test('generateTextStream throws error on non-ok response', async () => {
         mockFetchWithRetry.mockResolvedValue({
             ok: false,

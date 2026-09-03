@@ -4,6 +4,7 @@ import com.genflowly.EmbeddingConstants
 import com.genflowly.di.AppScope
 import com.genflowly.models.RequestType
 import com.genflowly.models.api.CustomerMemory
+import com.genflowly.models.api.LearnedFactView
 import com.genflowly.models.api.MemoryKind
 import com.genflowly.models.api.MemorySourceType
 import com.genflowly.models.encoding.EncodingMemoryData
@@ -73,17 +74,39 @@ class MemoryExtractionService(
      * run: the first pass after one full exchange, later passes every
      * [MESSAGES_PER_EXTRACTION] messages.
      */
-    fun maybeExtractFromConversationAsync(customerId: String, conversationId: String, bearerToken: String?) {
+    fun maybeExtractFromConversationAsync(
+        customerId: String,
+        conversationId: String,
+        bearerToken: String?,
+        /**
+         * Assistant message this exchange produced. When set, the extraction
+         * outcome is written onto it as learnedFactsJson — "[]" on EVERY
+         * skipped/failed path (the terminal "nothing learned" marker that
+         * stops client polling), the added facts on a successful run.
+         */
+        responseMessageId: String? = null,
+    ) {
         appScope.launch {
+            suspend fun markNothingLearned() {
+                if (responseMessageId == null) return
+                try {
+                    conversationService.setMessageLearnedFacts(conversationId, responseMessageId, "[]")
+                } catch (e: Exception) {
+                    logger.warn("Failed to write learned-facts marker for $responseMessageId: ${e.message}")
+                }
+            }
             try {
-                if (!memoryService.isMemoryEnabled(customerId)) return@launch
+                if (!memoryService.isMemoryEnabled(customerId)) {
+                    markNothingLearned(); return@launch
+                }
 
-                val latestMessageId = conversationService.getLatestMessageId(conversationId) ?: return@launch
+                val latestMessageId = conversationService.getLatestMessageId(conversationId)
+                if (latestMessageId == null) { markNothingLearned(); return@launch }
                 val thread = conversationService.getMessageThread(conversationId, latestMessageId)
                 val processed = memoryRepository.getConversationExtractionMark(customerId, conversationId)
                 val newMessages = thread.size - (processed ?: 0)
                 val threshold = if (processed == null) FIRST_EXTRACTION_MIN_MESSAGES else MESSAGES_PER_EXTRACTION
-                if (newMessages < threshold) return@launch
+                if (newMessages < threshold) { markNothingLearned(); return@launch }
 
                 // Claim the window before the LLM call so concurrent completions
                 // of parallel turns don't double-extract; a failed run forfeits
@@ -94,9 +117,14 @@ class MemoryExtractionService(
                     val speaker = if (message.role == "assistant") "Assistant" else "User"
                     "$speaker: ${message.text.take(MAX_MESSAGE_CHARS)}"
                 }
-                extract(customerId, transcript, MemorySourceType.CONVERSATION, conversationId, bearerToken)
+                val added = extract(customerId, transcript, MemorySourceType.CONVERSATION, conversationId, bearerToken)
+                if (responseMessageId != null) {
+                    val factsJson = json.encodeToString(added.map { LearnedFactView(it.memoryId, it.text) })
+                    conversationService.setMessageLearnedFacts(conversationId, responseMessageId, factsJson)
+                }
             } catch (e: Exception) {
                 logger.warn("Memory extraction from conversation $conversationId failed: ${e.message}")
+                markNothingLearned()
             }
         }
     }
@@ -116,13 +144,14 @@ class MemoryExtractionService(
         }
     }
 
+    /** Runs extraction and returns the memories ADDed by this run. */
     private suspend fun extract(
         customerId: String,
         content: String,
         sourceType: MemorySourceType,
         sourceId: String,
         bearerToken: String?
-    ) {
+    ): List<CustomerMemory> {
         val existing = memoryRepository.getMemories(customerId)
         val existingJson = json.encodeToString(existing.map {
             ExistingMemoryView(it.memoryId, it.kind.name, it.category, it.text)
@@ -140,14 +169,15 @@ class MemoryExtractionService(
             conversationId = "memory-extraction"
         )
 
-        val operations = parseOperations(result.text) ?: return
-        if (operations.isEmpty()) return
+        val operations = parseOperations(result.text) ?: return emptyList()
+        if (operations.isEmpty()) return emptyList()
 
         val existingById = existing.associateBy { it.memoryId }
+        val addedMemories = mutableListOf<CustomerMemory>()
         var applied = 0
         operations.forEach { op ->
             try {
-                if (applyOperation(customerId, op, existingById, sourceType, sourceId, bearerToken)) applied++
+                if (applyOperation(customerId, op, existingById, sourceType, sourceId, bearerToken, addedMemories)) applied++
             } catch (e: Exception) {
                 logger.warn("Failed to apply memory operation ${op.op} for $customerId: ${e.message}")
             }
@@ -155,6 +185,7 @@ class MemoryExtractionService(
         if (applied > 0) {
             logger.info("Applied $applied memory operation(s) for customer $customerId from ${sourceType.name.lowercase()} $sourceId")
         }
+        return addedMemories
     }
 
     /** Returns true when the operation changed stored state. */
@@ -164,7 +195,8 @@ class MemoryExtractionService(
         existingById: Map<String, CustomerMemory>,
         sourceType: MemorySourceType,
         sourceId: String,
-        bearerToken: String?
+        bearerToken: String?,
+        addedMemories: MutableList<CustomerMemory> = mutableListOf()
     ): Boolean = when (op.op.uppercase()) {
         "ADD" -> {
             val text = op.text?.trim()?.take(MAX_MEMORY_CHARS)
@@ -180,6 +212,7 @@ class MemoryExtractionService(
                     sourceId = sourceId
                 )
                 encodeMemoryVector(customerId, memory, bearerToken)
+                addedMemories.add(memory)
                 true
             }
         }

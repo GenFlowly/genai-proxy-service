@@ -250,6 +250,19 @@ _DIRECT_OUTPUT_KEYS = {
 }
 
 
+# Prompt/response excerpts surfaced in the client's thinking panel.
+_TRACE_TEXT_LIMIT = 1500
+
+
+def _trace_entry(node_label: str, prompt: str, response) -> dict:
+    text = response if isinstance(response, str) else json.dumps(response, default=str)
+    return {"trace": [{
+        "node": node_label,
+        "prompt": (prompt or "")[:_TRACE_TEXT_LIMIT],
+        "response": (text or "")[:_TRACE_TEXT_LIMIT],
+    }]}
+
+
 def _route_output(key, value) -> dict:
     """State-update dict for one output: first-class field or scratch entry."""
     if key in _DIRECT_OUTPUT_KEYS:
@@ -269,21 +282,58 @@ def _merge_outputs(updates: list[dict]) -> dict:
     return merged
 
 
+# Optional template sections: {?field}...{/field} renders its body only when
+# `field` has a real value (non-empty retrieval results for {?context}, web
+# results for {?web_context}, a non-blank string / non-empty list otherwise).
+_SECTION_RE = re.compile(r"\{\?(\w+)\}(.*?)\{/\1\}", re.DOTALL)
+
+
 def _render_template(template: str, state: dict) -> str:
-    """Replace {field_name} placeholders with values from state, scratch or computed variables."""
+    """
+    Replace {field_name} placeholders with values from state, scratch or
+    computed variables. {?field}...{/field} blocks are optional sections,
+    dropped entirely when the field has no real value — e.g.
+    "{?context}Context:\n{context}\n\n{/context}Question: {query}" skips the
+    whole Context section when retrieval found nothing.
+    """
     ranked = state.get("ranked_results") or state.get("retrieval_results", [])
+    web_results = state.get("web_search_results", [])
+    web_answer = state.get("web_search_answer")
     computed = {
         "context": _build_context(ranked),
         "query": state.get("rewritten_query") or state.get("original_query", ""),
         "chunks_text": _build_chunks_text(state.get("retrieval_results", [])),
         "web_context": _build_web_context(
-            state.get("web_search_results", []),
-            state.get("web_search_answer"),
+            web_results,
+            web_answer,
             state.get("node_configs", {}).get("WEB_SEARCH", {}).get("citation_instruction"),
         ),
     }
     scalars = lambda d: {k: v for k, v in d.items() if isinstance(v, (str, int, float, bool))}  # noqa: E731
-    all_vars = {**scalars(state.get("scratch", {}) or {}), **scalars(state), **computed}
+    scratch = state.get("scratch", {}) or {}
+    all_vars = {**scalars(scratch), **scalars(state), **computed}
+
+    # Presence of a field for {?field} sections: the computed vars render
+    # placeholder text even when empty, so test the underlying data instead.
+    def has_value(name: str) -> bool:
+        if name == "context":
+            return bool(ranked)
+        if name == "web_context":
+            return bool(web_results or web_answer)
+        if name == "chunks_text":
+            return bool(state.get("retrieval_results"))
+        val = scratch.get(name, state.get(name))
+        if val is None:
+            return name in all_vars and bool(str(all_vars[name]).strip())
+        if isinstance(val, str):
+            return bool(val.strip())
+        if isinstance(val, (list, dict)):
+            return bool(val)
+        return bool(val)
+
+    template = _SECTION_RE.sub(
+        lambda m: m.group(2) if has_value(m.group(1)) else "", template
+    )
 
     def replace(match):
         val = all_vars.get(match.group(1), "")
@@ -527,10 +577,11 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                     for llm_key, state_key in json_output_mapping.items()
                 ])
                 result["usage"] = usage
+                result.update(_trace_entry(agent_type, rendered_input, content))
                 return result
             except json.JSONDecodeError:
                 logger.error("Node %s: expected JSON, got: %s", agent_type, _get_text(response.content)[:200])
-                return {"usage": usage}
+                return {"usage": usage, **_trace_entry(agent_type, rendered_input, _get_text(response.content))}
 
         if response_format == "json_indices":
             source = state.get(json_indices_source_key, [])
@@ -541,24 +592,29 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                     content = re.sub(r"\n?```$", "", content).strip()
                 indices = json.loads(content)
                 reordered = [source[i] for i in indices if i < len(source)]
-                return {**_route_output(output_key, reordered), "usage": usage}
+                return {**_route_output(output_key, reordered), "usage": usage,
+                        **_trace_entry(agent_type, rendered_input, content)}
             except (json.JSONDecodeError, TypeError, ValueError):
                 logger.error("Node %s: expected index array, got: %s — using original order", agent_type, _get_text(response.content)[:200])
-                return {**_route_output(output_key, source), "usage": usage}
+                return {**_route_output(output_key, source), "usage": usage,
+                        **_trace_entry(agent_type, rendered_input, _get_text(response.content))}
 
         if structured_llm is not None:
             if parsed is not None:
-                return {**_route_output(output_key, json.dumps(parsed)), "usage": usage}
+                return {**_route_output(output_key, json.dumps(parsed)), "usage": usage,
+                        **_trace_entry(agent_type, rendered_input, json.dumps(parsed))}
             # Constrained decoding makes this near-unreachable; degrade to the
             # raw text so the caller's own parse (and failover) can decide.
             logger.error(
                 "Node %s: structured output parse failed (%s) — returning raw text",
                 agent_type, parsing_error,
             )
-            return {**_route_output(output_key, _get_text(response.content)), "usage": usage}
+            return {**_route_output(output_key, _get_text(response.content)), "usage": usage,
+                    **_trace_entry(agent_type, rendered_input, _get_text(response.content))}
 
         # response_format == "text"
-        result = {**_route_output(output_key, _get_text(response.content)), "usage": usage}
+        result = {**_route_output(output_key, _get_text(response.content)), "usage": usage,
+                  **_trace_entry(agent_type, rendered_input, _get_text(response.content))}
         if tools_bound:
             raw_tool_calls = getattr(response, "tool_calls", None) or []
             if raw_tool_calls:
