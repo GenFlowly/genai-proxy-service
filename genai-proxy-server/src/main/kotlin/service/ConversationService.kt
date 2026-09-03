@@ -28,6 +28,10 @@ class ConversationService(
     private val shareRepository: ShareRepository
 ) {
 
+    /** Async memory-extraction outcome for a message ("[]" = nothing learned). */
+    suspend fun setMessageLearnedFacts(conversationId: String, messageId: String, factsJson: String) =
+        conversationRepository.setMessageLearnedFacts(conversationId, messageId, factsJson)
+
     /**
      * Returns the effective role [callerCustomerId] has on [conversationId]:
      * [ShareRole.OWNER] if they own it, otherwise the role from a direct share,
@@ -87,6 +91,9 @@ class ConversationService(
                                 tokensReadFromCache = nextMsg.tokensReadFromCache,
                                 costUsd = nextMsg.costUsd,
                                 thinkingDurationMs = nextMsg.thinkingDurationMs,
+                                learnedFacts = nextMsg.learnedFactsJson?.let {
+                                    runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
+                                },
                                 webSources = nextMsg.webSourcesJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
                                 }
@@ -172,7 +179,7 @@ class ConversationService(
 
     // ─── Messages ─────────────────────────────────────────────────────────────
 
-    private suspend fun getMessage(
+    suspend fun getMessage(
         conversationId: String,
         previousMessageId: String
     ): Message? {

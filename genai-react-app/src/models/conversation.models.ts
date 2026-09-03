@@ -12,6 +12,47 @@ export interface WebSource {
 }
 
 /**
+ * One fact the async memory-extraction pipeline learned about the user from an
+ * exchange. `memoryId` is the handle for deleting it from memory again.
+ */
+export interface LearnedFact {
+    memoryId: string
+    text: string
+}
+
+/** What a graph node does — drives the icon shown next to its thinking step. */
+export type ThinkingStepKind = 'LLM' | 'MEMORY' | 'RETRIEVAL' | 'WEB_SEARCH' | 'REFLECTION'
+
+/**
+ * One structured per-node step of the agent graph's thinking phase, streamed
+ * via the "ks" chunk. A node can appear multiple times (graph cycles): a later
+ * `running` for the same node id after it finished starts a NEW entry, while a
+ * `done` updates the latest still-running entry with that node id.
+ */
+export interface ThinkingStep {
+    /** Node id — the correlation key between running/done events */
+    node: string
+    /** User-facing node name, e.g. "Query Analyzer" */
+    name: string
+    /**
+     * Absent only on legacy fallback rows built client-side from flat "k"
+     * strings — the backend always sends it.
+     */
+    kind?: ThinkingStepKind
+    status: 'running' | 'done'
+    /** Present while running, e.g. "Query Analyzer: thinking…" */
+    label?: string
+    /** Present when done, e.g. "Found 3 relevant document(s)" */
+    detail?: string
+    /** Done: retrieved doc titles / web titles / memory excerpts (≤5) */
+    items?: string[]
+    /** Done, LLM-backed nodes: rendered prompt sent to the model (truncated) */
+    prompt?: string
+    /** Done, LLM-backed nodes: the model's raw response (truncated) */
+    response?: string
+}
+
+/**
  * Represents a single AI model's response.
  */
 export interface Message {
@@ -28,7 +69,16 @@ export interface Message {
      * error below it. Only ever set client-side — never persisted.
      */
     error?: string | null
+    /**
+     * Legacy flat thinking lines streamed via the "k" chunk. Kept for backends
+     * that still emit flat strings; rendered as plain steps without an icon.
+     */
     thinkingSteps?: string[]
+    /**
+     * Structured per-node thinking steps streamed via the "ks" chunk, in
+     * arrival order (cycles append new entries for the same node id).
+     */
+    thinkingStepList?: ThinkingStep[]
     /**
      * Retrieval-server thinking time (request receipt → first generated token),
      * in ms. Streamed live via the "kd" chunk and persisted in DDB; null for
@@ -50,6 +100,14 @@ export interface Message {
      * Null for responses persisted before cost tracking.
      */
     costUsd?: number | null
+    /**
+     * Facts the async memory extraction learned about the user from this
+     * exchange. Only set for messages loaded from history: an array (possibly
+     * empty) when extraction finished, null when the backend doesn't know
+     * (pending/legacy). Messages generated in this session leave it undefined —
+     * the UI polls the learned-facts endpoint for those instead.
+     */
+    learnedFacts?: LearnedFact[] | null
 }
 
 /**

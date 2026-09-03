@@ -5,6 +5,10 @@ def _merge_scratch(current: dict, update: dict) -> dict:
     return {**(current or {}), **(update or {})}
 
 
+def _append_list(current: list, update: list) -> list:
+    return (current or []) + (update or [])
+
+
 def _merge_usage(current: dict, update: dict) -> dict:
     return {
         "input_tokens": current.get("input_tokens", 0) + update.get("input_tokens", 0),
@@ -91,6 +95,11 @@ class RetrievalState(TypedDict):
     # Written by the MEMORY node: the rendered "what you know about this user"
     # block. The response-generating nodes append it to their persona.
     memories_block: Optional[str]
+
+    # Execution trace for the client's "thinking" panel: one entry per
+    # LLM-calling node — {node, prompt, response} (truncated). Appended by the
+    # nodes, surfaced by the streaming layer as thinking_step events.
+    trace: Annotated[list, _append_list]
 
     # Free-form state: node outputs whose output_key is not a first-class
     # field above land here ({key: value}), readable from any later node's

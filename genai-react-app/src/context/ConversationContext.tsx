@@ -14,8 +14,10 @@ import {
     ConversationBlock,
     IConversationContext,
     Message,
+    ThinkingStep,
     WebSource,
 } from '../models/conversation.models'
+import { applyThinkingStep } from '../utils/thinkingStepUtils'
 import { AttachmentRef } from '../models/attachment.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
 import i18n from '../i18n'
@@ -227,7 +229,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         signal?: AbortSignal,
         onThinkingDuration?: (millis: number) => void,
         attachments: AttachmentRef[] = [],
-        onWebSources?: (sources: WebSource[]) => void
+        onWebSources?: (sources: WebSource[]) => void,
+        onThinkingStep?: (step: ThinkingStep) => void
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -240,7 +243,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources)
+        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -523,6 +526,17 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     }))
                 }
 
+                const handleThinkingStep = (step: ThinkingStep) => {
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, thinkingStepList: applyThinkingStep(m.thinkingStepList ?? [], step) }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
                 const handleThinkingDuration = (millis: number) => {
                     setConversationBlockList(prev => prev.map(block => {
                         if (block.conversationBlockId !== id) return block
@@ -648,7 +662,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal,
                         handleThinkingDuration,
                         attachmentsToUse,
-                        handleWebSources
+                        handleWebSources,
+                        handleThinkingStep
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer

@@ -31,3 +31,18 @@ data class GetMemoriesResponse(val memories: List<CustomerMemory>)
 
 @Serializable
 data class DeleteMemoryResponse(val status: String)
+
+/** One fact learned about the user from an exchange (a created memory). */
+@kotlinx.serialization.Serializable
+data class LearnedFactView(val memoryId: String, val text: String)
+
+/**
+ * Async memory-extraction outcome for a message. status "pending" while
+ * extraction has not written its marker yet; "done" with the facts (possibly
+ * empty — nothing learned) once terminal.
+ */
+@kotlinx.serialization.Serializable
+data class LearnedFactsResponse(
+    val status: String,
+    val facts: List<LearnedFactView> = emptyList(),
+)

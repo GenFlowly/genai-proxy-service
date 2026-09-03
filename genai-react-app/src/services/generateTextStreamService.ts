@@ -1,7 +1,7 @@
 import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import { GenerateTextStreamRequest } from "../models/generateText.models";
-import { WebSource } from "../models/conversation.models";
+import { ThinkingStep, WebSource } from "../models/conversation.models";
 import { fetchWithRetry } from "../utils/apiUtils";
 
 export interface StreamMetadata {
@@ -32,7 +32,8 @@ export async function generateTextStream(
     onThinking?: (step: string) => void,
     signal?: AbortSignal,
     onThinkingDuration?: (millis: number) => void,
-    onWebSources?: (sources: WebSource[]) => void
+    onWebSources?: (sources: WebSource[]) => void,
+    onThinkingStep?: (step: ThinkingStep) => void
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -108,6 +109,13 @@ export async function generateTextStream(
             const msg = JSON.parse(trimmed);
             if (msg.t === "c") onDelta(msg.v);
             else if (msg.t === "k") onThinking?.(msg.v);
+            else if (msg.t === "ks") {
+                // Structured per-node thinking step from the agent graph
+                const step = msg.v;
+                if (step && typeof step === "object" && typeof step.node === "string") {
+                    onThinkingStep?.(step as ThinkingStep);
+                }
+            }
             else if (msg.t === "kd") {
                 const millis = Number(msg.v);
                 if (Number.isFinite(millis)) onThinkingDuration?.(millis);

@@ -374,6 +374,9 @@ class RetrievalServerClient(
                                 val content = jsonObj["content"]?.jsonPrimitive?.content
                                 if (!content.isNullOrEmpty()) send(StreamChunk.Content(content))
                             }
+                            jsonObj.containsKey("thinking_step") -> {
+                                jsonObj["thinking_step"]?.let { send(StreamChunk.ThinkingStep(it.toString())) }
+                            }
                             jsonObj.containsKey("thinking") -> {
                                 val thinking = jsonObj["thinking"]?.jsonPrimitive?.content
                                 if (!thinking.isNullOrEmpty()) send(StreamChunk.Thinking(thinking))
