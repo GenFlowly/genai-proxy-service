@@ -36,6 +36,11 @@ function linkifyCitations(text: string, webSources?: WebSource[] | null): string
     })
 }
 
+/** "$1.23" / "$0.0421" — sub-dollar amounts keep enough decimals for sub-cent turn costs. */
+function formatUsd(cost: number): string {
+    return cost >= 1 ? `$${cost.toFixed(2)}` : `$${cost.toFixed(4)}`
+}
+
 /** Numbered link list rendered under the response text. */
 function SourcesSection({ sources }: { sources: WebSource[] }) {
     const { t } = useTranslation()
@@ -118,7 +123,35 @@ function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], i
 export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { t } = useTranslation()
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
-    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, setVendorSelectionForBlock, stopGenerating } = useConversation()
+    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, setVendorSelectionForBlock, stopGenerating, conversationBlockList = [] } = useConversation()
+
+    // Running per-vendor totals (tokens + exact cost) up to and including each
+    // response, keyed by messageId. The badge shows these conversation-so-far
+    // numbers on every response; a single turn's usage is the difference
+    // between consecutive responses of the same vendor.
+    const cumulativeByMessage = useMemo(() => {
+        type Totals = { inputTokens: number; outputTokens: number; totalTokens: number; tokensReadFromCache: number; costUsd: number | null }
+        const perVendor: Partial<Record<string, Totals>> = {}
+        const byMessage: Partial<Record<string, Totals>> = {}
+        for (const block of conversationBlockList) {
+            for (const msg of block.responseMessages) {
+                if (!msg.aiVendor) continue
+                const hasUsage = msg.inputTokens != null || msg.outputTokens != null || msg.totalTokens != null || msg.costUsd != null
+                if (!hasUsage) continue
+                const prev = perVendor[msg.aiVendor] ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, tokensReadFromCache: 0, costUsd: null }
+                const next: Totals = {
+                    inputTokens: prev.inputTokens + (msg.inputTokens ?? 0),
+                    outputTokens: prev.outputTokens + (msg.outputTokens ?? 0),
+                    totalTokens: prev.totalTokens + (msg.totalTokens ?? 0),
+                    tokensReadFromCache: prev.tokensReadFromCache + (msg.tokensReadFromCache ?? 0),
+                    costUsd: msg.costUsd != null ? (prev.costUsd ?? 0) + msg.costUsd : prev.costUsd,
+                }
+                perVendor[msg.aiVendor] = next
+                byMessage[msg.messageId] = next
+            }
+        }
+        return byMessage
+    }, [conversationBlockList])
 
     const selectedResponseId = getSelectedResponseForBlock(blockId)
     const sidebarsHidden = !isLeftSidebarExpanded && !isRightSidebarExpanded
@@ -226,9 +259,21 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             )}
 
             <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
-                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingDurationMs, webSources, inputTokens, outputTokens, totalTokens, tokensReadFromCache }) => {
+                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingDurationMs, webSources, inputTokens, outputTokens, totalTokens, tokensReadFromCache, costUsd }) => {
                     const isSelected = selectedResponseId === messageId
                     const isThinkingPhase = !!isLoading && text.trim().length === 0
+
+                    // Conversation-so-far totals for this response's vendor; a
+                    // response not (yet) in the block list — e.g. rendered in
+                    // isolation — falls back to its own per-turn values.
+                    const hasOwnUsage = inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null || costUsd != null
+                    const usageTotals = cumulativeByMessage[messageId] ?? (hasOwnUsage ? {
+                        inputTokens: inputTokens ?? 0,
+                        outputTokens: outputTokens ?? 0,
+                        totalTokens: totalTokens ?? 0,
+                        tokensReadFromCache: tokensReadFromCache ?? 0,
+                        costUsd: costUsd ?? null,
+                    } : undefined)
 
                     let HeaderComponent: React.ReactNode = null
                     if (aiVendor) {
@@ -276,37 +321,36 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                 {!isLoading && webSources && webSources.length > 0 && (
                                     <SourcesSection sources={webSources} />
                                 )}
-                                {!isLoading && (inputTokens != null || outputTokens != null || totalTokens != null || tokensReadFromCache != null) && (
+                                {!isLoading && usageTotals && (
                                     <div className={styles.tokenBadge}>
-                                        {inputTokens != null && (
-                                            <Tooltip content={t('conversation.response.totalInputTokens')}>
+                                        <Tooltip content={t('conversation.response.totalInputTokens')}>
+                                            <span className={styles.tokenItem}>
+                                                <Icon src={ICONS.INPUT_TOKENS} size={12} />
+                                                {usageTotals.inputTokens.toLocaleString()}
+                                            </span>
+                                        </Tooltip>
+                                        <Tooltip content={t('conversation.response.totalOutputTokens')}>
+                                            <span className={styles.tokenItem}>
+                                                <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
+                                                {usageTotals.outputTokens.toLocaleString()}
+                                            </span>
+                                        </Tooltip>
+                                        <Tooltip content={t('conversation.response.tokensReadFromCache')}>
+                                            <span className={styles.tokenItem}>
+                                                <Icon src={ICONS.CACHE_TOKENS} size={12} />
+                                                {usageTotals.tokensReadFromCache.toLocaleString()}
+                                            </span>
+                                        </Tooltip>
+                                        <Tooltip content={t('conversation.response.totalTokens')}>
+                                            <span className={styles.tokenItem}>
+                                                <Icon src={ICONS.TOTAL_TOKENS} size={12} />
+                                                {usageTotals.totalTokens.toLocaleString()}
+                                            </span>
+                                        </Tooltip>
+                                        {usageTotals.costUsd != null && (
+                                            <Tooltip content={t('conversation.response.conversationCostUsd', { vendor: aiVendor })}>
                                                 <span className={styles.tokenItem}>
-                                                    <Icon src={ICONS.INPUT_TOKENS} size={12} />
-                                                    {inputTokens.toLocaleString()}
-                                                </span>
-                                            </Tooltip>
-                                        )}
-                                        {outputTokens != null && (
-                                            <Tooltip content={t('conversation.response.totalOutputTokens')}>
-                                                <span className={styles.tokenItem}>
-                                                    <Icon src={ICONS.OUTPUT_TOKENS} size={12} />
-                                                    {outputTokens.toLocaleString()}
-                                                </span>
-                                            </Tooltip>
-                                        )}
-                                        {tokensReadFromCache != null && (
-                                            <Tooltip content={t('conversation.response.tokensReadFromCache')}>
-                                                <span className={styles.tokenItem}>
-                                                    <Icon src={ICONS.CACHE_TOKENS} size={12} />
-                                                    {tokensReadFromCache.toLocaleString()}
-                                                </span>
-                                            </Tooltip>
-                                        )}
-                                        {totalTokens != null && (
-                                            <Tooltip content={t('conversation.response.totalTokens')}>
-                                                <span className={styles.tokenItem}>
-                                                    <Icon src={ICONS.TOTAL_TOKENS} size={12} />
-                                                    {totalTokens.toLocaleString()}
+                                                    {formatUsd(usageTotals.costUsd)}
                                                 </span>
                                             </Tooltip>
                                         )}

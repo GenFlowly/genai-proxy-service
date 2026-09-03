@@ -488,6 +488,12 @@ class ConversationRepository(
                     message.tokensReadFromCache?.let {
                         map["tokensReadFromCache"] = AttributeValue.builder().n(it.toString()).build()
                     }
+                    message.tokensWrittenToCache?.let {
+                        map["tokensWrittenToCache"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    message.costUsd?.let {
+                        map["costUsd"] = AttributeValue.builder().n(it.toString()).build()
+                    }
                     message.thinkingDurationMs?.let {
                         map["thinkingDurationMs"] = AttributeValue.builder().n(it.toString()).build()
                     }
@@ -554,6 +560,8 @@ class ConversationRepository(
             outputTokens = outputTokens,
             totalTokens = totalTokens,
             tokensReadFromCache = tokensReadFromCache,
+            tokensWrittenToCache = item["tokensWrittenToCache"]?.n()?.toIntOrNull(),
+            costUsd = item["costUsd"]?.n()?.toDoubleOrNull(),
             thinkingDurationMs = item["thinkingDurationMs"]?.n()?.toLongOrNull(),
             createdAt = item["createdAt"]?.s()
         )

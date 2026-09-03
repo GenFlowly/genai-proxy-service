@@ -114,7 +114,8 @@ fun Route.registerGenerateTextRoutes(
                         request.tools,
                         request.toolChoice,
                         request.toolResults,
-                        request.responseSchema
+                        request.responseSchema,
+                        request.useLearnedPreferences
                     )
 
                 val generateTextResponseList =
@@ -129,9 +130,11 @@ fun Route.registerGenerateTextRoutes(
                 // exchange for semantic conversation search.
                 responseMessageList.firstOrNull()?.let { message ->
                     val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
-                    memoryExtractionService.maybeExtractFromConversationAsync(
-                        customerId, message.conversationId, bearerToken
-                    )
+                    if (request.learnFromConversation) {
+                        memoryExtractionService.maybeExtractFromConversationAsync(
+                            customerId, message.conversationId, bearerToken
+                        )
+                    }
                     conversationIndexingService.indexExchangeAsync(
                         customerId = customerId,
                         conversationId = message.conversationId,
@@ -177,6 +180,9 @@ private fun createResponse(message: Message): GenerateTextResponse {
         messageId = message.messageId,
         inputTokens = message.inputTokens,
         outputTokens = message.outputTokens,
+        totalTokens = message.totalTokens,
+        tokensReadFromCache = message.tokensReadFromCache,
+        costUsd = message.costUsd,
         toolCalls = message.toolCallsJson?.let {
             runCatching { toolCallsJsonParser.parseToJsonElement(it) }.getOrNull()
         }

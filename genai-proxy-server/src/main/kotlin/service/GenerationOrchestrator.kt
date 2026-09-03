@@ -35,7 +35,8 @@ class GenerationOrchestrator(
     private val retrievalService: RetrievalServerClient,
     private val requestValidator: GenerationRequestValidator,
     private val modelCatalogService: ModelCatalogService,
-    private val memoryService: MemoryService
+    private val memoryService: MemoryService,
+    private val costCalculationService: CostCalculationService
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
@@ -83,7 +84,8 @@ class GenerationOrchestrator(
         tools: List<ToolDefinition> = emptyList(),
         toolChoice: String? = null,
         toolResults: List<ToolResult> = emptyList(),
-        responseSchema: kotlinx.serialization.json.JsonObject? = null
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
+        useLearnedPreferences: Boolean = true
 
     ): List<Message> {
 
@@ -97,9 +99,10 @@ class GenerationOrchestrator(
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
         // returns the full instruction, so there is no second fetch here.
         val instructionResp = resolveInstruction(customerId, instructionId, instructionVersion)
-        // Learned CORE memories ride on the system prompt so durable user facts
-        // shape every response, with or without retrieval.
-        val systemPrompt = memoryService.withMemoryBlock(customerId, instructionResp?.instruction ?: "")
+        // Memory injection is a graph concern (the MEMORY node): here we only
+        // make the governance call — request consent AND the account setting.
+        val systemPrompt = instructionResp?.instruction ?: ""
+        val memoryEnabled = useLearnedPreferences && memoryService.isMemoryEnabled(customerId)
         val effectiveInstructionId = instructionResp?.id ?: ""
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 
@@ -149,7 +152,8 @@ class GenerationOrchestrator(
                         tools = tools,
                         toolChoice = toolChoice,
                         toolResults = toolResults,
-                        responseSchema = responseSchema
+                        responseSchema = responseSchema,
+                        memoryEnabled = memoryEnabled
                     )
                 }
             }.awaitAll()
@@ -169,7 +173,8 @@ class GenerationOrchestrator(
         tools: List<ToolDefinition> = emptyList(),
         toolChoice: String? = null,
         toolResults: List<ToolResult> = emptyList(),
-        responseSchema: kotlinx.serialization.json.JsonObject? = null
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
+        memoryEnabled: Boolean = false
     ): Message {
         val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, message.customerId)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
@@ -200,7 +205,8 @@ class GenerationOrchestrator(
             tools = tools.toPayloadTools(),
             toolChoice = toolChoice,
             toolResults = toolResults.toPayloadToolResults(),
-            responseSchema = responseSchema
+            responseSchema = responseSchema,
+            memoryEnabled = memoryEnabled
         )
 
         val responseMessage = Message(
@@ -217,7 +223,17 @@ class GenerationOrchestrator(
             inputTokens = result.inputTokens,
             outputTokens = result.outputTokens,
             totalTokens = result.totalTokens,
-            tokensReadFromCache = result.tokensReadFromCache
+            tokensReadFromCache = result.tokensReadFromCache,
+            tokensWrittenToCache = result.tokensWrittenToCache,
+            costUsd = costCalculationService.computeCostUsd(
+                aiVendor, model,
+                TokenUsageBreakdown(
+                    inputTokens = result.inputTokens,
+                    outputTokens = result.outputTokens,
+                    cacheReadTokens = result.tokensReadFromCache,
+                    tokensWrittenToCache = result.tokensWrittenToCache
+                )
+            )
         )
 
         conversationService.addMessageInConversation(responseMessage)
@@ -253,7 +269,8 @@ class GenerationOrchestrator(
         tools: List<ToolDefinition> = emptyList(),
         toolChoice: String? = null,
         toolResults: List<ToolResult> = emptyList(),
-        responseSchema: kotlinx.serialization.json.JsonObject? = null
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
+        useLearnedPreferences: Boolean = true
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -266,9 +283,10 @@ class GenerationOrchestrator(
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
         // returns the full instruction, so there is no second fetch here.
         val instructionResp = resolveInstruction(customerId, instructionId, instructionVersion)
-        // Learned CORE memories ride on the system prompt so durable user facts
-        // shape every response, with or without retrieval.
-        val systemPrompt = memoryService.withMemoryBlock(customerId, instructionResp?.instruction ?: "")
+        // Memory injection is a graph concern (the MEMORY node): here we only
+        // make the governance call — request consent AND the account setting.
+        val systemPrompt = instructionResp?.instruction ?: ""
+        val memoryEnabled = useLearnedPreferences && memoryService.isMemoryEnabled(customerId)
         val effectiveInstructionId = instructionResp?.id ?: ""
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 
@@ -387,7 +405,8 @@ class GenerationOrchestrator(
                     tools = tools.toPayloadTools(),
                     toolChoice = toolChoice,
                     toolResults = toolResults.toPayloadToolResults(),
-                    responseSchema = responseSchema
+                    responseSchema = responseSchema,
+                    memoryEnabled = memoryEnabled
                 ).collect { chunk ->
                     when (chunk) {
                         is StreamChunk.Content -> {
@@ -446,6 +465,18 @@ class GenerationOrchestrator(
                         outputTokens = capturedUsage?.outputTokens,
                         totalTokens = capturedUsage?.totalTokens,
                         tokensReadFromCache = capturedUsage?.tokensReadFromCache,
+                        tokensWrittenToCache = capturedUsage?.tokensWrittenToCache,
+                        costUsd = capturedUsage?.let {
+                            costCalculationService.computeCostUsd(
+                                config.aiVendor, config.model,
+                                TokenUsageBreakdown(
+                                    inputTokens = it.inputTokens,
+                                    outputTokens = it.outputTokens,
+                                    cacheReadTokens = it.tokensReadFromCache,
+                                    tokensWrittenToCache = it.tokensWrittenToCache
+                                )
+                            )
+                        },
                         thinkingDurationMs = capturedThinkingDurationMs
                     )
                     conversationService.addMessageInConversation(responseMessage)

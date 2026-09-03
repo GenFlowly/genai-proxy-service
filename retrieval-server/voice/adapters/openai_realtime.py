@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 REALTIME_URL = "wss://api.openai.com/v1/realtime"
 DEFAULT_MODEL = os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime-2.1")
+# Transcribes the user's speech for transcript persistence. Project-scoped API
+# keys only see the transcription models enabled for the project; when this
+# model isn't among them OpenAI emits input_audio_transcription.failed per
+# utterance and no user transcripts (or messages) are ever produced.
+TRANSCRIBE_MODEL = os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-live-transcribe")
 DEFAULT_VOICE = "marin"
 
 
@@ -62,10 +67,10 @@ class OpenAIRealtimeAdapter(VoiceAdapter):
                     "input": {
                         "format": {"type": "audio/pcm", "rate": self.input_rate},
                         "turn_detection": {"type": "semantic_vad"},
-                        "transcription": {"model": "gpt-4o-mini-transcribe"},
+                        "transcription": {"model": TRANSCRIBE_MODEL},
                     },
                     "output": {
-                        "format": {"type": "audio/pcm"},
+                        "format": {"type": "audio/pcm", "rate": self.output_rate},
                         "voice": self._voice,
                     },
                 },
@@ -136,20 +141,37 @@ class OpenAIRealtimeAdapter(VoiceAdapter):
             self._pending_assistant_transcript = event.get("transcript", "")
         elif etype == "conversation.item.input_audio_transcription.completed":
             await self._emit({"type": "transcript.done", "role": "user", "text": event.get("transcript", "")})
+        elif etype == "conversation.item.input_audio_transcription.failed":
+            message = (event.get("error") or {}).get("message", "unknown error")
+            logger.warning("User transcription failed (model=%s): %s", TRANSCRIBE_MODEL, message)
+            await self._emit({"type": "error", "message": f"User transcription failed: {message}"})
         elif etype == "input_audio_buffer.speech_started":
             # User started talking over the assistant — client should stop playback
             await self._emit({"type": "interrupted"})
         elif etype == "response.done":
             usage = (event.get("response") or {}).get("usage") or {}
             if usage:
-                details = usage.get("input_token_details") or {}
+                in_det = usage.get("input_token_details") or {}
+                cached_det = in_det.get("cached_tokens_details") or {}
+                out_det = usage.get("output_token_details") or {}
                 await self._emit({
                     "type": "usage",
                     "usage": {
                         "input_tokens": usage.get("input_tokens", 0),
                         "output_tokens": usage.get("output_tokens", 0),
                         "total_tokens": usage.get("total_tokens", 0),
-                        "cache_read_tokens": details.get("cached_tokens", 0),
+                        "cache_read_tokens": in_det.get("cached_tokens", 0),
+                        # Modality breakdown for exact cost computation — audio
+                        # tokens are billed at different rates than text tokens.
+                        # input_*_tokens include the cached_*_tokens subset.
+                        "details": {
+                            "input_text_tokens": in_det.get("text_tokens", 0),
+                            "input_audio_tokens": in_det.get("audio_tokens", 0),
+                            "cached_text_tokens": cached_det.get("text_tokens", 0),
+                            "cached_audio_tokens": cached_det.get("audio_tokens", 0),
+                            "output_text_tokens": out_det.get("text_tokens", 0),
+                            "output_audio_tokens": out_det.get("audio_tokens", 0),
+                        },
                     },
                 })
             if self._pending_assistant_transcript:

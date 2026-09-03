@@ -10,11 +10,11 @@ import {
 } from '../services/defaultGraphService'
 import {
     CONDITION_OPTIONS,
-    NODE_CATALOG,
     diffGraphUpdate,
     toEditorGraph,
     toInstructionOptions,
 } from '../lib/agentGraph'
+import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
 
 /**
  * The System default graph on the visual editor. Unpublished: a blank canvas
@@ -30,6 +30,7 @@ export default function DefaultGraphPage() {
     const [instructionOptions, setInstructionOptions] = useState<InstructionOption[]>([])
     const [saving, setSaving] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
+    const { catalog, saveNodeAsPreset, presetNotice } = useNodePresetCatalog(getAccessTokenSilently)
 
     const refresh = useCallback(async () => {
         setLoadError(null)
@@ -107,16 +108,22 @@ export default function DefaultGraphPage() {
     if (loadError) return <div className="banner error">{loadError}</div>
 
     return (
-        <div className="graph-editor-shell">
-            <GraphEditor
-                graph={editorGraph}
-                nodeCatalog={NODE_CATALOG}
-                instructions={instructionOptions}
-                conditionOptions={CONDITION_OPTIONS}
-                saving={saving}
-                errorMessage={saveError}
-                onSave={(edited) => void handleSave(edited)}
-            />
-        </div>
+        <>
+            {presetNotice && (
+                <div className={`row-message ${presetNotice.kind}`}>{presetNotice.text}</div>
+            )}
+            <div className="graph-editor-shell">
+                <GraphEditor
+                    graph={editorGraph}
+                    nodeCatalog={catalog}
+                    instructions={instructionOptions}
+                    conditionOptions={CONDITION_OPTIONS}
+                    saving={saving}
+                    errorMessage={saveError}
+                    onSave={(edited) => void handleSave(edited)}
+                    onSaveAsPreset={(node) => void saveNodeAsPreset(node)}
+                />
+            </div>
+        </>
     )
 }

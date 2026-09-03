@@ -40,7 +40,11 @@ fun voiceSessionSpecPath(): io.swagger.v3.oas.models.PathItem =
                 |### Connecting
                 |Authenticate with an Auth0 JWT or developer API key (`Authorization: Bearer ...`).
                 |Browsers cannot set WebSocket headers — pass the JWT as an `access_token` query
-                |parameter instead.
+                |parameter instead. **The `access_token` fallback accepts Auth0 JWTs only**;
+                |developer API keys (`gfy_...`) are read exclusively from the `Authorization`
+                |header, so a browser app using a developer key must relay the WebSocket through
+                |its own backend, which attaches the header (see `examples/realtime-voice-app`
+                |for a working Next.js relay).
                 |
                 |### Handshake
                 |First frame from the client must be `session.init` (JSON text frame):
@@ -76,8 +80,18 @@ fun voiceSessionSpecPath(): io.swagger.v3.oas.models.PathItem =
                 |- `interrupted` — user barge-in: stop audio playback immediately
                 |- `error` — terminal or vendor error
                 |
+                |### Common errors
+                |- `Failed to connect to openai: ... model_not_found` — the vendor rejected the
+                |  model id at connect time. The `/voice/models` list is catalog-based and may
+                |  include retired snapshots or models the customer's (often project-scoped)
+                |  vendor key cannot access; pick a current-generation id such as
+                |  `gpt-realtime-2.1`.
+                |- Immediate 401 on the upgrade — credentials missing/revoked, or a `gfy_` key
+                |  was passed via `access_token` (header-only, see Connecting above).
+                |
                 |Full protocol reference: genai-proxy-server README and
-                |retrieval-server `voice/session.py`.
+                |retrieval-server `voice/session.py`. A complete browser client (mic capture,
+                |resampling, playback, barge-in) lives in `examples/realtime-voice-app`.
             """.trimMargin()
             responses = io.swagger.v3.oas.models.responses.ApiResponses().apply {
                 addApiResponse(
