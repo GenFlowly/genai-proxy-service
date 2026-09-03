@@ -6,7 +6,9 @@ import { useLayout } from '../../../../context/LayoutContext'
 import { useConversation } from '../../../../context/ConversationContext'
 import { TextContainer } from '@genflowly/component-library'
 import { Icon } from '@genflowly/component-library'
-import { Message, WebSource } from "../../../../models/conversation.models";
+import { LearnedFact, Message, ThinkingStep, WebSource } from "../../../../models/conversation.models";
+import ThinkingSteps from './ThinkingSteps'
+import { useLearnedFacts } from '../../../../hooks/useLearnedFacts'
 import { RectangleButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
 import {
@@ -67,6 +69,82 @@ function SourcesSection({ sources }: { sources: WebSource[] }) {
     )
 }
 
+/**
+ * Placeholder message ids assigned client-side before the backend echoes the
+ * real one (stream placeholders / synthesized error cards). There is nothing
+ * to poll for under such an id.
+ */
+const PLACEHOLDER_MESSAGE_ID = /^(resp|error)-/
+
+/**
+ * "Facts learned about the user" item in the response footer stats row.
+ * Pending → muted pulsing "Learning facts…" while the async extraction runs;
+ * done with facts → count with an interactive tooltip listing each fact and a
+ * ✗ that deletes it from memory; done without facts → muted "No new facts".
+ */
+function LearnedFactsStat({ conversationId, messageId, initialFacts, isFreshResponse }: {
+    conversationId: string
+    messageId: string
+    initialFacts: LearnedFact[] | null | undefined
+    isFreshResponse: boolean
+}) {
+    const { t } = useTranslation()
+    const { status, facts, removeFact } = useLearnedFacts(conversationId, messageId, initialFacts, isFreshResponse)
+
+    const handleDelete = async (memoryId: string) => {
+        try {
+            await removeFact(memoryId)
+        } catch (e) {
+            // Real failure (not a 404): keep the fact listed so the user can retry
+            console.error('Failed to delete memory fact', e)
+        }
+    }
+
+    if (status === 'pending') {
+        return (
+            <span className={`${styles.tokenItem} ${styles.learnedFactsPending}`} data-testid="learned-facts-pending">
+                <span className={styles.pulse} />
+                {t('conversation.response.learningFacts')}
+            </span>
+        )
+    }
+
+    if (facts.length === 0) {
+        return (
+            <span className={`${styles.tokenItem} ${styles.learnedFactsNone}`} data-testid="learned-facts-none">
+                {t('conversation.response.noNewFacts')}
+            </span>
+        )
+    }
+
+    return (
+        <Tooltip
+            interactive
+            content={
+                <ul className={styles.learnedFactsList} data-testid="learned-facts-list">
+                    {facts.map(fact => (
+                        <li key={fact.memoryId} className={styles.learnedFactItem}>
+                            <span className={styles.learnedFactText}>{fact.text}</span>
+                            <button
+                                className={styles.learnedFactDelete}
+                                onClick={() => handleDelete(fact.memoryId)}
+                                aria-label={t('conversation.response.deleteFact', { fact: fact.text })}
+                                data-testid="learned-fact-delete"
+                            >
+                                ✗
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            }
+        >
+            <span className={styles.tokenItem} data-testid="learned-facts-count">
+                {t('conversation.response.factsAddedToMemory', { count: facts.length })}
+            </span>
+        </Tooltip>
+    )
+}
+
 interface ResponseProps {
     blockId: string
     responseMessages: Message[]
@@ -79,7 +157,7 @@ interface ResponseProps {
  * Collapsible thinking summary shown inside each response card, between the
  * header and the response text (formerly the separate ResponseThinking widget).
  */
-function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], isThinking: boolean, durationMs?: number | null }) {
+function ThinkingSection({ steps, stepList, isThinking, durationMs }: { steps: string[], stepList?: ThinkingStep[] | null, isThinking: boolean, durationMs?: number | null }) {
     const { t } = useTranslation()
     const [isExpanded, setIsExpanded] = useState(true)
 
@@ -88,7 +166,14 @@ function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], i
         if (!isThinking) setIsExpanded(false)
     }, [isThinking])
 
-    if (steps.length === 0 && !isThinking) return null
+    // Legacy flat "k" strings become plain steps (label only, no icon) so the
+    // whole section renders through one component; structured "ks" steps follow
+    const displaySteps: ThinkingStep[] = useMemo(() => [
+        ...steps.map((step, i): ThinkingStep => ({ node: `legacy-${i}`, name: step, status: 'done' })),
+        ...(stepList ?? []),
+    ], [steps, stepList])
+
+    if (displaySteps.length === 0 && !isThinking) return null
 
     // Once thinking completes, show how long it took (measured by the
     // retrieval server: request receipt → first generated token)
@@ -111,11 +196,7 @@ function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], i
             </button>
             {/* No placeholder when steps haven't arrived yet — the toggle's
                 "Thinking" label plus pulse already says it */}
-            {isExpanded && steps.length > 0 && (
-                <ul className={styles.thinkingSteps}>
-                    {steps.map((step, i) => <li key={i}>{step}</li>)}
-                </ul>
-            )}
+            {isExpanded && <ThinkingSteps steps={displaySteps} />}
         </div>
     )
 }
@@ -123,7 +204,7 @@ function ThinkingSection({ steps, isThinking, durationMs }: { steps: string[], i
 export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { t } = useTranslation()
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
-    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, setVendorSelectionForBlock, stopGenerating, conversationBlockList = [] } = useConversation()
+    const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, setVendorSelectionForBlock, stopGenerating, conversationBlockList = [], conversationId = '' } = useConversation()
 
     // Running per-vendor totals (tokens + exact cost) up to and including each
     // response, keyed by messageId. The badge shows these conversation-so-far
@@ -259,9 +340,20 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             )}
 
             <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
-                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingDurationMs, webSources, inputTokens, outputTokens, totalTokens, tokensReadFromCache, costUsd }) => {
+                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingStepList, thinkingDurationMs, webSources, inputTokens, outputTokens, totalTokens, tokensReadFromCache, costUsd, learnedFacts }) => {
                     const isSelected = selectedResponseId === messageId
                     const isThinkingPhase = !!isLoading && text.trim().length === 0
+
+                    // Only a response generated in THIS session (learnedFacts
+                    // never set — historical loads always set it, if only to
+                    // null) with a real backend message id has an async memory
+                    // extraction worth polling for. Errored/aborted messages
+                    // never reached extraction.
+                    const isFreshResponse = learnedFacts === undefined
+                        && !error
+                        && !!conversationId
+                        && !!messageId
+                        && !PLACEHOLDER_MESSAGE_ID.test(messageId)
 
                     // Conversation-so-far totals for this response's vendor; a
                     // response not (yet) in the block list — e.g. rendered in
@@ -302,6 +394,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                 subheader={
                                     <ThinkingSection
                                         steps={thinkingSteps ?? []}
+                                        stepList={thinkingStepList}
                                         isThinking={isThinkingPhase}
                                         durationMs={thinkingDurationMs}
                                     />
@@ -354,6 +447,12 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                                 </span>
                                             </Tooltip>
                                         )}
+                                        <LearnedFactsStat
+                                            conversationId={conversationId}
+                                            messageId={messageId}
+                                            initialFacts={learnedFacts}
+                                            isFreshResponse={isFreshResponse}
+                                        />
                                     </div>
                                 )}
                                 {(isLoading || isLastResponseBlock) && (

@@ -377,6 +377,30 @@ class ConversationRepository(
 
     // ─── Messages ─────────────────────────────────────────────────────────────
 
+    /**
+     * Writes the async memory-extraction outcome onto a message. "[]" is the
+     * terminal "nothing learned" marker that stops client polling.
+     */
+    suspend fun setMessageLearnedFacts(
+        conversationId: String,
+        messageId: String,
+        factsJson: String
+    ) = withContext(Dispatchers.IO) {
+        dynamoDbClient.updateItem(
+            software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest.builder()
+                .tableName(MESSAGE_TABLE)
+                .key(mapOf(
+                    "conversationId" to AttributeValue.builder().s(conversationId).build(),
+                    "messageId" to AttributeValue.builder().s(messageId).build()
+                ))
+                .updateExpression("SET learnedFactsJson = :facts")
+                .expressionAttributeValues(mapOf(
+                    ":facts" to AttributeValue.builder().s(factsJson).build()
+                ))
+                .build()
+        )
+    }
+
     suspend fun getMessage(
         conversationId: String,
         messageId: String
@@ -562,6 +586,7 @@ class ConversationRepository(
             tokensReadFromCache = tokensReadFromCache,
             tokensWrittenToCache = item["tokensWrittenToCache"]?.n()?.toIntOrNull(),
             costUsd = item["costUsd"]?.n()?.toDoubleOrNull(),
+            learnedFactsJson = item["learnedFactsJson"]?.s(),
             thinkingDurationMs = item["thinkingDurationMs"]?.n()?.toLongOrNull(),
             createdAt = item["createdAt"]?.s()
         )

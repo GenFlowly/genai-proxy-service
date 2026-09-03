@@ -132,7 +132,8 @@ fun Route.registerGenerateTextRoutes(
                     val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
                     if (request.learnFromConversation) {
                         memoryExtractionService.maybeExtractFromConversationAsync(
-                            customerId, message.conversationId, bearerToken
+                            customerId, message.conversationId, bearerToken,
+                            responseMessageId = message.messageId
                         )
                     }
                     conversationIndexingService.indexExchangeAsync(

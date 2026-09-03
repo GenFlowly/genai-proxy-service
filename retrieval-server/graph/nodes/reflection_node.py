@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from graph.llm_factory import get_llm
 from graph.nodes.llm_node import (
     _content_summary,
+    _trace_entry,
     _image_blocks,
     _make_ai,
     _make_human,
@@ -148,6 +149,7 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
                 output_key: parsed.get("answer", ""),
                 "needs_more_context": needs_more,
                 "usage": usage,
+                **_trace_entry(node_type, rendered_input, parsed.get("answer", "")),
             }
         except (json.JSONDecodeError, Exception) as e:
             # Always exit the cycle safely on parse failure — never leave
@@ -157,6 +159,7 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
                 output_key: response.content,
                 "needs_more_context": False,
                 "usage": usage,
+                **_trace_entry(node_type, rendered_input, str(response.content)),
             }
 
     node.__name__ = f"reflection_node_{node_type.lower()}"

@@ -54,6 +54,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
         memory_enabled=req.memory_enabled,
         memories_block=None,
+        trace=[],
         scratch={},
         generated_response=None,
         error=None,
@@ -95,9 +96,13 @@ def _direct_graph() -> tuple:
         _FALLBACK_MEMORY_NODE_ID: "MEMORY",
         _FALLBACK_NODE_ID: _FALLBACK_NODE_TYPE,
     }
+    node_name_map = {
+        _FALLBACK_MEMORY_NODE_ID: "Memory",
+        _FALLBACK_NODE_ID: "Response Generator",
+    }
     node_configs = {_FALLBACK_NODE_TYPE: _FALLBACK_CONFIG}
     streaming_nodes = {_FALLBACK_NODE_ID}
-    return graph, node_type_map, node_configs, streaming_nodes, _DEFAULT_MAX_ITERATIONS
+    return graph, node_type_map, node_name_map, node_configs, streaming_nodes, _DEFAULT_MAX_ITERATIONS
 
 
 def _build_node_configs(nodes: list[dict]) -> tuple[dict, dict, set[str]]:
@@ -149,8 +154,9 @@ def _resolve_graph(customer_id: str) -> tuple:
     graph_record, nodes = graph_data
     graph, max_iterations = get_or_build_graph(customer_id, graph_record, nodes)
     node_type_map, node_configs, streaming_nodes = _build_node_configs(nodes)
+    node_name_map = {n["nodeId"]: n.get("name") or n["nodeType"] for n in nodes}
 
-    return graph, node_type_map, node_configs, streaming_nodes, max_iterations
+    return graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations
 
 
 @router.post("/retrieve")
@@ -182,16 +188,16 @@ async def retrieve(req: RetrieveRequest):
         )
 
     if req.agentic:
-        graph, node_type_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id)
+        graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id)
     else:
-        graph, node_type_map, node_configs, streaming_nodes, max_iterations = _direct_graph()
+        graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _direct_graph()
     state = _build_state(req, node_configs)
     run_config = {"recursion_limit": max_iterations}
 
     if req.stream:
         logger.info("Returning StreamingResponse for customer=%s", req.customer_id)
         return StreamingResponse(
-            stream_response(state, graph=graph, node_type_map=node_type_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start, structured_output=bool(req.response_schema)),
+            stream_response(state, graph=graph, node_type_map=node_type_map, node_name_map=node_name_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start, structured_output=bool(req.response_schema)),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -310,6 +316,7 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0},
         memory_enabled=req.memory_enabled,
         memories_block=None,
+        trace=[],
         scratch={},
         generated_response=None,
         error=None,

@@ -7,44 +7,85 @@ from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
 
-_NODE_START_MESSAGES: dict[str, str] = {
-    "QUERY_ANALYZER":    "Analyzing your query...",
-    "QUERY_REWRITER":    "Rewriting query for better search...",
-    "RETRIEVAL":         "Searching knowledge base...",
-    "WEB_SEARCH":        "Searching the web...",
-    "RESULT_RANKER":     "Ranking results...",
-    "RESPONSE_GENERATOR": "Generating response...",
-    "RESPONSE_GENERATOR_WITH_REFLECTION": "Generating response...",
-}
+# Runtime primitive of a node type — drives the thinking panel's icon/verbs.
+def _kind_of(node_type: str) -> str:
+    key = (node_type or "").upper()
+    if key == "RETRIEVAL":
+        return "RETRIEVAL"
+    if key == "WEB_SEARCH":
+        return "WEB_SEARCH"
+    if key == "MEMORY":
+        return "MEMORY"
+    if key == "RESPONSE_GENERATOR_WITH_REFLECTION":
+        return "REFLECTION"
+    return "LLM"
 
 
-def _format_node_output(node_type: str, output: dict) -> str | None:
-    key = node_type.upper()
-    if key == "QUERY_ANALYZER":
-        intent = output.get("query_intent", "")
-        needs_rewrite = output.get("needs_rewrite")
-        if intent:
-            return f"Intent: {intent} (needs rewrite: {'yes' if needs_rewrite else 'no'})"
-    elif key == "QUERY_REWRITER":
-        rewritten = output.get("rewritten_query", "")
-        if rewritten:
-            return f"Rewritten: {rewritten}"
-    elif key == "RETRIEVAL":
+def _doc_title(result: dict) -> str:
+    entity = result.get("entity", {}) or {}
+    return (entity.get("title") or entity.get("subject") or entity.get("note_value") or "")[:120]
+
+
+_MAX_ITEMS = 5
+
+
+def _step_done_payload(node_type: str, output: dict) -> dict:
+    """detail / items / prompt / response of a completed node, from its update."""
+    payload: dict = {}
+    kind = _kind_of(node_type)
+
+    trace = output.get("trace") or []
+    if trace:
+        entry = trace[-1]
+        payload["prompt"] = entry.get("prompt", "")
+        payload["response"] = entry.get("response", "")
+
+    if kind == "RETRIEVAL":
         results = output.get("retrieval_results", [])
-        return f"Found {len(results)} relevant document(s)"
-    elif key == "WEB_SEARCH":
+        payload["detail"] = f"Found {len(results)} relevant document(s)"
+        payload["items"] = [t for t in (_doc_title(r) for r in results[:_MAX_ITEMS]) if t]
+    elif kind == "WEB_SEARCH":
         results = output.get("web_search_results", [])
-        return f"Found {len(results)} web result(s)"
-    elif key == "RESULT_RANKER":
-        ranked = output.get("ranked_results", [])
-        return f"Ranked to {len(ranked)} most relevant result(s)"
-    return None
+        payload["detail"] = f"Found {len(results)} web result(s)"
+        payload["items"] = [r.get("title", "")[:120] for r in results[:_MAX_ITEMS]]
+    elif kind == "MEMORY":
+        block = output.get("memories_block") or ""
+        memories = [line[2:] for line in block.splitlines() if line.startswith("- ")]
+        payload["detail"] = (
+            f"Applied {len(memories)} learned memori(es)" if memories else "No stored memories to apply"
+        )
+        payload["items"] = [m[:120] for m in memories[:_MAX_ITEMS]]
+    else:
+        # LLM-backed nodes: summarize the well-known output fields.
+        intent = output.get("query_intent")
+        rewritten = output.get("rewritten_query")
+        ranked = output.get("ranked_results")
+        if intent:
+            needs = "yes" if output.get("needs_rewrite") else "no"
+            payload["detail"] = f"Intent: {intent} (needs rewrite: {needs})"
+        elif rewritten:
+            payload["detail"] = f"Rewrote the query to: {rewritten}"
+        elif isinstance(ranked, list):
+            payload["detail"] = f"Kept the {len(ranked)} most relevant result(s)"
+        elif output.get("generated_response") is not None:
+            payload["detail"] = "Response generated"
+    return payload
+
+
+def _start_label(kind: str, name: str) -> str:
+    return {
+        "RETRIEVAL": f"{name}: searching the knowledge base…",
+        "WEB_SEARCH": f"{name}: searching the web…",
+        "MEMORY": f"{name}: loading what is known about you…",
+        "REFLECTION": f"{name}: generating and reflecting…",
+    }.get(kind, f"{name}: thinking…")
 
 
 async def stream_response(
     state: RetrievalState,
     graph: Any = None,
     node_type_map: Optional[dict[str, str]] = None,
+    node_name_map: Optional[dict[str, str]] = None,
     streaming_nodes: Optional[set[str]] = None,
     recursion_limit: int = 25,
     request_start: Optional[float] = None,
@@ -73,6 +114,7 @@ async def stream_response(
         raise ValueError("stream_response requires a compiled graph — no fallback available")
 
     node_type_map = node_type_map or {}
+    node_name_map = node_name_map or {}
     streaming_nodes = streaming_nodes or set()
 
     logger.info(
@@ -103,19 +145,38 @@ async def stream_response(
 
             node_type = node_type_map.get(node, node)
 
-            if event_type == "on_chain_start" and node:
-                logger.info("Stream: node START → %s (type=%s)", node, node_type)
-                msg = _NODE_START_MESSAGES.get(node_type.upper() if node_type else "")
-                if msg:
-                    yield f"data: {json.dumps({'thinking': msg})}\n\n"
+            # Only the node's own runnable (event name == node id) drives the
+            # thinking steps — inner chains repeat the langgraph_node metadata
+            # and previously caused duplicate messages.
+            is_node_event = bool(node) and event.get("name") == node
 
-            elif event_type == "on_chain_end" and node:
+            if event_type == "on_chain_start" and is_node_event:
+                logger.info("Stream: node START → %s (type=%s)", node, node_type)
+                kind = _kind_of(node_type)
+                name = node_name_map.get(node) or node_type or node
+                step = {
+                    "node": node,
+                    "name": name,
+                    "kind": kind,
+                    "status": "running",
+                    "label": _start_label(kind, name),
+                }
+                yield f"data: {json.dumps({'thinking_step': step})}\n\n"
+
+            elif event_type == "on_chain_end" and is_node_event:
                 logger.info("Stream: node END   → %s (type=%s)", node, node_type)
                 output = event.get("data", {}).get("output", {})
                 if isinstance(output, dict):
-                    msg = _format_node_output(node_type, output)
-                    if msg:
-                        yield f"data: {json.dumps({'thinking': msg})}\n\n"
+                    kind = _kind_of(node_type)
+                    name = node_name_map.get(node) or node_type or node
+                    step = {
+                        "node": node,
+                        "name": name,
+                        "kind": kind,
+                        "status": "done",
+                        **_step_done_payload(node_type, output),
+                    }
+                    yield f"data: {json.dumps({'thinking_step': step})}\n\n"
                     # Web sources go to the caller so [n] citation markers in the
                     # generated text can be rendered as links. Emitted as soon as
                     # the search node completes — before generation streams.

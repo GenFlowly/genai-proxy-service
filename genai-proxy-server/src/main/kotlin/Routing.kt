@@ -141,6 +141,7 @@ object Routes {
 
     const val GET_MEMORIES = "$API_V1/memories"
     const val DELETE_MEMORY = "$API_V1/memories/{memoryId}"
+    const val GET_LEARNED_FACTS = "$API_V1/conversation/{conversationId}/messages/{messageId}/learned-facts"
 }
 
 
@@ -229,7 +230,7 @@ fun Application.configureRouting(
         registerGetProfileRoutes(customerProfileService)
         registerAttachmentRoutes(attachmentService, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
-        registerMemoryRoutes(memoryService, customerProfileService)
+        registerMemoryRoutes(memoryService, customerProfileService, conversationService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService

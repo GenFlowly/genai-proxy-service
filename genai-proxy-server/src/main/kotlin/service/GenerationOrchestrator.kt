@@ -416,6 +416,10 @@ class GenerationOrchestrator(
                         is StreamChunk.Thinking -> {
                             emit("{\"t\":\"k\",\"v\":${chunk.text.toJsonStringValue()}}\n")
                         }
+                        is StreamChunk.ThinkingStep -> {
+                            // chunk.json is already a JSON object — embed as-is
+                            emit("{\"t\":\"ks\",\"v\":${chunk.json}}\n")
+                        }
                         is StreamChunk.ThinkingDuration -> {
                             capturedThinkingDurationMs = chunk.millis
                             emit("{\"t\":\"kd\",\"v\":${chunk.millis}}\n")
