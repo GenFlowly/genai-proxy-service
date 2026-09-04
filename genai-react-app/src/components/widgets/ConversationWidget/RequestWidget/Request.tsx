@@ -4,6 +4,7 @@ import {ICONS} from '../../../../constants/icons'
 import { TextEditor } from '@genflowly/component-library'
 import { RectangleButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
+import { Icon } from '@genflowly/component-library'
 import {useConversation} from '../../../../context/ConversationContext'
 import {useAuth} from '../../../../context/AuthContext'
 import {useToast} from '../../../../context/ToastContext'
@@ -23,6 +24,7 @@ import {
     MAX_ATTACHMENTS_PER_MESSAGE,
     MAX_ATTACHMENT_SIZE_BYTES
 } from '../../../../models/attachment.models'
+import {useWindowSize} from '../../../../hooks/useWindowSize'
 
 interface RequestProps {
     blockId: string
@@ -50,58 +52,94 @@ export default function Request({
     } = useAuth()
     const {showToast} = useToast()
     const hasAnyValidApiKey = aiVendorAPIKeyStatusList.some(s => s.isAPIKeyValid)
+    const {width} = useWindowSize()
+    const isMobile = width <= 768
 
-    const containerRef = React.useRef<HTMLDivElement | null>(null)
+    const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === blockId)
+    // The prompt editor renders unless the block is streaming/resolved
+    const isEditorView = !!conversationBlock
+        && conversationBlock.status !== 'resolved'
+        && !conversationBlock.isLoading
+    // Any block after the first is a follow-up: same docked editor, but the
+    // block only occupies the editor's height on mobile, not a full screen
+    const isFollowUpBlock = conversationBlockList.findIndex(b => b.conversationBlockId === blockId) > 0
 
-    // When the on-screen keyboard opens (the visual viewport shrinks while the
-    // editor is focused), the container's --vvh-based height collapses around
-    // the editor. Pin the widget to the top of the scroll container so the
-    // whole editor stays on screen, and re-reveal the caret's line inside the
-    // editor's own scroller.
+    const editorWrapperRef = React.useRef<HTMLDivElement | null>(null)
+
+    // 📱 A focused follow-up block grows by the keyboard's height (--kb in
+    // the SCSS) so the riding editor gets reserved space instead of
+    // overlapping the response above. That growth happens at the END of the
+    // scroll content — keep the conversation pinned to the end whenever the
+    // keyboard opens/closes so the editor lands flush on the keyboard with
+    // the last response visible right above it.
     useEffect(() => {
+        if (!isEditorView || !isFollowUpBlock) return
         const viewport = window.visualViewport
         if (!viewport) return
 
-        let lastHeight = viewport.height
-        let scrollTimer: ReturnType<typeof setTimeout> | null = null
-
-        const handleViewportResize = () => {
-            const previousHeight = lastHeight
-            lastHeight = viewport.height
-
-            // A sharp height drop while the editor owns focus = keyboard opened
-            const keyboardOpened = viewport.height < previousHeight - 100
-            if (!keyboardOpened) return
-            if (!containerRef.current?.contains(document.activeElement)) return
-
-            if (scrollTimer) clearTimeout(scrollTimer)
-            // Wait out the container's 150ms height transition so we scroll
-            // against the final layout
-            scrollTimer = setTimeout(() => {
-                const container = containerRef.current
-                if (!container) return
-
-                container.scrollIntoView({block: 'start', behavior: 'smooth'})
-
-                // Keep the line being edited visible inside the shrunken editor
-                const anchorNode = window.getSelection()?.anchorNode
-                if (anchorNode && container.contains(anchorNode)) {
-                    const line = anchorNode instanceof Element
-                        ? anchorNode
-                        : anchorNode.parentElement
-                    line?.scrollIntoView({block: 'nearest'})
-                }
-            }, 200)
+        const scrollConversationToEnd = () => {
+            const scroller = document.querySelector('[data-testid="center-section-scroll"]')
+            if (scroller) scroller.scrollTop = scroller.scrollHeight
         }
 
-        viewport.addEventListener('resize', handleViewportResize)
+        const handleResize = () => {
+            if (!editorWrapperRef.current?.contains(document.activeElement)) return
+            // Double rAF: the --vvh/--kb CSS vars are themselves written in a
+            // rAF, so wait a frame for the block's new height to apply first
+            requestAnimationFrame(() => requestAnimationFrame(scrollConversationToEnd))
+        }
+
+        viewport.addEventListener('resize', handleResize)
+        return () => viewport.removeEventListener('resize', handleResize)
+    }, [isEditorView, isFollowUpBlock])
+
+    // 📱 iOS Safari force-scrolls the page on focus when it thinks the
+    // keyboard will cover the caret — before our CSS has moved the editor up
+    // — which shoves the whole layout (incl. the fixed MobileHeader) off
+    // screen. The editor repositions itself above the keyboard, so the
+    // scroll is never needed: pin the window scroll back to 0 during the
+    // keyboard animation and whenever Safari retries while the editor owns
+    // focus. No-op everywhere else (the window never scrolls in this app).
+    useEffect(() => {
+        if (!isEditorView) return
+        const wrapper = editorWrapperRef.current
+        if (!wrapper) return
+
+        let rafId: number | null = null
+        let pinUntil = 0
+
+        const pin = () => {
+            rafId = null
+            if (window.scrollY !== 0) window.scrollTo(0, 0)
+            if (performance.now() < pinUntil) {
+                rafId = requestAnimationFrame(pin)
+            }
+        }
+        const startPinning = (durationMs: number) => {
+            pinUntil = Math.max(pinUntil, performance.now() + durationMs)
+            if (rafId === null) rafId = requestAnimationFrame(pin)
+        }
+
+        // Cover the whole keyboard open/close animation (~250ms on iOS);
+        // focusout catches the close-side pan Safari does while restoring
+        const handleFocusChange = () => startPinning(700)
+        // Safari can re-scroll later (e.g. caret moves); undo while focused
+        const handleScroll = () => {
+            if (wrapper.contains(document.activeElement)) startPinning(150)
+        }
+
+        wrapper.addEventListener('focusin', handleFocusChange)
+        wrapper.addEventListener('focusout', handleFocusChange)
+        window.addEventListener('scroll', handleScroll)
+        window.visualViewport?.addEventListener('scroll', handleScroll)
         return () => {
-            viewport.removeEventListener('resize', handleViewportResize)
-            if (scrollTimer) clearTimeout(scrollTimer)
+            wrapper.removeEventListener('focusin', handleFocusChange)
+            wrapper.removeEventListener('focusout', handleFocusChange)
+            window.removeEventListener('scroll', handleScroll)
+            window.visualViewport?.removeEventListener('scroll', handleScroll)
+            if (rafId !== null) cancelAnimationFrame(rafId)
         }
-    }, [])
-
-    const conversationBlock = conversationBlockList.find(b => b.conversationBlockId === blockId)
+    }, [isEditorView])
 
     // ✅ Local draft state to prevent global re-renders on typing
     const [draftPrompt, setDraftPrompt] = React.useState(conversationBlock?.prompt || '')
@@ -255,6 +293,22 @@ export default function Request({
         }
     }, [])
 
+    const handleGenerate = () => {
+        if (!hasAnyValidApiKey) return
+        if (pendingAttachments.some(a => a.status === 'uploading')) {
+            showToast(t('conversation.request.attachmentsUploading'))
+            return
+        }
+        const selectedId = getSelectedResponseForBlock(blockId)
+        const attachmentRefs = pendingAttachments
+            .map(a => a.ref)
+            .filter((r): r is NonNullable<typeof r> => r != null)
+        generateResponsesStream(blockId, draftPrompt, selectedId, undefined, attachmentRefs)
+        // The block now owns the refs; drop the local previews
+        pendingAttachments.forEach(a => URL.revokeObjectURL(a.previewUrl))
+        setPendingAttachments([])
+    }
+
     if (!conversationBlock) return null
 
     // If we have responses AND loading is finished, this block is "resolved" -> Show static text
@@ -296,53 +350,56 @@ export default function Request({
     // Otherwise show the editor
     return (
 
-        <div className={styles.container}
-             ref={containerRef}
+        <div className={`${styles.container}${isFollowUpBlock ? ` ${styles.followUp}` : ''}`}
              onPasteCapture={handlePasteCapture}
              data-testid={testId || "request-widget-container"}>
-            <TextEditor
-                id={blockId}
-                value={draftPrompt}
-                onChange={handleEditorChange}
-                height="100%"
-                className={styles.textEditorFullscreen}
-                data-testid="text-editor"
-            />
+            <div className={styles.editorWrapper} ref={editorWrapperRef}>
+                <TextEditor
+                    id={blockId}
+                    value={draftPrompt}
+                    onChange={handleEditorChange}
+                    height="100%"
+                    className={styles.textEditorFullscreen}
+                    data-testid="text-editor"
+                />
 
-            <AttachmentPreviewStrip
-                attachments={pendingAttachments}
-                onRemove={removeAttachment}
-            />
+                {isMobile && (
+                    // 📱 Compact icon-only generate button floating inside the
+                    // editor's bottom-right corner
+                    <button
+                        className={styles.mobileGenerateButton}
+                        onClick={handleGenerate}
+                        disabled={!hasAnyValidApiKey}
+                        aria-label={t('conversation.request.generate')}
+                        data-testid="generate-button"
+                    >
+                        <Icon src={ICONS.SEND} size={22}/>
+                    </button>
+                )}
 
-            <div className={styles.buttonWrapper}
-                 data-testid="generate-button-wrapper">
-                <Tooltip content={!hasAnyValidApiKey ? t('conversation.request.noApiKeysSet') : ""}>
-                    <div
-                        style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
-                        <RectangleButton
-                            onClick={() => {
-                                if (!hasAnyValidApiKey) return
-                                if (pendingAttachments.some(a => a.status === 'uploading')) {
-                                    showToast(t('conversation.request.attachmentsUploading'))
-                                    return
-                                }
-                                const selectedId = getSelectedResponseForBlock(blockId)
-                                const attachmentRefs = pendingAttachments
-                                    .map(a => a.ref)
-                                    .filter((r): r is NonNullable<typeof r> => r != null)
-                                generateResponsesStream(blockId, draftPrompt, selectedId, undefined, attachmentRefs)
-                                // The block now owns the refs; drop the local previews
-                                pendingAttachments.forEach(a => URL.revokeObjectURL(a.previewUrl))
-                                setPendingAttachments([])
-                            }}
-                            label={t('conversation.request.generate')}
-                            disabled={!hasAnyValidApiKey}
-                            icon={ICONS.SEND}
-                            data-testid="generate-button"
-                        />
-                    </div>
-                </Tooltip>
+                <AttachmentPreviewStrip
+                    attachments={pendingAttachments}
+                    onRemove={removeAttachment}
+                />
             </div>
+
+            {!isMobile && (
+                <div className={styles.buttonWrapper}
+                     data-testid="generate-button-wrapper">
+                    <Tooltip content={!hasAnyValidApiKey ? t('conversation.request.noApiKeysSet') : ""}>
+                        <div
+                            style={!hasAnyValidApiKey ? {cursor: 'not-allowed'} : {}}>
+                            <RectangleButton
+                                onClick={handleGenerate}
+                                label={t('conversation.request.generate')}
+                                disabled={!hasAnyValidApiKey}
+                                icon={ICONS.SEND}
+                                data-testid="generate-button"
+                            />
+                        </div>
+                    </Tooltip>
+                </div>
+            )}
         </div>
     )
 }
