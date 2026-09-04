@@ -76,7 +76,8 @@ export interface Message {
     thinkingSteps?: string[]
     /**
      * Structured per-node thinking steps streamed via the "ks" chunk, in
-     * arrival order (cycles append new entries for the same node id).
+     * arrival order (cycles append new entries for the same node id). Also
+     * persisted with the message and restored on conversation load.
      */
     thinkingStepList?: ThinkingStep[]
     /**

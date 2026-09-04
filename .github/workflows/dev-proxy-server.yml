@@ -100,6 +100,11 @@ jobs:
             flyctl secrets set --app $APP_NAME --stage VOYAGE_API_KEY="${{ secrets.VOYAGE_API_KEY }}"
           fi
 
+          # Tavily key for the WEB_SEARCH graph node; staged so the deploy below picks it up
+          if [ -n "${{ secrets.TAVILY_API_KEY }}" ]; then
+            flyctl secrets set --app $APP_NAME --stage TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY }}"
+          fi
+
           flyctl deploy --app $APP_NAME --yes
 
       - name: Deploy Proxy Server to Fly.io

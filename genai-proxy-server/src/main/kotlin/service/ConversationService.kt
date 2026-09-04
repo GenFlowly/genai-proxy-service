@@ -91,6 +91,9 @@ class ConversationService(
                                 tokensReadFromCache = nextMsg.tokensReadFromCache,
                                 costUsd = nextMsg.costUsd,
                                 thinkingDurationMs = nextMsg.thinkingDurationMs,
+                                thinkingSteps = nextMsg.thinkingStepsJson?.let {
+                                    runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
+                                },
                                 learnedFacts = nextMsg.learnedFactsJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
                                 },
