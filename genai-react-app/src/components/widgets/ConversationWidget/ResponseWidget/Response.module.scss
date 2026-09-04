@@ -268,11 +268,21 @@
 
 .learnedFactsNone {
   opacity: 0.7;
-  font-style: italic;
 }
 
 // Fact list inside the interactive tooltip (portaled to body — these are
 // CSS-module classes so they apply there too)
+.learnedFactsTooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-align: left;
+}
+
+.learnedFactsLabel {
+  font-weight: 600;
+}
+
 .learnedFactsList {
   list-style: none;
   margin: 0;

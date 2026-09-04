@@ -23,17 +23,28 @@
     }
 
     @include respond-to-mobile {
-        // Track the visual viewport (--vvh set by useVisualViewportHeight) so
-        // the editor gives up height when the on-screen keyboard opens and the
-        // Generate button stays visible above it. 100dvh fallback for browsers
-        // without VisualViewport support.
-        height: calc(var(--vvh, 100dvh) - 64px - 10rem);
-        // Floor: two editor lines + the Generate button must always fit, even
-        // on short viewports with the keyboard open (see .textEditorFullscreen)
+        // Positioning context for the absolutely-placed editor wrapper
+        position: relative;
+
+        // The one editor size used everywhere on mobile (~3-4 lines)
+        --editor-height: clamp(12rem, 32svh, 16rem);
+        // Height of the on-screen keyboard: the gap between the static page
+        // (100svh) and the visual viewport; 0 while the keyboard is closed.
+        // (The max() guard: with the keyboard closed and the browser toolbar
+        // hidden the visual viewport can be TALLER than 100svh — never let
+        // this go negative.)
+        --kb: max(0px, 100svh - var(--vvh, 100svh));
+
+        // Static height: 100svh is constant on mobile (unlike dvh, which
+        // grows when the keyboard opens and Safari hides its toolbar), so
+        // nothing in the layout moves when the keyboard opens/closes — it
+        // simply overlays the bottom of the page. Together with the 3.5rem
+        // header inset in the scroll content this fills the scrollport
+        // exactly, so a fresh chat has nothing to scroll and can't slide
+        // under the MobileHeader.
+        height: calc(100svh - #{$mobile-header-height});
         min-height: 12rem;
-        // The keyboard open/close resize lands as discrete events; ease the
-        // height change so it doesn't snap
-        transition: height 150ms ease;
+        scroll-margin-top: $mobile-header-height;
     }
 }
 
@@ -116,6 +127,63 @@
     white-space: nowrap;
 }
 
+// Hosts the editor, the floating mobile generate button and the attachment
+// strip. On desktop it just fills the container like the bare editor used to.
+.editorWrapper {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative; // Anchor for .mobileGenerateButton
+
+    @include respond-to-mobile {
+        // A small (~3-4 line) editor box glued to the bottom of the VISIBLE
+        // viewport, chat-app style: resting on the screen bottom when the
+        // keyboard is closed, translated up to sit flush on the keyboard's
+        // top edge when it opens. Keeping the caret right above the keyboard
+        // also stops iOS Safari from force-scrolling the page to reveal it.
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: var(--editor-height);
+        min-height: 0;
+        // Ride the keyboard with a transform (compositor-animated, no layout
+        // work per frame) instead of `bottom`. iOS reports the final visual
+        // viewport in one discrete event at the END of the keyboard
+        // animation, so this transition IS the perceived movement — duration
+        // and ease-out curve approximate the iOS keyboard feel.
+        // Deliberately based on --vvh alone: --vv-offset flutters during the
+        // keyboard animation (Safari panning vs. the scroll pin in
+        // Request.tsx, which is what corrects the pan), and feeding it in
+        // here restarted the transition every tick — the on-screen shake.
+        transform: translateY(calc(-1 * var(--kb)));
+        transition: transform 300ms cubic-bezier(0.33, 1, 0.68, 1);
+        will-change: transform;
+        // Paint above the conversation content it slides over when riding
+        // the keyboard in follow-up blocks, with a solid backdrop so
+        // messages can't show through the editor's edges
+        z-index: 20;
+        background-color: $color-request-container-background;
+    }
+}
+
+// 📱 Follow-up blocks (any block after the first): identical docked editor,
+// but the block only takes the editor's height at the end of the
+// conversation — plus the keyboard's height while it's open, so the space
+// the riding editor moves into is RESERVED in the layout rather than
+// overlapping the response above. Request.tsx keeps the conversation
+// scrolled to the end when --kb changes, which lands the editor flush on
+// the keyboard with the last response fully visible right above it.
+.container.followUp {
+    @include respond-to-mobile {
+        height: calc(var(--editor-height) + var(--kb));
+        min-height: var(--editor-height);
+        overflow: visible;
+    }
+}
+
 .textEditorFullscreen {
     flex: 1;
     min-height: 0;
@@ -142,4 +210,37 @@
     display: flex;
     justify-content: center;
     padding: 0 0 1rem 0;
+}
+
+// 📱 Icon-only generate button floating inside the editor's bottom-right
+// corner (the mobile replacement for .buttonWrapper's full-width row)
+.mobileGenerateButton {
+    position: absolute;
+    // Inset past the editor's own $mobile-content-inset so the button sits
+    // visually inside the editor's rounded border
+    right: calc(#{$mobile-content-inset} + 0.75rem);
+    bottom: calc(#{$mobile-content-inset} + 0.75rem);
+    z-index: 10;
+    width: 44px; // Comfortable touch target
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background-color: $color-button-primary;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+
+    &:active {
+        background-color: $color-primary-pressed;
+    }
+
+    &:disabled {
+        background-color: $color-disabled;
+        opacity: 0.5;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
 }

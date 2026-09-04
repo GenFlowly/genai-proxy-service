@@ -216,87 +216,112 @@ describe('Request Widget Component', () => {
 
     describe('keyboard-open scroll behavior', () => {
         let resizeHandler: (() => void) | undefined
-        let viewportHeight: number
+        let removeViewportListener: jest.Mock
+        let scroller: HTMLDivElement
+
+        // Two blocks so 'block-2' is a follow-up: the keyboard-resize effect
+        // only attaches to follow-up editor blocks
+        const mockFollowUpBlocks = () => {
+            mockUseConversation.mockReturnValue({
+                conversationBlockList: [
+                    {
+                        conversationBlockId: 'block-1',
+                        responseMessages: [{ id: 'res-1' }],
+                        isLoading: false,
+                        status: 'resolved',
+                        prompt: 'First prompt'
+                    },
+                    {
+                        conversationBlockId: 'block-2',
+                        responseMessages: [],
+                        isLoading: false,
+                        status: 'draft',
+                        prompt: ''
+                    }
+                ],
+                generateResponsesStream: mockGenerateResponsesStream,
+                stopGenerating: mockStopGenerating,
+                getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
+                setEditorPrompt: mockSetEditorPrompt,
+                setActiveBlockId: mockSetActiveBlockId
+            })
+        }
 
         beforeEach(() => {
             jest.useFakeTimers()
             resizeHandler = undefined
-            viewportHeight = 800
+            removeViewportListener = jest.fn()
             Object.defineProperty(window, 'visualViewport', {
                 configurable: true,
                 value: {
-                    get height() { return viewportHeight },
+                    height: 800,
                     addEventListener: (event: string, cb: () => void) => {
                         if (event === 'resize') resizeHandler = cb
                     },
-                    removeEventListener: jest.fn()
+                    removeEventListener: removeViewportListener
                 }
             })
+
+            // The conversation scroller the effect pins to the end
+            scroller = document.createElement('div')
+            scroller.setAttribute('data-testid', 'center-section-scroll')
+            Object.defineProperty(scroller, 'scrollHeight', { value: 500, configurable: true })
+            scroller.scrollTop = 0
+            document.body.appendChild(scroller)
         })
 
         afterEach(() => {
             jest.useRealTimers()
+            scroller.remove()
             Object.defineProperty(window, 'visualViewport', {
                 configurable: true,
                 value: undefined
             })
         })
 
-        const openKeyboard = (newHeight: number) => {
-            viewportHeight = newHeight
+        const openKeyboard = () => {
             act(() => {
                 resizeHandler?.()
-                jest.advanceTimersByTime(200)
+                // The effect defers its scroll behind a double rAF; flush both frames
+                jest.advanceTimersByTime(100)
             })
         }
 
-        test('scrolls the widget to the top when the keyboard opens while the editor is focused', () => {
-            render(<Request blockId="block-1" />)
-            const container = screen.getByTestId('request-widget-container')
-            container.scrollIntoView = jest.fn()
+        test('pins the conversation to the end when the keyboard opens while the editor is focused', () => {
+            mockFollowUpBlocks()
+            render(<Request blockId="block-2" />)
 
             screen.getByTestId('text-editor').focus()
-            openKeyboard(400)
+            openKeyboard()
 
-            expect(container.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
+            expect(scroller.scrollTop).toBe(500)
         })
 
         test('does not scroll when focus is outside the editor', () => {
-            render(<Request blockId="block-1" />)
-            const container = screen.getByTestId('request-widget-container')
-            container.scrollIntoView = jest.fn()
+            mockFollowUpBlocks()
+            render(<Request blockId="block-2" />)
 
-            openKeyboard(400)
+            openKeyboard()
 
-            expect(container.scrollIntoView).not.toHaveBeenCalled()
+            expect(scroller.scrollTop).toBe(0)
         })
 
-        test('does not scroll on small viewport changes (browser chrome, not keyboard)', () => {
+        test('does not attach the keyboard-resize listener for the first block', () => {
             render(<Request blockId="block-1" />)
-            const container = screen.getByTestId('request-widget-container')
-            container.scrollIntoView = jest.fn()
 
             screen.getByTestId('text-editor').focus()
-            openKeyboard(750)
 
-            expect(container.scrollIntoView).not.toHaveBeenCalled()
+            expect(resizeHandler).toBeUndefined()
         })
 
-        test('keeps the caret line visible inside the shrunken editor', () => {
-            render(<Request blockId="block-1" />)
-            const container = screen.getByTestId('request-widget-container')
-            container.scrollIntoView = jest.fn()
+        test('removes the resize listener on unmount', () => {
+            mockFollowUpBlocks()
+            const { unmount } = render(<Request blockId="block-2" />)
+            expect(resizeHandler).toBeDefined()
 
-            const caretLine = screen.getByTestId('text-editor')
-            caretLine.scrollIntoView = jest.fn()
-            jest.spyOn(window, 'getSelection').mockReturnValue({
-                anchorNode: caretLine
-            } as unknown as Selection)
+            unmount()
 
-            caretLine.focus()
-            openKeyboard(400)
-
-            expect(caretLine.scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+            expect(removeViewportListener).toHaveBeenCalledWith('resize', resizeHandler)
         })
     })
 

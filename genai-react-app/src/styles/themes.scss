@@ -95,6 +95,10 @@
     --mobile-content-inset: 0.5rem;
     --mobile-content-width: calc(100vw - (2 * var(--mobile-content-inset)));
 
+    // Height of the fixed MobileHeader overlay (40px circle buttons + 0.5rem
+    // vertical padding). Content that must clear the header offsets by this.
+    --mobile-header-height: 3.5rem;
+
     // Vertical padding for request/response widgets — identical top & bottom,
     // desktop & mobile
     --widget-padding-y: 0.5rem;
@@ -260,6 +264,7 @@ $breakpoint-mobile: 768px;
 // Mobile content sizing (see :root definitions above)
 $mobile-content-inset: var(--mobile-content-inset);
 $mobile-content-width: var(--mobile-content-width);
+$mobile-header-height: var(--mobile-header-height);
 $widget-padding-y: var(--widget-padding-y);
 $message-card-max-width: var(--message-card-max-width);
 $response-column-gap: var(--response-column-gap);
