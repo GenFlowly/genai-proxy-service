@@ -84,6 +84,10 @@ services:
       AWS_ACCESS_KEY_ID: "AKIAYKFQRDRO4B3UB67C"
       KMS_KEY_ID: "alias/gen-ai-proxy-service-development-vendor-api-key-encryption-key"
       ATTACHMENTS_BUCKET: "gen-ai-proxy-service-development-attachments"
+      # Tavily key for the WEB_SEARCH graph node; set the value in .env
+      TAVILY_API_KEY: "${TAVILY_API_KEY:-}"
+      # Voyage key for query embedding against voyage-* collections; set in .env
+      VOYAGE_API_KEY: "${VOYAGE_API_KEY:-}"
       # If using SSO or dynamic credentials, mounting ~/.aws is preferred
       # Or you can inject temporary credentials via .env in the env_file below
     volumes:

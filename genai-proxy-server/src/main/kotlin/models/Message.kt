@@ -59,6 +59,13 @@ data class Message(
      */
     val thinkingDurationMs: Long? = null,
     /**
+     * Assistant messages: the agent graph's thinking-step events for the turn,
+     * as streamed ("ks" chunks) — JSON [{"node","name","kind","status",...}].
+     * Raw running+done events; clients fold them into the per-node step list.
+     * Null for user messages and records predating the feature.
+     */
+    val thinkingStepsJson: String? = null,
+    /**
      * ISO-8601 instant stamped by the repository's withTimestamps on write.
      * Read-only: populated when loading from DDB, ignored on create (the
      * provider always stamps its own value).

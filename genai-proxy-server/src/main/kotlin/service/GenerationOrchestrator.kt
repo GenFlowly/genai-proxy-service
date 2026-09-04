@@ -17,6 +17,11 @@ import com.genflowly.models.Message
 import com.genflowly.models.toCredentialKey
 import com.genflowly.models.toProviderString
 import org.slf4j.LoggerFactory
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -383,6 +388,7 @@ class GenerationOrchestrator(
             var capturedThinkingDurationMs: Long? = null
             var capturedToolCallsJson: String? = null
             var capturedWebSourcesJson: String? = null
+            val capturedThinkingSteps = mutableListOf<String>()
             var success = false
             try {
                 retrievalService.retrieveAndGenerateStream(
@@ -417,6 +423,7 @@ class GenerationOrchestrator(
                             emit("{\"t\":\"k\",\"v\":${chunk.text.toJsonStringValue()}}\n")
                         }
                         is StreamChunk.ThinkingStep -> {
+                            capturedThinkingSteps.add(chunk.json)
                             // chunk.json is already a JSON object — embed as-is
                             emit("{\"t\":\"ks\",\"v\":${chunk.json}}\n")
                         }
@@ -481,7 +488,8 @@ class GenerationOrchestrator(
                                 )
                             )
                         },
-                        thinkingDurationMs = capturedThinkingDurationMs
+                        thinkingDurationMs = capturedThinkingDurationMs,
+                        thinkingStepsJson = thinkingStepsToJson(capturedThinkingSteps)
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }
@@ -498,6 +506,25 @@ class GenerationOrchestrator(
         )
     }
 
+}
+
+/**
+ * Persisted form of a turn's thinking-step events ("ks" chunks, each already a
+ * JSON object). Guards the DDB 400KB item limit: an oversized run (deep graph
+ * cycles) keeps every step but drops the bulky prompt/response excerpts.
+ */
+private const val MAX_THINKING_STEPS_JSON_CHARS = 250_000
+
+private fun thinkingStepsToJson(steps: List<String>): String? {
+    if (steps.isEmpty()) return null
+    val full = steps.joinToString(",", "[", "]")
+    if (full.length <= MAX_THINKING_STEPS_JSON_CHARS) return full
+    return runCatching {
+        val stripped = Json.parseToJsonElement(full).jsonArray.map { el ->
+            JsonObject(el.jsonObject.filterKeys { it != "prompt" && it != "response" })
+        }
+        JsonArray(stripped).toString()
+    }.getOrNull()
 }
 
 private fun String.toJsonStringValue(): String = buildString {

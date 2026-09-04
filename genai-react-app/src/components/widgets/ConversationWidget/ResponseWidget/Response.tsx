@@ -159,7 +159,8 @@ interface ResponseProps {
  */
 function ThinkingSection({ steps, stepList, isThinking, durationMs }: { steps: string[], stepList?: ThinkingStep[] | null, isThinking: boolean, durationMs?: number | null }) {
     const { t } = useTranslation()
-    const [isExpanded, setIsExpanded] = useState(true)
+    // Expanded only while live thinking — historical loads start collapsed
+    const [isExpanded, setIsExpanded] = useState(isThinking)
 
     // Auto-collapse once the answer starts streaming
     useEffect(() => {
