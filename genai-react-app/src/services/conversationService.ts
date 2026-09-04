@@ -2,7 +2,8 @@ import { fetchWithRetry } from "../utils/apiUtils";
 import { config } from '../config/env';
 import { endpoints } from '../config/endpoints';
 import { HttpMethod } from '../constants/http';
-import { ConversationBlock, LearnedFact, Message, WebSource } from '../models/conversation.models';
+import { ConversationBlock, LearnedFact, Message, ThinkingStep, WebSource } from '../models/conversation.models';
+import { applyThinkingStep } from '../utils/thinkingStepUtils';
 import { AttachmentRef } from '../models/attachment.models';
 import { AIVendor } from '../constants/vendors';
 import { SearchUserResponse } from '../models/user.models';
@@ -30,6 +31,8 @@ interface BackendResponse {
     tokensReadFromCache?: number | null;
     costUsd?: number | null;
     thinkingDurationMs?: number | null;
+    /** Raw thinking-step events ("ks" chunks) persisted with the message */
+    thinkingSteps?: ThinkingStep[] | null;
     webSources?: WebSource[] | null;
     /** Facts memory extraction learned from this exchange; null = unknown/pending */
     learnedFacts?: LearnedFact[] | null;
@@ -108,6 +111,15 @@ export async function getConversation(
                     tokensReadFromCache: resp.tokensReadFromCache ?? null,
                     costUsd: resp.costUsd ?? null,
                     thinkingDurationMs: resp.thinkingDurationMs ?? null,
+                    // Persisted raw running/done events fold into the same
+                    // per-node list the live "ks" stream builds. Any step
+                    // without a done event (aborted stream) must not pulse
+                    // forever in a historical view.
+                    thinkingStepList: resp.thinkingSteps?.length
+                        ? resp.thinkingSteps
+                            .reduce(applyThinkingStep, [] as ThinkingStep[])
+                            .map(s => s.status === 'running' ? { ...s, status: 'done' as const } : s)
+                        : undefined,
                     webSources: resp.webSources ?? null,
                     // Always set for historical messages (null = extraction
                     // outcome unknown) so the UI knows not to poll for them

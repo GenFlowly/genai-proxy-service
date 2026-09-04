@@ -65,3 +65,6 @@ __pycache__/
 
 # Kotlin
 .kotlin/
+
+# Local dev secrets for docker-compose (see genai-proxy-server/.env.example)
+genai-proxy-server/.env
