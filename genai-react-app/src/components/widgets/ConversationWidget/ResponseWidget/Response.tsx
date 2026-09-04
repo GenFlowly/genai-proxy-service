@@ -104,10 +104,11 @@ function GeneratedAttachmentsSection({ attachments }: { attachments: AttachmentR
 const PLACEHOLDER_MESSAGE_ID = /^(resp|error)-/
 
 /**
- * "Facts learned about the user" item in the response footer stats row.
- * Pending → muted pulsing "Learning facts…" while the async extraction runs;
- * done with facts → count with an interactive tooltip listing each fact and a
- * ✗ that deletes it from memory; done without facts → muted "No new facts".
+ * "Facts learned about the user" item in the response footer stats row,
+ * rendered as a brain icon + count. Pending → muted pulsing brain while the
+ * async extraction runs; done → the count, with a tooltip that carries the
+ * wording ("N facts added to memory" / "No new facts…") and, when there are
+ * facts, an interactive list with a ✗ that deletes each from memory.
  */
 function LearnedFactsStat({ conversationId, messageId, initialFacts, isFreshResponse }: {
     conversationId: string
@@ -129,18 +130,31 @@ function LearnedFactsStat({ conversationId, messageId, initialFacts, isFreshResp
 
     if (status === 'pending') {
         return (
-            <span className={`${styles.tokenItem} ${styles.learnedFactsPending}`} data-testid="learned-facts-pending">
-                <span className={styles.pulse} />
-                {t('conversation.response.learningFacts')}
-            </span>
+            <Tooltip content={t('conversation.response.learningFacts')}>
+                <span
+                    className={`${styles.tokenItem} ${styles.learnedFactsPending}`}
+                    aria-label={t('conversation.response.learningFacts')}
+                    data-testid="learned-facts-pending"
+                >
+                    <Icon src={ICONS.BRAIN} size={12} />
+                    <span className={styles.pulse} />
+                </span>
+            </Tooltip>
         )
     }
 
     if (facts.length === 0) {
         return (
-            <span className={`${styles.tokenItem} ${styles.learnedFactsNone}`} data-testid="learned-facts-none">
-                {t('conversation.response.noNewFacts')}
-            </span>
+            <Tooltip content={t('conversation.response.noNewFacts')}>
+                <span
+                    className={`${styles.tokenItem} ${styles.learnedFactsNone}`}
+                    aria-label={t('conversation.response.noNewFacts')}
+                    data-testid="learned-facts-none"
+                >
+                    <Icon src={ICONS.BRAIN} size={12} />
+                    0
+                </span>
+            </Tooltip>
         )
     }
 
@@ -148,25 +162,35 @@ function LearnedFactsStat({ conversationId, messageId, initialFacts, isFreshResp
         <Tooltip
             interactive
             content={
-                <ul className={styles.learnedFactsList} data-testid="learned-facts-list">
-                    {facts.map(fact => (
-                        <li key={fact.memoryId} className={styles.learnedFactItem}>
-                            <span className={styles.learnedFactText}>{fact.text}</span>
-                            <button
-                                className={styles.learnedFactDelete}
-                                onClick={() => handleDelete(fact.memoryId)}
-                                aria-label={t('conversation.response.deleteFact', { fact: fact.text })}
-                                data-testid="learned-fact-delete"
-                            >
-                                ✗
-                            </button>
-                        </li>
-                    ))}
-                </ul>
+                <div className={styles.learnedFactsTooltip}>
+                    <div className={styles.learnedFactsLabel}>
+                        {t('conversation.response.factsAddedToMemory', { count: facts.length })}
+                    </div>
+                    <ul className={styles.learnedFactsList} data-testid="learned-facts-list">
+                        {facts.map(fact => (
+                            <li key={fact.memoryId} className={styles.learnedFactItem}>
+                                <span className={styles.learnedFactText}>{fact.text}</span>
+                                <button
+                                    className={styles.learnedFactDelete}
+                                    onClick={() => handleDelete(fact.memoryId)}
+                                    aria-label={t('conversation.response.deleteFact', { fact: fact.text })}
+                                    data-testid="learned-fact-delete"
+                                >
+                                    ✗
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             }
         >
-            <span className={styles.tokenItem} data-testid="learned-facts-count">
-                {t('conversation.response.factsAddedToMemory', { count: facts.length })}
+            <span
+                className={styles.tokenItem}
+                aria-label={t('conversation.response.factsAddedToMemory', { count: facts.length })}
+                data-testid="learned-facts-count"
+            >
+                <Icon src={ICONS.BRAIN} size={12} />
+                {facts.length}
             </span>
         </Tooltip>
     )

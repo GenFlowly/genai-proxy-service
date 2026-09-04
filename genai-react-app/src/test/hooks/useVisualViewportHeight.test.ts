@@ -9,6 +9,7 @@ function createMockViewport(initialHeight: number) {
     const listeners: Record<string, Listener[]> = { resize: [], scroll: [] };
     return {
         height: initialHeight,
+        offsetTop: 0,
         addEventListener: jest.fn((event: string, cb: Listener) => {
             listeners[event].push(cb);
         }),
@@ -28,10 +29,27 @@ function getVvh(): string {
 describe('useVisualViewportHeight Hook', () => {
     const originalVisualViewport = (window as any).visualViewport;
 
+    beforeEach(() => {
+        // The hook coalesces event bursts into one rAF; fake timers let
+        // tests flush that frame deterministically
+        jest.useFakeTimers();
+    });
+
     afterEach(() => {
+        jest.useRealTimers();
         (window as any).visualViewport = originalVisualViewport;
         document.documentElement.style.removeProperty('--vvh');
+        document.documentElement.style.removeProperty('--vv-offset');
     });
+
+    // Fires a viewport event and advances fake timers past the rAF frame
+    // the hook schedules its style write in
+    const fireAndFlush = (viewport: ReturnType<typeof createMockViewport>, event: 'resize' | 'scroll') => {
+        act(() => {
+            viewport.fire(event);
+            jest.advanceTimersByTime(20);
+        });
+    };
 
     test('sets --vvh from visualViewport.height on mount', () => {
         (window as any).visualViewport = createMockViewport(660);
@@ -47,16 +65,12 @@ describe('useVisualViewportHeight Hook', () => {
 
         renderHook(() => useVisualViewportHeight());
 
-        act(() => {
-            viewport.height = 340; // keyboard opened
-            viewport.fire('resize');
-        });
+        viewport.height = 340; // keyboard opened
+        fireAndFlush(viewport, 'resize');
         expect(getVvh()).toBe('340px');
 
-        act(() => {
-            viewport.height = 660; // keyboard closed
-            viewport.fire('resize');
-        });
+        viewport.height = 660; // keyboard closed
+        fireAndFlush(viewport, 'resize');
         expect(getVvh()).toBe('660px');
     });
 
@@ -66,10 +80,8 @@ describe('useVisualViewportHeight Hook', () => {
 
         renderHook(() => useVisualViewportHeight());
 
-        act(() => {
-            viewport.height = 500;
-            viewport.fire('scroll');
-        });
+        viewport.height = 500;
+        fireAndFlush(viewport, 'scroll');
         expect(getVvh()).toBe('500px');
     });
 

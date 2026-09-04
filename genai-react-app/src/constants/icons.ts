@@ -30,6 +30,7 @@ import pinIcon from '../assets/icons/pin.svg'
 import pinOffIcon from '../assets/icons/pin-off.svg'
 import historyIcon from '../assets/icons/history.svg'
 import sunIcon from '../assets/icons/sun.svg'
+import brainIcon from '../assets/icons/brain.svg'
 
 export const ICONS = {
     EDIT: editIcon,
@@ -62,4 +63,5 @@ export const ICONS = {
     PIN: pinIcon,
     PIN_OFF: pinOffIcon,
     HISTORY: historyIcon,
+    BRAIN: brainIcon,
 }

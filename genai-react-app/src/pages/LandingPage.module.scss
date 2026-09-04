@@ -7,6 +7,17 @@
   background-color: $background-gray;
   display: flex;
   flex-direction: column;
+
+  @include respond-to-mobile {
+    // 100svh — the SMALL viewport (browser UI visible) — is the only truly
+    // constant mobile viewport unit. 100vh (large viewport) leaves a
+    // scrollable surplus that lets content slide under the fixed
+    // MobileHeader, and 100dvh RESIZES when the keyboard opens (Safari hides
+    // its toolbar → dynamic viewport grows), which made the whole page
+    // stretch down and snap back. With svh the layout never moves; the
+    // keyboard simply overlays the bottom of the page.
+    height: 100svh;
+  }
 }
 
 .layout {
