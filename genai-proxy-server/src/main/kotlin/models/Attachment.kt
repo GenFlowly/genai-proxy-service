@@ -19,7 +19,10 @@ const val MAX_ATTACHMENTS_PER_MESSAGE = 10
 data class AttachmentRef(
     val attachmentId: String,
     val s3Key: String,
-    val mediaType: String
+    val mediaType: String,
+    /** Display name for downloads. Set for generated artifacts (e.g. PDFs from
+     * the generate_pdf tool); null for uploaded images (pre-feature records). */
+    val filename: String? = null
 )
 
 fun attachmentS3Key(customerId: String, attachmentId: String): String =

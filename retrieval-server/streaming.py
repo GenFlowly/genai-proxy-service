@@ -18,6 +18,8 @@ def _kind_of(node_type: str) -> str:
         return "MEMORY"
     if key == "RESPONSE_GENERATOR_WITH_REFLECTION":
         return "REFLECTION"
+    if key == "TOOL_EXECUTOR":
+        return "TOOL"
     return "LLM"
 
 
@@ -48,6 +50,11 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
         results = output.get("web_search_results", [])
         payload["detail"] = f"Found {len(results)} web result(s)"
         payload["items"] = [r.get("title", "")[:120] for r in results[:_MAX_ITEMS]]
+    elif kind == "TOOL":
+        artifacts = output.get("generated_artifacts", [])
+        executed = [m for m in output.get("loop_messages", []) if m.get("role") == "tool"]
+        payload["detail"] = f"Executed {len(executed)} tool(s)"
+        payload["items"] = [a.get("filename", "")[:120] for a in artifacts[:_MAX_ITEMS]]
     elif kind == "MEMORY":
         block = output.get("memories_block") or ""
         memories = [line[2:] for line in block.splitlines() if line.startswith("- ")]
@@ -78,6 +85,7 @@ def _start_label(kind: str, name: str) -> str:
         "WEB_SEARCH": f"{name}: searching the web…",
         "MEMORY": f"{name}: loading what is known about you…",
         "REFLECTION": f"{name}: generating and reflecting…",
+        "TOOL": f"{name}: running tools…",
     }.get(kind, f"{name}: thinking…")
 
 
@@ -90,6 +98,7 @@ async def stream_response(
     recursion_limit: int = 25,
     request_start: Optional[float] = None,
     structured_output: bool = False,
+    builtin_tool_names: Optional[set[str]] = None,
 ) -> AsyncIterator[str]:
     """
     Stream SSE events from a graph execution.
@@ -109,6 +118,10 @@ async def stream_response(
                          JSON object is emitted as a single content chunk when
                          the generator node completes. Any synthetic schema tool
                          call is never surfaced as a tool_calls event.
+        builtin_tool_names: Names of built-in (graph_tools) tools bound for this
+                         request. Their calls are executed in-graph by the
+                         TOOL_EXECUTOR node and must never be emitted to the
+                         caller as tool_calls events.
     """
     if graph is None:
         raise ValueError("stream_response requires a compiled graph — no fallback available")
@@ -116,6 +129,7 @@ async def stream_response(
     node_type_map = node_type_map or {}
     node_name_map = node_name_map or {}
     streaming_nodes = streaming_nodes or set()
+    builtin_tool_names = builtin_tool_names or set()
 
     logger.info(
         "Stream: starting astream_events for customer=%s provider=%s streaming_nodes=%s",
@@ -180,6 +194,12 @@ async def stream_response(
                     # Web sources go to the caller so [n] citation markers in the
                     # generated text can be rendered as links. Emitted as soon as
                     # the search node completes — before generation streams.
+                    # Artifacts produced by built-in tools (e.g. generated
+                    # PDFs) go to the caller for persistence + download links.
+                    if node_type and node_type.upper() == "TOOL_EXECUTOR":
+                        artifacts = output.get("generated_artifacts", [])
+                        if artifacts:
+                            yield f"data: {json.dumps({'generated_artifacts': artifacts})}\n\n"
                     if node_type and node_type.upper() == "WEB_SEARCH":
                         sources = [
                             {"index": i, "title": r.get("title", ""), "url": r.get("url", "")}
@@ -219,13 +239,23 @@ async def stream_response(
                 # forced tool — never surface it.
                 if node in streaming_nodes and not structured_output:
                     raw_tool_calls = getattr(output, "tool_calls", None) or []
-                    if raw_tool_calls:
+                    # Built-in tool calls are executed in-graph by the
+                    # TOOL_EXECUTOR node — never surfaced to the caller. On a
+                    # mixed turn the executor drops the caller-defined calls
+                    # too (see tool_executor.py), so emit nothing.
+                    has_builtin = any(c.get("name", "") in builtin_tool_names for c in raw_tool_calls)
+                    if raw_tool_calls and not has_builtin:
                         tool_calls = [
                             {"id": c.get("id", ""), "name": c.get("name", ""), "args": c.get("args") or {}}
                             for c in raw_tool_calls
                         ]
                         logger.info("Stream: emitting %d tool call(s): %s", len(tool_calls), [c["name"] for c in tool_calls])
                         yield f"data: {json.dumps({'tool_calls': tool_calls})}\n\n"
+                    elif has_builtin:
+                        logger.info(
+                            "Stream: suppressing tool_calls event — built-in call(s) handled in-graph: %s",
+                            [c.get("name") for c in raw_tool_calls],
+                        )
 
             if event_type == "on_chat_model_stream" and node in streaming_nodes and not structured_output:
                 chunk = event["data"].get("chunk")

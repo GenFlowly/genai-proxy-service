@@ -99,7 +99,8 @@ class ConversationService(
                                 },
                                 webSources = nextMsg.webSourcesJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
-                                }
+                                },
+                                generatedAttachments = nextMsg.attachments
                             )
                         )
                         i++ // consume next message

@@ -175,6 +175,11 @@ fun Application.configureRouting(
             call.respondText("Hello World!")
         }
 
+        // Liveness probe for docker-compose / ECS healthchecks.
+        get("/health") {
+            call.respondText("""{"status":"healthy"}""", ContentType.Application.Json)
+        }
+
         // Generated OpenAPI specification + interactive Swagger UI
         route("/api.json") {
             openApi()

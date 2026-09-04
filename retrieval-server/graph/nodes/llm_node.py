@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from graph.llm_factory import get_llm
 from graph.s3_images import fetch_image_base64
 from graph.state import RetrievalState
+from graph.tools_runtime import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -411,7 +412,20 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # JSON-format nodes and pipeline nodes never see them. Native Anthropic
         # tools (computer use etc.) may require beta headers, which must be set
         # when the client is created — so specs are built before get_llm.
+        # Built-in tools (graph_tools registry, enabled via the graph's
+        # TOOL_EXECUTOR node) bind alongside them — their calls are executed
+        # in-graph by the TOOL_EXECUTOR node instead of exiting to the caller.
         tools = state.get("tools") or []
+        builtin_names = state.get("builtin_tools") or []
+        if is_response_node and builtin_names:
+            builtin_specs = get_registry().specs(builtin_names)
+            # A caller-defined tool shadowing a built-in name would make its
+            # calls ambiguous (executed in-graph vs. by the caller) — built-in wins.
+            reserved = {s["name"] for s in builtin_specs}
+            shadowed = [t.get("name") for t in tools if t.get("name") in reserved]
+            if shadowed:
+                logger.warning("Node %s: caller tool(s) %s shadow built-in tools — dropped", agent_type, shadowed)
+            tools = [t for t in tools if t.get("name") not in reserved] + builtin_specs
         tools_bound = bool(is_response_node and tools and response_format == "text" and not response_schema)
         tool_specs: list = []
         llm_betas: list = []
@@ -523,6 +537,20 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 messages.append(HumanMessage(content=combined))
         else:
             _append_current_turn()
+
+        # In-graph agent loop (TOOL_EXECUTOR): replay this request's built-in
+        # tool exchanges after the current user turn, so on re-entry the model
+        # sees its own tool calls answered and produces the final response.
+        if is_response_node:
+            for lm in state.get("loop_messages") or []:
+                if lm.get("role") == "assistant":
+                    messages.append(
+                        _history_ai_message(lm.get("content", ""), lm.get("tool_calls") or [], False)
+                    )
+                else:
+                    messages.append(
+                        ToolMessage(content=lm.get("content", ""), tool_call_id=lm.get("tool_call_id", ""))
+                    )
 
         logger.info(
             "Node %s: calling LLM, format=%s model=%s caching=%s query_images=%d",

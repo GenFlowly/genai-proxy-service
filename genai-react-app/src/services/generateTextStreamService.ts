@@ -2,6 +2,7 @@ import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import { GenerateTextStreamRequest } from "../models/generateText.models";
 import { ThinkingStep, WebSource } from "../models/conversation.models";
+import { AttachmentRef } from "../models/attachment.models";
 import { fetchWithRetry } from "../utils/apiUtils";
 
 export interface StreamMetadata {
@@ -33,7 +34,8 @@ export async function generateTextStream(
     signal?: AbortSignal,
     onThinkingDuration?: (millis: number) => void,
     onWebSources?: (sources: WebSource[]) => void,
-    onThinkingStep?: (step: ThinkingStep) => void
+    onThinkingStep?: (step: ThinkingStep) => void,
+    onGeneratedAttachments?: (attachments: AttachmentRef[]) => void
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -122,6 +124,25 @@ export async function generateTextStream(
             }
             else if (msg.t === "ws") {
                 if (Array.isArray(msg.v) && msg.v.length > 0) onWebSources?.(msg.v);
+            }
+            else if (msg.t === "ga") {
+                // Files built-in tools produced (e.g. generated PDFs). The
+                // proxy relays the retrieval-server's snake_case artifact
+                // shape verbatim — normalize to the AttachmentRef the rest of
+                // the app uses.
+                if (Array.isArray(msg.v) && msg.v.length > 0) {
+                    const refs: AttachmentRef[] = msg.v
+                        .filter((a: any) => a && typeof a === "object")
+                        .map((a: any) => ({
+                            attachmentId: a.artifact_id ?? a.attachmentId ?? "",
+                            s3Key: a.key ?? a.s3Key ?? "",
+                            mediaType: a.media_type ?? a.mediaType ?? "application/octet-stream",
+                            filename: a.filename ?? undefined,
+                            sizeBytes: typeof a.size_bytes === "number" ? a.size_bytes : undefined,
+                        }))
+                        .filter((r: AttachmentRef) => r.attachmentId);
+                    if (refs.length > 0) onGeneratedAttachments?.(refs);
+                }
             }
             // other types (heartbeat, etc.) are silently ignored
         } catch {
