@@ -23,6 +23,13 @@ data class GenerateTextResponse(
     /** Retrieval-server thinking time (request receipt → first generated token), ms */
     val thinkingDurationMs: Long? = null,
     /**
+     * The agent graph's thinking-step events for this turn, as streamed ("ks"
+     * chunks): [{"node","name","kind","status",...}]. Raw running+done events —
+     * clients fold them into the per-node step list. Null for records
+     * predating the feature.
+     */
+    val thinkingSteps: kotlinx.serialization.json.JsonElement? = null,
+    /**
      * Tool calls the model made: [{"id","name","args"}]. Execute them and send the
      * results back via toolResults on the next generate request (with
      * selectedResponseId set to this messageId) to continue the turn.
