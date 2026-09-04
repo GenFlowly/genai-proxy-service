@@ -6,6 +6,9 @@ import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Mappers from the domain models onto the retrieval-server exchange types.
@@ -13,8 +16,35 @@ import kotlinx.serialization.json.Json
 
 private val jsonParser = Json { ignoreUnknownKeys = true }
 
+// Images only: generated artifacts (e.g. PDFs) also live in attachments but
+// must not be replayed to the LLM as image blocks.
 fun List<AttachmentRef>.toImageRefs(): List<ImageRef> =
-    map { ImageRef(s3Key = it.s3Key, mediaType = it.mediaType) }
+    filter { it.mediaType.startsWith("image/") }
+        .map { ImageRef(s3Key = it.s3Key, mediaType = it.mediaType) }
+
+/**
+ * Parse the retrieval-server's generated_artifacts JSON —
+ * [{"artifact_id","key","media_type","filename","size_bytes"}] — into
+ * AttachmentRefs for persistence on the assistant message. The artifact id/key
+ * follow the attachmentS3Key convention, so the existing attachment-download
+ * endpoint serves them unchanged. Malformed input degrades to an empty list.
+ */
+fun parseGeneratedArtifacts(json: String?): List<AttachmentRef> {
+    if (json.isNullOrBlank()) return emptyList()
+    return runCatching {
+        jsonParser.parseToJsonElement(json).jsonArray.mapNotNull { el ->
+            val obj = el.jsonObject
+            val id = obj["artifact_id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            val key = obj["key"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            AttachmentRef(
+                attachmentId = id,
+                s3Key = key,
+                mediaType = obj["media_type"]?.jsonPrimitive?.content ?: "application/octet-stream",
+                filename = obj["filename"]?.jsonPrimitive?.content
+            )
+        }
+    }.getOrElse { emptyList() }
+}
 
 fun Message.toConversationMessage(): ConversationMessage =
     ConversationMessage(

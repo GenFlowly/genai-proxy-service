@@ -9,6 +9,7 @@ from langgraph.graph import END, StateGraph
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.instruction_loader import get_instruction_text
+from graph.tools_runtime import get_registry
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
 from graph.state import RetrievalState
@@ -20,7 +21,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
+def _enabled_builtin_tools(node_type_map: dict, node_configs: dict) -> list[str]:
+    """Built-in tool names enabled by the graph's TOOL_EXECUTOR node(s): the
+    node config's "tools" list, or every registered tool when unspecified.
+    No TOOL_EXECUTOR node → no built-in tools bound."""
+    enabled: list[str] = []
+    for node_id, node_type in node_type_map.items():
+        if node_type != "TOOL_EXECUTOR":
+            continue
+        names = node_configs.get(node_id, {}).get("tools")
+        if names is None:
+            names = get_registry().names()
+        enabled.extend(n for n in names if n not in enabled)
+    return enabled
+
+
+def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[str]) -> RetrievalState:
     return RetrievalState(
         customer_id=req.customer_id,
         client=req.client,
@@ -32,6 +48,9 @@ def _build_state(req: RetrieveRequest, node_configs: dict) -> RetrievalState:
         tools=[t.model_dump() for t in req.tools],
         tool_choice=req.tool_choice,
         query_tool_results=[r.model_dump() for r in req.tool_results],
+        builtin_tools=builtin_tools,
+        loop_messages=[],
+        generated_artifacts=[],
         response_schema=req.response_schema,
         tool_calls=None,
         rewritten_query=None,
@@ -191,13 +210,14 @@ async def retrieve(req: RetrieveRequest):
         graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id)
     else:
         graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _direct_graph()
-    state = _build_state(req, node_configs)
+    builtin_tools = _enabled_builtin_tools(node_type_map, node_configs)
+    state = _build_state(req, node_configs, builtin_tools)
     run_config = {"recursion_limit": max_iterations}
 
     if req.stream:
         logger.info("Returning StreamingResponse for customer=%s", req.customer_id)
         return StreamingResponse(
-            stream_response(state, graph=graph, node_type_map=node_type_map, node_name_map=node_name_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start, structured_output=bool(req.response_schema)),
+            stream_response(state, graph=graph, node_type_map=node_type_map, node_name_map=node_name_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start, structured_output=bool(req.response_schema), builtin_tool_names=set(builtin_tools)),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -219,6 +239,7 @@ async def retrieve(req: RetrieveRequest):
             "customer_id": result["customer_id"],
             "generated_response": result.get("generated_response"),
             "tool_calls": result.get("tool_calls"),
+            "generated_artifacts": result.get("generated_artifacts", []),
             "retrieval_results": result.get("ranked_results") or result.get("retrieval_results", []),
             # Numbered to match the [n] citation markers the response generator
             # emits when a WEB_SEARCH node ran (see _build_web_context).
@@ -294,6 +315,9 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
         tools=[],
         tool_choice=None,
         query_tool_results=[],
+        builtin_tools=[],
+        loop_messages=[],
+        generated_artifacts=[],
         response_schema=req.response_schema,
         tool_calls=None,
         rewritten_query=None,

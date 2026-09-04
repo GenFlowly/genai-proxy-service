@@ -12,6 +12,10 @@ langchain-text-splitters
 
 boto3
 
+# Built-in graph tools (graph_tools/): markdown -> PDF rendering
+markdown
+xhtml2pdf
+
 # Model catalog for /models listing (capability metadata per model)
 litellm
 

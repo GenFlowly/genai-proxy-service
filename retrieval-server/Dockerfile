@@ -19,6 +19,7 @@ COPY models.py .
 COPY streaming.py .
 COPY routes/ ./routes/
 COPY graph/ ./graph/
+COPY graph_tools/ ./graph_tools/
 COPY voice/ ./voice/
 
 # Model cache lives on a mounted volume so it persists across restarts

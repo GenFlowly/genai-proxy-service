@@ -7,6 +7,10 @@ import { useConversation } from '../../../../context/ConversationContext'
 import { TextContainer } from '@genflowly/component-library'
 import { Icon } from '@genflowly/component-library'
 import { LearnedFact, Message, ThinkingStep, WebSource } from "../../../../models/conversation.models";
+import { AttachmentRef } from '../../../../models/attachment.models'
+import { AttachmentCard } from '@genflowly/component-library'
+import { getAttachmentViewUrl } from '../../../../services/attachmentService'
+import { useAuth } from '../../../../context/AuthContext'
 import ThinkingSteps from './ThinkingSteps'
 import { useLearnedFacts } from '../../../../hooks/useLearnedFacts'
 import { RectangleButton } from '@genflowly/component-library'
@@ -65,6 +69,29 @@ function SourcesSection({ sources }: { sources: WebSource[] }) {
                     </li>
                 ))}
             </ul>
+        </div>
+    )
+}
+
+/**
+ * Download cards for files built-in tools produced during the turn (e.g.
+ * generated PDFs). URLs are short-lived presigned GETs, resolved on click.
+ */
+function GeneratedAttachmentsSection({ attachments }: { attachments: AttachmentRef[] }) {
+    const { getAccessTokenSilently } = useAuth()
+    return (
+        <div className={styles.generatedAttachments} data-testid="generated-attachments">
+            {attachments.map(attachment => (
+                <AttachmentCard
+                    key={attachment.attachmentId}
+                    filename={attachment.filename ?? 'attachment'}
+                    mediaType={attachment.mediaType}
+                    sizeBytes={attachment.sizeBytes}
+                    getDownloadUrl={async () =>
+                        getAttachmentViewUrl(await getAccessTokenSilently(), attachment.attachmentId)
+                    }
+                />
+            ))}
         </div>
     )
 }
@@ -341,7 +368,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             )}
 
             <div className={`${styles.inner} ${sidebarsHidden ? styles.sideBySide : ''}`}>
-                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingStepList, thinkingDurationMs, webSources, inputTokens, outputTokens, totalTokens, tokensReadFromCache, costUsd, learnedFacts }) => {
+                {filteredResponseList.map(({ aiVendor, model, text, messageId, isLoading, error, thinkingSteps, thinkingStepList, thinkingDurationMs, webSources, generatedAttachments, inputTokens, outputTokens, totalTokens, tokensReadFromCache, costUsd, learnedFacts }) => {
                     const isSelected = selectedResponseId === messageId
                     const isThinkingPhase = !!isLoading && text.trim().length === 0
 
@@ -414,6 +441,9 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                                 )}
                                 {!isLoading && webSources && webSources.length > 0 && (
                                     <SourcesSection sources={webSources} />
+                                )}
+                                {generatedAttachments && generatedAttachments.length > 0 && (
+                                    <GeneratedAttachmentsSection attachments={generatedAttachments} />
                                 )}
                                 {!isLoading && usageTotals && (
                                     <div className={styles.tokenBadge}>

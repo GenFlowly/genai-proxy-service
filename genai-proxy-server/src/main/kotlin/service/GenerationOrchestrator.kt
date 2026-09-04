@@ -5,6 +5,7 @@ import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import com.genflowly.models.retrieval.StreamChunk
+import com.genflowly.models.retrieval.parseGeneratedArtifacts
 import com.genflowly.models.retrieval.toConversationMessage
 import com.genflowly.models.retrieval.toImageRefs
 import com.genflowly.models.retrieval.toPayloadToolResults
@@ -222,6 +223,9 @@ class GenerationOrchestrator(
             // A pure tool-call response has no text — don't fake an error message
             text = result.text ?: if (result.toolCallsJson != null) "" else "No response received. Please try again.",
             toolCallsJson = result.toolCallsJson,
+            // Files built-in tools produced (e.g. generated PDFs) — served for
+            // download through the existing attachment endpoint.
+            attachments = parseGeneratedArtifacts(result.generatedArtifactsJson),
             previousMessageId = message.messageId,
             aiConfig = listOf(AIConfig(aiVendor = aiVendor, model = model)),
             systemPrompt = message.systemPrompt,
@@ -388,6 +392,7 @@ class GenerationOrchestrator(
             var capturedThinkingDurationMs: Long? = null
             var capturedToolCallsJson: String? = null
             var capturedWebSourcesJson: String? = null
+            var capturedGeneratedArtifactsJson: String? = null
             val capturedThinkingSteps = mutableListOf<String>()
             var success = false
             try {
@@ -441,6 +446,13 @@ class GenerationOrchestrator(
                             // chunk.json is already a JSON array — embed as-is
                             emit("{\"t\":\"ws\",\"v\":${chunk.json}}\n")
                         }
+                        is StreamChunk.GeneratedArtifacts -> {
+                            // Multiple TOOL_EXECUTOR completions per turn are
+                            // possible in principle; keep the accumulated set.
+                            capturedGeneratedArtifactsJson = mergeJsonArrays(capturedGeneratedArtifactsJson, chunk.json)
+                            // chunk.json is already a JSON array — embed as-is
+                            emit("{\"t\":\"ga\",\"v\":${chunk.json}}\n")
+                        }
                         is StreamChunk.Usage -> capturedUsage = chunk
                     }
                 }
@@ -469,6 +481,7 @@ class GenerationOrchestrator(
                         text = responseText,
                         toolCallsJson = capturedToolCallsJson,
                         webSourcesJson = capturedWebSourcesJson,
+                        attachments = parseGeneratedArtifacts(capturedGeneratedArtifactsJson),
                         previousMessageId = message.messageId,
                         aiConfig = listOf(config),
                         systemPrompt = message.systemPrompt,
@@ -514,6 +527,16 @@ class GenerationOrchestrator(
  * cycles) keeps every step but drops the bulky prompt/response excerpts.
  */
 private const val MAX_THINKING_STEPS_JSON_CHARS = 250_000
+
+/** Concatenate two JSON arrays (either may be null); malformed input keeps the newer one. */
+private fun mergeJsonArrays(existing: String?, incoming: String): String {
+    if (existing.isNullOrBlank()) return incoming
+    return runCatching {
+        JsonArray(
+            Json.parseToJsonElement(existing).jsonArray + Json.parseToJsonElement(incoming).jsonArray
+        ).toString()
+    }.getOrElse { incoming }
+}
 
 private fun thinkingStepsToJson(steps: List<String>): String? {
     if (steps.isEmpty()) return null

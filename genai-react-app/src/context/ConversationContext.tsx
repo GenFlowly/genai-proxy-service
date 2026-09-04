@@ -230,7 +230,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         onThinkingDuration?: (millis: number) => void,
         attachments: AttachmentRef[] = [],
         onWebSources?: (sources: WebSource[]) => void,
-        onThinkingStep?: (step: ThinkingStep) => void
+        onThinkingStep?: (step: ThinkingStep) => void,
+        onGeneratedAttachments?: (attachments: AttachmentRef[]) => void
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -243,7 +244,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
-        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep)
+        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -548,6 +549,23 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     }))
                 }
 
+                const handleGeneratedAttachments = (attachments: AttachmentRef[]) => {
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            // Multiple "ga" events per turn are possible — merge by id
+                            const existing = m.generatedAttachments ?? []
+                            const merged = [
+                                ...existing,
+                                ...attachments.filter(a => !existing.some(e => e.attachmentId === a.attachmentId)),
+                            ]
+                            return { ...m, generatedAttachments: merged }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
                 const handleWebSources = (sources: WebSource[]) => {
                     setConversationBlockList(prev => prev.map(block => {
                         if (block.conversationBlockId !== id) return block
@@ -663,7 +681,8 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         handleThinkingDuration,
                         attachmentsToUse,
                         handleWebSources,
-                        handleThinkingStep
+                        handleThinkingStep,
+                        handleGeneratedAttachments
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer

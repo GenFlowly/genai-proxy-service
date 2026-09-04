@@ -11,6 +11,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutRequest
+import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
 
 /** Data access for the AIModelCatalog table (per-model token limits + pricing). */
@@ -84,17 +85,52 @@ class ModelCatalogRepository(
                     .build()
             )
             val item = response.item()?.takeIf { it.isNotEmpty() } ?: return@withContext null
-            ModelCatalogEntry(
-                model = model,
-                maxOutputTokens = item["maxOutputTokens"]?.n()?.toIntOrNull(),
-                maxInputTokens = item["maxInputTokens"]?.n()?.toIntOrNull(),
-                inputCostPerMTok = item["inputCostPerMTok"]?.n()?.toDoubleOrNull(),
-                outputCostPerMTok = item["outputCostPerMTok"]?.n()?.toDoubleOrNull(),
-                cacheReadCostPerMTok = item["cacheReadCostPerMTok"]?.n()?.toDoubleOrNull(),
-                cacheWriteCostPerMTok = item["cacheWriteCostPerMTok"]?.n()?.toDoubleOrNull(),
-                inputAudioCostPerMTok = item["inputAudioCostPerMTok"]?.n()?.toDoubleOrNull(),
-                outputAudioCostPerMTok = item["outputAudioCostPerMTok"]?.n()?.toDoubleOrNull(),
-                cacheReadAudioCostPerMTok = item["cacheReadAudioCostPerMTok"]?.n()?.toDoubleOrNull()
-            )
+            toEntry(item, model)
         }
+
+    /**
+     * Latest date-suffixed variant of an alias model id (e.g.
+     * "claude-opus-4-5" -> "claude-opus-4-5-20251101"). The LiteLLM-sourced
+     * catalog often carries only dated snapshot ids while the vendors accept
+     * the undated alias; limits and pricing are identical, so the newest
+     * variant is a faithful stand-in. YYYYMMDD suffixes sort chronologically,
+     * so the highest sort key is the newest snapshot.
+     */
+    suspend fun findLatestDatedVariant(aiVendor: String, model: String): ModelCatalogEntry? =
+        withContext(Dispatchers.IO) {
+            val prefix = "$model-"
+            val response = dynamoDbClient.query(
+                QueryRequest.builder()
+                    .tableName(DynamoDBConstants.AI_MODEL_CATALOG_TABLE)
+                    .keyConditionExpression("#v = :v AND begins_with(#m, :p)")
+                    .expressionAttributeNames(mapOf(
+                        "#v" to AI_VENDOR_KEY,
+                        "#m" to DynamoDBConstants.MODEL_SORT_KEY
+                    ))
+                    .expressionAttributeValues(mapOf(
+                        ":v" to AttributeValue.builder().s(aiVendor).build(),
+                        ":p" to AttributeValue.builder().s(prefix).build()
+                    ))
+                    .scanIndexForward(false)
+                    .build()
+            )
+            val item = response.items().firstOrNull { candidate ->
+                candidate[DynamoDBConstants.MODEL_SORT_KEY]?.s()
+                    ?.removePrefix(prefix)?.matches(Regex("\\d{8}")) == true
+            } ?: return@withContext null
+            toEntry(item, item[DynamoDBConstants.MODEL_SORT_KEY]!!.s())
+        }
+
+    private fun toEntry(item: Map<String, AttributeValue>, model: String) = ModelCatalogEntry(
+        model = model,
+        maxOutputTokens = item["maxOutputTokens"]?.n()?.toIntOrNull(),
+        maxInputTokens = item["maxInputTokens"]?.n()?.toIntOrNull(),
+        inputCostPerMTok = item["inputCostPerMTok"]?.n()?.toDoubleOrNull(),
+        outputCostPerMTok = item["outputCostPerMTok"]?.n()?.toDoubleOrNull(),
+        cacheReadCostPerMTok = item["cacheReadCostPerMTok"]?.n()?.toDoubleOrNull(),
+        cacheWriteCostPerMTok = item["cacheWriteCostPerMTok"]?.n()?.toDoubleOrNull(),
+        inputAudioCostPerMTok = item["inputAudioCostPerMTok"]?.n()?.toDoubleOrNull(),
+        outputAudioCostPerMTok = item["outputAudioCostPerMTok"]?.n()?.toDoubleOrNull(),
+        cacheReadAudioCostPerMTok = item["cacheReadAudioCostPerMTok"]?.n()?.toDoubleOrNull()
+    )
 }
