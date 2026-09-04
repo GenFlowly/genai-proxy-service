@@ -171,7 +171,8 @@ describe('Response Widget Component', () => {
         expect(screen.getByText('1,234')).toBeInTheDocument();
         expect(screen.getByText('567')).toBeInTheDocument();
         expect(screen.getByText('1,801')).toBeInTheDocument();
-        expect(screen.getByText('0')).toBeInTheDocument();
+        // "0" appears both as the cache-token count and the learned-facts count
+        expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(1);
     });
 
     test('does not render token badge when tokens are null or undefined', () => {
@@ -448,7 +449,7 @@ describe('Response Widget Component', () => {
             jest.useRealTimers();
         });
 
-        test('fresh response shows "Learning facts…" then the fact count once extraction finishes', async () => {
+        test('fresh response shows the pending brain then the fact count once extraction finishes', async () => {
             jest.useFakeTimers();
             withConversation();
             getLearnedFacts
@@ -457,7 +458,7 @@ describe('Response Widget Component', () => {
 
             render(<Response blockId="block-1" responseMessages={[baseMessage]} />);
 
-            expect(screen.getByTestId('learned-facts-pending')).toHaveTextContent('Learning facts…');
+            expect(screen.getByTestId('learned-facts-pending')).toHaveAccessibleName('Learning facts…');
 
             // First (immediate) poll: still pending
             await act(async () => { await Promise.resolve(); });
@@ -465,18 +466,20 @@ describe('Response Widget Component', () => {
 
             // Next poll 4s later: done with 2 facts
             await act(async () => { jest.advanceTimersByTime(4000); });
-            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('2 facts added to memory');
+            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('2');
+            expect(screen.getByTestId('learned-facts-count')).toHaveAccessibleName('2 facts added to memory');
             expect(getLearnedFacts).toHaveBeenCalledWith('tok', 'conv-1', baseMessage.messageId);
         });
 
-        test('fresh response with no learned facts settles on "No new facts"', async () => {
+        test('fresh response with no learned facts settles on a zero count', async () => {
             withConversation();
             getLearnedFacts.mockResolvedValue({ status: 'done', facts: [] });
 
             render(<Response blockId="block-1" responseMessages={[baseMessage]} />);
 
             await act(async () => { await Promise.resolve(); });
-            expect(screen.getByTestId('learned-facts-none')).toHaveTextContent('No new facts added to memory');
+            expect(screen.getByTestId('learned-facts-none')).toHaveTextContent('0');
+            expect(screen.getByTestId('learned-facts-none')).toHaveAccessibleName('No new facts added to memory');
         });
 
         test('historical message renders its facts directly without polling', async () => {
@@ -484,7 +487,7 @@ describe('Response Widget Component', () => {
 
             render(<Response blockId="block-1" responseMessages={[{ ...baseMessage, learnedFacts: FACTS }]} />);
 
-            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('2 facts added to memory');
+            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('2');
             await act(async () => { await Promise.resolve(); });
             expect(getLearnedFacts).not.toHaveBeenCalled();
         });
@@ -494,7 +497,8 @@ describe('Response Widget Component', () => {
 
             render(<Response blockId="block-1" responseMessages={[{ ...baseMessage, learnedFacts: [FACTS[0]] }]} />);
 
-            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('1 fact added to memory');
+            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('1');
+            expect(screen.getByTestId('learned-facts-count')).toHaveAccessibleName('1 fact added to memory');
         });
 
         test('historical message with unknown outcome (null) shows "No new facts" without polling', async () => {
@@ -536,7 +540,7 @@ describe('Response Widget Component', () => {
             expect(deleteMemoryFact).toHaveBeenCalledWith('tok', 'mem-1');
             expect(screen.queryByText('Prefers dark mode')).not.toBeInTheDocument();
             expect(screen.getByText('Works in fintech')).toBeInTheDocument();
-            expect(screen.getByTestId('learned-facts-count')).toHaveTextContent('1 fact added to memory');
+            expect(screen.getByTestId('learned-facts-count')).toHaveAccessibleName('1 fact added to memory');
         });
 
         test('deleting the last fact switches to the none-state', async () => {

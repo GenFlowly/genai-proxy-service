@@ -100,6 +100,28 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
     const handleFollowUp = (selectedMessageId: string) => {
         if (!hasAnyValidApiKey) return
 
+        // 📱 The follow-up editor should come up ready to type, keyboard open.
+        // iOS only shows the keyboard for focus() calls made inside the tap
+        // gesture — the editor may not even exist yet, so focus a throwaway
+        // input NOW and hand focus over once the editor is in the DOM.
+        const tempInput = document.createElement('input')
+        tempInput.type = 'text'
+        tempInput.style.position = 'fixed'
+        tempInput.style.opacity = '0'
+        tempInput.style.height = '0'
+        tempInput.style.fontSize = '16px' // prevent iOS zoom-on-focus
+        document.body.appendChild(tempInput)
+        tempInput.focus({ preventScroll: true })
+
+        const focusEditor = () => {
+            const editorInput = document.querySelector<HTMLElement>(
+                '.conversation-block-item:last-child .cm-content, ' +
+                '.conversation-block-item:last-child textarea'
+            )
+            editorInput?.focus({ preventScroll: true })
+            tempInput.remove()
+        }
+
         // Get the last conversation block
         const lastBlock = conversationBlockList[conversationBlockList.length - 1]
 
@@ -119,6 +141,7 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
             setTimeout(() => {
                 const last = document.querySelector(`.conversation-block-item:last-child`)
                 last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                focusEditor()
             }, 100)
         } else {
             // Create a new block only if the last one has responses
@@ -130,6 +153,7 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
             setTimeout(() => {
                 const last = document.querySelector(`.conversation-block-item:last-child`)
                 last?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                focusEditor()
             }, 300)
         }
     }

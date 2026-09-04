@@ -82,12 +82,15 @@
 
   .contentWrapper {
     gap: 0;
-    padding-bottom: 3rem; // Ensure content is accessible above browser bottom bar
-    // Rest below the fixed MobileHeader overlay (3.5rem matches its height):
-    // the first message / editor / new-chat input start under the header, but
-    // because this padding is inside the scroll container, scrolled content
-    // still runs all the way to the top of the screen beneath the transparent
-    // header controls
-    padding-top: 3.5rem;
+    // No bottom padding on mobile: the page is sized to the visual viewport
+    // (--vvh), which already excludes the browser's bottom bar / keyboard.
+    // Padding here would make a fresh chat (header inset + full-height
+    // editor) overflow the scrollport and scroll under the MobileHeader.
+    padding-bottom: 0;
+    // Rest below the fixed MobileHeader overlay: the first message / editor /
+    // new-chat input start under the header, but because this padding is
+    // inside the scroll container, scrolled content still runs all the way to
+    // the top of the screen beneath the transparent header controls
+    padding-top: $mobile-header-height;
   }
 }
