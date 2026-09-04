@@ -1,8 +1,12 @@
-/** Reference to an image uploaded to the attachments S3 bucket. Mirrors the backend AttachmentRef. */
+/** Reference to a file in the attachments S3 bucket. Mirrors the backend AttachmentRef. */
 export interface AttachmentRef {
     attachmentId: string
     s3Key: string
     mediaType: string
+    /** Display name for downloads. Set for generated artifacts (e.g. PDFs); absent on uploaded images. */
+    filename?: string
+    /** File size in bytes. Only present on artifacts streamed via the "ga" chunk. */
+    sizeBytes?: number
 }
 
 export interface CreateAttachmentUploadResponse {

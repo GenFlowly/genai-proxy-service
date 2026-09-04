@@ -186,6 +186,7 @@ private fun createResponse(message: Message): GenerateTextResponse {
         costUsd = message.costUsd,
         toolCalls = message.toolCallsJson?.let {
             runCatching { toolCallsJsonParser.parseToJsonElement(it) }.getOrNull()
-        }
+        },
+        generatedAttachments = message.attachments
     )
 }

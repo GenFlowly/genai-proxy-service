@@ -25,6 +25,13 @@ sealed class StreamChunk {
     /** Raw JSON array of tool calls the model made: [{"id","name","args"}] */
     data class ToolCalls(val json: String) : StreamChunk()
     /**
+     * Raw JSON array of files built-in tools produced during the turn (e.g.
+     * generated PDFs), already stored in the attachments bucket:
+     * [{"artifact_id","key","media_type","filename","size_bytes"}]. Emitted
+     * when the graph's TOOL_EXECUTOR node completes.
+     */
+    data class GeneratedArtifacts(val json: String) : StreamChunk()
+    /**
      * Raw JSON array of web-search sources backing the [n] citation markers in
      * the generated text: [{"index","title","url"}]. Emitted once, when the
      * WEB_SEARCH graph node completes.
@@ -49,7 +56,9 @@ data class RetrievalResult(
     /** Prompt-cache write (cache_creation) tokens — billed at the cache-write rate. */
     val tokensWrittenToCache: Int? = null,
     /** JSON array of tool calls the model made, null when it answered directly */
-    val toolCallsJson: String? = null
+    val toolCallsJson: String? = null,
+    /** JSON array of artifacts built-in tools produced (see StreamChunk.GeneratedArtifacts) */
+    val generatedArtifactsJson: String? = null
 )
 
 /** Image reference passed to the retrieval-server, which fetches the bytes from S3 itself. */

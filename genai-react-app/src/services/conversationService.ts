@@ -34,6 +34,8 @@ interface BackendResponse {
     /** Raw thinking-step events ("ks" chunks) persisted with the message */
     thinkingSteps?: ThinkingStep[] | null;
     webSources?: WebSource[] | null;
+    /** Files built-in tools produced during the turn (e.g. generated PDFs) */
+    generatedAttachments?: AttachmentRef[] | null;
     /** Facts memory extraction learned from this exchange; null = unknown/pending */
     learnedFacts?: LearnedFact[] | null;
 }
@@ -121,6 +123,7 @@ export async function getConversation(
                             .map(s => s.status === 'running' ? { ...s, status: 'done' as const } : s)
                         : undefined,
                     webSources: resp.webSources ?? null,
+                    generatedAttachments: resp.generatedAttachments ?? null,
                     // Always set for historical messages (null = extraction
                     // outcome unknown) so the UI knows not to poll for them
                     learnedFacts: resp.learnedFacts ?? null,

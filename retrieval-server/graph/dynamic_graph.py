@@ -8,8 +8,10 @@ from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
 from graph.nodes.reflection_node import make_reflection_node
 from graph.nodes.retrieval import retrieval
+from graph.nodes.tool_executor import tool_executor
 from graph.nodes.web_search import web_search
 from graph.state import RetrievalState
+from graph.tools_runtime import is_builtin_tool
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +32,31 @@ def _make_condition_router(condition: dict, routes: dict[str, str]):
       condition_key   (str)  — state field to evaluate; first-class state
                                fields are checked first, then the free-form
                                scratch channel (custom node output_keys)
-      condition_type  (str)  — "bool" (default) | "list_empty" | "value"
+      condition_type  (str)  — "bool" (default) | "list_empty" | "value" | "tool_route"
         "bool"       : routes["true"] when the field is truthy, else routes["false"]
         "list_empty" : routes["true"] when the field is an empty list or None
         "value"      : the field's value (as a string) is matched against the
                        route labels; "__default__" is the fallback route
+        "tool_route" : inspects state["tool_calls"] — routes["builtin"] when any
+                       call names a built-in (graph_tools) tool, routes["caller"]
+                       when only caller-defined calls exist, routes["none"] when
+                       there are no calls (condition_key is ignored)
     """
     key = condition["condition_key"]
     ctype = condition.get("condition_type", "bool")
 
     def router(state: RetrievalState) -> str:
+        if ctype == "tool_route":
+            calls = state.get("tool_calls") or []
+            if any(is_builtin_tool(c.get("name", "")) for c in calls):
+                label = "builtin"
+            else:
+                label = "caller" if calls else "none"
+            return (
+                routes.get(label)
+                or routes.get("__default__")
+                or next(iter(routes.values()))
+            )
         val = state.get(key, state.get("scratch", {}).get(key))
         if ctype == "value":
             label = "" if val is None else str(val)
@@ -65,6 +82,8 @@ def _build_node_fn(node_type: str, node_id: str):
         return retrieval(node_id)
     if node_type == "WEB_SEARCH":
         return web_search(node_id)
+    if node_type == "TOOL_EXECUTOR":
+        return tool_executor(node_id)
     if node_type == "RESPONSE_GENERATOR_WITH_REFLECTION":
         return make_reflection_node(node_type, node_id)
     return make_llm_node(node_type, node_id)

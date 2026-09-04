@@ -44,10 +44,19 @@ def get_llm(
             logger.error("LLM factory: openai_api_key is MISSING in credentials")
         else:
             logger.info("LLM factory: openai_api_key present (len=%d)", len(key))
+        kwargs = {}
+        # gpt-5 family: reasoning is on by default and /v1/chat/completions
+        # rejects function tools + reasoning ("use /v1/responses or set
+        # reasoning_effort to 'none'"). The Responses API supports both, so
+        # route the whole family there. langchain-openai only auto-routes the
+        # -pro variants it knows about, which lags behind new model releases.
+        if (resolved_model or "").startswith("gpt-5"):
+            kwargs["use_responses_api"] = True
         return ChatOpenAI(
             model=resolved_model,
             api_key=key,
             max_tokens=max_tokens,
+            **kwargs,
         )
 
     elif provider == "gemini":
