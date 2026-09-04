@@ -250,6 +250,8 @@ class RetrievalServerClient(
             val text = root["generated_response"]?.jsonPrimitive?.content
             val usageObj = root["usage"]?.jsonObject
             val toolCallsElement = root["tool_calls"]?.takeIf { it !is kotlinx.serialization.json.JsonNull }
+            val artifactsElement = root["generated_artifacts"]
+                ?.takeIf { it is kotlinx.serialization.json.JsonArray && it.isNotEmpty() }
             RetrievalResult(
                 text = text,
                 inputTokens = usageObj?.get("input_tokens")?.jsonPrimitive?.intOrNull,
@@ -258,6 +260,7 @@ class RetrievalServerClient(
                 tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
                 tokensWrittenToCache = usageObj?.get("cache_creation_tokens")?.jsonPrimitive?.intOrNull,
                 toolCallsJson = toolCallsElement?.toString(),
+                generatedArtifactsJson = artifactsElement?.toString(),
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to call retrieval server (non-streaming)" }
@@ -389,6 +392,12 @@ class RetrievalServerClient(
                                 val webSources = jsonObj["web_sources"]
                                 if (webSources != null && webSources !is kotlinx.serialization.json.JsonNull) {
                                     send(StreamChunk.WebSources(webSources.toString()))
+                                }
+                            }
+                            jsonObj.containsKey("generated_artifacts") -> {
+                                val artifacts = jsonObj["generated_artifacts"]
+                                if (artifacts != null && artifacts !is kotlinx.serialization.json.JsonNull) {
+                                    send(StreamChunk.GeneratedArtifacts(artifacts.toString()))
                                 }
                             }
                             jsonObj.containsKey("tool_calls") -> {

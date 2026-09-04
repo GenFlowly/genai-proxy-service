@@ -60,6 +60,25 @@ class RetrievalState(TypedDict):
     # ToolMessages directly after the assistant turn that made the calls.
     query_tool_results: list
 
+    # Built-in tool names (graph_tools registry) enabled for this request —
+    # derived from the graph's TOOL_EXECUTOR node config. The response
+    # generator binds their specs alongside caller-defined tools; the
+    # TOOL_EXECUTOR node executes their calls in-graph.
+    builtin_tools: list
+
+    # In-graph agent-loop turns for the CURRENT request, appended after the
+    # current user message on each generator run:
+    #   {role: "assistant", content, tool_calls} — the turn that made the calls
+    #   {role: "tool", tool_call_id, content}    — each executed result
+    # Written by the TOOL_EXECUTOR node; distinct from query_tool_results,
+    # which replays caller-executed results from the previous API request.
+    loop_messages: Annotated[list, _append_list]
+
+    # Files produced by built-in tools this request: [{artifact_id, key,
+    # media_type, filename, size_bytes}, ...]. The proxy server persists them
+    # as attachments on the assistant message.
+    generated_artifacts: Annotated[list, _append_list]
+
     # JSON Schema the response generator's output must conform to (structured
     # output). Only the response-generator node honors it; mutually exclusive
     # with tools. None → free-text generation.

@@ -182,6 +182,62 @@ describe('generateTextStreamService', () => {
         expect(onThinkingStep).not.toHaveBeenCalled();
     });
 
+    test('generateTextStream normalizes "ga" generated-attachment chunks into AttachmentRefs', async () => {
+        const encoder = new TextEncoder();
+        const gaPayload = [
+            {
+                artifact_id: 'abc-123',
+                key: 'customers/CU1/attachments/abc-123',
+                media_type: 'application/pdf',
+                filename: 'report.pdf',
+                size_bytes: 15417
+            },
+            { filename: 'no-id-so-dropped.pdf' }
+        ];
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ga","v":${JSON.stringify(gaPayload)}}\n`) })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"Your PDF is ready"}\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            headers: new Map(),
+            body: { getReader: () => mockReader }
+        });
+
+        const onDelta = jest.fn();
+        const onGeneratedAttachments = jest.fn();
+        await generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            onDelta,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            onGeneratedAttachments
+        );
+
+        expect(onGeneratedAttachments).toHaveBeenCalledTimes(1);
+        expect(onGeneratedAttachments).toHaveBeenCalledWith([
+            {
+                attachmentId: 'abc-123',
+                s3Key: 'customers/CU1/attachments/abc-123',
+                mediaType: 'application/pdf',
+                filename: 'report.pdf',
+                sizeBytes: 15417
+            }
+        ]);
+        // Attachment chunks never leak into the answer text
+        expect(onDelta).toHaveBeenCalledTimes(1);
+        expect(onDelta).toHaveBeenCalledWith('Your PDF is ready');
+    });
+
     test('generateTextStream throws error on non-ok response', async () => {
         mockFetchWithRetry.mockResolvedValue({
             ok: false,

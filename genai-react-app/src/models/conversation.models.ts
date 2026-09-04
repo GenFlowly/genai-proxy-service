@@ -91,6 +91,13 @@ export interface Message {
      * via the "ws" chunk and persisted in DDB; absent when no web search ran.
      */
     webSources?: WebSource[] | null
+    /**
+     * Files built-in tools produced during the turn (e.g. PDFs from
+     * generate_pdf), stored in the attachments bucket. Streamed live via the
+     * "ga" chunk and persisted on the assistant message; download URLs are
+     * fetched on demand via the attachments endpoint.
+     */
+    generatedAttachments?: AttachmentRef[] | null
     inputTokens?: number | null
     outputTokens?: number | null
     totalTokens?: number | null

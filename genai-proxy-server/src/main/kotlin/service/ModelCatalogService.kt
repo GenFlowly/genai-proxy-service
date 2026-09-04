@@ -112,7 +112,13 @@ class ModelCatalogService(
             return cached.entry
         }
         val entry = try {
+            // Alias model ids (e.g. "claude-opus-4-5") often aren't in the
+            // LiteLLM-sourced catalog, which lists dated snapshots — fall back
+            // to the newest dated variant (identical limits and pricing).
             modelCatalogRepository.getModelCatalogEntry(vendor.name, model)
+                ?: modelCatalogRepository.findLatestDatedVariant(vendor.name, model)?.also {
+                    logger.info { "Catalog: alias ${vendor.name}/$model resolved to dated variant ${it.model}" }
+                }
         } catch (e: Exception) {
             logger.warn(e) { "Model catalog lookup failed for ${vendor.name}/$model" }
             // Don't poison the negative cache on transient DDB errors

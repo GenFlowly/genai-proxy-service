@@ -45,5 +45,11 @@ data class GenerateTextResponse(
      * extraction): [{"memoryId","text"}]. null = still pending/unknown;
      * empty array = terminal, nothing learned.
      */
-    val learnedFacts: kotlinx.serialization.json.JsonElement? = null
+    val learnedFacts: kotlinx.serialization.json.JsonElement? = null,
+    /**
+     * Files built-in tools produced during the turn (e.g. PDFs from
+     * generate_pdf), persisted as attachments on the assistant message. Fetch
+     * a download URL via GET /attachments/{attachmentId}/url.
+     */
+    val generatedAttachments: List<AttachmentRef> = emptyList()
 )
