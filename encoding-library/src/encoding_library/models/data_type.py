@@ -5,3 +5,4 @@ class DataType(Enum):
     NOTE = "NOTE"
     MEMORY = "MEMORY"
     CONVERSATION = "CONVERSATION"
+    INSTRUCTION = "INSTRUCTION"

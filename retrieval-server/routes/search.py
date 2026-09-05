@@ -25,6 +25,7 @@ _GROUP_FIELD_BY_TYPE = {
     "conversation": "conversation_key",
     "notes": "note_key",
     "memory": "memory_key",
+    "instructions": "instruction_key",
     # "email": rows are one-per-email already (id = message_id)
 }
 
@@ -34,6 +35,7 @@ _GROUP_FIELD_BY_TYPE = {
 _OUTPUT_FIELDS = [
     "note_value", "title", "subject", "client", "created_at", "date",
     "conversation_key", "message_key", "note_key", "memory_key",
+    "instruction_key", "version", "category",
     "from_email", "folder",
 ]
 

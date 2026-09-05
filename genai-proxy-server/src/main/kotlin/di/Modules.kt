@@ -131,7 +131,7 @@ fun appModule(): Module = module {
     single { GenerationAgentExecutor(get(), get(), get(), get(), get(), get()) }
     single { RequestAgentMapAdminService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
-    single { InstructionService(get(), get(), get(), get(), get(), get(), get()) }
+    single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }

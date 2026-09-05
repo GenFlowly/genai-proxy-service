@@ -49,12 +49,14 @@ fun Route.registerCreateInstructionRoutes(
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val request = call.receive<CreateInstructionRequest>()
+                val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
 
                 val response = instructionService.createInstructionWithGeneratedPersona(
                     customerId = customerId,
                     instructionName = request.instructionName,
                     instruction = request.instruction,
-                    existingInstructionId = request.existingInstructionId
+                    existingInstructionId = request.existingInstructionId,
+                    bearerToken = token
                 )
 
                 call.respond(response)
