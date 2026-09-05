@@ -117,6 +117,15 @@ export class ApiGatewayStack extends cdk.Stack {
             authorizer: authorizer,
         });
 
+        // Instructions share the same ingest handler — the payload's
+        // dataType (INSTRUCTION) selects the processor/collection downstream.
+        this.api.addRoutes({
+            path: '/encode-instructions',
+            methods: [apigatewayv2.HttpMethod.POST],
+            integration: ingestNotesIntegration,
+            authorizer: authorizer,
+        });
+
         const createCollectionsIntegration = new HttpLambdaIntegration(
             'CreateCollectionsIntegration',
             props.createCollectionsLambda

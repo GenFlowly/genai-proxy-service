@@ -41,6 +41,11 @@ def _discover_collections(
         # generation context would need its own product decision.
         if name.startswith(f"{customer_id}_conversation"):
             continue
+        # Instruction collections back semantic instruction search only —
+        # instruction (persona) text is not knowledge and must not be
+        # injected into generation context.
+        if name.startswith(f"{customer_id}_instructions"):
+            continue
         model = resolve_model(*fallback_model)
         try:
             meta = parse_collection_description(client.describe_collection(name).get("description"))

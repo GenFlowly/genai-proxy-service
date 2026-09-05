@@ -17,8 +17,13 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import com.genflowly.EmbeddingConstants
 import com.genflowly.models.GeneratedPersona
 import com.genflowly.models.RequestType
+import com.genflowly.models.encoding.EncodingInstructionData
+import com.genflowly.models.encoding.EncodingSaveInstructionRequest
+import com.genflowly.providers.EncodingServerClient
+import com.genflowly.providers.RetrievalServerClient
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -35,6 +40,8 @@ class InstructionService(
     private val sharedUsersResolver: SharedUsersResolver,
     private val agentResolutionService: AgentResolutionService,
     private val generationAgentExecutor: GenerationAgentExecutor,
+    private val encodingServerClient: EncodingServerClient,
+    private val retrievalServerClient: RetrievalServerClient,
     private val appScope: AppScope
 ) {
 
@@ -123,7 +130,8 @@ class InstructionService(
         icon: String? = null,
         color: String? = null,
         tags: List<String>? = null,
-        category: String? = null
+        category: String? = null,
+        bearerToken: String? = null
     ): InstructionResponse {
         var instructionId = existingInstructionId
         var version = 1
@@ -172,6 +180,15 @@ class InstructionService(
 
         instructionRepository.saveInstruction(newInstruction)
 
+        // Push the new version into the embedding pipeline (semantic search
+        // index). Only when the caller is the creator: the encoding server
+        // resolves the collection from the caller's token, and each customer's
+        // instructions collection indexes only instructions they created.
+        // Fire-and-forget — indexing is best-effort; DDB is the source of truth.
+        if (bearerToken != null && creator == customerId) {
+            encodeInstructionAsync(customerId, newInstruction, bearerToken)
+        }
+
         return InstructionResponse(
             id = newInstruction.id,
             name = newInstruction.name,
@@ -185,6 +202,40 @@ class InstructionService(
         )
     }
 
+    /** Async push of an instruction version into the embedding pipeline. */
+    private fun encodeInstructionAsync(
+        customerId: String,
+        instruction: com.genflowly.models.Instruction,
+        bearerToken: String
+    ) {
+        appScope.launch {
+            try {
+                val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
+                encodingServerClient.encodeInstruction(
+                    EncodingSaveInstructionRequest(
+                        client = "instruction",
+                        modelType = EmbeddingConstants.MODEL_TYPE,
+                        modelName = prefs?.embeddingModel ?: EmbeddingConstants.MODEL_NAME,
+                        data = EncodingInstructionData(
+                            instruction_id = instruction.id,
+                            instructionId = instruction.id,
+                            version = instruction.version ?: 1,
+                            name = instruction.name,
+                            instructions = instruction.instructions,
+                            category = instruction.category,
+                            tags = instruction.tags,
+                            created_at = java.time.Instant.now().toString(),
+                            createdAt = java.time.Instant.now().toString()
+                        )
+                    ),
+                    bearerToken
+                )
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to push instruction ${instruction.id} to embedding pipeline" }
+            }
+        }
+    }
+
     /**
      * Generates persona metadata (icon, color, tags, category — and the name
      * unless one was provided) via AI, then creates the instruction/version.
@@ -193,7 +244,8 @@ class InstructionService(
         customerId: String,
         instructionName: String?,
         instruction: String,
-        existingInstructionId: String?
+        existingInstructionId: String?,
+        bearerToken: String? = null
     ): InstructionResponse {
         // Always generate the persona metadata (icon, color, tags) via AI
         val generatedPersona = generateInstructionPersona(instruction, customerId)
@@ -209,7 +261,8 @@ class InstructionService(
             icon = generatedPersona.icon,
             color = generatedPersona.color,
             tags = generatedPersona.tags,
-            category = generatedPersona.category
+            category = generatedPersona.category,
+            bearerToken = bearerToken
         )
     }
 
@@ -286,22 +339,44 @@ class InstructionService(
     }
 
     /**
-     * Case-insensitive search over the latest version of every instruction the
-     * customer can access, matching name, category, tags or the instruction
-     * text. A blank query returns all latest instructions.
+     * Search over the latest version of every instruction the customer can
+     * access. Combines semantic hits from the vector index (the customer's
+     * own instructions, ranked by similarity) with the case-insensitive
+     * lexical match on name, category, tags or instruction text; semantic
+     * hits rank first, lexical-only matches follow. A blank query returns
+     * all latest instructions. The vector index is best-effort — on any
+     * failure this degrades to pure lexical search.
      */
     suspend fun searchInstructions(customerId: String, query: String): GetCustomerInstructionListResponse {
         val latest = getLatestCustomerInstructions(customerId)
         val q = query.trim().lowercase()
 
-        val matches = if (q.isEmpty()) latest else latest.filter { instruction ->
+        if (q.isEmpty()) {
+            return GetCustomerInstructionListResponse(instructions = latest)
+        }
+
+        val lexicalMatches = latest.filter { instruction ->
             instruction.name.lowercase().contains(q) ||
                 (instruction.category?.lowercase()?.contains(q) ?: false) ||
                 (instruction.tags?.any { it.lowercase().contains(q) } ?: false) ||
                 instruction.instruction.lowercase().contains(q)
         }
 
-        return GetCustomerInstructionListResponse(instructions = matches)
+        // Semantic hits carry instruction ids (the index's grouping key);
+        // hydrate them from the accessible-latest set so deleted or unshared
+        // instructions are silently dropped and content comes from DDB.
+        val accessibleById = latest.associateBy { it.id }
+        val semanticMatches = try {
+            retrievalServerClient
+                .search(customerId, query.trim(), topN = SEMANTIC_SEARCH_TOP_N, types = listOf("instructions"))
+                .mapNotNull { accessibleById[it.key] }
+        } catch (e: Exception) {
+            logger.warn { "Semantic instruction search failed for $customerId, falling back to lexical: ${e.message}" }
+            emptyList()
+        }
+
+        val merged = (semanticMatches + lexicalMatches).distinctBy { it.id }
+        return GetCustomerInstructionListResponse(instructions = merged)
     }
 
     /**
@@ -370,6 +445,16 @@ class InstructionService(
             val instruction = instructionRepository.getInstruction(instructionId, latestVersion)
             if (instruction != null && instruction.creator == customerId) {
                 instructionRepository.deleteInstruction(instructionId)
+                // Hard-delete its embeddings asynchronously (same fire-and-forget
+                // convention as notes); a failure leaves orphaned vectors but
+                // never blocks or fails the delete itself.
+                appScope.launch {
+                    try {
+                        retrievalServerClient.deleteInstructionVectors(customerId, instructionId)
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error deleting vectors for instruction $instructionId" }
+                    }
+                }
             } else {
                 throw SecurityException("Customer $customerId does not own instruction $instructionId or it does not exist")
             }
@@ -464,6 +549,10 @@ class InstructionService(
 
     companion object {
         private val jsonParser = Json { ignoreUnknownKeys = true }
+
+        // Chunk hits collapse to one entry per instruction, so a modest
+        // fan-out is enough to cover the accessible set.
+        private const val SEMANTIC_SEARCH_TOP_N = 25
 
         /** JSON Schema for [GeneratedPersona] — vendor-enforced during persona generation. */
         private val PERSONA_SCHEMA: JsonObject = buildJsonObject {

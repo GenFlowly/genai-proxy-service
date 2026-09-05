@@ -20,6 +20,11 @@ class DeleteMemoryVectorsRequest(BaseModel):
     memory_key: str
 
 
+class DeleteInstructionVectorsRequest(BaseModel):
+    customer_id: str
+    instruction_key: str
+
+
 def _escape_filter_value(value: str) -> str:
     """Escape a string for safe interpolation into a Milvus filter expression."""
     return value.replace("\\", "\\\\").replace('"', '\\"')
@@ -103,3 +108,42 @@ async def delete_memory_vectors(req: DeleteMemoryVectorsRequest):
         logger.error("Failed to delete memory vectors for customer=%s memory_key=%s: %s",
                      req.customer_id, req.memory_key, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to delete memory vectors")
+
+
+@router.post("/delete-instruction-vectors")
+async def delete_instruction_vectors(req: DeleteInstructionVectorsRequest):
+    """
+    Hard-delete every vector chunk of an instruction from the customer's vector
+    DB. Instruction collections are named '{customer_id}_instructions_{model_name}'.
+    """
+    if not req.customer_id or not req.instruction_key:
+        raise HTTPException(status_code=400, detail="customer_id and instruction_key are required")
+
+    logger.info("Deleting instruction vectors — customer=%s instruction_key=%s",
+                req.customer_id, req.instruction_key)
+
+    try:
+        client = get_milvus_client(req.customer_id)
+        instructions_prefix = f"{req.customer_id}_instructions"
+        instruction_filter = f'instruction_key == "{_escape_filter_value(req.instruction_key)}"'
+
+        deleted_counts: dict[str, int] = {}
+        for collection_name in client.list_collections():
+            if not collection_name.startswith(instructions_prefix):
+                continue
+            result = client.delete(collection_name=collection_name, filter=instruction_filter)
+            delete_count = result.get("delete_count", 0) if hasattr(result, "get") else 0
+            deleted_counts[collection_name] = delete_count
+            logger.info(
+                "Deleted %s vectors for instruction_key=%s from collection '%s'",
+                delete_count, req.instruction_key, collection_name,
+            )
+
+        if not deleted_counts:
+            logger.info("No instruction collections found for customer %s; nothing to delete", req.customer_id)
+
+        return {"status": "success", "deleted": deleted_counts}
+    except Exception as e:
+        logger.error("Failed to delete instruction vectors for customer=%s instruction_key=%s: %s",
+                     req.customer_id, req.instruction_key, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete instruction vectors")

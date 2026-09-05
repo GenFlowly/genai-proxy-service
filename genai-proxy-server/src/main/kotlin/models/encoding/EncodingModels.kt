@@ -80,6 +80,34 @@ data class EncodingSaveConversationRequest(
     val data: EncodingConversationData
 )
 
+/**
+ * Wire format for an instruction (persona) version pushed into the embedding
+ * pipeline. Same dual-case convention as [EncodingNoteData] for the server's
+ * mixed readers. Only the latest version is indexed — the encoding server
+ * replaces the instruction's prior chunks on every push.
+ */
+@Serializable
+data class EncodingInstructionData(
+    val instruction_id: String,
+    val instructionId: String,
+    val version: Int,
+    val name: String,
+    val instructions: String,
+    val category: String? = null,
+    val tags: List<String>? = null,
+    val created_at: String,
+    val createdAt: String
+)
+
+@Serializable
+data class EncodingSaveInstructionRequest(
+    val dataType: String = "INSTRUCTION",
+    val client: String,
+    val modelType: String? = null,
+    val modelName: String? = null,
+    val data: EncodingInstructionData
+)
+
 @Serializable
 data class EncodingSaveNoteRequest(
     val dataType: String,
