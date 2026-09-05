@@ -32,6 +32,7 @@ export interface LambdaStackProps extends cdk.StackProps {
     customerProfileTableName: string;
     customerVectorDBConfigTableName: string;
     customerNotesTableName: string;
+    instructionsTableName: string;
     voyageApiKey?: string;
 }
 
@@ -59,6 +60,7 @@ export class LambdaStack extends cdk.Stack {
             grantIndexPermissions: true,
         });
         const NOTES_EMBEDDING_STATUS_INDEX = 'embedding-status-index';
+        const instructionsTable = dynamodb.Table.fromTableName(this, 'InstructionsTable', props.instructionsTableName);
 
         /**
          * Ingest Email Lambda
@@ -176,11 +178,17 @@ export class LambdaStack extends cdk.Stack {
                 ZILLIZ_ENDPOINT: props.zillizEndpoint,
                 ZILLIZ_TOKEN: props.zillizToken,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
+                CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
+                INSTRUCTIONS_TABLE: props.instructionsTableName,
             },
         });
 
         // Expose cryptographic arrays perfectly mapping AWS natively safely
         customerVectorDBConfigTable.grantReadData(this.storeEmbeddingsLambda);
+        // Store step marks NOTE rows synced and stamps INSTRUCTION rows with
+        // their milvus_ids after insertion.
+        customerNotesTable.grantReadWriteData(this.storeEmbeddingsLambda);
+        instructionsTable.grantReadWriteData(this.storeEmbeddingsLambda);
         this.storeEmbeddingsLambda.addToRolePolicy(new iam.PolicyStatement({
             actions: ['kms:Decrypt'],
             resources: ['*'],
