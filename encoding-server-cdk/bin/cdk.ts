@@ -39,6 +39,7 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     customerProfileTableName: process.env.CUSTOMER_PROFILE_TABLE_NAME || 'CustomerProfile',
     customerVectorDBConfigTableName: process.env.CUSTOMER_VECTOR_DB_CONFIG_TABLE_NAME || 'CustomerVectorDBConfig',
     customerNotesTableName: process.env.CUSTOMER_NOTES_TABLE_NAME || 'CustomerNotes',
+    instructionsTableName: process.env.INSTRUCTIONS_TABLE_NAME || 'Instructions',
     voyageApiKey: process.env.VOYAGE_API_KEY,
 });
 

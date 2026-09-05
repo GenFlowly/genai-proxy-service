@@ -1,6 +1,7 @@
 from encoding_library.processors.conversation_processor import ConversationProcessor
 from encoding_library.processors.data_processor import DataProcessor
 from encoding_library.processors.email_processor import EmailProcessor
+from encoding_library.processors.instruction_processor import InstructionProcessor
 from encoding_library.processors.memory_processor import MemoryProcessor
 from encoding_library.processors.note_processor import NoteProcessor
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
@@ -31,6 +32,8 @@ class ProcessorFactory:
                     return MemoryProcessor()
                 elif data_type_enum == DataType.CONVERSATION:
                     return ConversationProcessor()
+                elif data_type_enum == DataType.INSTRUCTION:
+                    return InstructionProcessor()
 
             except ValueError:
                 pass

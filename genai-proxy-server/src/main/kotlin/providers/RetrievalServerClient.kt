@@ -608,6 +608,25 @@ class RetrievalServerClient(
     }
 
     /**
+     * Hard-deletes an instruction's embeddings in the vector DB via
+     * /delete-instruction-vectors. Throws on transport errors — callers
+     * decide whether that is fatal.
+     */
+    suspend fun deleteInstructionVectors(customerId: String, instructionId: String): Boolean {
+        val response = httpClient.post("$retrievalServerUrl/delete-instruction-vectors") {
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(DeleteInstructionVectorsPayload(customer_id = customerId, instruction_key = instructionId)))
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            logger.error { "Failed to delete vectors for instruction $instructionId: ${response.status} $errorBody" }
+            return false
+        }
+        logger.info { "Successfully deleted vectors for instruction $instructionId" }
+        return true
+    }
+
+    /**
      * Hard-deletes a memory's embeddings in the vector DB via
      * /delete-memory-vectors. Throws on transport errors — callers decide
      * whether that is fatal.
@@ -632,6 +651,9 @@ private data class DeleteNoteVectorsPayload(val customer_id: String, val note_ke
 
 @Serializable
 private data class DeleteMemoryVectorsPayload(val customer_id: String, val memory_key: String)
+
+@Serializable
+private data class DeleteInstructionVectorsPayload(val customer_id: String, val instruction_key: String)
 
 @Serializable
 private data class SearchPayload(
