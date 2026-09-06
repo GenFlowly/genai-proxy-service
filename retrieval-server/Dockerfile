@@ -33,5 +33,8 @@ EXPOSE 5001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')" || exit 1
 
-CMD ["uvicorn", "app:app", "--host", "::", "--port", "5001", "--workers", "1"]
+# python app.py, not the uvicorn CLI: the app builds a dual-stack (v4+v6)
+# socket itself — `uvicorn --host ::` is IPv6-only, which breaks Fly's
+# IPv4 metrics scrape (see app.py __main__).
+CMD ["python", "app.py"]
 
