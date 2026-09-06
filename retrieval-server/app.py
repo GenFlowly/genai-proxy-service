@@ -71,7 +71,16 @@ async def health():
 
 
 if __name__ == "__main__":
+    import socket
+
     import uvicorn
+
     port = int(os.environ.get("PORT", 5001))
-    uvicorn.run(app, host="::", port=port)
+    # Dual-stack listener: uvicorn's own `--host ::` binds IPv6-ONLY (asyncio
+    # sets IPV6_V6ONLY), which made Fly's metrics scraper — which connects
+    # over the machine's private IPv4 — get connection-refused on /metrics,
+    # while proxy traffic (IPv6 via .internal) worked. One socket, both
+    # families.
+    sock = socket.create_server(("", port), family=socket.AF_INET6, dualstack_ipv6=True)
+    uvicorn.run(app, fd=sock.fileno())
 
