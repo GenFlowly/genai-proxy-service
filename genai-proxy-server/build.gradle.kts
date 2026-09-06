@@ -31,6 +31,13 @@ dependencies {
 
     implementation("io.ktor:ktor-server-cors:3.0.0")
     implementation("io.ktor:ktor-server-call-logging:3.0.0")
+    implementation("io.ktor:ktor-server-call-id:3.0.0")
+
+    // Metrics: Prometheus registry + /metrics, scraped by Fly's org Prometheus
+    implementation("io.ktor:ktor-server-metrics-micrometer:3.0.0")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.13.6")
+    // Structured JSON logs (Grafana/Loki-queryable), request_id via MDC
+    runtimeOnly("net.logstash.logback:logstash-logback-encoder:8.0")
 
     // OpenAPI spec generation from routes + Swagger UI
     implementation("io.github.smiley4:ktor-openapi:5.1.0")

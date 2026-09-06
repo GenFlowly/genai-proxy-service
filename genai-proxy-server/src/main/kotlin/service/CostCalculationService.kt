@@ -1,6 +1,8 @@
 package com.genflowly.service
 
 import com.genflowly.models.AIVendor
+import com.genflowly.observability.Metrics
+import com.genflowly.observability.metricVendor
 import mu.KotlinLogging
 import kotlin.math.roundToLong
 
@@ -49,6 +51,12 @@ class CostCalculationService(
 
         val entry = modelCatalogService.getCatalogEntry(vendor, model)
         if (entry?.inputCostPerMTok == null && entry?.outputCostPerMTok == null) {
+            // Alarmed on: these turns are silently missing from cost tracking.
+            Metrics.count(
+                "llm_cost_unpriced_total",
+                1.0,
+                "vendor" to vendor.metricVendor(), "model" to model,
+            )
             logger.warn { "No catalog pricing for ${vendor.name}/$model — costUsd not computed" }
             return null
         }
@@ -90,7 +98,15 @@ class CostCalculationService(
         }
 
         // 10 decimal places — far below a micro-cent, avoids float noise in DDB
-        return (cost * 1e10).roundToLong() / 1e10
+        val rounded = (cost * 1e10).roundToLong() / 1e10
+        // One emission point covers every caller (non-streaming, streaming,
+        // voice) — the exact-cost counter behind the spend dashboards/alarms.
+        Metrics.count(
+            "llm_cost_usd_total",
+            rounded,
+            "vendor" to vendor.metricVendor(), "model" to model,
+        )
+        return rounded
     }
 
     private fun perMTok(tokens: Int, ratePerMTok: Double): Double =

@@ -17,6 +17,9 @@ from encoding_library.utils.voyage_batch import (
     create_batch,
 )
 
+from encoding_library.observability import setup_logging, track
+
+setup_logging("encoding-server")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -157,6 +160,7 @@ def _submit_group(model_name: str, states: List[Dict[str, Any]], refs: List[Dict
     return batch_id
 
 
+@track("voyage_batch_accumulate")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Table-driven bulk accumulator. Sweeps CustomerNotes for notes marked

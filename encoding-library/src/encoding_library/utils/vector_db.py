@@ -4,6 +4,9 @@ import base64
 import boto3
 from typing import Tuple
 
+from encoding_library.observability import count
+from encoding_library.utils.retry import RetryingProxy, retry_call
+
 logger = logging.getLogger(__name__)
 
 region_name = os.environ.get('AWS_REGION', 'us-east-1')
@@ -54,6 +57,9 @@ def get_zilliz_credentials(customer_id: str) -> Tuple[str, str]:
     except Exception as e:
         logger.error(f"Failed to fetch Zilliz credentials for {customer_id}: {str(e)}")
         if GLOBAL_ZILLIZ_ENDPOINT and GLOBAL_ZILLIZ_TOKEN:
+            # Alarmed on: the customer may silently be querying the system
+            # vector DB instead of their own.
+            count("zilliz_credential_fallback_total")
             logger.info(f"Error fetching vector DB config for {customer_id} — using system's vector DB")
             return GLOBAL_ZILLIZ_ENDPOINT, GLOBAL_ZILLIZ_TOKEN
         raise e
@@ -72,14 +78,17 @@ def get_milvus_client(customer_id: str):
 
     try:
         from pymilvus import MilvusClient
-        client = MilvusClient(
+        client = retry_call(
+            MilvusClient,
             uri=zilliz_endpoint,
             token=zilliz_token,
             timeout=10.0,
-            secure=zilliz_endpoint.startswith("https://")
+            secure=zilliz_endpoint.startswith("https://"),
+            operation="milvus.connect",
         )
         logger.info(f"MilvusClient connected for customer {customer_id}")
-        return client
+        # Every Milvus call (search/insert/delete/...) retries with backoff.
+        return RetryingProxy(client, operation="milvus")
     except Exception as e:
         logger.error(f"Failed to connect to Milvus for customer {customer_id}: {e}")
         raise

@@ -6,6 +6,8 @@ from typing import Optional
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
+from encoding_library.observability import count
+
 logger = logging.getLogger(__name__)
 
 _dynamodb = None
@@ -113,7 +115,9 @@ def _get_cached(cache_key: str, loader) -> Optional[tuple[dict, list[dict]]]:
         return result
     except Exception:
         logger.exception("Failed to load graph for key=%s", cache_key)
-        # Serve stale data over failing the request when we have it.
+        # Serve stale data over failing the request when we have it — counted
+        # so a DynamoDB outage papered over by the cache still alarms.
+        count("graph_stale_serve_total")
         return cached[1] if cached else None
 
 

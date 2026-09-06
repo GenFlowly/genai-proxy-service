@@ -22,16 +22,23 @@ class VoyageContextualizedEmbeddings:
     def _call(self, inputs: List[List[str]], input_type: str) -> List[List[List[float]]]:
         import os
         import requests
+        from encoding_library.utils.retry import is_transient_http_error, retry_call
         api_key = os.environ.get("VOYAGE_API_KEY")
         if not api_key:
             raise ValueError("VOYAGE_API_KEY environment variable is not set")
-        response = requests.post(
-            self.ENDPOINT,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": self.model, "inputs": inputs, "input_type": input_type},
-            timeout=300,
-        )
-        response.raise_for_status()
+        def _post():
+            # raise_for_status inside the retried call so 429/5xx retry too,
+            # not just connection errors.
+            r = requests.post(
+                self.ENDPOINT,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": self.model, "inputs": inputs, "input_type": input_type},
+                timeout=300,
+            )
+            r.raise_for_status()
+            return r
+
+        response = retry_call(_post, operation="voyage", retry_if=is_transient_http_error)
         docs = sorted(response.json()["data"], key=lambda d: d["index"])
         return [
             [c["embedding"] for c in sorted(doc["data"], key=lambda c: c["index"])]
@@ -111,9 +118,12 @@ def create_embeddings(chunks: List[str], encoder: Any) -> List[Dict[str, Any]]:
     """
     if not chunks:
         return []
-        
-    # Encode chunks using native Langchain API implementation format
-    embeddings = encoder.embed_documents(chunks)
+
+    # Encode chunks using native Langchain API implementation format.
+    # Retried with backoff: hosted encoders (Voyage/OpenAI) are 3rd-party API
+    # calls; for local models a retry is a cheap no-op-on-success.
+    from encoding_library.utils.retry import retry_call
+    embeddings = retry_call(encoder.embed_documents, chunks, operation="embedding")
          
     # Format result
     result = []

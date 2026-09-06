@@ -6,15 +6,18 @@ from typing import Dict, Any
 from encoding_library.chunkers.enums import ChunkingType
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.processors.processor_factory import ProcessorFactory
+from encoding_library.observability import set_request_id, setup_logging, track
 from encoding_library.utils.embedding_utils import create_chunks, get_embedding_model
 from encoding_library.utils.model_registry import get_chunking_params
 
+setup_logging("encoding-server")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 BATCH_SIZE = int(os.environ.get('BATCH_SIZE', 25))
 
 
+@track("parse_and_chunk")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Parse and Chunk Lambda — first node in the Step Functions V2 pipeline.
@@ -25,6 +28,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Received parse-and-chunk request.")
 
         memory_request_internal_state = MemoryRequestInternalState.from_dict(event)
+        set_request_id(memory_request_internal_state.request_id)
 
         processor = ProcessorFactory.get_processor(memory_request_internal_state)
         text_to_encode = processor.get_text_to_encode(memory_request_internal_state)
@@ -77,6 +81,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 chunking_type=memory_request_internal_state.chunking_type,
                 chunking_technique=memory_request_internal_state.chunking_technique,
                 data_chunks=chunks[i:i + BATCH_SIZE],
+                request_id=memory_request_internal_state.request_id,
             )
             batches.append(batch_state.to_dict())
 

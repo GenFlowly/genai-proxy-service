@@ -29,9 +29,11 @@ Anthropic has no realtime voice API, so "claude" is not a valid provider here.
 import asyncio
 import json
 import logging
+import time
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from encoding_library.observability import count, observe
 from voice.graph_tool import make_graph_tool_executor
 
 logger = logging.getLogger(__name__)
@@ -106,6 +108,7 @@ async def handle_voice_session(websocket: WebSocket) -> None:
     try:
         await adapter.start()
     except Exception as e:
+        count("voice_session_total", status="connect_failed", vendor=provider)
         logger.error("Voice adapter start failed (provider=%s): %s", provider, e, exc_info=True)
         return await fail(f"Failed to connect to {provider}: {e}")
 
@@ -121,6 +124,8 @@ async def handle_voice_session(websocket: WebSocket) -> None:
         init.get("customer_id"), provider, adapter.model,
     )
 
+    session_start = time.perf_counter()
+    session_status = "ok"
     reader = asyncio.create_task(adapter.run())
     try:
         while True:
@@ -140,8 +145,11 @@ async def handle_voice_session(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         logger.info("Voice session client disconnected: customer=%s", init.get("customer_id"))
     except Exception as e:
+        session_status = "error"
         logger.error("Voice session failed: %s", e, exc_info=True)
     finally:
+        count("voice_session_total", status=session_status, vendor=provider)
+        observe("voice_session_duration_seconds", time.perf_counter() - session_start, vendor=provider)
         reader.cancel()
         try:
             await adapter.close()
