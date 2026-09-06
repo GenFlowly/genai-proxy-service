@@ -5,7 +5,7 @@ from pymilvus import MilvusClient
 
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
-from encoding_library.observability import count, setup_logging, track
+from encoding_library.observability import count, set_request_id, setup_logging, track
 from encoding_library.utils.vector_db import get_milvus_client
 
 setup_logging("encoding-server")
@@ -21,6 +21,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         memory_request_internal_state = MemoryRequestInternalState.from_dict(event)
+        set_request_id(memory_request_internal_state.request_id)
         customer_id = memory_request_internal_state.customer_id
         if not customer_id:
             raise ValueError("customer_id is missing from the payload")

@@ -4,8 +4,11 @@ import boto3
 import logging
 from typing import Dict, Any
 
+from encoding_library.observability import set_request_id, setup_logging, track
+
 # Trigger build - separated ECR repos
 
+setup_logging("encoding-server")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -15,6 +18,7 @@ STATE_MACHINE_ARN = os.environ.get('STATE_MACHINE_ARN')
 if not STATE_MACHINE_ARN:
     raise ValueError("STATE_MACHINE_ARN environment variable is required")
 
+@track("trigger_ingestion")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Trigger Handler
@@ -31,6 +35,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             try:
                 # Parse message body
                 body = json.loads(record['body'])
+                # Correlate this record's logs with the originating API request
+                set_request_id(body.get('request_id'))
                 
                 # Check if body is already a MemoryRequestInternalState (has customer_id)
                 # Note: MemoryRequestInternalState uses 'customer_id', but ingestion may use 'customerId'

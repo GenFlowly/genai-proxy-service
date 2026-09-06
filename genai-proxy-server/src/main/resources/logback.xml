@@ -1,7 +1,18 @@
 <configuration>
+    <!-- Structured JSON lines (one object per line), field names aligned with
+         the Python services' JSON logs (encoding_library.observability):
+         timestamp / level / logger / message / service, plus MDC fields
+         (request_id from the CallId plugin). -->
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <logger>logger</logger>
+                <thread>[ignore]</thread>
+                <version>[ignore]</version>
+                <levelValue>[ignore]</levelValue>
+            </fieldNames>
+            <customFields>{"service":"genai-proxy-server"}</customFields>
         </encoder>
     </appender>
     <root level="INFO">

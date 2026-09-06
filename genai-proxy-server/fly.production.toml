@@ -18,6 +18,12 @@ primary_region = "iad"
   min_machines_running = 1
   processes = ["app"]
 
+# Fly's org Prometheus scrapes /metrics directly over the private network.
+# The route itself 404s for traffic arriving through fly-proxy (public).
+[metrics]
+  port = 8080
+  path = "/metrics"
+
 [[vm]]
   size = "shared-cpu-2x"
   memory = "2048mb"

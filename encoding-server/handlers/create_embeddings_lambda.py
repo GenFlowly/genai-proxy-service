@@ -3,7 +3,7 @@ import logging
 from typing import Dict, Any
 
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
-from encoding_library.observability import count, setup_logging, track
+from encoding_library.observability import count, set_request_id, setup_logging, track
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 
 setup_logging("encoding-server")
@@ -22,6 +22,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         # Deserialize batch systematically into standard state representation
         memory_request_internal_state = MemoryRequestInternalState.from_dict(event)
+        set_request_id(memory_request_internal_state.request_id)
         
         chunks = memory_request_internal_state.data_chunks
         if not chunks:
