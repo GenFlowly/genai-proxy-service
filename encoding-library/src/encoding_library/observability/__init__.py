@@ -18,7 +18,13 @@ for naming and dimension conventions):
     observe("llm_request_duration_seconds", elapsed, vendor="anthropic")
 """
 from .decorators import track
-from .logging_util import JsonFormatter, request_id_var, set_request_id, setup_logging
+from .logging_util import (
+    JsonFormatter,
+    request_id_from_lambda_event,
+    request_id_var,
+    set_request_id,
+    setup_logging,
+)
 from .metrics import ALLOWED_DIMENSIONS, configure_observability, count, observe
 
 __all__ = [
@@ -27,6 +33,7 @@ __all__ = [
     "configure_observability",
     "count",
     "observe",
+    "request_id_from_lambda_event",
     "request_id_var",
     "set_request_id",
     "setup_logging",
