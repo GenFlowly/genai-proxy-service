@@ -162,6 +162,65 @@ To connect your AWS API Gateway URLs to your custom domain DNS in Cloudflare, fo
    - *(Note: Ensure your overall SSL/TLS encryption mode in Cloudflare is set to **Full (Strict)** so the connection between Cloudflare and AWS is encrypted!)*
 
 
+### 9. Observability Setup (Grafana Cloud)
+
+All backends emit metrics and structured JSON logs (conventions: `genai-proxy-server/development.md` → "Observability"; per-service guides in `retrieval-server/development.md` and `encoding-server/development.md`). Two datasources in Grafana Cloud cover everything:
+
+- **Fly Prometheus** — proxy + retrieval-server. Fly's org Prometheus scrapes each app's private `/metrics` endpoint (the `[metrics]` block in their `fly.toml`s); nothing is exposed publicly.
+- **CloudWatch** — encoding lambdas. Handlers print EMF JSON lines; CloudWatch turns them into metrics under the custom namespace **`GenFlowly`**.
+
+**1. Create the Grafana Cloud stack** (free tier) at grafana.com — you get `https://<name>.grafana.net`. Dashboards, datasources and alert rules all live there.
+
+*Zero-setup sanity check:* log into **fly-metrics.net** with your Fly account — Fly's hosted Grafana already shows the app metrics before any of the steps below.
+
+**2. Fly Prometheus datasource** (proxy + retrieval-server metrics):
+```bash
+fly orgs list                              # note your org slug
+fly tokens create readonly --org <slug>    # read-only token for the datasource
+```
+In Grafana: **Connections → Data sources → Add → Prometheus**
+- URL: `https://api.fly.io/prometheus/<org-slug>/`
+- HTTP header `Authorization`: `FlyV1 <token>` for `fm...` tokens (the readonly kind), or `Bearer <token>` for a personal `fly auth token`
+- Save & test, then in Explore query `llm_cost_usd_total` or `vector_retrieval_total` — series from `service="genai-proxy-server"` and `service="retrieval-server"` should appear.
+
+**3. CloudWatch datasource** (lambda metrics + Logs Insights):
+
+Use **Grafana Assume Role** auth — an ExternalId-gated cross-account role, no static keys. (Never create an IAM user with access keys for this: a long-lived key can read CloudWatch *Logs*, which contain customer data, and never expires if leaked.)
+
+In Grafana, **Add data source → CloudWatch** → Authentication Provider: **Grafana Assume Role** — it displays your stack's **ExternalId**. Then create the role (per AWS account — repeat in dev and prod):
+```bash
+cat > /tmp/grafana-trust.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"AWS": "arn:aws:iam::008923505280:root"},
+    "Action": "sts:AssumeRole",
+    "Condition": {"StringEquals": {"sts:ExternalId": "<YOUR_GRAFANA_EXTERNAL_ID>"}}
+  }]
+}
+EOF
+aws iam create-role --role-name GrafanaCloudWatchReadOnly \
+  --assume-role-policy-document file:///tmp/grafana-trust.json
+aws iam attach-role-policy --role-name GrafanaCloudWatchReadOnly \
+  --policy-arn arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+```
+(`008923505280` is Grafana Labs' AWS account — confirm it matches the ARN shown in the datasource UI. The ExternalId condition stops any other Grafana customer from assuming your role.)
+
+Back in the datasource config:
+- **Assume Role ARN**: `arn:aws:iam::<account-id>:role/GrafanaCloudWatchReadOnly`
+- Default region: `us-east-1`
+- **Namespaces of Custom Metrics**: `GenFlowly` — the namespace the shared library's EMF emitter publishes under (`encoding_library/observability/metrics.py`). AWS's own namespaces autocomplete automatically; custom ones must be listed here (comma-separated if more are added later). Only affects autocomplete — namespaces can always be typed manually in a query.
+- **Query Result Timeout**: `5m` — applies to CloudWatch Logs Insights queries only (Grafana polls until the async query completes). Our log groups are small, so queries finish in seconds; a short cap makes stuck queries fail fast. Raise it if a legitimate query ever hits the limit.
+- **Application Signals trace link**: leave blank/disabled — we don't run X-Ray/Application Signals; cross-service correlation is done via the `request_id` log field instead.
+- Test in Explore: namespace `GenFlowly` → e.g. `vector_store_total`. AWS built-ins (`AWS/Lambda` Errors/Duration, `AWS/SQS` queue depth/DLQ) work immediately; custom metrics only exist once a lambda has run since the instrumented deploy.
+
+Add one CloudWatch datasource per AWS account (dev `571600870493`, prod `189979486945`), each pointing at that account's role ARN. Revoke access at any time by deleting the role.
+
+**4. Alerting**: **Alerting → Contact points** — the default email contact point works out of the box; add Slack via webhook if desired. Alert rules can target either datasource (free tier includes alerting).
+
+Both datasources are read-only: the Fly token can't deploy, and the AWS side uses short-lived STS credentials via the assume-role trust (no static secret exists). Request-id correlation: every log line in every service carries a `request_id` field propagated from the proxy's `X-Request-Id` — search it in Logs Insights (lambdas) or Fly logs to trace one user request end-to-end.
+
 ## Section 3: Deploying to Production
 
 When you are ready to launch to Production, you must bootstrap and pre-provision the environment just like you did for Development, but using production parameters.
