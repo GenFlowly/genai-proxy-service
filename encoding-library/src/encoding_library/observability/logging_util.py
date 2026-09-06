@@ -31,6 +31,18 @@ def set_request_id(value: str | None = None) -> str:
     return rid
 
 
+def request_id_from_lambda_event(event) -> str | None:
+    """X-Request-Id from an API Gateway lambda event (case-insensitive)."""
+    try:
+        headers = event.get("headers") or {}
+        for key, value in headers.items():
+            if key.lower() == "x-request-id":
+                return value
+    except Exception:
+        pass
+    return None
+
+
 class JsonFormatter(logging.Formatter):
     def __init__(self, service: str):
         super().__init__()
