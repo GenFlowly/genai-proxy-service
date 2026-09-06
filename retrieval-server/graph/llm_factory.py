@@ -11,6 +11,12 @@ _DEFAULTS = {
     "gemini": "gemini-1.5-pro",
 }
 
+# LLM calls retry inside the vendor SDKs (exponential backoff on 429/5xx/
+# connection errors, no retry on auth/4xx) rather than through
+# encoding_library.utils.retry — re-issuing a generation from our layer can
+# double-bill when the original request actually succeeded server-side.
+_MAX_RETRIES = 3
+
 
 def get_llm(
     provider: str,
@@ -34,6 +40,7 @@ def get_llm(
             model=resolved_model,
             api_key=key,
             max_tokens=max_tokens,
+            max_retries=_MAX_RETRIES,
             **kwargs,
         )
 
@@ -56,6 +63,7 @@ def get_llm(
             model=resolved_model,
             api_key=key,
             max_tokens=max_tokens,
+            max_retries=_MAX_RETRIES,
             **kwargs,
         )
 
@@ -70,6 +78,7 @@ def get_llm(
             model=resolved_model,
             google_api_key=key,
             max_tokens=max_tokens,
+            max_retries=_MAX_RETRIES,
         )
 
     else:
