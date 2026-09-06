@@ -32,11 +32,14 @@ import com.genflowly.service.SharedUsersResolver
 import com.genflowly.service.UtilityGenerationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
+import com.genflowly.observability.Metrics
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import org.slf4j.MDC
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.kms.KmsClient
@@ -54,7 +57,7 @@ fun appModule(): Module = module {
     single { AppScope() }
 
     single {
-        HttpClient(CIO) {
+        val client = HttpClient(CIO) {
             engine {
                 // Disabled at the engine level so long-lived WebSocket voice
                 // sessions aren't cut off; REST calls are still bounded by the
@@ -75,6 +78,49 @@ fun appModule(): Module = module {
             }
             install(io.ktor.client.plugins.websocket.WebSockets)
         }
+
+        // One interceptor covers every outbound call from the shared client:
+        // - propagates this request's id (CallId -> MDC) as X-Request-Id, so
+        //   retrieval-server and encoding-lambda logs correlate end-to-end;
+        // - emits internal_client_total/_duration_seconds for calls to our
+        //   internal services (paths are a bounded set, so `operation` is a
+        //   safe dimension). WebSocket upgrades get the header but no
+        //   duration metric — a session's lifetime is not a request latency.
+        val internalHosts = listOfNotNull(
+            get<AppConfig>().retrievalServerUrl,
+            get<AppConfig>().encodingServerUrl,
+        ).mapNotNull { runCatching { Url(it).host }.getOrNull() }.toSet()
+
+        client.plugin(HttpSend).intercept { request ->
+            MDC.get("request_id")?.let { rid ->
+                if (request.headers["X-Request-Id"] == null) {
+                    request.headers.append("X-Request-Id", rid)
+                }
+            }
+            val isInternalHttp = request.url.host in internalHosts &&
+                !request.url.protocol.isWebsocket()
+            if (!isInternalHttp) {
+                execute(request)
+            } else {
+                val operation = request.url.encodedPath
+                val start = System.nanoTime()
+                try {
+                    val call = execute(request)
+                    val status = if (call.response.status.value < 400) "ok" else "error"
+                    Metrics.count("internal_client_total", 1.0, "operation" to operation, "status" to status)
+                    Metrics.observe(
+                        "internal_client_duration_seconds",
+                        (System.nanoTime() - start) / 1e9,
+                        "operation" to operation,
+                    )
+                    call
+                } catch (t: Throwable) {
+                    Metrics.count("internal_client_total", 1.0, "operation" to operation, "status" to "error")
+                    throw t
+                }
+            }
+        }
+        client
     }
 
     single {

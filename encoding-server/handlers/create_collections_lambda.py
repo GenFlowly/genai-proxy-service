@@ -11,18 +11,22 @@ from encoding_library.utils.model_registry import (
     build_collection_description,
 )
 from services.authorization_service import AuthorizationService
+from encoding_library.observability import request_id_from_lambda_event, set_request_id, setup_logging, track
 
+setup_logging("encoding-server")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 auth_service = None
 
+@track("create_collections")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda to create Zilliz collections for a given customer explicitly.
     Called when a customer onboards (e.g. from genai-proxy-server).
     """
     try:
+        set_request_id(request_id_from_lambda_event(event))
         logger.info(f"Received create collections request: {json.dumps(event)}")
         
         global auth_service

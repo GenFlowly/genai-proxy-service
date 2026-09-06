@@ -14,6 +14,9 @@ from encoding_library.utils.voyage_batch import (
 )
 from handlers.voyage_batch_store import store_batch_results
 
+from encoding_library.observability import setup_logging, track
+
+setup_logging("encoding-server")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -141,6 +144,7 @@ def _reset_notes_to_pending(batches: List[Dict[str, Any]]) -> None:
             logger.error(f"Failed to reset note {note_key} to pending: {e}")
 
 
+@track("voyage_batch_poll")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Scheduled reconciliation poller (Option A). Runs on an EventBridge schedule.

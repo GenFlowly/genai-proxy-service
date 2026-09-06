@@ -208,7 +208,8 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 |---|---|---|
 | `llm_request_total` / `llm_request_duration_seconds` | vendor, model, status | retrieval-server LLM nodes |
 | `llm_tokens_total` | vendor, model, direction (`input`\|`output`\|`cache_read`\|`cache_creation`) | retrieval-server LLM nodes |
-| `llm_cost_usd_total` | vendor, model | **Kotlin proxy (Micrometer pass, pending)** |
+| `llm_cost_usd_total` | vendor, model | Kotlin proxy (`CostCalculationService`) |
+| `llm_cost_unpriced_total` | vendor, model | Kotlin proxy — turns with no catalog pricing (cost silently null) |
 | `vector_store_total` / `_duration_seconds` | status | store_embeddings lambda |
 | `vector_store_chunks_total` | data_type | store_embeddings lambda |
 | `vector_store_ddb_writeback_failure_total` | data_type | store_embeddings lambda |
@@ -220,6 +221,11 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `tool_execution_total` / `_duration_seconds` | tool, status | retrieval-server TOOL_EXECUTOR |
 | `stream_zero_tokens_total`, `stream_error_total` | vendor | retrieval-server streaming |
 | `retry_attempt_total`, `retry_exhausted_total` | operation | encoding-library retry util (all services) |
+| `ingest_notes/ingest_email/trigger_ingestion/parse_and_chunk/create_collections/voyage_batch_accumulate/voyage_batch_poll` (`_total`/`_duration_seconds`) | status | remaining encoding lambdas (`@track` on each handler) |
+| `memory_load_failure_total` | — | retrieval-server memory node (swallowed by design, counted) |
+| `graph_stale_serve_total` | — | retrieval-server graph_loader (DDB failure papered over by cache) |
+| `voice_session_total` / `voice_session_duration_seconds` | vendor, status (`ok`\|`error`\|`connect_failed`) | retrieval-server voice sessions |
+| `internal_client_total` / `_duration_seconds` | operation (path), status | Kotlin proxy shared HttpClient → retrieval/encoding servers |
 
 ### Python services (retrieval-server, encoding lambdas)
 
@@ -242,6 +248,17 @@ When an operation *swallows* its failures by design (graph nodes that degrade to
 
 Logging: emit structured context via `extra={...}` (rendered as JSON fields), not f-string interpolation, for anything a dashboard or Logs Insights query might filter on. Never rely on log-message wording for alarms — that's what the counters are for.
 
+### Request-id propagation (end-to-end)
+
+One request id follows a user request through every backend; search `request_id:<id>` in any service's logs to see the whole story:
+
+1. **Kotlin proxy**: the `CallId` plugin adopts the caller's `X-Request-Id` or generates one, puts it in the MDC (so it's on every JSON log line) and echoes it in the response.
+2. **Proxy → retrieval-server / encoding-server**: the shared `HttpClient` (Modules.kt) forwards the MDC id as `X-Request-Id` on every outbound call automatically — services never set the header by hand.
+3. **Retrieval-server**: an app middleware adopts the incoming `X-Request-Id` (or mints one), binds it to the logging contextvar and echoes it back.
+4. **Encoding lambdas**: the ingest lambdas read the header, call `set_request_id(...)` and stamp it into `MemoryRequestInternalState.request_id`, which rides the SQS message and Step Functions payloads — every downstream lambda (`trigger`, `parse_and_chunk`, `create_embeddings`, `store_embeddings`) calls `set_request_id(state.request_id)` on entry.
+
+When adding a new lambda to the pipeline, preserve `request_id` on any state object you construct and call `set_request_id` first thing in the handler.
+
 ### Third-party calls: retry with exponential backoff
 
 Every outbound call to a third-party API from Python code MUST go through `encoding_library.utils.retry` (`@retry` decorator, `retry_call`, or a `RetryingProxy`-wrapped client). Defaults: 3 attempts, 0.5s base delay, 2× backoff, 8s cap, equal jitter. Each retry emits `retry_attempt_total{operation}`; giving up emits `retry_exhausted_total{operation}`.
@@ -253,9 +270,16 @@ Every outbound call to a third-party API from Python code MUST go through `encod
 - **boto3 (DynamoDB/S3/KMS)** has its own built-in backoff — don't double-wrap.
 - **Voice realtime websockets** are stateful sessions; reconnection is session logic, deliberately not covered by this util.
 
-### Kotlin proxy (future Micrometer pass)
+### Kotlin proxy
 
-The proxy can't use the Python util — when metrics are added there (Micrometer + Prometheus registry, scraped by Fly the same way), **follow the exact metric names and dimension keys above**. Specifically:
+The Kotlin twin of the Python util is `com.genflowly.observability.Metrics` (Micrometer + Prometheus registry, initialized in `Application.kt`, scraped by Fly via the `[metrics]` block in fly.toml; the `/metrics` route 404s for public fly-proxy traffic). It enforces the same conventions — allowed dimensions only, `_total` counters, `_duration_seconds` summaries recording seconds:
 
-- LLM **cost**: emit `llm_cost_usd_total{vendor, model}` as a float counter at the three `CostCalculationService.computeCostUsd` call sites (`GenerationOrchestrator` non-streaming + streaming, `VoiceSessionService`). Until then, cost dashboards are *derived* from the retrieval-server's `llm_tokens_total` × static rates and are approximate.
-- Micrometer's `Counter.increment(double)` and `Timer` map 1:1 to the conventions; name timers `*_duration_seconds` via `DistributionSummary`/`Timer` with base-unit seconds.
+```kotlin
+Metrics.count("llm_cost_usd_total", costUsd, "vendor" to vendor.metricVendor(), "model" to model)
+Metrics.observe("some_op_duration_seconds", elapsedSeconds, "status" to "ok")
+val result = Metrics.tracked("some_op") { doWork() }   // = Python @track
+```
+
+- **Vendor labels**: always use `AIVendor.metricVendor()` (`CLAUDE` → `"anthropic"`) so one Grafana query spans the proxy and the retrieval-server.
+- **Cost** is emitted inside `CostCalculationService.computeCostUsd` — one point covers non-streaming, streaming and voice; do not add per-call-site emissions. `llm_cost_unpriced_total` counts turns that produced no cost for lack of catalog pricing.
+- **HTTP metrics** come free from the `MicrometerMetrics` Ktor plugin (`ktor_http_server_requests_*`); per-request access logs come from `CallLogging`, JSON-formatted by logback's LogstashEncoder with a `request_id` MDC field from the `CallId` plugin (honors/returns `X-Request-Id`).

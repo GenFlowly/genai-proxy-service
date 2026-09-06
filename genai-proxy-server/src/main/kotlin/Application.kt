@@ -4,6 +4,20 @@ package com.genflowly
 import com.auth0.jwk.JwkProviderBuilder
 import com.genflowly.di.AppScope
 import com.genflowly.di.appModule
+import com.genflowly.observability.Metrics
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.metrics.micrometer.MicrometerMetrics
+import io.ktor.server.plugins.callid.CallId
+import io.ktor.server.plugins.callid.callIdMdc
+import io.ktor.server.plugins.calllogging.CallLogging
+import io.ktor.server.request.path
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import io.micrometer.prometheusmetrics.PrometheusConfig
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry
+import java.util.UUID
 import io.github.smiley4.ktoropenapi.OpenApi
 import io.github.smiley4.ktoropenapi.config.AuthScheme
 import io.github.smiley4.ktoropenapi.config.AuthType
@@ -56,6 +70,40 @@ fun validateCredentials(credential: JWTCredential, auth0Audience: String): JWTPr
 fun Application.module() {
     install(ContentNegotiation) {
         json()
+    }
+
+    // Metrics + structured request logging (conventions: development.md
+    // "Observability"). The Prometheus registry backs Metrics.count/observe
+    // and the Ktor per-route HTTP metrics; /metrics is registered below.
+    val meterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
+    Metrics.init(meterRegistry, service = "genai-proxy-server")
+    install(MicrometerMetrics) {
+        registry = meterRegistry
+    }
+    install(CallId) {
+        retrieveFromHeader(HttpHeaders.XRequestId)
+        generate { UUID.randomUUID().toString().replace("-", "").take(16) }
+        verify { it.isNotBlank() }
+        replyToHeader(HttpHeaders.XRequestId)
+    }
+    install(CallLogging) {
+        callIdMdc("request_id")
+        filter { call -> call.request.path() != "/metrics" && call.request.path() != "/health" }
+    }
+    routing {
+        // Scraped by Fly's Prometheus over the private network. Public traffic
+        // always arrives through fly-proxy, which adds Fly-Client-IP /
+        // X-Forwarded-For — direct 6PN scrapes don't. Hidden from the OpenAPI
+        // spec (plain Ktor route builder, not the documented one).
+        get("/metrics") {
+            val viaPublicProxy = call.request.headers.contains("Fly-Client-IP") ||
+                call.request.headers.contains(HttpHeaders.XForwardedFor)
+            if (viaPublicProxy) {
+                call.respond(HttpStatusCode.NotFound)
+            } else {
+                call.respondText(meterRegistry.scrape())
+            }
+        }
     }
 
     install(io.ktor.server.websocket.WebSockets) {

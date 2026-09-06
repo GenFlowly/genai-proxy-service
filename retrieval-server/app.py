@@ -12,10 +12,10 @@ os.environ["MPLCONFIGDIR"] = "/tmp/matplotlib"
 os.environ["NUMBA_CACHE_DIR"] = "/tmp/numba_cache"
 os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp/joblib_tmp"
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from encoding_library.observability import configure_observability, setup_logging
+from encoding_library.observability import configure_observability, set_request_id, setup_logging
 
 from routes.model_metadata import router as model_metadata_router
 from routes.models import router as models_router
@@ -45,6 +45,16 @@ app = FastAPI(lifespan=lifespan)
 
 # Per-endpoint request count / latency / status-code metrics + GET /metrics
 Instrumentator(excluded_handlers=["/health", "/metrics"]).instrument(app).expose(app)
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    # Adopt the proxy's X-Request-Id (or mint one) so all log lines of this
+    # request — here and in the Kotlin proxy — share one correlation id.
+    rid = set_request_id(request.headers.get("x-request-id"))
+    response = await call_next(request)
+    response.headers["X-Request-Id"] = rid
+    return response
 
 app.include_router(retrieve_router)
 app.include_router(models_router)
