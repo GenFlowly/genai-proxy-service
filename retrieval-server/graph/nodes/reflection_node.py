@@ -1,9 +1,11 @@
 import json
 import logging
+import time
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from encoding_library.observability import count, observe
 from graph.llm_factory import get_llm
 from graph.nodes.llm_node import (
     _content_summary,
@@ -131,7 +133,14 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
         for idx, m in enumerate(messages):
             logger.info("Node %s - Message %d [%s]:\n%s\n---", node_type, idx, type(m).__name__, _content_summary(m.content))
 
-        response = await llm.ainvoke(messages)
+        llm_start = time.perf_counter()
+        try:
+            response = await llm.ainvoke(messages)
+        except Exception:
+            count("llm_request_total", status="error", vendor=provider, model=effective_model)
+            raise
+        count("llm_request_total", status="ok", vendor=provider, model=effective_model)
+        observe("llm_request_duration_seconds", time.perf_counter() - llm_start, vendor=provider)
         logger.info("Node %s - Received Response:\n%s\n---", node_type, response.content)
 
         meta = getattr(response, "usage_metadata", None) or {}
@@ -140,6 +149,10 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
             "output_tokens": meta.get("output_tokens", 0),
             "total_tokens": meta.get("total_tokens", 0),
         }
+        if usage["input_tokens"]:
+            count("llm_tokens_total", usage["input_tokens"], vendor=provider, model=effective_model, direction="input")
+        if usage["output_tokens"]:
+            count("llm_tokens_total", usage["output_tokens"], vendor=provider, model=effective_model, direction="output")
 
         try:
             parsed = json.loads(response.content)
