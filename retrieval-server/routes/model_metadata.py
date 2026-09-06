@@ -23,6 +23,7 @@ import time
 from typing import Optional
 
 import httpx
+from encoding_library.utils.retry import is_transient_http_error, retry
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -143,6 +144,7 @@ def _catalog_pricing(price_map: dict, provider: str, model: str) -> dict:
     }
 
 
+@retry("vendor_metadata", retry_if=is_transient_http_error)
 async def _fetch_anthropic(
     client: httpx.AsyncClient, api_key: str, price_map: dict
 ) -> list[ModelMetadata]:
@@ -185,6 +187,7 @@ async def _fetch_anthropic(
     return models
 
 
+@retry("vendor_metadata", retry_if=is_transient_http_error)
 async def _fetch_gemini(
     client: httpx.AsyncClient, api_key: str, price_map: dict
 ) -> list[ModelMetadata]:
@@ -225,6 +228,7 @@ async def _fetch_gemini(
     return models
 
 
+@retry("vendor_metadata", retry_if=is_transient_http_error)
 async def _fetch_openai(
     client: httpx.AsyncClient, api_key: str, price_map: dict
 ) -> list[ModelMetadata]:

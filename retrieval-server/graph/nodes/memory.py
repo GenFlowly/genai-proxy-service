@@ -6,6 +6,7 @@ from typing import Optional
 import boto3
 from boto3.dynamodb.conditions import Key
 
+from encoding_library.observability import count
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -99,7 +100,9 @@ def memory(node_id: Optional[str] = None):
         try:
             memories = _get_cached_core_memories(state["customer_id"])
         except Exception:
-            # Memory must never break generation.
+            # Memory must never break generation — but count the degradation:
+            # without this, memory being silently down is invisible to alarms.
+            count("memory_load_failure_total")
             logger.exception("Failed to load memories for %s; proceeding without", state["customer_id"])
             return {}
 

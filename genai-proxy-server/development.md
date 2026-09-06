@@ -185,3 +185,101 @@ code(HttpStatusCode.OK) {
 ```
 
 See `activity/generation/GenerateTextStreamActivity.kt` for a complete example, or any existing activity file for the standard pattern.
+
+## Observability — metrics & logging conventions
+
+All services follow ONE set of metric-naming and dimension conventions, pinned here and implemented for Python in `encoding-library/src/encoding_library/observability/`. Dashboards and alarms live in Grafana (fed by Fly Prometheus for the Fly apps and CloudWatch for the lambdas), so a metric must mean the same thing no matter which service emitted it.
+
+### Metric naming
+
+- `snake_case`. Counters end in `_total`; duration histograms end in `_duration_seconds` (seconds, not ms).
+- One operation = one counter + one duration histogram, e.g. `web_search_total{status=...}` + `web_search_duration_seconds`.
+- `status` values: `ok` | `error` (plus operation-specific values like `missing_key` where meaningful).
+
+### Dimensions (labels)
+
+Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`, `data_type`, `tool`, `direction`, `source` (+ an automatic `service`). The Python util silently drops anything else.
+
+**Never add `customer_id` (or any per-customer / per-request value) as a metric dimension.** Per-customer label values explode Prometheus series cardinality and CloudWatch per-metric billing. Customer context belongs in *logs* (structured field + request id), not metrics — per-customer cost/usage questions are answered from DynamoDB, not from dashboards.
+
+### Canonical metrics (emit these names, don't invent variants)
+
+| Metric | Dimensions | Emitted by |
+|---|---|---|
+| `llm_request_total` / `llm_request_duration_seconds` | vendor, model, status | retrieval-server LLM nodes |
+| `llm_tokens_total` | vendor, model, direction (`input`\|`output`\|`cache_read`\|`cache_creation`) | retrieval-server LLM nodes |
+| `llm_cost_usd_total` | vendor, model | Kotlin proxy (`CostCalculationService`) |
+| `llm_cost_unpriced_total` | vendor, model | Kotlin proxy — turns with no catalog pricing (cost silently null) |
+| `vector_store_total` / `_duration_seconds` | status | store_embeddings lambda |
+| `vector_store_chunks_total` | data_type | store_embeddings lambda |
+| `vector_store_ddb_writeback_failure_total` | data_type | store_embeddings lambda |
+| `create_embeddings_total` / `_duration_seconds`, `embedding_chunks_total` | status | create_embeddings lambda |
+| `vector_retrieval_total` / `_duration_seconds` | status, source (`retrieve`\|`search`) | retrieval-server |
+| `embedding_failure_total` | source, model | retrieval-server |
+| `zilliz_credential_fallback_total` | — | encoding-library (both runtimes) |
+| `web_search_total` / `_duration_seconds` | status | retrieval-server |
+| `tool_execution_total` / `_duration_seconds` | tool, status | retrieval-server TOOL_EXECUTOR |
+| `stream_zero_tokens_total`, `stream_error_total` | vendor | retrieval-server streaming |
+| `retry_attempt_total`, `retry_exhausted_total` | operation | encoding-library retry util (all services) |
+| `ingest_notes/ingest_email/trigger_ingestion/parse_and_chunk/create_collections/voyage_batch_accumulate/voyage_batch_poll` (`_total`/`_duration_seconds`) | status | remaining encoding lambdas (`@track` on each handler) |
+| `memory_load_failure_total` | — | retrieval-server memory node (swallowed by design, counted) |
+| `graph_stale_serve_total` | — | retrieval-server graph_loader (DDB failure papered over by cache) |
+| `voice_session_total` / `voice_session_duration_seconds` | vendor, status (`ok`\|`error`\|`connect_failed`) | retrieval-server voice sessions |
+| `internal_client_total` / `_duration_seconds` | operation (path), status | Kotlin proxy shared HttpClient → retrieval/encoding servers |
+
+### Python services (retrieval-server, encoding lambdas)
+
+Use the shared util — decorator for the ok/error/duration triple, imperative calls for values produced inside the operation:
+
+```python
+from encoding_library.observability import track, count, observe, setup_logging, configure_observability
+
+configure_observability(service="retrieval-server", backend="prometheus")  # lambdas auto-detect EMF
+setup_logging("retrieval-server")  # JSON lines + contextvar request_id
+
+@track("vector_store", data_type="note")     # -> vector_store_total + vector_store_duration_seconds
+def store(...): ...
+
+count("vector_store_chunks_total", len(chunks), data_type="NOTE")
+observe("llm_request_duration_seconds", elapsed, vendor=provider)
+```
+
+When an operation *swallows* its failures by design (graph nodes that degrade to empty results), put `@track` on a raising inner function and catch around the call — a metric that can never record `status=error` is useless for alarming. See `graph/nodes/retrieval.py` / `web_search.py` for the pattern.
+
+Logging: emit structured context via `extra={...}` (rendered as JSON fields), not f-string interpolation, for anything a dashboard or Logs Insights query might filter on. Never rely on log-message wording for alarms — that's what the counters are for.
+
+### Request-id propagation (end-to-end)
+
+One request id follows a user request through every backend; search `request_id:<id>` in any service's logs to see the whole story:
+
+1. **Kotlin proxy**: the `CallId` plugin adopts the caller's `X-Request-Id` or generates one, puts it in the MDC (so it's on every JSON log line) and echoes it in the response.
+2. **Proxy → retrieval-server / encoding-server**: the shared `HttpClient` (Modules.kt) forwards the MDC id as `X-Request-Id` on every outbound call automatically — services never set the header by hand.
+3. **Retrieval-server**: an app middleware adopts the incoming `X-Request-Id` (or mints one), binds it to the logging contextvar and echoes it back.
+4. **Encoding lambdas**: the ingest lambdas read the header, call `set_request_id(...)` and stamp it into `MemoryRequestInternalState.request_id`, which rides the SQS message and Step Functions payloads — every downstream lambda (`trigger`, `parse_and_chunk`, `create_embeddings`, `store_embeddings`) calls `set_request_id(state.request_id)` on entry.
+
+When adding a new lambda to the pipeline, preserve `request_id` on any state object you construct and call `set_request_id` first thing in the handler.
+
+### Third-party calls: retry with exponential backoff
+
+Every outbound call to a third-party API from Python code MUST go through `encoding_library.utils.retry` (`@retry` decorator, `retry_call`, or a `RetryingProxy`-wrapped client). Defaults: 3 attempts, 0.5s base delay, 2× backoff, 8s cap, equal jitter. Each retry emits `retry_attempt_total{operation}`; giving up emits `retry_exhausted_total{operation}`.
+
+- **Milvus/Zilliz**: `get_milvus_client()` already returns a retry-wrapped client — use it, never construct `MilvusClient` directly.
+- **Embeddings**: `create_embeddings()` retries internally (covers realtime and batch paths).
+- **HTTP calls**: pass `retry_if=is_transient_http_error` so only connection errors, 429 and 5xx retry — a 401/404 must fail fast. Call `raise_for_status()` *inside* the retried function, or 429/5xx responses won't trigger a retry.
+- **LLM chat calls are the exception**: they retry inside the vendor SDKs (`max_retries` in `graph/llm_factory.py`), not through this util — re-issuing a generation from our layer can double-bill when the original request actually succeeded. Same for key validation (SDK-level; auth errors must not retry).
+- **boto3 (DynamoDB/S3/KMS)** has its own built-in backoff — don't double-wrap.
+- **Voice realtime websockets** are stateful sessions; reconnection is session logic, deliberately not covered by this util.
+
+### Kotlin proxy
+
+The Kotlin twin of the Python util is `com.genflowly.observability.Metrics` (Micrometer + Prometheus registry, initialized in `Application.kt`, scraped by Fly via the `[metrics]` block in fly.toml; the `/metrics` route 404s for public fly-proxy traffic). It enforces the same conventions — allowed dimensions only, `_total` counters, `_duration_seconds` summaries recording seconds:
+
+```kotlin
+Metrics.count("llm_cost_usd_total", costUsd, "vendor" to vendor.metricVendor(), "model" to model)
+Metrics.observe("some_op_duration_seconds", elapsedSeconds, "status" to "ok")
+val result = Metrics.tracked("some_op") { doWork() }   // = Python @track
+```
+
+- **Vendor labels**: always use `AIVendor.metricVendor()` (`CLAUDE` → `"anthropic"`) so one Grafana query spans the proxy and the retrieval-server.
+- **Cost** is emitted inside `CostCalculationService.computeCostUsd` — one point covers non-streaming, streaming and voice; do not add per-call-site emissions. `llm_cost_unpriced_total` counts turns that produced no cost for lack of catalog pricing.
+- **HTTP metrics** come free from the `MicrometerMetrics` Ktor plugin (`ktor_http_server_requests_*`); per-request access logs come from `CallLogging`, JSON-formatted by logback's LogstashEncoder with a `request_id` MDC field from the `CallId` plugin (honors/returns `X-Request-Id`).

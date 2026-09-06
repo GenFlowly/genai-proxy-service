@@ -3,9 +3,10 @@ from typing import Any
 
 from pymilvus import MilvusClient
 
+from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
-from encoding_library.utils.vector_db import get_zilliz_credentials
+from encoding_library.utils.vector_db import get_milvus_client
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -68,77 +69,85 @@ def retrieval(node_id: str | None = None):
 
 
 async def _retrieval(state: RetrievalState, node_id: str | None) -> dict:
+    # The graph degrades gracefully (empty results + error in state), so the
+    # metric lives on the raising inner function — a swallowed failure here
+    # would otherwise be invisible to alarms.
+    try:
+        return await _retrieval_impl(state, node_id)
+    except Exception as e:
+        logger.error("Node retrieval: FAILED — %s", e, exc_info=True)
+        return {"retrieval_results": [], "error": str(e)}
+
+
+@track("vector_retrieval", source="retrieve")
+async def _retrieval_impl(state: RetrievalState, node_id: str | None) -> dict:
     query = state.get("rewritten_query") or state["original_query"]
     customer_id = state["customer_id"]
     logger.info("Node retrieval: START — customer=%s query='%s'", customer_id, query[:100])
 
-    try:
-        configs = state.get("node_configs", {})
-        config = (configs.get(node_id) if node_id else None) or configs.get("RETRIEVAL", {})
-        top_n = config.get("top_n") or state["top_n"]
-        similarity_threshold = config.get("similarity_threshold") or state["similarity_threshold"]
-        search_params = config.get("search_params") or state["search_params"]
+    configs = state.get("node_configs", {})
+    config = (configs.get(node_id) if node_id else None) or configs.get("RETRIEVAL", {})
+    top_n = config.get("top_n") or state["top_n"]
+    similarity_threshold = config.get("similarity_threshold") or state["similarity_threshold"]
+    search_params = config.get("search_params") or state["search_params"]
 
-        logger.info("Node retrieval: connecting to Zilliz for customer=%s", customer_id)
-        zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
-        client = MilvusClient(uri=zilliz_endpoint, token=zilliz_token)
-        logger.info("Node retrieval: connected to Zilliz")
+    logger.info("Node retrieval: connecting to Zilliz for customer=%s", customer_id)
+    # get_milvus_client returns a retry-wrapped client (backoff on every call)
+    client = get_milvus_client(customer_id)
+    logger.info("Node retrieval: connected to Zilliz")
 
-        grouped = _discover_collections(client, customer_id, (state.get("model_type"), state.get("model_name")))
-        if not grouped:
-            logger.warning("Node retrieval: no collections found for customer=%s", customer_id)
-            return {"retrieval_results": []}
+    grouped = _discover_collections(client, customer_id, (state.get("model_type"), state.get("model_name")))
+    if not grouped:
+        logger.warning("Node retrieval: no collections found for customer=%s", customer_id)
+        return {"retrieval_results": []}
 
-        all_results = []
+    all_results = []
 
-        # Embed the query once per distinct model, then search that model's collections.
-        # Distances from different models are merged as-is; scores are only strictly
-        # comparable within one model, but COSINE keeps them on the same [0,1]-ish scale.
-        for (model_type, model_name), collection_names in grouped.items():
-            logger.info("Node retrieval: embedding query with model_type=%s model_name=%s for %d collection(s)", model_type, model_name, len(collection_names))
-            encoder = _get_cached_embedding_model(model_type, model_name)
-            query_embeddings = create_embeddings([query], encoder)
-            if not query_embeddings:
-                logger.error("Node retrieval: embedding creation returned empty result for model %s/%s", model_type, model_name)
-                continue
+    # Embed the query once per distinct model, then search that model's collections.
+    # Distances from different models are merged as-is; scores are only strictly
+    # comparable within one model, but COSINE keeps them on the same [0,1]-ish scale.
+    for (model_type, model_name), collection_names in grouped.items():
+        logger.info("Node retrieval: embedding query with model_type=%s model_name=%s for %d collection(s)", model_type, model_name, len(collection_names))
+        encoder = _get_cached_embedding_model(model_type, model_name)
+        query_embeddings = create_embeddings([query], encoder)
+        if not query_embeddings:
+            count("embedding_failure_total", source="retrieve", model=model_name)
+            logger.error("Node retrieval: embedding creation returned empty result for model %s/%s", model_type, model_name)
+            continue
 
-            query_vector = query_embeddings[0].get("vector")
-            logger.info("Node retrieval: query embedded, vector_dim=%d", len(query_vector or []))
+        query_vector = query_embeddings[0].get("vector")
+        logger.info("Node retrieval: query embedded, vector_dim=%d", len(query_vector or []))
 
-            for collection_name in collection_names:
-                logger.info("Node retrieval: searching collection '%s' (top_n=%d threshold=%.2f)", collection_name, top_n, similarity_threshold)
-                search_res = client.search(
-                    collection_name=collection_name,
-                    data=[query_vector],
-                    limit=top_n,
-                    search_params=search_params,
-                    output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"],
-                )
+        for collection_name in collection_names:
+            logger.info("Node retrieval: searching collection '%s' (top_n=%d threshold=%.2f)", collection_name, top_n, similarity_threshold)
+            search_res = client.search(
+                collection_name=collection_name,
+                data=[query_vector],
+                limit=top_n,
+                search_params=search_params,
+                output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"],
+            )
 
-                hits_found = 0
-                hits_discarded = 0
-                for hits in search_res:
-                    for hit in hits:
-                        distance = hit.get("distance", 0.0)
-                        if distance >= similarity_threshold:
-                            hits_found += 1
-                            all_results.append({
-                                "id": hit.get("id"),
-                                "distance": distance,
-                                "entity": hit.get("entity", {}),
-                                "source_collection": collection_name,
-                            })
-                        else:
-                            hits_discarded += 1
-                            logger.debug("Node retrieval: discarding hit id=%s distance=%.4f < threshold=%.2f", hit.get("id"), distance, similarity_threshold)
+            hits_found = 0
+            hits_discarded = 0
+            for hits in search_res:
+                for hit in hits:
+                    distance = hit.get("distance", 0.0)
+                    if distance >= similarity_threshold:
+                        hits_found += 1
+                        all_results.append({
+                            "id": hit.get("id"),
+                            "distance": distance,
+                            "entity": hit.get("entity", {}),
+                            "source_collection": collection_name,
+                        })
+                    else:
+                        hits_discarded += 1
+                        logger.debug("Node retrieval: discarding hit id=%s distance=%.4f < threshold=%.2f", hit.get("id"), distance, similarity_threshold)
 
-                logger.info("Node retrieval: collection '%s' — %d hits kept, %d discarded", collection_name, hits_found, hits_discarded)
+            logger.info("Node retrieval: collection '%s' — %d hits kept, %d discarded", collection_name, hits_found, hits_discarded)
 
-        all_results.sort(key=lambda x: x["distance"], reverse=True)
-        top_results = all_results[:top_n]
-        logger.info("Node retrieval: END — %d total results returned", len(top_results))
-        return {"retrieval_results": top_results}
-
-    except Exception as e:
-        logger.error("Node retrieval: FAILED — %s", e, exc_info=True)
-        return {"retrieval_results": [], "error": str(e)}
+    all_results.sort(key=lambda x: x["distance"], reverse=True)
+    top_results = all_results[:top_n]
+    logger.info("Node retrieval: END — %d total results returned", len(top_results))
+    return {"retrieval_results": top_results}

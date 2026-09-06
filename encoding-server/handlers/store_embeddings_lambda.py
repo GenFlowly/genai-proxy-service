@@ -5,13 +5,15 @@ from pymilvus import MilvusClient
 
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
+from encoding_library.observability import count, set_request_id, setup_logging, track
 from encoding_library.utils.vector_db import get_milvus_client
 
+setup_logging("encoding-server")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-
+@track("vector_store")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Store Zilliz Handler - Phase 5 Map State Final Node
@@ -19,6 +21,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         memory_request_internal_state = MemoryRequestInternalState.from_dict(event)
+        set_request_id(memory_request_internal_state.request_id)
         customer_id = memory_request_internal_state.customer_id
         if not customer_id:
             raise ValueError("customer_id is missing from the payload")
@@ -79,6 +82,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         milvus_client.flush(collection_name=collection_name)
         milvus_ids = [r["id"] for r in records]
 
+        count("vector_store_chunks_total", result.get("insert_count", 0),
+              data_type=memory_request_internal_state.data_type)
         logger.info(f"Inserted {result.get('insert_count', 0)} records into '{collection_name}'.")
 
         if memory_request_internal_state.data_type == "NOTE":
@@ -113,6 +118,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     logger.warning("note_key missing in raw_data, skipping DDB update")
             except Exception as e:
+                # Swallowed by design (the vectors ARE stored), but counted:
+                # the note is never marked synced, so unalarmed failures here
+                # cause silent re-processing drift.
+                count("vector_store_ddb_writeback_failure_total", data_type="NOTE")
                 logger.error(f"Failed to update DDB for NOTE: {str(e)}")
 
         if memory_request_internal_state.data_type == "INSTRUCTION":
@@ -145,6 +154,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     logger.warning("instruction_id/version missing in raw_data, skipping DDB update")
             except Exception as e:
+                count("vector_store_ddb_writeback_failure_total", data_type="INSTRUCTION")
                 logger.error(f"Failed to update DDB for INSTRUCTION: {str(e)}")
 
         # Clear heavy fields after insertion to avoid Step Functions 256KB payload limit

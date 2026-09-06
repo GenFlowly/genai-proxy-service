@@ -13,7 +13,9 @@ no dangling tool-call ids reach the vendors; the model re-issues caller tools
 on the next iteration if it still needs them.
 """
 import logging
+import time
 
+from encoding_library.observability import count, observe
 from graph.state import RetrievalState
 from graph.tools_runtime import get_registry, make_tool_context
 
@@ -62,13 +64,17 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
 
     for call in builtin_calls:
         name = call.get("name", "")
+        start = time.perf_counter()
         try:
             result = await registry.get(name).run(call.get("args") or {}, context)
             content = result.content
             artifacts.extend(a.to_dict() for a in result.artifacts)
+            count("tool_execution_total", status="ok", tool=name)
         except Exception as e:
+            count("tool_execution_total", status="error", tool=name)
             logger.error("Node tool_executor: %s failed — %s", name, e, exc_info=True)
             content = f"Error executing {name}: {e}"
+        observe("tool_execution_duration_seconds", time.perf_counter() - start, tool=name)
         loop_messages.append({
             "role": "tool",
             "tool_call_id": call.get("id", ""),

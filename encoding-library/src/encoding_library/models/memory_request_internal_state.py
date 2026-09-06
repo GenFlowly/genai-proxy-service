@@ -20,6 +20,7 @@ class MemoryRequestInternalState:
         chunk_overlap: Optional[int] = None,
         data_chunks: Optional[List[str]] = None,
         vectors: Optional[List[Any]] = None,
+        request_id: Optional[str] = None,
     ):
         self.data_type = data_type
         self.customer_id = customer_id
@@ -35,6 +36,9 @@ class MemoryRequestInternalState:
         self.chunk_overlap = chunk_overlap
         self.data_chunks = data_chunks
         self.vectors = vectors
+        # Correlation id from the originating API request (X-Request-Id),
+        # carried through SQS -> Step Functions so every lambda's logs share it
+        self.request_id = request_id
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -51,6 +55,7 @@ class MemoryRequestInternalState:
             "chunk_overlap": self.chunk_overlap,
             "data_chunks": self.data_chunks,
             "vectors": self.vectors,
+            "request_id": self.request_id,
         }
 
     @staticmethod
@@ -69,4 +74,5 @@ class MemoryRequestInternalState:
             chunk_overlap=data.get('chunk_overlap'),
             data_chunks=data.get('data_chunks'),
             vectors=data.get('vectors'),
+            request_id=data.get('request_id'),
         )

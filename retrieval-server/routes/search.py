@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
 from encoding_library.utils.vector_db import get_milvus_client
@@ -69,6 +70,7 @@ def _title(entity: dict) -> str:
 
 
 @router.post("/search")
+@track("vector_retrieval", source="search")
 async def search(req: SearchRequest):
     """
     Unified semantic search over all of a customer's vector collections —
@@ -119,6 +121,7 @@ async def search(req: SearchRequest):
             encoder = _get_cached_embedding_model(model_type, model_name)
             query_embeddings = create_embeddings([req.query], encoder)
             if not query_embeddings:
+                count("embedding_failure_total", source="search", model=model_name)
                 logger.error("Query embedding failed for model %s/%s", model_type, model_name)
                 continue
             query_vector = query_embeddings[0].get("vector")

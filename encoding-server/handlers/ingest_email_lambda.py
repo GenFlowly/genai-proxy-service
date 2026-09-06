@@ -6,9 +6,11 @@ from typing import Dict, Any
 from encoding_library.processors.processor_factory import ProcessorFactory
 from services.authorization_service import AuthorizationService
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
+from encoding_library.observability import request_id_from_lambda_event, set_request_id, setup_logging, track
 
 # Trigger build - separated ECR repos
 
+setup_logging("encoding-server")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -20,6 +22,7 @@ QUEUE_URL = os.environ.get('QUEUE_URL')
 auth_service = None
 
 # LAMBDA 1
+@track("ingest_email")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     First lambda in encoding server
@@ -34,6 +37,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Uses ProcessorFactory to handle different data types (e.g. Email).
     """
     try:
+        # Adopt the caller's X-Request-Id (or mint one) and carry it through
+        # SQS/Step Functions via the state payload for end-to-end correlation
+        request_id = set_request_id(request_id_from_lambda_event(event))
         logger.info(f"Received event: {json.dumps(event)}")
         
         # Initialize AWS clients inside the handler so they don't block the INIT phase
@@ -92,6 +98,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     chunking_technique=item_data.get('chunkingTechnique', item_data.get('chunking_technique')),
                     chunk_size=item_data.get('chunkSize', item_data.get('chunk_size')),
                     chunk_overlap=item_data.get('chunkOverlap', item_data.get('chunk_overlap')),
+                    request_id=request_id,
                 )
 
                 # Get appropriate processor from the typed state
