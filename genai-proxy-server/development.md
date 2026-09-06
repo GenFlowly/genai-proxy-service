@@ -219,6 +219,7 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `web_search_total` / `_duration_seconds` | status | retrieval-server |
 | `tool_execution_total` / `_duration_seconds` | tool, status | retrieval-server TOOL_EXECUTOR |
 | `stream_zero_tokens_total`, `stream_error_total` | vendor | retrieval-server streaming |
+| `retry_attempt_total`, `retry_exhausted_total` | operation | encoding-library retry util (all services) |
 
 ### Python services (retrieval-server, encoding lambdas)
 
@@ -240,6 +241,17 @@ observe("llm_request_duration_seconds", elapsed, vendor=provider)
 When an operation *swallows* its failures by design (graph nodes that degrade to empty results), put `@track` on a raising inner function and catch around the call — a metric that can never record `status=error` is useless for alarming. See `graph/nodes/retrieval.py` / `web_search.py` for the pattern.
 
 Logging: emit structured context via `extra={...}` (rendered as JSON fields), not f-string interpolation, for anything a dashboard or Logs Insights query might filter on. Never rely on log-message wording for alarms — that's what the counters are for.
+
+### Third-party calls: retry with exponential backoff
+
+Every outbound call to a third-party API from Python code MUST go through `encoding_library.utils.retry` (`@retry` decorator, `retry_call`, or a `RetryingProxy`-wrapped client). Defaults: 3 attempts, 0.5s base delay, 2× backoff, 8s cap, equal jitter. Each retry emits `retry_attempt_total{operation}`; giving up emits `retry_exhausted_total{operation}`.
+
+- **Milvus/Zilliz**: `get_milvus_client()` already returns a retry-wrapped client — use it, never construct `MilvusClient` directly.
+- **Embeddings**: `create_embeddings()` retries internally (covers realtime and batch paths).
+- **HTTP calls**: pass `retry_if=is_transient_http_error` so only connection errors, 429 and 5xx retry — a 401/404 must fail fast. Call `raise_for_status()` *inside* the retried function, or 429/5xx responses won't trigger a retry.
+- **LLM chat calls are the exception**: they retry inside the vendor SDKs (`max_retries` in `graph/llm_factory.py`), not through this util — re-issuing a generation from our layer can double-bill when the original request actually succeeded. Same for key validation (SDK-level; auth errors must not retry).
+- **boto3 (DynamoDB/S3/KMS)** has its own built-in backoff — don't double-wrap.
+- **Voice realtime websockets** are stateful sessions; reconnection is session logic, deliberately not covered by this util.
 
 ### Kotlin proxy (future Micrometer pass)
 

@@ -6,7 +6,7 @@ from pymilvus import MilvusClient
 from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
-from encoding_library.utils.vector_db import get_zilliz_credentials
+from encoding_library.utils.vector_db import get_milvus_client
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -92,8 +92,8 @@ async def _retrieval_impl(state: RetrievalState, node_id: str | None) -> dict:
     search_params = config.get("search_params") or state["search_params"]
 
     logger.info("Node retrieval: connecting to Zilliz for customer=%s", customer_id)
-    zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
-    client = MilvusClient(uri=zilliz_endpoint, token=zilliz_token)
+    # get_milvus_client returns a retry-wrapped client (backoff on every call)
+    client = get_milvus_client(customer_id)
     logger.info("Node retrieval: connected to Zilliz")
 
     grouped = _discover_collections(client, customer_id, (state.get("model_type"), state.get("model_name")))

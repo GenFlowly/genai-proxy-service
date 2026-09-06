@@ -4,6 +4,7 @@ import os
 import httpx
 
 from encoding_library.observability import count, track
+from encoding_library.utils.retry import is_transient_http_error, retry
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,7 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
 
 
 @track("web_search")
+@retry("tavily", retry_if=is_transient_http_error)
 async def _tavily_search(payload: dict, api_key: str) -> dict:
     async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
         response = await client.post(
