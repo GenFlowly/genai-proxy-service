@@ -1,0 +1,1054 @@
+{
+  "title": "GenFlowly Encoding Pipeline (development)",
+  "tags": [
+    "genflowly",
+    "observability",
+    "development"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Embedding pipeline (EMF custom metrics)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Vector store ops (per 5m)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "vector_store_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "store ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "create_embeddings_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "embed ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Chunks stored by data type (per 5m)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "vector_store_chunks_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "data_type": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "${PROP('Dim.data_type')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "embedding_chunks_total",
+          "statistic": "Sum",
+          "dimensions": {},
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "embedded chunks",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Silent failures (writeback / zilliz fallback)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "vector_store_ddb_writeback_failure_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "data_type": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "ddb writeback ${PROP('Dim.data_type')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "zilliz_credential_fallback_total",
+          "statistic": "Sum",
+          "dimensions": {},
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "zilliz fallback",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Ingestion & chunking ops (per 5m)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "ingest_notes_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "ingest_notes ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "ingest_email_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "ingest_email ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "trigger_ingestion_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "trigger ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "parse_and_chunk_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "parse_chunk ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Stage durations (avg / max)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "vector_store_duration_seconds",
+          "statistic": "Average",
+          "dimensions": {},
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "store avg",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "vector_store_duration_seconds",
+          "statistic": "Maximum",
+          "dimensions": {},
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "store max",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "create_embeddings_duration_seconds",
+          "statistic": "Average",
+          "dimensions": {},
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "embed avg",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "parse_and_chunk_duration_seconds",
+          "statistic": "Average",
+          "dimensions": {},
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "chunk avg",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Voyage batch pipeline & retries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "voyage_batch_accumulate_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "accumulate ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "voyage_batch_poll_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "poll ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "retry_attempt_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "operation": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "retry ${PROP('Dim.operation')}",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "retry_exhausted_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "operation": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "EXHAUSTED ${PROP('Dim.operation')}",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "AWS built-ins (Lambda / SQS / Step Functions)",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Lambda errors & throttles",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/Lambda",
+          "metricName": "Errors",
+          "statistic": "Sum",
+          "dimensions": {
+            "FunctionName": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "${PROP('Dim.FunctionName')} errors",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/Lambda",
+          "metricName": "Throttles",
+          "statistic": "Sum",
+          "dimensions": {
+            "FunctionName": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "${PROP('Dim.FunctionName')} throttles",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Lambda duration (avg)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 16,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/Lambda",
+          "metricName": "Duration",
+          "statistic": "Average",
+          "dimensions": {
+            "FunctionName": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "${PROP('Dim.FunctionName')}",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Lambda invocations",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 16,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/Lambda",
+          "metricName": "Invocations",
+          "statistic": "Sum",
+          "dimensions": {
+            "FunctionName": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "${PROP('Dim.FunctionName')}",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "SQS queue depth (incl. DLQ)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateNumberOfMessagesVisible",
+          "statistic": "Maximum",
+          "dimensions": {
+            "QueueName": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "${PROP('Dim.QueueName')}",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Step Functions executions",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "afxh14dyp3ldsd"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/States",
+          "metricName": "ExecutionsSucceeded",
+          "statistic": "Sum",
+          "dimensions": {
+            "StateMachineArn": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "succeeded",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/States",
+          "metricName": "ExecutionsFailed",
+          "statistic": "Sum",
+          "dimensions": {
+            "StateMachineArn": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "FAILED",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/States",
+          "metricName": "ExecutionsTimedOut",
+          "statistic": "Sum",
+          "dimensions": {
+            "StateMachineArn": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "",
+          "expression": "",
+          "label": "timed out",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    }
+  ]
+}

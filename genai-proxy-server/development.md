@@ -229,24 +229,10 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 
 ### Python services (retrieval-server, encoding lambdas)
 
-Use the shared util — decorator for the ok/error/duration triple, imperative calls for values produced inside the operation:
+Service-specific usage guides live next to each service — how to emit metrics, the swallowed-failure pattern, per-handler checklists and the retry rules:
 
-```python
-from encoding_library.observability import track, count, observe, setup_logging, configure_observability
-
-configure_observability(service="retrieval-server", backend="prometheus")  # lambdas auto-detect EMF
-setup_logging("retrieval-server")  # JSON lines + contextvar request_id
-
-@track("vector_store", data_type="note")     # -> vector_store_total + vector_store_duration_seconds
-def store(...): ...
-
-count("vector_store_chunks_total", len(chunks), data_type="NOTE")
-observe("llm_request_duration_seconds", elapsed, vendor=provider)
-```
-
-When an operation *swallows* its failures by design (graph nodes that degrade to empty results), put `@track` on a raising inner function and catch around the call — a metric that can never record `status=error` is useless for alarming. See `graph/nodes/retrieval.py` / `web_search.py` for the pattern.
-
-Logging: emit structured context via `extra={...}` (rendered as JSON fields), not f-string interpolation, for anything a dashboard or Logs Insights query might filter on. Never rely on log-message wording for alarms — that's what the counters are for.
+- `retrieval-server/development.md`
+- `encoding-server/development.md`
 
 ### Request-id propagation (end-to-end)
 
