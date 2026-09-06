@@ -3,6 +3,7 @@ import os
 
 import httpx
 
+from encoding_library.observability import count, track
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
     config = (configs.get(node_id) if node_id else None) or configs.get("WEB_SEARCH", {})
     api_key = config.get("api_key") or os.getenv("TAVILY_API_KEY")
     if not api_key:
+        count("web_search_total", status="missing_key")
         logger.error("Node web_search: no API key in node config or TAVILY_API_KEY env")
         return {"web_search_results": [], "web_search_answer": "", "error": "Web search is not configured (missing API key)"}
 
@@ -71,28 +73,35 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
     if config.get("exclude_domains"):
         payload["exclude_domains"] = config["exclude_domains"]
 
+    # A failed search degrades to empty results, so the metric lives on the
+    # raising inner call — without it, "Tavily is down" and "no results" are
+    # indistinguishable to alarms.
     try:
-        async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                _TAVILY_URL,
-                json=payload,
-                headers={"Authorization": f"Bearer {api_key}"},
-            )
-            response.raise_for_status()
-            data = response.json()
-
-        results = [
-            {
-                "title": r.get("title", ""),
-                "url": r.get("url", ""),
-                "content": r.get("content", ""),
-                "score": r.get("score", 0.0),
-            }
-            for r in data.get("results", [])
-        ]
-        logger.info("Node web_search: END — %d result(s) returned", len(results))
-        return {"web_search_results": results, "web_search_answer": data.get("answer") or ""}
-
+        data = await _tavily_search(payload, api_key)
     except Exception as e:
         logger.error("Node web_search: FAILED — %s", e, exc_info=True)
         return {"web_search_results": [], "web_search_answer": ""}
+
+    results = [
+        {
+            "title": r.get("title", ""),
+            "url": r.get("url", ""),
+            "content": r.get("content", ""),
+            "score": r.get("score", 0.0),
+        }
+        for r in data.get("results", [])
+    ]
+    logger.info("Node web_search: END — %d result(s) returned", len(results))
+    return {"web_search_results": results, "web_search_answer": data.get("answer") or ""}
+
+
+@track("web_search")
+async def _tavily_search(payload: dict, api_key: str) -> dict:
+    async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
+        response = await client.post(
+            _TAVILY_URL,
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        response.raise_for_status()
+        return response.json()

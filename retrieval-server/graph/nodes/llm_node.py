@@ -2,10 +2,12 @@ import asyncio
 import json
 import logging
 import re
+import time
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
+from encoding_library.observability import count, observe
 from graph.llm_factory import get_llm
 from graph.s3_images import fetch_image_base64
 from graph.state import RetrievalState
@@ -561,15 +563,22 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
 
         parsed = None
         parsing_error = None
-        if structured_llm is not None:
-            wrapped = await structured_llm.ainvoke(messages)
-            response = wrapped["raw"]
-            parsed = wrapped["parsed"]
-            parsing_error = wrapped["parsing_error"]
-            logger.info("Node %s - Received structured response: parsed=%s error=%s", agent_type, parsed is not None, parsing_error)
-        else:
-            response = await llm.ainvoke(messages)
-            logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
+        llm_start = time.perf_counter()
+        try:
+            if structured_llm is not None:
+                wrapped = await structured_llm.ainvoke(messages)
+                response = wrapped["raw"]
+                parsed = wrapped["parsed"]
+                parsing_error = wrapped["parsing_error"]
+                logger.info("Node %s - Received structured response: parsed=%s error=%s", agent_type, parsed is not None, parsing_error)
+            else:
+                response = await llm.ainvoke(messages)
+                logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
+        except Exception:
+            count("llm_request_total", status="error", vendor=provider, model=effective_model)
+            raise
+        count("llm_request_total", status="ok", vendor=provider, model=effective_model)
+        observe("llm_request_duration_seconds", time.perf_counter() - llm_start, vendor=provider)
 
         meta = getattr(response, "usage_metadata", None) or {}
         details = meta.get("input_token_details") or {}
@@ -580,6 +589,16 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             "cache_read_tokens": details.get("cache_read", 0),
             "cache_creation_tokens": details.get("cache_creation", 0),
         }
+        # vendor+model token totals back the cost dashboards until exact
+        # costUsd is emitted from the Kotlin proxy (Micrometer pass).
+        if usage["input_tokens"]:
+            count("llm_tokens_total", usage["input_tokens"], vendor=provider, model=effective_model, direction="input")
+        if usage["output_tokens"]:
+            count("llm_tokens_total", usage["output_tokens"], vendor=provider, model=effective_model, direction="output")
+        if usage["cache_read_tokens"]:
+            count("llm_tokens_total", usage["cache_read_tokens"], vendor=provider, model=effective_model, direction="cache_read")
+        if usage["cache_creation_tokens"]:
+            count("llm_tokens_total", usage["cache_creation_tokens"], vendor=provider, model=effective_model, direction="cache_creation")
         if usage["cache_read_tokens"] or usage["cache_creation_tokens"]:
             logger.info(
                 "Node %s: cache stats — read=%d creation=%d (provider=%s)",

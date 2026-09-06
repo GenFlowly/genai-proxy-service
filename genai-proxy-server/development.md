@@ -185,3 +185,65 @@ code(HttpStatusCode.OK) {
 ```
 
 See `activity/generation/GenerateTextStreamActivity.kt` for a complete example, or any existing activity file for the standard pattern.
+
+## Observability — metrics & logging conventions
+
+All services follow ONE set of metric-naming and dimension conventions, pinned here and implemented for Python in `encoding-library/src/encoding_library/observability/`. Dashboards and alarms live in Grafana (fed by Fly Prometheus for the Fly apps and CloudWatch for the lambdas), so a metric must mean the same thing no matter which service emitted it.
+
+### Metric naming
+
+- `snake_case`. Counters end in `_total`; duration histograms end in `_duration_seconds` (seconds, not ms).
+- One operation = one counter + one duration histogram, e.g. `web_search_total{status=...}` + `web_search_duration_seconds`.
+- `status` values: `ok` | `error` (plus operation-specific values like `missing_key` where meaningful).
+
+### Dimensions (labels)
+
+Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`, `data_type`, `tool`, `direction`, `source` (+ an automatic `service`). The Python util silently drops anything else.
+
+**Never add `customer_id` (or any per-customer / per-request value) as a metric dimension.** Per-customer label values explode Prometheus series cardinality and CloudWatch per-metric billing. Customer context belongs in *logs* (structured field + request id), not metrics — per-customer cost/usage questions are answered from DynamoDB, not from dashboards.
+
+### Canonical metrics (emit these names, don't invent variants)
+
+| Metric | Dimensions | Emitted by |
+|---|---|---|
+| `llm_request_total` / `llm_request_duration_seconds` | vendor, model, status | retrieval-server LLM nodes |
+| `llm_tokens_total` | vendor, model, direction (`input`\|`output`\|`cache_read`\|`cache_creation`) | retrieval-server LLM nodes |
+| `llm_cost_usd_total` | vendor, model | **Kotlin proxy (Micrometer pass, pending)** |
+| `vector_store_total` / `_duration_seconds` | status | store_embeddings lambda |
+| `vector_store_chunks_total` | data_type | store_embeddings lambda |
+| `vector_store_ddb_writeback_failure_total` | data_type | store_embeddings lambda |
+| `create_embeddings_total` / `_duration_seconds`, `embedding_chunks_total` | status | create_embeddings lambda |
+| `vector_retrieval_total` / `_duration_seconds` | status, source (`retrieve`\|`search`) | retrieval-server |
+| `embedding_failure_total` | source, model | retrieval-server |
+| `zilliz_credential_fallback_total` | — | encoding-library (both runtimes) |
+| `web_search_total` / `_duration_seconds` | status | retrieval-server |
+| `tool_execution_total` / `_duration_seconds` | tool, status | retrieval-server TOOL_EXECUTOR |
+| `stream_zero_tokens_total`, `stream_error_total` | vendor | retrieval-server streaming |
+
+### Python services (retrieval-server, encoding lambdas)
+
+Use the shared util — decorator for the ok/error/duration triple, imperative calls for values produced inside the operation:
+
+```python
+from encoding_library.observability import track, count, observe, setup_logging, configure_observability
+
+configure_observability(service="retrieval-server", backend="prometheus")  # lambdas auto-detect EMF
+setup_logging("retrieval-server")  # JSON lines + contextvar request_id
+
+@track("vector_store", data_type="note")     # -> vector_store_total + vector_store_duration_seconds
+def store(...): ...
+
+count("vector_store_chunks_total", len(chunks), data_type="NOTE")
+observe("llm_request_duration_seconds", elapsed, vendor=provider)
+```
+
+When an operation *swallows* its failures by design (graph nodes that degrade to empty results), put `@track` on a raising inner function and catch around the call — a metric that can never record `status=error` is useless for alarming. See `graph/nodes/retrieval.py` / `web_search.py` for the pattern.
+
+Logging: emit structured context via `extra={...}` (rendered as JSON fields), not f-string interpolation, for anything a dashboard or Logs Insights query might filter on. Never rely on log-message wording for alarms — that's what the counters are for.
+
+### Kotlin proxy (future Micrometer pass)
+
+The proxy can't use the Python util — when metrics are added there (Micrometer + Prometheus registry, scraped by Fly the same way), **follow the exact metric names and dimension keys above**. Specifically:
+
+- LLM **cost**: emit `llm_cost_usd_total{vendor, model}` as a float counter at the three `CostCalculationService.computeCostUsd` call sites (`GenerationOrchestrator` non-streaming + streaming, `VoiceSessionService`). Until then, cost dashboards are *derived* from the retrieval-server's `llm_tokens_total` × static rates and are approximate.
+- Micrometer's `Counter.increment(double)` and `Timer` map 1:1 to the conventions; name timers `*_duration_seconds` via `DistributionSummary`/`Timer` with base-unit seconds.

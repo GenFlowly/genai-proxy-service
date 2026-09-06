@@ -3,6 +3,7 @@ import logging
 import time
 from typing import Any, AsyncIterator, Optional
 
+from encoding_library.observability import count
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -283,6 +284,8 @@ async def stream_response(
             event_count, token_count,
         )
         if token_count == 0:
+            # Alarmed on: the user received an empty answer inside a 200 response.
+            count("stream_zero_tokens_total", vendor=state.get("llm_provider", ""))
             logger.warning("Stream: ZERO tokens emitted — streaming node may have failed or produced no output")
         logger.info(
             "Stream: total usage — input_tokens=%d output_tokens=%d total_tokens=%d cache_read=%d cache_creation=%d",
@@ -291,6 +294,9 @@ async def stream_response(
         )
         yield f"data: {json.dumps({'usage': usage})}\n\n"
     except Exception as e:
+        # The HTTP status is already 200 by now — this counter is the only
+        # failure signal for errors surfaced mid-stream.
+        count("stream_error_total", vendor=state.get("llm_provider", ""))
         logger.error("Stream: unhandled exception — %s", e, exc_info=True)
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
     finally:

@@ -3,11 +3,15 @@ import logging
 from typing import Dict, Any
 
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
+from encoding_library.observability import count, setup_logging, track
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 
+setup_logging("encoding-server")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
+@track("create_embeddings")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for generating vector embeddings natively from pre-chunked batches.
@@ -33,6 +37,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Generate mathematical vector array dynamically computationally over text sequences
         logger.info(f"Generating semantic vectors securely for {len(chunks)} iterations natively...")
         embeddings = create_embeddings(chunks, encoder)
+        count("embedding_chunks_total", len(embeddings))
 
         # Clear heavy fields after insertion to avoid Step Functions 256KB payload limit
         memory_request_internal_state.data_chunks = []
