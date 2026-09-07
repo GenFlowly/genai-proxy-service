@@ -184,6 +184,7 @@ fun appModule(): Module = module {
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
     single { com.genflowly.service.MemoryExtractionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.ConversationIndexingService(get(), get(), get(), get()) }
+    single { com.genflowly.service.ExchangeSideEffects(get(), get()) }
     single { com.genflowly.service.UnifiedSearchService(get(), get(), get(), get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
