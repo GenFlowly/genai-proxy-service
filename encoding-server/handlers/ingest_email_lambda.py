@@ -7,6 +7,7 @@ from encoding_library.processors.processor_factory import ProcessorFactory
 from services.authorization_service import AuthorizationService
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.observability import request_id_from_lambda_event, set_request_id, setup_logging, track
+from handlers.http_metrics import track_http_status
 
 # Trigger build - separated ECR repos
 
@@ -23,6 +24,7 @@ auth_service = None
 
 # LAMBDA 1
 @track("ingest_email")
+@track_http_status("ingest_email")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     First lambda in encoding server
