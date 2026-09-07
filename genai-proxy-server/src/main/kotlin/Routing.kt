@@ -164,8 +164,7 @@ fun Application.configureRouting(
     modelCatalogService: com.genflowly.service.ModelCatalogService,
     requestAgentMapAdminService: com.genflowly.service.RequestAgentMapAdminService,
     memoryService: com.genflowly.service.MemoryService,
-    memoryExtractionService: com.genflowly.service.MemoryExtractionService,
-    conversationIndexingService: com.genflowly.service.ConversationIndexingService,
+    exchangeSideEffects: com.genflowly.service.ExchangeSideEffects,
     unifiedSearchService: com.genflowly.service.UnifiedSearchService,
     nodePresetService: com.genflowly.service.NodePresetService,
     appConfig: AppConfig,
@@ -194,8 +193,8 @@ fun Application.configureRouting(
             call.respondText(scalarDocsHtml, ContentType.Text.Html)
         }
 
-        registerGenerateTextRoutes(generationOrchestrator, customerProfileService, memoryExtractionService, conversationIndexingService)
-        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, memoryExtractionService, conversationIndexingService)
+        registerGenerateTextRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
+        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)
