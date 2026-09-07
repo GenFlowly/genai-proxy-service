@@ -182,7 +182,12 @@ fun appModule(): Module = module {
     single { ConversationManagementService(get(), get(), get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
-    single { com.genflowly.service.MemoryExtractionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single {
+        com.genflowly.service.MemoryExtractionService(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            logContent = !get<AppConfig>().isProduction
+        )
+    }
     single { com.genflowly.service.ConversationIndexingService(get(), get(), get(), get()) }
     single { com.genflowly.service.ExchangeSideEffects(get(), get()) }
     single { com.genflowly.service.UnifiedSearchService(get(), get(), get(), get()) }

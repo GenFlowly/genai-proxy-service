@@ -223,6 +223,12 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `retry_attempt_total`, `retry_exhausted_total` | operation | encoding-library retry util (all services) |
 | `ingest_notes/ingest_email/trigger_ingestion/parse_and_chunk/create_collections/voyage_batch_accumulate/voyage_batch_poll` (`_total`/`_duration_seconds`) | status | remaining encoding lambdas (`@track` on each handler) |
 | `memory_load_failure_total` | — | retrieval-server memory node (swallowed by design, counted) |
+| `memory_extraction_total` / `_duration_seconds` | source (`conversation`\|`note`), status | Kotlin proxy (`MemoryExtractionService`) |
+| `memory_extraction_skipped_total` | source, status (`disabled`\|`empty`\|`debounced`\|`too_short`) | Kotlin proxy — extraction not attempted, by reason |
+| `memory_extraction_unparseable_total` | source | Kotlin proxy — agent output blank or not valid JSON |
+| `memory_operation_total` | operation (`add`\|`update`\|`delete`\|`unknown`), status (`ok`\|`noop`\|`error`) | Kotlin proxy — one per proposed memory operation |
+| `memory_vector_failure_total` | operation (`encode`\|`delete`) | Kotlin proxy — memory vector push/delete failed (swallowed, counted) |
+| `memory_learned_facts_write_failure_total` | — | Kotlin proxy — learned-facts marker write onto the message failed |
 | `graph_stale_serve_total` | — | retrieval-server graph_loader (DDB failure papered over by cache) |
 | `voice_session_total` / `voice_session_duration_seconds` | vendor, status (`ok`\|`error`\|`connect_failed`) | retrieval-server voice sessions |
 | `internal_client_total` / `_duration_seconds` | operation (path), status | Kotlin proxy shared HttpClient → retrieval/encoding servers |
