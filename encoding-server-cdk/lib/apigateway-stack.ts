@@ -66,10 +66,13 @@ export class ApiGatewayStack extends cdk.Stack {
         // Create JWT Authorizer for Auth0
         const authorizer = new HttpJwtAuthorizer('Auth0Authorizer', auth0Issuer, {
             jwtAudience: [
-                auth0Audience, 
+                auth0Audience,
                 'https://genflowly-beta',
                 'https://api-development.genflowly.com',
-                'https://api-production.genflowly.com'
+                'https://api-production.genflowly.com',
+                // Audience the web/admin apps actually request (AUTH0_API_AUDIENCE
+                // on the proxy) — its absence 401'd every forwarded encode call.
+                'https://api.genflowly.com'
             ],
         });
 

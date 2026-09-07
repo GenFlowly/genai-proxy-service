@@ -231,7 +231,7 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `memory_learned_facts_write_failure_total` | — | Kotlin proxy — learned-facts marker write onto the message failed |
 | `graph_stale_serve_total` | — | retrieval-server graph_loader (DDB failure papered over by cache) |
 | `voice_session_total` / `voice_session_duration_seconds` | vendor, status (`ok`\|`error`\|`connect_failed`) | retrieval-server voice sessions |
-| `internal_client_total` / `_duration_seconds` | operation (path), status | Kotlin proxy shared HttpClient → retrieval/encoding servers |
+| `internal_client_total` / `_duration_seconds` | operation (path), status (`ok`\|`4xx`\|`5xx`\|`error`=transport failure, plus `not_configured` on skipped encoding calls) | Kotlin proxy shared HttpClient → retrieval/encoding servers |
 
 ### Python services (retrieval-server, encoding lambdas)
 
