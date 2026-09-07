@@ -13,8 +13,16 @@ primary_region = "iad"
   source = "model_cache"
   destination = "/app/model_cache"
 
-# No http_service section means this app won't be exposed to the public internet.
-# It will be accessible internally via `http://<app-name>.internal:5001`
+# Dev only (prod uses fly.production.toml): traffic arrives via Flycast
+# (http://<app-name>.flycast, port 80) so fly-proxy can auto stop/start the
+# machine on idle/traffic. The app has only a private Flycast IP allocated —
+# no public IPs — so it is still unreachable from the public internet.
+[http_service]
+  internal_port = 5001
+  force_https = false
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
 
 # Fly's org-level Prometheus scrapes /metrics over the private network —
 # the app stays internal-only. Dashboards: fly-metrics.net / Grafana Cloud.
