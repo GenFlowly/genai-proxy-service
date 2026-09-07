@@ -1,6 +1,6 @@
 {
   "uid": "fly-backend-production",
-  "title": "GenFlowly Backend (Fly, production)",
+  "title": "Backend Services",
   "tags": [
     "genflowly",
     "observability",
