@@ -475,6 +475,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 )
 
         provider = state["llm_provider"]
+        request_source = state.get("request_source") or "conversation"
         # Cache stable prefixes (system prompt + conversation history) on the response
         # generator. Anthropic requires explicit cache_control blocks; OpenAI caches
         # automatically for prefixes >=1024 tokens.
@@ -575,9 +576,11 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 response = await llm.ainvoke(messages)
                 logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
         except Exception:
-            count("llm_request_total", status="error", vendor=provider, model=effective_model)
+            count("llm_request_total", status="error", vendor=provider, model=effective_model,
+                  source=request_source, operation=agent_type.lower())
             raise
-        count("llm_request_total", status="ok", vendor=provider, model=effective_model)
+        count("llm_request_total", status="ok", vendor=provider, model=effective_model,
+              source=request_source, operation=agent_type.lower())
         observe("llm_request_duration_seconds", time.perf_counter() - llm_start, vendor=provider)
 
         meta = getattr(response, "usage_metadata", None) or {}

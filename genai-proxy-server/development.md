@@ -206,7 +206,7 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 
 | Metric | Dimensions | Emitted by |
 |---|---|---|
-| `llm_request_total` / `llm_request_duration_seconds` | vendor, model, status | retrieval-server LLM nodes |
+| `llm_request_total` / `llm_request_duration_seconds` | vendor, model, status; the counter also carries source (`conversation`\|`internal`\|a RequestType lowercased — the purpose forwarded from the proxy as `request_source`) and operation (graph node type) | retrieval-server LLM nodes — one increment per LLM API call, including agent-graph iterations, reflection passes and tool round trips |
 | `llm_tokens_total` | vendor, model, direction (`input`\|`output`\|`cache_read`\|`cache_creation`) | retrieval-server LLM nodes |
 | `llm_cost_usd_total` | vendor, model | Kotlin proxy (`CostCalculationService`) |
 | `llm_cost_unpriced_total` | vendor, model | Kotlin proxy — turns with no catalog pricing (cost silently null) |
