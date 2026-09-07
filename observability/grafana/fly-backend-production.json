@@ -184,7 +184,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Memory used by app",
+      "title": "Memory used by app (%)",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -202,7 +202,9 @@
             "fillOpacity": 8,
             "showPoints": "never"
           },
-          "unit": "bytes"
+          "unit": "percent",
+          "min": 0,
+          "max": 100
         },
         "overrides": []
       },
@@ -221,7 +223,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "fly_instance_memory_mem_total{app=~\".*-production\"} - fly_instance_memory_mem_available{app=~\".*-production\"}",
+          "expr": "100 * (1 - fly_instance_memory_mem_available{app=~\".*-production\"} / fly_instance_memory_mem_total{app=~\".*-production\"})",
           "legendFormat": "{{app}}",
           "refId": "A"
         }
