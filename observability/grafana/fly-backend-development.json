@@ -264,7 +264,7 @@
       "gridPos": {
         "x": 0,
         "y": 15,
-        "w": 8,
+        "w": 12,
         "h": 7
       },
       "fieldConfig": {
@@ -309,9 +309,9 @@
         "uid": "${DS_PROM}"
       },
       "gridPos": {
-        "x": 8,
+        "x": 12,
         "y": 15,
-        "w": 8,
+        "w": 12,
         "h": 7
       },
       "fieldConfig": {
@@ -350,52 +350,6 @@
     },
     {
       "type": "timeseries",
-      "title": "Internal requests/h: proxy -> retrieval",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 16,
-        "y": 15,
-        "w": 8,
-        "h": 7
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (operation, status) (increase(internal_client_total{app=~\".*-development\", operation!~\".*(encode|create-collections).*\"}[1h]))",
-          "legendFormat": "{{operation}} {{status}}",
-          "refId": "A"
-        }
-      ],
-      "description": "Hourly request counts from the proxy to the retrieval-server, per request path and status."
-    },
-    {
-      "type": "timeseries",
       "title": "Proxy CPU utilization (%)",
       "datasource": {
         "type": "prometheus",
@@ -405,7 +359,7 @@
       "gridPos": {
         "x": 0,
         "y": 22,
-        "w": 8,
+        "w": 12,
         "h": 7
       },
       "fieldConfig": {
@@ -451,9 +405,9 @@
       },
       "description": "Busy CPU as % of all cores: 100 minus the average per-core idle rate (fly_instance_cpu is a per-core centiseconds counter).",
       "gridPos": {
-        "x": 8,
+        "x": 12,
         "y": 22,
-        "w": 8,
+        "w": 12,
         "h": 7
       },
       "fieldConfig": {
@@ -491,18 +445,27 @@
       ]
     },
     {
+      "type": "row",
+      "title": "Internal requests/h (proxy -> backends)",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
       "type": "timeseries",
-      "title": "Internal requests/h: proxy -> encoding",
+      "title": "/retrieve",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
       },
-      "description": "Hourly request counts from the proxy to the encoding server (encode-*/create-collections), per request path and status.",
       "gridPos": {
-        "x": 16,
-        "y": 22,
-        "w": 8,
-        "h": 7
+        "x": 0,
+        "y": 30,
+        "w": 6,
+        "h": 6
       },
       "fieldConfig": {
         "defaults": {
@@ -529,8 +492,580 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (operation, status) (increase(internal_client_total{app=~\".*-development\", operation=~\".*(encode|create-collections).*\"}[1h]))",
-          "legendFormat": "{{operation}} {{status}}",
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/retrieve\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/execute-agent-graph",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 30,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/execute-agent-graph\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/search",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 30,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/search\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/models",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 30,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/models\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/models/metadata",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/models/metadata\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/validate-key",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 36,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/validate-key\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/delete-note-vectors",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/delete-note-vectors\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/delete-instruction-vectors",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 36,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/delete-instruction-vectors\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/delete-memory-vectors",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=\"/delete-memory-vectors\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/encode-conversations",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 42,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=~\".*/encode-conversations\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/encode-notes",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=~\".*/encode-notes\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/encode-memories",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 42,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=~\".*/encode-memories\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/encode-instructions",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=~\".*/encode-instructions\"}[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "/create-collections",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 48,
+        "w": 6,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-development\", operation=~\".*/create-collections\"}[1h]))",
+          "legendFormat": "{{status}}",
           "refId": "A"
         }
       ]
@@ -540,7 +1075,7 @@
       "title": "LLM",
       "gridPos": {
         "x": 0,
-        "y": 29,
+        "y": 54,
         "w": 24,
         "h": 1
       },
@@ -556,7 +1091,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 55,
         "w": 8,
         "h": 7
       },
@@ -601,7 +1136,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 30,
+        "y": 55,
         "w": 8,
         "h": 7
       },
@@ -648,7 +1183,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 30,
+        "y": 55,
         "w": 8,
         "h": 7
       },
@@ -693,7 +1228,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 62,
         "w": 8,
         "h": 7
       },
@@ -737,7 +1272,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 37,
+        "y": 62,
         "w": 8,
         "h": 7
       },
@@ -782,7 +1317,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 37,
+        "y": 62,
         "w": 4,
         "h": 7
       },
@@ -833,7 +1368,7 @@
       },
       "gridPos": {
         "x": 20,
-        "y": 37,
+        "y": 62,
         "w": 4,
         "h": 7
       },
@@ -869,7 +1404,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 44,
+        "y": 69,
         "w": 8,
         "h": 7
       },
@@ -913,7 +1448,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 44,
+        "y": 69,
         "w": 8,
         "h": 7
       },
@@ -957,7 +1492,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 44,
+        "y": 69,
         "w": 8,
         "h": 7
       },
@@ -1001,7 +1536,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 76,
         "w": 12,
         "h": 7
       },
@@ -1059,7 +1594,7 @@
       "title": "Vector retrieval & embeddings",
       "gridPos": {
         "x": 0,
-        "y": 58,
+        "y": 83,
         "w": 24,
         "h": 1
       },
@@ -1075,7 +1610,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 59,
+        "y": 84,
         "w": 8,
         "h": 7
       },
@@ -1119,7 +1654,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 59,
+        "y": 84,
         "w": 8,
         "h": 7
       },
@@ -1164,7 +1699,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 59,
+        "y": 84,
         "w": 4,
         "h": 7
       },
@@ -1200,7 +1735,7 @@
       },
       "gridPos": {
         "x": 20,
-        "y": 59,
+        "y": 84,
         "w": 4,
         "h": 7
       },
@@ -1232,7 +1767,7 @@
       "title": "Web search, tools, streaming, voice",
       "gridPos": {
         "x": 0,
-        "y": 66,
+        "y": 91,
         "w": 24,
         "h": 1
       },
@@ -1248,7 +1783,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 67,
+        "y": 92,
         "w": 8,
         "h": 7
       },
@@ -1301,7 +1836,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 67,
+        "y": 92,
         "w": 8,
         "h": 7
       },
@@ -1354,7 +1889,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 67,
+        "y": 92,
         "w": 8,
         "h": 7
       },
@@ -1398,7 +1933,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 74,
+        "y": 99,
         "w": 12,
         "h": 7
       },
@@ -1465,7 +2000,7 @@
       "title": "Memory extraction",
       "gridPos": {
         "x": 0,
-        "y": 81,
+        "y": 106,
         "w": 24,
         "h": 1
       }
@@ -1479,7 +2014,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 82,
+        "y": 107,
         "w": 8,
         "h": 7
       },
@@ -1523,7 +2058,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 82,
+        "y": 107,
         "w": 8,
         "h": 7
       },
@@ -1567,7 +2102,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 82,
+        "y": 107,
         "w": 8,
         "h": 7
       },
@@ -1621,7 +2156,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 89,
+        "y": 114,
         "w": 8,
         "h": 7
       },
@@ -1665,7 +2200,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 89,
+        "y": 114,
         "w": 4,
         "h": 7
       },
@@ -1701,7 +2236,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 89,
+        "y": 114,
         "w": 4,
         "h": 7
       },
