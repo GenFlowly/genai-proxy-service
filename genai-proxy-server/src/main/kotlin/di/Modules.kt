@@ -106,7 +106,14 @@ fun appModule(): Module = module {
                 val start = System.nanoTime()
                 try {
                     val call = execute(request)
-                    val status = if (call.response.status.value < 400) "ok" else "error"
+                    // 4xx vs 5xx matters here: a wall of 4xx means our token/config
+                    // is rejected (as in the encoding-gateway 401 outage), 5xx means
+                    // the downstream service is broken.
+                    val status = when {
+                        call.response.status.value < 400 -> "ok"
+                        call.response.status.value < 500 -> "4xx"
+                        else -> "5xx"
+                    }
                     Metrics.count("internal_client_total", 1.0, "operation" to operation, "status" to status)
                     Metrics.observe(
                         "internal_client_duration_seconds",
