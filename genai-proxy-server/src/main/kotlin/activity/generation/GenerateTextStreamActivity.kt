@@ -88,9 +88,6 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.toString()
                 )
 
-                // no-transform is load-bearing: compressing middlewares (e.g. the
-                // CRA dev-server proxy's gzip) buffer chunked responses unless the
-                // response opts out, which turns the stream into one big lump.
                 call.response.header("Cache-Control", "no-cache, no-transform")
                 call.response.header("Connection", "keep-alive")
                 call.response.header("X-Accel-Buffering", "no")
@@ -113,14 +110,11 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.useLearnedPreferences
                 )
 
-                // Send Metadata Headers
-                // conversationId is already set (or resolved), but let's sync with result
                 call.response.header("X-Conversation-Id", streamResult.conversationId)
-                call.response.header("X-Message-Id", streamResult.messageId) // User Msg ID
-                call.response.header("X-Response-Message-Id", streamResult.responseMessageId) // Assistant Msg ID
+                call.response.header("X-Message-Id", streamResult.messageId)
+                call.response.header("X-Response-Message-Id", streamResult.responseMessageId)
                 call.response.header("X-Ai-Vendor", request.aiConfig.aiVendor.toString())
-                // Instruction actually applied to the turn (explicit or the
-                // server-resolved default) so the UI can show it immediately
+
                 if (streamResult.appliedInstructionId.isNotBlank()) {
                     call.response.header("X-Instruction-Id", streamResult.appliedInstructionId)
                     if (streamResult.appliedInstructionVersion.isNotBlank()) {
@@ -130,7 +124,7 @@ fun Route.registerGenerateTextStreamRoutes(
 
                 call.respondTextWriter(contentType = ContentType.Text.Plain) {
                     try {
-                        // Force flush headers and send a heartbeat byte (space) immediately 
+                        // Force flush headers and send a heartbeat byte (space) immediately
                         // to prevent client timeout (TTFB) while waiting for AI vendor
                         write(" ")
                         flush()
@@ -146,10 +140,6 @@ fun Route.registerGenerateTextStreamRoutes(
                     }
                 }
 
-                // Fire-and-forget: learn about the user from the completed
-                // exchange (debounced inside the service) and index the
-                // exchange for semantic conversation search. The bearer token
-                // is only needed for the embedding pushes and may be absent.
                 val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
                 if (request.learnFromConversation) {
                     memoryExtractionService.maybeExtractFromConversationAsync(
