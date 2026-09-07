@@ -15,7 +15,8 @@ primary_region = "iad"
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true
-  min_machines_running = 1
+  # Dev only: everything stops when idle; fly-proxy boots a machine on the next request.
+  min_machines_running = 0
   processes = ["app"]
 
 # Fly's org Prometheus scrapes /metrics directly over the private network.

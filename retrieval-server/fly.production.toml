@@ -1,0 +1,29 @@
+app = "retrieval-server"
+# Co-located with the proxy server and DynamoDB (us-east-1)
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "5001"
+  HF_HOME = "/app/model_cache"
+
+[[mounts]]
+  source = "model_cache"
+  destination = "/app/model_cache"
+
+# No http_service section means this app won't be exposed to the public internet.
+# It will be accessible internally via `http://<app-name>.internal:5001`
+# Production stays always-on (no fly-proxy routing, no auto stop/start) to avoid
+# cold starts; the dev fly.toml uses Flycast + auto_stop instead.
+
+# Fly's org-level Prometheus scrapes /metrics over the private network —
+# the app stays internal-only. Dashboards: fly-metrics.net / Grafana Cloud.
+[metrics]
+  port = 5001
+  path = "/metrics"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "4096mb"
