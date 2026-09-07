@@ -119,7 +119,14 @@ jobs:
           FLY_AWS_ACCESS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsAccessKeyId'].OutputValue" --output text)
           FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsSecretAccessKey'].OutputValue" --output text)
           KMS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-KmsStack --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArnOutput'].OutputValue" --output text)
-          ENCODING_SERVER_URL=$(aws cloudformation list-exports --query "Exports[?Name=='encoding-service-${{ env.STAGE }}-apigw-ApiEndpoint'].Value" --output text)
+          # The API URL is a plain stack output (no CloudFormation export), so it
+          # must come from describe-stacks — list-exports returned empty, which
+          # silently disabled all proxy->encoding-server ingestion.
+          ENCODING_SERVER_URL=$(aws cloudformation describe-stacks --stack-name encoding-service-ApiGatewayStack --query "Stacks[0].Outputs[?OutputKey=='encodingservice${{ env.STAGE }}apigwApiEndpoint'].OutputValue" --output text)
+          if [ -z "$ENCODING_SERVER_URL" ] || [ "$ENCODING_SERVER_URL" = "None" ]; then
+            echo "Failed to resolve ENCODING_SERVER_URL from encoding-service-ApiGatewayStack outputs" >&2
+            exit 1
+          fi
           ATTACHMENTS_BUCKET=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-S3Stack --query "Stacks[0].Outputs[?OutputKey=='AttachmentsBucketName'].OutputValue" --output text)
 
           # Set secrets and deploy
