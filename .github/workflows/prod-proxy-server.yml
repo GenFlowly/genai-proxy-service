@@ -105,7 +105,8 @@ jobs:
             flyctl secrets set --app $APP_NAME --stage TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY }}"
           fi
 
-          flyctl deploy --app $APP_NAME --yes
+          # Pin the prod config: the default fly.toml is dev-only (Flycast + auto_stop)
+          flyctl deploy --config fly.production.toml --app $APP_NAME --yes
 
       - name: Deploy Proxy Server to Fly.io
         working-directory: ${{ env.SERVICE_APP_PATH }}
