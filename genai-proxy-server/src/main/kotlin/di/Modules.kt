@@ -93,8 +93,8 @@ fun appModule(): Module = module {
 
         client.plugin(HttpSend).intercept { request ->
             MDC.get("request_id")?.let { rid ->
-                if (request.headers["X-Request-Id"] == null) {
-                    request.headers.append("X-Request-Id", rid)
+                if (request.headers[HttpHeaders.XRequestId] == null) {
+                    request.headers.append(HttpHeaders.XRequestId, rid)
                 }
             }
             val isInternalHttp = request.url.host in internalHosts &&

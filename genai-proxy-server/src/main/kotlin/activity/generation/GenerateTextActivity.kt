@@ -2,6 +2,7 @@ package com.genflowly.activity.generation
 
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
+import com.genflowly.utils.bearerToken
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
@@ -129,7 +130,7 @@ fun Route.registerGenerateTextRoutes(
                 // exchange (debounced inside the service) and index the
                 // exchange for semantic conversation search.
                 responseMessageList.firstOrNull()?.let { message ->
-                    val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+                    val bearerToken = call.bearerToken()
                     if (request.learnFromConversation) {
                         memoryExtractionService.maybeExtractFromConversationAsync(
                             customerId, message.conversationId, bearerToken,

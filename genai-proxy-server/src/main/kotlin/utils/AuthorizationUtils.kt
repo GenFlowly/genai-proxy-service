@@ -35,6 +35,14 @@ suspend fun ApplicationCall.getAuthenticatedCustomerId(
     return customerProfileService.getCustomerIdForToken(sub, azp)
 }
 
+/**
+ * The bearer token from the Authorization header, or null if absent.
+ * Used to forward the caller's credentials to internal services
+ * (encoding server, retrieval server).
+ */
+fun ApplicationCall.bearerToken(): String? =
+    request.headers[HttpHeaders.Authorization]?.removePrefix("Bearer ")?.trim()
+
 /** The Auth0 sub claim of the authenticated JWT, or null for API-key auth. */
 fun ApplicationCall.authenticatedSub(): String? =
     principal<JWTPrincipal>()?.payload?.getClaim("sub")?.asString()

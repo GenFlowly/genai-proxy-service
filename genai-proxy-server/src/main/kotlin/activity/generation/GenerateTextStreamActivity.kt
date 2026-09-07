@@ -1,9 +1,12 @@
 package com.genflowly.activity.generation
 
+import com.genflowly.ResponseHeaders
 import com.genflowly.Routes
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.utils.bearerToken
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
@@ -56,10 +59,10 @@ fun Route.registerGenerateTextStreamRoutes(
                 code(HttpStatusCode.OK) {
                     description = "Plain-text stream of generated text chunks"
                     body<String> { mediaTypes(ContentType.Text.Plain) }
-                    header<String>("X-Conversation-Id") { description = "Conversation this exchange belongs to" }
-                    header<String>("X-Message-Id") { description = "ID of the stored user message" }
-                    header<String>("X-Response-Message-Id") { description = "ID of the stored assistant message" }
-                    header<String>("X-Ai-Vendor") { description = "AI vendor that served the request" }
+                    header<String>(ResponseHeaders.CONVERSATION_ID) { description = "Conversation this exchange belongs to" }
+                    header<String>(ResponseHeaders.MESSAGE_ID) { description = "ID of the stored user message" }
+                    header<String>(ResponseHeaders.RESPONSE_MESSAGE_ID) { description = "ID of the stored assistant message" }
+                    header<String>(ResponseHeaders.AI_VENDOR) { description = "AI vendor that served the request" }
                 }
                 code(HttpStatusCode.BadRequest) {
                     description = "Malformed request body"
@@ -88,9 +91,9 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.toString()
                 )
 
-                call.response.header("Cache-Control", "no-cache, no-transform")
-                call.response.header("Connection", "keep-alive")
-                call.response.header("X-Accel-Buffering", "no")
+                call.response.header(HttpHeaders.CacheControl, "no-cache, no-transform")
+                call.response.header(HttpHeaders.Connection, "keep-alive")
+                call.response.header(ResponseHeaders.ACCEL_BUFFERING, "no")
 
                 val streamResult = generationOrchestrator.processTextGenerateStreamRequest(
                     listOf(request.aiConfig),
@@ -110,15 +113,15 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.useLearnedPreferences
                 )
 
-                call.response.header("X-Conversation-Id", streamResult.conversationId)
-                call.response.header("X-Message-Id", streamResult.messageId)
-                call.response.header("X-Response-Message-Id", streamResult.responseMessageId)
-                call.response.header("X-Ai-Vendor", request.aiConfig.aiVendor.toString())
+                call.response.header(ResponseHeaders.CONVERSATION_ID, streamResult.conversationId)
+                call.response.header(ResponseHeaders.MESSAGE_ID, streamResult.messageId)
+                call.response.header(ResponseHeaders.RESPONSE_MESSAGE_ID, streamResult.responseMessageId)
+                call.response.header(ResponseHeaders.AI_VENDOR, request.aiConfig.aiVendor.toString())
 
                 if (streamResult.appliedInstructionId.isNotBlank()) {
-                    call.response.header("X-Instruction-Id", streamResult.appliedInstructionId)
+                    call.response.header(ResponseHeaders.INSTRUCTION_ID, streamResult.appliedInstructionId)
                     if (streamResult.appliedInstructionVersion.isNotBlank()) {
-                        call.response.header("X-Instruction-Version", streamResult.appliedInstructionVersion)
+                        call.response.header(ResponseHeaders.INSTRUCTION_VERSION, streamResult.appliedInstructionVersion)
                     }
                 }
 
@@ -140,7 +143,7 @@ fun Route.registerGenerateTextStreamRoutes(
                     }
                 }
 
-                val bearerToken = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+                val bearerToken = call.bearerToken()
                 if (request.learnFromConversation) {
                     memoryExtractionService.maybeExtractFromConversationAsync(
                         customerId, streamResult.conversationId, bearerToken,
