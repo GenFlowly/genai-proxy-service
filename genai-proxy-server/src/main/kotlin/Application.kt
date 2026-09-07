@@ -381,14 +381,12 @@ fun Application.module() {
         allowHeader(HttpHeaders.AccessControlAllowOrigin)
         allowHeader(HttpHeaders.AccessControlAllowHeaders)
         allowHeader(HttpHeaders.AccessControlAllowMethods)
-        exposeHeader("X-Conversation-Id")
-        exposeHeader("X-Message-Id")
-        exposeHeader("X-Response-Message-Id")
-        exposeHeader("X-Ai-Vendor")
-        exposeHeader("X-Input-Tokens")
-        exposeHeader("X-Output-Tokens")
-        exposeHeader("X-Instruction-Id")
-        exposeHeader("X-Instruction-Version")
+        exposeHeader(ResponseHeaders.CONVERSATION_ID)
+        exposeHeader(ResponseHeaders.MESSAGE_ID)
+        exposeHeader(ResponseHeaders.RESPONSE_MESSAGE_ID)
+        exposeHeader(ResponseHeaders.AI_VENDOR)
+        exposeHeader(ResponseHeaders.INSTRUCTION_ID)
+        exposeHeader(ResponseHeaders.INSTRUCTION_VERSION)
         
         allowCredentials = true
         allowNonSimpleContentTypes = true
