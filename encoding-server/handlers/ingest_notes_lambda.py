@@ -6,7 +6,8 @@ from typing import Dict, Any
 from encoding_library.processors.processor_factory import ProcessorFactory
 from services.authorization_service import AuthorizationService
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
-from encoding_library.observability import request_id_from_lambda_event, set_request_id, setup_logging, track
+from encoding_library.observability import count, request_id_from_lambda_event, set_request_id, setup_logging, track
+from handlers.http_metrics import track_http_status
 
 # Trigger build - separated ECR repos
 
@@ -23,6 +24,7 @@ auth_service = None
 
 # LAMBDA 1
 @track("ingest_notes")
+@track_http_status("ingest_notes")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     First lambda in encoding server
@@ -81,6 +83,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         entries = [] # For SQS batch sending
         
         for idx, item_data in enumerate(items_to_process):
+            item_data_type = item_data.get('dataType', item_data.get('data_type', 'NOTE')) \
+                if isinstance(item_data, dict) else 'NOTE'
             try:
                 if not all(k in item_data for k in ('client', 'data')):
                     raise ValueError(f"Payload must contain 'client' and 'data'. Got keys: {list(item_data.keys())}")
@@ -122,17 +126,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
                 sqs_message_ids.append(response['MessageId'])
                 processed_count += 1
-                
+                count("ingest_item_total", status="ok", data_type=item_data_type)
+
             except ValueError as ve:
                 error_msg = f"Item {idx}: Validation error: {str(ve)}"
                 logger.error(error_msg)
                 errors.append(error_msg)
                 failed_count += 1
+                count("ingest_item_total", status="validation_error", data_type=item_data_type)
             except Exception as e:
                 error_msg = f"Item {idx}: Error processing: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 errors.append(error_msg)
                 failed_count += 1
+                count("ingest_item_total", status="error", data_type=item_data_type)
 
         
         # Return appropriate response
