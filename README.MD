@@ -221,6 +221,8 @@ Add one CloudWatch datasource per AWS account (dev `571600870493`, prod `1899794
 
 Both datasources are read-only: the Fly token can't deploy, and the AWS side uses short-lived STS credentials via the assume-role trust (no static secret exists). Request-id correlation: every log line in every service carries a `request_id` field propagated from the proxy's `X-Request-Id` — search it in Logs Insights (lambdas) or Fly logs to trace one user request end-to-end.
 
+**5. Dashboards as code**: the JSONs in `observability/grafana/` are the source of truth — never edit a dashboard only in the Grafana UI (export any UI change back into the repo). CI deploys them automatically: `dev-grafana-dashboards.yml` upserts the `*-development.json` dashboards on pushes to `development`, `prod-grafana-dashboards.yml` upserts `*-production.json` on merges to `main` (each into a `GenFlowly (<stage>)` folder, matched by the dashboard `uid` — every JSON must have one, by convention its filename). Setup: create a Grafana **service account** (role Editor) with a token, and add `GRAFANA_URL` (`https://<name>.grafana.net`) and `GRAFANA_SA_TOKEN` to both the `development` and `production` GitHub environments.
+
 ## Section 3: Deploying to Production
 
 When you are ready to launch to Production, you must bootstrap and pre-provision the environment just like you did for Development, but using production parameters.

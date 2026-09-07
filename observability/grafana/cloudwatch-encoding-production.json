@@ -1,4 +1,5 @@
 {
+  "uid": "cloudwatch-encoding-production",
   "title": "GenFlowly Encoding Pipeline (production)",
   "tags": [
     "genflowly",
