@@ -12,6 +12,7 @@ from encoding_library.utils.model_registry import (
 )
 from services.authorization_service import AuthorizationService
 from encoding_library.observability import request_id_from_lambda_event, set_request_id, setup_logging, track
+from handlers.http_metrics import track_http_status
 
 setup_logging("encoding-server")
 logger = logging.getLogger()
@@ -20,6 +21,7 @@ logger.setLevel(logging.INFO)
 auth_service = None
 
 @track("create_collections")
+@track_http_status("create_collections")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda to create Zilliz collections for a given customer explicitly.

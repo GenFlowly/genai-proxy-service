@@ -511,7 +511,7 @@
     },
     {
       "type": "stat",
-      "title": "Cost last 24h (USD)",
+      "title": "Cost (USD)",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -535,7 +535,8 @@
             "lastNotNull"
           ]
         },
-        "graphMode": "area"
+        "graphMode": "area",
+        "textMode": "value_and_name"
       },
       "targets": [
         {
@@ -543,14 +544,25 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum(increase(llm_cost_usd_total{app=~\".*-development\"}[24h]))",
+          "expr": "sum(increase(llm_cost_usd_total{app=~\".*-development\"}[$__range]))",
+          "legendFormat": "total",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (vendor) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__range]))",
+          "legendFormat": "{{vendor}}",
+          "refId": "B"
         }
-      ]
+      ],
+      "description": "Total LLM spend over the selected dashboard time range, overall and per vendor."
     },
     {
       "type": "stat",
-      "title": "Unpriced turns 24h",
+      "title": "Unpriced turns",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -579,7 +591,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum(increase(llm_cost_unpriced_total{app=~\".*-development\"}[24h])) or vector(0)",
+          "expr": "sum(increase(llm_cost_unpriced_total{app=~\".*-development\"}[$__range])) or vector(0)",
           "refId": "A"
         }
       ]
