@@ -674,7 +674,7 @@
       "gridPos": {
         "x": 0,
         "y": 15,
-        "w": 12,
+        "w": 8,
         "h": 7
       },
       "fieldConfig": {
@@ -769,6 +769,134 @@
           "period": "300",
           "expression": "",
           "label": "5xx errors",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Ingest HTTP responses by status (per 5m)",
+      "description": "Actual statusCode returned by the API-facing lambdas (@track alone reports ok for handled 4xx).",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "bfxh1tvnrnu9sf"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 15,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "http_response_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "operation": [
+              "*"
+            ],
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "300",
+          "expression": "",
+          "label": "${PROP('Dim.operation')} ${PROP('Dim.status')}",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Ingest items by outcome (per 5m)",
+      "description": "Per-item ingest outcomes \u2014 catches partial failures hidden inside 202 responses.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "bfxh1tvnrnu9sf"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 15,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "GenFlowly",
+          "metricName": "ingest_item_total",
+          "statistic": "Sum",
+          "dimensions": {
+            "data_type": [
+              "*"
+            ],
+            "status": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "300",
+          "expression": "",
+          "label": "${PROP('Dim.data_type')} ${PROP('Dim.status')}",
           "id": "",
           "alias": ""
         }

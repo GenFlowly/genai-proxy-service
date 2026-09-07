@@ -222,6 +222,8 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `stream_zero_tokens_total`, `stream_error_total` | vendor | retrieval-server streaming |
 | `retry_attempt_total`, `retry_exhausted_total` | operation | encoding-library retry util (all services) |
 | `ingest_notes/ingest_email/trigger_ingestion/parse_and_chunk/create_collections/voyage_batch_accumulate/voyage_batch_poll` (`_total`/`_duration_seconds`) | status | remaining encoding lambdas (`@track` on each handler) |
+| `http_response_total` | operation (handler), status (actual HTTP statusCode, e.g. `202`\|`400`) | API-facing encoding lambdas — real HTTP outcome; `@track` alone reports ok for handled 4xx |
+| `ingest_item_total` | data_type, status (`ok`\|`validation_error`\|`error`) | ingest handler, per item — catches partial failures inside 202 responses |
 | `memory_load_failure_total` | — | retrieval-server memory node (swallowed by design, counted) |
 | `memory_extraction_total` / `_duration_seconds` | source (`conversation`\|`note`), status | Kotlin proxy (`MemoryExtractionService`) |
 | `memory_extraction_skipped_total` | source, status (`disabled`\|`empty`\|`debounced`\|`too_short`) | Kotlin proxy — extraction not attempted, by reason |
