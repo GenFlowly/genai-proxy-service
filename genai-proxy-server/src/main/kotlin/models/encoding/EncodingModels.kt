@@ -1,5 +1,7 @@
 package com.genflowly.models.encoding
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -44,9 +46,10 @@ data class EncodingMemoryData(
     val createdAt: String
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class EncodingSaveMemoryRequest(
-    val dataType: String = "MEMORY",
+    @EncodeDefault val dataType: String = "MEMORY",
     val client: String,
     val modelType: String? = null,
     val modelName: String? = null,
@@ -71,9 +74,10 @@ data class EncodingConversationData(
     val createdAt: String
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class EncodingSaveConversationRequest(
-    val dataType: String = "CONVERSATION",
+    @EncodeDefault val dataType: String = "CONVERSATION",
     val client: String,
     val modelType: String? = null,
     val modelName: String? = null,
@@ -99,9 +103,10 @@ data class EncodingInstructionData(
     val createdAt: String
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class EncodingSaveInstructionRequest(
-    val dataType: String = "INSTRUCTION",
+    @EncodeDefault val dataType: String = "INSTRUCTION",
     val client: String,
     val modelType: String? = null,
     val modelName: String? = null,
