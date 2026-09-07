@@ -664,11 +664,122 @@
       ]
     },
     {
+      "type": "timeseries",
+      "title": "Encoding API requests & rejections (per 5m)",
+      "description": "Front door of the ingestion pipeline. 4xx here with no lambda invocations = the JWT authorizer is rejecting callers (audience/issuer mismatch) \u2014 nothing downstream will run.",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "bfxh1tvnrnu9sf"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApiGateway",
+          "metricName": "Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "ApiId": [
+              "9myixcs1df"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "300",
+          "expression": "",
+          "label": "requests",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApiGateway",
+          "metricName": "4xx",
+          "statistic": "Sum",
+          "dimensions": {
+            "ApiId": [
+              "9myixcs1df"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "300",
+          "expression": "",
+          "label": "4xx rejected",
+          "id": "",
+          "alias": ""
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "queryMode": "Metrics",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApiGateway",
+          "metricName": "5xx",
+          "statistic": "Sum",
+          "dimensions": {
+            "ApiId": [
+              "9myixcs1df"
+            ]
+          },
+          "matchExact": false,
+          "region": "default",
+          "period": "300",
+          "expression": "",
+          "label": "5xx errors",
+          "id": "",
+          "alias": ""
+        }
+      ]
+    },
+    {
       "type": "row",
       "title": "AWS built-ins (Lambda / SQS / Step Functions)",
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 22,
         "w": 24,
         "h": 1
       },
@@ -684,7 +795,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 23,
         "w": 8,
         "h": 7
       },
@@ -769,7 +880,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 16,
+        "y": 23,
         "w": 8,
         "h": 7
       },
@@ -830,7 +941,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 16,
+        "y": 23,
         "w": 8,
         "h": 7
       },
@@ -890,7 +1001,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 30,
         "w": 12,
         "h": 7
       },
@@ -950,7 +1061,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 23,
+        "y": 30,
         "w": 12,
         "h": 7
       },
