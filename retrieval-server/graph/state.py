@@ -24,6 +24,11 @@ class RetrievalState(TypedDict):
     customer_id: str
     client: str
     data_type: str
+    # What the LLM calls in this run serve — "conversation" for user chat, a
+    # RequestType (conversation_title, instruction_persona, memory_extraction,
+    # ...) for internal generations. Metric dimension (`source`) on
+    # llm_request_total; bounded set, forwarded from the proxy.
+    request_source: str
 
     # Embedding model
     model_type: Optional[str]

@@ -90,6 +90,7 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
         )
 
         provider = state["llm_provider"]
+        request_source = state.get("request_source") or "conversation"
         cache_anthropic = (provider == "anthropic")
         messages: list[Any] = [_make_system(system_prompt, cache_anthropic)]
 
@@ -137,9 +138,11 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
         try:
             response = await llm.ainvoke(messages)
         except Exception:
-            count("llm_request_total", status="error", vendor=provider, model=effective_model)
+            count("llm_request_total", status="error", vendor=provider, model=effective_model,
+                  source=request_source, operation=node_type.lower())
             raise
-        count("llm_request_total", status="ok", vendor=provider, model=effective_model)
+        count("llm_request_total", status="ok", vendor=provider, model=effective_model,
+              source=request_source, operation=node_type.lower())
         observe("llm_request_duration_seconds", time.perf_counter() - llm_start, vendor=provider)
         logger.info("Node %s - Received Response:\n%s\n---", node_type, response.content)
 

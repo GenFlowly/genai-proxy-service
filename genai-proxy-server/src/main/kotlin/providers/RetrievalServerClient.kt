@@ -53,7 +53,9 @@ private data class RetrievalAgentPayload(
     /** JSON Schema for vendor-enforced structured output; exclusive with tools */
     val response_schema: kotlinx.serialization.json.JsonObject? = null,
     /** Governance decision: MEMORY nodes may inject learned user memories. */
-    val memory_enabled: Boolean = false
+    val memory_enabled: Boolean = false,
+    /** Purpose label for llm_request_total{source=...}: "conversation" or a RequestType lowercased. */
+    val request_source: String = "conversation"
 )
 
 @Serializable
@@ -78,7 +80,9 @@ private data class ExecuteAgentGraphPayload(
     val llm_max_tokens: Int = 4096,
     val model_type: String? = null,
     val model_name: String? = null,
-    val response_schema: kotlinx.serialization.json.JsonObject? = null
+    val response_schema: kotlinx.serialization.json.JsonObject? = null,
+    /** Purpose label for llm_request_total{source=...}: the RequestType lowercased. */
+    val request_source: String = "internal"
 )
 
 // --- /models and /validate-key wire types ---
@@ -188,7 +192,8 @@ class RetrievalServerClient(
         toolChoice: String?,
         toolResults: List<PayloadToolResult>,
         responseSchema: kotlinx.serialization.json.JsonObject?,
-        memoryEnabled: Boolean
+        memoryEnabled: Boolean,
+        requestSource: String
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
@@ -207,7 +212,8 @@ class RetrievalServerClient(
             tool_choice = toolChoice,
             tool_results = toolResults,
             response_schema = responseSchema,
-            memory_enabled = memoryEnabled
+            memory_enabled = memoryEnabled,
+            request_source = requestSource
         )
     )
 
@@ -227,10 +233,11 @@ class RetrievalServerClient(
         toolChoice: String? = null,
         toolResults: List<PayloadToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
-        memoryEnabled: Boolean = false
+        memoryEnabled: Boolean = false,
+        requestSource: String = "conversation"
     ): RetrievalResult {
         logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -283,7 +290,8 @@ class RetrievalServerClient(
         llmMaxTokens: Int = 4096,
         modelType: String? = null,
         modelName: String? = null,
-        responseSchema: kotlinx.serialization.json.JsonObject? = null
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
+        requestSource: String = "internal"
     ): RetrievalResult {
         logger.info { "Executing agent graph $graphId for customer $customerId (provider $llmProvider, model $llmModel)" }
         return try {
@@ -299,7 +307,8 @@ class RetrievalServerClient(
                     llm_max_tokens = llmMaxTokens,
                     model_type = modelType,
                     model_name = modelName,
-                    response_schema = responseSchema
+                    response_schema = responseSchema,
+                    request_source = requestSource
                 )))
                 timeout {
                     requestTimeoutMillis = 300_000L
@@ -343,10 +352,11 @@ class RetrievalServerClient(
         toolChoice: String? = null,
         toolResults: List<PayloadToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
-        memoryEnabled: Boolean = false
+        memoryEnabled: Boolean = false,
+        requestSource: String = "conversation"
     ): Flow<StreamChunk> = channelFlow {
         logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
