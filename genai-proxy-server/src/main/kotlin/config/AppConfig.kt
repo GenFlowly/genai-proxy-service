@@ -24,8 +24,12 @@ data class AppConfig(
     /** Auth0 application clientIds whose tokens belong to the admin panel (matched against azp). */
     val adminPanelAuth0ClientIds: Set<String>,
     /** Email domain required for admin-panel accounts (no leading @). */
-    val adminEmailDomain: String
+    val adminEmailDomain: String,
+    /** Deployment environment from APP_ENV: "production" on the prod Fly app, "development" otherwise. */
+    val environment: String
 ) {
+    val isProduction: Boolean get() = environment == "production"
+
     /**
      * Maps a JWT azp claim (the Auth0 application the token was issued to) to
      * the profile client identifier, or null when the azp is not configured —
@@ -57,7 +61,9 @@ data class AppConfig(
             reactAppAuth0ClientIds = envList("AUTH0_REACT_APP_CLIENT_IDS"),
             adminPanelAuth0ClientIds = envList("AUTH0_ADMIN_PANEL_CLIENT_IDS"),
             adminEmailDomain = System.getenv("ADMIN_EMAIL_DOMAIN")?.trim()?.removePrefix("@")?.lowercase()
-                ?.takeIf { it.isNotEmpty() } ?: "genflowly.com"
+                ?.takeIf { it.isNotEmpty() } ?: "genflowly.com",
+            environment = System.getenv("APP_ENV")?.trim()?.lowercase()
+                ?.takeIf { it.isNotEmpty() } ?: "development"
         )
 
         private fun envList(name: String): Set<String> =

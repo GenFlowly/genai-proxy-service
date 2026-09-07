@@ -10,24 +10,21 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
-import kotlinx.serialization.SerializationException
 import com.genflowly.models.BatchGenerateTextResponse
 import com.genflowly.models.GenerateTextRequest
 import com.genflowly.models.GenerateTextResponse
 import com.genflowly.models.Message
 import org.slf4j.LoggerFactory
-import com.genflowly.service.ConversationIndexingService
+import com.genflowly.service.ExchangeSideEffects
 import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.CustomerProfileService
-import com.genflowly.service.MemoryExtractionService
 
 private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 
 fun Route.registerGenerateTextRoutes(
     generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService,
-    memoryExtractionService: MemoryExtractionService,
-    conversationIndexingService: ConversationIndexingService
+    exchangeSideEffects: ExchangeSideEffects
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT, {
@@ -70,7 +67,7 @@ fun Route.registerGenerateTextRoutes(
                 }
             }
         }) {
-            try {
+            call.handleGenerationErrors(logger, "GenerateText") {
                 val request = call.receive<GenerateTextRequest>()
 
                 // Extract customerId from JWT token
@@ -126,46 +123,19 @@ fun Route.registerGenerateTextRoutes(
                     generateTextResponseList.add(createResponse(message))
                 }
 
-                // Fire-and-forget: learn about the user from the completed
-                // exchange (debounced inside the service) and index the
-                // exchange for semantic conversation search.
                 responseMessageList.firstOrNull()?.let { message ->
-                    val bearerToken = call.bearerToken()
-                    if (request.learnFromConversation) {
-                        memoryExtractionService.maybeExtractFromConversationAsync(
-                            customerId, message.conversationId, bearerToken,
-                            responseMessageId = message.messageId
-                        )
-                    }
-                    conversationIndexingService.indexExchangeAsync(
+                    exchangeSideEffects.launchAsync(
                         customerId = customerId,
                         conversationId = message.conversationId,
                         client = client,
                         userText = request.prompt.prompt,
                         responseMessageId = message.messageId,
-                        bearerToken = bearerToken
+                        bearerToken = call.bearerToken(),
+                        learnFromConversation = request.learnFromConversation
                     )
                 }
 
                 call.respond(BatchGenerateTextResponse(results = generateTextResponseList))
-
-
-            } catch (e: SerializationException) {
-                logger.error("Malformed GenerateText request: {}", e.message, e)
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Invalid request format: ${e.message}")
-                )
-            } catch (e: Exception) {
-                logger.error(
-                    "Unexpected error in GenerateText controller: {}",
-                    e.message,
-                    e
-                )
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    mapOf("error" to "Internal server error: ${e.message}")
-                )
             }
         }
     }

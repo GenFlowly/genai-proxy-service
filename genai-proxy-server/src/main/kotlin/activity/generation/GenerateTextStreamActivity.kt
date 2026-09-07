@@ -11,25 +11,21 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.header
-import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.Route
 import io.github.smiley4.ktoropenapi.post
-import kotlinx.serialization.SerializationException
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GenerateTextStreamRequest
 import org.slf4j.LoggerFactory
-import com.genflowly.service.ConversationIndexingService
+import com.genflowly.service.ExchangeSideEffects
 import com.genflowly.service.GenerationOrchestrator
-import com.genflowly.service.MemoryExtractionService
 
 private val logger = LoggerFactory.getLogger("GenerateTextStreamRoute")
 
 fun Route.registerGenerateTextStreamRoutes(
     generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService,
-    memoryExtractionService: MemoryExtractionService,
-    conversationIndexingService: ConversationIndexingService
+    exchangeSideEffects: ExchangeSideEffects
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT_STREAM, {
@@ -78,7 +74,7 @@ fun Route.registerGenerateTextStreamRoutes(
                 }
             }
         }) {
-            try {
+            call.handleGenerationErrors(logger, "GenerateTextStream") {
                 val request = call.receive<GenerateTextStreamRequest>()
 
                 val customerId = call.requireAuthenticatedCustomerId(
@@ -143,37 +139,14 @@ fun Route.registerGenerateTextStreamRoutes(
                     }
                 }
 
-                val bearerToken = call.bearerToken()
-                if (request.learnFromConversation) {
-                    memoryExtractionService.maybeExtractFromConversationAsync(
-                        customerId, streamResult.conversationId, bearerToken,
-                        responseMessageId = streamResult.responseMessageId
-                    )
-                }
-                conversationIndexingService.indexExchangeAsync(
+                exchangeSideEffects.launchAsync(
                     customerId = customerId,
                     conversationId = streamResult.conversationId,
                     client = request.client,
                     userText = request.prompt.prompt,
                     responseMessageId = streamResult.responseMessageId,
-                    bearerToken = bearerToken
-                )
-
-            } catch (e: SerializationException) {
-                logger.error("Malformed GenerateTextStream request: {}", e.message, e)
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Invalid request format: ${e.message}")
-                )
-            } catch (e: Exception) {
-                logger.error(
-                    "Unexpected error in GenerateTextStream controller: {}",
-                    e.message,
-                    e
-                )
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    mapOf("error" to "Internal server error: ${e.message}")
+                    bearerToken = call.bearerToken(),
+                    learnFromConversation = request.learnFromConversation
                 )
             }
         }

@@ -8,6 +8,7 @@ primary_region = "iad"
 
 [env]
   PORT = "8080"
+  APP_ENV = "production"
 
 [http_service]
   internal_port = 8080
