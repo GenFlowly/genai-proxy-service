@@ -1,6 +1,6 @@
 {
   "uid": "cloudwatch-encoding-production",
-  "title": "GenFlowly Encoding Pipeline (production)",
+  "title": "Encoding Lambdas",
   "tags": [
     "genflowly",
     "observability",
