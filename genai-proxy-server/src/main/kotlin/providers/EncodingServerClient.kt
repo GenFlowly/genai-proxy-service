@@ -6,6 +6,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import com.genflowly.EmbeddingConstants
@@ -43,7 +44,7 @@ class EncodingServerClient(
         try {
             logger.info { "Ensuring collections exist for customerId=$customerId on encoding server $baseUrl" }
             val createRes = httpClient.post("$baseUrl/create-collections") {
-                header("Authorization", authHeader)
+                header(HttpHeaders.Authorization, authHeader)
                 contentType(ContentType.Application.Json)
                 setBody(
                     EncodingCreateCollectionsRequest(
@@ -80,7 +81,7 @@ class EncodingServerClient(
             logger.info { "Sending note to encoding server: $url" }
             val response = httpClient.post(url) {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $bearerToken")
+                header(HttpHeaders.Authorization, "Bearer $bearerToken")
                 setBody(request)
             }
             if (response.status.isSuccess()) {
@@ -110,7 +111,7 @@ class EncodingServerClient(
         try {
             val response = httpClient.post(url) {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $bearerToken")
+                header(HttpHeaders.Authorization, "Bearer $bearerToken")
                 setBody(request)
             }
             if (response.status.isSuccess()) {
@@ -140,7 +141,7 @@ class EncodingServerClient(
         try {
             val response = httpClient.post(url) {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $bearerToken")
+                header(HttpHeaders.Authorization, "Bearer $bearerToken")
                 setBody(request)
             }
             if (response.status.isSuccess()) {
@@ -170,7 +171,7 @@ class EncodingServerClient(
         try {
             val response = httpClient.post(url) {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $bearerToken")
+                header(HttpHeaders.Authorization, "Bearer $bearerToken")
                 setBody(request)
             }
             if (response.status.isSuccess()) {
