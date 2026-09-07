@@ -9,6 +9,7 @@ import com.genflowly.models.api.MemoryKind
 import com.genflowly.models.api.MemorySourceType
 import com.genflowly.models.encoding.EncodingMemoryData
 import com.genflowly.models.encoding.EncodingSaveMemoryRequest
+import com.genflowly.observability.Metrics
 import com.genflowly.providers.EncodingServerClient
 import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.repository.CustomerProfileRepository
@@ -59,7 +60,13 @@ class MemoryExtractionService(
     private val customerProfileRepository: CustomerProfileRepository,
     private val encodingServerClient: EncodingServerClient,
     private val retrievalServerClient: RetrievalServerClient,
-    private val appScope: AppScope
+    private val appScope: AppScope,
+    /**
+     * When true (development and lower environments), log lines may include
+     * conversation/memory content; in production only ids and counts are
+     * logged.
+     */
+    private val logContent: Boolean
 ) {
     private val logger = LoggerFactory.getLogger(MemoryExtractionService::class.java)
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -92,35 +99,52 @@ class MemoryExtractionService(
                 try {
                     conversationService.setMessageLearnedFacts(conversationId, responseMessageId, "[]")
                 } catch (e: Exception) {
+                    Metrics.count("memory_learned_facts_write_failure_total")
                     logger.warn("Failed to write learned-facts marker for $responseMessageId: ${e.message}")
                 }
             }
+            suspend fun skip(reason: String, detail: String = "") {
+                Metrics.count(
+                    "memory_extraction_skipped_total", 1.0,
+                    "status" to reason, "source" to SOURCE_CONVERSATION
+                )
+                logger.info("Memory extraction skipped for conversation {}: {}{}", conversationId, reason, detail)
+                markNothingLearned()
+            }
             try {
+                logger.info("Memory extraction triggered for conversation {} by customer {}", conversationId, customerId)
                 if (!memoryService.isMemoryEnabled(customerId)) {
-                    markNothingLearned(); return@launch
+                    skip("disabled"); return@launch
                 }
 
                 val latestMessageId = conversationService.getLatestMessageId(conversationId)
-                if (latestMessageId == null) { markNothingLearned(); return@launch }
+                if (latestMessageId == null) { skip("empty"); return@launch }
                 val thread = conversationService.getMessageThread(conversationId, latestMessageId)
                 val processed = memoryRepository.getConversationExtractionMark(customerId, conversationId)
                 val newMessages = thread.size - (processed ?: 0)
                 val threshold = if (processed == null) FIRST_EXTRACTION_MIN_MESSAGES else MESSAGES_PER_EXTRACTION
-                if (newMessages < threshold) { markNothingLearned(); return@launch }
-
-                // Claim the window before the LLM call so concurrent completions
-                // of parallel turns don't double-extract; a failed run forfeits
-                // its window, which the next exchange re-opens.
-                memoryRepository.setConversationExtractionMark(customerId, conversationId, thread.size)
-
-                val transcript = thread.takeLast(MAX_TRANSCRIPT_MESSAGES).joinToString("\n") { message ->
-                    val speaker = if (message.role == "assistant") "Assistant" else "User"
-                    "$speaker: ${message.text.take(MAX_MESSAGE_CHARS)}"
+                if (newMessages < threshold) {
+                    skip("debounced", " ($newMessages new message(s), threshold $threshold)"); return@launch
                 }
-                val added = extract(customerId, transcript, MemorySourceType.CONVERSATION, conversationId, bearerToken)
-                if (responseMessageId != null) {
-                    val factsJson = json.encodeToString(added.map { LearnedFactView(it.memoryId, it.text) })
-                    conversationService.setMessageLearnedFacts(conversationId, responseMessageId, factsJson)
+
+                Metrics.tracked("memory_extraction", "source" to SOURCE_CONVERSATION) {
+                    // Claim the window before the LLM call so concurrent completions
+                    // of parallel turns don't double-extract; a failed run forfeits
+                    // its window, which the next exchange re-opens.
+                    memoryRepository.setConversationExtractionMark(customerId, conversationId, thread.size)
+
+                    val transcript = thread.takeLast(MAX_TRANSCRIPT_MESSAGES).joinToString("\n") { message ->
+                        val speaker = if (message.role == "assistant") "Assistant" else "User"
+                        "$speaker: ${message.text.take(MAX_MESSAGE_CHARS)}"
+                    }
+                    if (logContent) {
+                        logger.info("Memory extraction transcript for conversation {}:\n{}", conversationId, transcript)
+                    }
+                    val added = extract(customerId, transcript, MemorySourceType.CONVERSATION, conversationId, bearerToken)
+                    if (responseMessageId != null) {
+                        val factsJson = json.encodeToString(added.map { LearnedFactView(it.memoryId, it.text) })
+                        conversationService.setMessageLearnedFacts(conversationId, responseMessageId, factsJson)
+                    }
                 }
             } catch (e: Exception) {
                 logger.warn("Memory extraction from conversation $conversationId failed: ${e.message}")
@@ -132,12 +156,21 @@ class MemoryExtractionService(
     /** Note trigger, called on the final (encode=true) save of an editing session. */
     fun maybeExtractFromNoteAsync(customerId: String, noteKey: String, title: String?, content: String, bearerToken: String?) {
         appScope.launch {
+            fun skip(reason: String) {
+                Metrics.count(
+                    "memory_extraction_skipped_total", 1.0,
+                    "status" to reason, "source" to SOURCE_NOTE
+                )
+                logger.info("Memory extraction skipped for note {}: {}", noteKey, reason)
+            }
             try {
-                if (content.trim().length < MIN_NOTE_CHARS) return@launch
-                if (!memoryService.isMemoryEnabled(customerId)) return@launch
+                if (content.trim().length < MIN_NOTE_CHARS) { skip("too_short"); return@launch }
+                if (!memoryService.isMemoryEnabled(customerId)) { skip("disabled"); return@launch }
                 val noteText = listOfNotNull(title?.takeIf { it.isNotBlank() && it != "Untitled" }, content)
                     .joinToString("\n").take(MAX_NOTE_CHARS)
-                extract(customerId, noteText, MemorySourceType.NOTE, noteKey, bearerToken)
+                Metrics.tracked("memory_extraction", "source" to SOURCE_NOTE) {
+                    extract(customerId, noteText, MemorySourceType.NOTE, noteKey, bearerToken)
+                }
             } catch (e: Exception) {
                 logger.warn("Memory extraction from note $noteKey failed: ${e.message}")
             }
@@ -169,21 +202,37 @@ class MemoryExtractionService(
             conversationId = "memory-extraction"
         )
 
-        val operations = parseOperations(result.text) ?: return emptyList()
-        if (operations.isEmpty()) return emptyList()
+        val source = sourceType.name.lowercase()
+        if (logContent) {
+            logger.info("Memory-extraction agent output for {} {}: {}", source, sourceId, result.text)
+        }
+        val operations = parseOperations(result.text, source) ?: return emptyList()
+        if (operations.isEmpty()) {
+            logger.info("Memory extraction returned no operations for {} {}", source, sourceId)
+            return emptyList()
+        }
 
         val existingById = existing.associateBy { it.memoryId }
         val addedMemories = mutableListOf<CustomerMemory>()
         var applied = 0
         operations.forEach { op ->
+            val opName = op.op.lowercase().takeIf { it in KNOWN_OPERATIONS } ?: "unknown"
             try {
-                if (applyOperation(customerId, op, existingById, sourceType, sourceId, bearerToken, addedMemories)) applied++
+                val changed = applyOperation(customerId, op, existingById, sourceType, sourceId, bearerToken, addedMemories)
+                if (changed) applied++
+                Metrics.count(
+                    "memory_operation_total", 1.0,
+                    "operation" to opName, "status" to if (changed) "ok" else "noop"
+                )
             } catch (e: Exception) {
+                Metrics.count("memory_operation_total", 1.0, "operation" to opName, "status" to "error")
                 logger.warn("Failed to apply memory operation ${op.op} for $customerId: ${e.message}")
             }
         }
         if (applied > 0) {
-            logger.info("Applied $applied memory operation(s) for customer $customerId from ${sourceType.name.lowercase()} $sourceId")
+            logger.info("Applied $applied memory operation(s) for customer $customerId from $source $sourceId")
+        } else {
+            logger.info("No memory operation changed stored state for $source $sourceId (${operations.size} proposed)")
         }
         return addedMemories
     }
@@ -272,6 +321,7 @@ class MemoryExtractionService(
                 bearerToken
             )
         } catch (e: Exception) {
+            Metrics.count("memory_vector_failure_total", 1.0, "operation" to "encode")
             logger.error("Failed to encode memory ${memory.memoryId} for $customerId", e)
         }
     }
@@ -280,24 +330,35 @@ class MemoryExtractionService(
         try {
             retrievalServerClient.deleteMemoryVectors(customerId, memoryId)
         } catch (e: Exception) {
+            Metrics.count("memory_vector_failure_total", 1.0, "operation" to "delete")
             logger.error("Failed to delete vectors for memory $memoryId", e)
         }
     }
 
-    private fun parseOperations(raw: String): List<MemoryOperation>? {
+    private fun parseOperations(raw: String, source: String): List<MemoryOperation>? {
         val cleaned = raw.trim()
             .removePrefix("```json").removePrefix("```")
             .removeSuffix("```").trim()
-        if (cleaned.isBlank()) return null
+        if (cleaned.isBlank()) {
+            Metrics.count("memory_extraction_unparseable_total", 1.0, "source" to source)
+            logger.warn("Blank memory-extraction output")
+            return null
+        }
         return try {
             json.decodeFromString<MemoryOperations>(cleaned).operations
         } catch (e: Exception) {
-            logger.warn("Unparseable memory-extraction output (${cleaned.take(120)}...): ${e.message}")
+            Metrics.count("memory_extraction_unparseable_total", 1.0, "source" to source)
+            val snippet = if (logContent) " (${cleaned.take(120)}...)" else " (${cleaned.length} chars)"
+            logger.warn("Unparseable memory-extraction output$snippet: ${e.message}")
             null
         }
     }
 
     companion object {
+        private const val SOURCE_CONVERSATION = "conversation"
+        private const val SOURCE_NOTE = "note"
+        private val KNOWN_OPERATIONS = setOf("add", "update", "delete")
+
         private const val FIRST_EXTRACTION_MIN_MESSAGES = 2
         private const val MESSAGES_PER_EXTRACTION = 4
         private const val MAX_TRANSCRIPT_MESSAGES = 12
