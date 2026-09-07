@@ -288,7 +288,7 @@
     },
     {
       "type": "timeseries",
-      "title": "LLM requests/s by vendor",
+      "title": "LLM requests/h by vendor",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -324,11 +324,12 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (vendor, status) (rate(llm_request_total{app=~\".*-development\"}[$__rate_interval]))",
+          "expr": "sum by (vendor) (increase(llm_request_total{app=~\".*-development\"}[1h]))",
           "legendFormat": "{{vendor}} {{status}}",
           "refId": "A"
         }
-      ]
+      ],
+      "description": "Request count per hour \u2014 increase(llm_request_total[1h]), readable at low traffic volumes."
     },
     {
       "type": "timeseries",
