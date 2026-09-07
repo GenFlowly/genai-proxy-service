@@ -9,6 +9,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import com.genflowly.EmbeddingConstants
+import com.genflowly.observability.Metrics
 import com.genflowly.models.encoding.EncodingCreateCollectionsRequest
 import com.genflowly.models.encoding.EncodingSaveConversationRequest
 import com.genflowly.models.encoding.EncodingSaveInstructionRequest
@@ -35,6 +36,7 @@ class EncodingServerClient(
     suspend fun ensureCollections(customerId: String, authHeader: String) {
         val baseUrl = configuredUrl
         if (baseUrl == null) {
+            Metrics.count("internal_client_total", 1.0, "operation" to "/create-collections", "status" to "not_configured")
             logger.warn { "ENCODING_SERVER_URL is not set. Skipping collection check/creation." }
             return
         }
@@ -69,6 +71,7 @@ class EncodingServerClient(
     suspend fun encodeNote(request: EncodingSaveNoteRequest, bearerToken: String) {
         val baseUrl = configuredUrl
         if (baseUrl == null) {
+            Metrics.count("internal_client_total", 1.0, "operation" to "/encode-notes", "status" to "not_configured")
             logger.warn { "ENCODING_SERVER_URL is not set. Skipping note encoding for note ${request.data.noteKey}." }
             return
         }
@@ -99,6 +102,7 @@ class EncodingServerClient(
     suspend fun encodeMemory(request: EncodingSaveMemoryRequest, bearerToken: String) {
         val baseUrl = configuredUrl
         if (baseUrl == null) {
+            Metrics.count("internal_client_total", 1.0, "operation" to "/encode-memories", "status" to "not_configured")
             logger.warn { "ENCODING_SERVER_URL is not set. Skipping memory encoding for ${request.data.memoryKey}." }
             return
         }
@@ -128,6 +132,7 @@ class EncodingServerClient(
     suspend fun encodeInstruction(request: EncodingSaveInstructionRequest, bearerToken: String) {
         val baseUrl = configuredUrl
         if (baseUrl == null) {
+            Metrics.count("internal_client_total", 1.0, "operation" to "/encode-instructions", "status" to "not_configured")
             logger.warn { "ENCODING_SERVER_URL is not set. Skipping instruction encoding for ${request.data.instructionId}." }
             return
         }
@@ -157,6 +162,7 @@ class EncodingServerClient(
     suspend fun encodeConversation(request: EncodingSaveConversationRequest, bearerToken: String) {
         val baseUrl = configuredUrl
         if (baseUrl == null) {
+            Metrics.count("internal_client_total", 1.0, "operation" to "/encode-conversations", "status" to "not_configured")
             logger.warn { "ENCODING_SERVER_URL is not set. Skipping conversation encoding for ${request.data.messageKey}." }
             return
         }
