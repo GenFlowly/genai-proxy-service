@@ -70,14 +70,14 @@ class GenerationAgentExecutorTest {
                 operationName = "test-op"
             ) { it }
         }
-        coVerify(exactly = 0) { utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `parse failure counts as provider failure and advances to the next provider`() = runTest {
         coEvery { credentials.getPrioritizedProviderConfigs("CU1") } returns configuredProviders
         coEvery {
-            utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any())
+            utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any(), any(), any())
         } returns result("bad") andThen result("good")
 
         val out = executor.executeWithCustomerFailover(
@@ -91,17 +91,17 @@ class GenerationAgentExecutorTest {
         }
 
         assertEquals("good", out)
-        coVerify(exactly = 2) { utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `configured customer providers are used in priority order with their own keys`() = runTest {
         coEvery { credentials.getPrioritizedProviderConfigs("CU1") } returns configuredProviders
         coEvery {
-            utility.generateTextWithApiKey(AIVendor.OPENAI, "gpt-5", any(), "System x", "key-1", null)
+            utility.generateTextWithApiKey(AIVendor.OPENAI, "gpt-5", any(), "System x", "key-1", null, null, "note_title")
         } throws IllegalStateException("rate limited")
         coEvery {
-            utility.generateTextWithApiKey(AIVendor.CLAUDE, "claude-fable-5", any(), "System x", "key-2", null)
+            utility.generateTextWithApiKey(AIVendor.CLAUDE, "claude-fable-5", any(), "System x", "key-2", null, null, "note_title")
         } returns result("A Title")
 
         val out = executor.executeWithCustomerKey(
@@ -116,7 +116,7 @@ class GenerationAgentExecutorTest {
             utility.generateTextWithApiKey(
                 AIVendor.CLAUDE, "claude-fable-5",
                 match { it.single().text == "User y" && it.single().conversationId == "note-title-generation" },
-                "System x", "key-2", null
+                "System x", "key-2", null, null, "note_title"
             )
         }
     }
@@ -126,7 +126,7 @@ class GenerationAgentExecutorTest {
         coEvery { credentials.getPrioritizedProviderConfigs("CU1") } returns emptyList()
         coEvery { credentials.getUsableVendorKeys("CU1") } returns mapOf(AIVendor.OPENAI to "key-o")
         coEvery {
-            utility.generateTextWithApiKey(AIVendor.OPENAI, "gpt-5", any(), "System x", "key-o", null)
+            utility.generateTextWithApiKey(AIVendor.OPENAI, "gpt-5", any(), "System x", "key-o", null, null, "note_title")
         } returns result("A Title")
 
         val out = executor.executeWithCustomerKey(
@@ -145,7 +145,7 @@ class GenerationAgentExecutorTest {
         coEvery { credentials.getUsableVendorKeys("CU1") } returns mapOf(AIVendor.CLAUDE to "key-c")
         // Bundled vendorDefaultModels maps CLAUDE to claude-haiku-4-5
         coEvery {
-            utility.generateTextWithApiKey(AIVendor.CLAUDE, "claude-haiku-4-5", any(), "System x", "key-c", null)
+            utility.generateTextWithApiKey(AIVendor.CLAUDE, "claude-haiku-4-5", any(), "System x", "key-c", null, null, "note_title")
         } returns result("A Title")
 
         val out = executor.executeWithCustomerKey(
@@ -180,7 +180,7 @@ class GenerationAgentExecutorTest {
                 operationName = "test-op"
             ) { it }
         }
-        coVerify(exactly = 0) { utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -193,7 +193,7 @@ class GenerationAgentExecutorTest {
             SystemAIProviderConfig(AIVendor.OPENAI, "gpt-5", "sys-key-o", 2)
         )
         coEvery {
-            utility.generateTextWithApiKey(AIVendor.CLAUDE, "claude-fable-5", any(), "System x", "sys-key-c", null)
+            utility.generateTextWithApiKey(AIVendor.CLAUDE, "claude-fable-5", any(), "System x", "sys-key-c", null, null, "note_title")
         } returns result("A Persona")
 
         val out = executor.executeWithCustomerFailover(
@@ -211,7 +211,7 @@ class GenerationAgentExecutorTest {
     fun `ADMIN_PANEL account with its own keys never touches system keys`() = runTest {
         coEvery { credentials.getPrioritizedProviderConfigs("CUADMIN") } returns configuredProviders
         coEvery {
-            utility.generateTextWithApiKey(AIVendor.OPENAI, "gpt-5", any(), "System x", "key-1", null)
+            utility.generateTextWithApiKey(AIVendor.OPENAI, "gpt-5", any(), "System x", "key-1", null, null, "note_title")
         } returns result("A Title")
 
         val out = executor.executeWithCustomerKey(
@@ -247,7 +247,7 @@ class GenerationAgentExecutorTest {
     fun `all providers failing throws with per-provider reasons`() = runTest {
         coEvery { credentials.getPrioritizedProviderConfigs("CU1") } returns configuredProviders
         coEvery {
-            utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any())
+            utility.generateTextWithApiKey(any(), any(), any(), any(), any(), any(), any(), any())
         } throws IllegalStateException("boom")
 
         val e = assertFailsWith<CustomerAIFailoverException> {

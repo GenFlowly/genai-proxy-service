@@ -147,7 +147,8 @@ class GenerationAgentExecutor(
                         systemPrompt = systemPrompt,
                         apiKey = candidate.apiKey,
                         maxTokens = agent.maxTokens,
-                        responseSchema = responseSchema
+                        responseSchema = responseSchema,
+                        requestSource = agent.requestType.name.lowercase()
                     )
                 }
                 return transform(result)
@@ -191,7 +192,8 @@ class GenerationAgentExecutor(
             llmMaxTokens = agent.maxTokens ?: 4096,
             modelType = EmbeddingConstants.MODEL_TYPE,
             modelName = EmbeddingConstants.MODEL_NAME,
-            responseSchema = responseSchema
+            responseSchema = responseSchema,
+            requestSource = agent.requestType.name.lowercase()
         )
         val text = result.text
         check(!text.isNullOrBlank()) {

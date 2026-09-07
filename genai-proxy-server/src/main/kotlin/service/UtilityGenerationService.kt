@@ -34,7 +34,9 @@ class UtilityGenerationService(
         apiKey: String,
         maxTokens: Int? = null,
         /** JSON Schema for vendor-enforced structured output (guaranteed-JSON text) */
-        responseSchema: kotlinx.serialization.json.JsonObject? = null
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
+        /** Purpose label for llm_request_total{source=...}: the RequestType lowercased. */
+        requestSource: String = "internal"
     ): AIGenerateResult {
         val lastMessage = messages.lastOrNull()
             ?: throw IllegalArgumentException("No message to generate from")
@@ -53,7 +55,8 @@ class UtilityGenerationService(
             conversationHistory = history,
             systemPrompt = systemPrompt,
             agentic = false,
-            responseSchema = responseSchema
+            responseSchema = responseSchema,
+            requestSource = requestSource
         )
 
         val text = result.text

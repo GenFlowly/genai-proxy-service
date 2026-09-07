@@ -68,6 +68,9 @@ class ExecuteAgentGraphRequest(BaseModel):
     graph_id: str
     customer_id: str
     client: str = "internal"
+    # Purpose label for metrics (llm_request_total{source=...}): the proxy's
+    # RequestType lowercased (conversation_title, instruction_persona, ...).
+    request_source: str = "internal"
     # Rendered into every node's system_prompt/input_template as {name}
     # placeholders BEFORE execution (the LangGraph state schema is fixed, so
     # variables cannot ride through state).
@@ -91,6 +94,9 @@ class RetrieveRequest(BaseModel):
     customer_id: str
     client: str
     data_type: str
+    # Purpose label for metrics (llm_request_total{source=...}): "conversation"
+    # for user chat; internal utility generations override it.
+    request_source: str = "conversation"
     raw_data: RawData
     llm_credentials: dict
     llm_provider: str = "openai"
