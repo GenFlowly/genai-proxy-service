@@ -1,0 +1,55 @@
+name: Production Grafana Dashboards
+
+# Deploys the production Grafana dashboards (dashboards-as-code).
+# The JSONs in observability/grafana/ are the source of truth; this
+# workflow upserts them into Grafana Cloud by uid on every merge to main
+# that touches them.
+# Self-triggered: runs only when the dashboards (or this workflow) change.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'observability/grafana/*-production.json'
+      - '.github/workflows/prod-grafana-dashboards.yml'
+  workflow_dispatch:
+
+env:
+  STAGE: production
+
+jobs:
+  deploy:
+    name: Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy dashboards to Grafana
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_SA_TOKEN: ${{ secrets.GRAFANA_SA_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $GRAFANA_SA_TOKEN" -H "Content-Type: application/json")
+          folder_uid="genflowly-$STAGE"
+
+          # Ensure the stage folder exists (409/412 = already there)
+          code=$(curl -s -o /tmp/folder.json -w '%{http_code}' -X POST "$GRAFANA_URL/api/folders" \
+            "${auth[@]}" -d "{\"uid\": \"$folder_uid\", \"title\": \"GenFlowly ($STAGE)\"}")
+          if [[ "$code" != "200" && "$code" != "409" && "$code" != "412" ]]; then
+            echo "Folder create failed ($code):"; cat /tmp/folder.json; exit 1
+          fi
+
+          for f in observability/grafana/*-"$STAGE".json; do
+            echo "Deploying $f"
+            jq -n --slurpfile dash "$f" --arg msg "deploy ${GITHUB_SHA::8}" --arg folder "$folder_uid" \
+              '{dashboard: ($dash[0] | .id = null), folderUid: $folder, overwrite: true, message: $msg}' \
+              > /tmp/payload.json
+            code=$(curl -s -o /tmp/resp.json -w '%{http_code}' -X POST "$GRAFANA_URL/api/dashboards/db" \
+              "${auth[@]}" -d @/tmp/payload.json)
+            if [[ "$code" != "200" ]]; then
+              echo "Deploy failed ($code):"; cat /tmp/resp.json; exit 1
+            fi
+            jq -r '"  -> \(.status) uid=\(.uid) \(.url)"' /tmp/resp.json
+          done
