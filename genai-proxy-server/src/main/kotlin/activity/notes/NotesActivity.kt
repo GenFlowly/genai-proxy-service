@@ -9,6 +9,7 @@ import com.genflowly.service.NotesService
 import com.genflowly.models.api.SaveNoteRequest
 import com.genflowly.models.api.SaveNoteResponse
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.utils.bearerToken
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.delete
 import io.github.smiley4.ktoropenapi.get
@@ -81,7 +82,7 @@ fun Route.registerNotesRoutes(
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 
-                val token = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+                val token = call.bearerToken()
                 if (token == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing authentication token"))
                     return@post

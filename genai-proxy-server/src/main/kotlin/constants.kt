@@ -168,6 +168,22 @@ object DynamoDBConstants {
     const val REQUEST_AGENT_UPDATED_BY_KEY = "updatedBy"
 }
 
+// Custom response headers forming part of the API contract. Every header
+// added here must also be exposed via exposeHeader() in the CORS config
+// (Application.kt), or browser clients cannot read it.
+object ResponseHeaders {
+    const val CONVERSATION_ID = "X-Conversation-Id"
+    const val MESSAGE_ID = "X-Message-Id"
+    const val RESPONSE_MESSAGE_ID = "X-Response-Message-Id"
+    const val AI_VENDOR = "X-Ai-Vendor"
+    const val INSTRUCTION_ID = "X-Instruction-Id"
+    const val INSTRUCTION_VERSION = "X-Instruction-Version"
+
+    // Nginx/proxy hint disabling response buffering for streamed responses.
+    // Not part of the client-facing contract, so not CORS-exposed.
+    const val ACCEL_BUFFERING = "X-Accel-Buffering"
+}
+
 // Scope value in RequestAgentMap for the global default mappings. The agents
 // and instructions those mappings reference are ordinary customer-owned
 // resources (owned by the mapping admin's account).
