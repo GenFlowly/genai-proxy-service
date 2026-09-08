@@ -88,7 +88,10 @@ class GeneratePdfTool(GraphTool):
     description = (
         "Create a PDF document and attach it to the conversation for the user to "
         "download. Call this when the user asks for a PDF, a downloadable or "
-        "printable document, or an export of content. Pass the COMPLETE document "
+        "printable document, or an export of content. If details are missing "
+        "(names, dates, addresses, etc.), call the tool anyway with reasonable "
+        "placeholders rather than asking clarifying questions first — the user "
+        "can request changes afterwards. Pass the COMPLETE document "
         "in content_markdown — the rendered PDF contains exactly what you pass, "
         "formatted with headings, lists, tables, and code blocks."
     )
@@ -141,7 +144,10 @@ class GeneratePdfTool(GraphTool):
                 f"PDF '{filename}' ({len(pdf_bytes)} bytes) was created and attached "
                 "to this conversation — the user can download it from the message. "
                 "Briefly tell the user the document is ready and summarize what it "
-                "contains; do NOT repeat the full document text in your reply."
+                "contains; do NOT repeat the full document text in your reply, and "
+                "NEVER write file paths, URLs, or download links (e.g. sandbox:/ "
+                "paths) — the file is attached to the message automatically by the "
+                "platform."
             ),
             artifacts=[artifact],
         )
