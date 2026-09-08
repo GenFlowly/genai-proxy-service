@@ -36,6 +36,10 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
 
     Config (node_configs["WEB_SEARCH"], all optional except the API key):
       api_key          (str)  — Tavily key; falls back to TAVILY_API_KEY env var
+      query_key        (str)  — state/scratch field holding a focused search
+                         query (e.g. written by an upstream analyzer node);
+                         falls back to rewritten_query/original_query when
+                         unset or empty
       max_results      (int)  — results to request (default 5)
       search_depth     (str)  — "basic" (default) | "advanced" (costs more credits)
       topic            (str)  — "general" (default) | "news" | "finance"
@@ -50,12 +54,21 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
       web_search_results — [{title, url, content, score}, ...]
       web_search_answer  — Tavily's synthesized answer ("" unless include_answer)
     """
-    query = state.get("rewritten_query") or state["original_query"]
-    customer_id = state["customer_id"]
-    logger.info("Node web_search: START — customer=%s query='%s'", customer_id, query[:100])
-
     configs = state.get("node_configs", {})
     config = (configs.get(node_id) if node_id else None) or configs.get("WEB_SEARCH", {})
+
+    query_key = config.get("query_key")
+    focused_query = None
+    if query_key:
+        focused_query = (state.get("scratch") or {}).get(query_key) or state.get(query_key)
+    query = focused_query or state.get("rewritten_query") or state["original_query"]
+
+    customer_id = state["customer_id"]
+    logger.info(
+        "Node web_search: START — customer=%s focused=%s query='%s'",
+        customer_id, bool(focused_query), query[:100],
+    )
+
     api_key = config.get("api_key") or os.getenv("TAVILY_API_KEY")
     if not api_key:
         count("web_search_total", status="missing_key")
