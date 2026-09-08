@@ -26,6 +26,7 @@ import com.genflowly.activity.customer.registerStoreApiKeyRoutes
 import com.genflowly.activity.customer.registerStoreSupabaseConfigRoutes
 import com.genflowly.activity.customer.registerStoreVectorDBConfigRoutes
 import com.genflowly.activity.customer.registerToolCredentialsRoutes
+import com.genflowly.activity.generation.registerCancelGenerationRoute
 import com.genflowly.activity.generation.registerGenerateTextRoutes
 import com.genflowly.activity.generation.registerGenerateTextStreamRoutes
 import com.genflowly.activity.generation.registerGetAIUsageActivityRoutes
@@ -74,6 +75,7 @@ object Routes {
 
     const val GENERATE_TEXT = "$API_V1/generate-text"
     const val GENERATE_TEXT_STREAM = "$API_V1/generate-text-stream"
+    const val CANCEL_GENERATION = "$API_V1/generations/{responseMessageId}/cancel"
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val STORE_VENDOR_CONFIG = "$API_V1/store-vendor-config"
     const val STORE_VECTOR_DB_CONFIG = "$API_V1/store-vector-db-config"
@@ -195,6 +197,7 @@ fun Application.configureRouting(
 
         registerGenerateTextRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
         registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
+        registerCancelGenerationRoute(generationOrchestrator, customerProfileService)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)

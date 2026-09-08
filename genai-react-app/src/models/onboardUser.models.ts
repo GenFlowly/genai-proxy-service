@@ -11,6 +11,8 @@ export interface OnboardCustomerResponse {
         preferredGenerativeMode?: string
         preferredInstructionId?: string
         instructionFallbackMode?: string
+        /** Preferred conversation agent (graphId); absent = follow the server default */
+        preferredAgentId?: string
     }
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[]
     customerInstructions?: InstructionResponse[]

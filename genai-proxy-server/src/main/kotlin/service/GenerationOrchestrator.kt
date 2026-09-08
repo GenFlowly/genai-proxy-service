@@ -12,6 +12,11 @@ import com.genflowly.models.retrieval.toPayloadToolResults
 import com.genflowly.models.retrieval.toPayloadTools
 import com.genflowly.models.retrieval.toResultsJson
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.repository.GraphRepository
+import com.genflowly.DynamoDBConstants.SYSTEM_GRAPH_OWNER
+import com.genflowly.di.AppScope
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.launch
 import com.genflowly.models.AIConfig
 import com.genflowly.models.AttachmentRef
 import com.genflowly.models.Message
@@ -42,9 +47,33 @@ class GenerationOrchestrator(
     private val requestValidator: GenerationRequestValidator,
     private val modelCatalogService: ModelCatalogService,
     private val memoryService: MemoryService,
-    private val costCalculationService: CostCalculationService
+    private val costCalculationService: CostCalculationService,
+    private val graphRepository: GraphRepository,
+    private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
+
+    /**
+     * In-flight streamed generations by responseMessageId, for explicit
+     * client cancellation. Entries remove themselves on completion.
+     */
+    private data class ActiveGeneration(val customerId: String, val job: kotlinx.coroutines.Job)
+    private val activeGenerations = java.util.concurrent.ConcurrentHashMap<String, ActiveGeneration>()
+
+    /**
+     * True cancel for a streamed generation: stops the upstream LLM work (the
+     * background job survives client disconnects by design, so closing the
+     * HTTP stream alone no longer stops it). The partial text streamed so far
+     * is persisted. Returns false when nothing is running under that id for
+     * this customer (already finished, or not the caller's generation).
+     */
+    fun cancelGeneration(customerId: String, responseMessageId: String): Boolean {
+        val active = activeGenerations[responseMessageId] ?: return false
+        if (active.customerId != customerId) return false
+        logger.info("Cancelling generation {} for customer {}", responseMessageId, customerId)
+        active.job.cancel(kotlinx.coroutines.CancellationException("Cancelled by user"))
+        return true
+    }
 
     private suspend fun getThreadContext(
         conversationId: String,
@@ -76,6 +105,21 @@ class GenerationOrchestrator(
         }
     }
 
+    /**
+     * Validates an explicitly requested agent (graph): it must exist, not be
+     * deleted, and be owned by the customer or published by System. Same
+     * access rule as GraphService.getAgent. No-op for null (server-side
+     * default resolution).
+     */
+    private suspend fun validateAgentAccess(agentId: String?, customerId: String) {
+        if (agentId.isNullOrBlank()) return
+        val item = graphRepository.getCustomerGraph(agentId)
+        val owner = item?.get("customerId")?.s()
+        require(item != null && item["deletedAt"] == null && (owner == customerId || owner == SYSTEM_GRAPH_OWNER)) {
+            "Agent '$agentId' not found."
+        }
+    }
+
     suspend fun processTextGenerateRequest(
         aiConfig: List<AIConfig>,
         instructionId: String,
@@ -91,7 +135,8 @@ class GenerationOrchestrator(
         toolChoice: String? = null,
         toolResults: List<ToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
-        useLearnedPreferences: Boolean = true
+        useLearnedPreferences: Boolean = true,
+        agentId: String? = null
 
     ): List<Message> {
 
@@ -100,6 +145,7 @@ class GenerationOrchestrator(
         require(responseSchema == null || tools.isEmpty()) {
             "responseSchema and tools are mutually exclusive — structured output reserves the vendor's tool channel"
         }
+        validateAgentAccess(agentId, customerId)
 
         // An explicit selection wins; otherwise resolve the customer's default
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
@@ -159,7 +205,8 @@ class GenerationOrchestrator(
                         toolChoice = toolChoice,
                         toolResults = toolResults,
                         responseSchema = responseSchema,
-                        memoryEnabled = memoryEnabled
+                        memoryEnabled = memoryEnabled,
+                        agentId = agentId
                     )
                 }
             }.awaitAll()
@@ -180,7 +227,8 @@ class GenerationOrchestrator(
         toolChoice: String? = null,
         toolResults: List<ToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
-        memoryEnabled: Boolean = false
+        memoryEnabled: Boolean = false,
+        agentId: String? = null
     ): Message {
         val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, message.customerId)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
@@ -212,7 +260,8 @@ class GenerationOrchestrator(
             toolChoice = toolChoice,
             toolResults = toolResults.toPayloadToolResults(),
             responseSchema = responseSchema,
-            memoryEnabled = memoryEnabled
+            memoryEnabled = memoryEnabled,
+            graphId = agentId
         )
 
         val responseMessage = Message(
@@ -279,7 +328,8 @@ class GenerationOrchestrator(
         toolChoice: String? = null,
         toolResults: List<ToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
-        useLearnedPreferences: Boolean = true
+        useLearnedPreferences: Boolean = true,
+        agentId: String? = null
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -287,6 +337,7 @@ class GenerationOrchestrator(
         require(responseSchema == null || tools.isEmpty()) {
             "responseSchema and tools are mutually exclusive — structured output reserves the vendor's tool channel"
         }
+        validateAgentAccess(agentId, customerId)
 
         // An explicit selection wins; otherwise resolve the customer's default
         // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
@@ -386,7 +437,15 @@ class GenerationOrchestrator(
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
         val responseMessageId = java.util.UUID.nameUUIDFromBytes(responseUniqueContent.toByteArray()).toString()
 
-        val flow = kotlinx.coroutines.flow.flow {
+        // Generation is DECOUPLED from the client connection: it runs on
+        // appScope and pushes chunks through a buffered channel the HTTP
+        // response merely relays. A client disconnect (mobile browsers kill
+        // the stream when the app is backgrounded) cancels only the relay —
+        // generation runs to completion and the response is persisted, so the
+        // client can recover it by refetching the conversation.
+        val chunkChannel = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+        val generationJob = appScope.launch {
+            val emit: suspend (String) -> Unit = { chunkChannel.send(it) }
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
             var capturedThinkingDurationMs: Long? = null
@@ -395,6 +454,7 @@ class GenerationOrchestrator(
             var capturedGeneratedArtifactsJson: String? = null
             val capturedThinkingSteps = mutableListOf<String>()
             var success = false
+            var cancelled = false
             try {
                 retrievalService.retrieveAndGenerateStream(
                     customerId = customerId,
@@ -417,7 +477,8 @@ class GenerationOrchestrator(
                     toolChoice = toolChoice,
                     toolResults = toolResults.toPayloadToolResults(),
                     responseSchema = responseSchema,
-                    memoryEnabled = memoryEnabled
+                    memoryEnabled = memoryEnabled,
+                    graphId = agentId
                 ).collect { chunk ->
                     when (chunk) {
                         is StreamChunk.Content -> {
@@ -457,13 +518,13 @@ class GenerationOrchestrator(
                     }
                 }
                 success = true
-            } catch (e: java.io.IOException) {
-                logger.warn("Stream disrupted (client likely disconnected): {}", e.message)
-                throw e
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Explicit user cancel (cancelGeneration) — keep the partial text.
+                cancelled = true
+                logger.info("Generation {} cancelled — persisting {} streamed char(s)", responseMessageId, sb.length)
             } catch (e: Exception) {
                 logger.error("Error during streaming", e)
-                emit("\n\n[Error: ${e.message}]")
-                throw e
+                runCatching { emit("\n\n[Error: ${e.message}]") }
             } finally {
                 val responseText = sb.toString()
                 logger.info(
@@ -471,7 +532,11 @@ class GenerationOrchestrator(
                     message.conversationId, responseText.length,
                     capturedUsage?.inputTokens, capturedUsage?.outputTokens, capturedUsage?.totalTokens
                 )
-                if (success && (responseText.isNotEmpty() || capturedToolCallsJson != null)) {
+                try {
+                // NonCancellable: after a user cancel this coroutine is dead —
+                // persistence of the partial text must still run.
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                if ((success || cancelled) && (responseText.isNotEmpty() || capturedToolCallsJson != null)) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
                         conversationId = message.conversationId,
@@ -506,8 +571,19 @@ class GenerationOrchestrator(
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }
+                }
+                } catch (e: Exception) {
+                    logger.error("Failed to persist streamed response $responseMessageId", e)
+                } finally {
+                    // Close AFTER persistence so a connected client's stream end
+                    // implies the message is queryable (usage fetch follows it).
+                    chunkChannel.close()
+                }
             }
         }
+        activeGenerations[responseMessageId] = ActiveGeneration(customerId, generationJob)
+        generationJob.invokeOnCompletion { activeGenerations.remove(responseMessageId) }
+        val flow = chunkChannel.consumeAsFlow()
 
         return StreamExecutionResult(
             activeConversationId,

@@ -30,11 +30,17 @@ data class AgentResponse(
     /** Editor canvas layout JSON ({"positions":{...}}); null when never saved from the editor. */
     val layout: String? = null,
     /**
-     * True when this is the admin-published System default graph served as a
-     * fallback because the customer has no default graph of their own. Editing
-     * it forks it into a customer-owned copy (the response carries the new graphId).
+     * True when this is an admin-published System-owned agent, visible to every
+     * customer read-only. Editing it forks it into a customer-owned copy (the
+     * response carries the new graphId).
      */
     val isSystem: Boolean = false,
+    /**
+     * Non-null when this graph backs an internal request flow (RequestAgentMap):
+     * e.g. CONVERSATION_TITLE, NOTE_TITLE, INSTRUCTION_PERSONA, MEMORY_EXTRACTION.
+     * Pickers for conversation agents should exclude these.
+     */
+    val requestType: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )

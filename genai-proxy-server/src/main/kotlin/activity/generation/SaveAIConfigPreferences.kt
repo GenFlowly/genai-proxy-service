@@ -57,7 +57,8 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
                     request.aiConfigPreferences?.embeddingMode,
                     request.aiConfigPreferences?.embeddingModel,
                     request.aiConfigPreferences?.preferredInstructionId,
-                    request.aiConfigPreferences?.instructionFallbackMode
+                    request.aiConfigPreferences?.instructionFallbackMode,
+                    request.aiConfigPreferences?.preferredAgentId
                 )
 
                 call.respond(HttpStatusCode.OK, mapOf("status" to "success"))            } catch (e: Exception) {
