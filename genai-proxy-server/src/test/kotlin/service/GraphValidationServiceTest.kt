@@ -82,6 +82,50 @@ class GraphValidationServiceTest {
     }
 
     @Test
+    fun `tool_route cycle passes without a reflection node`() {
+        // Agent loop: RESPONSE_GENERATOR → tool_route → TOOL_EXECUTOR → back.
+        // Exits by construction (no tool calls → "none" route), so no
+        // reflection node is required.
+        validate(
+            edges = """{"edges":[{"from":"T","to":"A"}],
+                "conditional_edges":[{"from":"A","condition_key":"tool_calls","condition_type":"tool_route",
+                "routes":{"builtin":"T","caller":"__end__","none":"__end__"}}]}""",
+            nodeTypes = mapOf("A" to "RESPONSE_GENERATOR", "T" to "TOOL_EXECUTOR"),
+        )
+    }
+
+    @Test
+    fun `non-tool cycle still requires reflection even when a tool_route edge exists`() {
+        // A ⇄ B is a plain bool cycle; the separate tool_route loop must not
+        // exempt it.
+        val e = assertFailsWith<IllegalArgumentException> {
+            validate(
+                edges = """{"edges":[{"from":"A","to":"B"},{"from":"T","to":"A"}],
+                    "conditional_edges":[
+                        {"from":"B","condition_key":"needs_more_context","routes":{"true":"A","false":"__end__"}},
+                        {"from":"A","condition_key":"tool_calls","condition_type":"tool_route",
+                         "routes":{"builtin":"T","caller":"__end__","none":"__end__"}}]}""",
+                nodeTypes = mapOf("A" to "RESPONSE_GENERATOR", "B" to "GENERATION", "T" to "TOOL_EXECUTOR"),
+            )
+        }
+        assertTrue(e.message!!.contains("cycle"))
+    }
+
+    @Test
+    fun `nodes reachable only through a tool_route edge are still reachable`() {
+        // TOOL_EXECUTOR is only reachable via the tool_route conditional —
+        // the reachability check must traverse it even though cycle detection
+        // ignores it.
+        validate(
+            edges = """{"edges":[{"from":"T","to":"A"}],
+                "conditional_edges":[{"from":"A","condition_key":"tool_calls","condition_type":"tool_route",
+                "routes":{"builtin":"T","caller":"__end__","none":"__end__"}}]}""",
+            nodeTypes = mapOf("A" to "RESPONSE_GENERATOR", "T" to "TOOL_EXECUTOR"),
+            entryPoint = "A",
+        )
+    }
+
+    @Test
     fun `plain-edge cycle is also caught`() {
         val e = assertFailsWith<IllegalArgumentException> {
             validate(
