@@ -16,6 +16,7 @@ import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.MemoryRepository
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -79,7 +80,11 @@ class MemoryExtractionService(
      * Debounced conversation trigger, called after an exchange completes. Runs
      * extraction when the conversation gained enough messages since the last
      * run: the first pass after one full exchange, later passes every
-     * [MESSAGES_PER_EXTRACTION] messages.
+     * [MESSAGES_PER_EXTRACTION] messages. A turn below the threshold is NOT
+     * dropped: it schedules a deferred flush [DEBOUNCE_FLUSH_DELAY_MS] later
+     * that extracts whatever accumulated, so short conversations still learn
+     * and the outcome lands on the turn that produced it (within the client's
+     * learned-facts polling window).
      */
     fun maybeExtractFromConversationAsync(
         customerId: String,
@@ -87,47 +92,84 @@ class MemoryExtractionService(
         bearerToken: String?,
         /**
          * Assistant message this exchange produced. When set, the extraction
-         * outcome is written onto it as learnedFactsJson — "[]" on EVERY
-         * skipped/failed path (the terminal "nothing learned" marker that
-         * stops client polling), the added facts on a successful run.
+         * outcome is written onto it as learnedFactsJson — "[]" on every
+         * terminal skipped/failed path (the marker that stops client polling),
+         * the added facts on a successful run. The debounced path defers
+         * instead of writing the marker, keeping the client polling until the
+         * flush resolves.
          */
         responseMessageId: String? = null,
     ) {
         appScope.launch {
-            suspend fun markNothingLearned() {
-                if (responseMessageId == null) return
-                try {
-                    conversationService.setMessageLearnedFacts(conversationId, responseMessageId, "[]")
-                } catch (e: Exception) {
-                    Metrics.count("memory_learned_facts_write_failure_total")
-                    logger.warn("Failed to write learned-facts marker for $responseMessageId: ${e.message}")
-                }
+            runConversationExtraction(customerId, conversationId, bearerToken, responseMessageId, deferred = false)
+        }
+    }
+
+    private suspend fun runConversationExtraction(
+        customerId: String,
+        conversationId: String,
+        bearerToken: String?,
+        responseMessageId: String?,
+        /** True on the delayed flush pass — the message-count threshold no longer applies. */
+        deferred: Boolean,
+    ) {
+        suspend fun markNothingLearned() {
+            if (responseMessageId == null) return
+            try {
+                conversationService.setMessageLearnedFacts(conversationId, responseMessageId, "[]")
+            } catch (e: Exception) {
+                Metrics.count("memory_learned_facts_write_failure_total")
+                logger.warn("Failed to write learned-facts marker for $responseMessageId: ${e.message}")
             }
-            suspend fun skip(reason: String, detail: String = "") {
+        }
+        suspend fun skip(reason: String, detail: String = "") {
+            Metrics.count(
+                "memory_extraction_skipped_total", 1.0,
+                "status" to reason, "source" to SOURCE_CONVERSATION
+            )
+            logger.info("Memory extraction skipped for conversation {}: {}{}", conversationId, reason, detail)
+            markNothingLearned()
+        }
+        try {
+            logger.info(
+                "Memory extraction triggered for conversation {} by customer {} (deferred={})",
+                conversationId, customerId, deferred
+            )
+            if (!memoryService.isMemoryEnabled(customerId)) {
+                skip("disabled"); return
+            }
+
+            val latestMessageId = conversationService.getLatestMessageId(conversationId)
+            if (latestMessageId == null) { skip("empty"); return }
+            val thread = conversationService.getMessageThread(conversationId, latestMessageId)
+            val processed = memoryRepository.getConversationExtractionMark(customerId, conversationId)
+            val newMessages = thread.size - (processed ?: 0)
+            if (newMessages < 1) {
+                // Nothing unprocessed (e.g. a parallel-vendor duplicate trigger,
+                // or an interim run beat the flush to it) — terminal marker.
+                skip(if (deferred) "flush_noop" else "debounced", " (0 new messages)"); return
+            }
+            val threshold = if (processed == null) FIRST_EXTRACTION_MIN_MESSAGES else MESSAGES_PER_EXTRACTION
+            if (!deferred && newMessages < threshold) {
+                // Below the batching threshold: don't drop the turn — flush it
+                // after a short delay instead. No "[]" marker is written here,
+                // so the client's learning indicator keeps polling and the
+                // flush outcome (which runs well inside the poll timeout)
+                // lands on THIS response.
                 Metrics.count(
                     "memory_extraction_skipped_total", 1.0,
-                    "status" to reason, "source" to SOURCE_CONVERSATION
+                    "status" to "debounced", "source" to SOURCE_CONVERSATION
                 )
-                logger.info("Memory extraction skipped for conversation {}: {}{}", conversationId, reason, detail)
-                markNothingLearned()
+                logger.info(
+                    "Memory extraction debounced for conversation {} ({} new message(s), threshold {}) — flushing in {}ms",
+                    conversationId, newMessages, threshold, DEBOUNCE_FLUSH_DELAY_MS
+                )
+                delay(DEBOUNCE_FLUSH_DELAY_MS)
+                runConversationExtraction(customerId, conversationId, bearerToken, responseMessageId, deferred = true)
+                return
             }
-            try {
-                logger.info("Memory extraction triggered for conversation {} by customer {}", conversationId, customerId)
-                if (!memoryService.isMemoryEnabled(customerId)) {
-                    skip("disabled"); return@launch
-                }
 
-                val latestMessageId = conversationService.getLatestMessageId(conversationId)
-                if (latestMessageId == null) { skip("empty"); return@launch }
-                val thread = conversationService.getMessageThread(conversationId, latestMessageId)
-                val processed = memoryRepository.getConversationExtractionMark(customerId, conversationId)
-                val newMessages = thread.size - (processed ?: 0)
-                val threshold = if (processed == null) FIRST_EXTRACTION_MIN_MESSAGES else MESSAGES_PER_EXTRACTION
-                if (newMessages < threshold) {
-                    skip("debounced", " ($newMessages new message(s), threshold $threshold)"); return@launch
-                }
-
-                Metrics.tracked("memory_extraction", "source" to SOURCE_CONVERSATION) {
+            Metrics.tracked("memory_extraction", "source" to SOURCE_CONVERSATION) {
                     // Claim the window before the LLM call so concurrent completions
                     // of parallel turns don't double-extract; a failed run forfeits
                     // its window, which the next exchange re-opens.
@@ -146,10 +188,9 @@ class MemoryExtractionService(
                         conversationService.setMessageLearnedFacts(conversationId, responseMessageId, factsJson)
                     }
                 }
-            } catch (e: Exception) {
-                logger.warn("Memory extraction from conversation $conversationId failed: ${e.message}")
-                markNothingLearned()
-            }
+        } catch (e: Exception) {
+            logger.warn("Memory extraction from conversation $conversationId failed: ${e.message}")
+            markNothingLearned()
         }
     }
 
@@ -361,6 +402,14 @@ class MemoryExtractionService(
 
         private const val FIRST_EXTRACTION_MIN_MESSAGES = 2
         private const val MESSAGES_PER_EXTRACTION = 4
+
+        /**
+         * Delay before a below-threshold turn is flushed anyway. Must resolve
+         * (delay + extraction time) inside the client's learned-facts polling
+         * window (60s — see useLearnedFacts.ts) so the pending indicator
+         * settles with the real outcome instead of timing out.
+         */
+        private const val DEBOUNCE_FLUSH_DELAY_MS = 30_000L
         private const val MAX_TRANSCRIPT_MESSAGES = 12
         private const val MAX_MESSAGE_CHARS = 2000
         private const val MIN_NOTE_CHARS = 30
