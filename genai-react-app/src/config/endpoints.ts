@@ -12,6 +12,7 @@ export const endpoints = {
     storeCustomerSupabaseConfig: `${BASE}${API_PREFIX}/store-supabase-config`,
     generateText: `${BASE}${API_PREFIX}/generate-text`,
     generateTextStream: `${BASE}${API_PREFIX}/generate-text-stream`,
+    cancelGeneration: (responseMessageId: string) => `${BASE}${API_PREFIX}/generations/${responseMessageId}/cancel`,
     batchGenerateText: `${BASE}${API_PREFIX}/batch-generate-text`,
     getTextGenerationModels: `${BASE}${API_PREFIX}/models`,
     saveAIConfig: `${BASE}${API_PREFIX}/save-ai-config`,

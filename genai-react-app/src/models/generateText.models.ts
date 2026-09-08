@@ -15,6 +15,8 @@ export interface GenerateTextRequest {
     selectedResponseId: string
     conversationId: string
     client: string
+    /** Agent (graph) to run the generation through; omitted/null = server default. */
+    agentId?: string | null
 }
 
 export interface GenerateTextStreamRequest {
@@ -23,6 +25,8 @@ export interface GenerateTextStreamRequest {
     selectedResponseId: string
     conversationId: string
     client: string
+    /** Agent (graph) to run the generation through; omitted/null = server default. */
+    agentId?: string | null
 }
 
 export interface GenerateTextResponse {

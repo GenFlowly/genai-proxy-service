@@ -10,7 +10,8 @@ import { usePageTitle } from '../../hooks/usePageTitle'
 import { useWindowSize } from '../../hooks/useWindowSize'
 import { useAuth } from '../../context/AuthContext'
 import { getCustomerAgents } from '../../services/agentsService'
-import { Agent } from '../../models/agents.models'
+import { Agent, effectiveDefaultAgentId } from '../../models/agents.models'
+import { useAI } from '../../context/AIContext'
 import { formatServerDateTime } from '../../utils/timeUtils'
 
 // ── Node type display helpers ─────────────────────────────────────────────────
@@ -34,15 +35,17 @@ function getNodeMeta(nodeType: string) {
 
 interface AgentCardProps {
     agent: Agent
+    /** True only for the ONE effective default agent (pick → own default → System). */
+    isEffectiveDefault: boolean
     onEdit: (agent: Agent) => void
 }
 
-function AgentCard({ agent, onEdit }: AgentCardProps) {
+function AgentCard({ agent, isEffectiveDefault, onEdit }: AgentCardProps) {
     const { t } = useTranslation()
     const [expanded, setExpanded] = useState(false)
 
     return (
-        <div className={`${styles.card} ${agent.isDefault ? styles.cardDefault : ''}`}>
+        <div className={`${styles.card} ${isEffectiveDefault ? styles.cardDefault : ''}`}>
             {/* Card header */}
             <div className={styles.cardHeader}>
                 <div className={styles.cardTitleRow}>
@@ -55,7 +58,7 @@ function AgentCard({ agent, onEdit }: AgentCardProps) {
                     </div>
                 </div>
                 <div className={styles.cardActions}>
-                    {agent.isDefault && (
+                    {isEffectiveDefault && (
                         <span className={styles.defaultBadge}>{t('agentsPage.agentCard.defaultBadge')}</span>
                     )}
                     {agent.isSystem && (
@@ -156,6 +159,8 @@ export default function AgentsPage() {
     const [agents, setAgents] = useState<Agent[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const { selectedAgentId } = useAI()
+    const defaultId = effectiveDefaultAgentId(agents, selectedAgentId)
 
     useEffect(() => {
         setLeftSidebarExpanded(false)
@@ -230,7 +235,12 @@ export default function AgentsPage() {
                 {!loading && !error && agents.length > 0 && (
                     <div className={styles.grid}>
                         {agents.map(agent => (
-                            <AgentCard key={agent.graphId} agent={agent} onEdit={handleEdit} />
+                            <AgentCard
+                                key={agent.graphId}
+                                agent={agent}
+                                isEffectiveDefault={agent.graphId === defaultId}
+                                onEdit={handleEdit}
+                            />
                         ))}
                     </div>
                 )}

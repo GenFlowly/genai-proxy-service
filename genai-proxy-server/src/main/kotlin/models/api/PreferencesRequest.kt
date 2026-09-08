@@ -25,6 +25,10 @@ data class AIConfigPreferences(
     // Either way, resolution ultimately falls back to the SYSTEM default.
     val preferredInstructionId: String? = null,
     val instructionFallbackMode: String? = null,
+    // Preferred conversation agent (graphId). Empty string clears the
+    // preference (revert to the server-side default agent); null leaves it
+    // unchanged.
+    val preferredAgentId: String? = null,
 )
 
 @Serializable

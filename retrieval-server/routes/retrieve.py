@@ -160,19 +160,31 @@ def _build_node_configs(nodes: list[dict]) -> tuple[dict, dict, set[str]]:
     return node_type_map, node_configs, streaming_nodes
 
 
-def _resolve_graph(customer_id: str) -> tuple:
+def _resolve_graph(customer_id: str, graph_id: str | None = None) -> tuple:
     """
-    Load the customer's dynamic graph from DDB.
+    Load the customer's dynamic graph from DDB — the explicitly requested
+    graph_id when given (own-or-System ownership re-checked here as defense in
+    depth; a 404/foreign graph raises 400), otherwise the customer's default.
     Falls back to a single direct-LLM node when no graph is configured.
     Returns (graph, node_type_map, node_configs, streaming_nodes).
     """
-    graph_data = get_default_graph_and_nodes(customer_id)
+    if graph_id:
+        graph_data = get_graph_and_nodes_by_id(graph_id)
+        owner = graph_data[0].get("customerId") if graph_data else None
+        if graph_data is None or owner not in (customer_id, "System"):
+            logger.warning("Requested graph=%s not accessible for customer=%s", graph_id, customer_id)
+            raise HTTPException(status_code=400, detail=f"Agent '{graph_id}' not found")
+    else:
+        graph_data = get_default_graph_and_nodes(customer_id)
     if graph_data is None:
         logger.info("No graph found for customer=%s — falling back to direct LLM", customer_id)
         return _direct_graph()
 
     graph_record, nodes = graph_data
-    graph, max_iterations = get_or_build_graph(customer_id, graph_record, nodes)
+    # Compiled-graph cache key: per-graph for explicit selections so switching
+    # agents between requests doesn't thrash the per-customer entry.
+    cache_key = f"graph#{graph_id}" if graph_id else customer_id
+    graph, max_iterations = get_or_build_graph(cache_key, graph_record, nodes)
     node_type_map, node_configs, streaming_nodes = _build_node_configs(nodes)
     node_name_map = {n["nodeId"]: n.get("name") or n["nodeType"] for n in nodes}
 
@@ -208,7 +220,7 @@ async def retrieve(req: RetrieveRequest):
         )
 
     if req.agentic:
-        graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id)
+        graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id, req.graph_id)
     else:
         graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _direct_graph()
     builtin_tools = _enabled_builtin_tools(node_type_map, node_configs)

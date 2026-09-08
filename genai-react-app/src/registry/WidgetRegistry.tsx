@@ -6,6 +6,7 @@ import ConversationHistorySidebarWidget from '../components/widgets/SidebarWidge
 import ThreadWidget from '../components/widgets/SidebarWidgets/ThreadWidget/ThreadWidget'
 import NewChatWidget from '../components/widgets/SidebarWidgets/NewChatWidget/NewChatWidget'
 import AIVendorWidget from '../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget'
+import AgentPickerWidget from '../components/widgets/SidebarWidgets/AgentPickerWidget/AgentPickerWidget'
 import TokenCounter from '../components/widgets/SidebarWidgets/TokenCounter/TokenCounter'
 import SavedNotesWidget from '../components/widgets/SidebarWidgets/SavedNotesWidget/SavedNotesWidget'
 
@@ -49,6 +50,10 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
     'AI_VENDOR': {
         id: 'AI_VENDOR',
         component: AIVendorWidget,
+    },
+    'AGENT_PICKER': {
+        id: 'AGENT_PICKER',
+        component: AgentPickerWidget,
     },
     'SAVED_NOTES_WIDGET': {
         id: 'SAVED_NOTES_WIDGET',

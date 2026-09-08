@@ -19,12 +19,32 @@ export interface Agent {
     layout?: string
     /** True for the System-published default graph shared across customers */
     isSystem?: boolean
+    /**
+     * Non-null when the graph backs an internal request flow (e.g.
+     * CONVERSATION_TITLE, NOTE_TITLE, INSTRUCTION_PERSONA, MEMORY_EXTRACTION).
+     * Conversation agent pickers exclude these.
+     */
+    requestType?: string | null
     createdAt?: string
     updatedAt?: string
 }
 
 export interface GetCustomerAgentsResponse {
     agents: Agent[]
+}
+
+/**
+ * The single agent the react app treats as the default: the user's explicit
+ * pick (dropdown selection) when it still exists, else their own default
+ * graph, else the System-published default. Exactly one agent is ever the
+ * default; the Agents page badge and the picker both use this.
+ */
+export function effectiveDefaultAgentId(agents: Agent[], selectedAgentId: string | null): string | null {
+    if (selectedAgentId && agents.some(a => a.graphId === selectedAgentId)) return selectedAgentId
+    const fallback =
+        agents.find(a => !a.isSystem && a.isDefault) ??
+        agents.find(a => a.isSystem && a.isDefault)
+    return fallback?.graphId ?? null
 }
 
 // ── Create request types ──────────────────────────────────────────────────────

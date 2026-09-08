@@ -30,6 +30,13 @@ data class GenerateTextRequest(
     val learnFromConversation: Boolean = true,
     /** Consent: apply already-learned memories/preferences to this response. */
     val useLearnedPreferences: Boolean = true,
+
+    /**
+     * Agent (graph) to run this generation through: a graphId owned by the
+     * customer or published by System. null (default) keeps the server-side
+     * resolution: the customer's default agent, falling back to the System one.
+     */
+    val agentId: String? = null,
 )
 
 /**

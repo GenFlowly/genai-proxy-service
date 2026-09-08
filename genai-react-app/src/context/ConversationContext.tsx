@@ -10,6 +10,7 @@ import { generateText } from '../services/generateTextService'
 import { generateTextStream, StreamMetadata } from '../services/generateTextStreamService'
 import { getAIUsageActivity } from '../services/getAIUsageService'
 import { getConversation } from '../services/conversationService'
+import { cancelGeneration } from '../services/cancelGenerationService'
 import {
     ConversationBlock,
     IConversationContext,
@@ -36,6 +37,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         selectedInstructionId,
         setSelectedInstructionId,
         customerInstructions,
+        selectedAgentId,
     } = useAI()
     const { 
         setLeftSidebarExpanded, 
@@ -154,6 +156,37 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     }, [])
 
     // --- API Calls ---
+
+    /**
+     * Background-recovery for interrupted streams: mobile browsers kill the
+     * network stream when the app/tab is backgrounded, but the server keeps
+     * generating and persists the response under its deterministic message id.
+     * Poll the conversation until that message appears and return its text.
+     * Timers are throttled while the tab is hidden, so in practice this
+     * resumes polling the moment the user returns.
+     */
+    const recoverPersistedResponse = async (
+        token: string,
+        conversationId: string,
+        responseMessageId: string
+    ): Promise<Message | null> => {
+        const POLL_INTERVAL_MS = 5000
+        const MAX_ATTEMPTS = 36
+        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+            try {
+                const data = await getConversation(token, conversationId)
+                const found = data?.blocks
+                    ?.flatMap(b => b.responseMessages)
+                    .find(m => m.messageId === responseMessageId)
+                if (found?.text) return found
+            } catch (e) {
+                console.warn('Recovery poll failed, will retry', e)
+            }
+        }
+        return null
+    }
+
     const fetchVendorResponses = async (
         token: string,
         aiConfigs: AIConfig[],
@@ -175,6 +208,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: conversationIdRef.current,
             client: 'REACT_APP',
+            agentId: selectedAgentId,
         })
 
         console.log('DEBUGGING response RECEVIEVED:', response)
@@ -244,6 +278,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             selectedResponseId: selectedResponseId ?? '',
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
+            agentId: selectedAgentId,
         }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments)
     }
 
@@ -695,11 +730,51 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                         throw err
                     }
                     if (err?.name === 'AbortError') {
-                        // User stopped this vendor — keep whatever streamed, no error
+                        // User stopped this vendor — keep whatever streamed, no
+                        // error. Generation survives the dropped connection by
+                        // design, so a true stop also cancels it server-side
+                        // (fire-and-forget; the partial text is persisted).
+                        if (currentMsgId !== msgId) {
+                            cancelGeneration(token, currentMsgId).catch(e =>
+                                console.warn('Failed to cancel generation server-side', e)
+                            )
+                        }
                         finishVendorMessage(null)
                         return
                     }
                     console.error(`Stream failed for vendor ${conf.aiVendor}`, err)
+                    // The server keeps generating after a dropped connection
+                    // (backgrounded mobile app). When the server-side response
+                    // id is already known (metadata arrived before the drop),
+                    // poll for the persisted message instead of failing the turn.
+                    if (currentMsgId !== msgId) {
+                        const recovered = await recoverPersistedResponse(
+                            token,
+                            explicitConversationId || conversationIdRef.current,
+                            currentMsgId
+                        )
+                        if (recovered) {
+                            setConversationBlockList(prev => prev.map(block => {
+                                if (block.conversationBlockId !== id) return block
+                                const msgs = block.responseMessages.map(m => {
+                                    if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                                    return {
+                                        ...m,
+                                        text: recovered.text,
+                                        webSources: recovered.webSources ?? m.webSources,
+                                        generatedAttachments: recovered.generatedAttachments ?? m.generatedAttachments,
+                                        inputTokens: recovered.inputTokens ?? m.inputTokens,
+                                        outputTokens: recovered.outputTokens ?? m.outputTokens,
+                                        totalTokens: recovered.totalTokens ?? m.totalTokens,
+                                        costUsd: recovered.costUsd ?? m.costUsd,
+                                    }
+                                })
+                                return { ...block, responseMessages: msgs }
+                            }))
+                            finishVendorMessage(null)
+                            return
+                        }
+                    }
                     finishVendorMessage(err?.message || i18n.t('errors.ai.generateTextStreamFailed'))
                     return
                 }
