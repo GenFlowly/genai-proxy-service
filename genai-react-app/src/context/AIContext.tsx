@@ -22,6 +22,12 @@ interface AIContextType {
     selectedInstructionId: string | null
     setSelectedInstructionId: (id: string | null) => void
     isSystemPromptLoaded: boolean
+    /**
+     * Agent (graph) the user made their default via the picker; null = never
+     * picked (falls back to their own default graph, then the System one).
+     */
+    selectedAgentId: string | null
+    setSelectedAgentId: (id: string | null) => void
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined)
@@ -33,6 +39,8 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     const { customerInstructions, customerId, aiConfigPreferences } = useAuth()
     const [systemPrompt, setSystemPrompt] = useState<string>('')
     const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null)
+    const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+    const [agentPrefSeeded, setAgentPrefSeeded] = useState(false)
     const [isSystemPromptLoaded, setIsSystemPromptLoaded] = useState<boolean>(false)
     const [loadedPreferencesSignature, setLoadedPreferencesSignature] = useState<string>('')
 
@@ -41,9 +49,11 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         if (customerId) {
             const savedPrompt = localStorage.getItem(`${customerId}_system_prompt`)
             const savedInstructionId = localStorage.getItem(`${customerId}_selected_instruction_id`)
+            const savedAgentId = localStorage.getItem(`${customerId}_selected_agent_id`)
 
             setSystemPrompt(savedPrompt || '')
             setSelectedInstructionId(savedInstructionId || null)
+            setSelectedAgentId(savedAgentId || null)
             setIsSystemPromptLoaded(true)
         } else {
             setIsSystemPromptLoaded(false)
@@ -67,8 +77,27 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
             } else {
                 localStorage.removeItem(idKey)
             }
+
+            const agentKey = `${customerId}_selected_agent_id`
+            if (selectedAgentId) {
+                localStorage.setItem(agentKey, selectedAgentId)
+            } else {
+                localStorage.removeItem(agentKey)
+            }
         }
-    }, [systemPrompt, selectedInstructionId, customerId, isSystemPromptLoaded])
+    }, [systemPrompt, selectedInstructionId, selectedAgentId, customerId, isSystemPromptLoaded])
+
+    // 🔹 Seed the agent selection from the account preference once per login.
+    // localStorage (this device's last explicit pick) wins over the backend
+    // value; later picks are pushed to the backend by the AgentPicker widget.
+    useEffect(() => {
+        if (!customerId || !isSystemPromptLoaded || agentPrefSeeded || !aiConfigPreferences) return
+        const saved = localStorage.getItem(`${customerId}_selected_agent_id`)
+        if (!saved && aiConfigPreferences.preferredAgentId) {
+            setSelectedAgentId(aiConfigPreferences.preferredAgentId)
+        }
+        setAgentPrefSeeded(true)
+    }, [customerId, isSystemPromptLoaded, aiConfigPreferences, agentPrefSeeded])
 
     // 🔹 Sync backend model preferences into config as soon as they load.
     // This must live here (not in AIVendorWidget): the widget only mounts when
@@ -145,6 +174,8 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
                 selectedInstructionId,
                 setSelectedInstructionId,
                 isSystemPromptLoaded,
+                selectedAgentId,
+                setSelectedAgentId,
             }}
         >
             {children}
@@ -171,6 +202,8 @@ export const useAI = (): AIContextType => {
             selectedInstructionId: null,
             setSelectedInstructionId: () => { },
             isSystemPromptLoaded: false,
+            selectedAgentId: null,
+            setSelectedAgentId: () => { },
         }
     }
     return ctx

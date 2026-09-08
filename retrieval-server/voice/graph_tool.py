@@ -45,7 +45,7 @@ def make_graph_tool_executor(init: dict):
 
         # Imported lazily to avoid importing route modules at package import time
         from models import ConversationMessage, RawData, RetrieveRequest
-        from routes.retrieve import _build_state, _direct_graph, _resolve_graph
+        from routes.retrieve import _build_state, _direct_graph, _enabled_builtin_tools, _resolve_graph
 
         history = [
             ConversationMessage(role=t.get("role", "user"), content=t.get("content", ""))
@@ -65,15 +65,17 @@ def make_graph_tool_executor(init: dict):
             conversation_history=history,
             system_prompt=init.get("system_prompt"),
             agentic=init.get("agentic", True),
+            graph_id=init.get("graph_id"),
         )
 
         try:
             if req.agentic:
-                graph, _, _, node_configs, _, max_iterations = _resolve_graph(req.customer_id)
+                graph, node_type_map, _, node_configs, _, max_iterations = _resolve_graph(req.customer_id, req.graph_id)
             else:
-                graph, _, _, node_configs, _, max_iterations = _direct_graph()
+                graph, node_type_map, _, node_configs, _, max_iterations = _direct_graph()
 
-            state = _build_state(req, node_configs)
+            builtin_tools = _enabled_builtin_tools(node_type_map, node_configs)
+            state = _build_state(req, node_configs, builtin_tools)
             result = await graph.ainvoke(state, config={"recursion_limit": max_iterations})
 
             if result.get("error"):

@@ -409,30 +409,37 @@ class GraphService(
         val allNodes = graphRepository.listCustomerGraphNodes(customerId)
         val nodeById = allNodes.associateBy { it[NODE_ID_KEY]?.s() ?: "" }
 
+        // Graphs backing internal request flows (title/persona/memory
+        // generators) are tagged with their request type so pickers can
+        // exclude them; both the System scope and the customer's own
+        // fork overrides are consulted.
+        val requestTypeByGraphId = (
+            requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE) +
+                requestAgentMapRepository.listMapEntries(customerId)
+            ).associate { it.graphId to it.requestType }
+
         val ownAgents = graphs.map { graphItem ->
-            agentResponseFrom(graphItem, nodeById, isSystem = false)
+            agentResponseFrom(graphItem, nodeById, isSystem = false, requestTypeByGraphId)
         }
 
         // System-owned agents follow the instruction ownership model: they are
         // visible to every customer read-only, and editing one forks it into a
-        // customer-owned copy. The System DEFAULT graph is only served while
-        // the customer has no default of their own; the non-default System
-        // agents (request-type generators etc.) are always listed.
+        // customer-owned copy. ALL accessible agents are always listed — the
+        // customer picks which one to converse with; the System default is
+        // shown even when the customer has a default fork of their own.
         val systemGraphs = graphRepository.listCustomerGraphs(SYSTEM_GRAPH_OWNER)
         val agents = mutableListOf<AgentResponse>()
         if (systemGraphs.isNotEmpty()) {
             val systemNodeById = graphRepository.listCustomerGraphNodes(SYSTEM_GRAPH_OWNER)
                 .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
-            val hasOwnDefault = ownAgents.any { it.isDefault }
             systemGraphs.forEach { graphItem ->
                 val isDefaultGraph = graphItem[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false
-                if (isDefaultGraph && hasOwnDefault) return@forEach
-                val response = agentResponseFrom(graphItem, systemNodeById, isSystem = true)
+                val response = agentResponseFrom(graphItem, systemNodeById, isSystem = true, requestTypeByGraphId)
                 if (isDefaultGraph) agents.add(0, response) else agents.add(response)
             }
         }
-        // Own agents go after the System default (when shown) but before the
-        // System request agents, keeping the primary chat agent on top.
+        // Own agents go after the System default but before the System
+        // request agents, keeping the primary chat agent on top.
         val insertAt = if (agents.firstOrNull()?.isDefault == true) 1 else 0
         agents.addAll(insertAt, ownAgents)
 
@@ -802,6 +809,7 @@ class GraphService(
         graphItem: Map<String, AttributeValue>,
         nodeById: Map<String, Map<String, AttributeValue>>,
         isSystem: Boolean,
+        requestTypeByGraphId: Map<String, String> = emptyMap(),
     ): AgentResponse {
         val nodeIds = graphItem[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
         val hydratedNodes = nodeIds.mapNotNull { nid ->
@@ -816,8 +824,9 @@ class GraphService(
                 )
             }
         }
+        val graphId = graphItem[GRAPH_ID_KEY]?.s() ?: ""
         return AgentResponse(
-            graphId = graphItem[GRAPH_ID_KEY]?.s() ?: "",
+            graphId = graphId,
             name = graphItem[GRAPH_NAME_KEY]?.s() ?: "",
             isDefault = graphItem[GRAPH_IS_DEFAULT_KEY]?.bool() ?: false,
             entryPoint = graphItem[GRAPH_ENTRY_POINT_KEY]?.s() ?: "",
@@ -825,6 +834,7 @@ class GraphService(
             edges = graphItem[GRAPH_EDGES_KEY]?.s() ?: "{}",
             layout = graphItem[GRAPH_LAYOUT_KEY]?.s(),
             isSystem = isSystem,
+            requestType = requestTypeByGraphId[graphId],
             nodes = hydratedNodes,
             createdAt = graphItem["createdAt"]?.s(),
             updatedAt = graphItem["updatedAt"]?.s(),

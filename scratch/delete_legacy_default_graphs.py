@@ -18,6 +18,10 @@ Usage:
   python delete_legacy_default_graphs.py --apply    # actually delete
   python delete_legacy_default_graphs.py --hard     # with --apply: hard-delete rows (incl. history)
                                                     # (default is soft-delete: set deletedAt on v=0)
+  python delete_legacy_default_graphs.py --customers CU1,CU2
+                                                    # limit to these customer ids (default: all
+                                                    # non-System owners — excludes intentional forks
+                                                    # only if you list customers explicitly)
 
 Deletes, for every customer EXCEPT the "System" owner:
   - every CustomerGraphs row where isDefault=true (v=0 soft-deleted; --hard removes all versions)
@@ -83,6 +87,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--apply", action="store_true", help="actually delete (default: dry-run)")
     parser.add_argument("--hard", action="store_true", help="hard-delete all versions instead of soft-deleting v=0")
+    parser.add_argument("--customers", help="comma-separated customer ids to limit the cleanup to")
     args = parser.parse_args()
 
     region = os.getenv("AWS_REGION", "us-east-1")
@@ -91,6 +96,12 @@ def main():
     nodes_table = db.Table(NODES_TABLE)
 
     graphs = scan_legacy_default_graphs(db)
+    if args.customers:
+        wanted = {c.strip() for c in args.customers.split(",") if c.strip()}
+        graphs = [g for g in graphs if g.get("customerId") in wanted]
+        missing = wanted - {g.get("customerId") for g in graphs}
+        if missing:
+            print(f"WARNING: no live default graph found for: {', '.join(sorted(missing))}")
     if not graphs:
         print("No legacy per-customer default graphs found. Nothing to do.")
         return

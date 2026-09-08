@@ -9,6 +9,8 @@ export interface SaveAIConfigPreferencesRequest {
         preferredGenerativeMode?: string
         preferredInstructionId?: string
         instructionFallbackMode?: string
+        /** Preferred conversation agent (graphId). Empty string clears it. */
+        preferredAgentId?: string
     }
     otherPreferences?: Record<string, string>
 }
