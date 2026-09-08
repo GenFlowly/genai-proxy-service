@@ -200,6 +200,14 @@ export default function Request({
         }
     }, [getAccessTokenSilently, removeAttachment, showToast, t])
 
+    // Mobile file-picker path: same validation/upload pipeline as paste.
+    const attachmentInputRef = React.useRef<HTMLInputElement>(null)
+    const handleAttachmentInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        Array.from(e.target.files ?? []).forEach(uploadPastedImage)
+        // Allow re-selecting the same file later
+        e.target.value = ''
+    }, [uploadPastedImage])
+
     // GitHub-style paste: an image in the clipboard uploads automatically,
     // no file picker involved. Capture phase so the markdown editor doesn't
     // swallow the event first.
@@ -375,6 +383,32 @@ export default function Request({
                     >
                         <Icon src={ICONS.SEND} size={22}/>
                     </button>
+                )}
+
+                {isMobile && (
+                    // 📱 Image-attachment picker to the LEFT of the generate
+                    // button — mobile has no paste path for images, so this is
+                    // the only way to attach them there. Desktop stays
+                    // paste-only for now.
+                    <>
+                        <input
+                            ref={attachmentInputRef}
+                            type="file"
+                            accept={ALLOWED_ATTACHMENT_MEDIA_TYPES.join(',')}
+                            multiple
+                            hidden
+                            onChange={handleAttachmentInputChange}
+                            data-testid="attachment-file-input"
+                        />
+                        <button
+                            className={styles.mobileAttachmentButton}
+                            onClick={() => attachmentInputRef.current?.click()}
+                            aria-label={t('conversation.request.addImageAttachment')}
+                            data-testid="attachment-button"
+                        >
+                            <Icon src={ICONS.IMAGE_ATTACHMENT} size={22}/>
+                        </button>
+                    </>
                 )}
 
                 <AttachmentPreviewStrip

@@ -425,4 +425,68 @@ describe('Request Widget Component', () => {
             });
         });
     });
+
+    describe('mobile image-attachment button', () => {
+        const mockUploadAttachment = uploadAttachment as jest.Mock;
+        const originalInnerWidth = window.innerWidth;
+
+        const makeImageFile = (type = 'image/png', size = 1024): File => {
+            const file = new File(['x'], 'photo.png', { type });
+            Object.defineProperty(file, 'size', { value: size });
+            return file;
+        };
+
+        const setViewportWidth = (width: number) => {
+            Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+            act(() => { window.dispatchEvent(new Event('resize')); });
+        };
+
+        beforeEach(() => {
+            (global.URL.createObjectURL as any) = jest.fn(() => 'blob:preview');
+            (global.URL.revokeObjectURL as any) = jest.fn();
+        });
+
+        afterEach(() => {
+            Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
+        });
+
+        test('renders on mobile only', () => {
+            render(<Request blockId="block-1" />);
+            expect(screen.queryByTestId('attachment-button')).not.toBeInTheDocument();
+
+            setViewportWidth(500);
+            expect(screen.getByTestId('attachment-button')).toBeInTheDocument();
+        });
+
+        test('selecting a file uploads it through the shared pipeline', async () => {
+            const ref = { attachmentId: 'att-9', s3Key: 'customers/cust-123/attachments/att-9', mediaType: 'image/png' };
+            mockUploadAttachment.mockResolvedValue(ref);
+
+            render(<Request blockId="block-1" />);
+            setViewportWidth(500);
+
+            const input = screen.getByTestId('attachment-file-input') as HTMLInputElement;
+            fireEvent.change(input, { target: { files: [makeImageFile()] } });
+
+            expect(await screen.findByTestId('attachment-thumbnail')).toBeInTheDocument();
+            await waitFor(() => {
+                expect(screen.queryByTestId('attachment-uploading-spinner')).not.toBeInTheDocument();
+            });
+            expect(mockUploadAttachment).toHaveBeenCalledWith('test-token', expect.any(File));
+
+            fireEvent.click(screen.getByTestId('generate-button'));
+            expect(mockGenerateResponsesStream).toHaveBeenCalledWith('block-1', '', undefined, undefined, [ref]);
+        });
+
+        test('rejects unsupported file types with a toast', () => {
+            render(<Request blockId="block-1" />);
+            setViewportWidth(500);
+
+            const input = screen.getByTestId('attachment-file-input') as HTMLInputElement;
+            fireEvent.change(input, { target: { files: [makeImageFile('image/tiff')] } });
+
+            expect(mockShowToast).toHaveBeenCalled();
+            expect(mockUploadAttachment).not.toHaveBeenCalled();
+        });
+    });
 });
