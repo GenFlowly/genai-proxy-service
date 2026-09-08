@@ -311,7 +311,8 @@ class CustomerProfileRepository(
         embeddingMode: String? = null,
         embeddingModel: String? = null,
         preferredInstructionId: String? = null,
-        instructionFallbackMode: String? = null
+        instructionFallbackMode: String? = null,
+        preferredAgentId: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
             val now = Instant.now().toString()
@@ -373,10 +374,25 @@ class CustomerProfileRepository(
                 attrValues[":instructionFallbackMode"] = AttributeValue.builder().s(instructionFallbackMode).build()
             }
 
+            // Blank = clear (revert to the default agent), non-blank = set.
+            val removeParts = mutableListOf<String>()
+            if (preferredAgentId != null) {
+                attrNames["#preferredAgentId"] = "preferredAgentId"
+                if (preferredAgentId.isBlank()) {
+                    removeParts.add("#preferredAgentId")
+                } else {
+                    updateParts.add("#preferredAgentId = :preferredAgentId")
+                    attrValues[":preferredAgentId"] = AttributeValue.builder().s(preferredAgentId).build()
+                }
+            }
+
             val updateReq = UpdateItemRequest.builder()
                 .tableName(CUSTOMER_PREFERENCES_TABLE)
                 .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
-                .updateExpression("SET " + updateParts.joinToString(", "))
+                .updateExpression(
+                    "SET " + updateParts.joinToString(", ") +
+                        (if (removeParts.isNotEmpty()) " REMOVE " + removeParts.joinToString(", ") else "")
+                )
                 .expressionAttributeNames(attrNames)
                 .expressionAttributeValues(attrValues)
                 .build()
@@ -415,7 +431,8 @@ class CustomerProfileRepository(
                 embeddingMode = item["embeddingMode"]?.s(),
                 embeddingModel = item["embeddingModel"]?.s(),
                 preferredInstructionId = item["preferredInstructionId"]?.s(),
-                instructionFallbackMode = item["instructionFallbackMode"]?.s()
+                instructionFallbackMode = item["instructionFallbackMode"]?.s(),
+                preferredAgentId = item["preferredAgentId"]?.s()
             )
         }
 

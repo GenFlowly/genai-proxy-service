@@ -265,7 +265,8 @@
             "attachmentLimitReached": "You can attach at most {{max}} images per message",
             "attachmentUploadFailed": "Image upload failed. Please try again",
             "attachmentsUploading": "Images are still uploading",
-            "removeAttachment": "Remove image"
+            "removeAttachment": "Remove image",
+            "addImageAttachment": "Add image attachment"
         },
         "response": {
             "deleteFact": "Delete fact from memory: {{fact}}",
@@ -638,6 +639,14 @@
         "tokenCounter": {
             "estimated": "Estimated: {{tokenCount}}",
             "promptTokens": "Prompt Tokens"
+        },
+        "agentPickerWidget": {
+            "title": "Agents",
+            "failedToLoad": "Could not load agents",
+            "noAgents": "No agents available",
+            "systemBadge": "System",
+            "defaultBadge": "Default",
+            "failedToSave": "Could not save agent preference"
         }
     },
     "toasts": {

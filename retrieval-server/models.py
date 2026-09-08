@@ -125,3 +125,7 @@ class RetrieveRequest(BaseModel):
     # Governance decision from the proxy server: MEMORY nodes may inject
     # learned user memories (request consent AND account setting).
     memory_enabled: bool = False
+    # Explicit agent graph to run instead of the customer's default. The proxy
+    # validates access (own-or-System) before sending; ownership is re-checked
+    # here as defense in depth. None → default resolution.
+    graph_id: Optional[str] = None

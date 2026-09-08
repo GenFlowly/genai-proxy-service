@@ -67,7 +67,8 @@ class VoiceSessionService(
     private val customerCredentialsService: CustomerCredentialsService,
     private val retrievalServerClient: RetrievalServerClient,
     private val costCalculationService: CostCalculationService,
-    private val json: Json
+    private val json: Json,
+    private val graphRepository: com.genflowly.repository.GraphRepository
 ) {
     private val logger = LoggerFactory.getLogger("VoiceSessionService")
 
@@ -113,6 +114,17 @@ class VoiceSessionService(
         val client = init["client"]?.jsonPrimitive?.content ?: "voice"
         val agentic = init["agentic"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
 
+        // Optional explicit agent (graph) for the knowledge tool — null keeps
+        // the server-side default resolution, same contract as generate-text.
+        val agentId = init["agentId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        if (agentId != null) {
+            val graphItem = graphRepository.getCustomerGraph(agentId)
+            val owner = graphItem?.get("customerId")?.s()
+            val accessible = graphItem != null && graphItem["deletedAt"] == null &&
+                (owner == customerId || owner == com.genflowly.DynamoDBConstants.SYSTEM_GRAPH_OWNER)
+            if (!accessible) return SessionInitResult.Rejected("Agent '$agentId' not found.")
+        }
+
         val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(vendor, customerId)
             ?: return SessionInitResult.Rejected("No API key stored for $vendorName")
 
@@ -153,6 +165,7 @@ class VoiceSessionService(
             init["graphModel"]?.let { put("graph_model", it) }
             if (systemPrompt.isNotBlank()) put("system_prompt", systemPrompt)
             put("agentic", agentic)
+            agentId?.let { put("graph_id", it) }
             put("customer_id", customerId)
             put("client", client)
             maxTokens?.let { put("llm_max_tokens", it) }
