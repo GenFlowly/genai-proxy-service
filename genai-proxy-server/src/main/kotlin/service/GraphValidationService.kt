@@ -29,7 +29,10 @@ private val logger = KotlinLogging.logger {}
  *  6. Cycle safety: if the graph contains a directed cycle (over plain and
  *     conditional edges combined), at least one node must be of type
  *     RESPONSE_GENERATOR_WITH_REFLECTION (the cycle-exit signal writer).
- *     Acyclic branching needs no reflection node.
+ *     Acyclic branching needs no reflection node. Cycles closed only through
+ *     tool_route conditional edges are exempt: the tool loop terminates by
+ *     construction (no tool calls → "none"/"caller" route), with the graph's
+ *     maxIterations recursion limit as backstop.
  *  7. Every nodeId is reachable from the entryPoint.
  *  8. maxIterations in [1, 100].
  *  9. Node config must be valid JSON when provided.
@@ -194,12 +197,17 @@ object GraphValidationService {
      * conditional edges combined) must carry a RESPONSE_GENERATOR_WITH_REFLECTION
      * node — that is the node that writes `needs_more_context` (the cycle-exit
      * signal). Acyclic branching, multi-way or not, needs no reflection node.
+     *
+     * tool_route conditional edges are excluded from cycle detection: the
+     * agent↔TOOL_EXECUTOR loop they close exits by construction once the model
+     * stops emitting built-in tool calls (the "none"/"caller" routes), and the
+     * runtime's recursion limit (maxIterations) bounds it regardless.
      */
     private fun validateCycleSafety(
         edgesObj: JsonObject,
         nodeTypeById: Map<String, String>,
     ) {
-        if (!hasDirectedCycle(buildAdjacency(edgesObj))) return
+        if (!hasDirectedCycle(buildAdjacency(edgesObj, includeToolRoutes = false))) return
 
         val hasReflection = nodeTypeById.values.any {
             it == "RESPONSE_GENERATOR_WITH_REFLECTION"
@@ -210,8 +218,15 @@ object GraphValidationService {
         }
     }
 
-    /** Adjacency over plain + conditional edges, "__end__" targets excluded. */
-    private fun buildAdjacency(edgesObj: JsonObject): Map<String, Set<String>> {
+    /**
+     * Adjacency over plain + conditional edges, "__end__" targets excluded.
+     * With [includeToolRoutes] false, tool_route conditional edges are skipped
+     * (cycle detection only — reachability must still traverse them).
+     */
+    private fun buildAdjacency(
+        edgesObj: JsonObject,
+        includeToolRoutes: Boolean = true,
+    ): Map<String, Set<String>> {
         val adjacency = mutableMapOf<String, MutableSet<String>>()
         edgesObj["edges"]?.jsonArray?.forEach { el ->
             val edge = el.jsonObject
@@ -221,6 +236,8 @@ object GraphValidationService {
         }
         edgesObj["conditional_edges"]?.jsonArray?.forEach { el ->
             val cond = el.jsonObject
+            val conditionType = cond["condition_type"]?.jsonPrimitive?.content ?: "bool"
+            if (!includeToolRoutes && conditionType == "tool_route") return@forEach
             val from = cond["from"]?.jsonPrimitive?.content ?: return@forEach
             cond["routes"]?.jsonObject?.values?.forEach { routeVal ->
                 val target = routeVal.jsonPrimitive.content
