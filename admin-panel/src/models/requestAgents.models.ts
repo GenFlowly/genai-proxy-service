@@ -14,6 +14,10 @@ export interface RequestAgentMapEntry {
 
 export interface RequestAgentMapStatus {
     requestType: string
+    /** Human-readable action name from the backend RequestType registry. */
+    displayName?: string
+    /** Template variables the server supplies to this action's prompts. */
+    templateVariables?: string[]
     effectiveMapKey: string
     effectiveSource: 'DDB' | 'CONFIG'
     ddbEntry?: RequestAgentMapEntry | null
