@@ -38,6 +38,8 @@ class RequestAgentMapAdminService(
             val effective = agentResolutionService.resolve(requestType)
             RequestAgentMapStatus(
                 requestType = requestType.name,
+                displayName = requestType.displayName,
+                templateVariables = requestType.templateVariables,
                 effectiveMapKey = effective.mapKey,
                 effectiveSource = effective.source.name,
                 ddbEntry = ddbEntries[requestType.name]
