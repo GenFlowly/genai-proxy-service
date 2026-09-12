@@ -186,6 +186,28 @@ code(HttpStatusCode.OK) {
 
 See `activity/generation/GenerateTextStreamActivity.kt` for a complete example, or any existing activity file for the standard pattern.
 
+## Default actions (request-agent registry)
+
+An **action** is an internal generation flow the server runs on the user's behalf — not a chat turn the user typed. Current actions: instruction-persona creation, conversation-title generation, note-title generation, and memory extraction ("Learn about User"). Each action resolves the agent (prompt + model + optional graph) that serves it at call time instead of hardcoding prompts.
+
+### Where things live
+
+- **Registry**: the `RequestType` enum (`models/RequestType.kt`) is the single source of truth. Each value carries a `displayName` and the `templateVariables` the server supplies to that action's prompts. Both admin panel and react app render actions straight from this registry via the map APIs — nothing action-specific is hardcoded client-side (the clients keep only fallback labels).
+- **Bundled defaults**: `resources/config/request-agent-defaults.json` + prompt files under `resources/config/prompts/`. This is what serves an action when no DDB mapping exists.
+- **Mappings**: the `RequestAgentMap` DDB table, keyed `(scope, requestType) → graphId`. Two scopes:
+  - `SYSTEM` — the global default, managed in the admin panel ("Default Actions Mapping" page, `RequestAgentMapAdminService`). Mapping a graph transfers it to System ownership.
+  - `<customerId>` — a per-user override, managed from the react app's Settings → Default Actions (`CustomerRequestAgentMapService`, `/api/v1/request-agents`). No ownership transfer; the user maps their own agents.
+- **Resolution**: `AgentResolutionService.resolve(requestType, customerId)` — customer scope → `SYSTEM` scope → bundled default, cached ~60s per (scope, requestType). Execution goes through `GenerationAgentExecutor` on the **customer's** AI keys; multi-node graphs run on the retrieval-server LangGraph runtime.
+- Note: the customer-chat **default agent is NOT an action** — chat serves the System graph flagged `isDefault=true` directly and never goes through this map.
+
+### Adding a new action
+
+1. Add the enum value to `RequestType` **with its `displayName` and `templateVariables`** — the admin panel's mapping page and the react app's Settings section pick it up automatically from the registry; no client change needed.
+2. Add its bundled default to `request-agent-defaults.json` (mapKey, outputFormat, modelPreference, maxTokens) and its prompt files under `config/prompts/` (`{{var}}` placeholders must match the registry's `templateVariables`).
+3. At the call site, resolve with `agentResolutionService.resolve(RequestType.NEW_ACTION, customerId)` and execute via `GenerationAgentExecutor.executeWithCustomerKey(...)`, passing exactly the registered variables.
+4. Template syntax caveat: the local single-call path renders `{{var}}` (`PromptTemplateRenderer`); the LangGraph path substitutes single-brace `{var}` in node prompts (`retrieval-server/routes/retrieve.py`). Agents built in the UI should use single-brace placeholders in their input templates.
+5. Emit the standard metrics for the new flow (see Observability below) and never log prompt content in production.
+
 ## Observability — metrics & logging conventions
 
 All services follow ONE set of metric-naming and dimension conventions, pinned here and implemented for Python in `encoding-library/src/encoding_library/observability/`. Dashboards and alarms live in Grafana (fed by Fly Prometheus for the Fly apps and CloudWatch for the lambdas), so a metric must mean the same thing no matter which service emitted it.
