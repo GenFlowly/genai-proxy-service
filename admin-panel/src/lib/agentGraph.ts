@@ -13,9 +13,33 @@ import {
 } from '../models/defaultGraph.models'
 import { InstructionResponse } from '../models/instructions.models'
 import { NodePresetResponse } from '../models/nodePresets.models'
+import { AIVendor, VENDOR_LABELS } from '../constants/vendors'
+import { getSystemVendorModels } from '../services/systemApiKeysService'
 
 /** Ids the editor assigns to nodes created in the current session. */
 export const TEMP_NODE_ID_PREFIX = 'new-'
+
+/** Vendors offered as a node's model preference (system-key context: all). */
+export const GRAPH_VENDORS = Object.values(AIVendor).map((vendor) => ({
+    id: vendor,
+    label: VENDOR_LABELS[vendor],
+}))
+
+/**
+ * Model-list loader for the editor's node model preference. No system key
+ * for the vendor (or a failed fetch) resolves to [] — the model field then
+ * stays free-text.
+ */
+export function makeGetModelsForVendor(getToken: () => Promise<string>) {
+    return async (vendor: string): Promise<string[]> => {
+        try {
+            const token = await getToken()
+            return (await getSystemVendorModels(token, vendor)).models
+        } catch {
+            return []
+        }
+    }
+}
 
 /**
  * Maps the server's pre-made node presets to the palette entries the visual

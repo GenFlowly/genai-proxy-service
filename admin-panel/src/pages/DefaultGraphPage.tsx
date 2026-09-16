@@ -13,6 +13,8 @@ import {
     diffGraphUpdate,
     toEditorGraph,
     toInstructionOptions,
+    GRAPH_VENDORS,
+    makeGetModelsForVendor,
 } from '../lib/agentGraph'
 import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
 
@@ -31,6 +33,10 @@ export default function DefaultGraphPage() {
     const [saving, setSaving] = useState(false)
     const [saveError, setSaveError] = useState<string | null>(null)
     const { catalog, saveNodeAsPreset, presetNotice } = useNodePresetCatalog(getAccessTokenSilently)
+    const getModelsForVendor = useMemo(
+        () => makeGetModelsForVendor(getAccessTokenSilently),
+        [getAccessTokenSilently]
+    )
 
     const refresh = useCallback(async () => {
         setLoadError(null)
@@ -118,6 +124,8 @@ export default function DefaultGraphPage() {
                     nodeCatalog={catalog}
                     instructions={instructionOptions}
                     conditionOptions={CONDITION_OPTIONS}
+                    vendors={GRAPH_VENDORS}
+                    getModelsForVendor={getModelsForVendor}
                     saving={saving}
                     errorMessage={saveError}
                     onSave={(edited) => void handleSave(edited)}

@@ -232,6 +232,26 @@ describe('GraphAgentEditorPage', () => {
         );
     });
 
+    test('passes only valid-key vendors to the editor for the node model preference', async () => {
+        (useAuth as jest.Mock).mockReturnValue({
+            getAccessTokenSilently: jest.fn().mockResolvedValue(mockToken),
+            customerId: 'cust-1',
+            aiVendorAPIKeyStatusList: [
+                { aiVendor: 'OPENAI', status: 'API key is valid', isAPIKeyValid: true },
+                { aiVendor: 'CLAUDE', status: 'API Key is not set', isAPIKeyValid: false },
+                { aiVendor: 'GEMINI', status: 'API key is valid', isAPIKeyValid: true },
+            ],
+        });
+        await renderLoadedEditor();
+
+        await waitFor(() => expect(mockGraphEditorProps.vendors).toHaveLength(2));
+        expect(mockGraphEditorProps.vendors).toEqual([
+            { id: 'OPENAI', label: 'OpenAI' },
+            { id: 'GEMINI', label: 'Gemini' },
+        ]);
+        expect(typeof mockGraphEditorProps.getModelsForVendor).toBe('function');
+    });
+
     test('passes the fetched node presets as the catalog and the condition options to the editor', async () => {
         await renderLoadedEditor();
 
