@@ -11,10 +11,12 @@ import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useWindowSize } from '../../hooks/useWindowSize'
 import { useLayout } from '../../context/LayoutContext'
-import { Breadcrumbs, BreadcrumbItem } from '@genflowly/component-library'
+import { Breadcrumbs, BreadcrumbItem, ResizableSidebar } from '@genflowly/component-library'
 
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+
+const SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY = 'settings_sidebar_width_rem'
 
 // Translation keys for the section breadcrumb, keyed by the route segment
 const SECTION_LABEL_KEYS: Record<string, string> = {
@@ -30,6 +32,9 @@ export default function SettingsPage(): React.ReactElement {
     usePageTitle()
     const { width } = useWindowSize()
     const isMobile = width <= 768
+    // Matches the SCSS tablet breakpoint (1024px), where the layout stacks
+    // into a column and horizontal drag-resizing stops making sense
+    const isTablet = width <= 1024
     const navigate = useNavigate()
     const location = useLocation()
     const { setLeftSidebarExpanded } = useLayout()
@@ -47,8 +52,23 @@ export default function SettingsPage(): React.ReactElement {
         <div className={styles.page}>
             <Navbar />
             <div className={styles.layout}>
-                {/* On mobile the menu is its own page (/settings); the sidebar column is desktop-only */}
-                {!isMobile && <SettingsSidebar />}
+                {/* On mobile the menu is its own page (/settings); the sidebar column is desktop-only.
+                    On tablet the layout stacks vertically, so the sidebar renders plain (no resize). */}
+                {!isMobile && (
+                    isTablet ? (
+                        <SettingsSidebar />
+                    ) : (
+                        <ResizableSidebar
+                            storageKey={SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY}
+                            defaultWidth={260}
+                            minWidth={200}
+                            data-testid="settings-sidebar-panel"
+                            handleTestId="settings-sidebar-resize-handle"
+                        >
+                            <SettingsSidebar />
+                        </ResizableSidebar>
+                    )
+                )}
                 <div className={styles.content}>
                     <div className={styles.contentInner}>
                         {isMobile && <Breadcrumbs items={breadcrumbItems} />}

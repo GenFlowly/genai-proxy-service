@@ -2,19 +2,19 @@
 @import '../../../styles/mixins.scss';
 
 .sidebar {
-    width: 260px;
+    // Fills its container: on desktop that's the ResizableSidebar panel
+    // (which brings its own width, material and hairline border)
+    width: 100%;
     background-color: transparent;
-    border-right: 1px solid $color-border-light;
     display: flex;
     flex-direction: column;
     height: 100%;
     padding: 1.5rem 1rem;
     flex-shrink: 0;
 
+    // Tablet: rendered plain (no panel), stacked above the content
     @include respond-to-tablet {
-        width: 100%;
         height: auto;
-        border-right: none;
         border-bottom: 1px solid $color-border-light;
     }
 }
@@ -23,7 +23,6 @@
 .fullPage {
     width: 100%;
     height: 100%;
-    border-right: none;
 
     @include respond-to-tablet {
         height: 100%;
