@@ -6,6 +6,7 @@ import SettingsMenuPage from './SettingsMenuPage'
 import { ProfileSettings } from './components/ProfileSettings'
 import { AISettings } from './components/AISettings'
 import { MemorySettings } from './components/MemorySettings'
+import { ActionAgentSettings } from './components/ActionAgentSettings'
 import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useWindowSize } from '../../hooks/useWindowSize'
@@ -20,6 +21,7 @@ const SECTION_LABEL_KEYS: Record<string, string> = {
     profile: 'settingsPage.settingsPage.sectionProfile',
     ai: 'settingsPage.settingsPage.sectionAi',
     memory: 'settingsPage.settingsPage.sectionMemory',
+    actions: 'settingsPage.settingsPage.sectionActions',
     developer: 'settingsPage.settingsPage.sectionDeveloper',
 }
 
@@ -57,6 +59,7 @@ export default function SettingsPage(): React.ReactElement {
                             <Route path="profile" element={<ProfileSettings />} />
                             <Route path="ai" element={<AISettings />} />
                             <Route path="memory" element={<MemorySettings />} />
+                            <Route path="actions" element={<ActionAgentSettings />} />
                             <Route path="developer" element={<DeveloperSettings />} />
                         </Routes>
                     </div>

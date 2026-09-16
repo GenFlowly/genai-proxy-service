@@ -430,9 +430,10 @@ fun Application.module() {
     get<com.genflowly.service.RequestAgentDefaultsLoader>().defaults
 
     val requestAgentMapAdminService = get<com.genflowly.service.RequestAgentMapAdminService>()
+    val customerRequestAgentMapService = get<com.genflowly.service.CustomerRequestAgentMapService>()
     val memoryService = get<com.genflowly.service.MemoryService>()
     val exchangeSideEffects = get<com.genflowly.service.ExchangeSideEffects>()
     val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, appConfig)
+    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, appConfig)
 }

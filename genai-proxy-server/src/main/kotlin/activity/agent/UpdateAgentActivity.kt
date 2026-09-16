@@ -1,9 +1,11 @@
 package com.genflowly.activity.agent
 
 import com.genflowly.Routes
+import com.genflowly.config.AppConfig
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.GraphService
+import com.genflowly.utils.isAdminCustomer
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.put
 import io.ktor.http.HttpStatusCode
@@ -20,6 +22,7 @@ private val logger = LoggerFactory.getLogger("UpdateAgentActivity")
 fun Route.registerUpdateAgentRoutes(
     graphService: GraphService,
     customerProfileService: CustomerProfileService,
+    appConfig: AppConfig,
 ) {
     authenticate("auth0", "apiKey") {
         /**
@@ -77,7 +80,8 @@ fun Route.registerUpdateAgentRoutes(
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val req = call.receive<UpdateAgentRequest>()
-                val response = graphService.updateAgent(customerId, graphId, req)
+                val isAdmin = isAdminCustomer(customerId, customerProfileService, appConfig)
+                val response = graphService.updateAgent(customerId, graphId, req, isAdmin)
                 call.respond(response)
             } catch (e: IllegalArgumentException) {
                 // Structural validation failure or node-not-in-graph error

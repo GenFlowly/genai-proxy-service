@@ -555,10 +555,22 @@ class GraphService(
         customerId: String,
         graphId: String,
         req: UpdateAgentRequest,
+        /**
+         * True when the caller passed the admin allowlist: admins edit
+         * System-owned agents in place (they ARE the System operator);
+         * everyone else gets the fork-on-edit copy below.
+         */
+        isAdmin: Boolean = false,
     ): AgentResponse {
         val currentGraph = graphRepository.getCustomerGraph(graphId)
             ?: throw IllegalStateException("Agent (graph) '$graphId' not found.")
         val owner = currentGraph["customerId"]?.s()
+
+        if (owner == SYSTEM_GRAPH_OWNER && isAdmin) {
+            // isDefault is left untouched (null): the System default graph
+            // must stay default, and request-type agents must stay non-default.
+            return applyAgentUpdate(currentGraph, SYSTEM_GRAPH_OWNER, graphId, req.copy(isDefault = null), isSystem = true)
+        }
 
         // Editing the System-published default graph forks it into a
         // customer-owned copy first, then applies the update to the fork with

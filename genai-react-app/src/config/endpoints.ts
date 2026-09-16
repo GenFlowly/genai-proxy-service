@@ -35,6 +35,8 @@ export const endpoints = {
     updateUsername: `${BASE}${API_PREFIX}/profile/username`,
     updateDiscoverability: `${BASE}${API_PREFIX}/profile/discoverability`,
     getCustomerAgents: `${BASE}${API_PREFIX}/agents`,
+    getRequestAgents: `${BASE}${API_PREFIX}/request-agents`,
+    requestAgentMapping: (requestType: string) => `${BASE}${API_PREFIX}/request-agents/${requestType}`,
     getAgent: (graphId: string) => `${BASE}${API_PREFIX}/agents/${graphId}`,
     createAgentGraph: `${BASE}${API_PREFIX}/agents/graph`,
     getNodePresets: `${BASE}${API_PREFIX}/node-presets`,

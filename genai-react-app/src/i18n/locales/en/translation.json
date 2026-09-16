@@ -567,7 +567,8 @@
             "sectionAi": "AI Settings",
             "sectionDeveloper": "Developer",
             "sectionMemory": "Memory Settings",
-            "sectionProfile": "Profile"
+            "sectionProfile": "Profile",
+            "sectionActions": "Default Actions"
         },
         "settingsSidebar": {
             "aiSettings": "AI Settings",
@@ -575,7 +576,8 @@
             "logout": "Logout",
             "memorySettings": "Memory Settings",
             "profile": "Profile",
-            "title": "Settings"
+            "title": "Settings",
+            "actionAgents": "Default Actions"
         },
         "instructionDefaults": {
             "title": "Default instruction",
@@ -593,6 +595,21 @@
             "savedToast": "Instruction preferences saved",
             "saveErrorToast": "Failed to save instruction preferences",
             "loginFirstToast": "Please log in first"
+        },
+        "actionAgents": {
+            "title": "Default Actions",
+            "subtitle": "Choose which of your agents handles each built-in action. Leave an action on the platform default to use the standard behavior.",
+            "agentHint": "Agent",
+            "platformDefault": "Platform default",
+            "noAgents": "You have no agents yet — create one on the Agents page to use it here.",
+            "loading": "Loading…",
+            "save": "Save",
+            "saving": "Saving…",
+            "savedToast": "Default actions saved",
+            "saveErrorToast": "Failed to save default actions",
+            "loadErrorToast": "Failed to load default actions",
+            "loginFirstToast": "Sign in to change default actions",
+            "platformDefaultNamed": "Platform default — {{agent}}"
         }
     },
     "sidebar": {
