@@ -44,7 +44,9 @@ export default function ConversationHeader(): React.ReactElement | null {
 
     const isNewChat = !conversationId
     const canShare = conversationRole === 'OWNER' || conversationRole === 'EDIT'
-    const showShare = entitlements.canShare && (isNewChat || canShare)
+    // Only offer sharing once a conversation is loaded — a new chat has
+    // nothing to share yet
+    const showShare = entitlements.canShare && !isNewChat && canShare
     const displayTitle = isNewChat ? t('conversation.conversationHeader.newChat') : (conversationTitle ?? t('conversation.conversationHeader.untitledConversation'))
 
     const handleShareSave = async (
@@ -104,7 +106,6 @@ export default function ConversationHeader(): React.ReactElement | null {
             ...(showShare ? [{
                 label: t('conversation.conversationHeader.share'),
                 onClick: () => setShareModalOpen(true),
-                disabled: isNewChat,
                 'data-testid': 'conversation-share-button',
             }] : []),
             {
@@ -186,9 +187,8 @@ export default function ConversationHeader(): React.ReactElement | null {
                             label={t('conversation.conversationHeader.share')}
                             icon={ICONS.SHARE}
                             className={pageHeaderStyles.actionButton}
-                            onClick={() => !isNewChat && setShareModalOpen(true)}
+                            onClick={() => setShareModalOpen(true)}
                             data-testid="conversation-share-button"
-                            disabled={isNewChat}
                         />
                     )}
                 </>
