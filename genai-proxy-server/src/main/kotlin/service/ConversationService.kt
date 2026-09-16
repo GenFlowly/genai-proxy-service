@@ -228,7 +228,23 @@ class ConversationService(
         val updateSequenceMessage =
             updateSequenceOfMessageInConversation(message)
         conversationRepository.createMessage(updateSequenceMessage)
+        touchConversationForMessage(message)
         return updateSequenceMessage.messageId
+    }
+
+    /**
+     * Bumps the conversation's updatedAt so the history sidebar orders by last
+     * activity. The Conversation row is keyed by the OWNER's customerId; for a
+     * message from a share recipient the first touch misses (condition guard),
+     * so resolve the owner and touch their row instead. Best-effort — never
+     * fails the message write.
+     */
+    private suspend fun touchConversationForMessage(message: Message) {
+        if (conversationRepository.touchConversation(message.customerId, message.conversationId)) return
+        val ownerCustomerId = conversationRepository.getConversationById(message.conversationId)?.customerId
+        if (ownerCustomerId != null && ownerCustomerId != message.customerId) {
+            conversationRepository.touchConversation(ownerCustomerId, message.conversationId)
+        }
     }
 
     private suspend fun updateSequenceOfMessageInConversation(message: Message):
