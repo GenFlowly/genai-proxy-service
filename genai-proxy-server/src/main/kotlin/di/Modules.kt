@@ -183,6 +183,7 @@ fun appModule(): Module = module {
     single { AgentResolutionService(get(), get(), get(), get()) }
     single { GenerationAgentExecutor(get(), get(), get(), get(), get(), get()) }
     single { RequestAgentMapAdminService(get(), get(), get()) }
+    single { com.genflowly.service.CustomerRequestAgentMapService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get()) }

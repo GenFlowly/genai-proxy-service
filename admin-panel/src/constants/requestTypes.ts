@@ -6,10 +6,10 @@ export enum RequestType {
 }
 
 export const REQUEST_TYPE_LABELS: Record<RequestType, string> = {
-    [RequestType.INSTRUCTION_PERSONA]: 'Instruction persona generation',
-    [RequestType.CONVERSATION_TITLE]: 'Conversation title generation',
-    [RequestType.NOTE_TITLE]: 'Note title generation',
-    [RequestType.MEMORY_EXTRACTION]: 'User memory extraction',
+    [RequestType.INSTRUCTION_PERSONA]: 'Instruction Persona Creation',
+    [RequestType.CONVERSATION_TITLE]: 'Conversation Title Generation',
+    [RequestType.NOTE_TITLE]: 'Note Title Generation',
+    [RequestType.MEMORY_EXTRACTION]: 'Learn about User',
 }
 
 /**

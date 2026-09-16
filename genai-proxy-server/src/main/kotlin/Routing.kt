@@ -1,6 +1,7 @@
 package com.genflowly
 
 import com.genflowly.activity.agent.registerCreateAgentRoutes
+import com.genflowly.activity.agent.registerCustomerRequestAgentRoutes
 import com.genflowly.activity.agent.registerCreateGraphAgentRoutes
 import com.genflowly.activity.agent.registerDeleteAgentRoutes
 import com.genflowly.activity.agent.registerGetAgentRoutes
@@ -111,6 +112,9 @@ object Routes {
     const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
     const val TOOL_CREDENTIAL = "$API_V1/tool-credentials/{toolType}"
 
+    const val REQUEST_AGENT_MAP = "$API_V1/request-agents"
+    const val REQUEST_AGENT_MAP_ENTRY = "$API_V1/request-agents/{requestType}"
+
     const val GET_CUSTOMER_AGENTS = "$API_V1/agents"
     const val CREATE_AGENT = "$API_V1/agents"
     const val CREATE_GRAPH_AGENT = "$API_V1/agents/graph"
@@ -165,6 +169,7 @@ fun Application.configureRouting(
     systemApiKeyService: com.genflowly.service.SystemApiKeyService,
     modelCatalogService: com.genflowly.service.ModelCatalogService,
     requestAgentMapAdminService: com.genflowly.service.RequestAgentMapAdminService,
+    customerRequestAgentMapService: com.genflowly.service.CustomerRequestAgentMapService,
     memoryService: com.genflowly.service.MemoryService,
     exchangeSideEffects: com.genflowly.service.ExchangeSideEffects,
     unifiedSearchService: com.genflowly.service.UnifiedSearchService,
@@ -228,7 +233,8 @@ fun Application.configureRouting(
         registerCreateAgentRoutes(graphService, customerProfileService)
         registerCreateGraphAgentRoutes(graphService, customerProfileService)
         registerGetAgentRoutes(graphService, customerProfileService)
-        registerUpdateAgentRoutes(graphService, customerProfileService)
+        registerUpdateAgentRoutes(graphService, customerProfileService, appConfig)
+        registerCustomerRequestAgentRoutes(customerRequestAgentMapService, customerProfileService)
         registerDeleteAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
         

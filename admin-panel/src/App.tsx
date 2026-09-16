@@ -15,6 +15,7 @@ const NAV_ITEMS: { path: string; label: string }[] = [
     { path: '/system-api-keys', label: 'System AI Vendor API Keys' },
     { path: '/instructions', label: 'Instructions' },
     { path: '/default-agents', label: 'Default Agents' },
+    { path: '/mappings', label: 'Default Actions Mapping' },
     { path: '/node-presets', label: 'Node Presets' },
 ]
 
@@ -127,7 +128,8 @@ export default function App() {
                         <Route path="/default-agents" element={<DefaultAgentsPage />} />
                         <Route path="/default-agents/default-graph" element={<DefaultGraphPage />} />
                         <Route path="/default-agents/agent/:graphId" element={<AgentGraphEditorPage />} />
-                        <Route path="/default-agents/mappings" element={<RequestAgentsPage />} />
+                        <Route path="/mappings" element={<RequestAgentsPage />} />
+                        <Route path="/default-agents/mappings" element={<Navigate to="/mappings" replace />} />
                         <Route path="/node-presets" element={<NodePresetsPage />} />
                         <Route path="/request-agents" element={<Navigate to="/default-agents" replace />} />
                         <Route path="/default-graph" element={<Navigate to="/default-agents" replace />} />
