@@ -12,6 +12,9 @@ import { usePageTitle } from '../../../hooks/usePageTitle'
 import { createGraphAgent, getAgent, updateAgent } from '../../../services/agentsService'
 import { getCustomerInstructions } from '../../../services/instructionService'
 import { getNodePresets } from '../../../services/nodePresetsService'
+import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
+import { AIVendor, VENDOR_LABELS } from '../../../constants/vendors'
+import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import {
     Agent,
     CreateGraphAgentRequest,
@@ -123,7 +126,7 @@ export default function GraphAgentEditorPage() {
     const { graphId } = useParams<{ graphId: string }>()
     const navigate = useNavigate()
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
-    const { getAccessTokenSilently } = useAuth()
+    const { getAccessTokenSilently, customerId, aiVendorAPIKeyStatusList } = useAuth()
     const isDesktop = useIsDesktop()
     const isNew = !graphId || graphId === 'new'
     usePageTitle()
@@ -211,6 +214,31 @@ export default function GraphAgentEditorPage() {
             window.removeEventListener('popstate', handlePopState)
         }
     }, [dirty, t])
+
+    // Node model preference: only vendors the customer has a valid API key
+    // for are offered (the graph runs on the customer's own keys).
+    const vendors = useMemo(
+        () =>
+            (aiVendorAPIKeyStatusList ?? [])
+                .filter(s => s.status === APIKeyStatus.VALID || s.isAPIKeyValid)
+                .map(s => ({
+                    id: s.aiVendor,
+                    label: VENDOR_LABELS[s.aiVendor as AIVendor] ?? s.aiVendor,
+                })),
+        [aiVendorAPIKeyStatusList]
+    )
+
+    const getModelsForVendor = useCallback(
+        async (vendor: string): Promise<string[]> => {
+            if (!customerId) return []
+            const token = await getAccessTokenSilently()
+            const response = await getTextGenerationModels(token, customerId, {
+                aiVendor: [vendor as AIVendor],
+            })
+            return response.aiVendorModelList?.find(v => v.aiVendor === vendor)?.modelsList ?? []
+        },
+        [customerId, getAccessTokenSilently]
+    )
 
     const graph: AgentGraph | null = useMemo(() => {
         if (!agent) return null
@@ -360,6 +388,8 @@ export default function GraphAgentEditorPage() {
                         nodeCatalog={nodeCatalog}
                         instructions={instructions}
                         conditionOptions={conditionOptions}
+                        vendors={vendors}
+                        getModelsForVendor={getModelsForVendor}
                         saving={saving}
                         errorMessage={errorMessage}
                         onSave={handleSave}
