@@ -21,9 +21,11 @@ const THRESHOLDS = {
 console.log(`${colors.cyan}Are there any changes? Running tests on changed files...${colors.reset}`);
 
 try {
-    // 1. Run tests only on changed files with coverage
-    // We use stdio: 'inherit' to show test output to the user
-    execSync('npm run test:coverage -- --onlyChanged --json --outputFile=coverage/test-report.json', { stdio: 'inherit' });
+    // 1. Run tests only on changed files with coverage. The package.json
+    // global coverageThreshold is disabled for this run: with --onlyChanged
+    // it would be judged against whatever unrelated modules the tests happen
+    // to import — the per-changed-file thresholds below are the real gate.
+    execSync('npm run test:coverage -- --onlyChanged --coverageThreshold=\'{"global":{}}\' --json --outputFile=coverage/test-report.json', { stdio: 'inherit' });
 
     // 2. Read coverage summary
     const summaryPath = path.join(__dirname, '..', 'coverage', 'coverage-summary.json');
