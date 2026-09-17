@@ -56,7 +56,7 @@ export default function Navbar(): React.ReactElement {
             <div className={styles.container}>
                 <div className={styles.leftControls}>
                     <button onClick={toggleLeftSidebar} className={styles.mobileToggle} aria-label={t("layout.mobileMenu.menu")} data-testid="mobile-left-sidebar-toggle">
-                        <Icon src={ICONS.MENU} size={24} />
+                        <Icon src={ICONS.MENU} size={18} />
                     </button>
                     <Link to="/" className={styles.logoLink} title={t("layout.navbar.home")} data-testid="navbar-logo-link">
                         <img src={logo} alt={t("layout.navbar.logoAlt")} className={styles.logoImage} />
@@ -84,7 +84,7 @@ export default function Navbar(): React.ReactElement {
                                 className={styles.loginButton}
                                 data-testid="login-button"
                             >
-                                <Icon src={ICONS.LOGIN} size={20} aria-hidden={true} />
+                                <Icon src={ICONS.LOGIN} size={14} aria-hidden={true} />
                                 <span>{t("layout.navbar.login")}</span>
                             </button>
                         ) : (
@@ -100,7 +100,7 @@ export default function Navbar(): React.ReactElement {
                     </div>
                     {isChatPage && (
                         <button onClick={toggleRightSidebar} className={styles.mobileToggle} aria-label={t("layout.mobileFullPageModal.aiSettings")} data-testid="mobile-right-sidebar-toggle">
-                            <Icon src={ICONS.MODELS} size={24} />
+                            <Icon src={ICONS.MODELS} size={18} />
                         </button>
                     )}
                 </div>

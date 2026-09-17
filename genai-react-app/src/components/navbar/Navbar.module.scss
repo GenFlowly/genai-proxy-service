@@ -10,9 +10,11 @@
 }
 
 .container {
+  // Mac-menu-bar height: exactly 1.5rem (24px) total — no vertical padding,
+  // every child must fit within this strip
   height: 1.5rem;
   width: 100%;
-  padding: $spacing-lg;
+  padding: 0 $spacing-lg;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -43,11 +45,13 @@
 .loginButton {
   display: flex;
   align-items: center;
-  gap: $spacing-sm;
+  gap: $spacing-xs;
   background-color: $color-primary;
   color: $white;
-  padding: $spacing-xs $spacing-lg;
+  height: 1.25rem; // Fit inside the 1.5rem menu-bar strip
+  padding: 0 $spacing-md;
   border-radius: $radius-md;
+  font-size: 0.775rem;
   font-weight: 600;
   border: none;
   cursor: pointer;
@@ -203,7 +207,7 @@
   border: none;
   cursor: pointer;
   color: $color-navbar-text;
-  padding: 0.5rem;
+  padding: 0.125rem; // Keep the toggle within the 1.5rem menu-bar strip
   margin-right: 0.5rem;
 
   @include respond-to-mobile {

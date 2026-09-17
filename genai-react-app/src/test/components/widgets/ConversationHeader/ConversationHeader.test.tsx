@@ -81,7 +81,7 @@ describe('ConversationHeader', () => {
         })
     })
 
-    test('renders New Chat and disabled share button when conversationId is null', () => {
+    test('renders New Chat without a share button when conversationId is null', () => {
         mockUseConversation.mockReturnValue({
             conversationId: null,
             conversationTitle: null,
@@ -92,9 +92,8 @@ describe('ConversationHeader', () => {
 
         expect(screen.getByRole('heading', { name: 'New Chat' })).toBeInTheDocument()
         expect(screen.getByTestId('new-chat-button')).toBeInTheDocument()
-        const shareButton = screen.getByTestId('conversation-share-button')
-        expect(shareButton).toBeInTheDocument()
-        expect(shareButton).toBeDisabled()
+        // No conversation loaded yet — nothing to share
+        expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument()
     })
 
     test('renders title and enabled share button when OWNER', () => {

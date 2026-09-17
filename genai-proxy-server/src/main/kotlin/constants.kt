@@ -30,6 +30,7 @@ object DynamoDBConstants {
     const val CONVERSATION_TABLE = "Conversation"
     const val CONVERSATION_ID_KEY = "conversationId"
     const val CONVERSATION_CUSTOMER_GSI_KEY = "customerIdIndexV2"
+    const val CONVERSATION_CUSTOMER_UPDATED_GSI_KEY = "customerIdUpdatedAtIndex"
 
     const val MESSAGE_TABLE = "Message"
     const val MESSAGE_ID_SORT_KEY = "messageId"

@@ -1,7 +1,7 @@
 package com.genflowly.repository
 
 import com.genflowly.DynamoDBConstants.ARCHIVED_AT_KEY
-import com.genflowly.DynamoDBConstants.CONVERSATION_CUSTOMER_GSI_KEY
+import com.genflowly.DynamoDBConstants.CONVERSATION_CUSTOMER_UPDATED_GSI_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_ID_GSI_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_ID_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
@@ -21,6 +21,7 @@ import com.genflowly.models.Message
 import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
@@ -58,6 +59,42 @@ class ConversationRepository(
         } catch (e: Exception) {
             logger.error("Failed to Create Conversation in DynamoDB", e)
             throw e
+        }
+    }
+
+    /**
+     * Bumps the conversation's updatedAt to now, so it surfaces at the top of
+     * the last-activity-ordered listing ([CONVERSATION_CUSTOMER_UPDATED_GSI_KEY]).
+     *
+     * Guarded by attribute_exists so a wrong (customerId, conversationId) pair —
+     * e.g. a sender who isn't the owner of a shared conversation — never
+     * creates a phantom row. Returns false in that case instead of throwing.
+     */
+    suspend fun touchConversation(
+        customerId: String,
+        conversationId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("SET #ua = :now")
+                    .conditionExpression("attribute_exists(#cid)")
+                    .expressionAttributeNames(mapOf("#ua" to "updatedAt", "#cid" to CONVERSATION_ID_KEY))
+                    .expressionAttributeValues(mapOf(":now" to AttributeValue.builder().s(Instant.now().toString()).build()))
+                    .build()
+            )
+            true
+        } catch (e: ConditionalCheckFailedException) {
+            false
+        } catch (e: Exception) {
+            // Best-effort: a failed touch must not fail the message write
+            logger.error("Failed to touch conversation $conversationId", e)
+            false
         }
     }
 
@@ -251,8 +288,9 @@ class ConversationRepository(
     }
 
     /**
-     * Fetches up to [pageSize] conversations for the given customer, newest first,
-     * using a GSI on the Conversation table keyed by customerId.
+     * Fetches up to [pageSize] conversations for the given customer, most
+     * recently updated first, using a GSI on the Conversation table keyed by
+     * customerId and sorted by updatedAt (bumped on every message write).
      *
      * @param customerId   Partition value to filter by.
      * @param pageSize     Maximum number of items to return (default 10).
@@ -266,7 +304,7 @@ class ConversationRepository(
     ): GetCustomerConversationsResponse = withContext(Dispatchers.IO) {
         val queryBuilder = QueryRequest.builder()
             .tableName(CONVERSATION_TABLE)
-            .indexName(CONVERSATION_CUSTOMER_GSI_KEY)
+            .indexName(CONVERSATION_CUSTOMER_UPDATED_GSI_KEY)
             .keyConditionExpression("#cid = :cid")
             .filterExpression("attribute_not_exists(#aa)")
             .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY, "#aa" to ARCHIVED_AT_KEY))
