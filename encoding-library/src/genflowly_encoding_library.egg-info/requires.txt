@@ -4,7 +4,6 @@ pydantic
 langchain-text-splitters
 tiktoken
 langchain-experimental
-langchain-huggingface
 langchain-openai
 langchain-voyageai
 
@@ -14,7 +13,11 @@ flake8
 
 [ml]
 pymilvus[model]>=2.4.0
+langchain-huggingface
 sentence-transformers>=2.2.0
 scikit-learn
 scipy
 numpy<2.0.0
+
+[prometheus]
+prometheus-client
