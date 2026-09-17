@@ -3,9 +3,6 @@ FROM python:3.11-slim AS builder
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
-# Install torch in its own layer — heavy and rarely changes, so it stays cached
-# even when requirements.txt is updated.
-RUN pip install --no-cache-dir --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
@@ -21,12 +18,6 @@ COPY routes/ ./routes/
 COPY graph/ ./graph/
 COPY graph_tools/ ./graph_tools/
 COPY voice/ ./voice/
-
-# Model cache lives on a mounted volume so it persists across restarts
-# and is never downloaded at build time
-ENV HF_HOME=/app/model_cache
-
-RUN mkdir -p /app/model_cache
 
 EXPOSE 5001
 

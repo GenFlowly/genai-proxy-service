@@ -1,13 +1,9 @@
 import logging
 import os
 import sys
-from contextlib import asynccontextmanager
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Model cache persisted via Docker volume at /app/model_cache
-os.environ["HF_HOME"] = "/app/model_cache"
-os.environ["HF_HUB_DISABLE_XET"] = "1"   # force regular HTTPS download, XetHub hangs in Docker
 os.environ["MPLCONFIGDIR"] = "/tmp/matplotlib"
 os.environ["NUMBA_CACHE_DIR"] = "/tmp/numba_cache"
 os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp/joblib_tmp"
@@ -30,18 +26,9 @@ setup_logging("retrieval-server")
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    from graph.nodes.retrieval import _get_cached_embedding_model
-
-    logger.info("Pre-loading default embedding model at startup")
-    _get_cached_embedding_model(None, None)
-    logger.info("Embedding model ready — dynamic graph engine loaded (RETRIEVAL + make_llm_node)")
-
-    yield
-
-
-app = FastAPI(lifespan=lifespan)
+# Embedding is API-backed (Voyage/OpenAI); encoders are lightweight clients
+# instantiated lazily per model in graph.nodes.retrieval — nothing to preload.
+app = FastAPI()
 
 # Per-endpoint request count / latency / status-code metrics + GET /metrics
 Instrumentator(excluded_handlers=["/health", "/metrics"]).instrument(app).expose(app)
