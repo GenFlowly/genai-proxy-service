@@ -104,6 +104,22 @@ export class DynamoDBStack extends cdk.Stack {
                     nonKeyAttributes: ['conversationId', 'title', 'updatedAt', 'archivedAt'],
                 },
                 {
+                    // Paginated listing ordered by last activity: updatedAt is
+                    // bumped on every message write, so this index keeps the
+                    // history sidebar sorted by most recently updated.
+                    indexName: 'customerIdUpdatedAtIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'updatedAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.INCLUDE,
+                    nonKeyAttributes: ['conversationId', 'title', 'createdAt', 'archivedAt'],
+                },
+                {
                     // Lookup a conversation by id alone, needed to serve requests
                     // from users who have the conversation shared with them and
                     // therefore don't know the owner's customerId.

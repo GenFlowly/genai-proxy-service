@@ -39,7 +39,7 @@ export default function ThemeToggle({ className = '', 'data-testid': testId }: T
                     aria-label={opt.label}
                     data-testid={`theme-toggle-${opt.id}`}
                 >
-                    <Icon src={opt.icon} size={14} alt={opt.label} />
+                    <Icon src={opt.icon} size={12} alt={opt.label} />
                 </button>
             ))}
         </div>
