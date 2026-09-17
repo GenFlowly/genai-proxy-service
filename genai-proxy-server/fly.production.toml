@@ -25,6 +25,8 @@ primary_region = "iad"
   port = 8080
   path = "/metrics"
 
+# Right-sized 2026-09: CPU sat under 1% of one core; JVM is capped at
+# -Xmx512m (Dockerfile), OS-level peak was ~656MB. Raise RAM if -Xmx grows.
 [[vm]]
-  size = "shared-cpu-2x"
-  memory = "2048mb"
+  size = "shared-cpu-1x"
+  memory = "1024mb"
