@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genflowly-encoding-library"
-version = "0.1.34"
+version = "0.1.35"
 description = "Text encoding and chunking library."
 dependencies = [
     "requests>=2.31.0",
@@ -13,7 +13,6 @@ dependencies = [
     "langchain-text-splitters",
     "tiktoken",
     "langchain-experimental",
-    "langchain-huggingface",
     "langchain-openai",
     "langchain-voyageai"
 ]
@@ -29,8 +28,12 @@ dev = [
     "pytest",
     "flake8"
 ]
+# Local-embedding support (sentence-transformers pulls in torch, ~1GB RSS).
+# get_embedding_model imports langchain_huggingface lazily, so API-only
+# consumers (Voyage/OpenAI) can install without this extra.
 ml = [
     "pymilvus[model]>=2.4.0",
+    "langchain-huggingface",
     "sentence-transformers>=2.2.0",
     "scikit-learn",
     "scipy",
