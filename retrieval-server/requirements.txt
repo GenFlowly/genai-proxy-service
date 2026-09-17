@@ -1,7 +1,12 @@
 fastapi
 uvicorn[standard]
 pydantic
-genflowly-encoding-library[ml,prometheus]>=0.1.34
+# No [ml] extra: embeddings are API-backed (Voyage/OpenAI) — local
+# sentence-transformers/torch would add ~1GB RSS and a multi-GB image.
+genflowly-encoding-library[prometheus]>=0.1.35
+
+# Milvus client (previously came in via the encoding library's [ml] extra)
+pymilvus>=2.4.0
 
 # Metrics: /metrics endpoint scraped by Fly's org Prometheus
 prometheus-client

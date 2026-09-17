@@ -7,11 +7,6 @@ primary_region = "iad"
 
 [env]
   PORT = "5001"
-  HF_HOME = "/app/model_cache"
-
-[[mounts]]
-  source = "model_cache"
-  destination = "/app/model_cache"
 
 # Dev only (prod uses fly.production.toml): traffic arrives via Flycast
 # (http://<app-name>.flycast, port 80) so fly-proxy can auto stop/start the
@@ -30,7 +25,9 @@ primary_region = "iad"
   port = 5001
   path = "/metrics"
 
+# Right-sized 2026-09: embeddings are API-backed (Voyage) — no local torch /
+# sentence-transformers resident in memory, and CPU sat under 1% of one core.
 [[vm]]
-  size = "shared-cpu-2x"
-  memory = "4096mb"
+  size = "shared-cpu-1x"
+  memory = "1024mb"
 
