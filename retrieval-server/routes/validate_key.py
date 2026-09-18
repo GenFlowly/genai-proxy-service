@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 class ValidateKeyRequest(BaseModel):
-    provider: str  # "openai" | "anthropic" | "gemini"
+    provider: str  # "openai" | "anthropic" | "gemini" | "voyage"
     api_key: str
 
 
@@ -41,10 +41,25 @@ async def _check_gemini(api_key: str) -> None:
     await genai.Client(api_key=api_key).aio.models.list()
 
 
+async def _check_voyage(api_key: str) -> None:
+    # Voyage has no list-models endpoint; a one-token embed is the cheapest
+    # authenticated call there is.
+    import httpx
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.post(
+            "https://api.voyageai.com/v1/embeddings",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"input": ["ping"], "model": "voyage-4"},
+        )
+        response.raise_for_status()
+
+
 _CHECKERS = {
     "openai": _check_openai,
     "anthropic": _check_anthropic,
     "gemini": _check_gemini,
+    "voyage": _check_voyage,
 }
 
 

@@ -19,16 +19,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Providers the rest of the stack understands (see graph/llm_factory.py)
-_SUPPORTED_PROVIDERS = {"openai", "anthropic", "gemini"}
+# Providers the rest of the stack understands (see graph/llm_factory.py).
+# voyage is embedding-only: it never serves generation, so callers only send
+# it with capability="embedding".
+_SUPPORTED_PROVIDERS = {"openai", "anthropic", "gemini", "voyage"}
 
 
 class VendorCredentials(BaseModel):
-    provider: str  # "openai" | "anthropic" | "gemini"
+    provider: str  # "openai" | "anthropic" | "gemini" | "voyage"
     # Unused with the LiteLLM catalog (kept for wire compatibility with callers)
     api_key: str = ""
     # "all" — every model LiteLLM lists for the provider (no filtering).
     # "voice" — only realtime voice models (served via /v1/realtime-style APIs).
+    # "embedding" — only embedding models (mode == "embedding" in the catalog).
     capability: str = "all"
 
 
@@ -53,6 +56,10 @@ def _is_voice_model(model_name: str, model_cost: dict) -> bool:
     )
 
 
+def _is_embedding_model(model_name: str, model_cost: dict) -> bool:
+    return (model_cost.get(model_name) or {}).get("mode") == "embedding"
+
+
 def _list_provider_models(provider: str, capability: str) -> list[str]:
     # litellm is imported lazily: it's a heavy import and only needed here
     import litellm
@@ -60,6 +67,8 @@ def _list_provider_models(provider: str, capability: str) -> list[str]:
     names = litellm.models_by_provider.get(provider) or set()
     if capability == "voice":
         names = {n for n in names if _is_voice_model(n, litellm.model_cost)}
+    elif capability == "embedding":
+        names = {n for n in names if _is_embedding_model(n, litellm.model_cost)}
 
     # Catalog names may be provider-prefixed (e.g. "gemini/gemini-2.5-flash");
     # strip the prefix and dedupe so ids are directly usable as llm_model values.

@@ -7,7 +7,6 @@ import SettingsPage from './SettingsPage';
 jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar">Navbar</div>);
 jest.mock('./components/ProfileSettings', () => ({ ProfileSettings: () => <div data-testid="profile-settings">Profile Settings</div> }));
 jest.mock('./components/AISettings', () => ({ AISettings: () => <div data-testid="ai-settings">AI Settings</div> }));
-jest.mock('./components/MemorySettings', () => ({ MemorySettings: () => <div data-testid="memory-settings">Memory Settings</div> }));
 
 jest.mock('../../context/AuthContext', () => ({
     useAuth: () => ({
@@ -62,9 +61,9 @@ describe('SettingsPage', () => {
         expect(screen.getByTestId('ai-settings')).toBeInTheDocument();
         expect(screen.queryByTestId('profile-settings')).not.toBeInTheDocument();
 
-        // Click Memory Settings tab
-        fireEvent.click(screen.getByText('Memory Settings'));
-        expect(screen.getByTestId('memory-settings')).toBeInTheDocument();
+        // Back to Profile
+        fireEvent.click(screen.getByText('Profile'));
+        expect(screen.getByTestId('profile-settings')).toBeInTheDocument();
         expect(screen.queryByTestId('ai-settings')).not.toBeInTheDocument();
     });
 
@@ -85,7 +84,7 @@ describe('SettingsPage', () => {
             // Menu page is shown, not a settings section
             expect(screen.getByText('Profile')).toBeInTheDocument();
             expect(screen.getByText('AI Settings')).toBeInTheDocument();
-            expect(screen.getByText('Memory Settings')).toBeInTheDocument();
+            expect(screen.getByText('Default Actions')).toBeInTheDocument();
             expect(screen.queryByTestId('profile-settings')).not.toBeInTheDocument();
 
             // Breadcrumbs: Menu > Settings
@@ -106,7 +105,7 @@ describe('SettingsPage', () => {
 
             // Section renders full page: no sidebar menu items around it
             expect(screen.getByTestId('ai-settings')).toBeInTheDocument();
-            expect(screen.queryByText('Memory Settings')).not.toBeInTheDocument();
+            expect(screen.queryByText('Default Actions')).not.toBeInTheDocument();
         });
 
         test('section routes render without the sidebar on mobile', () => {

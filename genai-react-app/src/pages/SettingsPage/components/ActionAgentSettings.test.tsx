@@ -114,7 +114,7 @@ describe('ActionAgentSettings', () => {
         const memorySelect = screen.getByTestId('action-agent-MEMORY_EXTRACTION') as HTMLSelectElement;
         expect(memorySelect.value).toBe('GRP2');
         const titleSelect = screen.getByTestId('action-agent-CONVERSATION_TITLE') as HTMLSelectElement;
-        expect(titleSelect.value).toBe('');
+        expect(titleSelect.value).toBe('__platform_default__');
     });
 
     test('platform default option names the serving system agent', async () => {
@@ -161,7 +161,7 @@ describe('ActionAgentSettings', () => {
         await renderLoaded();
         await userEvent.selectOptions(
             screen.getByTestId('action-agent-MEMORY_EXTRACTION'),
-            ''
+            '__platform_default__'
         );
         await userEvent.click(screen.getByRole('button', { name: /save/i }));
 

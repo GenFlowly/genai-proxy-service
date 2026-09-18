@@ -337,18 +337,21 @@ class MemoryExtractionService(
     private suspend fun encodeMemoryVector(customerId: String, memory: CustomerMemory, bearerToken: String?) {
         if (bearerToken == null) return
         try {
+            val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
+            // Memories are extracted from conversations, so they follow the
+            // conversations-category default.
+            val model = prefs?.embeddingModelConversations ?: prefs?.embeddingModel
             if (collectionsEnsured.add(customerId)) {
                 // Customers onboarded before the MEMORY data type existed have
                 // no memory collection yet; creation is idempotent.
-                encodingServerClient.ensureCollections(customerId, "Bearer $bearerToken")
+                encodingServerClient.ensureCollections(customerId, "Bearer $bearerToken", model)
             }
-            val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
             val now = Instant.now().toString()
             encodingServerClient.encodeMemory(
                 EncodingSaveMemoryRequest(
                     client = "memory",
-                    modelType = EmbeddingConstants.MODEL_TYPE,
-                    modelName = prefs?.embeddingModel ?: EmbeddingConstants.MODEL_NAME,
+                    modelType = EmbeddingConstants.modelTypeFor(model),
+                    modelName = model ?: EmbeddingConstants.MODEL_NAME,
                     data = EncodingMemoryData(
                         memory_key = memory.memoryId,
                         memoryKey = memory.memoryId,

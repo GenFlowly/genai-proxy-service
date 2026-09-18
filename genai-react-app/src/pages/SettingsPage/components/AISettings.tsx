@@ -12,7 +12,6 @@ import {
     ClaudeBrandName,
     GeminiBrandName
 } from '../../../components/common/BrandName/BrandName'
-import { InstructionDefaultsSettings } from './InstructionDefaultsSettings'
 import styles from './AISettings.module.scss'
 
 const BRAND_LABEL: Record<AIVendor, React.ReactNode> = {
@@ -128,8 +127,6 @@ export function AISettings(): React.ReactElement {
                     data-testid="ai-settings-vendors"
                 />
             </div>
-
-            <InstructionDefaultsSettings />
         </div>
     )
 }

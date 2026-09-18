@@ -46,14 +46,12 @@ const TestComponent = () => {
             <button data-testid="refresh-inst" onClick={() => auth.refreshInstructions()}>Refresh</button>
             <div data-testid="vendor-count">{auth.aiVendorAPIKeyStatusList.length}</div>
             <div data-testid="vdb-count">{auth.vectorDBConfigStatusList.length}</div>
-            <div data-testid="supabase">{auth.supabaseConfigStatus ? 'SET' : 'NOT_SET'}</div>
             <button data-testid="upd-inst-new" onClick={() => auth.updateInstruction({ id: 'i1', version: 1, name: 'v1' } as any)}>Add Inst</button>
             <button data-testid="upd-inst-same" onClick={() => auth.updateInstruction({ id: 'i1', version: 1, name: 'v1-updated' } as any)}>Update Inst</button>
             <button data-testid="upd-vendor-new" onClick={() => auth.updateVendorApiKeyStatus({ aiVendor: 'OPENAI', isAPIKeyValid: true } as any)}>Add Vendor</button>
             <button data-testid="upd-vendor-same" onClick={() => auth.updateVendorApiKeyStatus({ aiVendor: 'OPENAI', isAPIKeyValid: false } as any)}>Update Vendor</button>
             <button data-testid="upd-vdb-new" onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'ZILLIZ', isConfigValid: true } as any)}>Add VDB</button>
             <button data-testid="upd-vdb-same" onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'ZILLIZ', isConfigValid: false } as any)}>Update VDB</button>
-            <button data-testid="upd-supabase" onClick={() => auth.updateSupabaseConfigStatus({ status: 'VALID' })}>Update Supabase</button>
         </div>
     )
 }
@@ -313,15 +311,6 @@ describe('AuthContext session handling', () => {
 
         fireEvent.click(screen.getByTestId('upd-vdb-same'))
         expect(screen.getByTestId('vdb-count')).toHaveTextContent('1')
-    })
-
-    test('updateSupabaseConfigStatus stores the status', async () => {
-        renderWithProvider()
-        await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('READY'))
-
-        expect(screen.getByTestId('supabase')).toHaveTextContent('NOT_SET')
-        fireEvent.click(screen.getByTestId('upd-supabase'))
-        expect(screen.getByTestId('supabase')).toHaveTextContent('SET')
     })
 
     test('session is re-checked when the tab becomes visible again', async () => {

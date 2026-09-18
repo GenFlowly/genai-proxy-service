@@ -61,7 +61,7 @@ describe('AISettings', () => {
     test('renders a card per vendor with key status', () => {
         render(<AISettings />);
 
-        expect(screen.getByText('AI Models & Providers')).toBeInTheDocument();
+        expect(screen.getByText('Model API Keys')).toBeInTheDocument();
         (Object.values(AIVendor) as AIVendor[]).forEach(vendor => {
             expect(screen.getByTestId(`ai-settings-vendors-${vendor}-status-pill`)).toHaveTextContent('Not set');
         });

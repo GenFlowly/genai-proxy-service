@@ -39,9 +39,13 @@
   display: flex;
   justify-content: flex-start;
   background-color: $color-background;
+  // Floating panel like the sidebar and the chat page's center section:
+  // rounded with the page canvas showing through the gap
+  border-radius: $widget-radius;
 
   @include respond-to-tablet {
     padding: 1.25rem;
+    border-radius: 0; // Stacked full-bleed layout, no floating panels
   }
 }
 

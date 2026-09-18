@@ -58,20 +58,21 @@ class ConversationIndexingService(
                     return@launch
                 }
 
+                val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
+                val model = prefs?.embeddingModelConversations ?: prefs?.embeddingModel
+
                 if (collectionsEnsured.add(customerId)) {
                     // Customers onboarded before the CONVERSATION data type
                     // existed have no conversation collection yet; creation is
                     // idempotent.
-                    encodingServerClient.ensureCollections(customerId, "Bearer $bearerToken")
+                    encodingServerClient.ensureCollections(customerId, "Bearer $bearerToken", model)
                 }
-
-                val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
                 val now = Instant.now().toString()
                 encodingServerClient.encodeConversation(
                     EncodingSaveConversationRequest(
                         client = client,
-                        modelType = EmbeddingConstants.MODEL_TYPE,
-                        modelName = prefs?.embeddingModel ?: EmbeddingConstants.MODEL_NAME,
+                        modelType = EmbeddingConstants.modelTypeFor(model),
+                        modelName = model ?: EmbeddingConstants.MODEL_NAME,
                         data = EncodingConversationData(
                             conversation_key = conversationId,
                             conversationKey = conversationId,
