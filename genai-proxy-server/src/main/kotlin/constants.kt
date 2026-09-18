@@ -40,7 +40,6 @@ object DynamoDBConstants {
     const val CUSTOMER_VECTOR_DB_CONFIG_TABLE = "CustomerVectorDBConfig"
     const val VENDOR_KEY = "vendor"
 
-    const val CUSTOMER_SUPABASE_CONFIG_TABLE = "CustomerSupabaseConfig"
 
     const val INSTRUCTION_TABLE = "Instructions"
     const val INSTRUCTION_ID_KEY = "instructionId"
@@ -197,6 +196,19 @@ const val SYSTEM_SCOPE = "SYSTEM"
 object EmbeddingConstants {
     const val MODEL_TYPE = "voyage"
     const val MODEL_NAME = "voyage-4-large"
+
+    /**
+     * Provider ("model_type") for an embedding model name. The customer
+     * preference stores only the model name (AIConfigPreferences.embeddingModel),
+     * so callers derive the provider from the vendor's naming convention —
+     * voyage-* is Voyage, text-embedding-* is OpenAI.
+     */
+    fun modelTypeFor(modelName: String?): String = when {
+        modelName == null -> MODEL_TYPE
+        modelName.startsWith("voyage") -> "voyage"
+        modelName.startsWith("text-embedding") -> "openai"
+        else -> MODEL_TYPE
+    }
 }
 
 // Node type of a locally-executed single-LLM-call graph node whose config

@@ -1,13 +1,7 @@
 @import '../../../styles/mixins.scss';
 
-.card {
-  @include card-base;
-  margin: 0 0.5rem;
-}
-
-.title {
-  @include title-base;
-}
+// Card shell comes from the component library's CredentialCard — this file
+// only lays out the connection form inside it.
 
 .form {
   display: flex;
@@ -15,19 +9,13 @@
   gap: 1.5rem;
 }
 
-.vendorSection {
-  background: $color-background;
-  padding: 1.5rem;
-  border: 1px solid $color-border;
-  border-radius: $radius-lg;
+.inputsGroup {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
-.vendorName {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: $color-text-primary;
-  margin: 0;
+.cardFooter {
+  display: flex;
+  justify-content: flex-start;
 }

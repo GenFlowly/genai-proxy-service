@@ -310,6 +310,8 @@ class CustomerProfileRepository(
         otherPreferences: Map<String, String>?,
         embeddingMode: String? = null,
         embeddingModel: String? = null,
+        embeddingModelConversations: String? = null,
+        embeddingModelNotes: String? = null,
         preferredInstructionId: String? = null,
         instructionFallbackMode: String? = null,
         preferredAgentId: String? = null
@@ -360,6 +362,19 @@ class CustomerProfileRepository(
                 updateParts.add("#embeddingModel = :embeddingModel")
                 attrNames["#embeddingModel"] = "embeddingModel"
                 attrValues[":embeddingModel"] = AttributeValue.builder().s(embeddingModel).build()
+            }
+
+            if (embeddingModelConversations != null) {
+                updateParts.add("#embeddingModelConversations = :embeddingModelConversations")
+                attrNames["#embeddingModelConversations"] = "embeddingModelConversations"
+                attrValues[":embeddingModelConversations"] =
+                    AttributeValue.builder().s(embeddingModelConversations).build()
+            }
+
+            if (embeddingModelNotes != null) {
+                updateParts.add("#embeddingModelNotes = :embeddingModelNotes")
+                attrNames["#embeddingModelNotes"] = "embeddingModelNotes"
+                attrValues[":embeddingModelNotes"] = AttributeValue.builder().s(embeddingModelNotes).build()
             }
 
             if (preferredInstructionId != null) {
@@ -430,6 +445,8 @@ class CustomerProfileRepository(
                 preferredGenerativeMode = preferredGenerativeMode,
                 embeddingMode = item["embeddingMode"]?.s(),
                 embeddingModel = item["embeddingModel"]?.s(),
+                embeddingModelConversations = item["embeddingModelConversations"]?.s(),
+                embeddingModelNotes = item["embeddingModelNotes"]?.s(),
                 preferredInstructionId = item["preferredInstructionId"]?.s(),
                 instructionFallbackMode = item["instructionFallbackMode"]?.s(),
                 preferredAgentId = item["preferredAgentId"]?.s()

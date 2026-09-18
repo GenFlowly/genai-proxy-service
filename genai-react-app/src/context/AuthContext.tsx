@@ -62,7 +62,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     )
     const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
     const [vectorDBConfigStatusList, setVectorDBConfigStatusList] = useState<any[]>([]);
-    const [supabaseConfigStatus, setSupabaseConfigStatus] = useState<any | null>(null);
     const [aiConfigPreferences, setAiConfigPreferences] = useState<OnboardCustomerResponse['aiConfigPreferences'] | null>(null);
     const [customerInstructions, setCustomerInstructions] = useState<InstructionResponse[]>([])
     const [customerName, setCustomerName] = useState<string | undefined>(undefined)
@@ -126,7 +125,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         setAiConfigPreferences(null)
         setCustomerInstructions([])
         setVectorDBConfigStatusList([]) // Clear vectorDBConfigStatusList on logout
-        setSupabaseConfigStatus(null)
         localStorage.removeItem('customerId')
         clearHistoryCache() // Cached conversation list is user data — never carry across accounts
         clearNotesCache() // Same for the cached saved-notes list
@@ -202,9 +200,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                         }
                         if (onboardData.vectorDBConfigStatusList) {
                             setVectorDBConfigStatusList(onboardData.vectorDBConfigStatusList);
-                        }
-                        if (onboardData.supabaseConfigStatus) {
-                            setSupabaseConfigStatus(onboardData.supabaseConfigStatus);
                         }
                     }
                     onboardFailedRef.current = false
@@ -349,10 +344,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         })
     }
 
-    const updateSupabaseConfigStatus = (status: any) => {
-        setSupabaseConfigStatus(status)
-    }
-
     // Strict Authentication: Considered authenticated ONLY if Auth0 says so AND we have a customerId (onboard success).
     const isStrictlyAuthenticated = isAuthenticated && !!customerId
 
@@ -379,10 +370,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         getAccessTokenSilently,
         aiVendorAPIKeyStatusList,
         vectorDBConfigStatusList, // Added vectorDBConfigStatusList to context
-        supabaseConfigStatus,
         updateVendorApiKeyStatus,
         updateVectorDBConfigStatus,
-        updateSupabaseConfigStatus,
         aiConfigPreferences,
         customerInstructions,
         refreshInstructions,

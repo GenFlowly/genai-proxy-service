@@ -14,8 +14,12 @@ import { Agent } from '../../../models/agents.models'
 import { ICONS } from '../../../constants/icons'
 import styles from './ActionAgentSettings.module.scss'
 
-/** Sentinel select value for "no override — use the platform default". */
-const PLATFORM_DEFAULT = ''
+/**
+ * Sentinel select value for "no override — use the platform default".
+ * Must be non-empty: InputSelectWithHint reserves the empty value for its
+ * hidden placeholder option, so an '' option can never show as selected.
+ */
+const PLATFORM_DEFAULT = '__platform_default__'
 
 /**
  * Lets a user point the app's default actions (conversation titles, note

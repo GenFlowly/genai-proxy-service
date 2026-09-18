@@ -23,8 +23,8 @@ import com.genflowly.activity.customer.registerCustomerProfileSettingsRoutes
 import com.genflowly.activity.customer.registerGetProfileRoutes
 import com.genflowly.activity.customer.registerOnboardCustomerRoutes
 import com.genflowly.activity.customer.registerSearchRoutes
+import com.genflowly.activity.customer.registerEmbeddingKeyRoutes
 import com.genflowly.activity.customer.registerStoreApiKeyRoutes
-import com.genflowly.activity.customer.registerStoreSupabaseConfigRoutes
 import com.genflowly.activity.customer.registerStoreVectorDBConfigRoutes
 import com.genflowly.activity.customer.registerToolCredentialsRoutes
 import com.genflowly.activity.generation.registerCancelGenerationRoute
@@ -79,8 +79,10 @@ object Routes {
     const val CANCEL_GENERATION = "$API_V1/generations/{responseMessageId}/cancel"
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val STORE_VENDOR_CONFIG = "$API_V1/store-vendor-config"
+    const val EMBEDDING_KEYS = "$API_V1/embedding-keys"
+    const val STORE_EMBEDDING_KEY = "$API_V1/store-embedding-key"
+    const val EMBEDDING_MODELS = "$API_V1/embedding-models"
     const val STORE_VECTOR_DB_CONFIG = "$API_V1/store-vector-db-config"
-    const val STORE_SUPABASE_CONFIG = "$API_V1/store-supabase-config"
     const val ONBOARD_CUSTOMER = "$API_V1/onboard"
     const val UPDATE_USERNAME = "$API_V1/profile/username"
     const val UPDATE_DISCOVERABILITY = "$API_V1/profile/discoverability"
@@ -204,8 +206,8 @@ fun Application.configureRouting(
         registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
         registerCancelGenerationRoute(generationOrchestrator, customerProfileService)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
+        registerEmbeddingKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
-        registerStoreSupabaseConfigRoutes(customerCredentialsService, customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService, appConfig)
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)

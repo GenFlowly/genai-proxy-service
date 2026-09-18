@@ -11,6 +11,12 @@ export interface SaveAIConfigPreferencesRequest {
         instructionFallbackMode?: string
         /** Preferred conversation agent (graphId). Empty string clears it. */
         preferredAgentId?: string
+        /** Legacy single default embedding model name (e.g. voyage-4-large). */
+        embeddingModel?: string
+        /** Default embedding model for conversation indexing. */
+        embeddingModelConversations?: string
+        /** Default embedding model for notes. */
+        embeddingModelNotes?: string
     }
     otherPreferences?: Record<string, string>
 }

@@ -214,7 +214,7 @@ class InstructionService(
                 encodingServerClient.encodeInstruction(
                     EncodingSaveInstructionRequest(
                         client = "instruction",
-                        modelType = EmbeddingConstants.MODEL_TYPE,
+                        modelType = EmbeddingConstants.modelTypeFor(prefs?.embeddingModel),
                         modelName = prefs?.embeddingModel ?: EmbeddingConstants.MODEL_NAME,
                         data = EncodingInstructionData(
                             instruction_id = instruction.id,

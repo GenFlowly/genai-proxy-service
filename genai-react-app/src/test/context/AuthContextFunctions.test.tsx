@@ -40,7 +40,6 @@ const TestComponent = () => {
             <div data-testid="inst-count">{auth.customerInstructions.length}</div>
             <div data-testid="vdb-count">{auth.vectorDBConfigStatusList.length}</div>
             <div data-testid="vendor-count">{auth.aiVendorAPIKeyStatusList.length}</div>
-            <div data-testid="supabase-status">{auth.supabaseConfigStatus ? 'SET' : 'NOT_SET'}</div>
 
             <button onClick={() => auth.updateInstruction({ id: 'i1', version: 1, name: 'v1' } as any)} data-testid="upd-inst-1">Add Inst 1</button>
             <button onClick={() => auth.updateInstruction({ id: 'i1', version: 1, name: 'v1-updated' } as any)} data-testid="upd-inst-1-upd">Update Inst 1</button>
@@ -51,8 +50,6 @@ const TestComponent = () => {
 
             <button onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'PINECONE', isConfigValid: true } as any)} data-testid="upd-vdb-new">Add VDB</button>
             <button onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'PINECONE', isConfigValid: false } as any)} data-testid="upd-vdb-upd">Update VDB</button>
-
-            <button onClick={() => auth.updateSupabaseConfigStatus({ status: 'VALID' })} data-testid="upd-supabase">Update Supabase</button>
         </div>
     );
 };
@@ -102,7 +99,7 @@ describe('AuthContext Functions', () => {
         expect(screen.getByTestId('inst-count')).toHaveTextContent('2');
     }, 15000);
 
-    test('vendor, vdb, and supabase status updaters', async () => {
+    test('vendor and vdb status updaters', async () => {
         render(
             <MemoryRouter>
                 <LayoutProvider>
@@ -137,13 +134,6 @@ describe('AuthContext Functions', () => {
             screen.getByTestId('upd-vdb-upd').click();
         });
         expect(screen.getByTestId('vdb-count')).toHaveTextContent('1');
-
-        // Supabase
-        expect(screen.getByTestId('supabase-status')).toHaveTextContent('NOT_SET');
-        await act(async () => {
-            screen.getByTestId('upd-supabase').click();
-        });
-        expect(screen.getByTestId('supabase-status')).toHaveTextContent('SET');
     }, 15000);
 
 });
