@@ -2,13 +2,11 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import DatabaseConnectionsSettingsWidget from '../../../../components/widgets/DatabaseConnectionsSettingsWidget/DatabaseConnectionsSettingsWidget';
 import { storeCustomerVectorDBConfig } from '../../../../services/storeCustomerVectorDBConfigService';
-import { storeCustomerSupabaseConfig } from '../../../../services/storeCustomerSupabaseConfigService';
 import { useAuth } from '../../../../context/AuthContext';
 import { useToast } from '../../../../context/ToastContext';
 
 // Mocks
 jest.mock('../../../../services/storeCustomerVectorDBConfigService');
-jest.mock('../../../../services/storeCustomerSupabaseConfigService');
 jest.mock('../../../../context/AuthContext');
 jest.mock('../../../../context/ToastContext');
 
@@ -16,13 +14,8 @@ jest.mock('../../../../components/common/CustomerVectorDBConfigStatus/CustomerVe
     CustomerVectorDBConfigStatus: ({ vendor }: any) => <div data-testid={`vector-db-status-${vendor}`}>Status</div>
 }));
 
-jest.mock('../../../../components/common/CustomerSupabaseConfigStatus/CustomerSupabaseConfigStatus', () => ({
-    CustomerSupabaseConfigStatus: () => <div data-testid={`supabase-status`}>Status</div>
-}));
-
 describe('DatabaseConnectionsSettingsWidget', () => {
     const mockUpdateVectorDBConfigStatus = jest.fn();
-    const mockUpdateSupabaseConfigStatus = jest.fn();
     const mockGetAccessTokenSilently = jest.fn();
     const mockShowToast = jest.fn();
 
@@ -32,8 +25,7 @@ describe('DatabaseConnectionsSettingsWidget', () => {
             customerId: '123',
             isAuthenticated: true,
             getAccessTokenSilently: mockGetAccessTokenSilently,
-            updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus,
-            updateSupabaseConfigStatus: mockUpdateSupabaseConfigStatus
+            updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus
         });
         (useToast as jest.Mock).mockReturnValue({
             showToast: mockShowToast
@@ -43,9 +35,12 @@ describe('DatabaseConnectionsSettingsWidget', () => {
 
     test('renders correctly', () => {
         render(<DatabaseConnectionsSettingsWidget />);
-        expect(screen.getByText('Database Settings')).toBeInTheDocument();
+        expect(screen.getByTestId('vector-db-zilliz')).toBeInTheDocument();
         expect(screen.getByText('Milvus Cloud')).toBeInTheDocument();
-        expect(screen.getByText('Supabase')).toBeInTheDocument();
+        // No page-level heading — the settings page provides its own
+        expect(screen.queryByText('Database Settings')).not.toBeInTheDocument();
+        // Supabase is not offered — only the vector DB connection remains
+        expect(screen.queryByText('Supabase')).not.toBeInTheDocument();
     });
 
     test('validates login status before save', async () => {
@@ -53,20 +48,18 @@ describe('DatabaseConnectionsSettingsWidget', () => {
             customerId: null,
             isAuthenticated: false,
             getAccessTokenSilently: mockGetAccessTokenSilently,
-            updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus,
-            updateSupabaseConfigStatus: mockUpdateSupabaseConfigStatus
+            updateVectorDBConfigStatus: mockUpdateVectorDBConfigStatus
         });
 
         render(<DatabaseConnectionsSettingsWidget />);
-        // Inputs must have values for button to be enabled in first place (for Zilliz)
+        // Inputs must have values for button to be enabled in first place
         const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
         const tokenInput = screen.getByPlaceholderText('Placeholder token...');
-        
+
         fireEvent.change(endpointInput, { target: { value: 'https://test.cloud.zilliz.com' } });
         fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
 
-        const buttons = screen.getAllByText('Save');
-        fireEvent.click(buttons[0]); // Zilliz
+        fireEvent.click(screen.getByText('Save'));
 
         expect(mockShowToast).toHaveBeenCalledWith('Please log in first.');
         expect(storeCustomerVectorDBConfig).not.toHaveBeenCalled();
@@ -76,12 +69,11 @@ describe('DatabaseConnectionsSettingsWidget', () => {
         render(<DatabaseConnectionsSettingsWidget />);
         const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
         const tokenInput = screen.getByPlaceholderText('Placeholder token...');
-        
+
         fireEvent.change(endpointInput, { target: { value: 'invalid-endpoint' } });
         fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
 
-        const buttons = screen.getAllByText('Save');
-        fireEvent.click(buttons[0]);
+        fireEvent.click(screen.getByText('Save'));
 
         expect(mockShowToast).toHaveBeenCalledWith('Invalid Zilliz endpoint format.');
         expect(storeCustomerVectorDBConfig).not.toHaveBeenCalled();
@@ -91,12 +83,11 @@ describe('DatabaseConnectionsSettingsWidget', () => {
         render(<DatabaseConnectionsSettingsWidget />);
         const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
         const tokenInput = screen.getByPlaceholderText('Placeholder token...');
-        
+
         fireEvent.change(endpointInput, { target: { value: 'https://in03-123.serverless.us-west-2.cloud.zilliz.com' } });
         fireEvent.change(tokenInput, { target: { value: 'short-token' } });
 
-        const buttons = screen.getAllByText('Save');
-        fireEvent.click(buttons[0]);
+        fireEvent.click(screen.getByText('Save'));
 
         expect(mockShowToast).toHaveBeenCalledWith('Invalid Zilliz token format. Expected a long hex string.');
         expect(storeCustomerVectorDBConfig).not.toHaveBeenCalled();
@@ -110,12 +101,11 @@ describe('DatabaseConnectionsSettingsWidget', () => {
         render(<DatabaseConnectionsSettingsWidget />);
         const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
         const tokenInput = screen.getByPlaceholderText('Placeholder token...');
-        
+
         fireEvent.change(endpointInput, { target: { value: 'https://in03-123.serverless.us-west-2.cloud.zilliz.com' } });
         fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
 
-        const buttons = screen.getAllByText('Save');
-        fireEvent.click(buttons[0]);
+        fireEvent.click(screen.getByText('Save'));
 
         await waitFor(() => {
             expect(storeCustomerVectorDBConfig).toHaveBeenCalledWith('token', {
@@ -125,51 +115,6 @@ describe('DatabaseConnectionsSettingsWidget', () => {
             });
             expect(mockUpdateVectorDBConfigStatus).toHaveBeenCalled();
             expect(mockShowToast).toHaveBeenCalledWith('Zilliz settings saved successfully.');
-        });
-    });
-
-    test('validates Supabase endpoint format', async () => {
-        render(<DatabaseConnectionsSettingsWidget />);
-        const endpointInput = screen.getByPlaceholderText('https://your-project.supabase.co');
-        const tokenInput = screen.getByPlaceholderText('your-anon-key / service_role');
-        const passwordInput = screen.getByPlaceholderText('PostgreSQL Database Password');
-        
-        fireEvent.change(endpointInput, { target: { value: 'invalid-url' } });
-        fireEvent.change(tokenInput, { target: { value: 'key' } });
-        fireEvent.change(passwordInput, { target: { value: 'pass' } });
-
-        const buttons = screen.getAllByText('Save');
-        fireEvent.click(buttons[1]); // Supabase
-
-        expect(mockShowToast).toHaveBeenCalledWith('Invalid Supabase endpoint format. Please enter a valid URL.');
-        expect(storeCustomerSupabaseConfig).not.toHaveBeenCalled();
-    });
-
-    test('saves valid Supabase config successfully', async () => {
-        (storeCustomerSupabaseConfig as jest.Mock).mockResolvedValue({
-            configStatus: { updateSuccessful: true, status: 'Success' }
-        });
-
-        render(<DatabaseConnectionsSettingsWidget />);
-        const endpointInput = screen.getByPlaceholderText('https://your-project.supabase.co');
-        const tokenInput = screen.getByPlaceholderText('your-anon-key / service_role');
-        const passwordInput = screen.getByPlaceholderText('PostgreSQL Database Password');
-        
-        fireEvent.change(endpointInput, { target: { value: 'https://xyz.supabase.co' } });
-        fireEvent.change(tokenInput, { target: { value: 'some-key' } });
-        fireEvent.change(passwordInput, { target: { value: 'mypassword' } });
-
-        const buttons = screen.getAllByText('Save');
-        fireEvent.click(buttons[1]);
-
-        await waitFor(() => {
-            expect(storeCustomerSupabaseConfig).toHaveBeenCalledWith('token', {
-                endpoint: 'https://xyz.supabase.co',
-                token: 'some-key',
-                password: 'mypassword'
-            });
-            expect(mockUpdateSupabaseConfigStatus).toHaveBeenCalled();
-            expect(mockShowToast).toHaveBeenCalledWith('Supabase settings saved successfully.');
         });
     });
 });

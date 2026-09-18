@@ -9,6 +9,7 @@ import com.genflowly.providers.EncodingServerClient
 import com.genflowly.providers.KMSProvider
 import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.repository.CustomerCredentialsRepository
+import com.genflowly.repository.CustomerProfileRepository
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -18,12 +19,13 @@ private val logger = KotlinLogging.logger {}
 
 /**
  * Customer-owned secret configuration: AI vendor API keys, external tool
- * credentials, vector-DB and Supabase configs. All values are KMS-encrypted
+ * credentials and vector-DB configs. All values are KMS-encrypted
  * before they reach the repository, and decrypted here — never anywhere else.
  */
 class CustomerCredentialsService(
     private val kmsProvider: KMSProvider,
     private val customerCredentialsRepository: CustomerCredentialsRepository,
+    private val customerProfileRepository: CustomerProfileRepository,
     private val encodingServerClient: EncodingServerClient,
     private val retrievalServerClient: RetrievalServerClient,
     private val appScope: AppScope
@@ -172,7 +174,89 @@ class CustomerCredentialsService(
         }
     }
 
-    // ─── Vector DB / Supabase config ──────────────────────────────────────────
+    // ─── Embedding API keys ───────────────────────────────────────────────────
+    // Same CustomerVendorApiKeys table, keyed by EmbeddingVendor name. OPENAI
+    // shares the text-generation vendor's row (one key for both uses); VOYAGE
+    // gets its own row that the AIVendor-based readers above silently skip.
+
+    /**
+     * Validates an embedding key against the provider and stores it encrypted
+     * only when valid — the embedding twin of [validateAndStoreVendorKey].
+     */
+    suspend fun validateAndStoreEmbeddingKey(
+        customerId: String,
+        vendor: com.genflowly.models.EmbeddingVendor,
+        apiKey: String
+    ): com.genflowly.models.EmbeddingKeyStatus {
+        val isKeyValid = retrievalServerClient.validateProviderKey(vendor.toProviderString(), apiKey)
+
+        return if (isKeyValid) {
+            storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
+            logger.info { "Embedding API key validated and stored for vendor $vendor" }
+            com.genflowly.models.EmbeddingKeyStatus(
+                vendor = vendor,
+                isAPIKeyValid = true,
+                status = com.genflowly.models.APIKeyStatus.VALID,
+                updateSuccessful = true
+            )
+        } else {
+            logger.warn { "Invalid embedding API key provided for vendor $vendor. Not saving." }
+            com.genflowly.models.EmbeddingKeyStatus(
+                vendor = vendor,
+                isAPIKeyValid = false,
+                status = com.genflowly.models.APIKeyStatus.INVALID,
+                updateSuccessful = false
+            )
+        }
+    }
+
+    /**
+     * Embedding models the customer can pick as their default, per provider.
+     * Only providers with a stored API key are listed — no key, no models.
+     */
+    suspend fun getEmbeddingModels(customerId: String): List<com.genflowly.models.EmbeddingVendorModels> {
+        val keysByVendor = com.genflowly.models.EmbeddingVendor.entries.mapNotNull { vendor ->
+            val decrypted = customerCredentialsRepository.getCustomerApiKey(vendor.name, customerId)
+                ?.let { kmsProvider.decrypt(it) }
+            if (decrypted.isNullOrBlank()) null else vendor to decrypted
+        }.toMap()
+        if (keysByVendor.isEmpty()) return emptyList()
+
+        val modelsByProvider = retrievalServerClient.listModelsByProvider(
+            keysByVendor.entries.associate { (vendor, key) -> vendor.toProviderString() to key },
+            capability = "embedding"
+        )
+        return keysByVendor.keys.map { vendor ->
+            com.genflowly.models.EmbeddingVendorModels(
+                vendor = vendor,
+                models = modelsByProvider[vendor.toProviderString()].orEmpty()
+            )
+        }
+    }
+
+    /** Key status per [com.genflowly.models.EmbeddingVendor], NOT_SET when absent. */
+    suspend fun getEmbeddingKeyStatuses(customerId: String): List<com.genflowly.models.EmbeddingKeyStatus> {
+        val itemsByVendor = customerCredentialsRepository.getCustomerVendorItems(customerId)
+            .associateBy { it[com.genflowly.DynamoDBConstants.AI_VENDOR_KEY]?.s() }
+
+        return com.genflowly.models.EmbeddingVendor.entries.map { vendor ->
+            val item = itemsByVendor[vendor.name]
+            val hasKey = !item?.get("apiKey")?.s().isNullOrBlank()
+            // Legacy items may lack the validity flag: a stored key counts as valid.
+            val isValid = hasKey && (item?.get("isAPIKeyValid")?.bool() ?: true)
+            com.genflowly.models.EmbeddingKeyStatus(
+                vendor = vendor,
+                isAPIKeyValid = isValid,
+                status = when {
+                    !hasKey -> com.genflowly.models.APIKeyStatus.NOT_SET
+                    isValid -> com.genflowly.models.APIKeyStatus.VALID
+                    else -> com.genflowly.models.APIKeyStatus.INVALID
+                }
+            )
+        }
+    }
+
+    // ─── Vector DB config ─────────────────────────────────────────────────────
 
     suspend fun storeCustomerVectorDBConfig(
         customerId: String,
@@ -186,25 +270,8 @@ class CustomerCredentialsService(
         return true
     }
 
-    suspend fun storeCustomerSupabaseConfig(
-        customerId: String,
-        endpoint: String,
-        token: String,
-        password: String
-    ): Boolean {
-        val encryptedEndpoint = kmsProvider.encrypt(endpoint)
-        val encryptedToken = kmsProvider.encrypt(token)
-        val encryptedPassword = kmsProvider.encrypt(password)
-        customerCredentialsRepository.saveCustomerSupabaseConfig(customerId, encryptedEndpoint, encryptedToken, encryptedPassword)
-        return true
-    }
-
     suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<com.genflowly.models.VectorDBConfigStatus> {
         return customerCredentialsRepository.getCustomerVectorDBConfigStatusList(customerId)
-    }
-
-    suspend fun getCustomerSupabaseConfigStatus(customerId: String): com.genflowly.models.SupabaseConfigStatus? {
-        return customerCredentialsRepository.getCustomerSupabaseConfigStatus(customerId)
     }
 
     /**
@@ -215,7 +282,8 @@ class CustomerCredentialsService(
     fun ensureCollectionsExistAsync(customerId: String, authHeader: String?) {
         if (authHeader != null) {
             appScope.launch {
-                encodingServerClient.ensureCollections(customerId, authHeader)
+                val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
+                encodingServerClient.ensureCollections(customerId, authHeader, prefs?.embeddingModel)
             }
         }
     }

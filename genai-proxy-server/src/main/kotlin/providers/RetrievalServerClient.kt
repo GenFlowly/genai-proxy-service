@@ -498,12 +498,61 @@ class RetrievalServerClient(
     }
 
     /**
+     * [listModels] for providers outside the [AIVendor] enum (e.g. the
+     * embedding-only "voyage"). Keys and results use retrieval-server
+     * provider strings; transport failures degrade to an empty map.
+     */
+    suspend fun listModelsByProvider(
+        apiKeysByProvider: Map<String, String>,
+        capability: String = "all"
+    ): Map<String, List<String>> {
+        if (apiKeysByProvider.isEmpty()) return emptyMap()
+
+        val payload = json.encodeToString(
+            ListModelsPayload(
+                vendors = apiKeysByProvider.map { (provider, apiKey) ->
+                    ListModelsVendorCredentials(
+                        provider = provider,
+                        api_key = apiKey,
+                        capability = capability
+                    )
+                }
+            )
+        )
+
+        return try {
+            val response: HttpResponse = httpClient.post("$retrievalServerUrl/models") {
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) {
+                logger.warn { "Retrieval server /models returned ${response.status}: $body" }
+                return emptyMap()
+            }
+            json.decodeFromString<ListModelsResponse>(body)
+                .vendor_models.associate { it.provider to it.models }
+        } catch (e: Exception) {
+            logger.warn { "Failed to fetch models from retrieval server: ${e.message}" }
+            emptyMap()
+        }
+    }
+
+    /**
      * Checks a vendor API key with one cheap authenticated vendor call via
      * /validate-key. Any transport error reads as invalid.
      */
-    suspend fun validateApiKey(vendor: AIVendor, apiKey: String): Boolean {
+    suspend fun validateApiKey(vendor: AIVendor, apiKey: String): Boolean =
+        validateProviderKey(vendor.toProviderString(), apiKey)
+
+    /**
+     * [validateApiKey] for providers outside the [AIVendor] enum (e.g. the
+     * embedding-only "voyage"). `provider` is the retrieval-server provider
+     * string.
+     */
+    suspend fun validateProviderKey(provider: String, apiKey: String): Boolean {
         val payload = json.encodeToString(
-            ValidateKeyPayload(provider = vendor.toProviderString(), api_key = apiKey)
+            ValidateKeyPayload(provider = provider, api_key = apiKey)
         )
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/validate-key") {
@@ -516,11 +565,11 @@ class RetrievalServerClient(
             }
             val parsed = json.decodeFromString<ValidateKeyResponse>(response.bodyAsText())
             if (!parsed.valid) {
-                logger.info { "API key invalid for vendor $vendor: ${parsed.error}" }
+                logger.info { "API key invalid for provider $provider: ${parsed.error}" }
             }
             parsed.valid
         } catch (e: Exception) {
-            logger.warn { "Failed to validate API key for vendor $vendor: ${e.message}" }
+            logger.warn { "Failed to validate API key for provider $provider: ${e.message}" }
             false
         }
     }

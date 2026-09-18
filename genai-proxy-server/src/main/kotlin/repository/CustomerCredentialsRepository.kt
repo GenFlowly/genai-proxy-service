@@ -20,7 +20,7 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 
 /**
  * Data access for the customer secret-config tables: CustomerVendorApiKeys,
- * CustomerVectorDBConfig, CustomerSupabaseConfig and CustomerToolCredentials.
+ * CustomerVectorDBConfig and CustomerToolCredentials.
  * All secret values arrive already KMS-encrypted — this class never touches
  * plaintext or KMS.
  */
@@ -187,7 +187,7 @@ class CustomerCredentialsRepository(
             }
         }
 
-    // ─── Vector DB / Supabase config ──────────────────────────────────────────
+    // ─── Vector DB config ─────────────────────────────────────────────────────
 
     suspend fun saveCustomerVectorDBConfig(
         customerId: String,
@@ -213,34 +213,6 @@ class CustomerCredentialsRepository(
             logger.info("Saved Vector DB Config for $customerId to DynamoDB")
         } catch (e: Exception) {
             logger.error("Failed to save Vector DB config to DynamoDB", e)
-            throw e
-        }
-    }
-
-    suspend fun saveCustomerSupabaseConfig(
-        customerId: String,
-        encryptedEndpoint: String,
-        encryptedToken: String,
-        encryptedPassword: String
-    ) = withContext(Dispatchers.IO) {
-        try {
-            val item = withTimestamps(mapOf(
-                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                "endpoint" to AttributeValue.builder().s(encryptedEndpoint).build(),
-                "token" to AttributeValue.builder().s(encryptedToken).build(),
-                "password" to AttributeValue.builder().s(encryptedPassword).build(),
-                "isConfigValid" to AttributeValue.builder().bool(true).build()
-            ))
-
-            val putReq = PutItemRequest.builder()
-                .tableName(DynamoDBConstants.CUSTOMER_SUPABASE_CONFIG_TABLE)
-                .item(item)
-                .build()
-
-            dynamoDbClient.putItem(putReq)
-            logger.info("Saved Supabase Config for $customerId to DynamoDB")
-        } catch (e: Exception) {
-            logger.error("Failed to save Supabase config to DynamoDB", e)
             throw e
         }
     }
@@ -278,39 +250,6 @@ class CustomerCredentialsRepository(
         } catch (e: Exception) {
             logger.error("Failed to get Vector DB config status list from DynamoDB", e)
             emptyList()
-        }
-    }
-
-    suspend fun getCustomerSupabaseConfigStatus(customerId: String): com.genflowly.models.SupabaseConfigStatus? = withContext(Dispatchers.IO) {
-        try {
-            val getReq = GetItemRequest.builder()
-                .tableName(DynamoDBConstants.CUSTOMER_SUPABASE_CONFIG_TABLE)
-                .key(mapOf(
-                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()
-                ))
-                .build()
-
-            val response = dynamoDbClient.getItem(getReq)
-
-            if (response.hasItem()) {
-                val item = response.item()
-                val status = if (item["isConfigValid"]?.bool() == true) {
-                    com.genflowly.models.SupabaseConfigStatusValue.PRESENT
-                } else {
-                    com.genflowly.models.SupabaseConfigStatusValue.NOT_SET
-                }
-
-                com.genflowly.models.SupabaseConfigStatus(
-                    isConfigValid = item["isConfigValid"]?.bool() ?: false,
-                    status = status,
-                    updateSuccessful = true
-                )
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to get Supabase config status from DynamoDB", e)
-            null
         }
     }
 

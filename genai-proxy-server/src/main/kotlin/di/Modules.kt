@@ -174,7 +174,7 @@ fun appModule(): Module = module {
     single { RequestAgentMapRepository(get(), get()) }
 
     single { SharedUsersResolver(get(), get()) }
-    single { CustomerCredentialsService(get(), get(), get(), get(), get()) }
+    single { CustomerCredentialsService(get(), get(), get(), get(), get(), get()) }
     single { UtilityGenerationService(get(), get()) }
     single { GraphService(get(), get(), get()) }
     single { com.genflowly.repository.NodePresetRepository(get(), get()) }

@@ -124,9 +124,9 @@ class NotesService(
             null
         }
         if (prefs?.embeddingMode == "batch") {
-            val model = prefs.embeddingModel ?: EmbeddingConstants.MODEL_NAME
+            val model = prefs.embeddingModelNotes ?: prefs.embeddingModel ?: EmbeddingConstants.MODEL_NAME
             try {
-                notesRepository.markNotePendingEmbedding(customerId, request.data.note_key, EmbeddingConstants.MODEL_TYPE, model)
+                notesRepository.markNotePendingEmbedding(customerId, request.data.note_key, EmbeddingConstants.modelTypeFor(model), model)
                 logger.info("Flagged note ${request.data.note_key} for batch embedding ($model)")
             } catch (e: Exception) {
                 logger.error("Failed to flag note ${request.data.note_key} for batch embedding", e)
@@ -138,8 +138,8 @@ class NotesService(
         val encodingRequest = EncodingSaveNoteRequest(
             dataType = "NOTE",
             client = request.client,
-            modelType = EmbeddingConstants.MODEL_TYPE,
-            modelName = prefs?.embeddingModel ?: EmbeddingConstants.MODEL_NAME,
+            modelType = EmbeddingConstants.modelTypeFor(prefs?.embeddingModelNotes ?: prefs?.embeddingModel),
+            modelName = prefs?.embeddingModelNotes ?: prefs?.embeddingModel ?: EmbeddingConstants.MODEL_NAME,
             chunkSize = request.chunkSize,
             chunkOverlap = request.chunkOverlap,
             data = EncodingNoteData(
