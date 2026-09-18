@@ -551,55 +551,6 @@ test('updateVectorDBConfigStatus updates existing and adds new', async () => {
     expect(screen.getByTestId('db-list')).toHaveTextContent('Milvus');
 });
 
-test('updateSupabaseConfigStatus updates existing and adds new', async () => {
-    (onboardCustomer as jest.Mock).mockResolvedValue({
-        customerId: '123',
-        customerInstructions: [],
-        aiVendorAPIKeyStatusList: [],
-        vectorDBConfigStatusList: [],
-        supabaseConfigStatus: { status: 'NOT_SET' },
-        aiConfigPreferences: null
-    });
-    mockUseAuth0.mockReturnValue({
-        isLoading: false,
-        isAuthenticated: true,
-        user: MOCK_USER,
-        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
-        logout: jest.fn(),
-    });
-
-    const TestSupabase = () => {
-        const { updateSupabaseConfigStatus, supabaseConfigStatus } = useAuth();
-        return (
-            <div>
-                <button onClick={() => updateSupabaseConfigStatus({ status: 'PRESENT' })} data-testid="update">Update</button>
-                <div data-testid="db-status">{supabaseConfigStatus?.status}</div>
-            </div>
-        );
-    };
-
-    render(
-        <MemoryRouter>
-            <LayoutProvider>
-                <AuthProvider>
-                    <TestSupabase />
-                </AuthProvider>
-            </LayoutProvider>
-        </MemoryRouter>
-    );
-
-    // 1. Wait for Onboard
-    await waitFor(() => {
-        expect(screen.getByTestId('db-status')).toHaveTextContent('NOT_SET');
-    });
-
-    // 2. Update
-    await act(async () => {
-        screen.getByTestId('update').click();
-    });
-    expect(screen.getByTestId('db-status')).toHaveTextContent('PRESENT');
-});
-
 test('Logs out for login_required error', async () => {
     const mockLogout = jest.fn();
     const loginReqError = { error: 'login_required' };

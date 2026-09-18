@@ -5,7 +5,9 @@ import { SettingsSidebar } from './components/SettingsSidebar'
 import SettingsMenuPage from './SettingsMenuPage'
 import { ProfileSettings } from './components/ProfileSettings'
 import { AISettings } from './components/AISettings'
-import { MemorySettings } from './components/MemorySettings'
+import { EmbeddingKeysSettings } from './components/EmbeddingKeysSettings'
+import { VectorDBSettings } from './components/VectorDBSettings'
+import { InstructionDefaultsSettings } from './components/InstructionDefaultsSettings'
 import { ActionAgentSettings } from './components/ActionAgentSettings'
 import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
@@ -22,9 +24,13 @@ const SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY = 'settings_sidebar_width_rem'
 const SECTION_LABEL_KEYS: Record<string, string> = {
     profile: 'settingsPage.settingsPage.sectionProfile',
     ai: 'settingsPage.settingsPage.sectionAi',
-    memory: 'settingsPage.settingsPage.sectionMemory',
     actions: 'settingsPage.settingsPage.sectionActions',
     developer: 'settingsPage.settingsPage.sectionDeveloper',
+    // AI sub-sections
+    'model-keys': 'settingsPage.settingsPage.sectionAiModelKeys',
+    'embedding-keys': 'settingsPage.settingsPage.sectionAiEmbeddingKeys',
+    'vector-db': 'settingsPage.settingsPage.sectionAiVectorDb',
+    defaults: 'settingsPage.settingsPage.sectionAiDefaults',
 }
 
 export default function SettingsPage(): React.ReactElement {
@@ -77,8 +83,14 @@ export default function SettingsPage(): React.ReactElement {
                                 Desktop: /settings redirects to the first section. */}
                             <Route path="/" element={isMobile ? <SettingsMenuPage /> : <Navigate to="profile" replace />} />
                             <Route path="profile" element={<ProfileSettings />} />
-                            <Route path="ai" element={<AISettings />} />
-                            <Route path="memory" element={<MemorySettings />} />
+                            {/* AI is a parent section: its sub-pages live under /settings/ai/* */}
+                            <Route path="ai" element={<Navigate to="/settings/ai/model-keys" replace />} />
+                            {/* Old URL kept as a redirect — the page was renamed from Vendor API Keys */}
+                            <Route path="ai/vendor-keys" element={<Navigate to="/settings/ai/model-keys" replace />} />
+                            <Route path="ai/model-keys" element={<AISettings />} />
+                            <Route path="ai/embedding-keys" element={<EmbeddingKeysSettings />} />
+                            <Route path="ai/vector-db" element={<VectorDBSettings />} />
+                            <Route path="ai/defaults" element={<InstructionDefaultsSettings />} />
                             <Route path="actions" element={<ActionAgentSettings />} />
                             <Route path="developer" element={<DeveloperSettings />} />
                         </Routes>

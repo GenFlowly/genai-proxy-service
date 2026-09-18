@@ -34,7 +34,7 @@ class EncodingServerClient(
      * when no encoding server is configured — collection creation is a
      * best-effort onboarding enhancement.
      */
-    suspend fun ensureCollections(customerId: String, authHeader: String) {
+    suspend fun ensureCollections(customerId: String, authHeader: String, modelName: String? = null) {
         val baseUrl = configuredUrl
         if (baseUrl == null) {
             Metrics.count("internal_client_total", 1.0, "operation" to "/create-collections", "status" to "not_configured")
@@ -48,8 +48,8 @@ class EncodingServerClient(
                 contentType(ContentType.Application.Json)
                 setBody(
                     EncodingCreateCollectionsRequest(
-                        modelType = EmbeddingConstants.MODEL_TYPE,
-                        modelName = EmbeddingConstants.MODEL_NAME
+                        modelType = EmbeddingConstants.modelTypeFor(modelName),
+                        modelName = modelName ?: EmbeddingConstants.MODEL_NAME
                     )
                 )
             }

@@ -11,7 +11,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    
+
     .title {
         font-size: 1.5rem;
         font-weight: 600;
@@ -19,7 +19,7 @@
         margin: 0;
         letter-spacing: -0.01em;
     }
-    
+
     .subtitle {
         font-size: 0.95rem;
         color: $color-text-muted;
@@ -31,43 +31,52 @@
     display: flex;
     flex-direction: column;
     gap: 2rem;
-    max-width: 680px;
 }
 
-.vendorSection {
+.vendorBrand {
+    height: 20px;
+    width: auto;
+}
+
+.field {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid $color-border-light;
-    background: transparent;
-    
-    &:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
-    }
+    gap: 0.375rem;
+    max-width: 32rem;
 }
 
-.vendorName {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: $color-text-primary;
-    margin: 0;
+.fieldLabel {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary, #6b7280);
 }
 
-.inputsGroup {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    
-    // We can target the InputTextWithHint slightly if needed to make it borderless
-    :global(.input-container) {
-        margin-top: 0.25rem;
-    }
+.emptyHint {
+    font-size: 0.8125rem;
+    color: var(--text-secondary, #6b7280);
+    margin: 0.25rem 0 0;
 }
 
 .footer {
     display: flex;
     justify-content: flex-start;
+    margin-top: 0.25rem;
+}
+
+.categoryBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
     margin-top: 0.5rem;
+}
+
+.categoryRow {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+
+    > * {
+        flex: 1 1 14rem;
+        min-width: 0;
+    }
 }

@@ -32,6 +32,8 @@ class CustomerProfileService(
         otherPreferences: Map<String, String>?,
         embeddingMode: String? = null,
         embeddingModel: String? = null,
+        embeddingModelConversations: String? = null,
+        embeddingModelNotes: String? = null,
         preferredInstructionId: String? = null,
         instructionFallbackMode: String? = null,
         preferredAgentId: String? = null
@@ -43,6 +45,8 @@ class CustomerProfileService(
             otherPreferences,
             embeddingMode,
             embeddingModel,
+            embeddingModelConversations,
+            embeddingModelNotes,
             preferredInstructionId,
             instructionFallbackMode,
             preferredAgentId
@@ -179,7 +183,6 @@ class CustomerProfileService(
             val aiConfigPreferences = async { getAIConfigPreferences(customerProfile.customerId) }
             val aiVendorAPIKeyStatusList = async { customerCredentialsService.getAIVendorAPIKeyStatusList(customerProfile.customerId) }
             val vectorDBConfigStatusList = async { customerCredentialsService.getCustomerVectorDBConfigStatusList(customerProfile.customerId) }
-            val supabaseConfigStatus = async { customerCredentialsService.getCustomerSupabaseConfigStatus(customerProfile.customerId) }
             val customerInstructions = async { instructionService.getLatestCustomerInstructions(customerProfile.customerId) }
 
             // Fire and forget backfill missing categories/icons using AI
@@ -192,8 +195,7 @@ class CustomerProfileService(
                 customerName = customerProfile.name ?: "User",
                 customerPicture = customerProfile.picture,
                 customerInstructions = customerInstructions.await(),
-                vectorDBConfigStatusList = vectorDBConfigStatusList.await(),
-                supabaseConfigStatus = supabaseConfigStatus.await()
+                vectorDBConfigStatusList = vectorDBConfigStatusList.await()
             )
         }
     }
