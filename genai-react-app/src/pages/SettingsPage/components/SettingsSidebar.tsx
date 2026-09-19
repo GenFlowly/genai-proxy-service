@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
-import { Icon } from '@genflowly/component-library'
+import { Icon, PillButton } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import styles from './SettingsSidebar.module.scss'
 
@@ -153,12 +153,13 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
             </nav>
 
             <div className={styles.footer}>
-                <button
+                <PillButton
+                    label={t('settingsPage.settingsSidebar.logout')}
+                    icon={ICONS.LOGOUT}
+                    variant="danger"
                     className={styles.logoutButton}
                     onClick={() => logout({ returnTo: window.location.origin })}
-                >
-                    {t('settingsPage.settingsSidebar.logout')}
-                </button>
+                />
             </div>
         </aside>
     )
