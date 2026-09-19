@@ -11,6 +11,9 @@ import com.genflowly.models.api.GetCustomerRequestAgentsResponse
 import com.genflowly.models.api.PutCustomerRequestAgentRequest
 import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.RequestAgentMapRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -30,22 +33,38 @@ class CustomerRequestAgentMapService(
 ) {
 
     /** Every default action plus this customer's override, when set. */
-    suspend fun listEntries(customerId: String): GetCustomerRequestAgentsResponse {
-        val entries = RequestType.entries.map { requestType ->
-            val systemEntry = requestAgentMapRepository
-                .getMapEntry(SYSTEM_SCOPE, requestType.name)
-                ?.takeIf { it.enabled }
-            CustomerRequestAgentStatus(
-                requestType = requestType.name,
-                displayName = requestType.displayName,
-                templateVariables = requestType.templateVariables,
-                entry = requestAgentMapRepository.getMapEntry(customerId, requestType.name),
-                platformAgentName = systemEntry?.let {
-                    graphRepository.getCustomerGraph(it.graphId)?.get(GRAPH_NAME_KEY)?.s()
-                }
-            )
-        }
-        return GetCustomerRequestAgentsResponse(entries = entries)
+    suspend fun listEntries(customerId: String): GetCustomerRequestAgentsResponse = coroutineScope {
+        // One query per scope (instead of a point-read per request type), both in flight together
+        val systemEntriesDeferred = async { requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE) }
+        val customerEntriesDeferred = async { requestAgentMapRepository.listMapEntries(customerId) }
+        val systemEntries = systemEntriesDeferred.await()
+            .filter { it.enabled }
+            .associateBy { it.requestType }
+        val customerEntries = customerEntriesDeferred.await().associateBy { it.requestType }
+
+        // Resolve each distinct platform graph's display name once, concurrently —
+        // several request types often share the same system agent
+        val platformAgentNames = systemEntries.values
+            .map { it.graphId }
+            .distinct()
+            .map { graphId ->
+                async { graphId to graphRepository.getCustomerGraph(graphId)?.get(GRAPH_NAME_KEY)?.s() }
+            }
+            .awaitAll()
+            .toMap()
+
+        GetCustomerRequestAgentsResponse(
+            entries = RequestType.entries.map { requestType ->
+                CustomerRequestAgentStatus(
+                    requestType = requestType.name,
+                    displayName = requestType.displayName,
+                    templateVariables = requestType.templateVariables,
+                    entry = customerEntries[requestType.name],
+                    platformAgentName = systemEntries[requestType.name]
+                        ?.let { platformAgentNames[it.graphId] }
+                )
+            }
+        )
     }
 
     /**

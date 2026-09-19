@@ -290,7 +290,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         [responseMessages]
     )
 
-    // The vendor failover priority (Settings → Model API Keys, 1 = primary)
+    // The vendor failover priority (Settings → LLM API Keys, 1 = primary)
     // orders responses left to right; vendors without a saved priority come
     // after prioritized ones, keeping arrival order among themselves.
     const { aiVendorAPIKeyStatusList } = useAuth()

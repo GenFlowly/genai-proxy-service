@@ -7,7 +7,6 @@ import { ProfileSettings } from './components/ProfileSettings'
 import { AISettings } from './components/AISettings'
 import { EmbeddingKeysSettings } from './components/EmbeddingKeysSettings'
 import { VectorDBSettings } from './components/VectorDBSettings'
-import { InstructionDefaultsSettings } from './components/InstructionDefaultsSettings'
 import { ActionAgentSettings } from './components/ActionAgentSettings'
 import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
@@ -27,10 +26,9 @@ const SECTION_LABEL_KEYS: Record<string, string> = {
     actions: 'settingsPage.settingsPage.sectionActions',
     developer: 'settingsPage.settingsPage.sectionDeveloper',
     // AI sub-sections
-    'model-keys': 'settingsPage.settingsPage.sectionAiModelKeys',
+    'llm-keys': 'settingsPage.settingsPage.sectionAiModelKeys',
     'embedding-keys': 'settingsPage.settingsPage.sectionAiEmbeddingKeys',
     'vector-db': 'settingsPage.settingsPage.sectionAiVectorDb',
-    defaults: 'settingsPage.settingsPage.sectionAiDefaults',
 }
 
 export default function SettingsPage(): React.ReactElement {
@@ -84,13 +82,15 @@ export default function SettingsPage(): React.ReactElement {
                             <Route path="/" element={isMobile ? <SettingsMenuPage /> : <Navigate to="profile" replace />} />
                             <Route path="profile" element={<ProfileSettings />} />
                             {/* AI is a parent section: its sub-pages live under /settings/ai/* */}
-                            <Route path="ai" element={<Navigate to="/settings/ai/model-keys" replace />} />
-                            {/* Old URL kept as a redirect — the page was renamed from Vendor API Keys */}
-                            <Route path="ai/vendor-keys" element={<Navigate to="/settings/ai/model-keys" replace />} />
-                            <Route path="ai/model-keys" element={<AISettings />} />
+                            <Route path="ai" element={<Navigate to="/settings/ai/llm-keys" replace />} />
+                            {/* Old URLs kept as redirects — the page was renamed Vendor API Keys → Model API Keys → LLM API Keys */}
+                            <Route path="ai/vendor-keys" element={<Navigate to="/settings/ai/llm-keys" replace />} />
+                            <Route path="ai/model-keys" element={<Navigate to="/settings/ai/llm-keys" replace />} />
+                            <Route path="ai/llm-keys" element={<AISettings />} />
                             <Route path="ai/embedding-keys" element={<EmbeddingKeysSettings />} />
                             <Route path="ai/vector-db" element={<VectorDBSettings />} />
-                            <Route path="ai/defaults" element={<InstructionDefaultsSettings />} />
+                            {/* The Default Preferences page was folded into Default Actions */}
+                            <Route path="ai/defaults" element={<Navigate to="/settings/actions" replace />} />
                             <Route path="actions" element={<ActionAgentSettings />} />
                             <Route path="developer" element={<DeveloperSettings />} />
                         </Routes>

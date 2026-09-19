@@ -12,6 +12,7 @@ import {
 } from '../../../services/requestAgentsService'
 import { Agent } from '../../../models/agents.models'
 import { ICONS } from '../../../constants/icons'
+import { InstructionDefaultsSettings } from './InstructionDefaultsSettings'
 import styles from './ActionAgentSettings.module.scss'
 
 /**
@@ -26,6 +27,8 @@ const PLATFORM_DEFAULT = '__platform_default__'
  * titles, instruction personas, memory extraction) at one of their own
  * agents instead of the platform defaults. The action list comes from the
  * backend RequestType registry, so new actions appear here automatically.
+ * Also hosts the default-instruction preference (formerly its own
+ * "Default Preferences" page) as a second section.
  */
 export function ActionAgentSettings(): React.ReactElement {
     const { t } = useTranslation()
@@ -173,6 +176,8 @@ export function ActionAgentSettings(): React.ReactElement {
                     </div>
                 </div>
             )}
+
+            <InstructionDefaultsSettings />
         </div>
     )
 }
