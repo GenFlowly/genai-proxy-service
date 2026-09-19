@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react'
-import { useConversation } from '../../../../context/ConversationContext'
+import { useConversation, useConversationUI } from '../../../../context/ConversationContext'
 import ConversationBlock from '../../../widgets/ConversationWidget/ConversationBlock/ConversationBlock'
 
 export default function ConversationListWidget() {
-    const { conversationBlockList, setActiveViewportItem } = useConversation()
+    const { conversationBlockList } = useConversation()
+    const { setActiveViewportItem } = useConversationUI()
 
     useEffect(() => {
         const root = document.querySelector('[data-testid="center-section"]')

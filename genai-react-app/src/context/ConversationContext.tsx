@@ -1,5 +1,5 @@
 // src/context/ConversationContext.tsx
-import React, { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AIVendor } from '../constants/vendors'
 import { useAuth } from './AuthContext'
@@ -14,6 +14,7 @@ import { cancelGeneration } from '../services/cancelGenerationService'
 import {
     ConversationBlock,
     IConversationContext,
+    IConversationUIContext,
     Message,
     ThinkingStep,
     WebSource,
@@ -24,8 +25,31 @@ import { createConversationTitle } from '../services/createConversationTitleServ
 import i18n from '../i18n'
 
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
+const ConversationUIContext = createContext<IConversationUIContext | undefined>(undefined)
 
-export const ConversationProvider = ({ children }: { children: ReactNode }) => {
+/**
+ * Fast-changing UI state (draft prompt text, viewport tracking) lives in its
+ * own provider ABOVE the data provider. Typing and scrolling update only
+ * this context, so the conversation tree — every block's markdown — no
+ * longer re-renders on each editor debounce tick or viewport change.
+ */
+const ConversationUIProvider = ({ children }: { children: ReactNode }) => {
+    const [editorPrompt, setEditorPrompt] = useState<string>('')
+    const [activeViewportItem, setActiveViewportItem] = useState<{ blockId: string, type: 'request' | 'response' } | null>(null)
+
+    const value = useMemo(
+        () => ({ editorPrompt, setEditorPrompt, activeViewportItem, setActiveViewportItem }),
+        [editorPrompt, activeViewportItem]
+    )
+
+    return (
+        <ConversationUIContext.Provider value={value}>
+            {children}
+        </ConversationUIContext.Provider>
+    )
+}
+
+const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     const { customerId, getAccessTokenSilently, isAuthenticated, logout, loginWithRedirect } = useAuth()
     const { showToast } = useToast()
 
@@ -50,7 +74,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     const [conversationId, setConversationId] = useState<string>('')
     const [activeBlockId, setActiveBlockId] = useState<string>('')
-    const [activeViewportItem, setActiveViewportItem] = useState<{ blockId: string, type: 'request' | 'response' } | null>(null)
     const [conversationTitle, setConversationTitle] = useState<string | null>(null)
     const [conversationRole, setConversationRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER')
     
@@ -100,13 +123,6 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         return selectedResponseByBlock[blockId] ?? null
     }, [selectedResponseByBlock])
 
-    // Editor State
-    const [editorPrompt, setEditorPromptInternal] = useState<string>('') // Active text being edited
-
-    const setEditorPrompt = useCallback((prompt: string) => {
-        setEditorPromptInternal(prompt)
-    }, [])
-
     // Sync Supplemental Text Effect
     useEffect(() => {
         if (!activeBlockId) {
@@ -132,8 +148,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
 
     }, [activeBlockId, conversationBlockList, getSelectedResponseForBlock, setSupplementalText])
 
-    const updateConversationBlock = (conversationBlockId: string, updater: Partial<ConversationBlock>) => {
-        // console.log('DEBUG updateConversationBlock', conversationBlockId, updater)
+    const updateConversationBlock = useCallback((conversationBlockId: string, updater: Partial<ConversationBlock>) => {
         setConversationBlockList(prev =>
             prev.map(block =>
                 block.conversationBlockId === conversationBlockId
@@ -141,11 +156,11 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
                     : block
             )
         )
-    }
+    }, [])
 
-    const setSelectedResponseForBlock = (blockId: string, responseId: string) => {
+    const setSelectedResponseForBlock = useCallback((blockId: string, responseId: string) => {
         setSelectedResponseByBlock(prev => ({ ...prev, [blockId]: responseId }))
-    }
+    }, [])
 
     const getVendorSelectionForBlock = useCallback((blockId: string): string[] => {
         return vendorSelectionByBlock[blockId] ?? []
@@ -351,7 +366,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
     }, [navigate, customerId])
 
     // --- Core Actions ---
-    const addNewConversationBlock = () => {
+    const addNewConversationBlock = useCallback(() => {
         const newConversation: ConversationBlock = {
             conversationBlockId: `conv-${Date.now()}`,
             prompt: '',
@@ -360,11 +375,11 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             status: 'draft',
         }
         setConversationBlockList(prev => [...prev, newConversation])
-    }
+    }, [])
 
-    const updatePromptInConversationBlock = (conversationBlockId: string, prompt: string) => {
+    const updatePromptInConversationBlock = useCallback((conversationBlockId: string, prompt: string) => {
         updateConversationBlock(conversationBlockId, { prompt })
-    }
+    }, [updateConversationBlock])
 
     const validateAndPrepareGeneration = (id: string, overridePrompt?: string, selectedMessageId?: string | null) => {
         const conversationBlock = conversationBlockList.find(c => c.conversationBlockId === id)
@@ -955,7 +970,7 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
         }
     }
 
-    const addNewConversationBlockWithId = (id: string) => {
+    const addNewConversationBlockWithId = useCallback((id: string) => {
         const newConversation: ConversationBlock = {
             conversationBlockId: id,
             prompt: '',
@@ -964,48 +979,110 @@ export const ConversationProvider = ({ children }: { children: ReactNode }) => {
             status: 'draft',
         }
         setConversationBlockList(prev => [...prev, newConversation])
-    }
+    }, [])
+
+    // Latest-ref pattern for the two generation entry points: they close
+    // over a lot of state (config, prompts, auth) and are only ever invoked
+    // from event handlers, so the context exposes stable wrappers that call
+    // the closure from the latest render. This keeps them out of the value
+    // memo below without risking stale closures.
+    const generateResponsesRef = useRef(generateResponses)
+    generateResponsesRef.current = generateResponses
+    const generateResponsesStreamRef = useRef(generateResponsesStream)
+    generateResponsesStreamRef.current = generateResponsesStream
+
+    const generateResponsesStable = useCallback(
+        (id: string, overridePrompt?: string, selectedMessageId?: string | null) =>
+            generateResponsesRef.current(id, overridePrompt, selectedMessageId),
+        []
+    )
+    const generateResponsesStreamStable = useCallback(
+        (id: string, overridePrompt?: string, selectedMessageId?: string | null, vendorToRegenerate?: AIVendor, attachments?: AttachmentRef[]) =>
+            generateResponsesStreamRef.current(id, overridePrompt, selectedMessageId, vendorToRegenerate, attachments),
+        []
+    )
+
+    // Memoized so provider re-renders with unchanged data hand out the same
+    // value object and consumers can skip re-rendering. Every non-stable
+    // field is a dep; render-time getters (getSelectedResponseForBlock,
+    // getVendorSelectionForBlock) are useCallbacks keyed to their state so
+    // the value refreshes exactly when their data changes.
+    const value = useMemo<IConversationContext>(() => ({
+        conversationBlockList,
+        conversationId,
+        activeBlockId,
+        setActiveBlockId,
+        systemPrompt,
+        setSystemPrompt,
+        selectedInstructionId,
+        setSelectedInstructionId,
+        addNewConversationBlock,
+        addNewConversationBlockWithId,
+        updateResponseInConversationBlock: updatePromptInConversationBlock,
+        generateResponses: generateResponsesStable,
+        generateResponsesStream: generateResponsesStreamStable,
+        stopGenerating,
+        selectedResponseByBlock,
+        setSelectedResponseForBlock,
+        getSelectedResponseForBlock,
+        loadConversation,
+        resetConversation,
+        conversationTitle,
+        conversationRole,
+        getVendorSelectionForBlock,
+        setVendorSelectionForBlock,
+    }), [
+        conversationBlockList,
+        conversationId,
+        activeBlockId,
+        systemPrompt,
+        setSystemPrompt,
+        selectedInstructionId,
+        setSelectedInstructionId,
+        addNewConversationBlock,
+        addNewConversationBlockWithId,
+        updatePromptInConversationBlock,
+        generateResponsesStable,
+        generateResponsesStreamStable,
+        stopGenerating,
+        selectedResponseByBlock,
+        setSelectedResponseForBlock,
+        getSelectedResponseForBlock,
+        loadConversation,
+        resetConversation,
+        conversationTitle,
+        conversationRole,
+        getVendorSelectionForBlock,
+        setVendorSelectionForBlock,
+    ])
 
     return (
-        <ConversationContext.Provider
-            value={{
-                conversationBlockList,
-                conversationId,
-                activeBlockId,
-                setActiveBlockId,
-                activeViewportItem,
-                setActiveViewportItem,
-                systemPrompt,
-                setSystemPrompt,
-                selectedInstructionId,
-                setSelectedInstructionId,
-                addNewConversationBlock,
-                addNewConversationBlockWithId,
-                updateResponseInConversationBlock: updatePromptInConversationBlock,
-                generateResponses,
-                generateResponsesStream,
-                stopGenerating,
-                selectedResponseByBlock,
-                setSelectedResponseForBlock,
-                getSelectedResponseForBlock,
-                loadConversation,
-                resetConversation,
-                editorPrompt,
-                setEditorPrompt,
-                conversationTitle,
-                conversationRole,
-                getVendorSelectionForBlock,
-                setVendorSelectionForBlock,
-
-            }}
-        >
+        <ConversationContext.Provider value={value}>
             {children}
         </ConversationContext.Provider>
     )
 }
 
+export const ConversationProvider = ({ children }: { children: ReactNode }) => (
+    <ConversationUIProvider>
+        <ConversationDataProvider>{children}</ConversationDataProvider>
+    </ConversationUIProvider>
+)
+
 export const useConversation = () => {
     const ctx = useContext(ConversationContext)
     if (!ctx) throw new Error('useConversation must be used within a ConversationProvider')
+    return ctx
+}
+
+/**
+ * Fast-changing UI state (draft prompt, viewport tracking). Subscribe here
+ * instead of useConversation when you need these fields — they update on
+ * every editor debounce tick / scroll, and this context keeps that churn
+ * away from the conversation tree.
+ */
+export const useConversationUI = () => {
+    const ctx = useContext(ConversationUIContext)
+    if (!ctx) throw new Error('useConversationUI must be used within a ConversationProvider')
     return ctx
 }

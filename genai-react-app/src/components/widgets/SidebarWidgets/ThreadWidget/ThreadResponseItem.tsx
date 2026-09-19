@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import styles from './ThreadResponseItem.module.scss'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
-import { useConversation } from '../../../../context/ConversationContext'
+import { useConversationUI } from '../../../../context/ConversationContext'
 
 interface ThreadResponseItemProps {
     conversationBlockId: string
@@ -14,7 +14,7 @@ interface ThreadResponseItemProps {
 
 export default function ThreadResponseItem({ conversationBlockId, responseCount, collapsed = false, 'data-testid': testId }: ThreadResponseItemProps) {
     const { t } = useTranslation()
-    const { activeViewportItem } = useConversation()
+    const { activeViewportItem } = useConversationUI()
 
     const handleClick = () => {
         // Scroll to the response section, not the conversation block

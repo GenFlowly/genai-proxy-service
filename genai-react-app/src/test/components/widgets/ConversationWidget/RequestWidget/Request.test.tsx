@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import Request from '../../../../../components/widgets/ConversationWidget/RequestWidget/Request';
-import { useConversation } from '../../../../../context/ConversationContext';
+import { useConversation, useConversationUI } from '../../../../../context/ConversationContext';
 import { useAuth } from '../../../../../context/AuthContext';
 import { uploadAttachment } from '../../../../../services/attachmentService';
 import '@testing-library/jest-dom';
@@ -40,6 +40,7 @@ jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
 
 describe('Request Widget Component', () => {
     const mockUseConversation = useConversation as jest.Mock;
+    const mockUseConversationUI = useConversationUI as jest.Mock;
     const mockUseAuth = useAuth as jest.Mock;
     const mockGenerateResponsesStream = jest.fn();
     const mockStopGenerating = jest.fn();
@@ -49,6 +50,9 @@ describe('Request Widget Component', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        // setEditorPrompt moved to the ConversationUI context (perf split);
+        // the main-context mocks below may still carry it harmlessly
+        mockUseConversationUI.mockReturnValue({ setEditorPrompt: mockSetEditorPrompt });
         mockUseConversation.mockReturnValue({
             conversationBlockList: [{
                 conversationBlockId: 'block-1',

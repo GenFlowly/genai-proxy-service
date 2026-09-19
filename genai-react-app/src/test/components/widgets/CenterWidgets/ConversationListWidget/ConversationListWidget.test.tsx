@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ConversationListWidget from '../../../../../components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget';
-import { useConversation } from '../../../../../context/ConversationContext';
+import { useConversation, useConversationUI } from '../../../../../context/ConversationContext';
 
 // Mock dependencies
 jest.mock('../../../../../context/ConversationContext');
@@ -12,6 +12,7 @@ jest.mock('../../../../../components/widgets/ConversationWidget/ConversationBloc
 
 describe('ConversationListWidget', () => {
     const mockUseConversation = useConversation as jest.Mock;
+    const mockUseConversationUI = useConversationUI as jest.Mock;
     const mockSetActiveViewportItem = jest.fn();
     
     // Setup for IntersectionObserver mocking
@@ -42,7 +43,9 @@ describe('ConversationListWidget', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         jest.useFakeTimers();
-        mockUseConversation.mockReturnValue({ 
+        // setActiveViewportItem moved to the ConversationUI context
+        mockUseConversationUI.mockReturnValue({ setActiveViewportItem: mockSetActiveViewportItem });
+        mockUseConversation.mockReturnValue({
             conversationBlockList: [],
             setActiveViewportItem: mockSetActiveViewportItem
         });
