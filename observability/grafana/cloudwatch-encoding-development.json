@@ -27,8 +27,8 @@
       "panels": [
         {
           "type": "timeseries",
-          "title": "Encoding API requests & rejections",
-          "description": "Front door of the ingestion pipeline. 4xx here with no lambda invocations = the JWT authorizer is rejecting callers (audience/issuer mismatch) \u2014 nothing downstream will run. 5-minute buckets.",
+          "title": "Encoding API success & errors",
+          "description": "Front door of the ingestion pipeline: successful requests (count - 4xx - 5xx) vs rejections. 4xx with no lambda invocations = the JWT authorizer is rejecting callers (audience/issuer mismatch) \u2014 nothing downstream will run. 5-minute buckets.",
           "datasource": {
             "type": "cloudwatch",
             "uid": "afxh14dyp3ldsd"
@@ -126,13 +126,14 @@
                   "vo5xewwhz0"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "300",
               "expression": "",
               "label": "requests",
-              "id": "",
-              "alias": ""
+              "id": "c",
+              "alias": "",
+              "hide": true
             },
             {
               "refId": "B",
@@ -151,12 +152,12 @@
                   "vo5xewwhz0"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "300",
               "expression": "",
               "label": "4xx rejected",
-              "id": "",
+              "id": "e4",
               "alias": ""
             },
             {
@@ -176,11 +177,32 @@
                   "vo5xewwhz0"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "300",
               "expression": "",
               "label": "5xx errors",
+              "id": "e5",
+              "alias": ""
+            },
+            {
+              "refId": "D",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "afxh14dyp3ldsd"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "namespace": "",
+              "metricName": "",
+              "statistic": "",
+              "dimensions": {},
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "c - e4 - e5",
+              "label": "success",
               "id": "",
               "alias": ""
             }
