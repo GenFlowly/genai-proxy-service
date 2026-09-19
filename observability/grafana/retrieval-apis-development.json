@@ -53,9 +53,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -124,12 +124,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/execute-agent-graph\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/execute-agent-graph\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /execute-agent-graph (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /execute-agent-graph, by status."
         },
         {
           "type": "timeseries",
@@ -269,9 +269,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -340,12 +340,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/retrieve\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/retrieve\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /retrieve (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /retrieve, by status."
         },
         {
           "type": "timeseries",
@@ -502,9 +502,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -573,12 +573,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/models\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/models\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /models (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /models, by status."
         },
         {
           "type": "timeseries",
@@ -718,9 +718,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -789,12 +789,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/models/metadata\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/models/metadata\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /models/metadata (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /models/metadata, by status."
         },
         {
           "type": "timeseries",
@@ -934,9 +934,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -1005,12 +1005,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/providers\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/providers\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /providers (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /providers, by status."
         },
         {
           "type": "timeseries",
@@ -1150,9 +1150,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -1221,12 +1221,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/validate-key\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/validate-key\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /validate-key (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /validate-key, by status."
         },
         {
           "type": "timeseries",
@@ -1383,9 +1383,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -1454,12 +1454,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/search\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/search\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /search (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /search, by status."
         },
         {
           "type": "timeseries",
@@ -1616,9 +1616,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -1687,12 +1687,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/delete-instruction-vectors\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/delete-instruction-vectors\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /delete-instruction-vectors (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /delete-instruction-vectors, by status."
         },
         {
           "type": "timeseries",
@@ -1832,9 +1832,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -1903,12 +1903,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/delete-memory-vectors\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/delete-memory-vectors\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /delete-memory-vectors (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /delete-memory-vectors, by status."
         },
         {
           "type": "timeseries",
@@ -2048,9 +2048,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -2119,12 +2119,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/delete-note-vectors\"})",
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/delete-note-vectors\"}[$__rate_interval]))",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /delete-note-vectors (cumulative counter; resets on deploy/restart)."
+          "description": "Requests per interval for /delete-note-vectors, by status."
         },
         {
           "type": "timeseries",
