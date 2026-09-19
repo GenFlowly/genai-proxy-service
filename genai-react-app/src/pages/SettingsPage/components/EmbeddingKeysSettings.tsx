@@ -44,7 +44,7 @@ function vendorForModel(model: string): string {
 
 /**
  * Bring-your-own API keys for the embedding models that index and search the
- * customer's data. The OpenAI key is the same key as on the Model API Keys
+ * customer's data. The OpenAI key is the same key as on the LLM API Keys
  * page (one key serves generation and embeddings), so it reads and writes the
  * shared vendor-key state; Voyage is embedding-only and has its own key.
  * Below the keys, per-category default embedding models (conversations,
@@ -113,7 +113,7 @@ export function EmbeddingKeysSettings(): React.ReactElement {
     }, [aiConfigPreferences])
 
     // OpenAI state lives in the shared vendor-key list, so a key stored on
-    // the Model API Keys page shows as set here (and vice versa)
+    // the LLM API Keys page shows as set here (and vice versa)
     const openAiVendorStatus = aiVendorAPIKeyStatusList.find(s => s.aiVendor === AIVendor.OPENAI)
     const openAiKeySet =
         openAiVendorStatus?.status === APIKeyStatus.VALID || !!openAiVendorStatus?.isAPIKeyValid
@@ -138,7 +138,7 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         const token = await getAccessTokenSilently()
 
         if (vendor === EmbeddingVendor.OPENAI) {
-            // Same endpoint as the Model API Keys page: one OpenAI key for both
+            // Same endpoint as the LLM API Keys page: one OpenAI key for both
             const response = await storeCustomerVendorApiKey(token, { aiVendor: vendor, apiKey })
             if (response.apiKeyStatus.updateSuccessful) {
                 updateVendorApiKeyStatus(response.apiKeyStatus)
