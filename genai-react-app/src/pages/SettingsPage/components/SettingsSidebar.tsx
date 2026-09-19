@@ -56,9 +56,9 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
             path: '/settings/ai',
             children: [
                 {
-                    key: 'model-keys',
+                    key: 'llm-keys',
                     label: t('settingsPage.settingsSidebar.aiModelKeys'),
-                    path: '/settings/ai/model-keys',
+                    path: '/settings/ai/llm-keys',
                 },
                 {
                     key: 'embedding-keys',
@@ -69,11 +69,6 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
                     key: 'vector-db',
                     label: t('settingsPage.settingsSidebar.aiVectorDb'),
                     path: '/settings/ai/vector-db',
-                },
-                {
-                    key: 'defaults',
-                    label: t('settingsPage.settingsSidebar.aiDefaults'),
-                    path: '/settings/ai/defaults',
                 },
             ],
         },

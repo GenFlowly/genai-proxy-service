@@ -78,6 +78,8 @@
     // reads these so radius and spacing stay consistent.
     --widget-radius: var(--radius-lg);
     --widget-gap: 0.0625rem; // 1px expressed in rem
+    // Vertical breathing room applied to every settings page's content area
+    --settings-page-padding-y: 2.5rem;
     // Page canvas visible behind/between the panels — matches PageHeader
     --color-page-background: var(--color-conversation-header-bg);
 
@@ -229,6 +231,7 @@ $radius-xl: var(--radius-xl);
 // Widget panels
 $widget-radius: var(--widget-radius);
 $widget-gap: var(--widget-gap);
+$settings-page-padding-y: var(--settings-page-padding-y);
 $color-page-background: var(--color-page-background);
 
 // Transitions
