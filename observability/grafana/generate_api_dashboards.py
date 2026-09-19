@@ -264,7 +264,7 @@ def build_llm_dashboard(env):
     appear as series via sum by (model). New vendors/models show up on the
     dashboard automatically."""
     app = f'app=~".*-{env}"'
-    v = f'{app}, vendor=~"$vendor"'
+    v = f'{app}, vendor=~"$vendor", model=~"$model"'
 
     overview = {"type": "row", "title": "Overview", "collapsed": False,
                 "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1}}
@@ -292,37 +292,41 @@ def build_llm_dashboard(env):
                    "{{vendor}} {{model}}", PANEL_W, 10, unit="currencyUSD"),
     ]
 
-    # Repeated per vendor; inside, each model is a series — fully dynamic.
+    # Row repeated per vendor; inside, every metric panel repeats per model so
+    # each vendor-model combination gets its own chart — no overlapping series,
+    # fully dynamic via the chained $vendor/$model variables.
     vendor_row = {"type": "row", "title": "Vendor: $vendor", "collapsed": True,
                   "repeat": "vendor", "gridPos": {"x": 0, "y": 18, "w": 24, "h": 1},
                   "panels": []}
     vy = 19
     vendor_charts = [
-        ("Calls by model",
-         "LLM calls per interval, by model.",
+        ("Calls — $model",
+         "LLM calls per interval.",
          [{"expr": f'sum by (model) (increase(llm_request_total{{{v}}}[$__rate_interval]))', "legendFormat": "{{model}}"}], None, True),
-        ("Response latency p95 by model",
-         "p95 time to get a response from the vendor, per model.",
+        ("Response latency p95 — $model",
+         "p95 time to get a response from the vendor.",
          [{"expr": f'histogram_quantile(0.95, sum by (le, model) (rate(llm_request_duration_seconds_bucket{{{v}}}[$__rate_interval])))',
            "legendFormat": "{{model}}"}], "s", False),
-        ("Generation time by model",
-         "Seconds spent generating per interval, by model.",
+        ("Generation time — $model",
+         "Seconds spent generating per interval.",
          [{"expr": f'sum by (model) (increase(llm_request_duration_seconds_sum{{{v}}}[$__rate_interval]))', "legendFormat": "{{model}}"}], "s", True),
-        ("Input tokens by model",
-         "Input tokens per interval, by model.",
+        ("Input tokens — $model",
+         "Input tokens per interval.",
          [{"expr": f'sum by (model) (increase(llm_tokens_total{{{v}, direction="input"}}[$__rate_interval]))', "legendFormat": "{{model}}"}], None, True),
-        ("Output tokens by model",
-         "Output tokens per interval, by model.",
+        ("Output tokens — $model",
+         "Output tokens per interval.",
          [{"expr": f'sum by (model) (increase(llm_tokens_total{{{v}, direction="output"}}[$__rate_interval]))', "legendFormat": "{{model}}"}], None, True),
-        ("Cache tokens by model",
-         "Cache tokens (read + creation) per interval, by model.",
+        ("Cache tokens — $model",
+         "Cache tokens (read + creation) per interval.",
          [{"expr": f'sum by (model) (increase(llm_tokens_total{{{v}, direction=~"cache_read|cache_creation"}}[$__rate_interval]))',
            "legendFormat": "{{model}}"}], None, True),
     ]
     for i, (title, desc, targets, unit, points) in enumerate(vendor_charts):
-        x = (i % CHARTS_PER_ROW) * PANEL_W
-        y = vy + (i // CHARTS_PER_ROW) * PANEL_H
-        vendor_row["panels"].append(ts_panel(title, desc, targets, x, y, unit=unit, points=points))
+        p = ts_panel(title, desc, targets, 0, vy + i * PANEL_H, unit=unit, points=points)
+        p["repeat"] = "model"
+        p["repeatDirection"] = "h"
+        p["maxPerRow"] = CHARTS_PER_ROW
+        vendor_row["panels"].append(p)
 
     return {
         "uid": f"llm-metrics-{env}",
@@ -348,6 +352,21 @@ def build_llm_dashboard(env):
                 "datasource": DS,
                 "query": {
                     "query": f'label_values(llm_request_total{{app=~".*-{env}"}}, vendor)',
+                    "refId": "PrometheusVariableQueryEditor-VariableQuery",
+                },
+                "refresh": 2,
+                "includeAll": True,
+                "multi": True,
+                "sort": 1,
+                "current": {"selected": True, "text": ["All"], "value": ["$__all"]},
+            },
+            {
+                "name": "model",
+                "label": "Model",
+                "type": "query",
+                "datasource": DS,
+                "query": {
+                    "query": f'label_values(llm_request_total{{app=~".*-{env}", vendor=~"$vendor"}}, model)',
                     "refId": "PrometheusVariableQueryEditor-VariableQuery",
                 },
                 "refresh": 2,
