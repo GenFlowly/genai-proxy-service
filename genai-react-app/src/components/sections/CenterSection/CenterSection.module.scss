@@ -12,35 +12,16 @@
   overflow: hidden;
 }
 
+// Scroll behavior and scrollbar styling come from the shared ScrollArea
 .scrollContainer {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  overflow-y: auto;
-  overflow-x: hidden; // Prevent horizontal scroll on center section
   scroll-behavior: smooth;
   // Bottom spacing lives on .contentWrapper, not here: padding on the scroll
   // container insets sticky descendants (response action bar) from its bottom edge
-
-  // Transparent track — only the thumb is visible, so the panel background
-  // runs uninterrupted to the rounded edge
-  scrollbar-color: $color-border transparent; // Firefox (thumb, track)
-
-  &::-webkit-scrollbar {
-    width: 8px;
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background-color: $color-border;
-    border-radius: 4px;
-  }
 }
 
 .contentWrapper {

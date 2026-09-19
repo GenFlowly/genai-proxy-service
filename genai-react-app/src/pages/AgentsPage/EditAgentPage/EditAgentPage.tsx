@@ -10,6 +10,7 @@ import { getAgent, updateAgent } from '../../../services/agentsService'
 import { createInstruction, getCustomerInstructions } from '../../../services/instructionService'
 import { Agent, AgentNode, UpdateAgentNodePatch, UpdateAgentRequest } from '../../../models/agents.models'
 import { InstructionResponse } from '../../../models/instruction.models'
+import { ScrollArea } from '@genflowly/component-library'
 import styles from './EditAgentPage.module.scss'
 import { formatServerDateTime } from '../../../utils/timeUtils'
 
@@ -183,7 +184,7 @@ function NodeConfigEditor({
                 data-testid={`instruction-search-${node.nodeId}`}
             />
             {pickerOpen && (
-                <ul className={styles.instructionOptionList} role="listbox">
+                <ScrollArea as="ul" className={styles.instructionOptionList} role="listbox">
                     {instructionsLoading && (
                         <li className={styles.instructionOptionEmpty}>{t('agentsPage.nodeConfigEditor.instructionsLoading')}</li>
                     )}
@@ -207,7 +208,7 @@ function NodeConfigEditor({
                             </button>
                         </li>
                     ))}
-                </ul>
+                </ScrollArea>
             )}
         </div>
     )
@@ -639,7 +640,7 @@ export default function EditAgentPage() {
                 {agent && (
                     <div className={styles.editLayout}>
                         {/* ── Left column: agent-level settings ── */}
-                        <aside className={styles.sidebar}>
+                        <ScrollArea as="aside" className={styles.sidebar}>
                             <div className={styles.sidebarCard}>
                                 <h2 className={styles.cardTitle}>{t('agentsPage.editAgentPage.agentSettings')}</h2>
 
@@ -696,10 +697,10 @@ export default function EditAgentPage() {
                                     )}
                                 </div>
                             </div>
-                        </aside>
+                        </ScrollArea>
 
                         {/* ── Main column: node pipeline editors ── */}
-                        <main className={styles.main}>
+                        <ScrollArea as="main" className={styles.main}>
                             <div className={styles.mainCard}>
                                 <div className={styles.mainCardHeader}>
                                     <h2 className={styles.cardTitle}>{t('agentsPage.editAgentPage.nodeConfiguration')}</h2>
@@ -735,7 +736,7 @@ export default function EditAgentPage() {
 
                                 </div>
                             </div>
-                        </main>
+                        </ScrollArea>
                     </div>
                 )}
             </div>

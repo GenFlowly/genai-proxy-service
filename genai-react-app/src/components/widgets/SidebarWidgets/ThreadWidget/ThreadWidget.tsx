@@ -1,5 +1,6 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { ScrollArea } from '@genflowly/component-library'
 import { useConversation } from '../../../../context/ConversationContext'
 import { useLayout } from '../../../../context/LayoutContext'
 import ThreadPromptItem from './ThreadPromptItem'
@@ -13,23 +14,6 @@ export default function ThreadWidget({ 'data-testid': testId }: { 'data-testid'?
 
     const collapsed = !isLeftSidebarExpanded
 
-    const [isScrolling, setIsScrolling] = useState(false)
-    const scrollTimeout = useRef<NodeJS.Timeout | null>(null)
-
-    const handleScroll = useCallback(() => {
-        setIsScrolling(true)
-        if (scrollTimeout.current) clearTimeout(scrollTimeout.current)
-        scrollTimeout.current = setTimeout(() => {
-            setIsScrolling(false)
-        }, 800)
-    }, [])
-
-    useEffect(() => {
-        return () => {
-            if (scrollTimeout.current) clearTimeout(scrollTimeout.current)
-        }
-    }, [])
-
     return (
         <div className={styles.threadWidget} data-testid={testId || "thread-widget"}>
             {!collapsed && <h3 className={styles.title}>{t('sidebar.threadWidget.title')}</h3>}
@@ -37,10 +21,7 @@ export default function ThreadWidget({ 'data-testid': testId }: { 'data-testid'?
             {conversationBlockList.length === 0 || (conversationBlockList.length === 1 && !conversationBlockList[0].prompt && conversationBlockList[0].status === 'draft') ? (
                 !collapsed && <p className={styles.emptyState} data-testid="thread-empty-state">{t('sidebar.threadWidget.noConversationYet')}</p>
             ) : (
-                <div 
-                    className={`${styles.threadList} ${isScrolling ? styles.scrolling : ''}`}
-                    onScroll={handleScroll}
-                >
+                <ScrollArea className={styles.threadList}>
                     {conversationBlockList.map((block) => {
                         const hasPrompt = block.prompt.trim().length > 0
                         const hasResponses = block.status === 'resolved' || block.responseMessages.length > 0
@@ -69,7 +50,7 @@ export default function ThreadWidget({ 'data-testid': testId }: { 'data-testid'?
                             </div>
                         )
                     })}
-                </div>
+                </ScrollArea>
             )}
         </div>
     )

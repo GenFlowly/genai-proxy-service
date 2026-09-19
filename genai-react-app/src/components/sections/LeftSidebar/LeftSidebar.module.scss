@@ -27,6 +27,10 @@
   &.minimized {
     width: 0;
     border-width: 0;
+    // Still in the flex flow at zero width, so the layout's gap would apply on
+    // both sides and double the seam between the neighboring panels; pull one
+    // gap back so every panel seam stays a single $widget-gap
+    margin-left: calc(-1 * #{$widget-gap});
     .sidebarContent {
       display: none;
     }
@@ -50,6 +54,7 @@
 
     &.minimized {
       width: 100%;
+      margin-left: 0;
     }
   }
 }
