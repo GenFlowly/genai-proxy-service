@@ -1,0 +1,2258 @@
+{
+  "uid": "retrieval-apis-production",
+  "title": "Retrieval Server APIs (Production)",
+  "tags": [
+    "genflowly",
+    "observability",
+    "production"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROM",
+        "label": "Prometheus datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Generation & Graphs",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "/execute-agent-graph",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 1,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/execute-agent-graph\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /execute-agent-graph (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/execute-agent-graph \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 1,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/execute-agent-graph\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/execute-agent-graph\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/execute-agent-graph\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/execute-agent-graph\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /execute-agent-graph."
+        },
+        {
+          "type": "timeseries",
+          "title": "/retrieve",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 9,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/retrieve\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /retrieve (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/retrieve \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 9,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/retrieve\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/retrieve\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/retrieve\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/retrieve\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /retrieve."
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Models & Providers",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "/models",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 18,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/models\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /models (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/models \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 18,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/models\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/models\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/models\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/models\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /models."
+        },
+        {
+          "type": "timeseries",
+          "title": "/models/metadata",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 26,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/models/metadata\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /models/metadata (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/models/metadata \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 26,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/models/metadata\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/models/metadata\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/models/metadata\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/models/metadata\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /models/metadata."
+        },
+        {
+          "type": "timeseries",
+          "title": "/providers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 34,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/providers\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /providers (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/providers \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 34,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/providers\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/providers\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/providers\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/providers\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /providers."
+        },
+        {
+          "type": "timeseries",
+          "title": "/validate-key",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 42,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/validate-key\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /validate-key (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/validate-key \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 42,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/validate-key\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/validate-key\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/validate-key\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/validate-key\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /validate-key."
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Search",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "/search",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 51,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/search\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /search (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/search \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 51,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/search\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/search\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/search\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/search\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /search."
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Vector Deletes",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 59,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "/delete-instruction-vectors",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 60,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/delete-instruction-vectors\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /delete-instruction-vectors (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/delete-instruction-vectors \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 60,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-instruction-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-instruction-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-instruction-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-instruction-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /delete-instruction-vectors."
+        },
+        {
+          "type": "timeseries",
+          "title": "/delete-memory-vectors",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 68,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/delete-memory-vectors\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /delete-memory-vectors (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/delete-memory-vectors \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 68,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-memory-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-memory-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-memory-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-memory-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /delete-memory-vectors."
+        },
+        {
+          "type": "timeseries",
+          "title": "/delete-note-vectors",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 76,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-production\", handler=\"/delete-note-vectors\"})",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests by status for /delete-note-vectors (cumulative counter; resets on deploy/restart)."
+        },
+        {
+          "type": "timeseries",
+          "title": "/delete-note-vectors \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 76,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-note-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-note-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-note-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-production\", handler=\"/delete-note-vectors\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /delete-note-vectors."
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    }
+  ]
+}
