@@ -196,12 +196,114 @@
       "description": "Share of LLM calls per vendor and model over the dashboard time range."
     },
     {
+      "type": "piechart",
+      "title": "Vendor cost distribution",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (vendor) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__range]))",
+          "legendFormat": "{{vendor}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Share of LLM spend per vendor over the dashboard time range."
+    },
+    {
+      "type": "piechart",
+      "title": "Vendor-model cost distribution",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (vendor, model) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__range]))",
+          "legendFormat": "{{vendor}} {{model}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Share of LLM spend per vendor and model over the dashboard time range."
+    },
+    {
       "type": "row",
       "title": "Cost",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 9,
+        "y": 17,
         "w": 24,
         "h": 1
       },
@@ -219,7 +321,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 10,
+        "y": 18,
         "w": 12,
         "h": 8
       },
@@ -263,7 +365,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 10,
+        "y": 18,
         "w": 12,
         "h": 8
       },
@@ -305,7 +407,7 @@
       "repeat": "vendor",
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 26,
         "w": 24,
         "h": 1
       },
@@ -319,7 +421,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 19,
+            "y": 27,
             "w": 12,
             "h": 8
           },
@@ -417,7 +519,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 27,
+            "y": 35,
             "w": 12,
             "h": 8
           },
@@ -515,7 +617,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 35,
+            "y": 43,
             "w": 12,
             "h": 8
           },
@@ -614,7 +716,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 43,
+            "y": 51,
             "w": 12,
             "h": 8
           },
@@ -712,7 +814,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 51,
+            "y": 59,
             "w": 12,
             "h": 8
           },
@@ -810,7 +912,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 59,
+            "y": 67,
             "w": 12,
             "h": 8
           },
