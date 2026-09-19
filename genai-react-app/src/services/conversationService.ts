@@ -66,7 +66,7 @@ export async function getConversation(
     conversationId: string
 ): Promise<GetConversationResponse | null> { // Changed return type to include null
 
-    const url = `${config.backend.baseUrl}/api/v1/chat/${conversationId}`;
+    const url = `${config.backend.baseUrl}/api/v1/chat?conversationId=${encodeURIComponent(conversationId)}`;
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
