@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
-import { Modal, InputTextWithHint, InstructionTile } from '@genflowly/component-library'
+import { Modal, InputTextWithHint, InstructionTile, ScrollArea } from '@genflowly/component-library'
 import { searchInstructions, getRecentInstructions } from '../../../services/instructionService'
 import { InstructionResponse } from '../../../models/instruction.models'
 import { loadRecentInstructionsCache, saveRecentInstructionsCache } from './recentInstructionsCache'
@@ -130,7 +130,7 @@ export default function InstructionPickerModal({
                             : t('conversation.instructionPicker.noRecent')}
                     </p>
                 ) : (
-                    <div className={styles.tiles}>
+                    <ScrollArea className={styles.tiles}>
                         {shown.map(instruction => (
                             <InstructionTile
                                 key={instruction.id}
@@ -144,7 +144,7 @@ export default function InstructionPickerModal({
                                 data-testid={`instruction-picker-tile-${instruction.id}`}
                             />
                         ))}
-                    </div>
+                    </ScrollArea>
                 )}
             </div>
         </Modal>

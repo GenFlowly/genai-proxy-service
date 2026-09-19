@@ -23,9 +23,9 @@ jest.mock('../../../../../context/AuthContext', () => ({
 jest.mock('../../../../../services/learnedFactsService');
 const { getLearnedFacts, deleteMemoryFact } = require('../../../../../services/learnedFactsService');
 
-// JSDOM's window is 1024px wide, which would cap rendering to 1 vendor.
-// Mock the responsive hook so vendor count is deterministic and adjustable.
-let mockMaxVendors = 3;
+// The real hook measures the conversation container with a ResizeObserver
+// (unavailable/zero-width in JSDOM). Mock it so vendor count is deterministic.
+let mockMaxVendors = 2;
 jest.mock('../../../../../hooks/useMaxVendors', () => ({
     useMaxVendors: () => mockMaxVendors
 }));
@@ -54,10 +54,16 @@ jest.mock('@genflowly/component-library', () => ({
     },
 }));
 
+// Real display names come from the provider catalog; both the brand
+// component and the name-lookup hook are mocked with fixed labels here.
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
-    OpenAIBrandName: () => <span>OpenAI</span>,
-    ClaudeBrandName: () => <span>Claude</span>,
-    GeminiBrandName: () => <span>Gemini</span>
+    VendorBrandName: ({ vendorId }: any) => (
+        <span>{({ OPENAI: 'OpenAI', CLAUDE: 'Claude', GEMINI: 'Gemini' } as any)[vendorId] ?? vendorId}</span>
+    )
+}));
+jest.mock('../../../../../hooks/useVendorDisplayNames', () => ({
+    useVendorDisplayNames: () => (vendorId: string) =>
+        ({ OPENAI: 'OpenAI', CLAUDE: 'Claude', GEMINI: 'Gemini' } as any)[vendorId] ?? vendorId
 }));
 
 describe('Response Widget Component', () => {
@@ -71,7 +77,7 @@ describe('Response Widget Component', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockSelection = [];
-        mockMaxVendors = 3;
+        mockMaxVendors = 2;
         mockVendorKeyStatuses = [];
         mockUseConversation.mockReturnValue({
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
@@ -129,10 +135,12 @@ describe('Response Widget Component', () => {
             { messageId: 'msg-3', text: 'R3', aiVendor: AIVendor.GEMINI, isLoading: false, timestamp: 0 },
         ];
         render(<Response blockId="block-1" responseMessages={msgs} />);
+        // Cap is 2: prioritized Claude leads, then OpenAI (first-arrived of
+        // the unprioritized pair) — Gemini falls outside the display cap
         const cards = screen.getAllByTestId('response-message');
+        expect(cards).toHaveLength(2);
         expect(cards[0]).toHaveTextContent('Claude');
         expect(cards[1]).toHaveTextContent('OpenAI');
-        expect(cards[2]).toHaveTextContent('Gemini');
     });
 
     test('priority decides which vendors survive the display cap', () => {
@@ -281,7 +289,7 @@ describe('Response Widget Component', () => {
         expect(screen.queryByTestId('vendor-radio-group')).not.toBeInTheDocument();
     });
 
-    test('shows the radio group when vendors exceed the column limit', () => {
+    test('still shows the checkbox group when vendors exceed the column limit', () => {
         mockMaxVendors = 2;
         mockSelection = [AIVendor.OPENAI, AIVendor.CLAUDE, AIVendor.GEMINI];
         const threeVendors = [
@@ -290,11 +298,11 @@ describe('Response Widget Component', () => {
         ];
         render(<Response blockId="block-1" responseMessages={threeVendors} />);
 
-        expect(screen.getByTestId('vendor-radio-group')).toBeInTheDocument();
-        expect(screen.queryByTestId('vendor-checkbox-group')).not.toBeInTheDocument();
+        expect(screen.getByTestId('vendor-checkbox-group')).toBeInTheDocument();
+        expect(screen.queryByTestId('vendor-radio-group')).not.toBeInTheDocument();
     });
 
-    test('radio group selection replaces the previous vendor selection', () => {
+    test('selecting a vendor at the column limit evicts the oldest selection', () => {
         mockMaxVendors = 2;
         mockSelection = [AIVendor.OPENAI, AIVendor.CLAUDE, AIVendor.GEMINI];
         const threeVendors = [
@@ -303,9 +311,11 @@ describe('Response Widget Component', () => {
         ];
         render(<Response blockId="block-1" responseMessages={threeVendors} />);
 
-        fireEvent.click(screen.getByTestId(`vendor-radio-group-option-${AIVendor.GEMINI}`));
+        // Displayed selection is capped to [OPENAI, CLAUDE]; picking GEMINI at
+        // the cap drops the oldest (OPENAI) instead of blocking the click
+        fireEvent.click(screen.getByTestId(`vendor-checkbox-group-option-${AIVendor.GEMINI}`));
 
-        expect(mockSetVendorSelectionForBlock).toHaveBeenCalledWith('block-1', [AIVendor.GEMINI]);
+        expect(mockSetVendorSelectionForBlock).toHaveBeenCalledWith('block-1', [AIVendor.CLAUDE, AIVendor.GEMINI]);
     });
 
     test('checkbox group keeps other selections when below the limit', () => {

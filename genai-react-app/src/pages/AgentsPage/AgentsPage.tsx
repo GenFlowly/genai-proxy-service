@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import Navbar from '../../components/navbar/Navbar'
 import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader'
 import i18n from '../../i18n'
+import { ScrollArea } from '@genflowly/component-library'
 import styles from './AgentsPage.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
@@ -192,7 +193,7 @@ export default function AgentsPage() {
                 the full-screen content instead */}
             {isMobile ? <MobileHeader title={t('agentsPage.agentsPage.title')} /> : <Navbar />}
 
-            <div className={styles.content}>
+            <ScrollArea className={styles.content}>
                 <div className={styles.pageHeader}>
                     <div>
                         <h1 className={styles.pageTitle}>{t('agentsPage.agentsPage.title')}</h1>
@@ -244,7 +245,7 @@ export default function AgentsPage() {
                         ))}
                     </div>
                 )}
-            </div>
+            </ScrollArea>
         </div>
     )
 }

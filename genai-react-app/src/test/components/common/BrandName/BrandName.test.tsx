@@ -1,15 +1,19 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import BrandName, {
-    OpenAIBrandName,
-    ClaudeBrandName,
-    GeminiBrandName,
-    UserBrandName,
-    CollapsedOpenAIBrandName,
-    CollapsedClaudeBrandName,
-    CollapsedGeminiBrandName
-} from '../../../../components/common/BrandName/BrandName';
 import '@testing-library/jest-dom';
+
+// Display names come from the provider catalog (single source of truth);
+// the hook is mocked with catalog-shaped names here.
+jest.mock('../../../../hooks/useVendorDisplayNames', () => ({
+    useVendorDisplayNames: () => (vendorId: string) =>
+        ({ OPENAI: 'OpenAI', CLAUDE: 'Anthropic', GEMINI: 'Google Gemini' } as Record<string, string>)[vendorId] ?? vendorId,
+}));
+
+import BrandName, {
+    VendorBrandName,
+    CollapsedVendorBrandName,
+    UserBrandName,
+} from '../../../../components/common/BrandName/BrandName';
 
 describe('BrandName Components', () => {
 
@@ -29,43 +33,38 @@ describe('BrandName Components', () => {
         });
     });
 
-    describe('Specific Brand Variants', () => {
-        test('OpenAIBrandName renders correctly', () => {
-            render(<OpenAIBrandName />);
+    describe('VendorBrandName (catalog-sourced names)', () => {
+        test('renders the catalog display name for a stored vendor id', () => {
+            render(<VendorBrandName vendorId="OPENAI" />);
             expect(screen.getByTestId('brand-name-text')).toHaveTextContent('OpenAI');
         });
 
-        test('ClaudeBrandName renders correctly', () => {
-            render(<ClaudeBrandName />);
-            expect(screen.getByTestId('brand-name-text')).toHaveTextContent('Claude');
-        });
-
-        test('GeminiBrandName renders correctly', () => {
-            render(<GeminiBrandName />);
-            expect(screen.getByTestId('brand-name-text')).toHaveTextContent('Gemini');
+        test('uses the catalog name, not the legacy id spelling', () => {
+            render(<VendorBrandName vendorId="CLAUDE" />);
+            expect(screen.getByTestId('brand-name-text')).toHaveTextContent('Anthropic');
         });
     });
 
-    describe('Collapsed Brand Variants (vendor initials)', () => {
-        test('CollapsedOpenAIBrandName renders the "O" initial', () => {
-            render(<CollapsedOpenAIBrandName />);
+    describe('CollapsedVendorBrandName (vendor initials)', () => {
+        test('renders the display-name initial with the vendor testid', () => {
+            render(<CollapsedVendorBrandName vendorId="OPENAI" />);
             const badge = screen.getByTestId('collapsed-openai-brand');
             expect(badge).toHaveTextContent('O');
             expect(badge).toHaveAttribute('aria-label', 'OpenAI');
         });
 
-        test('CollapsedClaudeBrandName renders the "C" initial', () => {
-            render(<CollapsedClaudeBrandName />);
+        test('derives the initial from the catalog display name', () => {
+            render(<CollapsedVendorBrandName vendorId="CLAUDE" />);
             const badge = screen.getByTestId('collapsed-claude-brand');
-            expect(badge).toHaveTextContent('C');
-            expect(badge).toHaveAttribute('aria-label', 'Claude');
+            expect(badge).toHaveTextContent('A');
+            expect(badge).toHaveAttribute('aria-label', 'Anthropic');
         });
 
-        test('CollapsedGeminiBrandName renders the "G" initial', () => {
-            render(<CollapsedGeminiBrandName />);
-            const badge = screen.getByTestId('collapsed-gemini-brand');
+        test('renders long-tail vendors from their id', () => {
+            render(<CollapsedVendorBrandName vendorId="groq" />);
+            const badge = screen.getByTestId('collapsed-groq-brand');
             expect(badge).toHaveTextContent('G');
-            expect(badge).toHaveAttribute('aria-label', 'Gemini');
+            expect(badge).toHaveAttribute('aria-label', 'groq');
         });
     });
 
@@ -83,10 +82,6 @@ describe('BrandName Components', () => {
         test('renders with default icon when picture is missing', () => {
             render(<UserBrandName name="No Pic User" />);
             expect(screen.getByTestId('user-brand-name-text')).toHaveTextContent('No Pic User');
-            // Should render Icon instead of img tag
-            // queryByRole('img') might find the default icon if it uses img, 
-            // but the conditional logic renders Icon component.
-            // Best verification given current codebase: check text exists and no user-avatar-img style logic
         });
     });
 });

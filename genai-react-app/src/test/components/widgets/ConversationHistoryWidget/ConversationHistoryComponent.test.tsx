@@ -69,9 +69,33 @@ describe('ConversationHistoryComponent', () => {
         mockGetPinnedConversations.mockResolvedValue({ conversations: [] })
     })
 
-    test('renders history header', async () => {
+    test('renders Recent heading once conversations load', async () => {
         render(<ConversationHistoryComponent />)
-        expect(screen.getByText('History')).toBeInTheDocument()
+        await waitFor(() => {
+            expect(screen.getByText('Recent')).toBeInTheDocument()
+        })
+    })
+
+    test('renders Pinned heading above Recent when there are pinned conversations', async () => {
+        mockGetPinnedConversations.mockResolvedValue({
+            conversations: [
+                { conversationId: 'conv-pinned', title: 'Pinned Chat', createdAt: null, updatedAt: null },
+            ],
+        })
+
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByText('Pinned')).toBeInTheDocument()
+        })
+        const pinnedHeading = screen.getByText('Pinned')
+        const recentHeading = screen.getByText('Recent')
+        // Pinned section renders before Recent
+        expect(
+            pinnedHeading.compareDocumentPosition(recentHeading) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
+        // Both headings share the same style
+        expect(pinnedHeading.className).toBe(recentHeading.className)
     })
 
     test('shows skeleton while loading', () => {

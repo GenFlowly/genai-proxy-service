@@ -10,10 +10,11 @@ import {
     diffGraphUpdate,
     toEditorGraph,
     toInstructionOptions,
-    GRAPH_VENDORS,
+    makeGraphVendors,
     makeGetModelsForVendor,
 } from '../lib/agentGraph'
 import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
+import { useVendorDisplayNames } from '../lib/vendorNames'
 
 /** Visual editor for one admin-owned agent graph (request agents etc.). */
 export default function AgentGraphEditorPage() {
@@ -31,6 +32,8 @@ export default function AgentGraphEditorPage() {
         () => makeGetModelsForVendor(getAccessTokenSilently),
         [getAccessTokenSilently]
     )
+    const vendorDisplayName = useVendorDisplayNames()
+    const graphVendors = useMemo(() => makeGraphVendors(vendorDisplayName), [vendorDisplayName])
 
     const refresh = useCallback(async () => {
         if (!graphId) return
@@ -106,7 +109,7 @@ export default function AgentGraphEditorPage() {
                     nodeCatalog={catalog}
                     instructions={instructionOptions}
                     conditionOptions={CONDITION_OPTIONS}
-                    vendors={GRAPH_VENDORS}
+                    vendors={graphVendors}
                     getModelsForVendor={getModelsForVendor}
                     saving={saving}
                     errorMessage={saveError}

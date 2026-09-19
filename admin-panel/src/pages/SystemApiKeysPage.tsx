@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import { VendorApiKeysManager, VendorApiKeyRowData } from '@genflowly/component-library'
-import { AIVendor, VENDOR_LABELS } from '../constants/vendors'
+import { AIVendor } from '../constants/vendors'
+import { useVendorDisplayNames } from '../lib/vendorNames'
 import { AIVendorAPIKeyStatus } from '../models/systemApiKeys.models'
 import {
     deleteSystemApiKey,
@@ -15,6 +16,7 @@ type ModelsState = { models: string[]; loading: boolean }
 
 export default function SystemApiKeysPage() {
     const { getAccessTokenSilently } = useAuth0()
+    const vendorDisplayName = useVendorDisplayNames()
     const [statuses, setStatuses] = useState<AIVendorAPIKeyStatus[]>([])
     const [loading, setLoading] = useState(true)
     const [loadError, setLoadError] = useState<string | null>(null)
@@ -83,7 +85,7 @@ export default function SystemApiKeysPage() {
     }
 
     const handleDeleteKey = async (vendor: string) => {
-        if (!window.confirm(`Remove the system ${VENDOR_LABELS[vendor as AIVendor]} API key?`)) {
+        if (!window.confirm(`Remove the system ${vendorDisplayName(vendor)} API key?`)) {
             return false
         }
         const token = await getAccessTokenSilently()
@@ -103,7 +105,7 @@ export default function SystemApiKeysPage() {
         const status = statuses.find((s) => s.aiVendor === vendor)
         return {
             vendor,
-            label: VENDOR_LABELS[vendor],
+            label: vendorDisplayName(vendor),
             keySet: status?.status === 'API key is valid',
             savedModel: status?.selectedModel ?? null,
             savedPriority: status?.priority ?? null,

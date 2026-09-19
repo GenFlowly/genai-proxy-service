@@ -6,20 +6,10 @@ import { getTextGenerationModels } from '../../../services/getTextGenerationMode
 import { AIVendorModelList } from '../../../models/getTextGenerationModels.models'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import { PillButton } from '@genflowly/component-library'
-import {
-    OpenAIBrandName,
-    ClaudeBrandName,
-    GeminiBrandName,
-} from '../BrandName/BrandName'
+import { VendorBrandName } from '../BrandName/BrandName'
 import styles from './VendorModelSelect.module.scss'
 
 const ALL_VENDORS = Object.values(AIVendor) as AIVendor[]
-
-const BRAND_LABEL: Record<AIVendor, React.ReactNode> = {
-    [AIVendor.OPENAI]: <OpenAIBrandName as="span" />,
-    [AIVendor.CLAUDE]: <ClaudeBrandName as="span" />,
-    [AIVendor.GEMINI]: <GeminiBrandName as="span" />,
-}
 
 export interface VendorModelSelectProps {
     vendor: AIVendor | null
@@ -91,7 +81,7 @@ export default function VendorModelSelect({ vendor, model, onChange }: VendorMod
                     return (
                         <div key={v} className={styles.vendorBlock}>
                             <PillButton
-                                label={BRAND_LABEL[v]}
+                                label={<VendorBrandName vendorId={v} as="span" />}
                                 onClick={() => handleVendorClick(v)}
                                 disabled={!enabled}
                                 variant={active ? 'primary' : 'secondary'}
