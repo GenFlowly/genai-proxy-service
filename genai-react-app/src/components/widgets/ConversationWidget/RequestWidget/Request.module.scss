@@ -26,8 +26,13 @@
         // Positioning context for the absolutely-placed editor wrapper
         position: relative;
 
-        // The one editor size used everywhere on mobile (~3-4 lines)
-        --editor-height: clamp(12rem, 32svh, 16rem);
+        // Bottom strip reserved inside the editor for the floating
+        // attachment/generate buttons (44px tall, 0.75rem inset, 0.5rem gap
+        // above) — text must never render inside it
+        --editor-button-strip: calc(44px + 0.75rem + 0.5rem);
+        // The one editor size used everywhere on mobile: ~3-4 visible lines
+        // PLUS the button strip, so the strip doesn't eat into the text area
+        --editor-height: calc(clamp(12rem, 32svh, 16rem) + var(--editor-button-strip));
         // Height of the on-screen keyboard: the gap between the static page
         // (100svh) and the visual viewport; 0 while the keyboard is closed.
         // (The max() guard: with the keyboard closed and the browser toolbar
@@ -200,8 +205,18 @@
 
     @include respond-to-mobile {
         // Never shrink below two lines of text (2 × 1.6rem line-height) plus
-        // the editor's vertical padding, however small --vvh gets
-        min-height: calc(2 * 1.6rem + 2 * 1.5rem + 4px);
+        // the editor's vertical padding and the button strip, however small
+        // --vvh gets
+        min-height: calc(2 * 1.6rem + 2 * 1.5rem + 4px + var(--editor-button-strip));
+
+        // The floating attachment/generate buttons overlay the editor's
+        // bottom-right corner. End the scrollable text area above them so no
+        // line can be typed or scrolled underneath — the reserved strip shows
+        // only the editor background, and CodeMirror keeps the caret inside
+        // the shortened scrollport.
+        :global(.cm-editor) {
+            padding-bottom: var(--editor-button-strip);
+        }
     }
 }
 
