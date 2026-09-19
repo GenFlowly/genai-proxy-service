@@ -323,9 +323,17 @@ function Response({ blockId, responseMessages, onFollowUp, disabled = false, isL
     const selectionRef = useRef<string[]>([])
     selectionRef.current = getVendorSelectionForBlock(blockId)
 
-    // Auto-select any vendor that appears for the first time in this block
+    // Auto-select any vendor that appears for the first time in this block.
+    // Each vendor is auto-selected at most ONCE (tracked in autoSelectedRef):
+    // this effect re-runs on every stream chunk (availableVendors gets a new
+    // identity), and re-adding anything merely missing from the selection
+    // would instantly undo the user's toggles while a response streams.
+    const autoSelectedRef = useRef<Set<string>>(new Set())
     useEffect(() => {
-        const newVendors = availableVendors.filter(v => !selectionRef.current.includes(v))
+        const newVendors = availableVendors.filter(
+            v => !autoSelectedRef.current.has(v) && !selectionRef.current.includes(v)
+        )
+        availableVendors.forEach(v => autoSelectedRef.current.add(v))
         if (newVendors.length > 0) {
             setVendorSelectionForBlock(blockId, [...selectionRef.current, ...newVendors])
         }
