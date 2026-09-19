@@ -1226,7 +1226,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Web search & tools ops",
+      "title": "Web search",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -1313,19 +1313,11 @@
             "uid": "${DS_PROM}"
           },
           "expr": "sum by (status) (increase(web_search_total{app=~\".*-development\"}[$__rate_interval]))",
-          "legendFormat": "web_search {{status}}",
+          "legendFormat": "{{status}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (tool, status) (increase(tool_execution_total{app=~\".*-development\"}[$__rate_interval]))",
-          "legendFormat": "{{tool}} {{status}}",
-          "refId": "B"
         }
-      ]
+      ],
+      "description": "Tavily web-search calls per interval, by status (ok / error / missing_key)."
     },
     {
       "type": "timeseries",
