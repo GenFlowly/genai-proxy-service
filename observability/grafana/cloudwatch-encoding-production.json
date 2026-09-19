@@ -1653,8 +1653,9 @@
     },
     {
       "type": "row",
-      "title": "Lambda",
+      "title": "Lambda: $function",
       "collapsed": true,
+      "repeat": "function",
       "gridPos": {
         "x": 0,
         "y": 51,
@@ -1664,7 +1665,7 @@
       "panels": [
         {
           "type": "timeseries",
-          "title": "Lambda errors & throttles",
+          "title": "Success & errors",
           "datasource": {
             "type": "cloudwatch",
             "uid": "bfxh1tvnrnu9sf"
@@ -1755,23 +1756,70 @@
               "metricQueryType": 0,
               "metricEditorMode": 0,
               "namespace": "AWS/Lambda",
-              "metricName": "Errors",
+              "metricName": "Invocations",
               "statistic": "Sum",
               "dimensions": {
                 "FunctionName": [
-                  "*"
+                  "$function"
                 ]
               },
               "matchExact": false,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "${PROP('Dim.FunctionName')} errors",
+              "label": "",
+              "id": "i",
+              "alias": "",
+              "hide": true
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/Lambda",
+              "metricName": "Errors",
+              "statistic": "Sum",
+              "dimensions": {
+                "FunctionName": [
+                  "$function"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "errors",
+              "id": "e",
+              "alias": ""
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "namespace": "",
+              "metricName": "",
+              "statistic": "",
+              "dimensions": {},
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "i - e",
+              "label": "success",
               "id": "",
               "alias": ""
             },
             {
-              "refId": "B",
+              "refId": "D",
               "datasource": {
                 "type": "cloudwatch",
                 "uid": "bfxh1tvnrnu9sf"
@@ -1784,22 +1832,23 @@
               "statistic": "Sum",
               "dimensions": {
                 "FunctionName": [
-                  "*"
+                  "$function"
                 ]
               },
               "matchExact": false,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "${PROP('Dim.FunctionName')} throttles",
+              "label": "throttles",
               "id": "",
               "alias": ""
             }
-          ]
+          ],
+          "description": "Successful (invocations - errors), failed and throttled runs. 5-minute buckets."
         },
         {
           "type": "timeseries",
-          "title": "Lambda duration (avg)",
+          "title": "Latency (avg / max)",
           "datasource": {
             "type": "cloudwatch",
             "uid": "bfxh1tvnrnu9sf"
@@ -1894,22 +1943,48 @@
               "statistic": "Average",
               "dimensions": {
                 "FunctionName": [
-                  "*"
+                  "$function"
                 ]
               },
               "matchExact": false,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "${PROP('Dim.FunctionName')}",
+              "label": "avg",
+              "id": "",
+              "alias": ""
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/Lambda",
+              "metricName": "Duration",
+              "statistic": "Maximum",
+              "dimensions": {
+                "FunctionName": [
+                  "$function"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "max",
               "id": "",
               "alias": ""
             }
-          ]
+          ],
+          "description": "Per-run duration."
         },
         {
           "type": "timeseries",
-          "title": "Lambda invocations",
+          "title": "Invocations",
           "datasource": {
             "type": "cloudwatch",
             "uid": "bfxh1tvnrnu9sf"
@@ -2004,18 +2079,131 @@
               "statistic": "Sum",
               "dimensions": {
                 "FunctionName": [
-                  "*"
+                  "$function"
                 ]
               },
               "matchExact": false,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "${PROP('Dim.FunctionName')}",
+              "label": "invocations",
               "id": "",
               "alias": ""
             }
-          ]
+          ],
+          "description": "Runs per 5-minute bucket."
+        },
+        {
+          "type": "timeseries",
+          "title": "Total run time",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 60,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "always"
+              },
+              "unit": "ms"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/Lambda",
+              "metricName": "Duration",
+              "statistic": "Sum",
+              "dimensions": {
+                "FunctionName": [
+                  "$function"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "total run time",
+              "id": "",
+              "alias": ""
+            }
+          ],
+          "description": "Summed execution time per 5-minute bucket."
         }
       ],
       "fieldConfig": {
@@ -2309,5 +2497,41 @@
         "overrides": []
       }
     }
-  ]
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "function",
+        "label": "Lambda",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "bfxh1tvnrnu9sf"
+        },
+        "query": {
+          "queryType": "dimensionValues",
+          "namespace": "AWS/Lambda",
+          "metricName": "Invocations",
+          "dimensionKey": "FunctionName",
+          "dimensionFilters": {},
+          "region": "default",
+          "refId": "CloudWatchVariableQueryEditor-VariableQuery"
+        },
+        "regex": "/^encoding-service-production-/",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  }
 }
