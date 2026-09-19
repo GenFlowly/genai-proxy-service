@@ -433,7 +433,7 @@
       "panels": [
         {
           "type": "timeseries",
-          "title": "Ingestion & chunking ops",
+          "title": "Ingest notes",
           "datasource": {
             "type": "cloudwatch",
             "uid": "afxh14dyp3ldsd"
@@ -535,12 +535,98 @@
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "ingest_notes ${PROP('Dim.status')}",
+              "label": "${PROP('Dim.status')}",
               "id": "",
               "alias": ""
+            }
+          ],
+          "description": "Ingest notes ops by status. 5-minute buckets."
+        },
+        {
+          "type": "timeseries",
+          "title": "Ingest email",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 18,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "always"
+              }
             },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
             {
-              "refId": "B",
+              "refId": "A",
               "datasource": {
                 "type": "cloudwatch",
                 "uid": "afxh14dyp3ldsd"
@@ -560,12 +646,98 @@
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "ingest_email ${PROP('Dim.status')}",
+              "label": "${PROP('Dim.status')}",
               "id": "",
               "alias": ""
+            }
+          ],
+          "description": "Ingest email ops by status. 5-minute buckets."
+        },
+        {
+          "type": "timeseries",
+          "title": "Trigger ingestion",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 26,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "always"
+              }
             },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
             {
-              "refId": "C",
+              "refId": "A",
               "datasource": {
                 "type": "cloudwatch",
                 "uid": "afxh14dyp3ldsd"
@@ -585,12 +757,98 @@
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "trigger ${PROP('Dim.status')}",
+              "label": "${PROP('Dim.status')}",
               "id": "",
               "alias": ""
+            }
+          ],
+          "description": "Trigger ingestion ops by status. 5-minute buckets."
+        },
+        {
+          "type": "timeseries",
+          "title": "Parse & chunk",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "afxh14dyp3ldsd"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 26,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "always"
+              }
             },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
             {
-              "refId": "D",
+              "refId": "A",
               "datasource": {
                 "type": "cloudwatch",
                 "uid": "afxh14dyp3ldsd"
@@ -610,12 +868,12 @@
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "parse_chunk ${PROP('Dim.status')}",
+              "label": "${PROP('Dim.status')}",
               "id": "",
               "alias": ""
             }
           ],
-          "description": "5-minute buckets."
+          "description": "Parse & chunk ops by status. 5-minute buckets."
         },
         {
           "type": "timeseries",
@@ -625,8 +883,8 @@
             "uid": "afxh14dyp3ldsd"
           },
           "gridPos": {
-            "x": 12,
-            "y": 18,
+            "x": 0,
+            "y": 34,
             "w": 12,
             "h": 8
           },
@@ -794,8 +1052,8 @@
             "uid": "afxh14dyp3ldsd"
           },
           "gridPos": {
-            "x": 0,
-            "y": 26,
+            "x": 12,
+            "y": 34,
             "w": 12,
             "h": 8
           },
