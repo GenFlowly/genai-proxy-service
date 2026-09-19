@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
-import { ConversationProvider, useConversation } from '../../context/ConversationContext';
+import { ConversationProvider, useConversation, useConversationUI } from '../../context/ConversationContext';
 import { ToastProvider, useToast } from '../../context/ToastContext';
 import { LayoutProvider } from '../../context/LayoutContext';
 import { AuthProvider } from '../../context/AuthContext';
@@ -91,9 +91,9 @@ const TestConversationUI = () => {
         setActiveBlockId,
         generateResponses, // Expose for testing
         conversationTitle,
-        activeViewportItem,
-        setActiveViewportItem,
     } = useConversation();
+    // Viewport tracking moved to the ConversationUI context (perf split)
+    const { activeViewportItem, setActiveViewportItem } = useConversationUI();
 
     // Auto-add a block if empty for testing
     React.useEffect(() => {

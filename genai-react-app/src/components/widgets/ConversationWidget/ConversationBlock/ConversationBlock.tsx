@@ -1,11 +1,13 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import Response from '../ResponseWidget/Response'
 import Request from '../RequestWidget/Request'
 import { useConversation } from '../../../../context/ConversationContext'
 import styles from './ConversationBlock.module.scss'
 import { useAuth } from '../../../../context/AuthContext'
 
-export default function ConversationBlock({ id, 'data-testid': testId }: { id: string, 'data-testid'?: string }) {
+// Memoized: the block list parent re-renders on unrelated layout/context
+// changes; a block only needs to re-render when its own context reads change
+function ConversationBlock({ id, 'data-testid': testId }: { id: string, 'data-testid'?: string }) {
     const {
         conversationBlockList,
         addNewConversationBlockWithId,
@@ -94,10 +96,9 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
         }
     }, [conversationBlock?.isLoading])
 
-    if (!conversationBlock) return null
-
-    // ✅ Follow-up logic: reuse last empty block or create new one
-    const handleFollowUp = (selectedMessageId: string) => {
+    // ✅ Follow-up logic: reuse last empty block or create new one.
+    // useCallback so Response's memo isn't broken by a fresh handler each render
+    const handleFollowUp = useCallback((selectedMessageId: string) => {
         if (!hasAnyValidApiKey) return
 
         // 📱 The follow-up editor should come up ready to type, keyboard open.
@@ -156,7 +157,9 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
                 focusEditor()
             }, 300)
         }
-    }
+    }, [hasAnyValidApiKey, conversationBlockList, setSelectedResponseForBlock, addNewConversationBlockWithId])
+
+    if (!conversationBlock) return null
 
     const isLastResponseBlock = [...conversationBlockList].reverse().find(b => b.responseMessages.length > 0)?.conversationBlockId === id
 
@@ -180,3 +183,5 @@ export default function ConversationBlock({ id, 'data-testid': testId }: { id: s
         </div>
     )
 }
+
+export default React.memo(ConversationBlock)

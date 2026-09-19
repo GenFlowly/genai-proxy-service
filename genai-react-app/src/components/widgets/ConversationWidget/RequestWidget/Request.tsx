@@ -5,7 +5,7 @@ import { TextEditor } from '@genflowly/component-library'
 import { RectangleButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
 import { Icon } from '@genflowly/component-library'
-import {useConversation} from '../../../../context/ConversationContext'
+import {useConversation, useConversationUI} from '../../../../context/ConversationContext'
 import {useAuth} from '../../../../context/AuthContext'
 import {useToast} from '../../../../context/ToastContext'
 import { TextContainer } from '@genflowly/component-library'
@@ -30,18 +30,20 @@ interface RequestProps {
     blockId: string
 }
 
-export default function Request({
-                                    blockId,
-                                    'data-testid': testId
-                                }: RequestProps & { 'data-testid'?: string }) {
+// Memoized (see export): props are stable, so re-renders come only from its
+// own editing state and the contexts it subscribes to
+function Request({
+                     blockId,
+                     'data-testid': testId
+                 }: RequestProps & { 'data-testid'?: string }) {
     const {t} = useTranslation()
     const {
         conversationBlockList,
         generateResponsesStream,
         getSelectedResponseForBlock,
-        setEditorPrompt,
         setActiveBlockId
     } = useConversation()
+    const { setEditorPrompt } = useConversationUI()
 
     const {
         aiVendorAPIKeyStatusList,
@@ -437,3 +439,5 @@ export default function Request({
         </div>
     )
 }
+
+export default React.memo(Request)

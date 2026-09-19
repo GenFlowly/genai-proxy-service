@@ -154,8 +154,6 @@ export interface IConversationContext {
     conversationId: string
     activeBlockId: string
     setActiveBlockId: (id: string) => void
-    activeViewportItem: { blockId: string, type: 'request' | 'response' } | null
-    setActiveViewportItem: (item: { blockId: string, type: 'request' | 'response' } | null) => void
     systemPrompt: string
     setSystemPrompt: (prompt: string) => void
     addNewConversationBlock: () => void
@@ -180,11 +178,20 @@ export interface IConversationContext {
     selectedInstructionId: string | null
     setSelectedInstructionId: (id: string | null) => void
 
-    editorPrompt: string
-    setEditorPrompt: (prompt: string) => void
-
     conversationTitle: string | null
 
     /** Caller's role on the loaded conversation. Defaults to OWNER for new/unloaded state. */
     conversationRole: 'OWNER' | 'EDIT' | 'VIEW'
+}
+
+/**
+ * Fast-changing UI state kept OUT of IConversationContext so typing
+ * (editorPrompt) and scrolling (activeViewportItem) don't re-render the
+ * whole conversation tree.
+ */
+export interface IConversationUIContext {
+    editorPrompt: string
+    setEditorPrompt: (prompt: string) => void
+    activeViewportItem: { blockId: string, type: 'request' | 'response' } | null
+    setActiveViewportItem: (item: { blockId: string, type: 'request' | 'response' } | null) => void
 }

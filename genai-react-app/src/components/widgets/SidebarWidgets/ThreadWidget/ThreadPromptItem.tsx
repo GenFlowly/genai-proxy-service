@@ -4,7 +4,7 @@ import { Tooltip } from '@genflowly/component-library'
 import styles from './ThreadPromptItem.module.scss'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
-import { useConversation } from '../../../../context/ConversationContext'
+import { useConversationUI } from '../../../../context/ConversationContext'
 
 interface ThreadPromptItemProps {
     conversationBlockId: string
@@ -15,7 +15,7 @@ interface ThreadPromptItemProps {
 
 export default function ThreadPromptItem({ conversationBlockId, prompt, collapsed = false, 'data-testid': testId }: ThreadPromptItemProps) {
     const { t } = useTranslation()
-    const { activeViewportItem } = useConversation()
+    const { activeViewportItem } = useConversationUI()
     
     const handleClick = () => {
         const element = document.querySelector(`[data-block-id="${conversationBlockId}"]`)
