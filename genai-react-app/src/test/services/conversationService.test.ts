@@ -1,7 +1,13 @@
-import { getConversation } from '../../services/conversationService';
+import {
+    getConversation,
+    shareConversation,
+    unshareConversation,
+    getConversationSharedUsers,
+} from '../../services/conversationService';
 import { fetchWithRetry } from '../../utils/apiUtils';
 import { config } from '../../config/env';
 import { AIVendor } from '../../constants/vendors';
+import { endpoints } from '../../config/endpoints';
 
 // Mock dependencies
 jest.mock('../../utils/apiUtils');
@@ -11,7 +17,7 @@ const mockFetchWithRetry = fetchWithRetry as jest.Mock;
 describe('conversationService', () => {
     const mockToken = 'mock-token';
     const mockConversationId = 'conv-123';
-    const mockUrl = `${config.backend.baseUrl}/api/v1/chat/${mockConversationId}`;
+    const mockUrl = `${config.backend.baseUrl}/api/v1/chat?conversationId=${mockConversationId}`;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -264,6 +270,73 @@ describe('conversationService', () => {
         const result = await getConversation(mockToken, mockConversationId);
 
         expect(result?.blocks[0].responseMessages[0].aiVendor).toBe(AIVendor.OPENAI);
+    });
+
+    test('shareConversation posts the share payload', async () => {
+        mockFetchWithRetry.mockResolvedValue({ ok: true });
+
+        await shareConversation(mockToken, mockConversationId, 'cust-9', 'EDIT');
+
+        expect(mockFetchWithRetry).toHaveBeenCalledWith(endpoints.conversationShare, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${mockToken}`,
+            },
+            body: JSON.stringify({
+                conversationId: mockConversationId,
+                targetCustomerId: 'cust-9',
+                role: 'EDIT',
+            }),
+        });
+    });
+
+    test('shareConversation throws on non-ok response', async () => {
+        mockFetchWithRetry.mockResolvedValue({ ok: false, status: 403, statusText: 'Forbidden' });
+
+        await expect(shareConversation(mockToken, mockConversationId, 'cust-9'))
+            .rejects.toThrow('Share Conversation failed: 403 Forbidden');
+    });
+
+    test('unshareConversation deletes with query params', async () => {
+        mockFetchWithRetry.mockResolvedValue({ ok: true });
+
+        await unshareConversation(mockToken, mockConversationId, 'cust-9');
+
+        expect(mockFetchWithRetry).toHaveBeenCalledWith(
+            `${endpoints.conversationShare}?conversationId=${mockConversationId}&targetCustomerId=cust-9`,
+            expect.objectContaining({ method: 'DELETE' })
+        );
+    });
+
+    test('unshareConversation throws on non-ok response', async () => {
+        mockFetchWithRetry.mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' });
+
+        await expect(unshareConversation(mockToken, mockConversationId, 'cust-9'))
+            .rejects.toThrow('Unshare Conversation failed: 404 Not Found');
+    });
+
+    test('getConversationSharedUsers returns the user list', async () => {
+        const users = [{ customerId: 'cust-9', username: 'sam' }];
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue(users),
+        });
+
+        const result = await getConversationSharedUsers(mockToken, mockConversationId);
+
+        expect(mockFetchWithRetry).toHaveBeenCalledWith(
+            endpoints.conversationSharedUsers(mockConversationId),
+            expect.objectContaining({ method: 'GET' })
+        );
+        expect(result).toEqual(users);
+    });
+
+    test('getConversationSharedUsers throws on non-ok response', async () => {
+        mockFetchWithRetry.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+        await expect(getConversationSharedUsers(mockToken, mockConversationId))
+            .rejects.toThrow('Get Conversation Shared Users failed: 500 Internal Server Error');
     });
 });
 // Trigger coverage run
