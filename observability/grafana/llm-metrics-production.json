@@ -48,6 +48,32 @@
             "$__all"
           ]
         }
+      },
+      {
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROM}"
+        },
+        "query": {
+          "query": "label_values(llm_request_total{app=~\".*-production\", vendor=~\"$vendor\"}, model)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
       }
     ]
   },
@@ -286,7 +312,7 @@
       "panels": [
         {
           "type": "timeseries",
-          "title": "Calls by model",
+          "title": "Calls \u2014 $model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -368,7 +394,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (increase(llm_request_total{app=~\".*-production\", vendor=~\"$vendor\"}[$__rate_interval]))",
+              "expr": "sum by (model) (increase(llm_request_total{app=~\".*-production\", vendor=~\"$vendor\", model=~\"$model\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -377,18 +403,21 @@
               "refId": "A"
             }
           ],
-          "description": "LLM calls per interval, by model."
+          "description": "LLM calls per interval.",
+          "repeat": "model",
+          "repeatDirection": "h",
+          "maxPerRow": 2
         },
         {
           "type": "timeseries",
-          "title": "Response latency p95 by model",
+          "title": "Response latency p95 \u2014 $model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
           "gridPos": {
-            "x": 12,
-            "y": 19,
+            "x": 0,
+            "y": 27,
             "w": 12,
             "h": 8
           },
@@ -463,7 +492,7 @@
           },
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le, model) (rate(llm_request_duration_seconds_bucket{app=~\".*-production\", vendor=~\"$vendor\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le, model) (rate(llm_request_duration_seconds_bucket{app=~\".*-production\", vendor=~\"$vendor\", model=~\"$model\"}[$__rate_interval])))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -472,18 +501,21 @@
               "refId": "A"
             }
           ],
-          "description": "p95 time to get a response from the vendor, per model."
+          "description": "p95 time to get a response from the vendor.",
+          "repeat": "model",
+          "repeatDirection": "h",
+          "maxPerRow": 2
         },
         {
           "type": "timeseries",
-          "title": "Generation time by model",
+          "title": "Generation time \u2014 $model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
           "gridPos": {
             "x": 0,
-            "y": 27,
+            "y": 35,
             "w": 12,
             "h": 8
           },
@@ -559,7 +591,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (increase(llm_request_duration_seconds_sum{app=~\".*-production\", vendor=~\"$vendor\"}[$__rate_interval]))",
+              "expr": "sum by (model) (increase(llm_request_duration_seconds_sum{app=~\".*-production\", vendor=~\"$vendor\", model=~\"$model\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -568,113 +600,21 @@
               "refId": "A"
             }
           ],
-          "description": "Seconds spent generating per interval, by model."
+          "description": "Seconds spent generating per interval.",
+          "repeat": "model",
+          "repeatDirection": "h",
+          "maxPerRow": 2
         },
         {
           "type": "timeseries",
-          "title": "Input tokens by model",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 27,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "drawStyle": "line",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "showPoints": "always"
-              }
-            },
-            "overrides": [
-              {
-                "__schemeRef": "status-color-scheme",
-                "matcher": {
-                  "id": "byRegexp",
-                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "green"
-                    }
-                  }
-                ]
-              },
-              {
-                "__schemeRef": "status-color-scheme",
-                "matcher": {
-                  "id": "byRegexp",
-                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "yellow"
-                    }
-                  }
-                ]
-              },
-              {
-                "__schemeRef": "status-color-scheme",
-                "matcher": {
-                  "id": "byRegexp",
-                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "red"
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "targets": [
-            {
-              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-production\", vendor=~\"$vendor\", direction=\"input\"}[$__rate_interval]))",
-              "legendFormat": "{{model}}",
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROM}"
-              },
-              "refId": "A"
-            }
-          ],
-          "description": "Input tokens per interval, by model."
-        },
-        {
-          "type": "timeseries",
-          "title": "Output tokens by model",
+          "title": "Input tokens \u2014 $model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
           "gridPos": {
             "x": 0,
-            "y": 35,
+            "y": 43,
             "w": 12,
             "h": 8
           },
@@ -749,7 +689,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-production\", vendor=~\"$vendor\", direction=\"output\"}[$__rate_interval]))",
+              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-production\", vendor=~\"$vendor\", model=~\"$model\", direction=\"input\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -758,18 +698,21 @@
               "refId": "A"
             }
           ],
-          "description": "Output tokens per interval, by model."
+          "description": "Input tokens per interval.",
+          "repeat": "model",
+          "repeatDirection": "h",
+          "maxPerRow": 2
         },
         {
           "type": "timeseries",
-          "title": "Cache tokens by model",
+          "title": "Output tokens \u2014 $model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
           "gridPos": {
-            "x": 12,
-            "y": 35,
+            "x": 0,
+            "y": 51,
             "w": 12,
             "h": 8
           },
@@ -844,7 +787,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-production\", vendor=~\"$vendor\", direction=~\"cache_read|cache_creation\"}[$__rate_interval]))",
+              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-production\", vendor=~\"$vendor\", model=~\"$model\", direction=\"output\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -853,7 +796,108 @@
               "refId": "A"
             }
           ],
-          "description": "Cache tokens (read + creation) per interval, by model."
+          "description": "Output tokens per interval.",
+          "repeat": "model",
+          "repeatDirection": "h",
+          "maxPerRow": 2
+        },
+        {
+          "type": "timeseries",
+          "title": "Cache tokens \u2014 $model",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 59,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "always"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-production\", vendor=~\"$vendor\", model=~\"$model\", direction=~\"cache_read|cache_creation\"}[$__rate_interval]))",
+              "legendFormat": "{{model}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "refId": "A"
+            }
+          ],
+          "description": "Cache tokens (read + creation) per interval.",
+          "repeat": "model",
+          "repeatDirection": "h",
+          "maxPerRow": 2
         }
       ],
       "fieldConfig": {
