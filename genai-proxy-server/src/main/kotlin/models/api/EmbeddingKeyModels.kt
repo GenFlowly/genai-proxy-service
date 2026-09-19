@@ -32,7 +32,9 @@ data class EmbeddingKeyStatus(
     val vendor: EmbeddingVendor,
     val isAPIKeyValid: Boolean,
     val status: APIKeyStatus,
-    val updateSuccessful: Boolean = false
+    val updateSuccessful: Boolean = false,
+    /** Provider's rejection message when validation fails. */
+    val detail: String? = null
 )
 
 @Serializable

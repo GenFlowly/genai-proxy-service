@@ -151,11 +151,8 @@ class CustomerCredentialsRepository(
         withContext(Dispatchers.IO) {
             getCustomerVendorItems(customerId).mapNotNull { item ->
                 val vendorStr = item[AI_VENDOR_KEY]?.s() ?: return@mapNotNull null
-                val aiVendor = try {
-                    AIVendor.valueOf(vendorStr)
-                } catch (e: Exception) {
-                    return@mapNotNull null
-                }
+                // Skips embedding-only rows (VOYAGE); any other vendor id is valid
+                val aiVendor = AIVendor.fromStoredNameOrNull(vendorStr) ?: return@mapNotNull null
 
                 // Check explicitly stored validation status AND presence of actual key
                 val isStoredValid = item["isAPIKeyValid"]?.bool() ?: false
