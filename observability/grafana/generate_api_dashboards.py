@@ -144,11 +144,15 @@ SERVICES = {
 }
 
 
-def base_panel(title, desc, x, y, w=PANEL_W, h=PANEL_H):
+def base_panel(title, desc, x, y, w=PANEL_W, h=PANEL_H, points=False):
+    # points=True: per-interval counter values plotted as dots against time
+    # (never graph a raw cumulative counter — it just adds up forever)
+    custom = ({"drawStyle": "points", "pointSize": 5, "showPoints": "always"}
+              if points else {"lineWidth": 2, "fillOpacity": 8, "showPoints": "never"})
     return {
         "type": "timeseries", "title": title, "datasource": DS,
         "gridPos": {"x": x, "y": y, "w": w, "h": h},
-        "fieldConfig": {"defaults": {"custom": {"lineWidth": 2, "fillOpacity": 8, "showPoints": "never"}}, "overrides": []},
+        "fieldConfig": {"defaults": {"custom": custom}, "overrides": []},
         "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
         "targets": [], "description": desc,
     }
@@ -157,11 +161,11 @@ def base_panel(title, desc, x, y, w=PANEL_W, h=PANEL_H):
 def api_panel_pair(svc, env, path, y):
     # one API per row: status chart left, latency chart right
     sel = svc["selector"](env, path)
-    p_status = base_panel(path, f"Requests by status for {path} (cumulative counter; resets on deploy/restart).", 0, y)
+    p_status = base_panel(path, f"Requests per interval for {path}, by status.", 0, y, points=True)
     assert CHARTS_PER_ROW == 2, "api dashboards lay out status+latency pairs"
     p_status["targets"] = [{
         "datasource": DS,
-        "expr": f"sum by (status) ({svc['count_metric']}{{{sel}}})",
+        "expr": f"sum by (status) (increase({svc['count_metric']}{{{sel}}}[$__rate_interval]))",
         "legendFormat": "{{status}}", "refId": "A",
     }]
     p_lat = base_panel(f"{path} — latency", f"Request latency percentiles for {path}.", PANEL_W, y)
@@ -227,8 +231,8 @@ def pie_panel(title, desc, expr, legend, x, y):
     }
 
 
-def ts_panel(title, desc, targets, x, y, unit=None):
-    p = base_panel(title, desc, x, y)
+def ts_panel(title, desc, targets, x, y, unit=None, points=False):
+    p = base_panel(title, desc, x, y, points=points)
     if unit:
         p["fieldConfig"]["defaults"]["unit"] = unit
     p["targets"] = [dict(t, datasource=DS, refId=chr(ord("A") + i)) for i, t in enumerate(targets)]
@@ -260,14 +264,14 @@ def build_llm_dashboard(env):
     cost_row = {"type": "row", "title": "Cost", "collapsed": False,
                 "gridPos": {"x": 0, "y": 9, "w": 24, "h": 1}}
     cost_panels = [
-        ts_panel("Total cost per vendor",
-                 "Cumulative LLM spend per vendor (USD; counter resets on deploy/restart).",
-                 [{"expr": f'sum by (vendor) (llm_cost_usd_total{{{app}}})', "legendFormat": "{{vendor}}"}],
-                 0, 10, unit="currencyUSD"),
-        ts_panel("Total cost per vendor-model",
-                 "Cumulative LLM spend per vendor and model (USD; counter resets on deploy/restart).",
-                 [{"expr": f'sum by (vendor, model) (llm_cost_usd_total{{{app}}})', "legendFormat": "{{vendor}} {{model}}"}],
-                 PANEL_W, 10, unit="currencyUSD"),
+        ts_panel("Cost per vendor (USD)",
+                 "LLM spend per interval, by vendor.",
+                 [{"expr": f'sum by (vendor) (increase(llm_cost_usd_total{{{app}}}[$__rate_interval]))', "legendFormat": "{{vendor}}"}],
+                 0, 10, unit="currencyUSD", points=True),
+        ts_panel("Cost per vendor-model (USD)",
+                 "LLM spend per interval, by vendor and model.",
+                 [{"expr": f'sum by (vendor, model) (increase(llm_cost_usd_total{{{app}}}[$__rate_interval]))', "legendFormat": "{{vendor}} {{model}}"}],
+                 PANEL_W, 10, unit="currencyUSD", points=True),
     ]
 
     # Repeated per vendor; inside, each model is a series — fully dynamic.
@@ -276,31 +280,31 @@ def build_llm_dashboard(env):
                   "panels": []}
     vy = 19
     vendor_charts = [
-        ("Total calls by model",
-         "Cumulative LLM calls per model (counter resets on deploy/restart).",
-         [{"expr": f'sum by (model) (llm_request_total{{{v}}})', "legendFormat": "{{model}}"}], None),
+        ("Calls by model",
+         "LLM calls per interval, by model.",
+         [{"expr": f'sum by (model) (increase(llm_request_total{{{v}}}[$__rate_interval]))', "legendFormat": "{{model}}"}], None, True),
         ("Response latency p95 by model",
          "p95 time to get a response from the vendor, per model.",
          [{"expr": f'histogram_quantile(0.95, sum by (le, model) (rate(llm_request_duration_seconds_bucket{{{v}}}[$__rate_interval])))',
-           "legendFormat": "{{model}}"}], "s"),
-        ("Total generation time by model",
-         "Cumulative seconds spent generating, per model (counter resets on deploy/restart).",
-         [{"expr": f'sum by (model) (llm_request_duration_seconds_sum{{{v}}})', "legendFormat": "{{model}}"}], "s"),
-        ("Total input tokens by model",
-         "Cumulative input tokens per model (counter resets on deploy/restart).",
-         [{"expr": f'sum by (model) (llm_tokens_total{{{v}, direction="input"}})', "legendFormat": "{{model}}"}], None),
-        ("Total output tokens by model",
-         "Cumulative output tokens per model (counter resets on deploy/restart).",
-         [{"expr": f'sum by (model) (llm_tokens_total{{{v}, direction="output"}})', "legendFormat": "{{model}}"}], None),
-        ("Total cache tokens by model",
-         "Cumulative cache tokens (read + creation) per model (counter resets on deploy/restart).",
-         [{"expr": f'sum by (model) (llm_tokens_total{{{v}, direction=~"cache_read|cache_creation"}})',
-           "legendFormat": "{{model}}"}], None),
+           "legendFormat": "{{model}}"}], "s", False),
+        ("Generation time by model",
+         "Seconds spent generating per interval, by model.",
+         [{"expr": f'sum by (model) (increase(llm_request_duration_seconds_sum{{{v}}}[$__rate_interval]))', "legendFormat": "{{model}}"}], "s", True),
+        ("Input tokens by model",
+         "Input tokens per interval, by model.",
+         [{"expr": f'sum by (model) (increase(llm_tokens_total{{{v}, direction="input"}}[$__rate_interval]))', "legendFormat": "{{model}}"}], None, True),
+        ("Output tokens by model",
+         "Output tokens per interval, by model.",
+         [{"expr": f'sum by (model) (increase(llm_tokens_total{{{v}, direction="output"}}[$__rate_interval]))', "legendFormat": "{{model}}"}], None, True),
+        ("Cache tokens by model",
+         "Cache tokens (read + creation) per interval, by model.",
+         [{"expr": f'sum by (model) (increase(llm_tokens_total{{{v}, direction=~"cache_read|cache_creation"}}[$__rate_interval]))',
+           "legendFormat": "{{model}}"}], None, True),
     ]
-    for i, (title, desc, targets, unit) in enumerate(vendor_charts):
+    for i, (title, desc, targets, unit, points) in enumerate(vendor_charts):
         x = (i % CHARTS_PER_ROW) * PANEL_W
         y = vy + (i // CHARTS_PER_ROW) * PANEL_H
-        vendor_row["panels"].append(ts_panel(title, desc, targets, x, y, unit=unit))
+        vendor_row["panels"].append(ts_panel(title, desc, targets, x, y, unit=unit, points=points))
 
     return {
         "uid": f"llm-metrics-{env}",
