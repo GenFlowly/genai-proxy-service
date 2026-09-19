@@ -460,6 +460,9 @@
     },
     "settingsPage": {
         "aiSettings": {
+            "addVendorHint": "Vendor",
+            "addVendorLabel": "Add an AI vendor",
+            "addVendorPlaceholder": "Select a vendor to add",
             "apiKeyHint": "API Key",
             "configModelHint": "Model",
             "configModelPlaceholder": "Select a model",
