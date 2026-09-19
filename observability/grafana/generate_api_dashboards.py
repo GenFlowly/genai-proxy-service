@@ -145,9 +145,9 @@ SERVICES = {
 
 
 def base_panel(title, desc, x, y, w=PANEL_W, h=PANEL_H, points=False):
-    # points=True: per-interval counter values plotted as dots against time
+    # points=True: per-interval counter values — dots connected by a line
     # (never graph a raw cumulative counter — it just adds up forever)
-    custom = ({"drawStyle": "points", "pointSize": 5, "showPoints": "always"}
+    custom = ({"drawStyle": "line", "lineWidth": 1, "pointSize": 5, "showPoints": "always"}
               if points else {"lineWidth": 2, "fillOpacity": 8, "showPoints": "never"})
     return {
         "type": "timeseries", "title": title, "datasource": DS,
