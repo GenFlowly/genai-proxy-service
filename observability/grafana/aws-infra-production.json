@@ -46,6 +46,37 @@
             "$__all"
           ]
         }
+      },
+      {
+        "name": "table",
+        "label": "DynamoDB table",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "bfxh1tvnrnu9sf"
+        },
+        "query": {
+          "queryType": "dimensionValues",
+          "namespace": "AWS/DynamoDB",
+          "metricName": "SuccessfulRequestLatency",
+          "dimensionKey": "TableName",
+          "dimensionFilters": {},
+          "region": "default",
+          "refId": "CloudWatchVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
       }
     ]
   },
@@ -895,6 +926,681 @@
         "defaults": {},
         "overrides": []
       }
+    },
+    {
+      "type": "row",
+      "title": "DynamoDB",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 1
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Read requests",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 19,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "SampleCount",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "GetItem",
+                  "BatchGetItem",
+                  "Query",
+                  "Scan",
+                  "TransactGetItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')}",
+              "id": "",
+              "alias": ""
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Write requests",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 19,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "SampleCount",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "PutItem",
+                  "UpdateItem",
+                  "DeleteItem",
+                  "BatchWriteItem",
+                  "TransactWriteItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')}",
+              "id": "",
+              "alias": ""
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Read latency (p50/p90/p95/p99)",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 27,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "ms"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "p50",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "GetItem",
+                  "BatchGetItem",
+                  "Query",
+                  "Scan",
+                  "TransactGetItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')} p50",
+              "id": "",
+              "alias": ""
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "p90",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "GetItem",
+                  "BatchGetItem",
+                  "Query",
+                  "Scan",
+                  "TransactGetItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')} p90",
+              "id": "",
+              "alias": ""
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "p95",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "GetItem",
+                  "BatchGetItem",
+                  "Query",
+                  "Scan",
+                  "TransactGetItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')} p95",
+              "id": "",
+              "alias": ""
+            },
+            {
+              "refId": "D",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "p99",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "GetItem",
+                  "BatchGetItem",
+                  "Query",
+                  "Scan",
+                  "TransactGetItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')} p99",
+              "id": "",
+              "alias": ""
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Write latency (p50/p90/p95/p99)",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 27,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "ms"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "p50",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "PutItem",
+                  "UpdateItem",
+                  "DeleteItem",
+                  "BatchWriteItem",
+                  "TransactWriteItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')} p50",
+              "id": "",
+              "alias": ""
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "p90",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "PutItem",
+                  "UpdateItem",
+                  "DeleteItem",
+                  "BatchWriteItem",
+                  "TransactWriteItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')} p90",
+              "id": "",
+              "alias": ""
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "p95",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "PutItem",
+                  "UpdateItem",
+                  "DeleteItem",
+                  "BatchWriteItem",
+                  "TransactWriteItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')} p95",
+              "id": "",
+              "alias": ""
+            },
+            {
+              "refId": "D",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/DynamoDB",
+              "metricName": "SuccessfulRequestLatency",
+              "statistic": "p99",
+              "dimensions": {
+                "TableName": [
+                  "$table"
+                ],
+                "Operation": [
+                  "PutItem",
+                  "UpdateItem",
+                  "DeleteItem",
+                  "BatchWriteItem",
+                  "TransactWriteItems"
+                ]
+              },
+              "matchExact": false,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.TableName')} ${PROP('Dim.Operation')} p99",
+              "id": "",
+              "alias": ""
+            }
+          ]
+        }
+      ]
     }
   ]
 }
