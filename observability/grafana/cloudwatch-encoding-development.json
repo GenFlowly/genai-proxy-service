@@ -2105,11 +2105,11 @@
                   "$function"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "",
+              "label": "invocations",
               "id": "i",
               "alias": "",
               "hide": true
@@ -2131,7 +2131,7 @@
                   "$function"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
@@ -2177,7 +2177,7 @@
                   "$function"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
@@ -2288,7 +2288,7 @@
                   "$function"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
@@ -2313,7 +2313,7 @@
                   "$function"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
@@ -2424,7 +2424,7 @@
                   "$function"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
@@ -2536,7 +2536,7 @@
                   "$function"
                 ]
               },
-              "matchExact": false,
+              "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
