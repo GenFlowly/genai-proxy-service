@@ -327,6 +327,25 @@ describe('Response Widget Component', () => {
         expect(mockSetVendorSelectionForBlock).toHaveBeenCalledWith('block-1', [AIVendor.OPENAI, AIVendor.CLAUDE]);
     });
 
+    test('streaming re-renders do not undo a vendor the user toggled off', () => {
+        // Both vendors present and selected
+        mockSelection = [AIVendor.OPENAI, AIVendor.CLAUDE];
+        const { rerender } = render(<Response blockId="block-1" responseMessages={mockMessages} />);
+        mockSetVendorSelectionForBlock.mockClear();
+
+        // User toggles CLAUDE off…
+        mockSelection = [AIVendor.OPENAI];
+
+        // …then a stream chunk arrives: fresh message array identities re-run
+        // the auto-select effect. It must not re-add the removed vendor.
+        rerender(<Response blockId="block-1" responseMessages={[
+            { ...mockMessages[0], text: 'Response 1 plus a streamed chunk' },
+            { ...mockMessages[1] }
+        ]} />);
+
+        expect(mockSetVendorSelectionForBlock).not.toHaveBeenCalled();
+    });
+
     test('auto-selects vendors that appear for the first time', () => {
         mockSelection = [];
         render(<Response blockId="block-1" responseMessages={[mockMessages[0]]} />);
