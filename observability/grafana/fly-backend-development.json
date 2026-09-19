@@ -2257,7 +2257,7 @@
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/admin/system-api-keys/{aiVendor}/models",
+          "title": "/api/v1/admin/system-api-keys/models",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -2342,16 +2342,16 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/\\\\{aiVendor\\\\}/models$\"})",
+              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/models$\"})",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /api/v1/admin/system-api-keys/{aiVendor}/models (cumulative counter; resets on deploy/restart)."
+          "description": "Requests by status for /api/v1/admin/system-api-keys/models (cumulative counter; resets on deploy/restart)."
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/admin/system-api-keys/{aiVendor}/models \u2014 latency",
+          "title": "/api/v1/admin/system-api-keys/models \u2014 latency",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -2437,7 +2437,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/\\\\{aiVendor\\\\}/models$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/models$\"}[$__rate_interval])))",
               "legendFormat": "p50",
               "refId": "A"
             },
@@ -2446,7 +2446,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/\\\\{aiVendor\\\\}/models$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/models$\"}[$__rate_interval])))",
               "legendFormat": "p90",
               "refId": "B"
             },
@@ -2455,7 +2455,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/\\\\{aiVendor\\\\}/models$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/models$\"}[$__rate_interval])))",
               "legendFormat": "p95",
               "refId": "C"
             },
@@ -2464,12 +2464,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/\\\\{aiVendor\\\\}/models$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/admin/system-api-keys/models$\"}[$__rate_interval])))",
               "legendFormat": "p99",
               "refId": "D"
             }
           ],
-          "description": "Request latency percentiles for /api/v1/admin/system-api-keys/{aiVendor}/models."
+          "description": "Request latency percentiles for /api/v1/admin/system-api-keys/models."
         },
         {
           "type": "timeseries",
@@ -5065,7 +5065,7 @@
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/attachments/{attachmentId}/url",
+          "title": "/api/v1/attachments/url",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -5150,16 +5150,16 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/\\\\{attachmentId\\\\}/url$\"})",
+              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/url$\"})",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /api/v1/attachments/{attachmentId}/url (cumulative counter; resets on deploy/restart)."
+          "description": "Requests by status for /api/v1/attachments/url (cumulative counter; resets on deploy/restart)."
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/attachments/{attachmentId}/url \u2014 latency",
+          "title": "/api/v1/attachments/url \u2014 latency",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -5245,7 +5245,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/\\\\{attachmentId\\\\}/url$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/url$\"}[$__rate_interval])))",
               "legendFormat": "p50",
               "refId": "A"
             },
@@ -5254,7 +5254,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/\\\\{attachmentId\\\\}/url$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/url$\"}[$__rate_interval])))",
               "legendFormat": "p90",
               "refId": "B"
             },
@@ -5263,7 +5263,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/\\\\{attachmentId\\\\}/url$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/url$\"}[$__rate_interval])))",
               "legendFormat": "p95",
               "refId": "C"
             },
@@ -5272,12 +5272,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/\\\\{attachmentId\\\\}/url$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/attachments/url$\"}[$__rate_interval])))",
               "legendFormat": "p99",
               "refId": "D"
             }
           ],
-          "description": "Request latency percentiles for /api/v1/attachments/{attachmentId}/url."
+          "description": "Request latency percentiles for /api/v1/attachments/url."
         },
         {
           "type": "timeseries",
@@ -6145,7 +6145,7 @@
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/conversation/{conversationId}/shared",
+          "title": "/api/v1/conversation/shared",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -6230,16 +6230,16 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/shared$\"})",
+              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/shared$\"})",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /api/v1/conversation/{conversationId}/shared (cumulative counter; resets on deploy/restart)."
+          "description": "Requests by status for /api/v1/conversation/shared (cumulative counter; resets on deploy/restart)."
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/conversation/{conversationId}/shared \u2014 latency",
+          "title": "/api/v1/conversation/shared \u2014 latency",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -6325,7 +6325,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/shared$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/shared$\"}[$__rate_interval])))",
               "legendFormat": "p50",
               "refId": "A"
             },
@@ -6334,7 +6334,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/shared$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/shared$\"}[$__rate_interval])))",
               "legendFormat": "p90",
               "refId": "B"
             },
@@ -6343,7 +6343,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/shared$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/shared$\"}[$__rate_interval])))",
               "legendFormat": "p95",
               "refId": "C"
             },
@@ -6352,12 +6352,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/shared$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/shared$\"}[$__rate_interval])))",
               "legendFormat": "p99",
               "refId": "D"
             }
           ],
-          "description": "Request latency percentiles for /api/v1/conversation/{conversationId}/shared."
+          "description": "Request latency percentiles for /api/v1/conversation/shared."
         },
         {
           "type": "timeseries",
@@ -7009,7 +7009,7 @@
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/conversation/{conversationId}/unarchive",
+          "title": "/api/v1/conversation/unarchive",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -7094,16 +7094,16 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/unarchive$\"})",
+              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/unarchive$\"})",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /api/v1/conversation/{conversationId}/unarchive (cumulative counter; resets on deploy/restart)."
+          "description": "Requests by status for /api/v1/conversation/unarchive (cumulative counter; resets on deploy/restart)."
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/conversation/{conversationId}/unarchive \u2014 latency",
+          "title": "/api/v1/conversation/unarchive \u2014 latency",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -7189,7 +7189,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/unarchive$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/unarchive$\"}[$__rate_interval])))",
               "legendFormat": "p50",
               "refId": "A"
             },
@@ -7198,7 +7198,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/unarchive$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/unarchive$\"}[$__rate_interval])))",
               "legendFormat": "p90",
               "refId": "B"
             },
@@ -7207,7 +7207,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/unarchive$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/unarchive$\"}[$__rate_interval])))",
               "legendFormat": "p95",
               "refId": "C"
             },
@@ -7216,12 +7216,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/\\\\{conversationId\\\\}/unarchive$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/conversation/unarchive$\"}[$__rate_interval])))",
               "legendFormat": "p99",
               "refId": "D"
             }
           ],
-          "description": "Request latency percentiles for /api/v1/conversation/{conversationId}/unarchive."
+          "description": "Request latency percentiles for /api/v1/conversation/unarchive."
         },
         {
           "type": "timeseries",
@@ -10681,7 +10681,7 @@
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/generations/{responseMessageId}/cancel",
+          "title": "/api/v1/generations/cancel",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -10766,16 +10766,16 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/\\\\{responseMessageId\\\\}/cancel$\"})",
+              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/cancel$\"})",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /api/v1/generations/{responseMessageId}/cancel (cumulative counter; resets on deploy/restart)."
+          "description": "Requests by status for /api/v1/generations/cancel (cumulative counter; resets on deploy/restart)."
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/generations/{responseMessageId}/cancel \u2014 latency",
+          "title": "/api/v1/generations/cancel \u2014 latency",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -10861,7 +10861,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/\\\\{responseMessageId\\\\}/cancel$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/cancel$\"}[$__rate_interval])))",
               "legendFormat": "p50",
               "refId": "A"
             },
@@ -10870,7 +10870,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/\\\\{responseMessageId\\\\}/cancel$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/cancel$\"}[$__rate_interval])))",
               "legendFormat": "p90",
               "refId": "B"
             },
@@ -10879,7 +10879,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/\\\\{responseMessageId\\\\}/cancel$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/cancel$\"}[$__rate_interval])))",
               "legendFormat": "p95",
               "refId": "C"
             },
@@ -10888,12 +10888,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/\\\\{responseMessageId\\\\}/cancel$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/generations/cancel$\"}[$__rate_interval])))",
               "legendFormat": "p99",
               "refId": "D"
             }
           ],
-          "description": "Request latency percentiles for /api/v1/generations/{responseMessageId}/cancel."
+          "description": "Request latency percentiles for /api/v1/generations/cancel."
         },
         {
           "type": "timeseries",
@@ -13057,7 +13057,7 @@
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/instruction/{instructionId}/shared",
+          "title": "/api/v1/instruction/shared",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -13142,16 +13142,16 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/shared$\"})",
+              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/shared$\"})",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /api/v1/instruction/{instructionId}/shared (cumulative counter; resets on deploy/restart)."
+          "description": "Requests by status for /api/v1/instruction/shared (cumulative counter; resets on deploy/restart)."
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/instruction/{instructionId}/shared \u2014 latency",
+          "title": "/api/v1/instruction/shared \u2014 latency",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -13237,7 +13237,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/shared$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/shared$\"}[$__rate_interval])))",
               "legendFormat": "p50",
               "refId": "A"
             },
@@ -13246,7 +13246,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/shared$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/shared$\"}[$__rate_interval])))",
               "legendFormat": "p90",
               "refId": "B"
             },
@@ -13255,7 +13255,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/shared$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/shared$\"}[$__rate_interval])))",
               "legendFormat": "p95",
               "refId": "C"
             },
@@ -13264,16 +13264,16 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/shared$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/shared$\"}[$__rate_interval])))",
               "legendFormat": "p99",
               "refId": "D"
             }
           ],
-          "description": "Request latency percentiles for /api/v1/instruction/{instructionId}/shared."
+          "description": "Request latency percentiles for /api/v1/instruction/shared."
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/instruction/{instructionId}/{version}",
+          "title": "/api/v1/instruction/version",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -13358,16 +13358,16 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/\\\\{version\\\\}$\"})",
+              "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/version$\"})",
               "legendFormat": "{{status}}",
               "refId": "A"
             }
           ],
-          "description": "Requests by status for /api/v1/instruction/{instructionId}/{version} (cumulative counter; resets on deploy/restart)."
+          "description": "Requests by status for /api/v1/instruction/version (cumulative counter; resets on deploy/restart)."
         },
         {
           "type": "timeseries",
-          "title": "/api/v1/instruction/{instructionId}/{version} \u2014 latency",
+          "title": "/api/v1/instruction/version \u2014 latency",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -13453,7 +13453,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/\\\\{version\\\\}$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/version$\"}[$__rate_interval])))",
               "legendFormat": "p50",
               "refId": "A"
             },
@@ -13462,7 +13462,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/\\\\{version\\\\}$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/version$\"}[$__rate_interval])))",
               "legendFormat": "p90",
               "refId": "B"
             },
@@ -13471,7 +13471,7 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/\\\\{version\\\\}$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/version$\"}[$__rate_interval])))",
               "legendFormat": "p95",
               "refId": "C"
             },
@@ -13480,12 +13480,12 @@
                 "type": "prometheus",
                 "uid": "${DS_PROM}"
               },
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/\\\\{instructionId\\\\}/\\\\{version\\\\}$\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(ktor_http_server_requests_seconds_bucket{app=\"genai-proxy-server-development\", route=~\".*/api/v1/instruction/version$\"}[$__rate_interval])))",
               "legendFormat": "p99",
               "refId": "D"
             }
           ],
-          "description": "Request latency percentiles for /api/v1/instruction/{instructionId}/{version}."
+          "description": "Request latency percentiles for /api/v1/instruction/version."
         },
         {
           "type": "timeseries",

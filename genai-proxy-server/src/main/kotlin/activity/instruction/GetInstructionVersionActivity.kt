@@ -20,15 +20,17 @@ fun Route.registerGetInstructionVersionRoutes(
     customerProfileService: CustomerProfileService
 ) {
     authenticate("auth0", "apiKey") {
-        get("${Routes.GET_CUSTOMER_INSTRUCTION_VERSION}/{instructionId}/{version}", {
+        get(Routes.GET_CUSTOMER_INSTRUCTION_VERSION, {
             tags("Instructions")
             summary = "Get a specific version of an instruction"
             request {
-                pathParameter<String>("instructionId") {
+                queryParameter<String>("instructionId") {
                     description = "Instruction to fetch"
+                    required = true
                 }
-                pathParameter<Int>("version") {
+                queryParameter<Int>("version") {
                     description = "Version number to fetch"
+                    required = true
                 }
             }
             response {
@@ -53,8 +55,8 @@ fun Route.registerGetInstructionVersionRoutes(
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 
-                val instructionId = call.parameters["instructionId"]
-                val versionStr = call.parameters["version"]
+                val instructionId = call.request.queryParameters["instructionId"]
+                val versionStr = call.request.queryParameters["version"]
                 val version = versionStr?.toIntOrNull()
 
                 if (instructionId == null || version == null) {

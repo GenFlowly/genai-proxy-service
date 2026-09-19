@@ -77,7 +77,7 @@ object Routes {
 
     const val GENERATE_TEXT = "$API_V1/generate-text"
     const val GENERATE_TEXT_STREAM = "$API_V1/generate-text-stream"
-    const val CANCEL_GENERATION = "$API_V1/generations/{responseMessageId}/cancel"
+    const val CANCEL_GENERATION = "$API_V1/generations/cancel"
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val STORE_VENDOR_CONFIG = "$API_V1/store-vendor-config"
     const val EMBEDDING_KEYS = "$API_V1/embedding-keys"
@@ -94,19 +94,19 @@ object Routes {
     const val GET_CONVERSATION = "$API_V1/chat"
     const val CREATE_INSTRUCTION = "$API_V1/instruction"
     const val CREATE_INSTRUCTION_SHARE = "$API_V1/instruction/share"
-    const val GET_INSTRUCTION_SHARED_USERS = "$API_V1/instruction/{instructionId}/shared"
+    const val GET_INSTRUCTION_SHARED_USERS = "$API_V1/instruction/shared"
     const val DELETE_INSTRUCTION = "$API_V1/instruction/{instructionId}"
     const val GET_CUSTOMER_INSTRUCTIONS = "$API_V1/instructions"
     const val SEARCH_INSTRUCTIONS = "$API_V1/instructions/search"
     const val GET_RECENT_INSTRUCTIONS = "$API_V1/instructions/recent"
-    const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction"
+    const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction/version"
     const val CREATE_CONVERSATION_TITLE = "$API_V1/conversation/title"
     const val CREATE_CONVERSATION_SHARE = "$API_V1/conversation/share"
-    const val GET_CONVERSATION_SHARED_USERS = "$API_V1/conversation/{conversationId}/shared"
+    const val GET_CONVERSATION_SHARED_USERS = "$API_V1/conversation/shared"
     const val GET_AI_USAGE = "$API_V1/message/usage"
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
     const val DELETE_CONVERSATION = "$API_V1/conversation/{conversationId}"
-    const val UNARCHIVE_CONVERSATION = "$API_V1/conversation/{conversationId}/unarchive"
+    const val UNARCHIVE_CONVERSATION = "$API_V1/conversation/unarchive"
     // Flat paths with ?conversationId= query params — path-embedded ids fragment
     // the per-route metrics (development.md "API metrics & dashboards").
     const val PIN_CONVERSATION = "$API_V1/conversation/pin"
@@ -135,7 +135,7 @@ object Routes {
     const val ADMIN_SYSTEM_API_KEYS = "$API_V1/admin/system-api-keys"
     const val ADMIN_SYSTEM_API_KEY_CONFIG = "$API_V1/admin/system-api-keys/config"
     const val ADMIN_SYSTEM_API_KEY = "$API_V1/admin/system-api-keys/{aiVendor}"
-    const val ADMIN_SYSTEM_API_KEY_MODELS = "$API_V1/admin/system-api-keys/{aiVendor}/models"
+    const val ADMIN_SYSTEM_API_KEY_MODELS = "$API_V1/admin/system-api-keys/models"
     const val ADMIN_MODEL_CATALOG_REFRESH = "$API_V1/admin/model-catalog/refresh"
 
     const val ADMIN_REQUEST_AGENT_MAP = "$API_V1/admin/request-agent-map"
@@ -150,7 +150,7 @@ object Routes {
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
 
     const val CREATE_ATTACHMENT = "$API_V1/attachments"
-    const val GET_ATTACHMENT_URL = "$API_V1/attachments/{attachmentId}/url"
+    const val GET_ATTACHMENT_URL = "$API_V1/attachments/url"
 
     const val GET_MEMORIES = "$API_V1/memories"
     const val DELETE_MEMORY = "$API_V1/memories/{memoryId}"

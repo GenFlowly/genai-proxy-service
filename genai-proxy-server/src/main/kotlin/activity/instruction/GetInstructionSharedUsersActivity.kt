@@ -24,8 +24,9 @@ fun Route.registerGetInstructionSharedUsersRoutes(
             tags("Instructions")
             summary = "List users an instruction is shared with"
             request {
-                pathParameter<String>("instructionId") {
+                queryParameter<String>("instructionId") {
                     description = "Instruction to inspect"
+                    required = true
                 }
             }
             response {
@@ -49,7 +50,7 @@ fun Route.registerGetInstructionSharedUsersRoutes(
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
-                val instructionId = call.parameters["instructionId"]
+                val instructionId = call.request.queryParameters["instructionId"]
                     ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing instructionId"))
 
                 val profiles = instructionService.getSharedUsersForInstruction(customerId, instructionId)
