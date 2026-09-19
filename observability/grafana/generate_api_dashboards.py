@@ -239,6 +239,24 @@ def ts_panel(title, desc, targets, x, y, unit=None, points=False):
     return p
 
 
+def stat_panel(title, desc, expr, legend, x, y, unit=None):
+    p = {
+        "type": "stat", "title": title, "datasource": DS,
+        "gridPos": {"x": x, "y": y, "w": PANEL_W, "h": PANEL_H},
+        "fieldConfig": {"defaults": {"decimals": 2}, "overrides": []},
+        "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": False},
+            "textMode": "value_and_name",
+            "colorMode": "value",
+        },
+        "targets": [{"datasource": DS, "expr": expr, "legendFormat": legend, "instant": True, "refId": "A"}],
+        "description": desc,
+    }
+    if unit:
+        p["fieldConfig"]["defaults"]["unit"] = unit
+    return p
+
+
 def build_llm_dashboard(env):
     """LLM Metrics dashboard. Vendors and models are runtime data (the model
     catalog is dynamic), so nothing is enumerated here: per-vendor grouping
@@ -264,14 +282,14 @@ def build_llm_dashboard(env):
     cost_row = {"type": "row", "title": "Cost", "collapsed": False,
                 "gridPos": {"x": 0, "y": 9, "w": 24, "h": 1}}
     cost_panels = [
-        ts_panel("Cost per vendor (USD)",
-                 "LLM spend per interval, by vendor.",
-                 [{"expr": f'sum by (vendor) (increase(llm_cost_usd_total{{{app}}}[$__rate_interval]))', "legendFormat": "{{vendor}}"}],
-                 0, 10, unit="currencyUSD", points=True),
-        ts_panel("Cost per vendor-model (USD)",
-                 "LLM spend per interval, by vendor and model.",
-                 [{"expr": f'sum by (vendor, model) (increase(llm_cost_usd_total{{{app}}}[$__rate_interval]))', "legendFormat": "{{vendor}} {{model}}"}],
-                 PANEL_W, 10, unit="currencyUSD", points=True),
+        stat_panel("Total cost per vendor (USD)",
+                   "Total LLM spend per vendor over the dashboard time range.",
+                   f'sum by (vendor) (increase(llm_cost_usd_total{{{app}}}[$__range]))',
+                   "{{vendor}}", 0, 10, unit="currencyUSD"),
+        stat_panel("Total cost per vendor-model (USD)",
+                   "Total LLM spend per vendor and model over the dashboard time range.",
+                   f'sum by (vendor, model) (increase(llm_cost_usd_total{{{app}}}[$__range]))',
+                   "{{vendor}} {{model}}", PANEL_W, 10, unit="currencyUSD"),
     ]
 
     # Repeated per vendor; inside, each model is a series — fully dynamic.
