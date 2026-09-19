@@ -28,6 +28,11 @@ REPO = HERE.parent.parent
 DS = {"type": "prometheus", "uid": "${DS_PROM}"}
 QUANTILES = [("p50", 0.5), ("p90", 0.9), ("p95", 0.95), ("p99", 0.99)]
 
+# Global layout rule: 2 charts per row on every generated dashboard.
+CHARTS_PER_ROW = 2
+PANEL_W = 24 // CHARTS_PER_ROW
+PANEL_H = 8
+
 # Subresource grouping: first path segment (after /api/v1 for the proxy), with
 # aliases folding related segments into one group. Unlisted segments group
 # under their own name.
@@ -139,7 +144,7 @@ SERVICES = {
 }
 
 
-def base_panel(title, desc, x, y, w=12, h=8):
+def base_panel(title, desc, x, y, w=PANEL_W, h=PANEL_H):
     return {
         "type": "timeseries", "title": title, "datasource": DS,
         "gridPos": {"x": x, "y": y, "w": w, "h": h},
@@ -153,12 +158,13 @@ def api_panel_pair(svc, env, path, y):
     # one API per row: status chart left, latency chart right
     sel = svc["selector"](env, path)
     p_status = base_panel(path, f"Requests by status for {path} (cumulative counter; resets on deploy/restart).", 0, y)
+    assert CHARTS_PER_ROW == 2, "api dashboards lay out status+latency pairs"
     p_status["targets"] = [{
         "datasource": DS,
         "expr": f"sum by (status) ({svc['count_metric']}{{{sel}}})",
         "legendFormat": "{{status}}", "refId": "A",
     }]
-    p_lat = base_panel(f"{path} — latency", f"Request latency percentiles for {path}.", 12, y)
+    p_lat = base_panel(f"{path} — latency", f"Request latency percentiles for {path}.", PANEL_W, y)
     p_lat["fieldConfig"]["defaults"]["unit"] = "s"
     p_lat["targets"] = [{
         "datasource": DS,
@@ -181,7 +187,7 @@ def build_dashboard(svc_key, svc, env, paths):
         inner_y = y + 1
         for path in sorted(groups[group]):
             row["panels"] += api_panel_pair(svc, env, path, inner_y)
-            inner_y += 8
+            inner_y += PANEL_H
         panels.append(row)
         y = inner_y
 
@@ -202,6 +208,134 @@ def build_dashboard(svc_key, svc, env, paths):
             "hide": 0,
         }]},
         "panels": panels,
+    }
+
+
+def pie_panel(title, desc, expr, legend, x, y):
+    return {
+        "type": "piechart", "title": title, "datasource": DS,
+        "gridPos": {"x": x, "y": y, "w": PANEL_W, "h": PANEL_H},
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "options": {
+            "pieType": "pie",
+            "reduceOptions": {"calcs": ["lastNotNull"], "values": False},
+            "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]},
+            "tooltip": {"mode": "single"},
+        },
+        "targets": [{"datasource": DS, "expr": expr, "legendFormat": legend, "instant": True, "refId": "A"}],
+        "description": desc,
+    }
+
+
+def ts_panel(title, desc, targets, x, y, unit=None):
+    p = base_panel(title, desc, x, y)
+    if unit:
+        p["fieldConfig"]["defaults"]["unit"] = unit
+    p["targets"] = [dict(t, datasource=DS, refId=chr(ord("A") + i)) for i, t in enumerate(targets)]
+    return p
+
+
+def build_llm_dashboard(env):
+    """LLM Metrics dashboard. Vendors and models are runtime data (the model
+    catalog is dynamic), so nothing is enumerated here: per-vendor grouping
+    comes from a Grafana row repeated over the $vendor variable, and models
+    appear as series via sum by (model). New vendors/models show up on the
+    dashboard automatically."""
+    app = f'app=~".*-{env}"'
+    v = f'{app}, vendor=~"$vendor"'
+
+    overview = {"type": "row", "title": "Overview", "collapsed": False,
+                "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1}}
+    pies = [
+        pie_panel("Vendor usage distribution",
+                  "Share of LLM calls per vendor over the dashboard time range.",
+                  f'sum by (vendor) (increase(llm_request_total{{{app}}}[$__range]))',
+                  "{{vendor}}", 0, 1),
+        pie_panel("Vendor-model usage distribution",
+                  "Share of LLM calls per vendor and model over the dashboard time range.",
+                  f'sum by (vendor, model) (increase(llm_request_total{{{app}}}[$__range]))',
+                  "{{vendor}} {{model}}", PANEL_W, 1),
+    ]
+
+    cost_row = {"type": "row", "title": "Cost", "collapsed": False,
+                "gridPos": {"x": 0, "y": 9, "w": 24, "h": 1}}
+    cost_panels = [
+        ts_panel("Total cost per vendor",
+                 "Cumulative LLM spend per vendor (USD; counter resets on deploy/restart).",
+                 [{"expr": f'sum by (vendor) (llm_cost_usd_total{{{app}}})', "legendFormat": "{{vendor}}"}],
+                 0, 10, unit="currencyUSD"),
+        ts_panel("Total cost per vendor-model",
+                 "Cumulative LLM spend per vendor and model (USD; counter resets on deploy/restart).",
+                 [{"expr": f'sum by (vendor, model) (llm_cost_usd_total{{{app}}})', "legendFormat": "{{vendor}} {{model}}"}],
+                 PANEL_W, 10, unit="currencyUSD"),
+    ]
+
+    # Repeated per vendor; inside, each model is a series — fully dynamic.
+    vendor_row = {"type": "row", "title": "Vendor: $vendor", "collapsed": True,
+                  "repeat": "vendor", "gridPos": {"x": 0, "y": 18, "w": 24, "h": 1},
+                  "panels": []}
+    vy = 19
+    vendor_charts = [
+        ("Total calls by model",
+         "Cumulative LLM calls per model (counter resets on deploy/restart).",
+         [{"expr": f'sum by (model) (llm_request_total{{{v}}})', "legendFormat": "{{model}}"}], None),
+        ("Response latency p95 by model",
+         "p95 time to get a response from the vendor, per model.",
+         [{"expr": f'histogram_quantile(0.95, sum by (le, model) (rate(llm_request_duration_seconds_bucket{{{v}}}[$__rate_interval])))',
+           "legendFormat": "{{model}}"}], "s"),
+        ("Total generation time by model",
+         "Cumulative seconds spent generating, per model (counter resets on deploy/restart).",
+         [{"expr": f'sum by (model) (llm_request_duration_seconds_sum{{{v}}})', "legendFormat": "{{model}}"}], "s"),
+        ("Total input tokens by model",
+         "Cumulative input tokens per model (counter resets on deploy/restart).",
+         [{"expr": f'sum by (model) (llm_tokens_total{{{v}, direction="input"}})', "legendFormat": "{{model}}"}], None),
+        ("Total output tokens by model",
+         "Cumulative output tokens per model (counter resets on deploy/restart).",
+         [{"expr": f'sum by (model) (llm_tokens_total{{{v}, direction="output"}})', "legendFormat": "{{model}}"}], None),
+        ("Total cache tokens by model",
+         "Cumulative cache tokens (read + creation) per model (counter resets on deploy/restart).",
+         [{"expr": f'sum by (model) (llm_tokens_total{{{v}, direction=~"cache_read|cache_creation"}})',
+           "legendFormat": "{{model}}"}], None),
+    ]
+    for i, (title, desc, targets, unit) in enumerate(vendor_charts):
+        x = (i % CHARTS_PER_ROW) * PANEL_W
+        y = vy + (i // CHARTS_PER_ROW) * PANEL_H
+        vendor_row["panels"].append(ts_panel(title, desc, targets, x, y, unit=unit))
+
+    return {
+        "uid": f"llm-metrics-{env}",
+        "title": f"LLM Metrics ({env.capitalize()})",
+        "tags": ["genflowly", "observability", env],
+        "timezone": "browser",
+        "schemaVersion": 39,
+        "refresh": "1m",
+        "time": {"from": "now-6h", "to": "now"},
+        "templating": {"list": [
+            {
+                "name": "DS_PROM",
+                "label": "Prometheus datasource",
+                "type": "datasource",
+                "query": "prometheus",
+                "current": {},
+                "hide": 0,
+            },
+            {
+                "name": "vendor",
+                "label": "Vendor",
+                "type": "query",
+                "datasource": DS,
+                "query": {
+                    "query": f'label_values(llm_request_total{{app=~".*-{env}"}}, vendor)',
+                    "refId": "PrometheusVariableQueryEditor-VariableQuery",
+                },
+                "refresh": 2,
+                "includeAll": True,
+                "multi": True,
+                "sort": 1,
+                "current": {"selected": True, "text": ["All"], "value": ["$__all"]},
+            },
+        ]},
+        "panels": [overview, *pies, cost_row, *cost_panels, vendor_row],
     }
 
 
@@ -235,6 +369,22 @@ def main():
             n_panels = sum(len(r["panels"]) for r in dash["panels"])
             print(f"{fname.name}: {len(dash['panels'])} groups, {n_panels} panels")
             remove_backend_row(env, svc["legacy_backend_row"])
+    for env in ("development", "production"):
+        dash = build_llm_dashboard(env)
+        fname = HERE / f"llm-metrics-{env}.json"
+        fname.write_text(json.dumps(dash, indent=2) + "\n")
+        print(f"{fname.name}: written")
+        remove_backend_row(env, "LLM")
+        remove_backend_row(env, "Model: $model")
+        # drop the vendor/model variables the removed LLM rows used
+        fly = HERE / f"fly-backend-{env}.json"
+        d = json.loads(fly.read_text())
+        tvars = d.get("templating", {}).get("list", [])
+        kept = [t for t in tvars if t["name"] not in ("vendor", "model")]
+        if len(kept) != len(tvars):
+            d["templating"]["list"] = kept
+            fly.write_text(json.dumps(d, indent=2) + "\n")
+            print(f"{fly.name}: removed unused vendor/model variables")
     apply_color_scheme.main()
 
 
