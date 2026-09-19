@@ -9,10 +9,12 @@ import DefaultGraphPage from './pages/DefaultGraphPage'
 import AgentGraphEditorPage from './pages/AgentGraphEditorPage'
 import RequestAgentsPage from './pages/RequestAgentsPage'
 import NodePresetsPage from './pages/NodePresetsPage'
+import VendorAllowlistPage from './pages/VendorAllowlistPage'
 import { onboardCustomer } from './services/onboardService'
 
 const NAV_ITEMS: { path: string; label: string }[] = [
     { path: '/system-api-keys', label: 'System AI Vendor API Keys' },
+    { path: '/vendor-allowlist', label: 'Allowlist AI Vendors' },
     { path: '/instructions', label: 'Instructions' },
     { path: '/default-agents', label: 'Default Agents' },
     { path: '/mappings', label: 'Default Actions Mapping' },
@@ -123,6 +125,7 @@ export default function App() {
                     )}
                     <Routes>
                         <Route path="/system-api-keys" element={<SystemApiKeysPage />} />
+                        <Route path="/vendor-allowlist" element={<VendorAllowlistPage />} />
                         <Route path="/instructions" element={<InstructionsPage />} />
                         <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
                         <Route path="/default-agents" element={<DefaultAgentsPage />} />
