@@ -220,15 +220,30 @@ Every proxy API automatically emits success/failure and latency metrics — the 
 
 **Route naming convention: resource ids go in query parameters, never in the path.** A path-embedded id gives every request its own metric identity and fragments the per-API dashboards (`/api/v1/chat/84b6da46-...` instead of one `/api/v1/chat` series).
 
-```
-✅ GET  /api/v1/chat?conversationId=xx
-✅ POST /api/v1/conversation/pin?conversationId=xx
-✅ GET  /api/v1/conversation/learned-facts?conversationId=xx&messageId=xx
-❌ GET  /api/v1/chat/{conversationId}
-❌ POST /api/v1/conversation/{conversationId}/pin
-```
+#### Creating a new API endpoint
 
-In the activity, read the id with `call.request.queryParameters["conversationId"]` and document it with `queryParameter<String>(...) { required = true }` in the OpenAPI block. (Older routes still using `{param}` path segments predate this convention — don't add new ones.)
+1. **Flat, static path** under `/api/v1/`, named `resource` or `resource/action` (e.g. `/api/v1/conversation/pin`). Every segment is a fixed word — the full path is the API's identity in metrics, logs and dashboards.
+2. **Identifiers go in query parameters** (`?conversationId=xx&messageId=xx`) for GET/POST-action routes, or in the JSON body for create/update payloads. Read them with `call.request.queryParameters["conversationId"]`, respond 400 when a required one is missing.
+3. **Document query params** in the OpenAPI block with `queryParameter<String>(...) { required = true }` (see the checklist above for the full block).
+4. Add the path constant to the `Routes` object in `Routing.kt` — don't build paths inline or append segments to a constant at the call site.
+5. Frontend: URL-encode every query value (`encodeURIComponent`) in `endpoints.ts`.
+
+**Antipattern — do NOT create routes like these.** Each of the following used to exist and fragmented the dashboards into one chart per UUID before being renamed to the query-param form next to it:
+
+| ❌ Antipattern (path-embedded ids) | ✅ Replaced by |
+|---|---|
+| `/api/v1/chat/{conversationId}` | `/api/v1/chat?conversationId=` |
+| `/api/v1/conversation/{conversationId}/pin` (+ `/unpin`) | `/api/v1/conversation/pin?conversationId=` |
+| `/api/v1/conversation/{conversationId}/messages/{messageId}/learned-facts` | `/api/v1/conversation/learned-facts?conversationId=&messageId=` |
+| `/api/v1/conversation/{conversationId}/shared` | `/api/v1/conversation/shared?conversationId=` |
+| `/api/v1/conversation/{conversationId}/unarchive` | `/api/v1/conversation/unarchive?conversationId=` |
+| `/api/v1/generations/{responseMessageId}/cancel` | `/api/v1/generations/cancel?responseMessageId=` |
+| `/api/v1/instruction/{instructionId}/shared` | `/api/v1/instruction/shared?instructionId=` |
+| `/api/v1/instruction/{instructionId}/{version}` | `/api/v1/instruction/version?instructionId=&version=` |
+| `/api/v1/attachments/{attachmentId}/url` | `/api/v1/attachments/url?attachmentId=` |
+| `/api/v1/admin/system-api-keys/{aiVendor}/models` | `/api/v1/admin/system-api-keys/models?aiVendor=` |
+
+(A few `{param}` routes still remain, e.g. plain DELETE-by-id routes; they predate this convention — don't add new ones.)
 
 **Dashboards**: the "Proxy Server" row in both `fly-backend-*.json` dashboards holds a chart pair per API — requests by status (colored by the global scheme) and p50/p90/p95/p99 latency. It is generated, not hand-maintained: after adding or renaming a route, run
 

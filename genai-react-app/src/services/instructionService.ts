@@ -87,9 +87,8 @@ export async function getInstructionVersion(
     instructionId: string,
     version: number
 ): Promise<InstructionResponse> {
-    // Use the same endpoint base as createInstruction, but GET with params
-    // Route: /api/v1/instruction/{instructionId}/{version}
-    const url = `${endpoints.createInstruction}/${instructionId}/${version}`
+    // Route: /api/v1/instruction/version?instructionId=xx&version=n
+    const url = `${endpoints.createInstruction}/version?instructionId=${encodeURIComponent(instructionId)}&version=${version}`
 
     const response = await fetchWithRetry(url, {
         method: HttpMethod.GET,
@@ -165,7 +164,7 @@ export async function getInstructionSharedUsers(
     token: string,
     instructionId: string
 ): Promise<SearchUserResponse[]> {
-    const response = await fetchWithRetry(`${endpoints.createInstruction}/${instructionId}/shared`, {
+    const response = await fetchWithRetry(`${endpoints.createInstruction}/shared?instructionId=${encodeURIComponent(instructionId)}`, {
         method: HttpMethod.GET,
         headers: {
             'Content-Type': 'application/json',

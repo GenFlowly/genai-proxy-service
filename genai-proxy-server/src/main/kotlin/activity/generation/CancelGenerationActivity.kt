@@ -31,9 +31,15 @@ fun Route.registerCancelGenerationRoute(
                     "The partial text streamed so far is kept as the response message. " +
                     "Returns cancelled=false when nothing is running under that id " +
                     "(generation already finished or never existed)."
+            request {
+                queryParameter<String>("responseMessageId") {
+                    description = "Response message id of the in-flight generation"
+                    required = true
+                }
+            }
         }) {
             val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
-            val responseMessageId = call.parameters["responseMessageId"]
+            val responseMessageId = call.request.queryParameters["responseMessageId"]
             if (responseMessageId.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "responseMessageId is required"))
                 return@post
