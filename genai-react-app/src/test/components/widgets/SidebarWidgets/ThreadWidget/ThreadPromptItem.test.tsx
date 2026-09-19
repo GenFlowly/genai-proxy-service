@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ThreadPromptItem from '../../../../../components/widgets/SidebarWidgets/ThreadWidget/ThreadPromptItem';
-import { useConversation } from '../../../../../context/ConversationContext';
+import { useConversationUI } from '../../../../../context/ConversationContext';
 import '@testing-library/jest-dom';
 
 const defaultProps = {
@@ -22,7 +22,7 @@ jest.mock('@genflowly/component-library', () => ({
 jest.mock('../../../../../context/ConversationContext');
 
 describe('ThreadPromptItem', () => {
-    const mockUseConversation = useConversation as jest.Mock;
+    const mockUseConversation = useConversationUI as jest.Mock;
     beforeAll(() => {
         // Mock scrollIntoView
         Element.prototype.scrollIntoView = jest.fn();

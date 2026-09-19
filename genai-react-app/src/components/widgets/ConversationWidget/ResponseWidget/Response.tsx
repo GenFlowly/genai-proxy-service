@@ -249,7 +249,9 @@ function ThinkingSection({ steps, stepList, isThinking, durationMs }: { steps: s
     )
 }
 
-export default function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
+// Memoized (see export): responseMessages keeps its identity for blocks a
+// stream isn't touching, so parent re-renders skip unchanged responses
+function Response({ blockId, responseMessages, onFollowUp, disabled = false, isLastResponseBlock = true, 'data-testid': testId }: ResponseProps & { 'data-testid'?: string }) {
     const { t } = useTranslation()
     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
     const { setSelectedResponseForBlock, getSelectedResponseForBlock, generateResponsesStream, getVendorSelectionForBlock, setVendorSelectionForBlock, stopGenerating, conversationBlockList = [], conversationId = '' } = useConversation()
@@ -570,3 +572,5 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         </div>
     )
 }
+
+export default React.memo(Response)

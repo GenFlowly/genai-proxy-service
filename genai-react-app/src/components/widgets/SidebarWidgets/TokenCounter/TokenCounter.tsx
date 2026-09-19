@@ -6,11 +6,13 @@ import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
 import { Tooltip } from '@genflowly/component-library'
 import { estimateTokens } from '../../../../utils/tokenEstimate'
+import { useConversationUI } from '../../../../context/ConversationContext'
 
 export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?: string } = {}) {
     const { t } = useTranslation()
     const { conversation } = useSidebarWidget()
-    const { editorPrompt, activeBlockId, conversationBlockList } = conversation
+    const { activeBlockId, conversationBlockList } = conversation
+    const { editorPrompt } = useConversationUI()
 
     // TextEditor is only rendered when the active block is not yet resolved
     const activeBlock = conversationBlockList.find(b => b.conversationBlockId === activeBlockId)

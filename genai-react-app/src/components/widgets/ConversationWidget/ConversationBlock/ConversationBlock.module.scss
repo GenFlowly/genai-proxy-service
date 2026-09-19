@@ -6,6 +6,18 @@
   flex-direction: column;
   align-items: center;
   scroll-margin-top: 5rem;
+
+  // Native virtualization: blocks scrolled out of view skip style/layout/
+  // paint entirely, so a long conversation costs roughly what the visible
+  // part costs. `contain-intrinsic-size: auto 20rem` keeps scrollbar
+  // geometry sane before first render, then remembers each block's real
+  // size. The LAST block is excluded: it hosts the active editor, which on
+  // mobile rides the keyboard via a transform that must not be clipped by
+  // the paint containment content-visibility switches on.
+  &:not(:last-child) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 20rem;
+  }
 }
 
 .followUpButtonWrapper {
