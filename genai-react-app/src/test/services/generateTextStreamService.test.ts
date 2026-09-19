@@ -296,6 +296,36 @@ describe('generateTextStreamService', () => {
         expect(mockReader.releaseLock).toHaveBeenCalled();
     });
 
+    test('generateTextStream throws the vendor reason on a structured "err" chunk', async () => {
+        const encoder = new TextEncoder();
+        const reason = 'Rate limit or quota exceeded (gemini): You exceeded your current quota, limit: 20';
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"partial "}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode(`${JSON.stringify({ t: 'err', v: reason })}\n`) })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            headers: new Map(),
+            body: { getReader: () => mockReader }
+        });
+
+        const onDelta = jest.fn();
+        await expect(generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            onDelta
+        )).rejects.toThrow(reason);
+
+        // Partial text delivered; the error payload never leaks into the text
+        expect(onDelta).toHaveBeenCalledWith('partial ');
+        expect(onDelta).not.toHaveBeenCalledWith(expect.stringContaining('quota'));
+        expect(mockReader.releaseLock).toHaveBeenCalled();
+    });
+
     test('generateTextStream throws error if response body is missing', async () => {
         mockFetchWithRetry.mockResolvedValue({
             ok: true,

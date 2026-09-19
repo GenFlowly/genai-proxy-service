@@ -332,6 +332,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         })
     }
 
+    /**
+     * Merge a partial update into the in-session AI config preferences (and
+     * the localStorage copy) so surfaces that saved preferences server-side
+     * are reflected everywhere without waiting for the next /onboard sync.
+     */
+    const updateAiConfigPreferences = (
+        partial: Partial<NonNullable<OnboardCustomerResponse['aiConfigPreferences']>>
+    ) => {
+        setAiConfigPreferences(prev => {
+            const next = { ...(prev ?? {}), ...partial }
+            if (customerId) {
+                localStorage.setItem(`${customerId}_ai_preferences`, JSON.stringify(next))
+            }
+            return next
+        })
+    }
+
     const updateVectorDBConfigStatus = (status: StoreCustomerVectorDBConfigResponse['configStatus']) => {
         setVectorDBConfigStatusList(prev => {
             const index = prev.findIndex(s => s.vendor === status.vendor)
@@ -373,6 +390,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         updateVendorApiKeyStatus,
         updateVectorDBConfigStatus,
         aiConfigPreferences,
+        updateAiConfigPreferences,
         customerInstructions,
         refreshInstructions,
         updateInstruction,

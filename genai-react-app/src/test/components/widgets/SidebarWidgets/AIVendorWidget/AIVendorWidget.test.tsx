@@ -91,45 +91,46 @@ describe('AIVendorWidget', () => {
         });
     });
 
-    test('renders vendors and toggles correctly', async () => {
+    test('renders only vendors with a valid key and toggles correctly', async () => {
         render(<AIVendorWidget />);
 
-        // Check vendors are rendered
+        // OpenAI has a valid key → rendered; Claude's key is NOT_SET → hidden
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
-        expect(screen.getByText('Claude')).toBeInTheDocument();
+        expect(screen.queryByTestId(`vendor-toggle-${AIVendor.CLAUDE}`)).not.toBeInTheDocument();
 
         // Check active state (OpenAI mocked as having model 'gpt-4')
         const openAIToggle = screen.getByTestId(`vendor-toggle-${AIVendor.OPENAI}`);
-        expect(openAIToggle).toHaveClass('primary'); // Assuming PillButton variant='primary' adds this class or check via other means if needed. 
+        expect(openAIToggle).toHaveClass('primary'); // Assuming PillButton variant='primary' adds this class or check via other means if needed.
         // Better: We check interaction logic
 
         // Deactivate OpenAI
         fireEvent.click(openAIToggle);
         expect(mockSetSelectedModelForAIVendor).toHaveBeenCalledWith(AIVendor.OPENAI, '');
 
-        // Activate Claude (Initially inactive but has models fetched)
-        // Wait for fetch to complete first?
         await waitFor(() => expect(mockGetTextGenerationModels).toHaveBeenCalled());
+    });
 
-        // Note: Claude is disabled in mock due to invalid API key, so click shouldn't work
-        const claudeToggle = screen.getByTestId(`vendor-toggle-${AIVendor.CLAUDE}`);
-        fireEvent.click(claudeToggle);
-        expect(mockSetSelectedModelForAIVendor).not.toHaveBeenCalledWith(AIVendor.CLAUDE, expect.any(String));
-
-        // Let's enable Claude to test activation
+    test('shows the no-keys hint when no vendor has a valid key', () => {
         mockUseSidebarWidget.mockReturnValue({
-            ...mockUseSidebarWidget(),
+            ai: {
+                config: [],
+                setSelectedModelForAIVendor: mockSetSelectedModelForAIVendor,
+                resetConfig: mockResetConfig
+            },
             auth: {
-                ...mockUseSidebarWidget().auth,
+                getAccessTokenSilently: mockGetAccessTokenSilently,
+                customerId: 'cust-123',
+                isAuthenticated: true,
                 aiVendorAPIKeyStatusList: [
-                    ...mockUseSidebarWidget().auth.aiVendorAPIKeyStatusList,
-                    { aiVendor: AIVendor.CLAUDE, status: APIKeyStatus.VALID, isAPIKeyValid: true }
+                    { aiVendor: AIVendor.OPENAI, status: APIKeyStatus.NOT_SET, isAPIKeyValid: false }
                 ]
             }
         });
 
-        // Re-render to pick up new context
-        // render(<AIVendorWidget />); // would need cleanup. Just use new test.
+        render(<AIVendorWidget />);
+
+        expect(screen.queryByTestId(`vendor-toggle-${AIVendor.OPENAI}`)).not.toBeInTheDocument();
+        expect(screen.getByText('No API keys set')).toBeInTheDocument();
     });
 
     test('activates vendor when enabled', async () => {

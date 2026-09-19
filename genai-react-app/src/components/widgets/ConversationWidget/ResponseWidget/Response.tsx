@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ICONS } from '../../../../constants/icons'
 import styles from './Response.module.scss'
@@ -294,13 +294,32 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
         [responseMessages]
     )
 
+    // The vendor failover priority (Settings → Model API Keys, 1 = primary)
+    // orders responses left to right; vendors without a saved priority come
+    // after prioritized ones, keeping arrival order among themselves.
+    const { aiVendorAPIKeyStatusList } = useAuth()
+    const vendorPriority = useMemo(() => {
+        const map = new Map<string, number>()
+        aiVendorAPIKeyStatusList.forEach(s => {
+            if (s.priority != null) map.set(s.aiVendor, s.priority)
+        })
+        return map
+    }, [aiVendorAPIKeyStatusList])
+
+    const byVendorPriority = useCallback(
+        (a: string, b: string) =>
+            (vendorPriority.get(a) ?? Number.MAX_SAFE_INTEGER) -
+            (vendorPriority.get(b) ?? Number.MAX_SAFE_INTEGER),
+        [vendorPriority]
+    )
+
     const availableVendors = useMemo(() => {
         const vendors = new Set<string>()
         visibleMessages.forEach(msg => {
             if (msg.aiVendor) vendors.add(msg.aiVendor)
         })
-        return Array.from(vendors)
-    }, [visibleMessages])
+        return Array.from(vendors).sort(byVendorPriority)
+    }, [visibleMessages, byVendorPriority])
 
     // Keep a ref to the latest context selection to avoid stale closure in the effect below
     const selectionRef = useRef<string[]>([])
@@ -324,7 +343,8 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
                 vendor === AIVendor.GEMINI ? 'Gemini' : vendor
     })), [availableVendors])
     const rawSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
-    const effectiveSelectedVendors = rawSelectedVendors.slice(0, maxVendors)
+    // Priority also decides WHICH vendors survive the display cap
+    const effectiveSelectedVendors = [...rawSelectedVendors].sort(byVendorPriority).slice(0, maxVendors)
     const filteredResponseList = useMemo(() => {
         const vendorMap = new Map<string, Message>()
         for (const msg of visibleMessages) {
@@ -333,7 +353,8 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
             }
         }
         return Array.from(vendorMap.values())
-    }, [visibleMessages, effectiveSelectedVendors])
+            .sort((a, b) => byVendorPriority(a.aiVendor ?? '', b.aiVendor ?? ''))
+    }, [visibleMessages, effectiveSelectedVendors, byVendorPriority])
 
     if (!visibleMessages || visibleMessages.length === 0) {
         return (

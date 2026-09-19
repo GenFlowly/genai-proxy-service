@@ -40,6 +40,9 @@ export interface AuthContextType {
     updateVendorApiKeyStatus: (status: AIVendorAPIKeyStatus) => void;
     updateVectorDBConfigStatus: (status: StoreCustomerVectorDBConfigResponse['configStatus']) => void;
     aiConfigPreferences: OnboardCustomerResponse['aiConfigPreferences'] | null;
+    updateAiConfigPreferences: (
+        partial: Partial<NonNullable<OnboardCustomerResponse['aiConfigPreferences']>>
+    ) => void;
     customerInstructions: InstructionResponse[];
     refreshInstructions: () => Promise<void>;
     updateInstruction: (instruction: InstructionResponse) => void;

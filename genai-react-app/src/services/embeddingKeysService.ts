@@ -19,6 +19,8 @@ export interface EmbeddingKeyStatus {
     isAPIKeyValid: boolean
     status: APIKeyStatus
     updateSuccessful?: boolean
+    /** Provider's own rejection message when validation fails */
+    detail?: string | null
 }
 
 export interface GetEmbeddingKeysResponse {

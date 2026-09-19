@@ -17,6 +17,7 @@ export const endpoints = {
     cancelGeneration: (responseMessageId: string) => `${BASE}${API_PREFIX}/generations/${responseMessageId}/cancel`,
     batchGenerateText: `${BASE}${API_PREFIX}/batch-generate-text`,
     getTextGenerationModels: `${BASE}${API_PREFIX}/models`,
+    getProviders: `${BASE}${API_PREFIX}/providers`,
     saveAIConfig: `${BASE}${API_PREFIX}/save-ai-config`,
     createInstruction: `${BASE}${API_PREFIX}/instruction`,
     getCustomerInstructions: `${BASE}${API_PREFIX}/instructions`,

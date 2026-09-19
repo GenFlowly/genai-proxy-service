@@ -11,9 +11,14 @@ jest.mock('../../../../../context/ConversationContext');
 jest.mock('../../../../../context/LayoutContext');
 
 // The learned-facts stat polls via useAuth + the learned-facts service —
-// stub both so tests control the poll results
+// stub both so tests control the poll results. Vendor key statuses feed the
+// priority-based response ordering.
+let mockVendorKeyStatuses: any[] = [];
 jest.mock('../../../../../context/AuthContext', () => ({
-    useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('tok') })
+    useAuth: () => ({
+        getAccessTokenSilently: jest.fn().mockResolvedValue('tok'),
+        aiVendorAPIKeyStatusList: mockVendorKeyStatuses,
+    })
 }));
 jest.mock('../../../../../services/learnedFactsService');
 const { getLearnedFacts, deleteMemoryFact } = require('../../../../../services/learnedFactsService');
@@ -67,6 +72,7 @@ describe('Response Widget Component', () => {
         jest.clearAllMocks();
         mockSelection = [];
         mockMaxVendors = 3;
+        mockVendorKeyStatuses = [];
         mockUseConversation.mockReturnValue({
             setSelectedResponseForBlock: mockSetSelectedResponseForBlock,
             getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
@@ -99,6 +105,46 @@ describe('Response Widget Component', () => {
         // Toggle group label + BrandName title = 2
         expect(screen.getAllByText('OpenAI').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Claude').length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('orders responses left to right by vendor priority', () => {
+        mockVendorKeyStatuses = [
+            { aiVendor: AIVendor.OPENAI, priority: 2 },
+            { aiVendor: AIVendor.CLAUDE, priority: 1 },
+        ];
+        // Arrival order is OpenAI then Claude — priority must flip them
+        render(<Response blockId="block-1" responseMessages={mockMessages} />);
+        const cards = screen.getAllByTestId('response-message');
+        expect(cards[0]).toHaveTextContent('Claude');
+        expect(cards[1]).toHaveTextContent('OpenAI');
+    });
+
+    test('unprioritized vendors keep arrival order after prioritized ones', () => {
+        mockVendorKeyStatuses = [
+            { aiVendor: AIVendor.CLAUDE, priority: 1 },
+        ];
+        const msgs = [
+            { messageId: 'msg-1', text: 'R1', aiVendor: AIVendor.OPENAI, isLoading: false, timestamp: 0 },
+            { messageId: 'msg-2', text: 'R2', aiVendor: AIVendor.CLAUDE, isLoading: false, timestamp: 0 },
+            { messageId: 'msg-3', text: 'R3', aiVendor: AIVendor.GEMINI, isLoading: false, timestamp: 0 },
+        ];
+        render(<Response blockId="block-1" responseMessages={msgs} />);
+        const cards = screen.getAllByTestId('response-message');
+        expect(cards[0]).toHaveTextContent('Claude');
+        expect(cards[1]).toHaveTextContent('OpenAI');
+        expect(cards[2]).toHaveTextContent('Gemini');
+    });
+
+    test('priority decides which vendors survive the display cap', () => {
+        mockMaxVendors = 1;
+        mockVendorKeyStatuses = [
+            { aiVendor: AIVendor.OPENAI, priority: 2 },
+            { aiVendor: AIVendor.CLAUDE, priority: 1 },
+        ];
+        render(<Response blockId="block-1" responseMessages={mockMessages} />);
+        const cards = screen.getAllByTestId('response-message');
+        expect(cards).toHaveLength(1);
+        expect(cards[0]).toHaveTextContent('Claude');
     });
 
     test('handles Follow Up click', () => {
