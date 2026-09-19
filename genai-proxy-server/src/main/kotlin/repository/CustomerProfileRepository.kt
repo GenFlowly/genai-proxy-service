@@ -464,4 +464,37 @@ class CustomerProfileRepository(
             val item = dynamoDbClient.getItem(request).item() ?: return@withContext emptyMap()
             item["otherPreferences"]?.m()?.mapValues { it.value.s() ?: "" } ?: emptyMap()
         }
+
+    // ─── System vendor allowlist ──────────────────────────────────────────────
+    // One system-scoped item in the preferences table (the "#" makes the key
+    // impossible to collide with real customer ids). null = never configured.
+
+    suspend fun getVendorAllowlist(): List<String>? = withContext(Dispatchers.IO) {
+        val request = GetItemRequest.builder()
+            .tableName(CUSTOMER_PREFERENCES_TABLE)
+            .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(VENDOR_ALLOWLIST_ITEM_ID).build()))
+            .build()
+        val item = dynamoDbClient.getItem(request).item()?.takeIf { it.isNotEmpty() } ?: return@withContext null
+        item["allowedVendors"]?.l()?.mapNotNull { it.s() }
+    }
+
+    suspend fun saveVendorAllowlist(allowedVendors: List<String>, updatedBy: String) =
+        withContext(Dispatchers.IO) {
+            val item = mapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(VENDOR_ALLOWLIST_ITEM_ID).build(),
+                "allowedVendors" to AttributeValue.builder()
+                    .l(allowedVendors.map { AttributeValue.builder().s(it).build() })
+                    .build(),
+                "updatedBy" to AttributeValue.builder().s(updatedBy).build(),
+                "updatedAt" to AttributeValue.builder().s(Instant.now().toString()).build(),
+            )
+            dynamoDbClient.putItem(
+                PutItemRequest.builder().tableName(CUSTOMER_PREFERENCES_TABLE).item(item).build()
+            )
+            logger.info("Vendor allowlist saved by $updatedBy: ${allowedVendors.size} vendor(s)")
+        }
+
+    companion object {
+        private const val VENDOR_ALLOWLIST_ITEM_ID = "SYSTEM#VENDOR_ALLOWLIST"
+    }
 }

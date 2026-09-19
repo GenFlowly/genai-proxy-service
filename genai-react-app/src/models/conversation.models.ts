@@ -56,7 +56,8 @@ export interface ThinkingStep {
  * Represents a single AI model's response.
  */
 export interface Message {
-    aiVendor: AIVendor
+    /** Vendor id: legacy enum name (OPENAI/CLAUDE/GEMINI) or a BYOK provider id */
+    aiVendor: string
     /** Model that generated this response (e.g. "gpt-4o") */
     model?: string | null
     text: string

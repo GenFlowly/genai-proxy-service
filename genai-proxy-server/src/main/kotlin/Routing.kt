@@ -44,6 +44,7 @@ import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
 import com.genflowly.activity.admin.registerDefaultGraphRoutes
 import com.genflowly.activity.admin.registerRequestAgentMapRoutes
+import com.genflowly.activity.admin.registerVendorAllowlistRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.memory.registerMemoryRoutes
@@ -88,6 +89,7 @@ object Routes {
     const val UPDATE_DISCOVERABILITY = "$API_V1/profile/discoverability"
     const val SEARCH_USERS = "$API_V1/users/search"
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
+    const val PROVIDERS = "$API_V1/providers"
     const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
     const val GET_CONVERSATION = "$API_V1/chat"
     const val CREATE_INSTRUCTION = "$API_V1/instruction"
@@ -127,6 +129,7 @@ object Routes {
     const val DEVELOPER_API_KEYS = "$API_V1/developer/api-keys"
     const val DEVELOPER_API_KEY = "$API_V1/developer/api-keys/{keyId}"
 
+    const val ADMIN_VENDOR_ALLOWLIST = "$API_V1/admin/vendor-allowlist"
     const val ADMIN_SYSTEM_API_KEYS = "$API_V1/admin/system-api-keys"
     const val ADMIN_SYSTEM_API_KEY_CONFIG = "$API_V1/admin/system-api-keys/config"
     const val ADMIN_SYSTEM_API_KEY = "$API_V1/admin/system-api-keys/{aiVendor}"
@@ -176,6 +179,7 @@ fun Application.configureRouting(
     exchangeSideEffects: com.genflowly.service.ExchangeSideEffects,
     unifiedSearchService: com.genflowly.service.UnifiedSearchService,
     nodePresetService: com.genflowly.service.NodePresetService,
+    vendorAllowlistService: com.genflowly.service.VendorAllowlistService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -209,7 +213,7 @@ fun Application.configureRouting(
         registerEmbeddingKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService, appConfig)
-        registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService)
+        registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService, vendorAllowlistService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService)
         registerGetConversationRoutes(customerProfileService, conversationService)
         registerCreateInstructionRoutes(instructionService, customerProfileService)
@@ -251,6 +255,7 @@ fun Application.configureRouting(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService
         )
         registerRequestAgentMapRoutes(requestAgentMapAdminService, customerProfileService, appConfig)
+        registerVendorAllowlistRoutes(vendorAllowlistService, aiModelsService, customerProfileService, appConfig)
         registerDefaultGraphRoutes(graphService, customerProfileService, appConfig)
         registerNodePresetRoutes(nodePresetService, customerProfileService, appConfig)
         registerVoiceSessionRoutes(customerProfileService, voiceSessionService)

@@ -19,10 +19,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Providers the rest of the stack understands (see graph/llm_factory.py).
-# voyage is embedding-only: it never serves generation, so callers only send
-# it with capability="embedding".
-_SUPPORTED_PROVIDERS = {"openai", "anthropic", "gemini", "voyage"}
+def _is_known_provider(provider: str) -> bool:
+    # Any provider in the LiteLLM catalog is callable: natively for the tier
+    # in graph/llm_factory.NATIVE_PROVIDERS, via ChatLiteLLM for the rest.
+    # (voyage is embedding-only and only ever asked for with
+    # capability="embedding".)
+    import litellm
+    return provider in litellm.models_by_provider
 
 
 class VendorCredentials(BaseModel):
@@ -76,7 +79,7 @@ def _list_provider_models(provider: str, capability: str) -> list[str]:
 
 
 def _list_for_vendor(vendor: VendorCredentials) -> VendorModels:
-    if vendor.provider not in _SUPPORTED_PROVIDERS:
+    if not _is_known_provider(vendor.provider):
         logger.warning("Unsupported provider '%s' in /models request", vendor.provider)
         return VendorModels(provider=vendor.provider, models=[])
     try:

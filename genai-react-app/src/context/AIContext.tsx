@@ -1,16 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { AIVendor } from '../constants/vendors'
 import { InstructionResponse } from '../models/instruction.models'
 import { useAuth } from './AuthContext'
 
 export interface AIConfig {
-    aiVendor: AIVendor
+    /** Vendor id: legacy enum name (OPENAI/CLAUDE/GEMINI) or a BYOK provider id */
+    aiVendor: string
     model: string
 }
 
 interface AIContextType {
     config: AIConfig[]
-    setSelectedModelForAIVendor: (aiVendor: AIVendor, model: string) => void
+    setSelectedModelForAIVendor: (aiVendor: string, model: string) => void
     resetConfig: () => void
     activeBlockId: string
     setActiveBlockId: (id: string) => void
@@ -122,7 +122,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     }, [aiConfigPreferences, loadedPreferencesSignature, config])
 
     // 🔹 Update or insert vendor+model config safely
-    const setSelectedModelForAIVendor = (aiVendor: AIVendor, model: string) => {
+    const setSelectedModelForAIVendor = (aiVendor: string, model: string) => {
         if (!aiVendor) return // skip invalid vendor
         setConfig(prevConfigs => {
             const existingIndex = prevConfigs.findIndex(c => c.aiVendor === aiVendor)

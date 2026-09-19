@@ -63,6 +63,10 @@ class AIModelsService(
         )
     }
 
+    /** BYOK vendor catalog (see retrieval /providers) — cached in the client. */
+    suspend fun getProviderCatalog(): com.genflowly.models.api.ProviderCatalogResponse =
+        retrievalServerClient.getProviderCatalog()
+
     /**
      * Check a vendor API key with one cheap authenticated vendor call.
      * Model listing is catalog-based and does not touch the vendor, so it

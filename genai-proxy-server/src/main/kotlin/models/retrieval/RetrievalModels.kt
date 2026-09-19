@@ -45,6 +45,14 @@ sealed class StreamChunk {
         /** Prompt-cache write (cache_creation) tokens — billed at the cache-write rate. */
         val tokensWrittenToCache: Int = 0
     ) : StreamChunk()
+
+    /**
+     * Generation failed mid-stream: the retrieval server's concise,
+     * user-facing description of the vendor error (quota exceeded, key
+     * rejected, ...). errorType is its machine class (rate_limit, auth,
+     * context_length, model_not_found, provider_error).
+     */
+    data class Error(val message: String, val errorType: String? = null) : StreamChunk()
 }
 
 data class RetrievalResult(

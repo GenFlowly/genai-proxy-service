@@ -9,6 +9,65 @@ from graph.state import RetrievalState
 logger = logging.getLogger(__name__)
 
 # Runtime primitive of a node type — drives the thinking panel's icon/verbs.
+# (substring set, error_type, user-facing label) — checked in order, first
+# match wins. Substrings are matched against the lowercased exception
+# type+message, which is vendor-agnostic: litellm, langchain and the native
+# SDKs all put these markers somewhere in the exception.
+_LLM_ERROR_KINDS = [
+    (("ratelimit", "rate limit", "resource_exhausted", "too many requests", "429",
+      "quota", "insufficient balance", "exceeded_current_quota"),
+     "rate_limit", "Rate limit or quota exceeded"),
+    (("authentication", "unauthorized", "invalid api key", "api key not valid",
+      "invalid_api_key", "401", "permission denied", "403"),
+     "auth", "API key rejected by the provider"),
+    (("context length", "context_length", "contextwindow", "maximum context",
+      "prompt is too long", "input is too long"),
+     "context_length", "Input exceeds the model's context window"),
+    (("not found", "does not exist", "model_not_found", "404"),
+     "model_not_found", "Model not found or unavailable"),
+]
+
+
+def _extract_provider_detail(raw: str) -> str:
+    """Pull the human sentence out of a nested provider error blob."""
+    import re
+
+    # Providers nest JSON-in-string; unescape the common wrappers first
+    flat = raw.replace("\\n", " ").replace('\\"', '"')
+    detail = None
+    for pattern in (r'"message"\s*:\s*"([^"{}]{10,400})"', r"'message'\s*:\s*'([^'{}]{10,400})'"):
+        m = re.search(pattern, flat)
+        if m:
+            detail = m.group(1)
+            break
+    if detail is None:
+        # No parsable message field — take the prose before any JSON payload
+        detail = flat.split("{", 1)[0]
+    # Drop "libname.SomeError: SomeError: VendorException - " chains and
+    # leftover escape debris
+    detail = re.sub(r"^(?:[\w.]*(?:Error|Exception)\b[\s:—-]*)+", "", detail)
+    detail = detail.replace("\\", " ")
+    return " ".join(detail.split())[:300]
+
+
+def user_facing_llm_error(e: Exception, provider: str) -> tuple[str, str]:
+    """Classify an LLM-call failure into (error_type, concise user message).
+
+    Vendor-agnostic by design: works off exception type/message markers, not
+    per-vendor exception classes, so new BYOK providers are covered for free.
+    """
+    raw = f"{type(e).__name__}: {e}"
+    low = raw.lower()
+    kind, label = "provider_error", "The provider returned an error"
+    for needles, k, l in _LLM_ERROR_KINDS:
+        if any(n in low for n in needles):
+            kind, label = k, l
+            break
+    detail = _extract_provider_detail(str(e))
+    message = f"{label} ({provider}): {detail}" if detail else f"{label} ({provider})"
+    return kind, message
+
+
 def _kind_of(node_type: str) -> str:
     key = (node_type or "").upper()
     if key == "RETRIEVAL":
@@ -298,6 +357,7 @@ async def stream_response(
         # failure signal for errors surfaced mid-stream.
         count("stream_error_total", vendor=state.get("llm_provider", ""))
         logger.error("Stream: unhandled exception — %s", e, exc_info=True)
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        kind, message = user_facing_llm_error(e, state.get("llm_provider", ""))
+        yield f"data: {json.dumps({'error': message, 'error_type': kind})}\n\n"
     finally:
         yield "data: [DONE]\n\n"

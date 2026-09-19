@@ -5,6 +5,9 @@ import { ThinkingStep, WebSource } from "../models/conversation.models";
 import { AttachmentRef } from "../models/attachment.models";
 import { fetchWithRetry } from "../utils/apiUtils";
 
+/** Vendor failure relayed mid-stream by the proxy ({"t":"err"} chunk). */
+export class StreamGenerationError extends Error {}
+
 export interface StreamMetadata {
     conversationId: string | null;
     messageId: string | null;
@@ -144,8 +147,17 @@ export async function generateTextStream(
                     if (refs.length > 0) onGeneratedAttachments?.(refs);
                 }
             }
+            else if (msg.t === "err") {
+                // Vendor failure mid-stream (quota exceeded, key rejected, ...)
+                // — the proxy relays the concise reason; surface it so the
+                // response card shows what actually happened.
+                throw new StreamGenerationError(
+                    typeof msg.v === "string" && msg.v ? msg.v : "Generation failed"
+                );
+            }
             // other types (heartbeat, etc.) are silently ignored
-        } catch {
+        } catch (e) {
+            if (e instanceof StreamGenerationError) throw e;
             // Not JSON. The proxy emits "[Error: <reason>]" as a raw line when
             // generation fails mid-stream — surface it as an error instead of
             // appending it to the generated text.

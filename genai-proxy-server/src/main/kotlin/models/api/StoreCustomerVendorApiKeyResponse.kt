@@ -32,5 +32,9 @@ data class AIVendorAPIKeyStatus(
     // Customer-selected model and failover priority (1 = primary) for
     // internal generations (titles, personas, memory). Null until configured.
     val selectedModel: String? = null,
-    val priority: Int? = null
+    val priority: Int? = null,
+    // Provider's own rejection message when validation fails (e.g. "account
+    // suspended, insufficient balance") — a bad key and a suspended account
+    // both fail the probe, and only this tells the customer which it was.
+    val detail: String? = null
 )

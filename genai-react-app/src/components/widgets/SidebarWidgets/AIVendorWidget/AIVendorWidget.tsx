@@ -30,8 +30,6 @@ import {
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 
-const vendors = Object.values(AIVendor) as AIVendor[]
-
 export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
     const { t } = useTranslation()
     const { ai, auth } = useSidebarWidget()
@@ -39,17 +37,26 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
     const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList } = auth
     const { showToast } = useToast()
 
+    // Only vendors with a working key are offered — the key-status list
+    // carries every vendor the customer configured (legacy three plus any
+    // BYOK long-tail vendor), and keyless ones are filtered out entirely.
+    const vendors = React.useMemo<string[]>(() => (
+        aiVendorAPIKeyStatusList
+            .filter(s => s.status === APIKeyStatus.VALID || s.isAPIKeyValid)
+            .map(s => s.aiVendor)
+    ), [aiVendorAPIKeyStatusList])
+
     const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
 
-    const isAIVendorModelsPopulated = (aiVendor: AIVendor) =>
+    const isAIVendorModelsPopulated = (aiVendor: string) =>
         config.some(c => c.aiVendor === aiVendor && c.model)
 
-    const getSelectedModel = (aiVendor: AIVendor) =>
+    const getSelectedModel = (aiVendor: string) =>
         config.find(c => c.aiVendor === aiVendor)?.model ?? ''
 
-    const isVendorEnabled = (vendor: AIVendor) => {
+    const isVendorEnabled = (vendor: string) => {
         const status = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
         return status?.status === APIKeyStatus.VALID
     }
@@ -112,7 +119,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                 // On error, let existing state persist
             }
         },
-        [isAuthenticated, customerId, getAccessTokenSilently]
+        [isAuthenticated, customerId, getAccessTokenSilently, vendors]
     )
 
     // --- Load cached models immediately and refresh if needed ---
@@ -158,7 +165,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
     }
 
 
-    const getModelsForVendor = (vendor: AIVendor): string[] =>
+    const getModelsForVendor = (vendor: string): string[] =>
         aiVendorModels.find(v => v.aiVendor === vendor)?.modelsList ?? []
 
     const hasAnyValidApiKey = vendors.some(isVendorEnabled)
@@ -261,6 +268,9 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
             data-testid={testId || "ai-vendor-widget"}
         >
             <div className={styles.vendorWidget}>
+                {vendors.length === 0 && (
+                    <span className={styles.errorText}>{t('sidebar.aiVendorWidget.noApiKeysSet')}</span>
+                )}
                 {vendors.map(vendor => {
                     const isActive = isAIVendorModelsPopulated(vendor)
                     const selectedModel = getSelectedModel(vendor)

@@ -19,6 +19,8 @@ export interface AIVendorAPIKeyStatus {
     selectedModel?: string | null
     /** Failover priority for internal generations (1 = primary) */
     priority?: number | null
+    /** Provider's own rejection message when validation fails */
+    detail?: string | null
 }
 
 export interface StoreCustomerVendorApiKeyResponse {
