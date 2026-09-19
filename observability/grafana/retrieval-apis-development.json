@@ -53,7 +53,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -269,7 +270,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -502,7 +504,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -718,7 +721,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -934,7 +938,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -1150,7 +1155,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -1383,7 +1389,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -1616,7 +1623,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -1832,7 +1840,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
@@ -2048,7 +2057,8 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "points",
+                "drawStyle": "line",
+                "lineWidth": 1,
                 "pointSize": 5,
                 "showPoints": "always"
               }
