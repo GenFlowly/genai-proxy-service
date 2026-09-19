@@ -142,7 +142,7 @@ describe('ActionAgentSettings', () => {
             screen.getByTestId('action-agent-CONVERSATION_TITLE'),
             'GRP1'
         );
-        await userEvent.click(screen.getByRole('button', { name: /save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
         await waitFor(() =>
             expect(mockPutRequestAgentMapping).toHaveBeenCalledWith(
@@ -163,7 +163,7 @@ describe('ActionAgentSettings', () => {
             screen.getByTestId('action-agent-MEMORY_EXTRACTION'),
             '__platform_default__'
         );
-        await userEvent.click(screen.getByRole('button', { name: /save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
         await waitFor(() =>
             expect(mockDeleteRequestAgentMapping).toHaveBeenCalledWith(
@@ -181,7 +181,7 @@ describe('ActionAgentSettings', () => {
             screen.getByTestId('action-agent-CONVERSATION_TITLE'),
             'GRP1'
         );
-        await userEvent.click(screen.getByRole('button', { name: /save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
         await waitFor(() =>
             expect(mockShowToast).toHaveBeenCalledWith('Invalid mapping: nope')
         );

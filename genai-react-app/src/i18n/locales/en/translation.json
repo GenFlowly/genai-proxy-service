@@ -479,7 +479,7 @@
             "saveErrorToast": "Error saving API key.",
             "savingLabel": "Saving...",
             "subtitle": "Configure your API keys to enable various AI models across the platform.",
-            "title": "Model API Keys"
+            "title": "LLM API Keys"
         },
         "developerSettings": {
             "copiedToast": "API key copied to clipboard.",
@@ -534,20 +534,18 @@
             "breadcrumbMenu": "Menu",
             "breadcrumbSettings": "Settings",
             "sectionAi": "AI Settings",
-            "sectionAiModelKeys": "Model API Keys",
+            "sectionAiModelKeys": "LLM API Keys",
             "sectionAiEmbeddingKeys": "Embedding Model API Keys",
             "sectionAiVectorDb": "Vector DB Connection",
-            "sectionAiDefaults": "Default Preferences",
             "sectionDeveloper": "Developer",
             "sectionProfile": "Profile",
             "sectionActions": "Default Actions"
         },
         "settingsSidebar": {
             "aiSettings": "AI Settings",
-            "aiModelKeys": "Model API Keys",
+            "aiModelKeys": "LLM API Keys",
             "aiEmbeddingKeys": "Embedding Model API Keys",
             "aiVectorDb": "Vector DB Connection",
-            "aiDefaults": "Default Preferences",
             "developer": "Developer",
             "logout": "Logout",
             "profile": "Profile",
@@ -556,7 +554,7 @@
         },
         "embeddingKeysSettings": {
             "title": "Embedding Model API Keys",
-            "subtitle": "Bring your own keys for the embedding models that index and search your data. The OpenAI key is shared with the Model API Keys page — one key serves both.",
+            "subtitle": "Bring your own keys for the embedding models that index and search your data. The OpenAI key is shared with the LLM API Keys page — one key serves both.",
             "voyageLabel": "Voyage AI",
             "defaultModelLabel": "Default embedding models",
             "defaultModelHint": "Used to index and search your data. Pick a provider, then one of its models — only providers with a saved API key are listed. Unset categories use the platform default (voyage-4-large).",
