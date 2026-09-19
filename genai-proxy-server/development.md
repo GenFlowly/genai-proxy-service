@@ -245,7 +245,7 @@ Every proxy API automatically emits success/failure and latency metrics — the 
 
 (A few `{param}` routes still remain, e.g. plain DELETE-by-id routes; they predate this convention — don't add new ones.)
 
-**Dashboards**: the "Proxy Server" row in both `fly-backend-*.json` dashboards holds a chart pair per API — requests by status (colored by the global scheme) and p50/p90/p95/p99 latency. It is generated, not hand-maintained: after adding or renaming a route, run
+**Dashboards**: the dedicated "Proxy Server APIs" dashboards (`observability/grafana/proxy-apis-*.json`) hold a chart pair per API — requests by status (colored by the global scheme) and p50/p90/p95/p99 latency — grouped into rows by subresource (`/api/v1/agents/...`, `/api/v1/conversation/...`, ...). They are generated, not hand-maintained: after adding or renaming a route, run
 
 ```
 python3 observability/grafana/generate_proxy_api_panels.py
