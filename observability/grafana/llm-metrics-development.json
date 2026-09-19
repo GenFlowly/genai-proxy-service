@@ -186,7 +186,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Total cost per vendor",
+      "title": "Cost per vendor (USD)",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -200,9 +200,9 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
+            "drawStyle": "points",
+            "pointSize": 5,
+            "showPoints": "always"
           },
           "unit": "currencyUSD"
         },
@@ -268,7 +268,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (vendor) (llm_cost_usd_total{app=~\".*-development\"})",
+          "expr": "sum by (vendor) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__rate_interval]))",
           "legendFormat": "{{vendor}}",
           "datasource": {
             "type": "prometheus",
@@ -277,11 +277,11 @@
           "refId": "A"
         }
       ],
-      "description": "Cumulative LLM spend per vendor (USD; counter resets on deploy/restart)."
+      "description": "LLM spend per interval, by vendor."
     },
     {
       "type": "timeseries",
-      "title": "Total cost per vendor-model",
+      "title": "Cost per vendor-model (USD)",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -295,9 +295,9 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
+            "drawStyle": "points",
+            "pointSize": 5,
+            "showPoints": "always"
           },
           "unit": "currencyUSD"
         },
@@ -363,7 +363,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (vendor, model) (llm_cost_usd_total{app=~\".*-development\"})",
+          "expr": "sum by (vendor, model) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__rate_interval]))",
           "legendFormat": "{{vendor}} {{model}}",
           "datasource": {
             "type": "prometheus",
@@ -372,7 +372,7 @@
           "refId": "A"
         }
       ],
-      "description": "Cumulative LLM spend per vendor and model (USD; counter resets on deploy/restart)."
+      "description": "LLM spend per interval, by vendor and model."
     },
     {
       "type": "row",
@@ -388,7 +388,7 @@
       "panels": [
         {
           "type": "timeseries",
-          "title": "Total calls by model",
+          "title": "Calls by model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -402,9 +402,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -469,7 +469,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (llm_request_total{app=~\".*-development\", vendor=~\"$vendor\"})",
+              "expr": "sum by (model) (increase(llm_request_total{app=~\".*-development\", vendor=~\"$vendor\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -478,7 +478,7 @@
               "refId": "A"
             }
           ],
-          "description": "Cumulative LLM calls per model (counter resets on deploy/restart)."
+          "description": "LLM calls per interval, by model."
         },
         {
           "type": "timeseries",
@@ -577,7 +577,7 @@
         },
         {
           "type": "timeseries",
-          "title": "Total generation time by model",
+          "title": "Generation time by model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -591,9 +591,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               },
               "unit": "s"
             },
@@ -659,7 +659,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (llm_request_duration_seconds_sum{app=~\".*-development\", vendor=~\"$vendor\"})",
+              "expr": "sum by (model) (increase(llm_request_duration_seconds_sum{app=~\".*-development\", vendor=~\"$vendor\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -668,11 +668,11 @@
               "refId": "A"
             }
           ],
-          "description": "Cumulative seconds spent generating, per model (counter resets on deploy/restart)."
+          "description": "Seconds spent generating per interval, by model."
         },
         {
           "type": "timeseries",
-          "title": "Total input tokens by model",
+          "title": "Input tokens by model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -686,9 +686,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -753,7 +753,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (llm_tokens_total{app=~\".*-development\", vendor=~\"$vendor\", direction=\"input\"})",
+              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-development\", vendor=~\"$vendor\", direction=\"input\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -762,11 +762,11 @@
               "refId": "A"
             }
           ],
-          "description": "Cumulative input tokens per model (counter resets on deploy/restart)."
+          "description": "Input tokens per interval, by model."
         },
         {
           "type": "timeseries",
-          "title": "Total output tokens by model",
+          "title": "Output tokens by model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -780,9 +780,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -847,7 +847,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (llm_tokens_total{app=~\".*-development\", vendor=~\"$vendor\", direction=\"output\"})",
+              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-development\", vendor=~\"$vendor\", direction=\"output\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -856,11 +856,11 @@
               "refId": "A"
             }
           ],
-          "description": "Cumulative output tokens per model (counter resets on deploy/restart)."
+          "description": "Output tokens per interval, by model."
         },
         {
           "type": "timeseries",
-          "title": "Total cache tokens by model",
+          "title": "Cache tokens by model",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -874,9 +874,9 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "lineWidth": 2,
-                "fillOpacity": 8,
-                "showPoints": "never"
+                "drawStyle": "points",
+                "pointSize": 5,
+                "showPoints": "always"
               }
             },
             "overrides": [
@@ -941,7 +941,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (model) (llm_tokens_total{app=~\".*-development\", vendor=~\"$vendor\", direction=~\"cache_read|cache_creation\"})",
+              "expr": "sum by (model) (increase(llm_tokens_total{app=~\".*-development\", vendor=~\"$vendor\", direction=~\"cache_read|cache_creation\"}[$__rate_interval]))",
               "legendFormat": "{{model}}",
               "datasource": {
                 "type": "prometheus",
@@ -950,7 +950,7 @@
               "refId": "A"
             }
           ],
-          "description": "Cumulative cache tokens (read + creation) per model (counter resets on deploy/restart)."
+          "description": "Cache tokens (read + creation) per interval, by model."
         }
       ],
       "fieldConfig": {
