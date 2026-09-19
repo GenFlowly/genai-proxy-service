@@ -1,13 +1,13 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ThreadResponseItem from '../../../../../components/widgets/SidebarWidgets/ThreadWidget/ThreadResponseItem';
-import { useConversation } from '../../../../../context/ConversationContext';
+import { useConversationUI } from '../../../../../context/ConversationContext';
 import '@testing-library/jest-dom';
 
 jest.mock('../../../../../context/ConversationContext');
 
 describe('ThreadResponseItem', () => {
-    const mockUseConversation = useConversation as jest.Mock;
+    const mockUseConversation = useConversationUI as jest.Mock;
     const defaultProps = {
         conversationBlockId: 'block-1',
         responseCount: 1

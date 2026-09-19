@@ -7,6 +7,13 @@ import '@testing-library/jest-dom';
 // Mocks
 jest.mock('../../../../../hooks/useSidebarWidget');
 
+// editorPrompt moved to the ConversationUI context (perf split); tests set
+// this variable to control what the component reads from it
+let mockEditorPrompt = '';
+jest.mock('../../../../../context/ConversationContext', () => ({
+    useConversationUI: () => ({ editorPrompt: mockEditorPrompt }),
+}));
+
 jest.mock('../../../../../components/common/SidebarWidgetContainer/SidebarWidgetContainer', () =>
     ({ children, collapsedContent, 'data-testid': testId }: any) => (
         <div data-testid={testId}>
@@ -31,9 +38,9 @@ describe('TokenCounter', () => {
         jest.clearAllMocks();
 
         // Default Context — no active block, no prompt
+        mockEditorPrompt = '';
         mockUseSidebarWidget.mockReturnValue({
             conversation: {
-                editorPrompt: '',
                 activeBlockId: '',
                 conversationBlockList: []
             }
@@ -61,9 +68,9 @@ describe('TokenCounter', () => {
     });
 
     test('estimates tokens when prompt is present', () => {
+        mockEditorPrompt = 'Hello World'; // 11 chars → 3 tokens
         mockUseSidebarWidget.mockReturnValue({
             conversation: {
-                editorPrompt: 'Hello World', // 11 chars → 3 tokens
                 activeBlockId: 'block-1',
                 conversationBlockList: [draftBlock]
             }
@@ -80,9 +87,9 @@ describe('TokenCounter', () => {
     });
 
     test('does not count until the debounce elapses', () => {
+        mockEditorPrompt = 'Hello World';
         mockUseSidebarWidget.mockReturnValue({
             conversation: {
-                editorPrompt: 'Hello World',
                 activeBlockId: 'block-1',
                 conversationBlockList: [draftBlock]
             }
@@ -102,9 +109,9 @@ describe('TokenCounter', () => {
     });
 
     test('shows 0 tokens when active block is resolved', () => {
+        mockEditorPrompt = 'Some text';
         mockUseSidebarWidget.mockReturnValue({
             conversation: {
-                editorPrompt: 'Some text',
                 activeBlockId: 'block-1',
                 conversationBlockList: [{
                     ...draftBlock,
