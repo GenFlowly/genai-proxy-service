@@ -185,8 +185,8 @@
       }
     },
     {
-      "type": "timeseries",
-      "title": "Cost per vendor (USD)",
+      "type": "stat",
+      "title": "Total cost per vendor (USD)",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -199,89 +199,38 @@
       },
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "drawStyle": "points",
-            "pointSize": 5,
-            "showPoints": "always"
-          },
+          "decimals": 2,
           "unit": "currencyUSD"
         },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi"
-        }
+        "textMode": "value_and_name",
+        "colorMode": "value"
       },
       "targets": [
         {
-          "expr": "sum by (vendor) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__rate_interval]))",
-          "legendFormat": "{{vendor}}",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
+          "expr": "sum by (vendor) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__range]))",
+          "legendFormat": "{{vendor}}",
+          "instant": true,
           "refId": "A"
         }
       ],
-      "description": "LLM spend per interval, by vendor."
+      "description": "Total LLM spend per vendor over the dashboard time range."
     },
     {
-      "type": "timeseries",
-      "title": "Cost per vendor-model (USD)",
+      "type": "stat",
+      "title": "Total cost per vendor-model (USD)",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -294,85 +243,34 @@
       },
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "drawStyle": "points",
-            "pointSize": 5,
-            "showPoints": "always"
-          },
+          "decimals": 2,
           "unit": "currencyUSD"
         },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi"
-        }
+        "textMode": "value_and_name",
+        "colorMode": "value"
       },
       "targets": [
         {
-          "expr": "sum by (vendor, model) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__rate_interval]))",
-          "legendFormat": "{{vendor}} {{model}}",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
+          "expr": "sum by (vendor, model) (increase(llm_cost_usd_total{app=~\".*-development\"}[$__range]))",
+          "legendFormat": "{{vendor}} {{model}}",
+          "instant": true,
           "refId": "A"
         }
       ],
-      "description": "LLM spend per interval, by vendor and model."
+      "description": "Total LLM spend per vendor and model over the dashboard time range."
     },
     {
       "type": "row",
