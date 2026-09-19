@@ -24,8 +24,9 @@ fun Route.registerGetConversationSharedUsersRoutes(
             tags("Conversations")
             summary = "List users a conversation is shared with"
             request {
-                pathParameter<String>("conversationId") {
+                queryParameter<String>("conversationId") {
                     description = "Conversation to inspect"
+                    required = true
                 }
             }
             response {
@@ -49,7 +50,7 @@ fun Route.registerGetConversationSharedUsersRoutes(
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
-                val conversationId = call.parameters["conversationId"]
+                val conversationId = call.request.queryParameters["conversationId"]
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Missing conversationId")

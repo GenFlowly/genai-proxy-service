@@ -114,7 +114,7 @@ fun Route.registerSystemVendorApiKeysRoutes(
         get(Routes.ADMIN_SYSTEM_API_KEY_MODELS, { hidden = true }) {
             try {
                 call.requireAdminCustomerId(customerProfileService, appConfig)
-                val vendorParam = call.parameters["aiVendor"]
+                val vendorParam = call.request.queryParameters["aiVendor"]
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
                         ErrorResponse(error = "Missing aiVendor")

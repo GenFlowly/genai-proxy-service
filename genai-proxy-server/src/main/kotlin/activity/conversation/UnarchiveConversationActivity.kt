@@ -24,8 +24,9 @@ fun Route.registerUnarchiveConversationRoutes(
             tags("Conversations")
             summary = "Restore an archived conversation"
             request {
-                pathParameter<String>("conversationId") {
+                queryParameter<String>("conversationId") {
                     description = "Conversation to restore"
+                    required = true
                 }
             }
             response {
@@ -49,7 +50,7 @@ fun Route.registerUnarchiveConversationRoutes(
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
-                val conversationId = call.parameters["conversationId"]
+                val conversationId = call.request.queryParameters["conversationId"]
 
                 if (conversationId.isNullOrBlank()) {
                     return@post call.respond(
