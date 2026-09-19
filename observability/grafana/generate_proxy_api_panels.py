@@ -56,7 +56,7 @@ def route_regex(path):
     return ".*" + path.replace("{", "\\\\{").replace("}", "\\\\}") + "$"
 
 
-def base_panel(title, desc, x, y, w=6, h=6):
+def base_panel(title, desc, x, y, w=12, h=8):
     return {
         "type": "timeseries", "title": title, "datasource": DS,
         "gridPos": {"x": x, "y": y, "w": w, "h": h},
@@ -70,8 +70,9 @@ def api_panels(env, paths, row_y):
     app = f"genai-proxy-server-{env}"
     out = []
     for i, path in enumerate(paths):
-        y = row_y + 1 + (i // 2) * 6
-        x = (i % 2) * 12
+        # one API per row: status chart left, latency chart right
+        y = row_y + 1 + i * 8
+        x = 0
         sel = f'app="{app}", route=~"{route_regex(path)}"'
         p_status = base_panel(path, f"Requests by status for {path} (cumulative counter; resets on deploy/restart).", x, y)
         p_status["targets"] = [{
@@ -79,7 +80,7 @@ def api_panels(env, paths, row_y):
             "expr": f"sum by (status) (ktor_http_server_requests_seconds_count{{{sel}}})",
             "legendFormat": "{{status}}", "refId": "A",
         }]
-        p_lat = base_panel(f"{path} — latency", f"Request latency percentiles for {path}.", x + 6, y)
+        p_lat = base_panel(f"{path} — latency", f"Request latency percentiles for {path}.", x + 12, y)
         p_lat["fieldConfig"]["defaults"]["unit"] = "s"
         p_lat["targets"] = [{
             "datasource": DS,
