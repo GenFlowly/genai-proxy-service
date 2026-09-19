@@ -1,0 +1,38 @@
+{
+  "description": "Global status color scheme for all Grafana dashboards. Edit here, then run apply_color_scheme.py to stamp it into every panel of every dashboard JSON in this directory. Rules are applied in order; later rules win when a series name matches more than one.",
+  "series_rules": [
+    {
+      "category": "success",
+      "color": "green",
+      "regex": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+    },
+    {
+      "category": "warning",
+      "color": "yellow",
+      "regex": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+    },
+    {
+      "category": "error",
+      "color": "red",
+      "regex": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+    }
+  ],
+  "stat_rules": [
+    {
+      "category": "warning",
+      "title_regex": "fallback|Unpriced",
+      "steps": [
+        { "color": "green", "value": null },
+        { "color": "yellow", "value": 1 }
+      ]
+    },
+    {
+      "category": "error",
+      "title_regex": "failures|Unparseable",
+      "steps": [
+        { "color": "green", "value": null },
+        { "color": "red", "value": 1 }
+      ]
+    }
+  ]
+}
