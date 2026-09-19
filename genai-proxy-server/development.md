@@ -212,6 +212,8 @@ An **action** is an internal generation flow the server runs on the user's behal
 
 All services follow ONE set of metric-naming and dimension conventions, pinned here and implemented for Python in `encoding-library/src/encoding_library/observability/`. Dashboards and alarms live in Grafana (fed by Fly Prometheus for the Fly apps and CloudWatch for the lambdas), so a metric must mean the same thing no matter which service emitted it.
 
+Dashboard JSONs live in `observability/grafana/`. All charts share a global status color scheme (green = success/2xx, yellow = warnings, red = errors/4xx/5xx) defined once in `observability/grafana/color-scheme.json` and stamped into every panel by `apply_color_scheme.py` — see the README there; never hand-edit colors in the dashboard JSONs.
+
 ### Metric naming
 
 - `snake_case`. Counters end in `_total`; duration histograms end in `_duration_seconds` (seconds, not ms).
