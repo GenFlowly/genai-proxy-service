@@ -11,6 +11,24 @@ _DEFAULTS = {
     "gemini": "gemini-1.5-pro",
 }
 
+# Native tier of the BYOK vendor catalog: providers with a first-party
+# langchain-* integration (each wraps the vendor's own SDK). openai/anthropic/
+# gemini stay in dedicated branches below because they carry vendor-specific
+# logic (betas, Responses-API routing). Everything else goes through LiteLLM.
+# Keys are LiteLLM provider ids — the platform-wide canonical vendor ids.
+# Values: (module, class, api-key kwarg — most accept the generic "api_key").
+NATIVE_PROVIDERS = {
+    "xai": ("langchain_xai", "ChatXAI", "api_key"),
+    "mistral": ("langchain_mistralai", "ChatMistralAI", "api_key"),
+    "groq": ("langchain_groq", "ChatGroq", "api_key"),
+    "deepseek": ("langchain_deepseek", "ChatDeepSeek", "api_key"),
+    "cohere": ("langchain_cohere", "ChatCohere", "cohere_api_key"),
+    "perplexity": ("langchain_perplexity", "ChatPerplexity", "api_key"),
+    "together_ai": ("langchain_together", "ChatTogether", "api_key"),
+    "fireworks_ai": ("langchain_fireworks", "ChatFireworks", "api_key"),
+    "nvidia_nim": ("langchain_nvidia_ai_endpoints", "ChatNVIDIA", "api_key"),
+}
+
 # LLM calls retry inside the vendor SDKs (exponential backoff on 429/5xx/
 # connection errors, no retry on auth/4xx) rather than through
 # encoding_library.utils.retry — re-issuing a generation from our layer can
@@ -81,6 +99,52 @@ def get_llm(
             max_retries=_MAX_RETRIES,
         )
 
+    elif provider in NATIVE_PROVIDERS:
+        module_name, class_name, key_kwarg = NATIVE_PROVIDERS[provider]
+        key = credentials.get(f"{provider}_api_key", "")
+        if not key:
+            logger.error("LLM factory: %s_api_key is MISSING in credentials", provider)
+        try:
+            import importlib
+            cls = getattr(importlib.import_module(module_name), class_name)
+            return cls(
+                model=resolved_model,
+                max_tokens=max_tokens,
+                max_retries=_MAX_RETRIES,
+                **{key_kwarg: key},
+            )
+        except Exception as e:
+            # A native package that fails to import or construct must not take
+            # the provider down — the LiteLLM path speaks its API too.
+            logger.warning(
+                "LLM factory: native %s (%s.%s) unavailable (%s); falling back to LiteLLM",
+                provider, module_name, class_name, e,
+            )
+            return _litellm_llm(provider, credentials, resolved_model, max_tokens)
+
     else:
-        logger.error("LLM factory: unsupported provider '%s'", provider)
-        raise ValueError(f"Unsupported LLM provider: {provider}")
+        # Long-tail BYOK providers: one normalized client over each vendor's
+        # native API. Model ids are namespaced "<provider>/<model>".
+        return _litellm_llm(provider, credentials, resolved_model, max_tokens)
+
+
+def _litellm_llm(
+    provider: str,
+    credentials: dict,
+    model: Optional[str],
+    max_tokens: int,
+) -> BaseChatModel:
+    from langchain_litellm import ChatLiteLLM
+
+    key = credentials.get(f"{provider}_api_key", "")
+    if not key:
+        logger.error("LLM factory: %s_api_key is MISSING in credentials", provider)
+    if not model:
+        raise ValueError(f"Provider '{provider}' requires an explicit model")
+    logger.info("LLM factory: LiteLLM path provider=%s model=%s", provider, model)
+    return ChatLiteLLM(
+        model=f"{provider}/{model}",
+        api_key=key,
+        max_tokens=max_tokens,
+        max_retries=_MAX_RETRIES,
+    )

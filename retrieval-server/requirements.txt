@@ -18,6 +18,18 @@ langchain-openai
 langchain-anthropic
 langchain-google-genai
 langchain-text-splitters
+# Native tier of the BYOK vendor catalog (see graph/llm_factory.py) — each
+# wraps the vendor's own SDK/API. Everything else goes through ChatLiteLLM.
+langchain-xai
+langchain-mistralai
+langchain-groq
+langchain-deepseek
+langchain-cohere
+langchain-perplexity
+langchain-together
+langchain-fireworks
+langchain-nvidia-ai-endpoints
+langchain-litellm
 
 boto3
 
