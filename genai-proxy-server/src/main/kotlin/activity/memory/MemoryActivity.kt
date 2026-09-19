@@ -32,16 +32,22 @@ fun Route.registerMemoryRoutes(
                     "status=pending until extraction writes its marker; then status=done " +
                     "with the facts (possibly empty — nothing was learned)."
             request {
-                pathParameter<String>("conversationId") { description = "Conversation" }
-                pathParameter<String>("messageId") { description = "Assistant message of the exchange" }
+                queryParameter<String>("conversationId") {
+                    description = "Conversation"
+                    required = true
+                }
+                queryParameter<String>("messageId") {
+                    description = "Assistant message of the exchange"
+                    required = true
+                }
             }
             response {
                 code(HttpStatusCode.OK) { body<com.genflowly.models.api.LearnedFactsResponse>() }
                 code(HttpStatusCode.NotFound) { body<ErrorResponse>() }
             }
         }) {
-            val conversationId = call.parameters["conversationId"]
-            val messageId = call.parameters["messageId"]
+            val conversationId = call.request.queryParameters["conversationId"]
+            val messageId = call.request.queryParameters["messageId"]
             if (conversationId.isNullOrBlank() || messageId.isNullOrBlank()) {
                 return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing ids"))
             }

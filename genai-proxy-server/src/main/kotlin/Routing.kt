@@ -107,8 +107,10 @@ object Routes {
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
     const val DELETE_CONVERSATION = "$API_V1/conversation/{conversationId}"
     const val UNARCHIVE_CONVERSATION = "$API_V1/conversation/{conversationId}/unarchive"
-    const val PIN_CONVERSATION = "$API_V1/conversation/{conversationId}/pin"
-    const val UNPIN_CONVERSATION = "$API_V1/conversation/{conversationId}/unpin"
+    // Flat paths with ?conversationId= query params — path-embedded ids fragment
+    // the per-route metrics (development.md "API metrics & dashboards").
+    const val PIN_CONVERSATION = "$API_V1/conversation/pin"
+    const val UNPIN_CONVERSATION = "$API_V1/conversation/unpin"
     const val GET_PINNED_CONVERSATIONS = "$API_V1/conversations/pinned"
     const val SEARCH = "$API_V1/search"
     const val GET_PROFILE = "$API_V1/profile"
@@ -152,7 +154,7 @@ object Routes {
 
     const val GET_MEMORIES = "$API_V1/memories"
     const val DELETE_MEMORY = "$API_V1/memories/{memoryId}"
-    const val GET_LEARNED_FACTS = "$API_V1/conversation/{conversationId}/messages/{messageId}/learned-facts"
+    const val GET_LEARNED_FACTS = "$API_V1/conversation/learned-facts"
 }
 
 

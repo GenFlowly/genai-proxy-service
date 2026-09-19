@@ -28,7 +28,7 @@ describe('learnedFactsService', () => {
             await getLearnedFacts('tok-123', 'conv-1', 'msg-1');
 
             expect(global.fetch).toHaveBeenCalledWith(
-                expect.stringContaining('/api/v1/conversation/conv-1/messages/msg-1/learned-facts'),
+                expect.stringContaining('/api/v1/conversation/learned-facts?conversationId=conv-1&messageId=msg-1'),
                 expect.objectContaining({
                     method: 'GET',
                     headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),

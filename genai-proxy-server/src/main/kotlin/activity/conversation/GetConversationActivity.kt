@@ -23,14 +23,15 @@ fun Route.registerGetConversationRoutes(
     conversationService: ConversationService
 ) {
     authenticate("auth0", "apiKey", optional = true) {
-        get("${Routes.GET_CONVERSATION}/{conversationId}", {
+        get(Routes.GET_CONVERSATION, {
             tags("Conversations")
             summary = "Get conversation history"
             description = "Returns the full message history of a conversation. Authentication is " +
                     "optional: unauthenticated callers can only access publicly shared conversations."
             request {
-                pathParameter<String>("conversationId") {
+                queryParameter<String>("conversationId") {
                     description = "Conversation to fetch"
+                    required = true
                 }
             }
             response {
@@ -53,7 +54,7 @@ fun Route.registerGetConversationRoutes(
             }
         }) {
             try {
-                val conversationId = call.parameters["conversationId"]
+                val conversationId = call.request.queryParameters["conversationId"]
 
                 // TODO think about it
                 if (conversationId.isNullOrBlank()) {

@@ -24,8 +24,9 @@ fun Route.registerUnpinConversationRoutes(
             tags("Conversations")
             summary = "Unpin a conversation"
             request {
-                pathParameter<String>("conversationId") {
+                queryParameter<String>("conversationId") {
                     description = "Conversation to unpin"
+                    required = true
                 }
             }
             response {
@@ -49,7 +50,7 @@ fun Route.registerUnpinConversationRoutes(
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
-                val conversationId = call.parameters["conversationId"]
+                val conversationId = call.request.queryParameters["conversationId"]
 
                 if (conversationId.isNullOrBlank()) {
                     return@post call.respond(
