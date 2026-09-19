@@ -48,6 +48,13 @@ jest.mock('../../../context/LayoutContext', () => ({
 
 jest.mock('../../../hooks/usePageTitle', () => ({ usePageTitle: jest.fn() }));
 
+// Vendor display names come from the provider catalog; mocked with
+// catalog-shaped names so labels are deterministic.
+jest.mock('../../../hooks/useVendorDisplayNames', () => ({
+    useVendorDisplayNames: () => (vendorId: string) =>
+        ({ OPENAI: 'OpenAI', CLAUDE: 'Anthropic', GEMINI: 'Google Gemini' } as Record<string, string>)[vendorId] ?? vendorId,
+}));
+
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
     ...jest.requireActual('react-router-dom'),
@@ -247,7 +254,7 @@ describe('GraphAgentEditorPage', () => {
         await waitFor(() => expect(mockGraphEditorProps.vendors).toHaveLength(2));
         expect(mockGraphEditorProps.vendors).toEqual([
             { id: 'OPENAI', label: 'OpenAI' },
-            { id: 'GEMINI', label: 'Gemini' },
+            { id: 'GEMINI', label: 'Google Gemini' },
         ]);
         expect(typeof mockGraphEditorProps.getModelsForVendor).toBe('function');
     });

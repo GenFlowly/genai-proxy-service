@@ -1,6 +1,7 @@
 import React, { ElementType, HTMLAttributes } from 'react'
 import { ICONS } from '../../../constants/icons'
 import { Icon } from '@genflowly/component-library'
+import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import styles from './BrandName.module.scss'
 
 // --- Generic BrandName Component ---
@@ -26,18 +27,14 @@ export default function BrandName<T extends ElementType = 'div'>({
     )
 }
 
-// --- Specific Implementations ---
+// --- Vendor variants: name text comes from the provider catalog ---
 
-export function OpenAIBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'name'> & React.ComponentPropsWithoutRef<T>) {
-    return <BrandName name="OpenAI" {...props} />
-}
-
-export function ClaudeBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'name'> & React.ComponentPropsWithoutRef<T>) {
-    return <BrandName name="Claude" {...props} />
-}
-
-export function GeminiBrandName<T extends ElementType = 'div'>(props: Omit<BrandNameProps<T>, 'name'> & React.ComponentPropsWithoutRef<T>) {
-    return <BrandName name="Gemini" {...props} />
+export function VendorBrandName<T extends ElementType = 'div'>({
+    vendorId,
+    ...props
+}: Omit<BrandNameProps<T>, 'name'> & { vendorId: string } & React.ComponentPropsWithoutRef<T>) {
+    const displayName = useVendorDisplayNames()
+    return <BrandName name={displayName(vendorId)} {...props} />
 }
 
 // --- Collapsed variants: vendor initial badge ---
@@ -65,16 +62,18 @@ function CollapsedInitial({ initial, name, size = 20, className, 'data-testid': 
     )
 }
 
-export function CollapsedOpenAIBrandName({ size = 30, className }: { size?: number, className?: string }) {
-    return <CollapsedInitial initial="O" name="OpenAI" size={size} className={className} data-testid="collapsed-openai-brand" />
-}
-
-export function CollapsedClaudeBrandName({ size = 20, className }: { size?: number, className?: string }) {
-    return <CollapsedInitial initial="C" name="Claude" size={size} className={className} data-testid="collapsed-claude-brand" />
-}
-
-export function CollapsedGeminiBrandName({ size = 20, className }: { size?: number, className?: string }) {
-    return <CollapsedInitial initial="G" name="Gemini" size={size} className={className} data-testid="collapsed-gemini-brand" />
+export function CollapsedVendorBrandName({ vendorId, size = 20, className }: { vendorId: string, size?: number, className?: string }) {
+    const displayName = useVendorDisplayNames()
+    const name = displayName(vendorId)
+    return (
+        <CollapsedInitial
+            initial={name.charAt(0).toUpperCase()}
+            name={name}
+            size={size}
+            className={className}
+            data-testid={`collapsed-${vendorId.toLowerCase()}-brand`}
+        />
+    )
 }
 
 export function UserBrandName<T extends ElementType = 'div'>({

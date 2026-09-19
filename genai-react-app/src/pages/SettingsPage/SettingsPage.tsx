@@ -13,7 +13,7 @@ import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useWindowSize } from '../../hooks/useWindowSize'
 import { useLayout } from '../../context/LayoutContext'
-import { Breadcrumbs, BreadcrumbItem, ResizableSidebar } from '@genflowly/component-library'
+import { Breadcrumbs, BreadcrumbItem, ResizableSidebar, ScrollArea } from '@genflowly/component-library'
 
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -75,7 +75,7 @@ export default function SettingsPage(): React.ReactElement {
                         </ResizableSidebar>
                     )
                 )}
-                <div className={styles.content}>
+                <ScrollArea className={styles.content}>
                     <div className={styles.contentInner}>
                         {isMobile && <Breadcrumbs items={breadcrumbItems} />}
                         <Routes>
@@ -95,7 +95,7 @@ export default function SettingsPage(): React.ReactElement {
                             <Route path="developer" element={<DeveloperSettings />} />
                         </Routes>
                     </div>
-                </div>
+                </ScrollArea>
             </div>
         </div>
     )

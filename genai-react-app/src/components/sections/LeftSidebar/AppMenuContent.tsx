@@ -5,7 +5,7 @@ import { useAuth } from '../../../context/AuthContext'
 import { NavbarMenu } from '../../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../../common/ThemeToggle/ThemeToggle'
 import { UserAvatarButton } from '@genflowly/component-library'
-import { Icon } from '@genflowly/component-library'
+import { Icon, ScrollArea } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import styles from './AppMenuContent.module.scss'
 
@@ -35,7 +35,7 @@ export const AppMenuContent: React.FC<AppMenuContentProps> = ({ onNavigate }) =>
     }
 
     return (
-        <div className={styles.appMenu} data-testid="app-menu-content">
+        <ScrollArea className={styles.appMenu} data-testid="app-menu-content">
             <div className={styles.navSection}>
                 <NavbarMenu />
             </div>
@@ -71,6 +71,6 @@ export const AppMenuContent: React.FC<AppMenuContentProps> = ({ onNavigate }) =>
                     )}
                 </div>
             </div>
-        </div>
+        </ScrollArea>
     )
 }

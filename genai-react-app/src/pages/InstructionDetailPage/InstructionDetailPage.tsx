@@ -16,6 +16,7 @@ import {
     BreadcrumbItem,
     PillButton,
     pageHeaderStyles,
+    ScrollArea,
 } from '@genflowly/component-library';
 import ShareModal, { VisibilityMode } from '../../components/common/ShareModal/ShareModal';
 import { SearchUserResponse } from '../../models/user.models';
@@ -164,7 +165,7 @@ export default function InstructionDetailPage() {
     return (
         <div className={styles.page}>
             <Navbar />
-            <div className={styles.pageContainer}>
+            <ScrollArea className={styles.pageContainer}>
                 <div className={pageHeaderStyles.header}>
                     <Breadcrumbs items={breadcrumbItems} variant="onHeader" />
                     <div className={pageHeaderStyles.actions}>
@@ -228,7 +229,7 @@ export default function InstructionDetailPage() {
                         return getInstructionSharedUsers(token, id);
                     }}
                 />
-            </div>
+            </ScrollArea>
         </div>
     );
 }

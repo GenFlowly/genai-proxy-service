@@ -13,7 +13,8 @@ import { createGraphAgent, getAgent, updateAgent } from '../../../services/agent
 import { getCustomerInstructions } from '../../../services/instructionService'
 import { getNodePresets } from '../../../services/nodePresetsService'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
-import { AIVendor, VENDOR_LABELS } from '../../../constants/vendors'
+import { AIVendor } from '../../../constants/vendors'
+import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import {
     Agent,
@@ -123,6 +124,7 @@ function useIsDesktop(): boolean {
  */
 export default function GraphAgentEditorPage() {
     const { t } = useTranslation()
+    const vendorDisplayName = useVendorDisplayNames()
     const { graphId } = useParams<{ graphId: string }>()
     const navigate = useNavigate()
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
@@ -223,9 +225,9 @@ export default function GraphAgentEditorPage() {
                 .filter(s => s.status === APIKeyStatus.VALID || s.isAPIKeyValid)
                 .map(s => ({
                     id: s.aiVendor,
-                    label: VENDOR_LABELS[s.aiVendor as AIVendor] ?? s.aiVendor,
+                    label: vendorDisplayName(s.aiVendor),
                 })),
-        [aiVendorAPIKeyStatusList]
+        [aiVendorAPIKeyStatusList, vendorDisplayName]
     )
 
     const getModelsForVendor = useCallback(

@@ -34,13 +34,15 @@ jest.mock('@genflowly/component-library', () => ({
     ),
 }));
 
+// Real display names come from the provider catalog; the mock uses fixed
+// per-vendor labels so widget behavior can be asserted deterministically.
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
-    OpenAIBrandName: () => <span>OpenAI</span>,
-    ClaudeBrandName: () => <span>Claude</span>,
-    GeminiBrandName: () => <span>Gemini</span>,
-    CollapsedOpenAIBrandName: () => <span>O</span>,
-    CollapsedClaudeBrandName: () => <span>C</span>,
-    CollapsedGeminiBrandName: () => <span>G</span>
+    VendorBrandName: ({ vendorId }: any) => (
+        <span>{({ OPENAI: 'OpenAI', CLAUDE: 'Claude', GEMINI: 'Gemini' } as any)[vendorId] ?? vendorId}</span>
+    ),
+    CollapsedVendorBrandName: ({ vendorId }: any) => (
+        <span>{({ OPENAI: 'O', CLAUDE: 'C', GEMINI: 'G' } as any)[vendorId] ?? vendorId.charAt(0)}</span>
+    )
 }));
 
 describe('AIVendorWidget', () => {

@@ -15,15 +15,11 @@ import ThinkingSteps from './ThinkingSteps'
 import { useLearnedFacts } from '../../../../hooks/useLearnedFacts'
 import { RectangleButton } from '@genflowly/component-library'
 import { Tooltip } from '@genflowly/component-library'
-import {
-    OpenAIBrandName,
-    ClaudeBrandName,
-    GeminiBrandName
-} from '../../../common/BrandName/BrandName'
+import { VendorBrandName } from '../../../common/BrandName/BrandName'
+import { useVendorDisplayNames } from '../../../../hooks/useVendorDisplayNames'
 import { AIVendor } from '../../../../constants/vendors'
 import { useMaxVendors } from '../../../../hooks/useMaxVendors'
 import { ToggleOption } from '@genflowly/component-library'
-import { RadioButtonGroup } from '@genflowly/component-library'
 import { CheckboxButtonGroup } from '@genflowly/component-library'
 
 /**
@@ -334,14 +330,18 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
     }, [availableVendors, blockId, setVendorSelectionForBlock])
 
     const selectedVendors = getVendorSelectionForBlock(blockId)
-    const maxVendors = useMaxVendors()
+
+    // The response container spans the conversation widget, so its width IS
+    // the conversation viewport — a callback ref keeps the measurement alive
+    // even when the container switches between the empty and normal branches
+    const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null)
+    const maxVendors = useMaxVendors(containerEl)
+    const vendorDisplayName = useVendorDisplayNames()
 
     const toggleOptions: ToggleOption[] = useMemo(() => availableVendors.map(vendor => ({
         id: vendor,
-        label: vendor === AIVendor.OPENAI ? 'OpenAI' :
-            vendor === AIVendor.CLAUDE ? 'Claude' :
-                vendor === AIVendor.GEMINI ? 'Gemini' : vendor
-    })), [availableVendors])
+        label: vendorDisplayName(vendor)
+    })), [availableVendors, vendorDisplayName])
     const rawSelectedVendors = selectedVendors.length > 0 ? selectedVendors : availableVendors
     // Priority also decides WHICH vendors survive the display cap
     const effectiveSelectedVendors = [...rawSelectedVendors].sort(byVendorPriority).slice(0, maxVendors)
@@ -359,6 +359,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
     if (!visibleMessages || visibleMessages.length === 0) {
         return (
             <div
+                ref={setContainerEl}
                 className={styles.container}
                 data-response-block-id={blockId}
                 data-testid={testId || "empty-response-block"}
@@ -383,32 +384,25 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
 
     return (
         <div
+            ref={setContainerEl}
             className={styles.container}
             data-response-block-id={blockId}
             data-testid={testId}
         >
             {availableVendors.length > 1 && (
                 <div className={styles.toggleWrapper}>
-                    {availableVendors.length > maxVendors ? (
-                        // More vendors than columns fit on this screen: pick one at a time
-                        <RadioButtonGroup
-                            options={toggleOptions}
-                            selectedValues={effectiveSelectedVendors}
-                            onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
-                            allowEmpty={false}
-                            data-testid="vendor-radio-group"
-                        />
-                    ) : (
-                        // All vendors fit: toggle freely up to the column limit
-                        <CheckboxButtonGroup
-                            options={toggleOptions}
-                            selectedValues={effectiveSelectedVendors}
-                            onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
-                            allowEmpty={false}
-                            maxSelection={maxVendors}
-                            data-testid="vendor-checkbox-group"
-                        />
-                    )}
+                    {/* Capped multi-select: as many vendors as columns fit the
+                        conversation width (2, or 1 on narrow screens); at the
+                        cap a new pick evicts the oldest selection */}
+                    <CheckboxButtonGroup
+                        options={toggleOptions}
+                        selectedValues={effectiveSelectedVendors}
+                        onChange={(vendors) => setVendorSelectionForBlock(blockId, vendors)}
+                        allowEmpty={false}
+                        maxSelection={maxVendors}
+                        showCheckbox
+                        data-testid="vendor-checkbox-group"
+                    />
                 </div>
             )}
 
@@ -442,11 +436,7 @@ export default function Response({ blockId, responseMessages, onFollowUp, disabl
 
                     let HeaderComponent: React.ReactNode = null
                     if (aiVendor) {
-                        let brand: React.ReactNode
-                        if (aiVendor === AIVendor.OPENAI) brand = <OpenAIBrandName as="span" />
-                        else if (aiVendor === AIVendor.CLAUDE) brand = <ClaudeBrandName as="span" />
-                        else if (aiVendor === AIVendor.GEMINI) brand = <GeminiBrandName as="span" />
-                        else brand = <h2>{aiVendor}</h2>
+                        const brand: React.ReactNode = <VendorBrandName vendorId={aiVendor} as="span" />
                         HeaderComponent = (
                             <span className={styles.responseCardTitle}>
                                 {brand}

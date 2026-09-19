@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AIVendor } from '../../../../constants/vendors'
 import { useToast } from '../../../../context/ToastContext'
 import {
     getTextGenerationModels,
@@ -20,12 +19,8 @@ import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
 import { PillButton } from '@genflowly/component-library'
 import {
-    OpenAIBrandName,
-    ClaudeBrandName,
-    GeminiBrandName,
-    CollapsedOpenAIBrandName,
-    CollapsedClaudeBrandName,
-    CollapsedGeminiBrandName
+    VendorBrandName,
+    CollapsedVendorBrandName
 } from '../../../common/BrandName/BrandName'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
@@ -190,11 +185,6 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
 
                 const tooltipContent = !isEnabled ? t('sidebar.aiVendorWidget.apiKeyNotSet') : vendor
 
-                let CollapsedBrandComponent = ({ size }: { size?: number }) => <Icon src={ICONS.MODELS} size={size} />
-                if (vendor === AIVendor.OPENAI) CollapsedBrandComponent = CollapsedOpenAIBrandName
-                if (vendor === AIVendor.CLAUDE) CollapsedBrandComponent = CollapsedClaudeBrandName
-                if (vendor === AIVendor.GEMINI) CollapsedBrandComponent = CollapsedGeminiBrandName
-
                 return (
                     <Tooltip key={vendor} content={tooltipContent} position="left">
                         <div className={styles.buttonWrapper}>
@@ -213,7 +203,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                                 }}
                                 disabled={!isEnabled}
                             >
-                                <CollapsedBrandComponent size={20} />
+                                <CollapsedVendorBrandName vendorId={vendor} size={20} />
                             </button>
                         </div>
                     </Tooltip>
@@ -277,10 +267,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                     const models = getModelsForVendor(vendor)
                     const isEnabled = isVendorEnabled(vendor)
 
-                    let BrandComponent: React.ReactNode = vendor
-                    if (vendor === AIVendor.OPENAI) BrandComponent = <OpenAIBrandName as="span" />
-                    if (vendor === AIVendor.CLAUDE) BrandComponent = <ClaudeBrandName as="span" />
-                    if (vendor === AIVendor.GEMINI) BrandComponent = <GeminiBrandName as="span" />
+                    const BrandComponent: React.ReactNode = <VendorBrandName vendorId={vendor} as="span" />
 
                     return (
                         <div key={vendor} className={styles.vendorBlock}>

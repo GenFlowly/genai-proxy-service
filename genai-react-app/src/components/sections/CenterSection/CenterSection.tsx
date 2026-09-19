@@ -1,4 +1,5 @@
 import React from 'react'
+import { ScrollArea } from '@genflowly/component-library'
 import styles from './CenterSection.module.scss'
 import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
 import { useSidebarMenu } from '../../../context/SidebarMenuContext'
@@ -20,13 +21,13 @@ export default function CenterSection({ widgetIds, 'data-testid': testId }: Cent
 
     return (
         <div className={styles.centerSection} data-testid={testId || "center-section"}>
-            <div className={styles.scrollContainer} data-testid="center-section-scroll">
+            <ScrollArea className={styles.scrollContainer} data-testid="center-section-scroll">
                 <div className={styles.contentWrapper} data-testid="center-section-content">
                     {displayWidgets.map(widget => (
                         <widget.component key={widget.id} />
                     ))}
                 </div>
-            </div>
+            </ScrollArea>
         </div>
     )
 }

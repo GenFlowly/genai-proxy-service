@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Agent, AgentNode, UpdateAgentNodePatch, UpdateAgentRequest } from '../../../models/agents.models'
 import i18n from '../../../i18n'
+import { ScrollArea } from '@genflowly/component-library'
 import styles from './EditAgentDrawer.module.scss'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -310,7 +311,7 @@ export default function EditAgentDrawer({
                 </div>
 
                 {/* Body */}
-                <div className={styles.drawerBody}>
+                <ScrollArea className={styles.drawerBody}>
                     {/* Agent-level fields */}
                     <section className={styles.section}>
                         <h3 className={styles.sectionTitle}>{t('agentsPage.editAgentDrawer.agentSettings')}</h3>
@@ -366,7 +367,7 @@ export default function EditAgentDrawer({
                             ))}
                         </div>
                     </section>
-                </div>
+                </ScrollArea>
 
                 {/* Footer */}
                 <div className={styles.drawerFooter}>

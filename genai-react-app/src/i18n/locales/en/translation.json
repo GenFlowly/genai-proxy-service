@@ -252,7 +252,8 @@
             "pinFailed": "Failed to pin conversation",
             "pinned": "Pinned",
             "pinnedToast": "Conversation pinned",
-            "title": "History",
+            "recent": "Recent",
+            "title": "Recent",
             "unpinConversation": "Unpin conversation",
             "unpinFailed": "Failed to unpin conversation",
             "unpinnedToast": "Conversation unpinned"
