@@ -245,13 +245,13 @@ Every proxy API automatically emits success/failure and latency metrics — the 
 
 (A few `{param}` routes still remain, e.g. plain DELETE-by-id routes; they predate this convention — don't add new ones.)
 
-**Dashboards**: the dedicated "Proxy Server APIs" dashboards (`observability/grafana/proxy-apis-*.json`) hold a chart pair per API — requests by status (colored by the global scheme) and p50/p90/p95/p99 latency — grouped into rows by subresource (`/api/v1/agents/...`, `/api/v1/conversation/...`, ...). They are generated, not hand-maintained: after adding or renaming a route, run
+**Dashboards**: the dedicated "Proxy Server APIs" (`observability/grafana/proxy-apis-*.json`) and "Retrieval Server APIs" (`retrieval-apis-*.json`) dashboards hold a chart pair per API — requests by status (colored by the global scheme) and p50/p90/p95/p99 latency — grouped into rows by subresource (`/api/v1/agents/...`, `/api/v1/conversation/...`, ...). They are generated, not hand-maintained: after adding or renaming a route in either server, run
 
 ```
-python3 observability/grafana/generate_proxy_api_panels.py
+python3 observability/grafana/generate_api_dashboards.py
 ```
 
-and commit the regenerated dashboard JSONs. The script discovers routes from `Routing.kt` (including segments appended at the call site and inline literals in `activity/`) and re-applies the color scheme, so the new API's charts show up automatically.
+and commit the regenerated dashboard JSONs. The script discovers proxy routes from `Routing.kt`/`activity/` and retrieval routes from `routes/*.py` decorators, and re-applies the color scheme, so the new API's charts show up automatically. CI deploys the JSONs to Grafana on push (`*-development.json` from `development`, `*-production.json` from `main`).
 
 ### Metric naming
 

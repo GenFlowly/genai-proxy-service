@@ -950,1326 +950,10 @@
     },
     {
       "type": "row",
-      "title": "Internal requests/h (proxy -> backends)",
-      "gridPos": {
-        "x": 0,
-        "y": 29,
-        "w": 24,
-        "h": 1
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "/retrieve",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 30,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/retrieve\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/execute-agent-graph",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 30,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/execute-agent-graph\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/search",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 30,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/search\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/models",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 30,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/models\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/models/metadata",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 36,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/models/metadata\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/validate-key",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 36,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/validate-key\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/delete-note-vectors",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 36,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/delete-note-vectors\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/delete-instruction-vectors",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 36,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/delete-instruction-vectors\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/delete-memory-vectors",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 42,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=\"/delete-memory-vectors\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/encode-conversations",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 42,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=~\".*/encode-conversations\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/encode-notes",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 42,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=~\".*/encode-notes\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/encode-memories",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 42,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=~\".*/encode-memories\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/encode-instructions",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 48,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=~\".*/encode-instructions\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "/create-collections",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 48,
-        "w": 6,
-        "h": 6
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "__schemeRef": "status-color-scheme",
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
-          },
-          "expr": "sum by (status) (increase(internal_client_total{app=~\".*-production\", operation=~\".*/create-collections\"}[1h]))",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "row",
       "title": "LLM",
       "gridPos": {
         "x": 0,
-        "y": 54,
+        "y": 29,
         "w": 24,
         "h": 1
       },
@@ -2289,7 +973,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 55,
+        "y": 30,
         "w": 8,
         "h": 7
       },
@@ -2383,7 +1067,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 55,
+        "y": 30,
         "w": 8,
         "h": 7
       },
@@ -2479,7 +1163,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 55,
+        "y": 30,
         "w": 8,
         "h": 7
       },
@@ -2573,7 +1257,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 62,
+        "y": 37,
         "w": 8,
         "h": 7
       },
@@ -2666,7 +1350,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 62,
+        "y": 37,
         "w": 8,
         "h": 7
       },
@@ -2760,7 +1444,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 62,
+        "y": 37,
         "w": 4,
         "h": 7
       },
@@ -2811,7 +1495,7 @@
       },
       "gridPos": {
         "x": 20,
-        "y": 62,
+        "y": 37,
         "w": 4,
         "h": 7
       },
@@ -2864,7 +1548,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 69,
+        "y": 44,
         "w": 8,
         "h": 7
       },
@@ -2957,7 +1641,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 69,
+        "y": 44,
         "w": 8,
         "h": 7
       },
@@ -3050,7 +1734,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 69,
+        "y": 44,
         "w": 8,
         "h": 7
       },
@@ -3143,7 +1827,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 76,
+        "y": 51,
         "w": 12,
         "h": 7
       },
@@ -3251,7 +1935,7 @@
       "repeat": "model",
       "gridPos": {
         "x": 0,
-        "y": 83,
+        "y": 58,
         "w": 24,
         "h": 1
       },
@@ -3271,7 +1955,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 84,
+        "y": 59,
         "w": 6,
         "h": 7
       },
@@ -3365,7 +2049,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 84,
+        "y": 59,
         "w": 6,
         "h": 7
       },
@@ -3459,7 +2143,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 84,
+        "y": 59,
         "w": 6,
         "h": 7
       },
@@ -3552,7 +2236,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 84,
+        "y": 59,
         "w": 6,
         "h": 7
       },
@@ -3642,7 +2326,7 @@
       "title": "Vector retrieval & embeddings",
       "gridPos": {
         "x": 0,
-        "y": 91,
+        "y": 66,
         "w": 24,
         "h": 1
       },
@@ -3662,7 +2346,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 92,
+        "y": 67,
         "w": 8,
         "h": 7
       },
@@ -3755,7 +2439,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 92,
+        "y": 67,
         "w": 8,
         "h": 7
       },
@@ -3849,7 +2533,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 92,
+        "y": 67,
         "w": 4,
         "h": 7
       },
@@ -3902,7 +2586,7 @@
       },
       "gridPos": {
         "x": 20,
-        "y": 92,
+        "y": 67,
         "w": 4,
         "h": 7
       },
@@ -3951,7 +2635,7 @@
       "title": "Web search, tools, streaming, voice",
       "gridPos": {
         "x": 0,
-        "y": 99,
+        "y": 74,
         "w": 24,
         "h": 1
       },
@@ -3971,7 +2655,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 100,
+        "y": 75,
         "w": 8,
         "h": 7
       },
@@ -4073,7 +2757,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 100,
+        "y": 75,
         "w": 8,
         "h": 7
       },
@@ -4175,7 +2859,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 100,
+        "y": 75,
         "w": 8,
         "h": 7
       },
@@ -4268,7 +2952,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 107,
+        "y": 82,
         "w": 12,
         "h": 7
       },
@@ -4384,7 +3068,7 @@
       "title": "Memory extraction",
       "gridPos": {
         "x": 0,
-        "y": 114,
+        "y": 89,
         "w": 24,
         "h": 1
       },
@@ -4402,7 +3086,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 115,
+        "y": 90,
         "w": 8,
         "h": 7
       },
@@ -4495,7 +3179,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 115,
+        "y": 90,
         "w": 8,
         "h": 7
       },
@@ -4588,7 +3272,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 115,
+        "y": 90,
         "w": 8,
         "h": 7
       },
@@ -4691,7 +3375,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 122,
+        "y": 97,
         "w": 8,
         "h": 7
       },
@@ -4784,7 +3468,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 122,
+        "y": 97,
         "w": 4,
         "h": 7
       },
@@ -4837,7 +3521,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 122,
+        "y": 97,
         "w": 4,
         "h": 7
       },
