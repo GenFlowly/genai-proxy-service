@@ -15,6 +15,7 @@ export const endpoints = {
     agents: `${BASE}${API_PREFIX}/agents`,
     agent: (graphId: string) => `${BASE}${API_PREFIX}/agents/${graphId}`,
     requestAgentMap: `${BASE}${API_PREFIX}/admin/request-agent-map`,
+    vendorAllowlist: `${BASE}${API_PREFIX}/admin/vendor-allowlist`,
     nodePresets: `${BASE}${API_PREFIX}/node-presets`,
     adminNodePresets: `${BASE}${API_PREFIX}/admin/node-presets`,
     adminNodePreset: (presetId: string) => `${BASE}${API_PREFIX}/admin/node-presets/${presetId}`,
