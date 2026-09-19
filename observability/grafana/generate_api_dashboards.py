@@ -277,28 +277,36 @@ def build_llm_dashboard(env):
                   "Share of LLM calls per vendor and model over the dashboard time range.",
                   f'sum by (vendor, model) (increase(llm_request_total{{{app}}}[$__range]))',
                   "{{vendor}} {{model}}", PANEL_W, 1),
+        pie_panel("Vendor cost distribution",
+                  "Share of LLM spend per vendor over the dashboard time range.",
+                  f'sum by (vendor) (increase(llm_cost_usd_total{{{app}}}[$__range]))',
+                  "{{vendor}}", 0, 9),
+        pie_panel("Vendor-model cost distribution",
+                  "Share of LLM spend per vendor and model over the dashboard time range.",
+                  f'sum by (vendor, model) (increase(llm_cost_usd_total{{{app}}}[$__range]))',
+                  "{{vendor}} {{model}}", PANEL_W, 9),
     ]
 
     cost_row = {"type": "row", "title": "Cost", "collapsed": False,
-                "gridPos": {"x": 0, "y": 9, "w": 24, "h": 1}}
+                "gridPos": {"x": 0, "y": 17, "w": 24, "h": 1}}
     cost_panels = [
         stat_panel("Total cost per vendor (USD)",
                    "Total LLM spend per vendor over the dashboard time range.",
                    f'sum by (vendor) (increase(llm_cost_usd_total{{{app}}}[$__range]))',
-                   "{{vendor}}", 0, 10, unit="currencyUSD"),
+                   "{{vendor}}", 0, 18, unit="currencyUSD"),
         stat_panel("Total cost per vendor-model (USD)",
                    "Total LLM spend per vendor and model over the dashboard time range.",
                    f'sum by (vendor, model) (increase(llm_cost_usd_total{{{app}}}[$__range]))',
-                   "{{vendor}} {{model}}", PANEL_W, 10, unit="currencyUSD"),
+                   "{{vendor}} {{model}}", PANEL_W, 18, unit="currencyUSD"),
     ]
 
     # Row repeated per vendor; inside, every metric panel repeats per model so
     # each vendor-model combination gets its own chart — no overlapping series,
     # fully dynamic via the chained $vendor/$model variables.
     vendor_row = {"type": "row", "title": "Vendor: $vendor", "collapsed": True,
-                  "repeat": "vendor", "gridPos": {"x": 0, "y": 18, "w": 24, "h": 1},
+                  "repeat": "vendor", "gridPos": {"x": 0, "y": 26, "w": 24, "h": 1},
                   "panels": []}
-    vy = 19
+    vy = 27
     vendor_charts = [
         ("Calls — $model",
          "LLM calls per interval.",
