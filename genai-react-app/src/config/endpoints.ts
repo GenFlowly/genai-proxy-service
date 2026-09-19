@@ -30,8 +30,8 @@ export const endpoints = {
     deleteConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}`,
     unarchiveConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}/unarchive`,
     getPinnedConversations: `${BASE}${API_PREFIX}/conversations/pinned`,
-    pinConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}/pin`,
-    unpinConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}/unpin`,
+    pinConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/pin?conversationId=${encodeURIComponent(conversationId)}`,
+    unpinConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/unpin?conversationId=${encodeURIComponent(conversationId)}`,
     getAIUsage: `${BASE}${API_PREFIX}/message/usage`,
     searchUsers: `${BASE}${API_PREFIX}/users/search`,
     getProfile: `${BASE}${API_PREFIX}/profile`,
@@ -47,6 +47,6 @@ export const endpoints = {
     developerApiKey: (keyId: string) => `${BASE}${API_PREFIX}/developer/api-keys/${keyId}`,
     attachments: `${BASE}${API_PREFIX}/attachments`,
     attachmentUrl: (attachmentId: string) => `${BASE}${API_PREFIX}/attachments/${attachmentId}/url`,
-    getLearnedFacts: (conversationId: string, messageId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}/messages/${messageId}/learned-facts`,
+    getLearnedFacts: (conversationId: string, messageId: string) => `${BASE}${API_PREFIX}/conversation/learned-facts?conversationId=${encodeURIComponent(conversationId)}&messageId=${encodeURIComponent(messageId)}`,
     deleteMemoryFact: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${memoryId}`,
 };

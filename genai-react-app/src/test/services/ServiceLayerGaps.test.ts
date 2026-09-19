@@ -19,7 +19,7 @@ describe('Service Layer Gaps', () => {
         });
 
         await getConversation('token', 'id');
-        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/v1/chat/id'), expect.anything());
+        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/v1/chat?conversationId=id'), expect.anything());
     });
 
     test('generateTextService calls', async () => {

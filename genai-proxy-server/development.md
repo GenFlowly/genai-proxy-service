@@ -214,6 +214,30 @@ All services follow ONE set of metric-naming and dimension conventions, pinned h
 
 Dashboard JSONs live in `observability/grafana/`. All charts share a global status color scheme (green = success/2xx, yellow = warnings, red = errors/4xx/5xx) defined once in `observability/grafana/color-scheme.json` and stamped into every panel by `apply_color_scheme.py` — see the README there; never hand-edit colors in the dashboard JSONs.
 
+### API metrics & dashboards (proxy server)
+
+Every proxy API automatically emits success/failure and latency metrics — the `MicrometerMetrics` plugin records each request on the `ktor_http_server_requests_seconds` timer with `route`, `method` and `status` labels (counts + duration histogram buckets). Nothing needs to be emitted by hand for a new route.
+
+**Route naming convention: resource ids go in query parameters, never in the path.** A path-embedded id gives every request its own metric identity and fragments the per-API dashboards (`/api/v1/chat/84b6da46-...` instead of one `/api/v1/chat` series).
+
+```
+✅ GET  /api/v1/chat?conversationId=xx
+✅ POST /api/v1/conversation/pin?conversationId=xx
+✅ GET  /api/v1/conversation/learned-facts?conversationId=xx&messageId=xx
+❌ GET  /api/v1/chat/{conversationId}
+❌ POST /api/v1/conversation/{conversationId}/pin
+```
+
+In the activity, read the id with `call.request.queryParameters["conversationId"]` and document it with `queryParameter<String>(...) { required = true }` in the OpenAPI block. (Older routes still using `{param}` path segments predate this convention — don't add new ones.)
+
+**Dashboards**: the "Proxy Server" row in both `fly-backend-*.json` dashboards holds a chart pair per API — requests by status (colored by the global scheme) and p50/p90/p95/p99 latency. It is generated, not hand-maintained: after adding or renaming a route, run
+
+```
+python3 observability/grafana/generate_proxy_api_panels.py
+```
+
+and commit the regenerated dashboard JSONs. The script discovers routes from `Routing.kt` (including segments appended at the call site and inline literals in `activity/`) and re-applies the color scheme, so the new API's charts show up automatically.
+
 ### Metric naming
 
 - `snake_case`. Counters end in `_total`; duration histograms end in `_duration_seconds` (seconds, not ms).
