@@ -25,6 +25,7 @@ import shareIcon from '../assets/icons/share-icon.svg'
 import laptopIcon from '../assets/icons/laptop.svg'
 import moonIcon from '../assets/icons/moon.svg'
 import loginIcon from '../assets/icons/login.svg'
+import logoutIcon from '../assets/icons/logout.svg'
 import archiveIcon from '../assets/icons/archive.svg'
 import pinIcon from '../assets/icons/pin.svg'
 import pinOffIcon from '../assets/icons/pin-off.svg'
@@ -60,6 +61,7 @@ export const ICONS = {
     MOON: moonIcon,
     SUN: sunIcon,
     LOGIN: loginIcon,
+    LOGOUT: logoutIcon,
     ARCHIVE: archiveIcon,
     PIN: pinIcon,
     PIN_OFF: pinOffIcon,
