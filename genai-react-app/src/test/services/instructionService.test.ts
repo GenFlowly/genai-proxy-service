@@ -109,7 +109,7 @@ describe('instructionService', () => {
 
         const instructionId = 'INS-123';
         const version = 5;
-        const expectedUrl = `${endpoints.createInstruction}/${instructionId}/${version}`;
+        const expectedUrl = `${endpoints.createInstruction}/version?instructionId=${instructionId}&version=${version}`;
 
         const result = await getInstructionVersion(mockToken, instructionId, version);
 
@@ -207,7 +207,7 @@ describe('instructionService', () => {
         const { getInstructionSharedUsers } = require('../../services/instructionService');
         const result = await getInstructionSharedUsers(mockToken, 'inst-1');
         
-        expect(mockFetchWithRetry).toHaveBeenCalledWith(`${endpoints.createInstruction}/inst-1/shared`, {
+        expect(mockFetchWithRetry).toHaveBeenCalledWith(`${endpoints.createInstruction}/shared?instructionId=inst-1`, {
             method: HttpMethod.GET,
             headers: expect.anything(),
         });

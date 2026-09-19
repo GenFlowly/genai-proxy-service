@@ -81,7 +81,10 @@ fun Route.registerAttachmentRoutes(
             description = "Returns a presigned S3 GET URL for an attachment owned by the " +
                     "authenticated customer, for rendering images when displaying a conversation."
             request {
-                pathParameter<String>("attachmentId") { description = "Attachment ID returned at upload time" }
+                queryParameter<String>("attachmentId") {
+                    description = "Attachment ID returned at upload time"
+                    required = true
+                }
             }
             response {
                 code(HttpStatusCode.OK) { body<GetAttachmentUrlResponse>() }
@@ -96,7 +99,7 @@ fun Route.registerAttachmentRoutes(
             }
         }) {
             try {
-                val attachmentId = call.parameters["attachmentId"]
+                val attachmentId = call.request.queryParameters["attachmentId"]
                 if (attachmentId.isNullOrBlank()) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "attachmentId is required"))
                     return@get

@@ -11,7 +11,7 @@ export const endpoints = {
     systemApiKeys: `${BASE}${API_PREFIX}/admin/system-api-keys`,
     systemApiKeyConfig: `${BASE}${API_PREFIX}/admin/system-api-keys/config`,
     systemApiKey: (aiVendor: string) => `${BASE}${API_PREFIX}/admin/system-api-keys/${aiVendor}`,
-    systemApiKeyModels: (aiVendor: string) => `${BASE}${API_PREFIX}/admin/system-api-keys/${aiVendor}/models`,
+    systemApiKeyModels: (aiVendor: string) => `${BASE}${API_PREFIX}/admin/system-api-keys/models?aiVendor=${encodeURIComponent(aiVendor)}`,
     agents: `${BASE}${API_PREFIX}/agents`,
     agent: (graphId: string) => `${BASE}${API_PREFIX}/agents/${graphId}`,
     requestAgentMap: `${BASE}${API_PREFIX}/admin/request-agent-map`,
