@@ -132,7 +132,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Proxy HTTP requests/h by status",
+      "title": "Proxy HTTP requests by status",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -217,16 +217,16 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (status) (increase(ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\"}[1h]))",
+          "expr": "sum by (status) (ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-development\"})",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
       ],
-      "description": "Hourly request counts served by the Kotlin proxy."
+      "description": "Total request count served by the Kotlin proxy (cumulative counter; resets on deploy/restart)."
     },
     {
       "type": "timeseries",
-      "title": "Retrieval HTTP requests/h by status",
+      "title": "Retrieval HTTP requests by status",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -311,12 +311,12 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\"}[1h]))",
+          "expr": "sum by (status) (http_requests_total{app=\"genai-retrieval-server-development\"})",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
       ],
-      "description": "Hourly request counts served by the retrieval-server."
+      "description": "Total request count served by the retrieval-server (cumulative counter; resets on deploy/restart)."
     },
     {
       "type": "timeseries",
