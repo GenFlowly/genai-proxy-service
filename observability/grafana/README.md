@@ -22,9 +22,9 @@ It stamps the scheme's rules into every timeseries panel as `byRegexp` field ove
 
 **Do not hand-edit colors in the dashboard JSONs** — change `color-scheme.json` and re-apply.
 
-## Per-API "Proxy Server" section (generated)
+## "Proxy Server APIs" dashboards (generated)
 
-The collapsed "Proxy Server" row in the fly-backend dashboards holds a chart pair (requests by status + latency percentiles) for every proxy API. It is regenerated — not hand-edited — by:
+The dedicated `proxy-apis-*.json` dashboards hold a chart pair (requests by status + latency percentiles) for every proxy API, grouped into collapsed rows by subresource (Agents, Conversation, Instruction, ...). They are regenerated — not hand-edited — by:
 
 ```
 python3 generate_proxy_api_panels.py
