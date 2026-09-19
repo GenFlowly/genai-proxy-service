@@ -22,12 +22,12 @@ It stamps the scheme's rules into every timeseries panel as `byRegexp` field ove
 
 **Do not hand-edit colors in the dashboard JSONs** — change `color-scheme.json` and re-apply.
 
-## "Proxy Server APIs" dashboards (generated)
+## Per-API dashboards (generated)
 
-The dedicated `proxy-apis-*.json` dashboards hold a chart pair (requests by status + latency percentiles) for every proxy API, grouped into collapsed rows by subresource (Agents, Conversation, Instruction, ...). They are regenerated — not hand-edited — by:
+The dedicated `proxy-apis-*.json` and `retrieval-apis-*.json` dashboards hold a chart pair (requests by status + latency percentiles) for every API of the proxy and retrieval servers, grouped into collapsed rows by subresource (Agents, Conversation, Instruction, ...). They are regenerated — not hand-edited — by:
 
 ```
-python3 generate_proxy_api_panels.py
+python3 generate_api_dashboards.py
 ```
 
-which discovers routes from the proxy's `Routing.kt`/`activity/` sources and re-applies the color scheme. Run it whenever an API is added or renamed. API route naming rules (ids in query params, not path segments) are in `genai-proxy-server/development.md` under "API metrics & dashboards".
+which discovers proxy routes from `Routing.kt`/`activity/` and retrieval routes from `routes/*.py` decorators, and re-applies the color scheme. Run it whenever an API is added or renamed. API route naming rules (ids in query params, not path segments) are in `genai-proxy-server/development.md` under "API metrics & dashboards".
