@@ -21,7 +21,8 @@ import {
     VendorApiKeysManager,
     VendorApiKeyRowData,
 } from '@genflowly/component-library'
-import { OpenAIBrandName } from '../../../components/common/BrandName/BrandName'
+import { VendorBrandName } from '../../../components/common/BrandName/BrandName'
+import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import styles from './EmbeddingKeysSettings.module.scss'
 
 /** Data categories that can each carry their own default embedding model. */
@@ -60,6 +61,7 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         aiConfigPreferences,
     } = useAuth()
     const { showToast } = useToast()
+    const vendorDisplayName = useVendorDisplayNames()
 
     const [voyageStatus, setVoyageStatus] = useState<EmbeddingKeyStatus | null>(null)
     const [vendorModels, setVendorModels] = useState<EmbeddingVendorModels[]>([])
@@ -119,7 +121,7 @@ export function EmbeddingKeysSettings(): React.ReactElement {
     const rows: VendorApiKeyRowData[] = useMemo(() => ([
         {
             vendor: EmbeddingVendor.OPENAI,
-            label: <OpenAIBrandName className={styles.vendorBrand} />,
+            label: <VendorBrandName vendorId={EmbeddingVendor.OPENAI} className={styles.vendorBrand} />,
             keySet: openAiKeySet,
         },
         {
@@ -163,10 +165,10 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         vendorModels.map(vm => ({
             label: vm.vendor === EmbeddingVendor.VOYAGE
                 ? t('settingsPage.embeddingKeysSettings.voyageLabel')
-                : 'OpenAI',
+                : vendorDisplayName(vm.vendor),
             value: vm.vendor,
         }))
-    ), [vendorModels, t])
+    ), [vendorModels, t, vendorDisplayName])
 
     const modelOptionsForVendor = (vendor: string) => (
         (vendorModels.find(vm => vm.vendor === vendor)?.models ?? [])

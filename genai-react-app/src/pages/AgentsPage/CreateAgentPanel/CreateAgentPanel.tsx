@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AIVendor } from '../../../constants/vendors'
 import VendorModelSelect from '../../../components/common/VendorModelSelect/VendorModelSelect'
+import { ScrollArea } from '@genflowly/component-library'
 import styles from './CreateAgentPanel.module.scss'
 
 const AVATAR_OPTIONS = ['🤖', '🦾', '🧠', '⚡', '🌟', '🔮', '🎯', '🚀']
@@ -104,7 +105,7 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                 </div>
             </div>
 
-            <div className={styles.body}>
+            <ScrollArea className={styles.body}>
                 {/* Step 1 */}
                 <section className={styles.step}>
                     <h2 className={styles.stepTitle}>
@@ -264,7 +265,7 @@ export default function CreateAgentPanel({ onBack, onSave, onDeploy }: CreateAge
                         </div>
                     </div>
                 </section>
-            </div>
+            </ScrollArea>
         </div>
     )
 }

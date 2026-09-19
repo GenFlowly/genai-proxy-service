@@ -13,10 +13,11 @@ import {
     diffGraphUpdate,
     toEditorGraph,
     toInstructionOptions,
-    GRAPH_VENDORS,
+    makeGraphVendors,
     makeGetModelsForVendor,
 } from '../lib/agentGraph'
 import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
+import { useVendorDisplayNames } from '../lib/vendorNames'
 
 /**
  * The System default graph on the visual editor. Unpublished: a blank canvas
@@ -37,6 +38,8 @@ export default function DefaultGraphPage() {
         () => makeGetModelsForVendor(getAccessTokenSilently),
         [getAccessTokenSilently]
     )
+    const vendorDisplayName = useVendorDisplayNames()
+    const graphVendors = useMemo(() => makeGraphVendors(vendorDisplayName), [vendorDisplayName])
 
     const refresh = useCallback(async () => {
         setLoadError(null)
@@ -124,7 +127,7 @@ export default function DefaultGraphPage() {
                     nodeCatalog={catalog}
                     instructions={instructionOptions}
                     conditionOptions={CONDITION_OPTIONS}
-                    vendors={GRAPH_VENDORS}
+                    vendors={graphVendors}
                     getModelsForVendor={getModelsForVendor}
                     saving={saving}
                     errorMessage={saveError}

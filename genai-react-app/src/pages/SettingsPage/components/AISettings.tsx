@@ -1,37 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
-import { AIVendor } from '../../../constants/vendors'
+import { AIVendor, storedVendorId, catalogIdFor } from '../../../constants/vendors'
 import { storeCustomerVendorApiKey, storeCustomerVendorConfig } from '../../../services/storeCustomerVendorApiKeysService'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
 import { AIVendorModelList } from '../../../models/getTextGenerationModels.models'
 import { getProviderCatalog, ProviderInfo } from '../../../services/providerCatalogService'
 import { InputSelectWithHint, VendorApiKeysManager, VendorApiKeyRowData } from '@genflowly/component-library'
-import {
-    OpenAIBrandName,
-    ClaudeBrandName,
-    GeminiBrandName
-} from '../../../components/common/BrandName/BrandName'
+import { VendorBrandName } from '../../../components/common/BrandName/BrandName'
+import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import styles from './AISettings.module.scss'
-
-const BRAND_LABEL: Record<string, React.ReactNode> = {
-    [AIVendor.OPENAI]: <OpenAIBrandName className={styles.vendorBrand} />,
-    [AIVendor.CLAUDE]: <ClaudeBrandName className={styles.vendorBrand} />,
-    [AIVendor.GEMINI]: <GeminiBrandName className={styles.vendorBrand} />,
-}
-
-// The legacy three vendors are stored/addressed by their uppercase enum
-// names; every other provider is stored under its lowercase catalog id
-// (the backend normalizes the same way).
-const LEGACY_BY_CATALOG_ID: Record<string, string> = {
-    openai: AIVendor.OPENAI,
-    anthropic: AIVendor.CLAUDE,
-    gemini: AIVendor.GEMINI,
-}
-const storedVendorId = (catalogId: string): string => LEGACY_BY_CATALOG_ID[catalogId] ?? catalogId
-const catalogIdFor = (storedId: string): string =>
-    Object.entries(LEGACY_BY_CATALOG_ID).find(([, legacy]) => legacy === storedId)?.[0] ?? storedId
 
 export function AISettings(): React.ReactElement {
     const { t } = useTranslation()
@@ -45,6 +24,7 @@ export function AISettings(): React.ReactElement {
         updateAiConfigPreferences,
     } = useAuth()
 
+    const vendorDisplayName = useVendorDisplayNames()
     const [vendorModels, setVendorModels] = useState<AIVendorModelList[]>([])
     // Vendors without a key stay hidden until picked from the add-vendor
     // dropdown; picking one reveals its card so the key can be entered.
@@ -121,11 +101,11 @@ export function AISettings(): React.ReactElement {
         // Catalog still loading/failed → at least the legacy three are addable
         const source = catalog.length > 0
             ? catalog.map(p => ({ id: storedVendorId(p.id), label: p.displayName }))
-            : (Object.values(AIVendor) as string[]).map(v => ({ id: v, label: v }))
+            : (Object.values(AIVendor) as string[]).map(v => ({ id: v, label: vendorDisplayName(v) }))
         return source
             .filter(({ id }) => !visibleVendors.includes(id))
             .map(({ id, label }) => ({ label, value: id }))
-    }, [catalog, visibleVendors])
+    }, [catalog, visibleVendors, vendorDisplayName])
 
     const rows: VendorApiKeyRowData[] = useMemo(() => (
         visibleVendors.map(vendor => {
@@ -143,8 +123,7 @@ export function AISettings(): React.ReactElement {
                 ?? []
             return {
                 vendor,
-                label: BRAND_LABEL[vendor]
-                    ?? <span className={styles.vendorTextLabel}>{provider?.displayName ?? vendor}</span>,
+                label: <VendorBrandName vendorId={vendor} className={styles.vendorBrand} />,
                 keySet: isKeySet(vendor),
                 savedModel: preferred ?? status?.selectedModel ?? null,
                 savedPriority: status?.priority ?? null,

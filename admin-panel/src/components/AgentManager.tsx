@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
-import { AIVendor, VENDOR_LABELS } from '../constants/vendors'
+import { AIVendor } from '../constants/vendors'
+import { useVendorDisplayNames } from '../lib/vendorNames'
 import { REQUEST_TYPE_VARIABLES, RequestType } from '../constants/requestTypes'
 import {
     AgentResponse,
@@ -63,6 +64,7 @@ export default function AgentManager({
     onChanged: () => Promise<void> | void
 }) {
     const { getAccessTokenSilently } = useAuth0()
+    const vendorDisplayName = useVendorDisplayNames()
 
     const [instructions, setInstructions] = useState<InstructionResponse[]>([])
     const [form, setForm] = useState<CreateAgentForm>(emptyCreateForm())
@@ -278,7 +280,7 @@ export default function AgentManager({
                         <option value="">Platform default (persona: system failover)</option>
                         {Object.values(AIVendor).map((vendor) => (
                             <option key={vendor} value={vendor}>
-                                {VENDOR_LABELS[vendor]}
+                                {vendorDisplayName(vendor)}
                             </option>
                         ))}
                     </select>

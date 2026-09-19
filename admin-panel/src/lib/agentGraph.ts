@@ -13,17 +13,22 @@ import {
 } from '../models/defaultGraph.models'
 import { InstructionResponse } from '../models/instructions.models'
 import { NodePresetResponse } from '../models/nodePresets.models'
-import { AIVendor, VENDOR_LABELS } from '../constants/vendors'
+import { AIVendor } from '../constants/vendors'
 import { getSystemVendorModels } from '../services/systemApiKeysService'
 
 /** Ids the editor assigns to nodes created in the current session. */
 export const TEMP_NODE_ID_PREFIX = 'new-'
 
-/** Vendors offered as a node's model preference (system-key context: all). */
-export const GRAPH_VENDORS = Object.values(AIVendor).map((vendor) => ({
-    id: vendor,
-    label: VENDOR_LABELS[vendor],
-}))
+/**
+ * Vendors offered as a node's model preference (system-key context: all).
+ * Labels come from the caller's useVendorDisplayNames lookup so naming
+ * stays sourced from the provider catalog.
+ */
+export const makeGraphVendors = (displayName: (vendorId: string) => string) =>
+    Object.values(AIVendor).map((vendor) => ({
+        id: vendor,
+        label: displayName(vendor),
+    }))
 
 /**
  * Model-list loader for the editor's node model preference. No system key

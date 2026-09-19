@@ -7,6 +7,7 @@ import {
     InstructionTile,
     PageHeader,
     PillButton,
+    ScrollArea,
 } from '@genflowly/component-library';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/navbar/Navbar';
@@ -78,7 +79,7 @@ export default function InstructionsPage() {
                     />
                 </>
             )}
-            <div className={styles.pageContainer}>
+            <ScrollArea className={styles.pageContainer}>
             {uniqueInstructions.length > 0 && (
                 <div className={styles.searchBox}>
                     <InputTextWithHint
@@ -121,7 +122,7 @@ export default function InstructionsPage() {
                     ))}
                 </div>
             )}
-        </div>
+        </ScrollArea>
         </div>
     );
 }

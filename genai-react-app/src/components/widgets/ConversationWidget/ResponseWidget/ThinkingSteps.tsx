@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { BookOpen, Brain, FileSearch, Globe, LucideIcon, Sparkles } from 'lucide-react'
+import { ScrollArea } from '@genflowly/component-library'
 import { ThinkingStep, ThinkingStepKind } from '../../../../models/conversation.models'
 import styles from './ThinkingSteps.module.scss'
 
@@ -17,7 +18,7 @@ function StepExpander({ label, text, testId }: { label: string, text: string, te
     return (
         <details className={styles.expander} data-testid={testId}>
             <summary className={styles.expanderSummary}>{label}</summary>
-            <pre className={styles.expanderContent}>{text}</pre>
+            <ScrollArea as="pre" className={styles.expanderContent}>{text}</ScrollArea>
         </details>
     )
 }

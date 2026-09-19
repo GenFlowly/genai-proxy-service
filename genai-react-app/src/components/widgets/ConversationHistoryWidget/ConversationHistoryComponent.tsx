@@ -12,16 +12,14 @@ import {
     unpinConversation,
 } from '../../../services/conversationHistoryService'
 import { ConversationSummary } from '../../../models/conversationHistory.models'
-import { CollapsedOpenAIBrandName, CollapsedClaudeBrandName, CollapsedGeminiBrandName } from '../../common/BrandName/BrandName'
-import { AIVendor } from '../../../constants/vendors'
+import { CollapsedVendorBrandName } from '../../common/BrandName/BrandName'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { SidebarListPanel, SidebarListGroup, SidebarListLoadMore } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
 import { loadHistoryCache, saveHistoryCache } from './historyCache'
-import { formatServerDateTime, formatServerTime } from '../../../utils/timeUtils'
-import { groupByDate, DateGroupId } from '../../../utils/dateGrouping'
+import { formatServerDateTime, formatServerTime, parseServerDate } from '../../../utils/timeUtils'
 
 const PAGE_SIZE = 15
 
@@ -181,37 +179,36 @@ export default function ConversationHistoryComponent() {
     }
 
     // Pinned conversations render only in the Pinned section, never in the
-    // date groups, even though they stay in `items`
+    // Recent section, even though they stay in `items`
     const pinnedIds = useMemo(() => new Set(pinned.map(c => c.conversationId)), [pinned])
-    const groupedItems = useMemo(
-        () => groupByDate(items.filter(c => !pinnedIds.has(c.conversationId)), conv => conv.updatedAt || conv.createdAt),
+    const recentItems = useMemo(
+        () => items.filter(c => !pinnedIds.has(c.conversationId)),
         [items, pinnedIds]
     )
 
-    const groupLabels: Record<DateGroupId, string> = {
-        today: t('common.dateGroups.today'),
-        yesterday: t('common.dateGroups.yesterday'),
-        last7Days: t('common.dateGroups.last7Days'),
-        older: t('common.dateGroups.older'),
+    const isToday = (value: string) => {
+        const d = parseServerDate(value)
+        if (!d) return false
+        const now = new Date()
+        return d.getFullYear() === now.getFullYear()
+            && d.getMonth() === now.getMonth()
+            && d.getDate() === now.getDate()
     }
 
-    const renderDetails = (conv: ConversationSummary, groupId: DateGroupId | 'pinned') => (
+    const renderDetails = (conv: ConversationSummary) => (
         <>
             <div className={styles.vendorIcons}>
-                {[...(conv.vendors || [])].sort().map((v, idx) => {
-                    if (v === AIVendor.OPENAI) return <CollapsedOpenAIBrandName key={idx} size={11} className={styles.vendorIcon} />
-                    if (v === AIVendor.CLAUDE) return <CollapsedClaudeBrandName key={idx} size={11} className={styles.vendorIcon} />
-                    if (v === AIVendor.GEMINI) return <CollapsedGeminiBrandName key={idx} size={11} className={styles.vendorIcon} />
-                    return null
-                })}
+                {[...(conv.vendors || [])].sort().map((v, idx) => (
+                    <CollapsedVendorBrandName key={idx} vendorId={v} size={11} className={styles.vendorIcon} />
+                ))}
             </div>
             {(conv.vendors?.length ?? 0) > 0 && conv.updatedAt && (
                 <span className={panelStyles.detailsSeparator} aria-hidden="true">·</span>
             )}
             {conv.updatedAt && (
                 <span className={panelStyles.timestamp}>
-                    {groupId === 'today' || groupId === 'yesterday'
-                        // The group header already names the day — time only
+                    {isToday(conv.updatedAt)
+                        // Same-day conversations don't need the date — time only
                         ? formatServerTime(conv.updatedAt)
                         : formatServerDateTime(conv.updatedAt)}
                 </span>
@@ -219,12 +216,11 @@ export default function ConversationHistoryComponent() {
         </>
     )
 
-    const toRow = (conv: ConversationSummary, groupId: DateGroupId | 'pinned') => {
-        const isPinned = groupId === 'pinned'
+    const toRow = (conv: ConversationSummary, isPinned: boolean) => {
         return {
             id: conv.conversationId,
             label: conv.title?.trim() || conv.conversationId,
-            details: renderDetails(conv, groupId),
+            details: renderDetails(conv),
             isActive: conv.conversationId === activeId,
             ariaCurrent: 'page' as const,
             onSelect: () => handleNavigate(conv.conversationId),
@@ -249,24 +245,26 @@ export default function ConversationHistoryComponent() {
         }
     }
 
+    // Pinned on top, then Recent — two group headings with the same style
     const groups: SidebarListGroup[] = [
         ...(pinned.length > 0
             ? [{
                 id: 'pinned',
                 label: t('conversation.conversationHistory.pinned'),
-                items: pinned.map(conv => toRow(conv, 'pinned')),
+                items: pinned.map(conv => toRow(conv, true)),
             }]
             : []),
-        ...groupedItems.map(group => ({
-            id: group.id,
-            label: groupLabels[group.id],
-            items: group.items.map(conv => toRow(conv, group.id)),
-        })),
+        ...(recentItems.length > 0
+            ? [{
+                id: 'recent',
+                label: t('conversation.conversationHistory.recent'),
+                items: recentItems.map(conv => toRow(conv, false)),
+            }]
+            : []),
     ]
 
     return (
         <SidebarListPanel
-            title={t('conversation.conversationHistory.title')}
             groups={groups}
             isLoading={isLoading}
             hasError={error}
