@@ -118,6 +118,9 @@ private data class ValidateKeyResponse(
     val error: String? = null
 )
 
+/** Outcome of a provider key check, with the provider's rejection message. */
+data class KeyValidationResult(val valid: Boolean, val error: String? = null)
+
 // --- /models/metadata wire types ---
 
 @Serializable
@@ -425,6 +428,17 @@ class RetrievalServerClient(
                                     send(StreamChunk.ToolCalls(toolCalls.toString()))
                                 }
                             }
+                            jsonObj.containsKey("error") -> {
+                                val message = jsonObj["error"]?.jsonPrimitive?.content
+                                if (!message.isNullOrBlank()) {
+                                    send(
+                                        StreamChunk.Error(
+                                            message = message,
+                                            errorType = jsonObj["error_type"]?.jsonPrimitive?.content
+                                        )
+                                    )
+                                }
+                            }
                             jsonObj.containsKey("usage") -> {
                                 val usageObj = jsonObj["usage"]!!.jsonObject
                                 send(
@@ -497,6 +511,32 @@ class RetrievalServerClient(
         }
     }
 
+    // BYOK vendor catalog — static per retrieval-server process, so one
+    // successful fetch is cached for this process's lifetime too.
+    @Volatile
+    private var providerCatalogCache: com.genflowly.models.api.ProviderCatalogResponse? = null
+
+    /**
+     * Every provider the retrieval server can call (native tier + LiteLLM
+     * long tail) with chat models and tool-support flags. Empty catalog on
+     * transport failure (not cached, retried on next call).
+     */
+    suspend fun getProviderCatalog(): com.genflowly.models.api.ProviderCatalogResponse {
+        providerCatalogCache?.let { return it }
+        return try {
+            val response: HttpResponse = httpClient.get("$retrievalServerUrl/providers")
+            if (!response.status.isSuccess()) {
+                logger.warn { "Retrieval server /providers returned ${response.status}" }
+                return com.genflowly.models.api.ProviderCatalogResponse(providers = emptyList())
+            }
+            json.decodeFromString<com.genflowly.models.api.ProviderCatalogResponse>(response.bodyAsText())
+                .also { providerCatalogCache = it }
+        } catch (e: Exception) {
+            logger.warn { "Failed to fetch provider catalog: ${e.message}" }
+            com.genflowly.models.api.ProviderCatalogResponse(providers = emptyList())
+        }
+    }
+
     /**
      * [listModels] for providers outside the [AIVendor] enum (e.g. the
      * embedding-only "voyage"). Keys and results use retrieval-server
@@ -550,7 +590,15 @@ class RetrievalServerClient(
      * embedding-only "voyage"). `provider` is the retrieval-server provider
      * string.
      */
-    suspend fun validateProviderKey(provider: String, apiKey: String): Boolean {
+    suspend fun validateProviderKey(provider: String, apiKey: String): Boolean =
+        validateProviderKeyDetailed(provider, apiKey).valid
+
+    /**
+     * Like [validateProviderKey] but keeps the provider's rejection message —
+     * "account suspended, recharge" and "key not valid" both fail the probe,
+     * and the customer can only tell them apart from the actual error.
+     */
+    suspend fun validateProviderKeyDetailed(provider: String, apiKey: String): KeyValidationResult {
         val payload = json.encodeToString(
             ValidateKeyPayload(provider = provider, api_key = apiKey)
         )
@@ -561,16 +609,16 @@ class RetrievalServerClient(
             }
             if (!response.status.isSuccess()) {
                 logger.warn { "Retrieval server /validate-key returned ${response.status}" }
-                return false
+                return KeyValidationResult(valid = false, error = "Key validation service unavailable")
             }
             val parsed = json.decodeFromString<ValidateKeyResponse>(response.bodyAsText())
             if (!parsed.valid) {
                 logger.info { "API key invalid for provider $provider: ${parsed.error}" }
             }
-            parsed.valid
+            KeyValidationResult(valid = parsed.valid, error = parsed.error)
         } catch (e: Exception) {
             logger.warn { "Failed to validate API key for provider $provider: ${e.message}" }
-            false
+            KeyValidationResult(valid = false, error = "Key validation service unavailable")
         }
     }
 

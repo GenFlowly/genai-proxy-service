@@ -143,7 +143,7 @@ export function EmbeddingKeysSettings(): React.ReactElement {
             }
             return {
                 success: response.apiKeyStatus.updateSuccessful,
-                message: response.apiKeyStatus.status,
+                message: response.apiKeyStatus.detail || response.apiKeyStatus.status,
             }
         }
 
@@ -155,7 +155,7 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         }
         return {
             success: !!response.keyStatus.updateSuccessful,
-            message: response.keyStatus.status,
+            message: response.keyStatus.detail || response.keyStatus.status,
         }
     }
 

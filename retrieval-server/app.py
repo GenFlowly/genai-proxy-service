@@ -16,6 +16,7 @@ from encoding_library.observability import configure_observability, set_request_
 from routes.model_metadata import router as model_metadata_router
 from routes.models import router as models_router
 from routes.notes import router as notes_router
+from routes.providers import router as providers_router
 from routes.retrieve import router as retrieve_router
 from routes.search import router as search_router
 from routes.validate_key import router as validate_key_router
@@ -45,6 +46,7 @@ async def request_id_middleware(request: Request, call_next):
 
 app.include_router(retrieve_router)
 app.include_router(models_router)
+app.include_router(providers_router)
 app.include_router(model_metadata_router)
 app.include_router(notes_router)
 app.include_router(search_router)

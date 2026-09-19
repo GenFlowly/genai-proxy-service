@@ -448,6 +448,7 @@ class GenerationOrchestrator(
             val emit: suspend (String) -> Unit = { chunkChannel.send(it) }
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
+            var capturedErrorMessage: String? = null
             var capturedThinkingDurationMs: Long? = null
             var capturedToolCallsJson: String? = null
             var capturedWebSourcesJson: String? = null
@@ -515,6 +516,18 @@ class GenerationOrchestrator(
                             emit("{\"t\":\"ga\",\"v\":${chunk.json}}\n")
                         }
                         is StreamChunk.Usage -> capturedUsage = chunk
+                        is StreamChunk.Error -> {
+                            // Vendor failure surfaced mid-stream (quota, key
+                            // rejected, ...) — relay the concise reason so the
+                            // client can attach it to this vendor's response
+                            // card. Any partial text is kept and persisted.
+                            capturedErrorMessage = chunk.message
+                            logger.warn(
+                                "Generation {} failed mid-stream ({}): {}",
+                                responseMessageId, chunk.errorType ?: "provider_error", chunk.message
+                            )
+                            emit("{\"t\":\"err\",\"v\":${chunk.message.toJsonStringValue()}}\n")
+                        }
                     }
                 }
                 success = true

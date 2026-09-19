@@ -75,8 +75,7 @@ class ModelCatalogService(
             systemApiKeyService.getSystemApiKeyForVendor(vendor)?.let { vendor to it }
         }
         if (vendorKeys.isEmpty()) {
-            logger.warn { "Model catalog refresh skipped: no system API keys configured" }
-            return emptyMap()
+            logger.warn { "Model catalog refresh: no system API keys configured — legacy vendors skipped" }
         }
 
         val counts = mutableMapOf<String, Int>()
@@ -97,6 +96,49 @@ class ModelCatalogService(
             }
             counts[vendor.name] = entries.size
         }
+
+        // Universal pricing floor: every cataloged vendor gets pricing rows
+        // from the LiteLLM price map — no vendor API key needed. Vendors the
+        // system-key sync covered THIS round are skipped so their richer rows
+        // (live limits straight from the vendor's model API) are not
+        // overwritten; a legacy vendor without a system key (e.g. GEMINI in
+        // dev) falls back to the price map like everyone else.
+        val syncedVendors = counts.keys.toSet()
+        for (provider in retrievalServerClient.getProviderCatalog().providers) {
+            val vendor = AIVendor.of(provider.id)
+            if (vendor.name in syncedVendors) continue
+            val entries = provider.models.mapNotNull { m ->
+                if (m.inputCostPerMTok == null && m.outputCostPerMTok == null) return@mapNotNull null
+                ModelCatalogEntry(
+                    model = m.name,
+                    maxOutputTokens = m.maxOutputTokens,
+                    maxInputTokens = m.maxInputTokens,
+                    inputCostPerMTok = m.inputCostPerMTok,
+                    outputCostPerMTok = m.outputCostPerMTok,
+                    cacheReadCostPerMTok = m.cacheReadCostPerMTok,
+                    cacheWriteCostPerMTok = m.cacheWriteCostPerMTok,
+                    inputAudioCostPerMTok = m.inputAudioCostPerMTok,
+                    outputAudioCostPerMTok = m.outputAudioCostPerMTok,
+                    cacheReadAudioCostPerMTok = m.cacheReadAudioCostPerMTok
+                )
+            }
+            if (entries.isEmpty()) continue
+            // BatchWriteItem rejects duplicate keys outright — dedupe defensively
+            val deduped = entries.distinctBy { it.model }
+            try {
+                modelCatalogRepository.saveModelCatalogEntries(vendor.name, deduped)
+            } catch (e: Exception) {
+                // One provider's bad batch must not abort the other ~50
+                logger.warn(e) { "Catalog pricing save failed for ${vendor.name} — skipping" }
+                continue
+            }
+            deduped.forEach { entry ->
+                cache[cacheKey(vendor, entry.model)] =
+                    CacheEntry(entry, System.currentTimeMillis())
+            }
+            counts[vendor.name] = deduped.size
+        }
+
         logger.info { "Model catalog refreshed: $counts" }
         return counts
     }

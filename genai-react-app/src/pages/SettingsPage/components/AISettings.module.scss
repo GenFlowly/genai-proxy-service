@@ -37,3 +37,21 @@
     height: 20px;
     width: auto;
 }
+
+.addVendorField {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    max-width: 32rem;
+}
+
+.addVendorLabel {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary, #6b7280);
+}
+
+.vendorTextLabel {
+    font-size: 1rem;
+    font-weight: 600;
+}

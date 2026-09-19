@@ -2,7 +2,8 @@
 import { AIVendor } from '../constants/vendors'
 
 export interface GetTextGenerationModelsRequest {
-    aiVendor: AIVendor[]
+    /** Vendor ids: legacy enum names (OPENAI/CLAUDE/GEMINI) or BYOK provider ids */
+    aiVendor: string[]
 }
 
 export interface GetTextGenerationModelsResponse {
@@ -10,6 +11,6 @@ export interface GetTextGenerationModelsResponse {
 }
 
 export interface AIVendorModelList {
-    aiVendor: AIVendor
+    aiVendor: string
     modelsList: string[]
 }

@@ -6,6 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { storeCustomerVendorApiKey, storeCustomerVendorConfig } from '../../../services/storeCustomerVendorApiKeysService';
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService';
+import { getProviderCatalog } from '../../../services/providerCatalogService';
 import { AIVendor } from '../../../constants/vendors';
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models';
 
@@ -14,16 +15,19 @@ jest.mock('../../../context/AuthContext');
 jest.mock('../../../context/ToastContext');
 jest.mock('../../../services/storeCustomerVendorApiKeysService');
 jest.mock('../../../services/getTextGenerationModelsService');
+jest.mock('../../../services/providerCatalogService');
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseToast = useToast as jest.Mock;
 const mockStoreCustomerVendorApiKey = storeCustomerVendorApiKey as jest.Mock;
 const mockStoreCustomerVendorConfig = storeCustomerVendorConfig as jest.Mock;
 const mockGetTextGenerationModels = getTextGenerationModels as jest.Mock;
+const mockGetProviderCatalog = getProviderCatalog as jest.Mock;
 
 describe('AISettings', () => {
     const mockUpdateVendorApiKeyStatus = jest.fn();
     const mockGetAccessTokenSilently = jest.fn();
+    const mockUpdateAiConfigPreferences = jest.fn();
 
     const authValue = (overrides: object = {}) => ({
         customerId: 'cust-123',
@@ -31,6 +35,8 @@ describe('AISettings', () => {
         getAccessTokenSilently: mockGetAccessTokenSilently,
         updateVendorApiKeyStatus: mockUpdateVendorApiKeyStatus,
         aiVendorAPIKeyStatusList: [],
+        aiConfigPreferences: null,
+        updateAiConfigPreferences: mockUpdateAiConfigPreferences,
         ...overrides,
     });
 
@@ -55,16 +61,60 @@ describe('AISettings', () => {
                 { aiVendor: AIVendor.GEMINI, modelsList: [] },
             ],
         });
+        mockGetProviderCatalog.mockResolvedValue({
+            providers: [
+                { id: 'openai', displayName: 'OpenAI', native: true, models: [{ name: 'gpt-5', supportsTools: true }] },
+                { id: 'anthropic', displayName: 'Claude', native: true, models: [{ name: 'claude-fable-5', supportsTools: true }] },
+                { id: 'gemini', displayName: 'Gemini', native: true, models: [{ name: 'gemini-2.5-pro', supportsTools: true }] },
+                { id: 'groq', displayName: 'Groq', native: true, models: [{ name: 'llama-3.3-70b-versatile', supportsTools: true }] },
+                { id: 'openrouter', displayName: 'OpenRouter', native: false, models: [{ name: 'meta-llama/llama-3-70b', supportsTools: false }] },
+            ],
+        });
         mockUseAuth.mockReturnValue(authValue());
     });
 
-    test('renders a card per vendor with key status', () => {
+    test('hides vendors without keys behind the add-vendor dropdown', async () => {
         render(<AISettings />);
 
         expect(screen.getByText('Model API Keys')).toBeInTheDocument();
+        // No keys set → no cards, every supported vendor is offered in the dropdown
         (Object.values(AIVendor) as AIVendor[]).forEach(vendor => {
-            expect(screen.getByTestId(`ai-settings-vendors-${vendor}-status-pill`)).toHaveTextContent('Not set');
+            expect(screen.queryByTestId(`ai-settings-vendors-${vendor}-status-pill`)).not.toBeInTheDocument();
         });
+        const dropdown = screen.getByTestId('add-vendor-select');
+        expect(dropdown).toBeInTheDocument();
+
+        // Picking a vendor reveals its card (still keyless → "Not set")
+        await userEvent.selectOptions(dropdown, AIVendor.CLAUDE);
+        expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.CLAUDE}-status-pill`)).toHaveTextContent('Not set');
+        expect(screen.queryByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-status-pill`)).not.toBeInTheDocument();
+    });
+
+    test('vendors with a saved key show as cards and leave the dropdown', async () => {
+        mockUseAuth.mockReturnValue(authValue({ aiVendorAPIKeyStatusList: [validOpenAIStatus] }));
+
+        render(<AISettings />);
+
+        expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-status-pill`)).toHaveTextContent('Key set');
+        const dropdown = screen.getByTestId('add-vendor-select');
+        await waitFor(() => expect(dropdown).toHaveTextContent('Claude'));
+        expect(dropdown).not.toHaveTextContent('OpenAI');
+        expect(dropdown).toHaveTextContent('Gemini');
+        // Long-tail catalog vendors are addable too
+        expect(dropdown).toHaveTextContent('Groq');
+        expect(dropdown).toHaveTextContent('OpenRouter');
+    });
+
+    test('a long-tail catalog vendor can be added and lists its catalog models', async () => {
+        render(<AISettings />);
+
+        const dropdown = screen.getByTestId('add-vendor-select');
+        await waitFor(() => expect(dropdown).toHaveTextContent('Groq'));
+        await userEvent.selectOptions(dropdown, 'groq');
+
+        // Card appears with a plain-text label and the catalog's model list
+        expect(screen.getByTestId('ai-settings-vendors-groq-status-pill')).toHaveTextContent('Not set');
+        expect(screen.getByText('Groq')).toBeInTheDocument();
     });
 
     test('shows model/priority config only for vendors with a valid key', () => {
@@ -91,6 +141,7 @@ describe('AISettings', () => {
         });
 
         render(<AISettings />);
+        await userEvent.selectOptions(screen.getByTestId('add-vendor-select'), AIVendor.OPENAI);
         await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'test-key');
         await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
 
@@ -118,6 +169,7 @@ describe('AISettings', () => {
         });
 
         render(<AISettings />);
+        await userEvent.selectOptions(screen.getByTestId('add-vendor-select'), AIVendor.OPENAI);
         await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'bad-key');
         await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
 
@@ -132,6 +184,7 @@ describe('AISettings', () => {
         mockUseAuth.mockReturnValue(authValue({ customerId: null, isAuthenticated: false }));
 
         render(<AISettings />);
+        await userEvent.selectOptions(screen.getByTestId('add-vendor-select'), AIVendor.OPENAI);
         await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'test-key');
         await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
 
@@ -169,6 +222,27 @@ describe('AISettings', () => {
                 selectedModel: 'gpt-5',
                 priority: 1,
             });
+            // The model default is mirrored into the shared preferredModels
+            // so the sidebar AI-config widget picks it up this session.
+            expect(mockUpdateAiConfigPreferences).toHaveBeenCalledWith({
+                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5' }],
+            });
+        });
+    });
+
+    test('saved model prefers the shared preferredModels over the vendor config', async () => {
+        mockUseAuth.mockReturnValue(authValue({
+            aiVendorAPIKeyStatusList: [validOpenAIStatus],
+            aiConfigPreferences: {
+                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5' }],
+            },
+        }));
+
+        render(<AISettings />);
+
+        // validOpenAIStatus says gpt-5-mini, but preferredModels wins
+        await waitFor(() => {
+            expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-model`)).toHaveValue('gpt-5');
         });
     });
 });
