@@ -1,23 +1,17 @@
 /**
- * Cloudflare Worker for the DEVELOPMENT admin panel.
- * Routes requests by URL path: /api goes to the backend (Fly/ELB behind
- * api-development.genflowly.com), everything else to the admin panel's
- * Cloudflare Pages site. Mirrors the genai-react-app worker.
+ * Shared router worker for the genflowly domains.
  *
- * Attach this worker to the admin panel's dev domain (e.g.
- * admin-development.genflowly.com) via a Workers route or custom domain.
+ * Routes requests by URL path: /api goes to the backend API, everything
+ * else to the static site on Cloudflare Pages. This one source serves all
+ * four routers (react app + admin panel, dev + prod); the hostnames come
+ * from per-environment vars in react-app.toml and admin-panel.toml.
  */
-
-const ELB_ENDPOINT = 'api-development.genflowly.com';
-// Branch alias of the development deployment on the genflowly-admin-panel
-// Pages project (dev deploys run `wrangler pages deploy --branch=development`).
-const PAGES_ENDPOINT = 'development.genflowly-admin-panel.pages.dev';
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // ✅ Handle CORS preflight at the edge
+    // Handle CORS preflight at the edge
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -30,14 +24,9 @@ export default {
       });
     }
 
+    const isApi = url.pathname.startsWith("/api");
     const targetUrl = new URL(request.url);
-    if (url.pathname.startsWith("/api")) {
-      // Route /api requests to the backend
-      targetUrl.hostname = ELB_ENDPOINT;
-    } else {
-      // Route everything else to Cloudflare Pages
-      targetUrl.hostname = PAGES_ENDPOINT;
-    }
+    targetUrl.hostname = isApi ? env.API_HOST : env.STATIC_HOST;
 
     console.log({
       incoming: url.pathname,
@@ -53,8 +42,8 @@ export default {
       })
     );
 
-    // ✅ Add CORS headers to API responses
-    if (url.pathname.startsWith("/api")) {
+    // Add CORS headers to API responses
+    if (isApi) {
       const newHeaders = new Headers(response.headers);
       newHeaders.set("Access-Control-Allow-Origin", "*");
 
