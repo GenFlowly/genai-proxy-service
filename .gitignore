@@ -68,3 +68,7 @@ __pycache__/
 
 # Local dev secrets for docker-compose (see genai-proxy-server/.env.example)
 genai-proxy-server/.env
+
+# Node
+node_modules/
+**/node_modules/
