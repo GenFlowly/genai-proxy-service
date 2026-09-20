@@ -1,0 +1,36 @@
+name: Development Workers Deploy
+
+# Deploys the router workers that sit in front of the development domains
+# (react app + admin panel). Runs automatically when the worker source
+# changes on development, or manually from the Actions tab.
+on:
+  push:
+    branches: [development]
+    paths:
+      - 'cloudflare/router-worker/**'
+      - '.github/workflows/dev-workers-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Beta
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: development
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy router workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler@4 deploy --config cloudflare/router-worker/react-app.toml --env development
+          npx wrangler@4 deploy --config cloudflare/router-worker/admin-panel.toml --env development

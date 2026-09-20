@@ -1,0 +1,28 @@
+# Router workers for the admin panel domains.
+#
+# ALWAYS deploy with an explicit --env. The env names below must match the
+# pre-existing workers in the Cloudflare dashboard exactly, or a deploy
+# would create a new orphan worker instead of updating the live one:
+#   npx wrangler@4 deploy --config cloudflare/router-worker/admin-panel.toml --env development
+#   npx wrangler@4 deploy --config cloudflare/router-worker/admin-panel.toml --env production
+#
+# The domain attachments (custom domains / routes) are managed in the
+# Cloudflare dashboard and are not touched by these deploys.
+
+name = "admin-panel-router-do-not-deploy-without-env"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+[env.development]
+name = "admin-panel-development"
+
+[env.development.vars]
+API_HOST = "api-development.genflowly.com"
+STATIC_HOST = "development.genflowly-admin-panel.pages.dev"
+
+[env.production]
+name = "admin-panel-production"
+
+[env.production.vars]
+API_HOST = "api.genflowly.com"
+STATIC_HOST = "genflowly-admin-panel.pages.dev"
