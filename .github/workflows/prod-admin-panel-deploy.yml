@@ -1,8 +1,12 @@
 name: Production Admin Panel Deploy
 
-# Manual-only: the admin panel is deliberately excluded from the merge-triggered
-# production pipeline. Deploy from the Actions tab (always builds main).
+# Self-triggered: runs only when the admin panel (or this workflow) changes.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin-panel/**'
+      - '.github/workflows/prod-admin-panel-deploy.yml'
   workflow_dispatch:
 
 jobs:
@@ -13,8 +17,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
