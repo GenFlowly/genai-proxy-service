@@ -187,7 +187,7 @@ fun appModule(): Module = module {
     single { com.genflowly.service.CustomerRequestAgentMapService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { ConversationService(get(), get()) }
+    single { ConversationService(get(), get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }

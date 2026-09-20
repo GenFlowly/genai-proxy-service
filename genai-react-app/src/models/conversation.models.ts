@@ -120,6 +120,17 @@ export interface Message {
 }
 
 /**
+ * Display identity of the user who sent a prompt, resolved server-side from
+ * the message's customerId. Matters when viewing a shared conversation, where
+ * the author is not the viewer.
+ */
+export interface MessageSender {
+    customerId: string
+    name?: string | null
+    picture?: string | null
+}
+
+/**
  * Represents a single conversation block consisting of:
  * - a user’s markdown input
  * - the AI-generated messages
@@ -140,6 +151,12 @@ export interface ConversationBlock {
      * only for records predating the timestamp plumbing.
      */
     sentAt?: number
+    /**
+     * Author of the prompt, from the backend's per-message sender. Absent for
+     * blocks created live in this session (the viewer is the author then) and
+     * for history loaded from servers predating the field.
+     */
+    sender?: MessageSender
 }
 
 /**
