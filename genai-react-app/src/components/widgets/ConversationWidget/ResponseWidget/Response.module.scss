@@ -409,13 +409,14 @@
 }
 
 .sourceLink {
-  color: $color-primary;
-  text-decoration: none;
+  // Match content links: text color + underline, never browser blue
+  color: $color-text-primary;
+  text-decoration: underline;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 
   &:hover {
-    text-decoration: underline;
+    opacity: 0.75;
   }
 }
