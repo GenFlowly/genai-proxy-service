@@ -1,50 +1,79 @@
-import React, { useEffect } from 'react'
+import React, { useMemo } from 'react'
+import {
+    ConversationWidget,
+    ConversationWidgetProvider,
+    ConversationWidgetContextValue
+} from '@genflowly/component-library'
 import { useConversation, useConversationUI } from '../../../../context/ConversationContext'
-import ConversationBlock from '../../../widgets/ConversationWidget/ConversationBlock/ConversationBlock'
+import { useAuth } from '../../../../context/AuthContext'
+import { useLayout } from '../../../../context/LayoutContext'
+import { useToast } from '../../../../context/ToastContext'
+import { uploadAttachment, getAttachmentViewUrl } from '../../../../services/attachmentService'
+import { getLearnedFacts, deleteMemoryFact } from '../../../../services/learnedFactsService'
+import { useVendorDisplayNames } from '../../../../hooks/useVendorDisplayNames'
 
+/**
+ * Adapter between the app's contexts/services and the shared
+ * ConversationWidget from @genflowly/component-library (where the widget's
+ * components moved). The app remains the owner of conversation state, auth,
+ * and backend calls; the library renders the conversation surface.
+ */
 export default function ConversationListWidget() {
-    const { conversationBlockList } = useConversation()
-    const { setActiveViewportItem } = useConversationUI()
+    const conversation = useConversation()
+    const conversationUI = useConversationUI()
+    const {
+        isAuthenticated,
+        customerId,
+        customerName,
+        customerPicture,
+        user,
+        aiVendorAPIKeyStatusList,
+        getAccessTokenSilently
+    } = useAuth()
+    const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
+    const { showToast } = useToast()
+    const getVendorDisplayName = useVendorDisplayNames()
 
-    useEffect(() => {
-        const root = document.querySelector('[data-testid="center-section"]')
-        if (!root) return
-
-        const options = {
-            root: root,
-            rootMargin: '-10% 0px -70% 0px', // Triggers when element is near the top
-            threshold: 0
-        }
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const blockId = entry.target.getAttribute('data-block-id')
-                    const type = entry.target.getAttribute('data-item-type') as 'request' | 'response'
-                    if (blockId && type) {
-                        setActiveViewportItem({ blockId, type })
-                    }
-                }
-            })
-        }, options)
-
-        // Allow some time for elements to render
-        const timeout = setTimeout(() => {
-            const elements = document.querySelectorAll('[data-scroll-item="true"]')
-            elements.forEach(el => observer.observe(el))
-        }, 100)
-
-        return () => {
-            clearTimeout(timeout)
-            observer.disconnect()
-        }
-    }, [conversationBlockList, setActiveViewportItem])
+    const value = useMemo<ConversationWidgetContextValue>(() => ({
+        conversation,
+        conversationUI,
+        auth: {
+            isAuthenticated,
+            customerId,
+            customerName,
+            customerPicture,
+            user,
+            aiVendorAPIKeyStatusList,
+            getAccessTokenSilently
+        },
+        services: {
+            uploadAttachment,
+            getAttachmentViewUrl,
+            getLearnedFacts,
+            deleteMemoryFact,
+            getVendorDisplayName
+        },
+        layout: { isLeftSidebarExpanded, isRightSidebarExpanded },
+        showToast
+    }), [
+        conversation,
+        conversationUI,
+        isAuthenticated,
+        customerId,
+        customerName,
+        customerPicture,
+        user,
+        aiVendorAPIKeyStatusList,
+        getAccessTokenSilently,
+        getVendorDisplayName,
+        isLeftSidebarExpanded,
+        isRightSidebarExpanded,
+        showToast
+    ])
 
     return (
-        <React.Fragment>
-            {conversationBlockList.map(block => (
-                <ConversationBlock key={block.conversationBlockId} id={block.conversationBlockId} />
-            ))}
-        </React.Fragment>
+        <ConversationWidgetProvider value={value}>
+            <ConversationWidget />
+        </ConversationWidgetProvider>
     )
 }

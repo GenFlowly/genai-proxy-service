@@ -1,0 +1,583 @@
+{
+  "agentsPage": {
+    "agentCard": {
+      "created": "Created",
+      "defaultBadge": "Default",
+      "edit": "Edit",
+      "editAriaLabel": "Edit agent {{name}}",
+      "entryPoint": "Entry point",
+      "graphId": "Graph ID",
+      "hideDetails": "▲ Hide details",
+      "lastUpdated": "Last updated",
+      "meta_one": "{{count}} node · max {{maxIterations}} iterations",
+      "meta_other": "{{count}} nodes · max {{maxIterations}} iterations",
+      "showDetails": "▼ Show details"
+    },
+    "agentsPage": {
+      "emptySubtitle": "Agents are created automatically when you onboard. If you see this, try refreshing.",
+      "emptyTitle": "No agents found",
+      "loadFailed": "Failed to load agents",
+      "loading": "Loading agents…",
+      "loadingAriaLabel": "Loading agents",
+      "retry": "Retry",
+      "subtitle": "AI pipelines powering your conversations",
+      "title": "My Agents"
+    },
+    "createAgentPanel": {
+      "addCustomTool": "+ Add Custom Tool",
+      "agentName": "Agent Name",
+      "agentNamePlaceholder": "e.g. Research Assistant",
+      "avatar": "Avatar",
+      "back": "← Back",
+      "contextWindow": "Context Window",
+      "contextWindowOption": "{{tokens}} tokens",
+      "creative": "Creative",
+      "deploy": "Deploy",
+      "description": "Description",
+      "descriptionPlaceholder": "What does this agent do?",
+      "llmProviderModel": "LLM Provider & Model",
+      "memoryType": "Memory Type",
+      "memoryTypes": {
+        "longTerm": "Long-term",
+        "none": "None",
+        "shortTerm": "Short-term"
+      },
+      "precise": "Precise",
+      "save": "Save",
+      "selectAvatarAriaLabel": "Select avatar {{emoji}}",
+      "stepBasics": "BASICS",
+      "stepMemory": "MEMORY",
+      "stepModelPersonality": "MODEL & PERSONALITY",
+      "stepToolsCapabilities": "TOOLS & CAPABILITIES",
+      "systemPrompt": "System Prompt",
+      "systemPromptPlaceholder": "You are a helpful assistant that...",
+      "temperature": "Temperature",
+      "title": "CREATE NEW AGENT",
+      "tools": {
+        "calendar": "Calendar",
+        "codeExecutor": "Code Executor",
+        "database": "Database",
+        "email": "Email",
+        "fileReader": "File Reader",
+        "webSearch": "Web Search"
+      }
+    },
+    "editAgentDrawer": {
+      "agentSettings": "Agent Settings",
+      "cancel": "Cancel",
+      "closeAriaLabel": "Close",
+      "dialogAriaLabel": "Edit agent: {{name}}",
+      "errorMaxIterations": "Max iterations must be between 1 and 100.",
+      "errorNameBlank": "Agent name must not be blank.",
+      "errorNodeConfigJson": "Config for node \"{{name}}\" is not valid JSON.",
+      "maxIterations": "Max Iterations",
+      "maxIterationsRange": "(1–100)",
+      "nameLabel": "Name",
+      "nodeConfiguration": "Node Configuration",
+      "nodeConfigurationSubtitle": "Expand each node to edit its name, system prompt, or full config JSON.",
+      "saveChanges": "Save Changes",
+      "saving": "Saving…",
+      "title": "Edit Agent"
+    },
+    "editAgentPage": {
+      "agentNotFound": "Agent not found.",
+      "agentSettings": "Agent Settings",
+      "backToAgents": "← Back to Agents",
+      "backToAgentsPlain": "Back to Agents",
+      "defaultBadge": "Default",
+      "discard": "Discard",
+      "entryPoint": "Entry point",
+      "errorBadge": "⚠️ Error",
+      "errorMaxIterations": "Max iterations must be between 1 and 100.",
+      "errorNameBlank": "Agent name must not be blank.",
+      "errorNodeConfigJson": "Node \"{{name}}\" has invalid JSON config.",
+      "graphId": "Graph ID",
+      "lastSaved": "Last saved",
+      "loadFailed": "Failed to load agent",
+      "loading": "Loading agent…",
+      "maxIterations": "Max Iterations",
+      "maxIterationsRange": "(1–100)",
+      "nameLabel": "Name",
+      "nodeConfiguration": "Node Configuration",
+      "nodeConfigurationSubtitle": "Expand any node to edit its name, system prompt, or full config JSON. Node order follows the pipeline defined by the graph's edges.",
+      "saveChanges": "Save Changes",
+      "saveFailed": "Failed to save agent",
+      "savedBadge": "✓ Saved",
+      "saving": "Saving…",
+      "topBarMeta_one": "{{count}} node · max {{maxIterations}} iterations",
+      "topBarMeta_other": "{{count}} nodes · max {{maxIterations}} iterations"
+    },
+    "nodeConfigEditor": {
+      "inputTemplate": "Input Template",
+      "inputTemplateHint": "Use <1>{query}</1>, <3>{context}</3>, <5>{chunks_text}</5> as placeholders.",
+      "inputTemplatePlaceholdersList": "Placeholders: <1>{query}</1> <3>{context}</3> <5>{chunks_text}</5>",
+      "invalidJsonBadge": "Invalid JSON",
+      "invalidJsonSuffix": "— invalid JSON",
+      "modelOverride": "Model Override",
+      "modelOverridePlaceholder": "e.g. gpt-4o, claude-sonnet-4-5",
+      "nodeName": "Node Name",
+      "optional": "(optional)",
+      "rawConfigJson": "Raw Config JSON",
+      "responseNodeHint": "The system prompt and model for this node come from the instruction and model selected at request time.",
+      "systemPrompt": "System Prompt",
+      "systemPromptPlaceholder": "You are a helpful assistant."
+    },
+    "nodeTypes": {
+      "queryAnalyzer": "Query Analyzer",
+      "queryRewriter": "Query Rewriter",
+      "reflectiveGenerator": "Reflective Generator",
+      "responseGenerator": "Response Generator",
+      "resultRanker": "Result Ranker",
+      "retrieval": "Retrieval"
+    }
+  },
+  "common": {
+    "breadcrumbs": {
+      "ariaLabel": "Breadcrumbs"
+    },
+    "dateGroups": {
+      "last7Days": "Last 7 days",
+      "older": "Older",
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "copyToClipboard": {
+      "copied": "✓ Copied",
+      "copy": "Copy"
+    },
+    "inputSelectWithHint": {
+      "placeholder": "Select an option"
+    },
+    "instructionTile": {
+      "untitledInstruction": "Untitled Instruction"
+    },
+    "shareModal": {
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "loading": "Loading...",
+      "makePublicToEveryone": "Make public to everyone",
+      "noUsersFound": "No users found matching \"{{searchTerm}}\".",
+      "notSharedPrivate": "Not shared (Private)",
+      "roleForEveryone": "Role for everyone:",
+      "save": "Save",
+      "saving": "Saving...",
+      "searchUsernamePlaceholder": "Search username...",
+      "searching": "Searching...",
+      "shareWithOnlySomeUsers": "Share with only some users",
+      "sharedWith": "Shared with:",
+      "title": "Share Options",
+      "view": "View"
+    },
+    "textContainer": {
+      "copyCode": "Copy Code",
+      "copyResponse": "Copy Response",
+      "loadingContentRenderer": "Loading content renderer..."
+    },
+    "themeToggle": {
+      "darkTheme": "Dark Theme",
+      "lightTheme": "Light Theme",
+      "systemTheme": "System Theme",
+      "themeSelection": "Theme selection"
+    },
+    "pillButtonGroup": {
+      "toggleOption": "Toggle {{label}}"
+    },
+    "vendorModelSelect": {
+      "noModelsAvailable": "No models available"
+    }
+  },
+  "conversation": {
+    "conversationHeader": {
+      "newChat": "New Chat",
+      "share": "Share",
+      "shareSettingsUpdateFailed": "Failed to update share settings",
+      "shareSettingsUpdated": "Share settings updated",
+      "untitledConversation": "Untitled conversation"
+    },
+    "conversationHistory": {
+      "archiveConversation": "Archive conversation",
+      "failedToLoad": "Failed to load history",
+      "listAriaLabel": "Conversation history",
+      "loadMore": "Load more",
+      "loading": "Loading…",
+      "noConversationsYet": "No conversations yet",
+      "title": "History"
+    },
+    "request": {
+      "generate": "Generate",
+      "noApiKeysSet": "No API keys set",
+      "attachmentUnsupportedType": "Unsupported image type. Use PNG, JPEG, WebP, or GIF",
+      "attachmentTooLarge": "Image is too large (max 5 MB)",
+      "attachmentLimitReached": "You can attach at most {{max}} images per message",
+      "attachmentUploadFailed": "Image upload failed. Please try again",
+      "attachmentsUploading": "Images are still uploading",
+      "removeAttachment": "Remove image",
+      "addImageAttachment": "Add image attachment"
+    },
+    "response": {
+      "followUp": "Follow up",
+      "generationFailed": "Generation failed: {{reason}}",
+      "noApiKeysSet": "No API keys set",
+      "noResponsesGenerated": "No responses were generated",
+      "regenerate": "Regenerate",
+      "responseFrom": "Response from {{vendor}}",
+      "selected": "Selected",
+      "stop": "Stop",
+      "streamInterrupted": "Response interrupted: {{reason}}",
+      "thinking": "Thinking",
+      "thoughtForSeconds_one": "Thought for {{count}} second",
+      "thoughtForSeconds_other": "Thought for {{count}} seconds",
+      "tokensReadFromCache": "Tokens read from cache",
+      "totalInputTokens": "Total Input Tokens",
+      "totalOutputTokens": "Total Output Tokens",
+      "totalTokens": "Total Tokens",
+      "sources": "Sources",
+      "learningFacts": "Learning facts…",
+      "noNewFacts": "No new facts added to memory",
+      "factsAddedToMemory_one": "{{count}} fact added to memory",
+      "factsAddedToMemory_other": "{{count}} facts added to memory",
+      "deleteFact": "Delete fact from memory: {{fact}}",
+      "conversationCostUsd": "Total {{vendor}} cost for this conversation so far (USD)",
+      "thinkingPrompt": "Prompt",
+      "thinkingResponse": "Response"
+    }
+  },
+  "dbSettings": {
+    "databaseConnectionsSettingsWidget": {
+      "endpointHint": "Endpoint",
+      "enterEndpointAndKey": "Please enter both endpoint and key.",
+      "enterEndpointAndToken": "Please enter both endpoint and token.",
+      "errorSavingSupabase": "Error saving Supabase settings.",
+      "errorSavingZilliz": "Error saving Zilliz settings.",
+      "invalidSupabaseEndpoint": "Invalid Supabase endpoint format. Please enter a valid URL.",
+      "invalidZillizEndpoint": "Invalid Zilliz endpoint format.",
+      "invalidZillizToken": "Invalid Zilliz token format. Expected a long hex string.",
+      "keyHint": "Key",
+      "milvusCloud": "Milvus Cloud",
+      "passwordHint": "Password",
+      "pleaseLogInFirst": "Please log in first.",
+      "save": "Save",
+      "saving": "Saving...",
+      "supabase": "Supabase",
+      "supabaseEndpointPlaceholder": "https://your-project.supabase.co",
+      "supabaseKeyPlaceholder": "your-anon-key / service_role",
+      "supabasePasswordPlaceholder": "PostgreSQL Database Password",
+      "supabaseSavedSuccessfully": "Supabase settings saved successfully.",
+      "title": "Database Settings",
+      "tokenHint": "Token",
+      "zillizEndpointPlaceholder": "https://in03-....zillizcloud.com",
+      "zillizSavedSuccessfully": "Zilliz settings saved successfully.",
+      "zillizTokenPlaceholder": "Placeholder token..."
+    }
+  },
+  "editor": {
+    "textEditor": {
+      "loadingEditor": "Loading editor..."
+    },
+    "toolbar": {
+      "addExample": "Add Example",
+      "addStep": "Add Step",
+      "copied": "Copied!",
+      "copyAlt": "Copy",
+      "copyToClipboard": "Copy to clipboard",
+      "copyToClipboardAria": "Copy to Clipboard",
+      "examplesAlt": "Examples",
+      "stepsAlt": "Steps"
+    }
+  },
+  "errors": {
+    "ai": {
+      "generateTextFailed": "Error generating text.",
+      "generateTextStreamFailed": "Error generating text stream."
+    },
+    "user": {
+      "updateUsernameFailed": "Update Username failed: {{status}} {{statusText}}",
+      "usernameTaken": "Username is already taken"
+    }
+  },
+  "instructionDetail": {
+    "instructionDetailPage": {
+      "back": "Back",
+      "createTitle": "Create Instruction",
+      "delete": "Delete",
+      "deleteConfirm": "Are you sure you want to delete this instruction? This action cannot be undone.",
+      "deleteFailedAlert": "Failed to delete instruction. You can only delete instructions you own.",
+      "editTitle": "Edit Instruction",
+      "instructionPrompt": "Instruction Prompt",
+      "nameHint": "Name",
+      "namePlaceholder": "e.g., Code Reviewer Persona",
+      "noAccessAlert": "You do not have access to this instruction or it doesn't exist.",
+      "readonlyBanner": "You are viewing a shared instruction. You cannot make changes.",
+      "save": "Save",
+      "saveFailedAlert": "Failed to save instruction",
+      "savingLabel": "Saving...",
+      "share": "Share",
+      "shareFailedAlert": "Failed to share instruction. Make sure you own it.",
+      "shareUpdatedAlert": "Instruction share settings updated successfully!"
+    }
+  },
+  "instructionWidget": {
+    "instructionWidget": {
+      "cancel": "Cancel",
+      "createInstructionsCta": "[+] Create Instructions",
+      "editInstructionAriaLabel": "Edit instruction",
+      "editSelectedInstructionTitle": "Edit selected instruction",
+      "instructionNamePlaceholder": "Instruction Name",
+      "looksGood": "Looks good",
+      "nameHint": "Name",
+      "noApiKeysSet": "No API keys set",
+      "personaHint": "Persona",
+      "processing": "Processing...",
+      "renameInstructionTitle": "Rename Instruction",
+      "saveInstructions": "Save Instructions",
+      "selectPersonaPlaceholder": "Select a persona",
+      "untitledInstruction": "Untitled Instruction",
+      "versionHint": "Version"
+    }
+  },
+  "instructionsPage": {
+    "instructionsPage": {
+      "createInstruction": "Create Instruction",
+      "emptyState": "No instructions found. Create one to get started!",
+      "title": "Instructions Hub"
+    }
+  },
+  "layout": {
+    "appContent": {
+      "loading": "Loading..."
+    },
+    "mobileMenu": {
+      "account": "Account",
+      "conversationHistory": "Conversation History",
+      "login": "Login",
+      "menu": "Menu",
+      "signingIn": "Signing in…",
+      "close": "Close menu",
+      "back": "Back"
+    },
+    "navbar": {
+      "account": "Account",
+      "home": "Home",
+      "login": "Login",
+      "logoAlt": "Create a new prompt",
+      "signingIn": "Signing in…"
+    },
+    "rightSidebar": {
+      "collapseSidebar": "Collapse Sidebar",
+      "expandSidebar": "Expand Sidebar"
+    },
+    "mobileFullPageModal": {
+      "aiSettings": "AI Settings",
+      "closeSettings": "Close Settings"
+    },
+    "mobileHeader": {
+      "moreActions": "More actions"
+    }
+  },
+  "notes": {
+    "notesHeader": {
+      "newNote": "New Note",
+      "saveError": "Couldn't save. Retrying…",
+      "savedAt": "Saved at {{time}}",
+      "saving": "Saving…",
+      "untitledNote": "Untitled Note",
+      "updatedAtDateTime": "Updated {{date}} at {{time}}",
+      "updatedAtTime": "Updated at {{time}}"
+    }
+  },
+  "profileWidget": {
+    "profileSettingsWidget": {
+      "discoverable": "Discoverable",
+      "discoverableDescription": "Allow other users to search for you by your exact username when sharing instructions.",
+      "failedToLoadProfile": "Failed to load profile data.",
+      "failedToUpdateDiscoverability": "Failed to update discoverability",
+      "failedToUpdateUsername": "Failed to update username",
+      "loadingProfile": "Loading profile...",
+      "noEmail": "No Email",
+      "noName": "No Name",
+      "personalDetails": "Personal Details",
+      "privacy": "Privacy",
+      "profilePictureAlt": "Profile",
+      "saving": "Saving...",
+      "title": "Profile Settings",
+      "updateUsername": "Update Username",
+      "username": "Username",
+      "usernamePlaceholder": "e.g. johndoe-1234",
+      "usernameUpdatedSuccessfully": "Username updated successfully!",
+      "yourUsername": "Your Username"
+    }
+  },
+  "settingsPage": {
+    "aiSettings": {
+      "apiKeyHint": "API Key",
+      "enterValidApiKeyToast": "Please enter a valid API key.",
+      "loginFirstToast": "Please log in first.",
+      "overwriteApiKey": "Overwrite API Key",
+      "save": "Save",
+      "saveErrorToast": "Error saving API key.",
+      "savingLabel": "Saving...",
+      "subtitle": "Configure your API keys to enable various AI models across the platform.",
+      "title": "AI Models & Providers"
+    },
+    "developerSettings": {
+      "copiedToast": "API key copied to clipboard.",
+      "copy": "Copy",
+      "copyFailedToast": "Could not copy — please select and copy the key manually.",
+      "createApiKey": "Create API key",
+      "createErrorToast": "Error creating API key.",
+      "createdKeyTitle": "Key “{{name}}” created — copy it now",
+      "createdKeyWarning": "This is the only time the full key is shown. Store it somewhere safe; if you lose it, revoke it and create a new one.",
+      "createdOn": "Created {{date}}",
+      "creatingLabel": "Creating...",
+      "enterKeyNameToast": "Please enter a name for the key.",
+      "keyNameHint": "Key name",
+      "keyNamePlaceholder": "e.g. My CI server",
+      "lastUsedOn": "Last used {{date}}",
+      "loadErrorToast": "Error loading API keys.",
+      "loading": "Loading…",
+      "loginFirstToast": "Please log in first.",
+      "noKeysYet": "No API keys yet.",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke the key \"{{name}}\"? Applications using it will stop working immediately.",
+      "revokeErrorToast": "Error revoking API key.",
+      "revokedToast": "API key revoked.",
+      "revokingLabel": "Revoking...",
+      "savedMyKey": "I've saved my key",
+      "subtitle": "Create API keys to call the API from your own code instead of logging in. Send a key on every request as <1>Authorization: Bearer gfy_...</1> — see the <3>API docs</3> for details.",
+      "title": "Developer",
+      "yourApiKeys": "Your API keys"
+    },
+    "memorySettings": {
+      "endpointHint": "Endpoint",
+      "enterEndpointAndKeyToast": "Please enter both endpoint and key.",
+      "enterEndpointAndTokenToast": "Please enter both endpoint and token.",
+      "invalidSupabaseEndpointToast": "Invalid Supabase endpoint format. Please enter a valid URL.",
+      "invalidZillizEndpointToast": "Invalid Zilliz endpoint format.",
+      "invalidZillizTokenToast": "Invalid Zilliz token format. Expected a long hex string.",
+      "keyHint": "Key",
+      "loginFirstToast": "Please log in first.",
+      "passwordHint": "Password",
+      "save": "Save",
+      "savingLabel": "Saving...",
+      "subtitle": "Configure connections to your vector databases and storage providers.",
+      "supabaseEndpointPlaceholder": "https://your-project.supabase.co",
+      "supabaseKeyPlaceholder": "your-anon-key / service_role",
+      "supabasePasswordPlaceholder": "PostgreSQL Database Password",
+      "supabaseSaveErrorToast": "Error saving Supabase settings.",
+      "supabaseSavedToast": "Supabase settings saved successfully.",
+      "title": "Memory Settings",
+      "tokenHint": "Token",
+      "zillizSaveErrorToast": "Error saving Zilliz settings.",
+      "zillizSavedToast": "Zilliz settings saved successfully.",
+      "zillizTokenPlaceholder": "Placeholder token..."
+    },
+    "profileSettings": {
+      "discoverabilityUpdateFailedMessage": "Failed to update discoverability",
+      "discoverable": "Discoverable",
+      "discoverableDescription": "Allow other users to search for you by your exact username when sharing instructions.",
+      "loadProfileFailed": "Failed to load profile data.",
+      "loadingProfile": "Loading profile...",
+      "noEmail": "No Email",
+      "noName": "No Name",
+      "personalDetails": "Personal Details",
+      "privacy": "Privacy",
+      "profilePictureAlt": "Profile",
+      "savingLabel": "Saving...",
+      "subtitle": "Manage your personal information and preferences.",
+      "title": "Profile Settings",
+      "updateUsername": "Update Username",
+      "usernamePlaceholder": "e.g. johndoe-1234",
+      "usernameSection": "Username",
+      "usernameUpdateFailedMessage": "Failed to update username",
+      "usernameUpdatedMessage": "Username updated successfully!",
+      "yourUsername": "Your Username"
+    },
+    "settingsPage": {
+      "breadcrumbMenu": "Menu",
+      "breadcrumbSettings": "Settings",
+      "sectionAi": "AI Settings",
+      "sectionDeveloper": "Developer",
+      "sectionMemory": "Memory Settings",
+      "sectionProfile": "Profile"
+    },
+    "settingsSidebar": {
+      "aiSettings": "AI Settings",
+      "developer": "Developer",
+      "logout": "Logout",
+      "memorySettings": "Memory Settings",
+      "profile": "Profile",
+      "title": "Settings"
+    }
+  },
+  "sidebar": {
+    "aiVendorWidget": {
+      "aiModelsTooltip": "AI Models",
+      "apiKeyNotSet": "API key not set",
+      "failedToSavePreferences": "Failed to save preferences: {{message}}",
+      "noApiKeysSet": "No API keys set",
+      "noModelsAvailable": "No models available",
+      "preferencesSavedSuccessfully": "Preferences saved successfully!",
+      "refreshModels": "Refresh Models",
+      "setAsDefault": "Set as default",
+      "title": "Models"
+    },
+    "conversationHistorySidebarWidget": {
+      "history": "History",
+      "toggleHistory": "Toggle History"
+    },
+    "instructionSidebarWidget": {
+      "instructions": "Instructions"
+    },
+    "newChatWidget": {
+      "newChat": "New Chat"
+    },
+    "savedNotesWidget": {
+      "archiveNote": "Archive note",
+      "couldNotLoadNotes": "Could not load notes",
+      "noSavedNotesYet": "No saved notes yet",
+      "title": "Saved Notes",
+      "untitled": "Untitled"
+    },
+    "threadPromptItem": {
+      "newPrompt": "New prompt"
+    },
+    "threadResponseItem": {
+      "responses_one": "Response",
+      "responses_other": "Responses",
+      "responses_zero": "No Responses"
+    },
+    "threadWidget": {
+      "noConversationYet": "No conversation yet",
+      "title": "Thread"
+    },
+    "tokenCounter": {
+      "estimated": "Estimated: {{tokenCount}}",
+      "promptTokens": "Prompt Tokens"
+    }
+  },
+  "toasts": {
+    "ai": {
+      "selectValidModelForVendor": "Please select a valid model for {{vendor}} first.",
+      "selectVendorAndModel": "Select at least one vendor and model."
+    },
+    "auth": {
+      "loginFirst": "Please log in first.",
+      "sessionExpiredDraftSaved": "Session expired. Your draft is saved — log in to continue."
+    },
+    "conversation": {
+      "noAccess": "You do not have access to this conversation"
+    }
+  },
+  "vendorSettings": {
+    "configureAIVendorSettingsWidget": {
+      "apiKeyHint": "API Key",
+      "apiKeyPlaceholder": "sk-...",
+      "enterValidApiKey": "Please enter a valid API key.",
+      "errorSavingApiKey": "Error saving API key.",
+      "pleaseLogInFirst": "Please log in first.",
+      "save": "Save",
+      "saving": "Saving...",
+      "title": "AI Vendor API Keys"
+    }
+  }
+}
