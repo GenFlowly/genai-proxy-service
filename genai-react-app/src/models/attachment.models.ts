@@ -1,30 +1,15 @@
-/** Reference to a file in the attachments S3 bucket. Mirrors the backend AttachmentRef. */
-export interface AttachmentRef {
-    attachmentId: string
-    s3Key: string
-    mediaType: string
-    /** Display name for downloads. Set for generated artifacts (e.g. PDFs); absent on uploaded images. */
-    filename?: string
-    /** File size in bytes. Only present on artifacts streamed via the "ga" chunk. */
-    sizeBytes?: number
-}
-
-export interface CreateAttachmentUploadResponse {
-    attachmentId: string
-    s3Key: string
-    mediaType: string
-    uploadUrl: string
-}
-
-export interface GetAttachmentUrlResponse {
-    attachmentId: string
-    url: string
-}
-
-/** Media types the backend accepts — the intersection all LLM vendors support. */
-export const ALLOWED_ATTACHMENT_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
-
-/** 5 MB — matches the backend's per-image limit (Anthropic's, the strictest vendor). */
-export const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024
-
-export const MAX_ATTACHMENTS_PER_MESSAGE = 10
+/**
+ * Attachment models — moved to @genflowly/component-library together with the
+ * ConversationWidget. Re-exported here so the app's existing imports keep
+ * working from a single source of truth.
+ */
+export type {
+    AttachmentRef,
+    CreateAttachmentUploadResponse,
+    GetAttachmentUrlResponse
+} from '@genflowly/component-library'
+export {
+    ALLOWED_ATTACHMENT_MEDIA_TYPES,
+    MAX_ATTACHMENT_SIZE_BYTES,
+    MAX_ATTACHMENTS_PER_MESSAGE
+} from '@genflowly/component-library'
