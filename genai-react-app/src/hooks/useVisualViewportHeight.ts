@@ -43,12 +43,17 @@ export function useVisualViewportHeight(): void {
         // iOS moves the visual viewport (offsetTop) rather than resizing on
         // some focus scenarios; track scroll too so the vars stay accurate
         viewport.addEventListener('scroll', scheduleUpdate)
+        // bfcache restores skip effects and may fire no resize event, leaving
+        // the vars stale (e.g. a keyboard-open height from before navigating
+        // away); re-read them whenever the page is shown
+        window.addEventListener('pageshow', scheduleUpdate)
 
         writeViewportVars()
 
         return () => {
             viewport.removeEventListener('resize', scheduleUpdate)
             viewport.removeEventListener('scroll', scheduleUpdate)
+            window.removeEventListener('pageshow', scheduleUpdate)
             if (rafId !== null) cancelAnimationFrame(rafId)
             document.documentElement.style.removeProperty('--vvh')
             document.documentElement.style.removeProperty('--vv-offset')
