@@ -2,7 +2,7 @@ import { fetchWithRetry } from "../utils/apiUtils";
 import { config } from '../config/env';
 import { endpoints } from '../config/endpoints';
 import { HttpMethod } from '../constants/http';
-import { ConversationBlock, LearnedFact, Message, ThinkingStep, WebSource } from '../models/conversation.models';
+import { ConversationBlock, LearnedFact, Message, MessageSender, ThinkingStep, WebSource } from '../models/conversation.models';
 import { applyThinkingStep } from '../utils/thinkingStepUtils';
 import { AttachmentRef } from '../models/attachment.models';
 import { AIVendor } from '../constants/vendors';
@@ -45,6 +45,8 @@ interface BackendPromptAndResponse {
     responses?: BackendResponse[];
     /** ISO-8601 createdAt of the user message that carried this prompt */
     promptCreatedAt?: string | null;
+    /** Author of the user message (customerId + display name/picture) */
+    sender?: MessageSender | null;
 }
 
 interface BackendGetConversationResponse {
@@ -145,7 +147,8 @@ export async function getConversation(
             responseMessages: responses,
             isLoading: false,
             status: 'resolved',
-            ...(Number.isFinite(sentAtMs) ? { sentAt: sentAtMs } : {})
+            ...(Number.isFinite(sentAtMs) ? { sentAt: sentAtMs } : {}),
+            ...(item.sender ? { sender: item.sender } : {})
         };
     });
 

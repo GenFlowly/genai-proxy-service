@@ -33,5 +33,19 @@ data class PromptAndResponse(
     val prompt: Prompt,
     val responses: List<GenerateTextResponse>? = emptyList(),
     /** ISO-8601 createdAt of the user message that carried this prompt. */
-    val promptCreatedAt: String? = null
+    val promptCreatedAt: String? = null,
+    /**
+     * Author of the user message. Lets viewers of a shared conversation see
+     * who sent each prompt instead of assuming it was themselves.
+     */
+    val sender: MessageSender? = null
+)
+
+/** Display identity of a message author, joined from CustomerProfile. */
+@Serializable
+data class MessageSender(
+    val customerId: String,
+    /** Null when the profile has no name (or no longer exists). */
+    val name: String? = null,
+    val picture: String? = null
 )

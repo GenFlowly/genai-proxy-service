@@ -81,6 +81,37 @@ describe('conversationService', () => {
         expect(result?.blocks[1].responseMessages[0].aiVendor).toBe(AIVendor.CLAUDE); // Although backend string "CLAUDE" needs to match enum if mapped correctly or cast
     });
 
+    test('getConversation maps the per-message sender onto blocks', async () => {
+        const mockBackendResponse = {
+            promptAndResponseList: [
+                {
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'From the owner' },
+                    responses: [{ text: 'Hi', aiVendor: 'OPENAI', conversationId: mockConversationId, messageId: 'msg-1' }],
+                    sender: { customerId: 'cust-owner', name: 'Owner Name', picture: 'https://pics/owner.png' }
+                },
+                {
+                    // Older server / legacy record: no sender field
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'No sender' },
+                    responses: [{ text: 'Ok', aiVendor: 'OPENAI', conversationId: mockConversationId, messageId: 'msg-2' }]
+                }
+            ]
+        };
+
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue(mockBackendResponse)
+        });
+
+        const result = await getConversation(mockToken, mockConversationId);
+
+        expect(result?.blocks[0].sender).toEqual({
+            customerId: 'cust-owner',
+            name: 'Owner Name',
+            picture: 'https://pics/owner.png'
+        });
+        expect(result?.blocks[1].sender).toBeUndefined();
+    });
+
     test('getConversation handles missing response text gracefully', async () => {
         // Arrange: One valid item, one incomplete item
         const mockBackendResponse = {

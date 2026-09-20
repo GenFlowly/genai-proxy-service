@@ -6,10 +6,12 @@ import com.genflowly.models.Message
 import com.genflowly.models.Prompt
 import com.genflowly.models.ShareRole
 import com.genflowly.models.api.GetConversationResponse
+import com.genflowly.models.api.MessageSender
 import com.genflowly.models.api.PromptAndResponse
 import com.genflowly.models.api.MessageUsageResponse
 import com.genflowly.models.api.VendorUsageTotals
 import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.ShareRepository
 
 class ConversationAccessDeniedException(message: String) : Exception(message)
@@ -25,7 +27,8 @@ private val webSourcesJsonParser = kotlinx.serialization.json.Json { ignoreUnkno
  */
 class ConversationService(
     private val conversationRepository: ConversationRepository,
-    private val shareRepository: ShareRepository
+    private val shareRepository: ShareRepository,
+    private val customerProfileRepository: CustomerProfileRepository
 ) {
 
     /** Async memory-extraction outcome for a message ("[]" = nothing learned). */
@@ -58,6 +61,9 @@ class ConversationService(
             .sortedBy { it.sequence }
 
         val pairs = mutableListOf<PromptAndResponse>()
+        // Author profiles, one lookup per distinct author (owner + share
+        // recipients who wrote); missing profiles degrade to just the id.
+        val senderCache = mutableMapOf<String, MessageSender>()
         // User-message ids of the turn currently being accumulated. A turn can
         // span several persisted user-message copies when parallel per-vendor
         // streams raced each other — those copies chain off this turn's ids and
@@ -112,13 +118,13 @@ class ConversationService(
                 if (isParallelDuplicate) {
                     currentTurnUserIds.add(msg.messageId)
                     val last = pairs.removeAt(pairs.size - 1)
-                    // Keep the first copy's createdAt — it marks when the turn was sent
-                    pairs.add(PromptAndResponse(last.prompt, (last.responses ?: emptyList()) + responses, last.promptCreatedAt))
+                    // Keep the first copy's createdAt/sender — it marks when the turn was sent
+                    pairs.add(last.copy(responses = (last.responses ?: emptyList()) + responses))
                 } else {
                     val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text, attachments = msg.attachments)
                     currentTurnUserIds = mutableSetOf(msg.messageId)
                     currentTurnPrompt = msg.text
-                    pairs.add(PromptAndResponse(prompt, responses, msg.createdAt))
+                    pairs.add(PromptAndResponse(prompt, responses, msg.createdAt, resolveSender(msg.customerId, senderCache)))
                 }
             }
             i++
@@ -144,6 +150,22 @@ class ConversationService(
             }
 
         return GetConversationResponse(pairs, title, role, vendorTotals)
+    }
+
+    /**
+     * Display identity of a message author. Falls back to a bare customerId
+     * when the profile is gone — history must still render for viewers.
+     */
+    private suspend fun resolveSender(
+        customerId: String,
+        cache: MutableMap<String, MessageSender>
+    ): MessageSender = cache.getOrPut(customerId) {
+        val profile = customerProfileRepository.getCustomerProfileByCustomerId(customerId)
+        MessageSender(
+            customerId = customerId,
+            name = profile?.get("name")?.s(),
+            picture = profile?.get("picture")?.s()
+        )
     }
 
     suspend fun createConversation(
