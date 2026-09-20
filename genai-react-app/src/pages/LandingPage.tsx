@@ -77,6 +77,31 @@ export default function LandingPage() {
         }
     }, [contextId, setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, setHistoryWidgetExpanded, isMobile])
 
+    // 📱 The app never scrolls the window (each page scrolls internally),
+    // but iOS Safari force-scrolls the window when the keyboard opens, and
+    // bfcache / history scroll restoration can hand this page that residual
+    // offset on load. With .page fixed at 100svh, a nonzero window scroll
+    // pushes the bottom strip — the docked prompt editor — off-screen. Pin
+    // the window to 0 on load and on every pageshow, and keep the browser
+    // from restoring a stale offset while this page owns the history entry.
+    useEffect(() => {
+        const pinWindowScroll = () => {
+            if (window.scrollY !== 0) window.scrollTo(0, 0)
+        }
+        pinWindowScroll()
+        const previousRestoration = window.history.scrollRestoration
+        try {
+            window.history.scrollRestoration = 'manual'
+        } catch { /* older browsers: restoration stays 'auto' */ }
+        window.addEventListener('pageshow', pinWindowScroll)
+        return () => {
+            window.removeEventListener('pageshow', pinWindowScroll)
+            try {
+                window.history.scrollRestoration = previousRestoration
+            } catch { /* ignore */ }
+        }
+    }, [])
+
     useEffect(() => {
         if (routeId) {
             // If URL has ID but context doesn't match, load it
