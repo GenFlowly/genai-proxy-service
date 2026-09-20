@@ -1,0 +1,29 @@
+# Router workers for the react app domains.
+#
+# ALWAYS deploy with an explicit --env. The env names below must match the
+# pre-existing workers in the Cloudflare dashboard exactly ("development"
+# and "production"), or a deploy would create a new orphan worker instead
+# of updating the live one:
+#   npx wrangler@4 deploy --config cloudflare/router-worker/react-app.toml --env development
+#   npx wrangler@4 deploy --config cloudflare/router-worker/react-app.toml --env production
+#
+# The domain attachments (custom domains / routes) are managed in the
+# Cloudflare dashboard and are not touched by these deploys.
+
+name = "react-app-router-do-not-deploy-without-env"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+[env.development]
+name = "development"
+
+[env.development.vars]
+API_HOST = "api-development.genflowly.com"
+STATIC_HOST = "development.genflowly-react-app.pages.dev"
+
+[env.production]
+name = "production"
+
+[env.production.vars]
+API_HOST = "api.genflowly.com"
+STATIC_HOST = "genflowly-react-app.pages.dev"

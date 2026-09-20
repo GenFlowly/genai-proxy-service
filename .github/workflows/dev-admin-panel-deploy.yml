@@ -29,8 +29,8 @@ jobs:
 
       - name: Deploy
         env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_ADMIN_PANEL_SITE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           VITE_AUTH0_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
           # The admin panel's own Auth0 application — NOT the react-app clientId.
           # The backend maps this azp to the ADMIN_PANEL account (see admin-panel/README.md).
@@ -41,4 +41,6 @@ jobs:
         run: |
           npm ci
           npm run build
-          npx netlify-cli deploy --prod --dir=dist --site=$NETLIFY_SITE_ID
+          # wrangler must stay pinned to v3: in v4 the `pages` commands deploy
+          # to Workers instead of the classic Pages project.
+          npx wrangler@3 pages deploy dist --project-name=genflowly-admin-panel --branch=development --commit-dirty=true
