@@ -1,17 +1,17 @@
 /**
  * Cloudflare Worker for the PRODUCTION admin panel.
  * Routes requests by URL path: /api goes to the backend behind
- * api.genflowly.com, everything else to the admin panel's Netlify site.
- * Mirrors the genai-react-app prod worker.
+ * api.genflowly.com, everything else to the admin panel's Cloudflare
+ * Pages site. Mirrors the genai-react-app prod worker.
  *
  * Attach this worker to the admin panel's prod domain (e.g.
  * admin.genflowly.com) via a Workers route or custom domain.
  */
 
 const ELB_ENDPOINT = 'api.genflowly.com';
-// The prod admin panel Netlify site (site id 6ab7f055-441f-4313-b3f8-6d03c8696ddb).
-// VERIFY this default domain in the Netlify dashboard before deploying.
-const NETLIFY_ENDPOINT = 'genflowly-admin-panel-production.netlify.app';
+// Production deployment of the genflowly-admin-panel Pages project
+// (prod deploys run `wrangler pages deploy --branch=main`).
+const PAGES_ENDPOINT = 'genflowly-admin-panel.pages.dev';
 
 export default {
   async fetch(request, env, ctx) {
@@ -35,8 +35,8 @@ export default {
       // Route /api requests to the backend
       targetUrl.hostname = ELB_ENDPOINT;
     } else {
-      // Route everything else to Netlify
-      targetUrl.hostname = NETLIFY_ENDPOINT;
+      // Route everything else to Cloudflare Pages
+      targetUrl.hostname = PAGES_ENDPOINT;
     }
 
     console.log({
