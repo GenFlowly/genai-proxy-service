@@ -7,7 +7,7 @@ Kotlin app that acts as the core API backend. Hosted on **Fly.io** (`genai-proxy
 ### 2. genai-proxy-server-cdk
 AWS CDK code that manages the persistent data and security infrastructure in AWS (DynamoDB tables, KMS encryption keys, and programmatic IAM access users for GitHub Actions and Fly.io).
 ### 3. genai-react-app
-React Front end that lets you interact with the application. Hosted on Netlify.
+React Front end that lets you interact with the application. Hosted on **Cloudflare Pages** (`genflowly-react-app` project).
 ### 4. retrieval-server (Sidecar)
 Python AI/ML service running Uvicorn that handles vector embeddings and retrieval. Hosted as a private internal service on **Fly.io** (`genai-retrieval-server-<stage>`).
 ### 5. encoding-server
@@ -16,6 +16,10 @@ Python AWS lambdas that do chunking, encoding, and storing in vector DB.
 CDK code that creates infrastructure for `encoding-server` in AWS for `development` and `production` stages.
 ### 7. encoding-library
 Common abstractions related to embeddings in Python.
+### 8. admin-panel
+Vite/React admin panel. Hosted on **Cloudflare Pages** (`genflowly-admin-panel` project).
+### 9. cloudflare/router-worker
+The Cloudflare Worker attached to each public domain. Routes `/api/*` to the backend and everything else to the Cloudflare Pages site. One shared source serves all four routers (react app + admin panel, dev + prod) via per-environment vars.
 
 ## Section 2: How to setup and deploy
 
@@ -71,10 +75,15 @@ Common abstractions related to embeddings in Python.
    flyctl certs check api-development.genflowly.com -a genai-proxy-server-development
    ```
 
-### 4. Netlify Setup (Frontend)
-1. Create a Netlify account and upload/deploy `genai-react-app`.
-2. In Netlify Account Settings, generate a "Personal Access Token" without expiration (`NETLIFY_AUTH_TOKEN`).
-3. In your Netlify Site Settings, copy the Site ID (`NETLIFY_SITE_ID`).
+### 4. Cloudflare Pages Setup (Frontend)
+1. Create an API token at dash.cloudflare.com → My Profile → API Tokens with two permissions: **Account → Cloudflare Pages → Edit** and **Account → Workers Scripts → Edit** (`CLOUDFLARE_API_TOKEN`). Copy your **Account ID** from the dashboard sidebar (`CLOUDFLARE_ACCOUNT_ID`).
+2. Create the Pages projects. Pin wrangler to v3 — in v4 the `pages` commands deploy to Workers instead of classic Pages:
+   ```bash
+   npx wrangler@3 pages project create genflowly-react-app --production-branch=main
+   npx wrangler@3 pages project create genflowly-admin-panel --production-branch=main
+   ```
+3. CI builds the apps in GitHub Actions (env vars baked in at build time) and uploads with `wrangler@3 pages deploy`. `--branch=main` becomes the production deployment (`<project>.pages.dev`); `--branch=development` gets the stable dev alias (`development.<project>.pages.dev`).
+4. The public domains are served by the router workers in `cloudflare/router-worker/`, deployed by `dev-workers-deploy.yml` / `prod-workers-deploy.yml`. The workers' domain/route attachments are managed in the Cloudflare dashboard and are not touched by deploys.
 
 ### 5. Auth0 Setup (Authentication)
 1. Create an Auth0 account and set up a Single Page Application (SPA).
@@ -103,15 +112,16 @@ Go to your GitHub Repository > **Settings** > **Secrets and variables** > **Acti
 5. `AUTH0_API_AUDIENCE`
 6. `AUTH0_SPA_CLIENT_ID`
 7. `AUTH0_SPA_DOMAIN`
-8. `NETLIFY_AUTH_TOKEN`
-9. `NETLIFY_SITE_ID`
+8. `CLOUDFLARE_API_TOKEN`
+9. `CLOUDFLARE_ACCOUNT_ID`
 10. `ZILLIZ_ENDPOINT`
 11. `ZILLIZ_TOKEN`
 
-When you push to the `development` branch, GitHub Actions will automatically:
+When you push to the `development` branch, GitHub Actions will automatically (each workflow is path-filtered, so only the services that changed deploy):
 - Deploy any DynamoDB/KMS schema updates via AWS CDK.
 - Fetch runtime AWS credentials from `FlyioIamStack` and inject them securely as Fly.io secrets into both `genai-proxy-server-<stage>` and `genai-retrieval-server-<stage>`.
 - Build and deploy both backend applications to Fly.io!
+- Build and deploy the react app and admin panel to Cloudflare Pages, and redeploy the router workers when `cloudflare/router-worker/` changes.
 
 ### 7. Milvus Setup
 1. Create a Zilliz Cloud account and get your endpoint and API token (`ZILLIZ_ENDPOINT`, `ZILLIZ_TOKEN`).
@@ -260,10 +270,11 @@ Go to your GitHub Repository > **Settings** > **Environments** > **production** 
 - `AUTH0_SPA_CLIENT_ID` (Production Client ID)
 - `AUTH0_API_AUDIENCE` (`https://api.genflowly.com`)
 - `AWS_ACCESS_KEY_ID` & `AWS_SECRET_ACCESS_KEY` (Production AWS User)
-- `NETLIFY_SITE_ID` (Production Netlify site ID)
+
+(`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` are repository-level secrets shared by both environments — the same Cloudflare account hosts dev and prod.)
 
 ### 5. Trigger CI/CD
-Open a Pull Request against the `main` branch. When it merges, the per-service production workflows (`.github/workflows/prod-proxy-server.yml`, `.github/workflows/prod-encoding-server.yml`) automatically sync your AWS CDK infrastructure and push your backend containers to Fly.io Production for whichever services changed. The frontend deploys to Netlify via `.github/workflows/prod-react-app-deploy.yml` on a weekly cron or manual dispatch.
+Open a Pull Request against the `main` branch. When it merges, the per-service production workflows automatically deploy whichever services changed: `prod-proxy-server.yml` / `prod-encoding-server.yml` sync AWS CDK infrastructure and push the backend containers to Fly.io, and `prod-react-app-deploy.yml` / `prod-admin-panel-deploy.yml` build and upload the frontends to Cloudflare Pages. The router workers deploy via `prod-workers-deploy.yml` (manual dispatch).
 
 
 ## Gotchas 
@@ -271,80 +282,6 @@ Open a Pull Request against the `main` branch. When it merges, the per-service p
 
 
 
-## Misc Scripts / Code
+## Cloudflare Router Workers
 
-### Cloudflare Workers
-```js
-/**
- * This Cloudflare Worker routes requests to the appropriate destination based on the URL path.
- * Requests to /api are forwarded to an EC2 instance, while all other requests are forwarded to a Netlify app.
- */
-
-const ELB_ENDPOINT = 'api.genflowly.com'; // USE api-development.genflowly.com for development
-const NETLIFY_ENDPOINT = 'genflowly-prod.netlify.app'; // update for development
-
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-
-    let targetUrl;
-
-        // ✅ Handle CORS preflight at the edge
-        if (request.method === "OPTIONS") {
-          return new Response(null, {
-            status: 204,
-            headers: {
-              "Access-Control-Allow-Origin": "*",
-              "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-              "Access-Control-Allow-Headers": "Content-Type, Authorization",
-              "Access-Control-Max-Age": "86400",
-            },
-          });
-        }
-
-
-    if (url.pathname.startsWith("/api")) {
-      // Route /api requests to EC2
-      targetUrl = new URL(request.url);
-      targetUrl.hostname = ELB_ENDPOINT;
-
-
-
-    } else {
-      // Route everything else to Netlify
-      targetUrl = new URL(request.url);
-      targetUrl.hostname = NETLIFY_ENDPOINT;
-    }
-
-    console.log({
-      incoming: url.pathname,
-      outgoing: targetUrl.toString(),
-    });
-
-    const response = await fetch(
-      new Request(targetUrl.toString(), {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-        redirect: "manual",
-      })
-    );
-
-    // ✅ Add CORS headers to API responses
-    if (url.pathname.startsWith("/api")) {
-      const newHeaders = new Headers(response.headers);
-      newHeaders.set("Access-Control-Allow-Origin", "*");
-
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: newHeaders,
-      });
-    }
-
-    return response;
-  },
-};
-
-
-```
+The workers that front the public domains live in `cloudflare/router-worker/` — one shared source (`src/worker.js`) plus per-app configs (`react-app.toml`, `admin-panel.toml`) whose `[env.development]` / `[env.production]` sections set the backend and Pages hostnames and pin the live worker names (`development`, `production`, `admin-panel-development`, `admin-panel-production`). Deployed by `dev-workers-deploy.yml` (on push) and `prod-workers-deploy.yml` (manual dispatch) — never edit worker code in the Cloudflare dashboard.
