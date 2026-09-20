@@ -29,13 +29,15 @@ jest.mock('@genflowly/component-library', () => ({
             onChange={(e) => onChange(e.target.value)}
         />
     ),
-    TextContainer: ({ content }: { content: string }) => (
-        <div data-testid="text-container">{content}</div>
+    TextContainer: ({ content, title }: { content: string; title?: React.ReactNode }) => (
+        <div data-testid="text-container">{title}{content}</div>
     ),
 }));
 
 jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
-    UserBrandName: () => <span data-testid="user-brand-name">User</span>
+    UserBrandName: ({ name, picture }: any) => (
+        <span data-testid="user-brand-name" data-picture={picture ?? ''}>{name}</span>
+    )
 }));
 
 describe('Request Widget Component', () => {
@@ -216,6 +218,60 @@ describe('Request Widget Component', () => {
 
         // Clean up
         localStorage.removeItem(storageKey);
+    });
+
+    describe('message author identity', () => {
+        const mockResolvedBlock = (block: Record<string, unknown>) => {
+            mockUseConversation.mockReturnValue({
+                conversationBlockList: [{
+                    conversationBlockId: 'block-1',
+                    responseMessages: [{ id: 'res-1' }],
+                    isLoading: false,
+                    status: 'resolved',
+                    prompt: 'Hello',
+                    ...block
+                }],
+                generateResponsesStream: mockGenerateResponsesStream,
+                stopGenerating: mockStopGenerating,
+                getSelectedResponseForBlock: mockGetSelectedResponseForBlock,
+                setEditorPrompt: mockSetEditorPrompt,
+                setActiveBlockId: mockSetActiveBlockId
+            });
+        };
+
+        test('block with a sender shows the sender, not the viewer (shared conversation)', () => {
+            mockResolvedBlock({
+                sender: { customerId: 'cust-owner', name: 'Owner Name', picture: 'https://pics/owner.png' }
+            });
+
+            render(<Request blockId="block-1" />);
+            const brand = screen.getByTestId('user-brand-name');
+            expect(brand).toHaveTextContent('Owner Name');
+            expect(brand).toHaveAttribute('data-picture', 'https://pics/owner.png');
+        });
+
+        test('sender without a picture does not fall back to the viewer picture', () => {
+            mockUseAuth.mockReturnValue({
+                aiVendorAPIKeyStatusList: [{ isAPIKeyValid: true }],
+                customerName: 'Test User',
+                customerPicture: 'https://pics/viewer.png',
+                user: { name: 'Auth0 User' },
+                customerId: 'cust-123'
+            });
+            mockResolvedBlock({ sender: { customerId: 'cust-owner', name: 'Owner Name', picture: null } });
+
+            render(<Request blockId="block-1" />);
+            const brand = screen.getByTestId('user-brand-name');
+            expect(brand).toHaveTextContent('Owner Name');
+            expect(brand).toHaveAttribute('data-picture', '');
+        });
+
+        test('block without a sender falls back to the viewer identity (live-sent message)', () => {
+            mockResolvedBlock({});
+
+            render(<Request blockId="block-1" />);
+            expect(screen.getByTestId('user-brand-name')).toHaveTextContent('Test User');
+        });
     });
 
     describe('keyboard-open scroll behavior', () => {
