@@ -323,8 +323,13 @@ function Request({
 
     // If we have responses AND loading is finished, this block is "resolved" -> Show static text
     // (Stopping an in-flight generation is done per-vendor from the Response widget.)
-    const displayName = customerName || user?.name || ''
-    const displayPicture = customerPicture || user?.picture
+    // History blocks carry their author's profile (sender) — a shared
+    // conversation must show who actually sent each message, never the
+    // viewer's own identity. Blocks created live in this session have no
+    // sender; there the viewer IS the author, so their profile applies.
+    const sender = conversationBlock.sender
+    const displayName = sender ? (sender.name ?? '') : (customerName || user?.name || '')
+    const displayPicture = sender ? (sender.picture ?? undefined) : (customerPicture || user?.picture)
 
     // Only lock Request when actively streaming/resolved AND not being edited
     if (conversationBlock.status === 'resolved' || conversationBlock.isLoading) {

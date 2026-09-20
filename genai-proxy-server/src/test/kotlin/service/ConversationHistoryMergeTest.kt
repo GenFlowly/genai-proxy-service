@@ -3,9 +3,11 @@ package com.genflowly.service
 import com.genflowly.models.AIVendor
 import com.genflowly.models.ShareRole
 import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.ShareRepository
 import io.mockk.coEvery
 import io.mockk.mockk
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import kotlinx.coroutines.test.runTest
 import com.genflowly.models.AIConfig
 import com.genflowly.models.Conversation
@@ -28,7 +30,8 @@ class ConversationHistoryMergeTest {
 
     private val conversationRepo = mockk<ConversationRepository>(relaxed = true)
     private val shareRepo = mockk<ShareRepository>(relaxed = true)
-    private val service = ConversationService(conversationRepo, shareRepo)
+    private val customerProfileRepo = mockk<CustomerProfileRepository>(relaxed = true)
+    private val service = ConversationService(conversationRepo, shareRepo, customerProfileRepo)
 
     private fun userMsg(id: String, text: String, seq: Int, prev: String? = null, createdAt: String? = null) = Message(
         messageId = id, conversationId = conv, text = text, client = "REACT_APP", role = "user",
@@ -47,6 +50,7 @@ class ConversationHistoryMergeTest {
         coEvery { conversationRepo.getMessagesForConversation(conv) } returns messages
         coEvery { conversationRepo.getConversationTitle(conv, owner) } returns "My chat"
         coEvery { shareRepo.getConversationShare(any(), any()) } returns null
+        coEvery { customerProfileRepo.getCustomerProfileByCustomerId(any()) } returns null
     }
 
     @Test
@@ -156,6 +160,41 @@ class ConversationHistoryMergeTest {
 
         assertEquals(1, result.promptAndResponseList.size)
         assertEquals(listOf("r1", "r2"), result.promptAndResponseList[0].responses?.map { it.text })
+    }
+
+    @Test
+    fun `each pair carries its author's profile as sender`() = runTest {
+        stubConversation(listOf(
+            userMsg("u1", "hello", seq = 1),
+            assistantMsg("a1", "hi", seq = 2, AIVendor.OPENAI, "m", prev = "u1")
+        ))
+        coEvery { customerProfileRepo.getCustomerProfileByCustomerId(owner) } returns mapOf(
+            "name" to AttributeValue.builder().s("Owner Name").build(),
+            "picture" to AttributeValue.builder().s("https://pics/owner.png").build()
+        )
+        // A share recipient must see the OWNER's identity on the messages,
+        // not their own — the original bug.
+        coEvery { shareRepo.getConversationShare(conv, "cust-viewer") } returns ShareRole.VIEW
+
+        val result = service.getConversationHistory(conv, "cust-viewer")
+
+        val sender = result.promptAndResponseList[0].sender
+        assertEquals(owner, sender?.customerId)
+        assertEquals("Owner Name", sender?.name)
+        assertEquals("https://pics/owner.png", sender?.picture)
+    }
+
+    @Test
+    fun `missing author profile degrades to bare customerId sender`() = runTest {
+        stubConversation(listOf(
+            userMsg("u1", "hello", seq = 1),
+            assistantMsg("a1", "hi", seq = 2, AIVendor.OPENAI, "m", prev = "u1")
+        ))
+
+        val sender = service.getConversationHistory(conv, owner).promptAndResponseList[0].sender
+        assertEquals(owner, sender?.customerId)
+        assertNull(sender?.name)
+        assertNull(sender?.picture)
     }
 
     @Test
