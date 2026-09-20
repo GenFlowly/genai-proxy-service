@@ -327,6 +327,34 @@ describe('Response Widget Component', () => {
         expect(mockSetVendorSelectionForBlock).toHaveBeenCalledWith('block-1', [AIVendor.OPENAI, AIVendor.CLAUDE]);
     });
 
+    test('vendor toggle row fades only the edges with hidden pills', () => {
+        mockSelection = [AIVendor.OPENAI, AIVendor.CLAUDE];
+        render(<Response blockId="block-1" responseMessages={mockMessages} />);
+        const scroller = screen.getByTestId('vendor-toggle-scroller');
+
+        // Simulate an overflowing chip row: 300px viewport, 500px of pills
+        Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 300 });
+        Object.defineProperty(scroller, 'scrollWidth', { configurable: true, value: 500 });
+
+        // At the left edge → only the right side hints at more content
+        Object.defineProperty(scroller, 'scrollLeft', { configurable: true, writable: true, value: 0 });
+        fireEvent.scroll(scroller);
+        expect(scroller.style.getPropertyValue('--fade-l')).toBe('0px');
+        expect(scroller.style.getPropertyValue('--fade-r')).toBe('16px');
+
+        // Mid-scroll → both edges fade
+        scroller.scrollLeft = 100;
+        fireEvent.scroll(scroller);
+        expect(scroller.style.getPropertyValue('--fade-l')).toBe('16px');
+        expect(scroller.style.getPropertyValue('--fade-r')).toBe('16px');
+
+        // At the right edge → only the left side fades
+        scroller.scrollLeft = 200;
+        fireEvent.scroll(scroller);
+        expect(scroller.style.getPropertyValue('--fade-l')).toBe('16px');
+        expect(scroller.style.getPropertyValue('--fade-r')).toBe('0px');
+    });
+
     test('streaming re-renders do not undo a vendor the user toggled off', () => {
         // Both vendors present and selected
         mockSelection = [AIVendor.OPENAI, AIVendor.CLAUDE];
