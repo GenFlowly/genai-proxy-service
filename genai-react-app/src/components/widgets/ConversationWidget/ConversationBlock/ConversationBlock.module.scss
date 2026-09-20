@@ -7,16 +7,17 @@
   align-items: center;
   scroll-margin-top: 5rem;
 
-  // Native virtualization: blocks scrolled out of view skip style/layout/
-  // paint entirely, so a long conversation costs roughly what the visible
-  // part costs. `contain-intrinsic-size: auto 20rem` keeps scrollbar
-  // geometry sane before first render, then remembers each block's real
-  // size. The LAST block is excluded: it hosts the active editor, which on
-  // mobile rides the keyboard via a transform that must not be clipped by
-  // the paint containment content-visibility switches on.
+  // Containment WITHOUT render skipping: content-visibility: auto was tried
+  // here and caused abrupt scrolling — blocks rendered in mid-scroll (hitch)
+  // and their real heights replacing the intrinsic-size estimate made scroll
+  // anchoring jump. Chat blocks vary too much in height for CSS-only
+  // estimates; render-skipping needs measured rows (react-window style).
+  // Plain layout+paint containment keeps each block's invalidations from
+  // propagating without ever touching scroll geometry. The LAST block is
+  // excluded: it hosts the active editor, which on mobile rides the keyboard
+  // via a transform that paint containment would clip.
   &:not(:last-child) {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 20rem;
+    contain: layout paint;
   }
 }
 
