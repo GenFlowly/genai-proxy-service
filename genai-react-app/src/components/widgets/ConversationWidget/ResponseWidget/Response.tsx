@@ -348,6 +348,28 @@ function Response({ blockId, responseMessages, onFollowUp, disabled = false, isL
     const maxVendors = useMaxVendors(containerEl)
     const vendorDisplayName = useVendorDisplayNames()
 
+    // 📱 The vendor toggle row scrolls horizontally when the pills overflow
+    // (many vendors on a narrow screen). Each edge gets a fade mask ONLY
+    // while more pills are hidden past it — the CSS mask reads these
+    // custom properties, updated on scroll and resize.
+    const toggleWrapperRef = useRef<HTMLDivElement | null>(null)
+    const updateToggleFades = useCallback(() => {
+        const el = toggleWrapperRef.current
+        if (!el) return
+        const maxScroll = el.scrollWidth - el.clientWidth
+        el.style.setProperty('--fade-l', el.scrollLeft > 2 ? '16px' : '0px')
+        el.style.setProperty('--fade-r', maxScroll - el.scrollLeft > 2 ? '16px' : '0px')
+    }, [])
+    useEffect(() => {
+        const el = toggleWrapperRef.current
+        if (!el) return
+        updateToggleFades()
+        const observer = new ResizeObserver(updateToggleFades)
+        observer.observe(el)
+        return () => observer.disconnect()
+        // Re-bind when the row mounts/unmounts (it only renders with >1 vendor)
+    }, [updateToggleFades, availableVendors.length])
+
     const toggleOptions: ToggleOption[] = useMemo(() => availableVendors.map(vendor => ({
         id: vendor,
         label: vendorDisplayName(vendor)
@@ -400,7 +422,12 @@ function Response({ blockId, responseMessages, onFollowUp, disabled = false, isL
             data-testid={testId}
         >
             {availableVendors.length > 1 && (
-                <div className={styles.toggleWrapper}>
+                <div
+                    className={styles.toggleWrapper}
+                    ref={toggleWrapperRef}
+                    onScroll={updateToggleFades}
+                    data-testid="vendor-toggle-scroller"
+                >
                     {/* Capped multi-select: as many vendors as columns fit the
                         conversation width (2, or 1 on narrow screens); at the
                         cap a new pick evicts the oldest selection */}
