@@ -1,8 +1,12 @@
 name: Development Admin Panel Deploy
 
-# Manual-only: the admin panel is deliberately excluded from the push-triggered
-# pipeline. Deploy from the Actions tab (always builds the development branch).
+# Self-triggered: runs only when the admin panel (or this workflow) changes.
 on:
+  push:
+    branches: [development]
+    paths:
+      - 'admin-panel/**'
+      - '.github/workflows/dev-admin-panel-deploy.yml'
   workflow_dispatch:
 
 jobs:
@@ -13,8 +17,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: development
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
