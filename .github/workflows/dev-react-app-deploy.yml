@@ -1,10 +1,13 @@
 name: Development React App Deploy
 
+# Self-triggered: runs only when the react app (or this workflow) changes.
 on:
-  schedule:
-    # Runs at 00:00 UTC every Friday
-    - cron: '0 0 * * 5'
-  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
+  push:
+    branches: [development]
+    paths:
+      - 'genai-react-app/**'
+      - '.github/workflows/dev-react-app-deploy.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -14,8 +17,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: development
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
