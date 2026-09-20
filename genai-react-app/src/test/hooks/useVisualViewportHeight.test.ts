@@ -85,6 +85,24 @@ describe('useVisualViewportHeight Hook', () => {
         expect(getVvh()).toBe('500px');
     });
 
+    test('re-reads the viewport on pageshow (bfcache restore fires no resize)', () => {
+        const viewport = createMockViewport(660);
+        (window as any).visualViewport = viewport;
+
+        renderHook(() => useVisualViewportHeight());
+        expect(getVvh()).toBe('660px');
+
+        // Simulate coming back from bfcache with a different real viewport:
+        // no visualViewport resize event fires, only window pageshow
+        viewport.height = 740;
+        act(() => {
+            window.dispatchEvent(new Event('pageshow'));
+            jest.advanceTimersByTime(20);
+        });
+
+        expect(getVvh()).toBe('740px');
+    });
+
     test('removes listeners and the --vvh variable on unmount', () => {
         const viewport = createMockViewport(660);
         (window as any).visualViewport = viewport;

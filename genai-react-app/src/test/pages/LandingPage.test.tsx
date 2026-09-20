@@ -75,6 +75,36 @@ describe('LandingPage Routing Logic', () => {
         mockUseParams.mockImplementation(() => jest.requireActual('react-router-dom').useParams());
     });
 
+    test('pins residual window scroll to 0 on mount and on pageshow', () => {
+        const scrollToSpy = jest.spyOn(window, 'scrollTo').mockImplementation(() => {});
+        // Simulate iOS leaving the window force-scrolled from a previous
+        // keyboard session (restored by bfcache/history restoration)
+        Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 120 });
+
+        render(
+            <MemoryRouter initialEntries={['/chat']}>
+                <Routes>
+                    <Route path="/chat" element={<LandingPage />} />
+                </Routes>
+            </MemoryRouter>
+        );
+        expect(scrollToSpy).toHaveBeenCalledWith(0, 0);
+
+        // Coming back from bfcache re-pins too
+        scrollToSpy.mockClear();
+        window.dispatchEvent(new Event('pageshow'));
+        expect(scrollToSpy).toHaveBeenCalledWith(0, 0);
+
+        // Already at 0 → no redundant scroll
+        scrollToSpy.mockClear();
+        (window as any).scrollY = 0;
+        window.dispatchEvent(new Event('pageshow'));
+        expect(scrollToSpy).not.toHaveBeenCalled();
+
+        scrollToSpy.mockRestore();
+        (window as any).scrollY = 0;
+    });
+
     test('Renders all layout components with correct widget IDs', () => {
         render(
             <MemoryRouter initialEntries={['/chat']}>
