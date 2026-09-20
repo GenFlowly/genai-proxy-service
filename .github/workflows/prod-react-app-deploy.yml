@@ -1,11 +1,13 @@
 name: Production React App Deploy
 
-# Deploys the react app to Cloudflare Pages (always builds main).
-# Runs on the weekly cron or manual dispatch, mirroring the dev setup.
+# Deploys the react app to Cloudflare Pages.
+# Self-triggered: runs only when the react app (or this workflow) changes.
 on:
-  schedule:
-    # Runs at 00:00 UTC every Friday
-    - cron: '0 0 * * 5'
+  push:
+    branches: [main]
+    paths:
+      - 'genai-react-app/**'
+      - '.github/workflows/prod-react-app-deploy.yml'
   workflow_dispatch:
 
 jobs:
@@ -16,8 +18,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
