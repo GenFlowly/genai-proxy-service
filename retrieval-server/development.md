@@ -61,8 +61,21 @@ in the ciphertext), memoized per run so a looping graph does one DDB+KMS round-t
 node. Mirrors the proxy's own `CustomerCredentialsRepository`/`KMSProvider` path; needs
 `dynamodb:GetItem` on that table + `kms:Decrypt` granted to this service's IAM role.
 
-**Supabase connection mode matters.** DBOS, the checkpointer, and stream reattach (`LISTEN/NOTIFY`)
-all need session-level Postgres features. Use the **session pooler or direct connection** (port
-5432, `sslmode=require`) for `DATABASE_URL` — never the **transaction pooler** (6543), which
-silently breaks advisory locks and `LISTEN/NOTIFY` and is the easiest way to ship a subtly broken
-deploy.
+**Supabase connection mode matters.** Use the Supabase **session pooler** URL (port 5432,
+`sslmode=require`) for `DATABASE_URL` — never the **transaction pooler** (6543), which breaks
+advisory locks. P0 confirmed `LISTEN/NOTIFY` does **not** work over Supabase's pooler in any mode,
+so DBOS runs with `use_listen_notify=False` (it polls) and the reattach channel polls the events
+table; neither needs NOTIFY. DBOS keeps its tables in a schema via `dbos_system_schema`, so the one
+Supabase `postgres` database is sufficient.
+
+**Required config — `DATABASE_URL` (the Supabase session-pooler connection string).** Without it
+the server starts normally and durable `/runs` is simply inactive; with it, durable runs are
+enabled.
+
+- **Local dev:** put it in `retrieval-server/.env.local` (gitignored — see `.env.example`).
+- **Deployed:** it's a **Fly secret on the `genai-retrieval-server-<stage>` app** (note: the CI app
+  name is `genai-retrieval-server-<stage>`, not the `retrieval-server` in `fly.toml`). Set it via
+  the Fly dashboard or `flyctl secrets set --app genai-retrieval-server-<stage> DATABASE_URL=…`.
+  CI (`dev`/`prod-proxy-server.yml`, "Deploy Retrieval Server" step) also sets it from an
+  environment-scoped **`DATABASE_URL` GitHub Actions secret** if that secret exists — so add it per
+  environment (dev/prod point at different Supabase projects) to keep deploys reproducible.
