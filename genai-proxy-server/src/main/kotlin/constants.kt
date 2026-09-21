@@ -86,6 +86,10 @@ object DynamoDBConstants {
     const val DELETED_AT_KEY = "deletedAt"
     const val ARCHIVED_AT_KEY = "archivedAt"
     const val PINNED_AT_KEY = "pinnedAt"
+    // Points at the durable agent run currently generating this conversation's
+    // reply (DURABLE_AGENTS_DBOS_PLAN §5.8) — set while a /runs stream is live so
+    // a page reload can rediscover and reattach; cleared when the run ends.
+    const val PENDING_RUN_ID_KEY = "pendingRunId"
 
     // Tool credentials — per-customer, per-toolType
     const val CUSTOMER_TOOL_CREDENTIALS_TABLE = "CustomerToolCredentials"

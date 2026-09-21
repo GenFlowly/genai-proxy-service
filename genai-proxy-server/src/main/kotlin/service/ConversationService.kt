@@ -35,6 +35,18 @@ class ConversationService(
     suspend fun setMessageLearnedFacts(conversationId: String, messageId: String, factsJson: String) =
         conversationRepository.setMessageLearnedFacts(conversationId, messageId, factsJson)
 
+    /** Points a conversation at the durable run generating its reply (reload rediscovery). */
+    suspend fun setPendingRunId(customerId: String, conversationId: String, runId: String): Boolean =
+        conversationRepository.setPendingRunId(customerId, conversationId, runId)
+
+    /** Clears the pending-run pointer once the run ends. */
+    suspend fun clearPendingRunId(customerId: String, conversationId: String): Boolean =
+        conversationRepository.clearPendingRunId(customerId, conversationId)
+
+    /** The durable run currently generating this conversation's reply, or null. */
+    suspend fun getPendingRunId(customerId: String, conversationId: String): String? =
+        conversationRepository.getPendingRunId(customerId, conversationId)
+
     /**
      * Returns the effective role [callerCustomerId] has on [conversationId]:
      * [ShareRole.OWNER] if they own it, otherwise the role from a direct share,
