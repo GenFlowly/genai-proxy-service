@@ -109,6 +109,38 @@ private data class VendorModels(val provider: String, val models: List<String>)
 @Serializable
 private data class ListModelsResponse(val vendor_models: List<VendorModels>)
 
+// --- /probe-embedding-models wire types ---
+
+@Serializable
+private data class ProbeVendorCredentials(val provider: String, val api_key: String)
+
+@Serializable
+private data class ProbeModelsPayload(val vendors: List<ProbeVendorCredentials>)
+
+@Serializable
+private data class WireVendorProbeResult(
+    val provider: String,
+    val supported: List<String> = emptyList(),
+    val inconclusive: List<String> = emptyList(),
+    val error: String? = null
+)
+
+@Serializable
+private data class ProbeModelsResponse(val vendor_results: List<WireVendorProbeResult>)
+
+/**
+ * One vendor's probe outcome: which of its catalog embedding models the given
+ * key actually embedded ([supported]), which were transient/uncertain
+ * ([inconclusive], keep the prior verdict), and [error] when the key itself
+ * failed auth (both lists empty — keep the stored list untouched).
+ */
+data class VendorProbeResult(
+    val provider: String,
+    val supported: List<String>,
+    val inconclusive: List<String>,
+    val error: String?
+)
+
 @Serializable
 private data class ValidateKeyPayload(val provider: String, val api_key: String)
 
@@ -519,6 +551,50 @@ class RetrievalServerClient(
         } catch (e: Exception) {
             logger.warn { "Failed to fetch models from retrieval server: ${e.message}" }
             emptyMap()
+        }
+    }
+
+    /**
+     * Probes which of each vendor's catalog embedding models the given key can
+     * actually embed, via /probe-embedding-models (one tiny embed per candidate
+     * against the same vendor endpoint the encoder uses). Keys are
+     * retrieval-server provider strings. Transport failure degrades to an empty
+     * list — callers treat that as "no fresh data", never as "no models".
+     */
+    suspend fun probeEmbeddingModels(
+        apiKeysByProvider: Map<String, String>
+    ): List<VendorProbeResult> {
+        if (apiKeysByProvider.isEmpty()) return emptyList()
+
+        val payload = json.encodeToString(
+            ProbeModelsPayload(
+                vendors = apiKeysByProvider.map { (provider, apiKey) ->
+                    ProbeVendorCredentials(provider = provider, api_key = apiKey)
+                }
+            )
+        )
+
+        return try {
+            val response: HttpResponse = httpClient.post("$retrievalServerUrl/probe-embedding-models") {
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) {
+                logger.warn { "Retrieval server /probe-embedding-models returned ${response.status}: $body" }
+                return emptyList()
+            }
+            json.decodeFromString<ProbeModelsResponse>(body).vendor_results.map {
+                VendorProbeResult(
+                    provider = it.provider,
+                    supported = it.supported,
+                    inconclusive = it.inconclusive,
+                    error = it.error
+                )
+            }
+        } catch (e: Exception) {
+            logger.warn { "Failed to probe embedding models on retrieval server: ${e.message}" }
+            emptyList()
         }
     }
 

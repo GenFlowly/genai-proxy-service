@@ -222,7 +222,7 @@ fun Application.configureRouting(
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService, appConfig)
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService, vendorAllowlistService)
-        registerSaveAIConfigPreferencesRoutes(customerProfileService)
+        registerSaveAIConfigPreferencesRoutes(customerProfileService, customerCredentialsService)
         registerGetConversationRoutes(customerProfileService, conversationService)
         registerCreateInstructionRoutes(instructionService, customerProfileService)
         registerCreateInstructionShareRoutes(instructionService, customerProfileService)

@@ -1,6 +1,5 @@
 package com.genflowly.activity.generation
 
-import com.genflowly.EmbeddingModelSupport
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.PreferencesRequest
@@ -13,12 +12,14 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
+import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("SaveAIConfigPreferences")
 
 fun Route.registerSaveAIConfigPreferencesRoutes(
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    customerCredentialsService: CustomerCredentialsService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.SAVE_AI_CONFIG_PREFERENCES, {
@@ -49,32 +50,21 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
                     customerProfileService
                 )
 
-                // Reject embedding models the encoding pipeline can't actually
+                // Reject embedding models the customer's key can't actually
                 // encode (e.g. voyage-multimodal-*, which the picker's LiteLLM
-                // catalog lists but the Voyage text-embed SDK rejects). Without
-                // this gate the failure surfaces only days later, deep in the
-                // encoding server, and silently — the whole run aborts before
+                // catalog lists but the Voyage text-embed SDK rejects). The valid
+                // set is discovered by probing the key, not a hardcoded list.
+                // Without this gate the failure surfaces only days later, deep in
+                // the encoding server, and silently — the whole run aborts before
                 // the store step, so nothing ever reaches Milvus.
                 val prefs = request.aiConfigPreferences
-                val unsupported = EmbeddingModelSupport.findUnsupported(
-                    "embeddingModel" to prefs?.embeddingModel,
-                    "embeddingModelConversations" to prefs?.embeddingModelConversations,
-                    "embeddingModelNotes" to prefs?.embeddingModelNotes,
-                )
-                if (unsupported.isNotEmpty()) {
-                    val offending = unsupported.joinToString("; ") { (field, model) -> "$field='$model'" }
-                    logger.warn(
-                        "Rejected preferences save for customer {}: unsupported embedding model(s): {}",
-                        customerId,
-                        offending
-                    )
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf(
-                            "error" to ("Unsupported embedding model(s): $offending. " +
-                                "Supported models: ${EmbeddingModelSupport.supportedModels.joinToString(", ")}")
-                        )
-                    )
+                try {
+                    customerCredentialsService.assertEmbeddingModelSupported(customerId, prefs?.embeddingModel)
+                    customerCredentialsService.assertEmbeddingModelSupported(customerId, prefs?.embeddingModelConversations)
+                    customerCredentialsService.assertEmbeddingModelSupported(customerId, prefs?.embeddingModelNotes)
+                } catch (e: IllegalArgumentException) {
+                    logger.warn("Rejected preferences save for customer {}: {}", customerId, e.message)
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Unsupported embedding model")))
                     return@post
                 }
 

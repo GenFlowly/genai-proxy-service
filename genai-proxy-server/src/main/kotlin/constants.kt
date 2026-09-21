@@ -40,6 +40,10 @@ object DynamoDBConstants {
     const val CUSTOMER_VECTOR_DB_CONFIG_TABLE = "CustomerVectorDBConfig"
     const val VENDOR_KEY = "vendor"
 
+    // Per-customer, per-embedding-vendor list of models the customer's key can
+    // actually embed (discovered by probing). PK = customerId, SK = vendor.
+    const val CUSTOMER_EMBEDDING_MODELS_TABLE = "CustomerEmbeddingModels"
+
 
     const val INSTRUCTION_TABLE = "Instructions"
     const val INSTRUCTION_ID_KEY = "instructionId"
@@ -219,74 +223,6 @@ object EmbeddingConstants {
         modelName.startsWith("text-embedding") -> "openai"
         else -> MODEL_TYPE
     }
-}
-
-/**
- * The embedding models the platform can actually encode end-to-end.
- *
- * Source of truth is the encoding pipeline's dispatch in
- * `encoding_library.utils.embedding_utils.get_embedding_model`:
- *   - voyage, name starts "voyage-context-" -> the contextualized-embeddings
- *     endpoint (see [VOYAGE_CONTEXT_MODELS])
- *   - voyage, otherwise -> langchain_voyageai `VoyageAIEmbeddings`, whose
- *     supported-model list is mirrored in [VOYAGE_TEXT_MODELS]
- *   - openai -> `OpenAIEmbeddings` ([OPENAI_MODELS])
- *
- * The Settings model picker is populated from LiteLLM's catalog (retrieval
- * server /models), which is broader than what the encoder accepts — it lists,
- * for example, `voyage-multimodal-*` embedding models that the Voyage
- * text-embed SDK rejects. Selecting one used to fail only deep in the encoding
- * server's create-embeddings step: the whole Step Functions run aborts before
- * the store step, so nothing ever reaches Milvus and the failure is invisible
- * to the user for days. Validating here rejects such models at save time with a
- * clear, immediate error.
- *
- * Keep in sync with the deployed voyageai / OpenAI SDK model lists.
- */
-object EmbeddingModelSupport {
-    // langchain_voyageai / voyageai SDK supported text-embedding models.
-    // Multimodal models (voyage-multimodal-*) are intentionally absent: the
-    // text embed path can't encode them.
-    private val VOYAGE_TEXT_MODELS = setOf(
-        "voyage-4-large", "voyage-4", "voyage-4-lite", "voyage-code-4",
-        "voyage-3-large", "voyage-3", "voyage-3-lite",
-        "voyage-3.5", "voyage-3.5-lite", "voyage-3-5", "voyage-3-5-lite",
-        "voyage-code-3", "voyage-code-3.5", "voyage-code-3-5", "voyage-code-2",
-        "voyage-2", "voyage-02", "voyage-01",
-        "voyage-lite-01", "voyage-lite-01-instruct", "voyage-lite-02-instruct",
-        "voyage-large-2", "voyage-large-2-instruct",
-        "voyage-multilingual-2", "voyage-finance-2", "voyage-law-2",
-    )
-
-    // Voyage contextualized-chunk models, encoded via the dedicated
-    // /contextualizedembeddings endpoint (VoyageContextualizedEmbeddings),
-    // NOT the langchain SDK.
-    private val VOYAGE_CONTEXT_MODELS = setOf("voyage-context-3", "voyage-context-4")
-
-    // OpenAI text-embedding models (langchain_openai OpenAIEmbeddings).
-    private val OPENAI_MODELS = setOf(
-        "text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002",
-    )
-
-    /** Every embeddable model name, sorted — for user-facing error messages. */
-    val supportedModels: List<String> =
-        (VOYAGE_TEXT_MODELS + VOYAGE_CONTEXT_MODELS + OPENAI_MODELS).sorted()
-
-    /** True if [modelName] can be encoded by the embedding pipeline. */
-    fun isSupported(modelName: String): Boolean =
-        modelName in VOYAGE_TEXT_MODELS ||
-            modelName in VOYAGE_CONTEXT_MODELS ||
-            modelName in OPENAI_MODELS
-
-    /**
-     * Returns the (field, model) pairs whose model is set-but-unsupported.
-     * Blank/null values are skipped: they clear or leave a preference unchanged
-     * and never reach the encoder. Empty result means everything is valid.
-     */
-    fun findUnsupported(vararg fields: Pair<String, String?>): List<Pair<String, String>> =
-        fields.mapNotNull { (name, model) ->
-            if (!model.isNullOrBlank() && !isSupported(model)) name to model else null
-        }
 }
 
 // Node type of a locally-executed single-LLM-call graph node whose config

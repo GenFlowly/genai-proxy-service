@@ -34,7 +34,8 @@ class CustomerCredentialsService(
     private val encodingServerClient: EncodingServerClient,
     private val retrievalServerClient: RetrievalServerClient,
     private val vendorAllowlistService: VendorAllowlistService,
-    private val appScope: AppScope
+    private val appScope: AppScope,
+    private val embeddingModelCatalogService: EmbeddingModelCatalogService
 ) {
 
     // ─── AI vendor API keys ───────────────────────────────────────────────────
@@ -233,6 +234,9 @@ class CustomerCredentialsService(
         return if (result.valid) {
             storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
             logger.info { "Embedding API key validated and stored for vendor $vendor" }
+            // Discover which models THIS key can actually embed, so the model
+            // picker is accurate by the time the customer opens it.
+            embeddingModelCatalogService.probeOnKeyChangeAsync(customerId, vendor, apiKey)
             com.genflowly.models.EmbeddingKeyStatus(
                 vendor = vendor,
                 isAPIKeyValid = true,
@@ -263,17 +267,25 @@ class CustomerCredentialsService(
         }.toMap()
         if (keysByVendor.isEmpty()) return emptyList()
 
-        val modelsByProvider = retrievalServerClient.listModelsByProvider(
-            keysByVendor.entries.associate { (vendor, key) -> vendor.toProviderString() to key },
-            capability = "embedding"
-        )
-        return keysByVendor.keys.map { vendor ->
+        // Serve the probed list — only models this key actually embeds — never
+        // the raw LiteLLM catalog (which lists models the encoder rejects, e.g.
+        // voyage-multimodal-*). Null (probe infra down, no cache) surfaces as an
+        // empty list rather than reintroducing unvalidated options.
+        return keysByVendor.map { (vendor, key) ->
             com.genflowly.models.EmbeddingVendorModels(
                 vendor = vendor,
-                models = modelsByProvider[vendor.toProviderString()].orEmpty()
+                models = embeddingModelCatalogService.getValidModels(customerId, vendor, key).orEmpty()
             )
         }
     }
+
+    /**
+     * Throws IllegalArgumentException if [modelName] is set but the customer's
+     * key can't embed it — the save-time gate for embedding-model preferences.
+     * Delegates to the probe-backed catalog (no hardcoded allowlist).
+     */
+    suspend fun assertEmbeddingModelSupported(customerId: String, modelName: String?) =
+        embeddingModelCatalogService.assertModelSupported(customerId, modelName)
 
     /** Key status per [com.genflowly.models.EmbeddingVendor], NOT_SET when absent. */
     suspend fun getEmbeddingKeyStatuses(customerId: String): List<com.genflowly.models.EmbeddingKeyStatus> {

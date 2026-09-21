@@ -425,6 +425,11 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
+    // Re-probe every customer's embedding key ~weekly (lease-guarded across
+    // instances) so a vendor deprecating a model a customer already selected is
+    // caught proactively, not on the next silent pipeline failure.
+    get<com.genflowly.service.EmbeddingModelCatalogService>().startWeeklyRefresh()
+
     // Eagerly load the bundled request-agent defaults (the fallback when the
     // RequestAgentMap table has no usable entry) so a broken bundle fails
     // startup, not the first persona/title generation.

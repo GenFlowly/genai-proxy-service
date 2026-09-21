@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 
 /**
@@ -120,6 +121,39 @@ class CustomerCredentialsRepository(
                 .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
                 .build()
             dynamoDbClient.query(request).items()
+        }
+
+    /**
+     * Every stored key row for the given vendors that actually holds a key —
+     * across all customers. Used by the weekly embedding-model sweep to find
+     * which (customerId, vendor) pairs to re-probe. Scans the whole table (a
+     * weekly job, PAY_PER_REQUEST), paging through all segments. Returned items
+     * carry customerId, aiVendor and the encrypted apiKey.
+     */
+    suspend fun scanEmbeddingKeyItems(vendors: Set<String>): List<Map<String, AttributeValue>> =
+        withContext(Dispatchers.IO) {
+            if (vendors.isEmpty()) return@withContext emptyList()
+            val vendorPlaceholders = vendors.mapIndexed { i, _ -> ":v$i" }
+            val exprValues = buildMap {
+                vendors.forEachIndexed { i, v -> put(":v$i", AttributeValue.builder().s(v).build()) }
+            }
+            val results = mutableListOf<Map<String, AttributeValue>>()
+            var lastKey: Map<String, AttributeValue>? = null
+            do {
+                val request = ScanRequest.builder()
+                    .tableName(CUSTOMER_API_KEY_TABLE)
+                    .filterExpression(
+                        "#vendor IN (${vendorPlaceholders.joinToString(", ")}) AND attribute_exists(apiKey)"
+                    )
+                    .expressionAttributeNames(mapOf("#vendor" to AI_VENDOR_KEY))
+                    .expressionAttributeValues(exprValues)
+                    .apply { if (lastKey != null) exclusiveStartKey(lastKey) }
+                    .build()
+                val response = dynamoDbClient.scan(request)
+                response.items().forEach { if (!it["apiKey"]?.s().isNullOrBlank()) results.add(it) }
+                lastKey = response.lastEvaluatedKey().takeIf { it.isNotEmpty() }
+            } while (lastKey != null)
+            results
         }
 
     suspend fun initCustomerApiKey(

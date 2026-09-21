@@ -166,6 +166,7 @@ fun appModule(): Module = module {
     single { CustomerProfileRepository(get(), get()) }
     single { ShareRepository(get(), get()) }
     single { CustomerCredentialsRepository(get(), get()) }
+    single { com.genflowly.repository.EmbeddingModelCatalogRepository(get(), get()) }
     single { DeveloperApiKeyRepository(get(), get()) }
     single { SystemApiKeyRepository(get(), get()) }
     single { ModelCatalogRepository(get(), get()) }
@@ -176,7 +177,12 @@ fun appModule(): Module = module {
     single { RequestAgentMapRepository(get(), get()) }
 
     single { SharedUsersResolver(get(), get()) }
-    single { CustomerCredentialsService(get(), get(), get(), get(), get(), get(), get()) }
+    single {
+        com.genflowly.service.EmbeddingModelCatalogService(
+            get(), get(), get(), get(), get<com.genflowly.di.AppScope>()
+        )
+    }
+    single { CustomerCredentialsService(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.VendorAllowlistService(get()) }
     single { UtilityGenerationService(get(), get()) }
     single { GraphService(get(), get(), get()) }
