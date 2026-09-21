@@ -8,6 +8,20 @@ os.environ["MPLCONFIGDIR"] = "/tmp/matplotlib"
 os.environ["NUMBA_CACHE_DIR"] = "/tmp/numba_cache"
 os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp/joblib_tmp"
 
+# Local dev only: load .env.local into the environment before anything reads it
+# (e.g. DATABASE_URL for durable runs). No-op in deployed envs, where the file is
+# absent and vars come from Fly secrets. setdefault so real env vars always win.
+_env_local = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
+if os.path.exists(_env_local):
+    with open(_env_local) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k, _v)
+
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -22,14 +36,28 @@ from routes.search import router as search_router
 from routes.validate_key import router as validate_key_router
 from routes.voice import router as voice_router
 
+# Durable-runs bootstrap. Importing this constructs the DBOS singleton IF
+# DATABASE_URL is set, so the durable /runs router below can register its
+# workflow. It is fully inert (and import-safe) when DATABASE_URL is absent.
+import durable_runtime
+
 configure_observability(service="retrieval-server", backend="prometheus")
 setup_logging("retrieval-server")
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Fail-safe: startup() never raises — durable runs disable themselves on any
+    # error and the server keeps serving /retrieve.
+    await durable_runtime.startup()
+    yield
+    await durable_runtime.shutdown()
+
+
 # Embedding is API-backed (Voyage/OpenAI); encoders are lightweight clients
 # instantiated lazily per model in graph.nodes.retrieval — nothing to preload.
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # Per-endpoint request count / latency / status-code metrics + GET /metrics
 Instrumentator(excluded_handlers=["/health", "/metrics"]).instrument(app).expose(app)
