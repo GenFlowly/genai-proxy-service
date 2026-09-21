@@ -8,7 +8,7 @@ import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
-import com.genflowly.DynamoDBConstants.PENDING_RUN_ID_KEY
+import com.genflowly.DynamoDBConstants.PENDING_RUNS_KEY
 import com.genflowly.DynamoDBConstants.PINNED_AT_KEY
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
@@ -27,6 +27,28 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
+
+/**
+ * One durable run generating a conversation's reply, tracked in the pendingRuns
+ * String Set. Encoded as a single delimited string (unit-separator (U+001F), absent
+ * from UUID ids / vendor enum / model names) so it fits one set element.
+ */
+data class PendingRun(
+    val responseMessageId: String,
+    val runId: String,
+    val vendor: String,
+    val model: String,
+) {
+    fun encode(): String = listOf(responseMessageId, runId, vendor, model).joinToString(DELIM)
+
+    companion object {
+        private const val DELIM = "\u001F"
+        fun decode(s: String): PendingRun? {
+            val p = s.split(DELIM)
+            return if (p.size == 4 && p[0].isNotEmpty() && p[1].isNotEmpty()) PendingRun(p[0], p[1], p[2], p[3]) else null
+        }
+    }
+}
 
 /**
  * Data access for the Conversation and Message tables.
@@ -100,15 +122,17 @@ class ConversationRepository(
     }
 
     /**
-     * Records the durable run currently generating this conversation's reply, so
-     * a reload can rediscover "assistant is mid-run" and reattach. Best-effort:
-     * a failure must never fail the generation. Returns false if the conversation
-     * row doesn't exist.
+     * Adds a durable run to the set currently generating this conversation's
+     * reply, so a reload can rediscover "assistant is mid-run" and reattach. A
+     * multi-vendor turn fans out to N concurrent runs, so this is a String Set —
+     * each parallel vendor request ADDs its own entry atomically without clobbering
+     * the others. Best-effort: a failure must never fail the generation. Returns
+     * false if the conversation row doesn't exist.
      */
-    suspend fun setPendingRunId(
+    suspend fun addPendingRun(
         customerId: String,
         conversationId: String,
-        runId: String
+        run: PendingRun
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             dynamoDbClient.updateItem(
@@ -118,25 +142,30 @@ class ConversationRepository(
                         CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
                     ))
-                    .updateExpression("SET #pr = :rid")
+                    .updateExpression("ADD #pr :e")
                     .conditionExpression("attribute_exists(#cid)")
-                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUN_ID_KEY, "#cid" to CONVERSATION_ID_KEY))
-                    .expressionAttributeValues(mapOf(":rid" to AttributeValue.builder().s(runId).build()))
+                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY, "#cid" to CONVERSATION_ID_KEY))
+                    .expressionAttributeValues(mapOf(":e" to AttributeValue.builder().ss(run.encode()).build()))
                     .build()
             )
             true
         } catch (e: ConditionalCheckFailedException) {
             false
         } catch (e: Exception) {
-            logger.error("Failed to set pendingRunId on conversation $conversationId", e)
+            logger.error("Failed to add pending run on conversation $conversationId", e)
             false
         }
     }
 
-    /** Clears the pending-run pointer once a run ends. Best-effort. */
-    suspend fun clearPendingRunId(
+    /**
+     * Removes one finished run from the pending set (DynamoDB drops the attribute
+     * once it's empty). Best-effort. Clears only this run's entry so the other
+     * vendors' in-flight runs stay reattachable.
+     */
+    suspend fun removePendingRun(
         customerId: String,
-        conversationId: String
+        conversationId: String,
+        run: PendingRun
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             dynamoDbClient.updateItem(
@@ -146,22 +175,26 @@ class ConversationRepository(
                         CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
                     ))
-                    .updateExpression("REMOVE #pr")
-                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUN_ID_KEY))
+                    .updateExpression("DELETE #pr :e")
+                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY))
+                    .expressionAttributeValues(mapOf(":e" to AttributeValue.builder().ss(run.encode()).build()))
                     .build()
             )
             true
         } catch (e: Exception) {
-            logger.error("Failed to clear pendingRunId on conversation $conversationId", e)
+            logger.error("Failed to remove pending run on conversation $conversationId", e)
             false
         }
     }
 
-    /** The durable run currently generating this conversation's reply, or null. */
-    suspend fun getPendingRunId(
+    /**
+     * The durable runs currently generating this conversation's reply — one per
+     * in-flight vendor — or empty. Malformed/legacy entries are skipped.
+     */
+    suspend fun getPendingRuns(
         customerId: String,
         conversationId: String
-    ): String? = withContext(Dispatchers.IO) {
+    ): List<PendingRun> = withContext(Dispatchers.IO) {
         try {
             val response = dynamoDbClient.getItem(
                 GetItemRequest.builder()
@@ -171,13 +204,13 @@ class ConversationRepository(
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
                     ))
                     .projectionExpression("#pr")
-                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUN_ID_KEY))
+                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY))
                     .build()
             )
-            response.item()?.get(PENDING_RUN_ID_KEY)?.s()
+            response.item()?.get(PENDING_RUNS_KEY)?.ss()?.mapNotNull { PendingRun.decode(it) } ?: emptyList()
         } catch (e: Exception) {
-            logger.error("Failed to read pendingRunId for conversation $conversationId", e)
-            null
+            logger.error("Failed to read pending runs for conversation $conversationId", e)
+            emptyList()
         }
     }
 

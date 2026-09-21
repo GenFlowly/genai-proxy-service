@@ -90,6 +90,12 @@ object DynamoDBConstants {
     // reply (DURABLE_AGENTS_DBOS_PLAN §5.8) — set while a /runs stream is live so
     // a page reload can rediscover and reattach; cleared when the run ends.
     const val PENDING_RUN_ID_KEY = "pendingRunId"
+    // Set of the durable runs currently generating this conversation's reply — one
+    // per vendor, since a multi-vendor turn fans out to N concurrent /runs. A
+    // String Set so parallel vendor requests ADD/DELETE their own entry atomically
+    // (the single PENDING_RUN_ID_KEY above only kept the last writer). Each element
+    // encodes responseMessageId, runId, vendor, model. Cleared per-run as each ends.
+    const val PENDING_RUNS_KEY = "pendingRuns"
 
     // Tool credentials — per-customer, per-toolType
     const val CUSTOMER_TOOL_CREDENTIALS_TABLE = "CustomerToolCredentials"

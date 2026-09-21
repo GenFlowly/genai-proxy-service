@@ -138,7 +138,7 @@ def _shared_clients():
         _shared_kms = boto3.client("kms", region_name=region)
     return _shared_ddb, _shared_kms
 
-
+#TODO fetch from kotlin server internal API
 def resolve_credentials(customer_id: str, provider: str) -> dict:
     """Fetch + decrypt the customer's credentials for `provider` from DynamoDB,
     as the {f'{provider}_api_key': key} dict get_llm expects (empty if unset).

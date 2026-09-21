@@ -59,12 +59,12 @@ fun Route.registerRunRoutes(
                 return@get
             }
             val pending = try {
-                conversationService.pendingRunIdIfAccessible(conversationId, customerId)
+                conversationService.pendingRunIdsIfAccessible(conversationId, customerId)
             } catch (e: ConversationAccessDeniedException) {
                 call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied"))
                 return@get
             }
-            if (pending != runId) {
+            if (runId !in pending) {
                 call.respond(HttpStatusCode.NotFound, mapOf("error" to "run is not active for this conversation"))
                 return@get
             }
@@ -104,12 +104,12 @@ fun Route.registerRunRoutes(
             }
             val body = call.receiveText()
             val pending = try {
-                conversationService.pendingRunIdIfAccessible(conversationId, customerId)
+                conversationService.pendingRunIdsIfAccessible(conversationId, customerId)
             } catch (e: ConversationAccessDeniedException) {
                 call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied"))
                 return@post
             }
-            if (pending != runId) {
+            if (runId !in pending) {
                 call.respond(HttpStatusCode.NotFound, mapOf("error" to "run is not active for this conversation"))
                 return@post
             }

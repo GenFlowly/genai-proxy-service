@@ -126,6 +126,133 @@ describe('ConversationContext durable-run HITL', () => {
         await waitFor(() => expect(getByTestId('text')).toHaveTextContent('resumed'));
     });
 
+    test('reattaches and synthesizes a placeholder when the in-flight turn has no persisted response', async () => {
+        // The real reload-mid-run case: the proxy has persisted the user turn and
+        // the pendingRunId, but NOT the assistant message yet (it writes that only
+        // when the run finishes) — so the last block comes back with an empty
+        // responseMessages array. Reattach must still fire and stream into a
+        // synthesized placeholder, otherwise the block shows "No responses were
+        // generated".
+        const { getConversation } = require('../../services/conversationService');
+        getConversation.mockResolvedValue({
+            conversationId: 'c1',
+            blocks: [{
+                conversationBlockId: 'b1',
+                prompt: { prompt: 'hi' },
+                responseMessages: [],
+            }],
+            role: 'OWNER', title: null, instructionId: null, pendingRunId: 'run-9',
+        });
+        const { reattachRun } = require('../../services/reattachRunService');
+        reattachRun.mockImplementation((_token: any, _runId: any, _convId: any, cb: any) => {
+            cb.onDelta('recovered');
+            return Promise.resolve();
+        });
+
+        const { getByTestId } = render(
+            <MemoryRouter><ConversationProvider><LoadTester /></ConversationProvider></MemoryRouter>
+        );
+        await act(async () => { getByTestId('load').click(); });
+        await waitFor(() =>
+            expect(reattachRun).toHaveBeenCalledWith('token', 'run-9', 'c1', expect.any(Object))
+        );
+        await waitFor(() => expect(getByTestId('text')).toHaveTextContent('recovered'));
+    });
+
+    test('reattaches to the backend in-flight placeholder and fills in usage/cost', async () => {
+        // The proxy now surfaces an in-flight placeholder with the real,
+        // deterministic responseMessageId (mapped to isLoading via inFlight). The
+        // client attaches to it, streams the reply, then fetches usage by that id.
+        const { getConversation } = require('../../services/conversationService');
+        getConversation.mockResolvedValue({
+            conversationId: 'c1',
+            blocks: [{
+                conversationBlockId: 'b1',
+                prompt: { prompt: 'hi' },
+                responseMessages: [{ messageId: 'real-rm', aiVendor: 'OPENAI', text: '', isLoading: true }],
+            }],
+            role: 'OWNER', title: null, instructionId: null, pendingRunId: 'run-9',
+        });
+        const { reattachRun } = require('../../services/reattachRunService');
+        reattachRun.mockImplementation((_t: any, _r: any, _c: any, cb: any) => {
+            cb.onDelta('streamed answer');
+            return Promise.resolve();
+        });
+        const { getAIUsageActivity } = require('../../services/getAIUsageService');
+        getAIUsageActivity.mockResolvedValue({ inputTokens: 11, outputTokens: 22, totalTokens: 33, costUsd: 0.01 });
+
+        const Comp = () => {
+            const c = useConversation();
+            const m = c.conversationBlockList[0]?.responseMessages[0];
+            return (
+                <div>
+                    <div data-testid="text">{m?.text ?? ''}</div>
+                    <div data-testid="tokens">{m?.totalTokens ?? ''}</div>
+                    <button data-testid="load" onClick={() => c.loadConversation('c1')}>load</button>
+                </div>
+            );
+        };
+        const { getByTestId } = render(
+            <MemoryRouter><ConversationProvider><Comp /></ConversationProvider></MemoryRouter>
+        );
+        await act(async () => { getByTestId('load').click(); });
+        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-9', 'c1', expect.any(Object)));
+        await waitFor(() => expect(getByTestId('text')).toHaveTextContent('streamed answer'));
+        await waitFor(() => expect(getAIUsageActivity).toHaveBeenCalledWith('token', 'c1', 'real-rm'));
+        await waitFor(() => expect(getByTestId('tokens')).toHaveTextContent('33'));
+    });
+
+    test('reattaches to every vendor run on a multi-vendor reload', async () => {
+        // A multi-vendor turn fans out to one durable run per vendor; the proxy
+        // surfaces one in-flight placeholder each (own runId), and the client must
+        // reattach to ALL of them — not just the last (the original bug).
+        const { getConversation } = require('../../services/conversationService');
+        getConversation.mockResolvedValue({
+            conversationId: 'c1',
+            blocks: [{
+                conversationBlockId: 'b1',
+                prompt: { prompt: 'hi' },
+                responseMessages: [
+                    { messageId: 'rm-openai', aiVendor: 'OPENAI', text: '', isLoading: true },
+                    { messageId: 'rm-claude', aiVendor: 'CLAUDE', text: '', isLoading: true },
+                ],
+            }],
+            role: 'OWNER', title: null, instructionId: null,
+            pendingRunId: 'run-openai',
+            pendingRuns: [
+                { messageId: 'rm-openai', runId: 'run-openai' },
+                { messageId: 'rm-claude', runId: 'run-claude' },
+            ],
+        });
+        const { reattachRun } = require('../../services/reattachRunService');
+        reattachRun.mockImplementation((_t: any, runId: any, _c: any, cb: any) => {
+            cb.onDelta(runId === 'run-openai' ? 'openai answer' : 'claude answer');
+            return Promise.resolve();
+        });
+        const { getAIUsageActivity } = require('../../services/getAIUsageService');
+        getAIUsageActivity.mockResolvedValue({ inputTokens: 1, outputTokens: 2, totalTokens: 3 });
+
+        const Comp = () => {
+            const c = useConversation();
+            const msgs = c.conversationBlockList[0]?.responseMessages ?? [];
+            return (
+                <div>
+                    <div data-testid="t0">{msgs[0]?.text ?? ''}</div>
+                    <div data-testid="t1">{msgs[1]?.text ?? ''}</div>
+                    <button data-testid="load" onClick={() => c.loadConversation('c1')}>load</button>
+                </div>
+            );
+        };
+        const { getByTestId } = render(
+            <MemoryRouter><ConversationProvider><Comp /></ConversationProvider></MemoryRouter>
+        );
+        await act(async () => { getByTestId('load').click(); });
+        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-openai', 'c1', expect.any(Object)));
+        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-claude', 'c1', expect.any(Object)));
+        await waitFor(() => expect(getByTestId('t0')).toHaveTextContent('openai answer'));
+        await waitFor(() => expect(getByTestId('t1')).toHaveTextContent('claude answer'));
+    });
+
     test('does not reattach when there is no pending run', async () => {
         const { getConversation } = require('../../services/conversationService');
         getConversation.mockResolvedValue({

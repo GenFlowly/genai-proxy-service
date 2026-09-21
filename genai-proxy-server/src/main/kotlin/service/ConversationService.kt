@@ -12,6 +12,7 @@ import com.genflowly.models.api.MessageUsageResponse
 import com.genflowly.models.api.VendorUsageTotals
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.CustomerProfileRepository
+import com.genflowly.repository.PendingRun
 import com.genflowly.repository.ShareRepository
 
 class ConversationAccessDeniedException(message: String) : Exception(message)
@@ -35,29 +36,29 @@ class ConversationService(
     suspend fun setMessageLearnedFacts(conversationId: String, messageId: String, factsJson: String) =
         conversationRepository.setMessageLearnedFacts(conversationId, messageId, factsJson)
 
-    /** Points a conversation at the durable run generating its reply (reload rediscovery). */
-    suspend fun setPendingRunId(customerId: String, conversationId: String, runId: String): Boolean =
-        conversationRepository.setPendingRunId(customerId, conversationId, runId)
+    /** Adds a durable run to the set generating this conversation's reply (reload rediscovery). */
+    suspend fun addPendingRun(customerId: String, conversationId: String, run: PendingRun): Boolean =
+        conversationRepository.addPendingRun(customerId, conversationId, run)
 
-    /** Clears the pending-run pointer once the run ends. */
-    suspend fun clearPendingRunId(customerId: String, conversationId: String): Boolean =
-        conversationRepository.clearPendingRunId(customerId, conversationId)
+    /** Removes one finished run from the pending set (the other vendors' runs stay reattachable). */
+    suspend fun removePendingRun(customerId: String, conversationId: String, run: PendingRun): Boolean =
+        conversationRepository.removePendingRun(customerId, conversationId, run)
 
-    /** The durable run currently generating this conversation's reply, or null. */
-    suspend fun getPendingRunId(customerId: String, conversationId: String): String? =
-        conversationRepository.getPendingRunId(customerId, conversationId)
+    /** The durable runs currently generating this conversation's reply — one per in-flight vendor. */
+    suspend fun getPendingRuns(customerId: String, conversationId: String): List<PendingRun> =
+        conversationRepository.getPendingRuns(customerId, conversationId)
 
     /**
-     * The conversation's pending run id IF [callerCustomerId] may access it (owner
-     * or share recipient); throws ConversationAccessDeniedException otherwise. Used
-     * to authorize run reattach/resume: you may only touch a run that is the
-     * pending run of a conversation you can access.
+     * The run ids currently pending for [conversationId] IF [callerCustomerId] may
+     * access it (owner or share recipient); throws ConversationAccessDeniedException
+     * otherwise. Used to authorize run reattach/resume: you may only touch a run
+     * that is a pending run of a conversation you can access.
      */
-    suspend fun pendingRunIdIfAccessible(conversationId: String, callerCustomerId: String): String? {
+    suspend fun pendingRunIdsIfAccessible(conversationId: String, callerCustomerId: String): Set<String> {
         getConversationRole(conversationId, callerCustomerId)
             ?: throw ConversationAccessDeniedException("Conversation not found or access denied")
-        val owner = conversationRepository.getConversationById(conversationId) ?: return null
-        return conversationRepository.getPendingRunId(owner.customerId, conversationId)
+        val owner = conversationRepository.getConversationById(conversationId) ?: return emptySet()
+        return conversationRepository.getPendingRuns(owner.customerId, conversationId).map { it.runId }.toSet()
     }
 
     /**
@@ -174,8 +175,39 @@ class ConversationService(
                 )
             }
 
-        // Surface an in-flight durable run so a reloading client can reattach.
-        val pendingRunId = conversationRepository.getPendingRunId(owner.customerId, conversationId)
+        // Surface in-flight durable runs so a reloading client can reattach. A
+        // multi-vendor turn fans out to one run per vendor, so there can be several.
+        val pendingRuns = conversationRepository.getPendingRuns(owner.customerId, conversationId)
+        if (pendingRuns.isNotEmpty() && pairs.isNotEmpty()) {
+            // Those assistant messages aren't persisted yet. Add one in-flight
+            // placeholder per run, each carrying the real responseMessageId + runId
+            // + vendor/model the run will persist under, so the reloading client
+            // renders a card per vendor, reattaches each to its own run, and fetches
+            // usage/cost by id once each finishes. Skip a run whose message already
+            // landed (it completed between the run starting and this read).
+            val lastPair = pairs.last()
+            val existingIds = lastPair.responses?.mapNotNull { it.messageId }?.toSet() ?: emptySet()
+            val placeholders = pendingRuns
+                .filter { it.responseMessageId !in existingIds }
+                .map {
+                    GenerateTextResponse(
+                        text = "",
+                        aiVendor = it.vendor,
+                        model = it.model,
+                        conversationId = conversationId,
+                        messageId = it.responseMessageId,
+                        inFlight = true,
+                        runId = it.runId,
+                    )
+                }
+            if (placeholders.isNotEmpty()) {
+                pairs[pairs.size - 1] = lastPair.copy(
+                    responses = (lastPair.responses ?: emptyList()) + placeholders
+                )
+            }
+        }
+        // Backward-compatible single pointer (first pending run) for older clients.
+        val pendingRunId = pendingRuns.firstOrNull()?.runId
         return GetConversationResponse(pairs, title, role, vendorTotals, pendingRunId)
     }
 

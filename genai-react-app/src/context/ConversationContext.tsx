@@ -349,32 +349,98 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 // Restore the selected instruction from the conversation
                 setSelectedInstructionId(data.instructionId ?? null)
 
-                // A durable run is still generating the latest reply — reattach to
-                // its stream so the response continues live after this reload.
-                const pendingRunId = data.pendingRunId
-                if (pendingRunId && data.blocks.length > 0) {
+                // Durable runs are still generating the latest reply — reattach to
+                // each so the responses continue live after this reload. A
+                // multi-vendor turn has one run per vendor (data.pendingRuns), each
+                // feeding its own response card.
+                const pendingRuns = data.pendingRuns ?? []
+                if (data.blocks.length > 0 && (pendingRuns.length > 0 || data.pendingRunId)) {
                     const lastBlock = data.blocks[data.blocks.length - 1]
-                    const target = lastBlock.responseMessages[lastBlock.responseMessages.length - 1]
-                    if (target) {
-                        const bId = lastBlock.conversationBlockId
-                        const targetId = target.messageId
+                    const bId = lastBlock.conversationBlockId
+
+                    // Reattach one response message to its durable run: reset text,
+                    // stream the replay in, then (for a real backend id) fetch
+                    // usage/cost and poll for the persisted message if the run already
+                    // finished. `synthetic` = we invented the id (legacy proxy, no
+                    // placeholder), so there's no server record to fetch usage for.
+                    const reattachOne = (targetId: string, runId: string, synthetic: boolean) => {
                         const patch = (fn: (m: any) => any) => setConversationBlockList(prev => prev.map(b =>
                             b.conversationBlockId === bId
                                 ? { ...b, responseMessages: b.responseMessages.map(m => m.messageId === targetId ? fn(m) : m) }
                                 : b))
-                        // Reset text: the reattach replays the run from the start, so
-                        // rebuild rather than append onto the persisted partial.
+                        // Reset text: the reattach replays the run from the start.
                         patch(m => ({ ...m, isLoading: true, text: '' }))
                         let acc = ''
-                        reattachRun(token, pendingRunId, data.conversationId, {
-                            onDelta: (c) => { acc += c; patch(m => ({ ...m, text: acc })) },
-                            onThinkingStep: (s) => patch(m => ({ ...m, thinkingStepList: applyThinkingStep(m.thinkingStepList ?? [], s) })),
+                        let gotContent = false
+                        const finish = async () => {
+                            if (!synthetic) {
+                                // Run finished before we reconnected → poll for the
+                                // persisted message so we never leave an empty card.
+                                if (!gotContent) {
+                                    try {
+                                        const recovered = await recoverPersistedResponse(token, data.conversationId, targetId)
+                                        if (recovered) patch(m => ({
+                                            ...m,
+                                            text: recovered.text,
+                                            webSources: recovered.webSources ?? m.webSources,
+                                            generatedAttachments: recovered.generatedAttachments ?? m.generatedAttachments,
+                                        }))
+                                    } catch (e) { console.warn('Recover after reattach failed', e) }
+                                }
+                                try {
+                                    const metrics = await getAIUsageActivity(token, data.conversationId, targetId)
+                                    if (metrics) patch(m => ({
+                                        ...m,
+                                        inputTokens: metrics.inputTokens,
+                                        outputTokens: metrics.outputTokens,
+                                        totalTokens: metrics.totalTokens,
+                                        tokensReadFromCache: metrics.tokensReadFromCache ?? 0,
+                                        costUsd: metrics.costUsd ?? null,
+                                    }))
+                                } catch (e) { console.warn('Usage fetch after reattach failed', e) }
+                            }
+                            setConversationBlockList(prev => prev.map(b =>
+                                b.conversationBlockId === bId
+                                    ? { ...b, isLoading: b.responseMessages.some(m => m.messageId !== targetId && m.isLoading), responseMessages: b.responseMessages.map(m => m.messageId === targetId ? { ...m, isLoading: false } : m) }
+                                    : b))
+                        }
+                        reattachRun(token, runId, data.conversationId, {
+                            onDelta: (c) => { acc += c; gotContent = true; patch(m => ({ ...m, text: acc })) },
+                            onThinkingStep: (s) => { gotContent = true; patch(m => ({ ...m, thinkingStepList: applyThinkingStep(m.thinkingStepList ?? [], s) })) },
                             onThinkingDuration: (ms) => patch(m => ({ ...m, thinkingDurationMs: ms })),
                             onWebSources: (ws) => patch(m => ({ ...m, webSources: ws })),
                             onGeneratedAttachments: (ga) => patch(m => ({ ...m, generatedAttachments: [...(m.generatedAttachments ?? []), ...ga] })),
-                            onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: pendingRunId } })),
+                            onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: runId } })),
                         }).catch(e => console.warn('Reattach to pending run failed', e))
-                            .finally(() => patch(m => ({ ...m, isLoading: false })))
+                            .finally(finish)
+                    }
+
+                    if (pendingRuns.length > 0) {
+                        // Backend surfaced a placeholder per run (real ids already in
+                        // the block via the service mapping) — reattach to every one.
+                        pendingRuns.forEach(pr => reattachOne(pr.messageId, pr.runId, false))
+                    } else if (data.pendingRunId) {
+                        // Legacy single-run proxy without placeholders: synthesize one
+                        // to receive the stream (no server record → usage-fetch skipped).
+                        const existing = lastBlock.responseMessages[lastBlock.responseMessages.length - 1]
+                        const targetId = existing?.messageId ?? `reattach-${data.pendingRunId}`
+                        if (!existing) {
+                            const priorMsg = [...data.blocks].reverse()
+                                .flatMap(b => b.responseMessages)
+                                .find(m => m.aiVendor)
+                            const placeholder: Message = {
+                                aiVendor: priorMsg?.aiVendor ?? '',
+                                model: priorMsg?.model ?? null,
+                                text: '',
+                                messageId: targetId,
+                                isLoading: true,
+                            }
+                            setConversationBlockList(prev => prev.map(b =>
+                                b.conversationBlockId === bId
+                                    ? { ...b, isLoading: true, responseMessages: [...b.responseMessages, placeholder] }
+                                    : b))
+                        }
+                        reattachOne(targetId, data.pendingRunId, !existing)
                     }
                 }
             }
