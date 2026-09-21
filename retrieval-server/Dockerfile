@@ -12,6 +12,7 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 COPY app.py .
+COPY durable_runtime.py .
 COPY models.py .
 COPY streaming.py .
 COPY routes/ ./routes/

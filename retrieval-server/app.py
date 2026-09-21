@@ -38,8 +38,16 @@ from routes.voice import router as voice_router
 
 # Durable-runs bootstrap. Importing this constructs the DBOS singleton IF
 # DATABASE_URL is set, so the durable /runs router below can register its
-# workflow. It is fully inert (and import-safe) when DATABASE_URL is absent.
-import durable_runtime
+# workflow. It is fully inert when DATABASE_URL is absent. The import itself is
+# guarded so that even a missing/broken durable_runtime module can never crash
+# the server — durable runs simply stay disabled and /retrieve serves as before.
+try:
+    import durable_runtime
+except Exception:
+    durable_runtime = None
+    logging.getLogger(__name__).exception(
+        "durable_runtime import failed — durable runs disabled"
+    )
 
 configure_observability(service="retrieval-server", backend="prometheus")
 setup_logging("retrieval-server")
@@ -49,10 +57,13 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Fail-safe: startup() never raises — durable runs disable themselves on any
-    # error and the server keeps serving /retrieve.
-    await durable_runtime.startup()
+    # error and the server keeps serving /retrieve. (durable_runtime is None only
+    # if its import failed, in which case durable runs are already disabled.)
+    if durable_runtime is not None:
+        await durable_runtime.startup()
     yield
-    await durable_runtime.shutdown()
+    if durable_runtime is not None:
+        await durable_runtime.shutdown()
 
 
 # Embedding is API-backed (Voyage/OpenAI); encoders are lightweight clients
