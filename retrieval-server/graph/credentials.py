@@ -119,3 +119,45 @@ class CredentialResolver:
         key is stored for the customer/provider."""
         key = self.api_key(customer_id, provider)
         return {f"{provider}_api_key": key} if key else {}
+
+
+# --- Module-level accessor used by the graph nodes -------------------------------
+#
+# boto3 clients are reused process-wide (creating them is expensive; they hold no
+# secrets). Decryption is done per call with no cross-run plaintext cache.
+
+_shared_ddb = None
+_shared_kms = None
+
+
+def _shared_clients():
+    global _shared_ddb, _shared_kms
+    if _shared_ddb is None or _shared_kms is None:
+        region = os.getenv("AWS_REGION", "us-east-1")
+        _shared_ddb = boto3.resource("dynamodb", region_name=region)
+        _shared_kms = boto3.client("kms", region_name=region)
+    return _shared_ddb, _shared_kms
+
+
+def resolve_credentials(customer_id: str, provider: str) -> dict:
+    """Fetch + decrypt the customer's credentials for `provider` from DynamoDB,
+    as the {f'{provider}_api_key': key} dict get_llm expects (empty if unset).
+    Uses process-wide boto3 clients; no plaintext is cached across calls."""
+    ddb, kms = _shared_clients()
+    return CredentialResolver(dynamodb_resource=ddb, kms_client=kms).credentials(customer_id, provider)
+
+
+def credentials_for(state) -> dict:
+    """
+    Credentials for the current graph run.
+
+    Prefers request-supplied credentials carried in state (the stateless
+    /retrieve path — behavior unchanged). When state carries none (the durable
+    /runs path, which deliberately keeps secrets out of checkpointed state),
+    resolves them from DynamoDB by customer_id. So nothing secret is ever
+    written to a checkpoint, while /retrieve is untouched.
+    """
+    creds = state.get("llm_credentials")
+    if creds:
+        return creds
+    return resolve_credentials(state["customer_id"], state["llm_provider"])

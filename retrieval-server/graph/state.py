@@ -46,7 +46,12 @@ class RetrievalState(TypedDict):
     similarity_threshold: float
 
     # LLM config — credentials forwarded from genai-proxy-service, provider selected per request
-    llm_credentials: dict  # keys: openai_api_key, anthropic_api_key, gemini_api_key
+    # keys: openai_api_key, anthropic_api_key, gemini_api_key, ...
+    # Set on the stateless /retrieve path (creds supplied in the request). The
+    # durable /runs path deliberately LEAVES THIS UNSET so no secret is ever
+    # checkpointed; nodes then resolve creds from DynamoDB by customer_id via
+    # graph.credentials.credentials_for(state).
+    llm_credentials: dict
     llm_provider: str      # "openai" | "anthropic" | "gemini"
     llm_model: Optional[str]  # model name forwarded from request (e.g. "gpt-4o", "claude-sonnet-4-6")
     llm_max_tokens: Optional[int]  # max tokens for generation, defaults to 4096

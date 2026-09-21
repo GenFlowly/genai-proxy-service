@@ -8,9 +8,10 @@ per-run caching, missing-key handling) is verified without any live AWS.
 """
 import base64
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from graph.credentials import CredentialResolver, stored_vendor_key
+import graph.credentials as credentials
+from graph.credentials import CredentialResolver, credentials_for, stored_vendor_key
 
 
 def _fake_clients(stored_plaintext_by_key: dict[tuple[str, str], str]):
@@ -111,6 +112,37 @@ class CredentialResolverTest(unittest.TestCase):
         r.api_key("cust-1", "openai")
 
         self.assertEqual(table.get_item.call_count, 1)
+
+
+class CredentialsForTest(unittest.TestCase):
+    """credentials_for(state): the accessor the graph nodes call."""
+
+    def test_prefers_request_creds_in_state_without_touching_ddb(self):
+        # /retrieve path: creds supplied in the request -> used as-is, resolver not called
+        state = {
+            "llm_credentials": {"anthropic_api_key": "sk-from-request"},
+            "customer_id": "cust-1",
+            "llm_provider": "anthropic",
+        }
+        with patch.object(credentials, "resolve_credentials") as mock_resolve:
+            out = credentials_for(state)
+        self.assertEqual(out, {"anthropic_api_key": "sk-from-request"})
+        mock_resolve.assert_not_called()
+
+    def test_resolves_from_ddb_when_state_has_no_creds(self):
+        # durable /runs path: no creds in state -> resolve by customer_id
+        state = {"customer_id": "cust-1", "llm_provider": "anthropic"}  # no llm_credentials
+        with patch.object(credentials, "resolve_credentials", return_value={"anthropic_api_key": "sk-resolved"}) as m:
+            out = credentials_for(state)
+        self.assertEqual(out, {"anthropic_api_key": "sk-resolved"})
+        m.assert_called_once_with("cust-1", "anthropic")
+
+    def test_empty_creds_in_state_falls_through_to_resolver(self):
+        state = {"llm_credentials": {}, "customer_id": "cust-1", "llm_provider": "openai"}
+        with patch.object(credentials, "resolve_credentials", return_value={"openai_api_key": "sk"}) as m:
+            out = credentials_for(state)
+        self.assertEqual(out, {"openai_api_key": "sk"})
+        m.assert_called_once_with("cust-1", "openai")
 
 
 if __name__ == "__main__":
