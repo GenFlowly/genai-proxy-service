@@ -15,6 +15,11 @@ export const endpoints = {
     generateText: `${BASE}${API_PREFIX}/generate-text`,
     generateTextStream: `${BASE}${API_PREFIX}/generate-text-stream`,
     cancelGeneration: (responseMessageId: string) => `${BASE}${API_PREFIX}/generations/cancel?responseMessageId=${encodeURIComponent(responseMessageId)}`,
+    // Durable-run reattach (reload recovery) + resume (human-in-the-loop reply).
+    reattachRun: (runId: string, conversationId: string, fromSeq = 0) =>
+        `${BASE}${API_PREFIX}/runs/${encodeURIComponent(runId)}/stream?conversationId=${encodeURIComponent(conversationId)}&fromSeq=${fromSeq}`,
+    resumeRun: (runId: string, conversationId: string) =>
+        `${BASE}${API_PREFIX}/runs/${encodeURIComponent(runId)}/resume?conversationId=${encodeURIComponent(conversationId)}`,
     batchGenerateText: `${BASE}${API_PREFIX}/batch-generate-text`,
     getTextGenerationModels: `${BASE}${API_PREFIX}/models`,
     getProviders: `${BASE}${API_PREFIX}/providers`,

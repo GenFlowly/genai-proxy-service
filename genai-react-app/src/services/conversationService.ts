@@ -53,6 +53,8 @@ interface BackendGetConversationResponse {
     promptAndResponseList: BackendPromptAndResponse[];
     title?: string | null;
     role?: ConversationRole;
+    /** Durable run currently generating this conversation's reply, if any. */
+    pendingRunId?: string | null;
 }
 
 export interface GetConversationResponse {
@@ -61,6 +63,8 @@ export interface GetConversationResponse {
     title?: string | null;
     instructionId?: string | null;
     role: ConversationRole;
+    /** Set when a durable run is mid-flight — the client reattaches to its stream. */
+    pendingRunId?: string | null;
 }
 
 export async function getConversation(
@@ -165,6 +169,7 @@ export async function getConversation(
         title: data.title ?? null,
         instructionId: lastPromptWithInstruction?.prompt.instructionId ?? null,
         role: data.role ?? 'OWNER',
+        pendingRunId: data.pendingRunId ?? null,
     };
 }
 

@@ -25,8 +25,126 @@ export interface StreamMetadata {
     conversationTitle?: string | null;
 }
 
-// Sentinel logic removed; token usage is explicitly queried after the stream.
-// TITLE_SENTINEL_RE removed due to async title generation migration
+/** Human-in-the-loop request surfaced by a durable run ({"t":"ai"} frame). */
+export interface AwaitingInput {
+    type?: string;
+    node?: string;
+    prompt?: string;
+    [k: string]: unknown;
+}
+
+/** Handlers for the NDJSON chat wire protocol, shared by the live and reattach streams. */
+export interface StreamCallbacks {
+    onDelta: (chunk: string) => void;
+    onThinking?: (step: string) => void;
+    onThinkingStep?: (step: ThinkingStep) => void;
+    onThinkingDuration?: (millis: number) => void;
+    onWebSources?: (sources: WebSource[]) => void;
+    onGeneratedAttachments?: (attachments: AttachmentRef[]) => void;
+    /** A durable run paused for human/client input — render a prompt + reply box. */
+    onAwaitingInput?: (payload: AwaitingInput) => void;
+}
+
+/**
+ * Reads an NDJSON chat stream body ({"t":"c"|"k"|"ks"|"kd"|"ws"|"ga"|"ai"|"err"})
+ * and dispatches each frame to [cb]. Shared by the live generate-text-stream and
+ * the durable-run reattach stream so the frame vocabulary lives in one place.
+ */
+export async function readNdjsonStream(response: Response, cb: StreamCallbacks): Promise<void> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+        throw new Error("Response body is not readable");
+    }
+
+    const decoder = new TextDecoder("utf-8");
+    let lineBuffer = "";
+
+    const processLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        try {
+            const msg = JSON.parse(trimmed);
+            if (msg.t === "c") cb.onDelta(msg.v);
+            else if (msg.t === "k") cb.onThinking?.(msg.v);
+            else if (msg.t === "ks") {
+                // Structured per-node thinking step from the agent graph
+                const step = msg.v;
+                if (step && typeof step === "object" && typeof step.node === "string") {
+                    cb.onThinkingStep?.(step as ThinkingStep);
+                }
+            }
+            else if (msg.t === "kd") {
+                const millis = Number(msg.v);
+                if (Number.isFinite(millis)) cb.onThinkingDuration?.(millis);
+            }
+            else if (msg.t === "ws") {
+                if (Array.isArray(msg.v) && msg.v.length > 0) cb.onWebSources?.(msg.v);
+            }
+            else if (msg.t === "ga") {
+                // Files built-in tools produced (e.g. generated PDFs). The
+                // proxy relays the retrieval-server's snake_case artifact
+                // shape verbatim — normalize to the AttachmentRef the rest of
+                // the app uses.
+                if (Array.isArray(msg.v) && msg.v.length > 0) {
+                    const refs: AttachmentRef[] = msg.v
+                        .filter((a: any) => a && typeof a === "object")
+                        .map((a: any) => ({
+                            attachmentId: a.artifact_id ?? a.attachmentId ?? "",
+                            s3Key: a.key ?? a.s3Key ?? "",
+                            mediaType: a.media_type ?? a.mediaType ?? "application/octet-stream",
+                            filename: a.filename ?? undefined,
+                            sizeBytes: typeof a.size_bytes === "number" ? a.size_bytes : undefined,
+                        }))
+                        .filter((r: AttachmentRef) => r.attachmentId);
+                    if (refs.length > 0) cb.onGeneratedAttachments?.(refs);
+                }
+            }
+            else if (msg.t === "ai") {
+                // A durable run paused on an in-graph interrupt() and needs input.
+                if (msg.v && typeof msg.v === "object") cb.onAwaitingInput?.(msg.v as AwaitingInput);
+            }
+            else if (msg.t === "err") {
+                // Vendor failure mid-stream (quota exceeded, key rejected, ...)
+                // — the proxy relays the concise reason; surface it so the
+                // response card shows what actually happened.
+                throw new StreamGenerationError(
+                    typeof msg.v === "string" && msg.v ? msg.v : "Generation failed"
+                );
+            }
+            // other types (heartbeat, etc.) are silently ignored
+        } catch (e) {
+            if (e instanceof StreamGenerationError) throw e;
+            // Not JSON. The proxy emits "[Error: <reason>]" as a raw line when
+            // generation fails mid-stream — surface it as an error instead of
+            // appending it to the generated text.
+            const errorMatch = trimmed.match(/^\[Error: ([\s\S]*)\]$/);
+            if (errorMatch) {
+                throw new Error(errorMatch[1] || 'Stream failed');
+            }
+            // Other raw content (legacy format) still flows through as text
+            cb.onDelta(line);
+        }
+    };
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            lineBuffer += decoder.decode(value, { stream: true });
+            const lines = lineBuffer.split("\n");
+            lineBuffer = lines.pop() ?? "";
+            for (const line of lines) processLine(line);
+        }
+        // Flush any remaining partial line
+        if (lineBuffer) processLine(lineBuffer);
+    } catch (error) {
+        console.error("Error reading stream", error);
+        throw error;
+    } finally {
+        reader.releaseLock();
+    }
+}
 
 export async function generateTextStream(
     token: string,
@@ -38,7 +156,8 @@ export async function generateTextStream(
     onThinkingDuration?: (millis: number) => void,
     onWebSources?: (sources: WebSource[]) => void,
     onThinkingStep?: (step: ThinkingStep) => void,
-    onGeneratedAttachments?: (attachments: AttachmentRef[]) => void
+    onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
+    onAwaitingInput?: (payload: AwaitingInput) => void
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -99,93 +218,13 @@ export async function generateTextStream(
         });
     }
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-        throw new Error("Response body is not readable");
-    }
-
-    const decoder = new TextDecoder("utf-8");
-    let lineBuffer = "";
-
-    const processLine = (line: string) => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        try {
-            const msg = JSON.parse(trimmed);
-            if (msg.t === "c") onDelta(msg.v);
-            else if (msg.t === "k") onThinking?.(msg.v);
-            else if (msg.t === "ks") {
-                // Structured per-node thinking step from the agent graph
-                const step = msg.v;
-                if (step && typeof step === "object" && typeof step.node === "string") {
-                    onThinkingStep?.(step as ThinkingStep);
-                }
-            }
-            else if (msg.t === "kd") {
-                const millis = Number(msg.v);
-                if (Number.isFinite(millis)) onThinkingDuration?.(millis);
-            }
-            else if (msg.t === "ws") {
-                if (Array.isArray(msg.v) && msg.v.length > 0) onWebSources?.(msg.v);
-            }
-            else if (msg.t === "ga") {
-                // Files built-in tools produced (e.g. generated PDFs). The
-                // proxy relays the retrieval-server's snake_case artifact
-                // shape verbatim — normalize to the AttachmentRef the rest of
-                // the app uses.
-                if (Array.isArray(msg.v) && msg.v.length > 0) {
-                    const refs: AttachmentRef[] = msg.v
-                        .filter((a: any) => a && typeof a === "object")
-                        .map((a: any) => ({
-                            attachmentId: a.artifact_id ?? a.attachmentId ?? "",
-                            s3Key: a.key ?? a.s3Key ?? "",
-                            mediaType: a.media_type ?? a.mediaType ?? "application/octet-stream",
-                            filename: a.filename ?? undefined,
-                            sizeBytes: typeof a.size_bytes === "number" ? a.size_bytes : undefined,
-                        }))
-                        .filter((r: AttachmentRef) => r.attachmentId);
-                    if (refs.length > 0) onGeneratedAttachments?.(refs);
-                }
-            }
-            else if (msg.t === "err") {
-                // Vendor failure mid-stream (quota exceeded, key rejected, ...)
-                // — the proxy relays the concise reason; surface it so the
-                // response card shows what actually happened.
-                throw new StreamGenerationError(
-                    typeof msg.v === "string" && msg.v ? msg.v : "Generation failed"
-                );
-            }
-            // other types (heartbeat, etc.) are silently ignored
-        } catch (e) {
-            if (e instanceof StreamGenerationError) throw e;
-            // Not JSON. The proxy emits "[Error: <reason>]" as a raw line when
-            // generation fails mid-stream — surface it as an error instead of
-            // appending it to the generated text.
-            const errorMatch = trimmed.match(/^\[Error: ([\s\S]*)\]$/);
-            if (errorMatch) {
-                throw new Error(errorMatch[1] || 'Stream failed');
-            }
-            // Other raw content (legacy format) still flows through as text
-            onDelta(line);
-        }
-    };
-
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            lineBuffer += decoder.decode(value, { stream: true });
-            const lines = lineBuffer.split("\n");
-            lineBuffer = lines.pop() ?? "";
-            for (const line of lines) processLine(line);
-        }
-        // Flush any remaining partial line
-        if (lineBuffer) processLine(lineBuffer);
-    } catch (error) {
-        console.error("Error reading stream", error);
-        throw error;
-    } finally {
-        reader.releaseLock();
-    }
+    await readNdjsonStream(response, {
+        onDelta,
+        onThinking,
+        onThinkingStep,
+        onThinkingDuration,
+        onWebSources,
+        onGeneratedAttachments,
+        onAwaitingInput,
+    });
 }
