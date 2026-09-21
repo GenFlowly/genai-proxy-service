@@ -1,0 +1,10 @@
+# Local dev secrets — e.g. DATABASE_URL (Supabase Postgres connection string
+# with the DB password) for the durable-runs work. Never commit these.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
