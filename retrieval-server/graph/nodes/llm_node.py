@@ -8,6 +8,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from encoding_library.observability import count, observe
+from graph.credentials import credentials_for
 from graph.llm_factory import get_llm
 from graph.s3_images import fetch_image_base64
 from graph.state import RetrievalState
@@ -436,7 +437,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
 
         llm = get_llm(
             state["llm_provider"],
-            state["llm_credentials"],
+            credentials_for(state),
             effective_model,
             state.get("llm_max_tokens", 4096),
             betas=llm_betas or None,

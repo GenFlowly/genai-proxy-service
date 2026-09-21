@@ -6,6 +6,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from encoding_library.observability import count, observe
+from graph.credentials import credentials_for
 from graph.llm_factory import get_llm
 from graph.nodes.llm_node import (
     _content_summary,
@@ -84,7 +85,7 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
         effective_model = model_override or state.get("llm_model")
         llm = get_llm(
             state["llm_provider"],
-            state["llm_credentials"],
+            credentials_for(state),
             effective_model,
             state.get("llm_max_tokens", 4096),
         )
