@@ -250,6 +250,22 @@ async def agent_run(run_id: str, state: dict, run_cfg: dict):
      resume endpoint does `DBOS.send(run_id, results)`, graph resumes from the checkpoint.
      Use this when you want a deep pause without unwinding the whole graph.
 
+> **✅ P2 spike results (verified over Supabase).**
+> - **`@DBOS.step()` works inside a LangGraph node** run within `agent_run` — the DBOS
+>   workflow context propagates through LangGraph's async node execution; the step is
+>   recorded against the workflow and memoized.
+> - **Exactly-once across crash-resume is real.** Crash *after* the step commits but
+>   *before* LangGraph checkpoints the node (the double-bill window): on DBOS recovery the
+>   node re-runs but the step is memoized → the LLM body runs **once** (1 bill). Proven with
+>   a SIGKILL-style crash + persistent bill counter.
+> - **Design tension found (llm_node):** the node calls `llm.ainvoke(messages)` and token
+>   streaming is surfaced by the *outer* `astream_events` (`on_chat_model_stream`), only for
+>   `is_streaming` nodes (the response generator). Wrapping the call as a step is clean for
+>   non-streaming/internal nodes (rewrite, rank, reflection, memory) with no UX change; for
+>   the streaming response node it interacts with token streaming and needs care. Also §5.5:
+>   the step's inputs/outputs are persisted, so **credentials must be resolved *inside* the
+>   step** (never passed as a step arg) — the response (no secret) is what gets memoized.
+
 ### 5.5 Credentials: fetch from DDB by `customer_id`, never checkpoint them
 Decision (product): resolve BYOK credentials **server-side from DynamoDB, keyed by
 `customer_id`** (already KMS-encrypted at rest there) rather than passing them in the request
