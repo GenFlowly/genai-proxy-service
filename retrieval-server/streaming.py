@@ -205,12 +205,16 @@ async def stream_events_dicts(
     streaming_nodes = streaming_nodes or set()
     builtin_tool_names = builtin_tool_names or set()
 
-    logger.info(
-        "Stream: starting astream_events for customer=%s provider=%s streaming_nodes=%s",
-        state["customer_id"],
-        state["llm_provider"],
-        streaming_nodes,
-    )
+    # `state` is the initial RetrievalState dict on a fresh run, but on a durable
+    # resume it's a langgraph Command(resume=...) — guard the dict-only accesses.
+    _provider = state.get("llm_provider", "") if isinstance(state, dict) else ""
+    if isinstance(state, dict):
+        logger.info(
+            "Stream: starting astream_events for customer=%s provider=%s streaming_nodes=%s",
+            state.get("customer_id"), _provider, streaming_nodes,
+        )
+    else:
+        logger.info("Stream: resuming astream_events (Command) streaming_nodes=%s", streaming_nodes)
     token_count = 0
     event_count = 0
     usage = {
@@ -362,7 +366,7 @@ async def stream_events_dicts(
         )
         if token_count == 0:
             # Alarmed on: the user received an empty answer inside a 200 response.
-            count("stream_zero_tokens_total", vendor=state.get("llm_provider", ""))
+            count("stream_zero_tokens_total", vendor=_provider)
             logger.warning("Stream: ZERO tokens emitted — streaming node may have failed or produced no output")
         logger.info(
             "Stream: total usage — input_tokens=%d output_tokens=%d total_tokens=%d cache_read=%d cache_creation=%d",
@@ -373,9 +377,9 @@ async def stream_events_dicts(
     except Exception as e:
         # The HTTP status is already 200 by now — this counter is the only
         # failure signal for errors surfaced mid-stream.
-        count("stream_error_total", vendor=state.get("llm_provider", ""))
+        count("stream_error_total", vendor=_provider)
         logger.error("Stream: unhandled exception — %s", e, exc_info=True)
-        kind, message = user_facing_llm_error(e, state.get("llm_provider", ""))
+        kind, message = user_facing_llm_error(e, _provider)
         yield {"error": message, "error_type": kind}
 
 

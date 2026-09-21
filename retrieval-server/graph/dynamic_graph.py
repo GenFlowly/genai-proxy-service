@@ -4,6 +4,7 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
+from graph.nodes.human_input import human_input
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
 from graph.nodes.reflection_node import make_reflection_node
@@ -89,6 +90,8 @@ def _build_node_fn(node_type: str, node_id: str):
         return web_search(node_id)
     if node_type == "TOOL_EXECUTOR":
         return tool_executor(node_id)
+    if node_type == "HUMAN_INPUT":
+        return human_input(node_id)
     if node_type == "RESPONSE_GENERATOR_WITH_REFLECTION":
         return make_reflection_node(node_type, node_id)
     return make_llm_node(node_type, node_id)
