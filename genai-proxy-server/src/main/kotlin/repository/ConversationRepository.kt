@@ -8,6 +8,7 @@ import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
+import com.genflowly.DynamoDBConstants.PENDING_RUN_ID_KEY
 import com.genflowly.DynamoDBConstants.PINNED_AT_KEY
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
@@ -95,6 +96,88 @@ class ConversationRepository(
             // Best-effort: a failed touch must not fail the message write
             logger.error("Failed to touch conversation $conversationId", e)
             false
+        }
+    }
+
+    /**
+     * Records the durable run currently generating this conversation's reply, so
+     * a reload can rediscover "assistant is mid-run" and reattach. Best-effort:
+     * a failure must never fail the generation. Returns false if the conversation
+     * row doesn't exist.
+     */
+    suspend fun setPendingRunId(
+        customerId: String,
+        conversationId: String,
+        runId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("SET #pr = :rid")
+                    .conditionExpression("attribute_exists(#cid)")
+                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUN_ID_KEY, "#cid" to CONVERSATION_ID_KEY))
+                    .expressionAttributeValues(mapOf(":rid" to AttributeValue.builder().s(runId).build()))
+                    .build()
+            )
+            true
+        } catch (e: ConditionalCheckFailedException) {
+            false
+        } catch (e: Exception) {
+            logger.error("Failed to set pendingRunId on conversation $conversationId", e)
+            false
+        }
+    }
+
+    /** Clears the pending-run pointer once a run ends. Best-effort. */
+    suspend fun clearPendingRunId(
+        customerId: String,
+        conversationId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("REMOVE #pr")
+                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUN_ID_KEY))
+                    .build()
+            )
+            true
+        } catch (e: Exception) {
+            logger.error("Failed to clear pendingRunId on conversation $conversationId", e)
+            false
+        }
+    }
+
+    /** The durable run currently generating this conversation's reply, or null. */
+    suspend fun getPendingRunId(
+        customerId: String,
+        conversationId: String
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val response = dynamoDbClient.getItem(
+                GetItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .projectionExpression("#pr")
+                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUN_ID_KEY))
+                    .build()
+            )
+            response.item()?.get(PENDING_RUN_ID_KEY)?.s()
+        } catch (e: Exception) {
+            logger.error("Failed to read pendingRunId for conversation $conversationId", e)
+            null
         }
     }
 

@@ -11,10 +11,13 @@ import com.genflowly.models.retrieval.toImageRefs
 import com.genflowly.models.retrieval.toPayloadToolResults
 import com.genflowly.models.retrieval.toPayloadTools
 import com.genflowly.models.retrieval.toResultsJson
+import com.genflowly.config.AppConfig
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.providers.RunsClient
 import com.genflowly.repository.GraphRepository
 import com.genflowly.DynamoDBConstants.SYSTEM_GRAPH_OWNER
 import com.genflowly.di.AppScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
 import com.genflowly.models.AIConfig
@@ -49,7 +52,9 @@ class GenerationOrchestrator(
     private val memoryService: MemoryService,
     private val costCalculationService: CostCalculationService,
     private val graphRepository: GraphRepository,
-    private val appScope: AppScope
+    private val appScope: AppScope,
+    private val runsClient: RunsClient,
+    private val appConfig: AppConfig
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
@@ -457,19 +462,22 @@ class GenerationOrchestrator(
             var success = false
             var cancelled = false
             try {
-                retrievalService.retrieveAndGenerateStream(
+                val resolvedMaxTokens = modelCatalogService.resolveMaxTokens(
+                    vendor = config.aiVendor,
+                    model = config.model,
+                    requested = config.maxTokens,
+                    streaming = true
+                )
+                // Stateless /retrieve stream (the default path). Credentials are
+                // sent in the request body.
+                fun statelessStream(): Flow<StreamChunk> = retrievalService.retrieveAndGenerateStream(
                     customerId = customerId,
                     client = client,
                     query = userRequestRawPrompt,
                     llmCredentials = llmCredentials,
                     llmProvider = llmProvider,
                     llmModel = config.model,
-                    llmMaxTokens = modelCatalogService.resolveMaxTokens(
-                        vendor = config.aiVendor,
-                        model = config.model,
-                        requested = config.maxTokens,
-                        streaming = true
-                    ),
+                    llmMaxTokens = resolvedMaxTokens,
                     conversationHistory = conversationHistory,
                     systemPrompt = systemPrompt,
                     agentic = agentic,
@@ -480,7 +488,46 @@ class GenerationOrchestrator(
                     responseSchema = responseSchema,
                     memoryEnabled = memoryEnabled,
                     graphId = agentId
-                ).collect { chunk ->
+                )
+                // Durable /runs path (flagged): start a durable background run and
+                // reattach to its event stream. Credentials are NOT sent — the
+                // retrieval-server resolves them from DynamoDB by customer_id, so
+                // no secret is checkpointed (DURABLE_AGENTS_DBOS_PLAN §5.5). Only
+                // the agentic case is routed here; a start failure degrades to the
+                // stateless stream so a chat is never lost behind the flag.
+                val generationFlow: Flow<StreamChunk> =
+                    if (appConfig.durableRunsEnabled && agentic) {
+                        val startedRunId = runsClient.startRun(
+                            customerId = customerId,
+                            client = client,
+                            query = userRequestRawPrompt,
+                            llmProvider = llmProvider,
+                            llmModel = config.model,
+                            llmMaxTokens = resolvedMaxTokens,
+                            conversationHistory = conversationHistory,
+                            systemPrompt = systemPrompt,
+                            agentic = agentic,
+                            queryImages = attachments.toImageRefs(),
+                            tools = tools.toPayloadTools(),
+                            toolChoice = toolChoice,
+                            toolResults = toolResults.toPayloadToolResults(),
+                            responseSchema = responseSchema,
+                            memoryEnabled = memoryEnabled,
+                            graphId = agentId
+                        )
+                        if (startedRunId != null) {
+                            // Pointer for reload rediscovery ("assistant is mid-run"); best-effort.
+                            runCatching { conversationService.setPendingRunId(customerId, activeConversationId, startedRunId) }
+                                .onFailure { logger.warn("Failed to persist pendingRunId {} on conversation {}: {}", startedRunId, activeConversationId, it.message) }
+                            runsClient.streamRun(startedRunId)
+                        } else {
+                            logger.warn("Durable run start failed for conversation {} — falling back to stateless stream", activeConversationId)
+                            statelessStream()
+                        }
+                    } else {
+                        statelessStream()
+                    }
+                generationFlow.collect { chunk ->
                     when (chunk) {
                         is StreamChunk.Content -> {
                             sb.append(chunk.text)
@@ -583,6 +630,11 @@ class GenerationOrchestrator(
                         thinkingStepsJson = thinkingStepsToJson(capturedThinkingSteps)
                     )
                     conversationService.addMessageInConversation(responseMessage)
+                }
+                // Durable run finished — clear the reload-rediscovery pointer
+                // (no-op REMOVE when nothing was set / on the stateless path).
+                if (appConfig.durableRunsEnabled && agentic) {
+                    runCatching { conversationService.clearPendingRunId(customerId, activeConversationId) }
                 }
                 }
                 } catch (e: Exception) {
