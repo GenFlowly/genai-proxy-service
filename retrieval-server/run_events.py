@@ -95,3 +95,14 @@ async def delete_run(run_id: str) -> None:
     """Drop a run's events (cancel / TTL cleanup)."""
     async with _pool.connection() as conn:
         await conn.execute(f"DELETE FROM {TABLE} WHERE run_id = %s", (run_id,))
+
+
+async def delete_older_than(max_age_seconds: int) -> int:
+    """Prune events older than max_age_seconds (run TTL); returns rows deleted.
+    Idempotent, so multiple pruners running concurrently is harmless."""
+    async with _pool.connection() as conn:
+        cur = await conn.execute(
+            f"DELETE FROM {TABLE} WHERE created_at < now() - make_interval(secs => %s)",
+            (max_age_seconds,),
+        )
+        return cur.rowcount

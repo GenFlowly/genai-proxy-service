@@ -23,9 +23,11 @@ enqueue_run raises — routes/runs.py surfaces that as 503.
 """
 import logging
 import os
+import time
 
 import durable_runtime
 import run_events
+from encoding_library.observability import count, observe
 from graph.dynamic_graph import get_or_build_durable_graph
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from models import RetrieveRequest
@@ -136,6 +138,8 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     state = _build_state(req, node_configs, builtin_tools)
 
     logger.info("agent_run START run_id=%s customer=%s graph_id=%s", run_id, req.customer_id, req.graph_id)
+    count("agent_run_started_total", source=req.request_source or "conversation")
+    run_start = time.perf_counter()
 
     usage: dict = {}
     error: dict = {}
@@ -173,6 +177,7 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
             error = {"error": "run exceeded the resume-cycle limit", "error_type": "runaway"}
             break
         await run_events.publish(run_id, {"awaiting_input": pending[0]})
+        count("agent_run_awaiting_input_total")
         from dbos import DBOS
         from langgraph.types import Command
 
@@ -202,6 +207,8 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     }
     status = "error" if summary["error"] else "completed"
     await run_events.publish(run_id, {"status": status, **summary}, terminal=True)
+    count("agent_run_total", status=status, source=req.request_source or "conversation")
+    observe("agent_run_duration_seconds", time.perf_counter() - run_start)
     logger.info("agent_run END run_id=%s status=%s tokens=%s", run_id, status, summary["usage"].get("total_tokens"))
     return summary
 

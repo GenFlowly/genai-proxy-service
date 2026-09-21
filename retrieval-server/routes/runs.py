@@ -162,6 +162,39 @@ async def cancel_run(run_id: str):
     return {"run_id": run_id, "status": "cancelled"}
 
 
+@router.get("/runs")
+async def list_runs(status: str | None = None, limit: int = 50):
+    """List recent durable runs (ops/inspection). Optional ?status= filter
+    (SUCCESS / ERROR / PENDING / ENQUEUED / CANCELLED), newest first."""
+    _require_ready()
+    from dbos import DBOS
+
+    try:
+        wfs = await DBOS.list_workflows_async(
+            name="agent_run",
+            status=[status] if status else None,
+            limit=max(1, min(limit, 200)),
+            sort_desc=True,
+            load_input=False,
+            load_output=False,
+        )
+    except Exception as e:
+        logger.exception("list_runs failed")
+        raise HTTPException(status_code=500, detail=f"could not list runs: {e}")
+    return {"runs": [
+        {"run_id": w.workflow_id, "status": w.status, "created_at": w.created_at, "updated_at": w.updated_at}
+        for w in wfs
+    ]}
+
+
+@router.get("/runs/{run_id}/events")
+async def get_run_events(run_id: str, from_seq: int = 0, limit: int = 500):
+    """Raw ordered events for a run (debug/inspection)."""
+    _require_ready()
+    rows = await run_events.read_since(run_id, from_seq, limit=max(1, min(limit, 2000)))
+    return {"run_id": run_id, "events": rows}
+
+
 @router.get("/runs/{run_id}")
 async def get_run(run_id: str):
     """Status/result for polling or rediscovery after a page reload."""
