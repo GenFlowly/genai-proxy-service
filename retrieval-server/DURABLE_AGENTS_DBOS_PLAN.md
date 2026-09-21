@@ -356,7 +356,15 @@ Non-durable and internal generations keep the existing stateless `/retrieve` and
 | &nbsp;&nbsp;• P1c ✅ | Durable `/runs` path: checkpointer compile variant, `run_events` reattach channel, `agent_run` DBOS workflow, `routes/runs.py`; verified over Supabase + in the deployed dev env | retrieval-server |
 | &nbsp;&nbsp;• P1d | Kotlin proxy `RunsClient` (start/reattach/resume/cancel/status) + wire one flow behind a flag; `conversationId → run_id` pointer for reload rediscovery | proxy |
 | **P2** ✅ | exactly-once LLM step (memoized `@DBOS.step` in `llm_node`/`reflection_node`, creds resolved inside); in-graph `interrupt()` HITL (`HUMAN_INPUT` node) with durable wait (`DBOS.recv`) + resume (`Command(resume=…)`); proxy relays `awaiting_input`. Verified over Supabase (exactly-once across crash; streaming survives the step; HITL pause/resume end-to-end). Tail: render the HITL prompt in the web app. | `llm_node.py`, `reflection_node.py`, `human_input.py`, `runs.py`, `streaming.py`, proxy |
-| **P3** | queue concurrency/priorities, retry/backoff policy, run inspection + metrics, cron/scheduled agents (DBOS scheduled workflows) if wanted | runs/observability |
+| **P3** ✅ (core) | Metrics (agent_run_started/total/awaiting_input/duration), run inspection (GET /runs list + /runs/{id}/events), run-events TTL pruner, queue global-concurrency. Verified over Supabase. Optional follow-ups: LLM-step retry/backoff, queue priorities, scheduled/cron agents, per-environment Supabase isolation (see note above). | runs/observability |
+
+> **⚠️ Environment isolation (found during P2).** Every process pointed at the same
+> `DATABASE_URL` shares one DBOS system DB **and one `agent_runs` queue**, so their
+> workers cross-execute each other's runs. During P2, the deployed dev server's
+> worker dequeued a run enqueued from a local process and executed it with the
+> deployed code. This is fine for the throwaway dev DB, but **before real use each
+> environment (local / dev / prod) must have its own Supabase** (or a distinct DBOS
+> app name / queue) so runs execute only where intended. Track in P3.
 
 ---
 
