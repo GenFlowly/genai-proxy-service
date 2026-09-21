@@ -333,8 +333,12 @@ Non-durable and internal generations keep the existing stateless `/retrieve` and
 
 | Phase | Deliverable | Touches |
 |---|---|---|
-| **P0 spike** | Point at a **Supabase** dev project (session-mode URL); DBOS + checkpointer wired; run one graph through `agent_run` with a trivial `interrupt()`; prove crash-resume + reattach; **confirm the §4 Supabase items** (session vs txn pooler, IPv4 from Fly, DBOS system-tables-in-a-schema) | `app.py`, `dynamic_graph.py`, `runs.py`, Supabase project |
+| **P0 spike** ✅ | Point at a **Supabase** dev project (session-mode URL); DBOS + checkpointer wired; run one graph through `agent_run` with a trivial `interrupt()`; prove crash-resume + reattach; **confirm the §4 Supabase items** (session vs txn pooler, IPv4 from Fly, DBOS system-tables-in-a-schema) | `app.py`, `dynamic_graph.py`, `runs.py`, Supabase project |
 | **P1** | `/runs` durable background path for the agentic case (start/stream/cancel) + proxy run client + event translation; **secrets out of state**; `/retrieve` untouched | retrieval-server + proxy |
+| &nbsp;&nbsp;• P1a ✅ | Credentials resolved from DDB by `customer_id` (`graph/credentials.py`, `credentials_for`); nodes cut over; secret left out of the durable state | retrieval-server |
+| &nbsp;&nbsp;• P1b ✅ | Proxy SSE→`StreamChunk` parser extracted to a shared `parseRetrievalEvent` (reused by the runs client) | proxy |
+| &nbsp;&nbsp;• P1c ✅ | Durable `/runs` path: checkpointer compile variant, `run_events` reattach channel, `agent_run` DBOS workflow, `routes/runs.py`; verified over Supabase + in the deployed dev env | retrieval-server |
+| &nbsp;&nbsp;• P1d | Kotlin proxy `RunsClient` (start/reattach/resume/cancel/status) + wire one flow behind a flag; `conversationId → run_id` pointer for reload rediscovery | proxy |
 | **P2** | exactly-once LLM step; in-graph `interrupt()` for HITL/client tools; resume via `DBOS.send`; pending-run pointer + reload rediscovery | `llm_node.py`, `tool_executor.py`, proxy |
 | **P3** | queue concurrency/priorities, retry/backoff policy, run inspection + metrics, cron/scheduled agents (DBOS scheduled workflows) if wanted | runs/observability |
 
