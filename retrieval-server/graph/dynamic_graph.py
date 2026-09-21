@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 # changed (edit, fork, or a new System publish) and forces a rebuild.
 _graph_cache: dict[str, tuple[tuple, Any, int]] = {}
 
+# Same shape/keying as _graph_cache but holds the checkpointer-bound (durable)
+# compilation used by the /runs path — kept separate so durable and stateless
+# graphs for the same customer coexist instead of evicting each other.
+_durable_graph_cache: dict[str, tuple[tuple, Any, int]] = {}
+
 # safety cap on how many times the graph can loop through a cycle before LangGraph forcibly aborts the run
 _DEFAULT_MAX_ITERATIONS = 10
 
@@ -89,9 +94,11 @@ def _build_node_fn(node_type: str, node_id: str):
     return make_llm_node(node_type, node_id)
 
 
-def build_graph_for_customer(graph_record: dict, nodes: list[dict]):
+def _build_workflow(graph_record: dict, nodes: list[dict]) -> tuple[StateGraph, int]:
     """
-    Compile a LangGraph StateGraph from graph_record + nodes loaded from DDB.
+    Assemble the (uncompiled) LangGraph StateGraph from graph_record + nodes
+    loaded from DDB, returning (workflow, max_iterations). Shared by the
+    stateless and durable compile variants so the graph topology is defined once.
 
     Supports cycles via conditional edges with condition_type "list_empty" or "bool".
     The recursion limit (max iterations through any cycle) is read from the
@@ -122,10 +129,29 @@ def build_graph_for_customer(graph_record: dict, nodes: list[dict]):
         # No path_map — router already returns the resolved destination (node ID or END)
         workflow.add_conditional_edges(cond["from"], router_fn)
 
+    return workflow, max_iterations
+
+
+def build_graph_for_customer(graph_record: dict, nodes: list[dict]):
+    """Compile the stateless graph (no checkpointer) for the /retrieve fast path."""
+    workflow, max_iterations = _build_workflow(graph_record, nodes)
     compiled = workflow.compile()
     logger.info(
         "Built graph=%s with %d nodes, max_iterations=%d",
-        graph_record.get("graphId"), len(node_map), max_iterations,
+        graph_record.get("graphId"), len(nodes), max_iterations,
+    )
+    return compiled, max_iterations
+
+
+def build_durable_graph_for_customer(graph_record: dict, nodes: list[dict], checkpointer):
+    """Compile the durable graph — same topology, bound to the Postgres
+    checkpointer so every super-step is persisted and the run can resume after a
+    crash/redeploy. Used only by the /runs path; requires a thread_id per call."""
+    workflow, max_iterations = _build_workflow(graph_record, nodes)
+    compiled = workflow.compile(checkpointer=checkpointer)
+    logger.info(
+        "Built DURABLE graph=%s with %d nodes, max_iterations=%d",
+        graph_record.get("graphId"), len(nodes), max_iterations,
     )
     return compiled, max_iterations
 
@@ -141,6 +167,23 @@ def get_or_build_graph(customer_id: str, graph_record: dict, nodes: list[dict]) 
     return cached[1], cached[2]
 
 
+def get_or_build_durable_graph(
+    customer_id: str, graph_record: dict, nodes: list[dict], checkpointer
+) -> tuple[Any, int]:
+    """Like get_or_build_graph but returns the checkpointer-bound variant, cached
+    separately so the durable and stateless compilations don't evict each other.
+    The checkpointer is the process singleton (durable_runtime), stable across
+    calls, so it isn't part of the cache key."""
+    identity = (graph_record.get("graphId"), int(graph_record.get("latestVersion") or 0))
+    cached = _durable_graph_cache.get(customer_id)
+    if cached is None or cached[0] != identity:
+        compiled, max_iterations = build_durable_graph_for_customer(graph_record, nodes, checkpointer)
+        _durable_graph_cache[customer_id] = (identity, compiled, max_iterations)
+        return compiled, max_iterations
+    return cached[1], cached[2]
+
+
 def invalidate_graph_cache(customer_id: str) -> None:
     """Force rebuild on next request (e.g. after user edits their graph)."""
     _graph_cache.pop(customer_id, None)
+    _durable_graph_cache.pop(customer_id, None)

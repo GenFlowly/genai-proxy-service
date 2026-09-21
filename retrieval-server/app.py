@@ -49,6 +49,18 @@ except Exception:
         "durable_runtime import failed — durable runs disabled"
     )
 
+# The durable /runs router. Imported AFTER durable_runtime so the DBOS singleton
+# exists when runs.py registers its @DBOS.workflow. Guarded: if it fails to
+# import (or durable runs are off), the server still serves /retrieve — the
+# /runs endpoints just return 503 (durable_runtime.is_ready() is False).
+try:
+    from routes.runs import router as runs_router
+except Exception:
+    runs_router = None
+    logging.getLogger(__name__).exception(
+        "runs router import failed — durable /runs endpoints disabled"
+    )
+
 configure_observability(service="retrieval-server", backend="prometheus")
 setup_logging("retrieval-server")
 logger = logging.getLogger(__name__)
@@ -84,6 +96,8 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 app.include_router(retrieve_router)
+if runs_router is not None:
+    app.include_router(runs_router)
 app.include_router(models_router)
 app.include_router(providers_router)
 app.include_router(model_metadata_router)
