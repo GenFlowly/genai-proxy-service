@@ -356,7 +356,14 @@ Non-durable and internal generations keep the existing stateless `/retrieve` and
 | &nbsp;&nbsp;• P1c ✅ | Durable `/runs` path: checkpointer compile variant, `run_events` reattach channel, `agent_run` DBOS workflow, `routes/runs.py`; verified over Supabase + in the deployed dev env | retrieval-server |
 | &nbsp;&nbsp;• P1d | Kotlin proxy `RunsClient` (start/reattach/resume/cancel/status) + wire one flow behind a flag; `conversationId → run_id` pointer for reload rediscovery | proxy |
 | **P2** ✅ | exactly-once LLM step (memoized `@DBOS.step` in `llm_node`/`reflection_node`, creds resolved inside); in-graph `interrupt()` HITL (`HUMAN_INPUT` node) with durable wait (`DBOS.recv`) + resume (`Command(resume=…)`); proxy relays `awaiting_input`. Verified over Supabase (exactly-once across crash; streaming survives the step; HITL pause/resume end-to-end). Tail: render the HITL prompt in the web app. | `llm_node.py`, `reflection_node.py`, `human_input.py`, `runs.py`, `streaming.py`, proxy |
-| **P3** ✅ (core) | Metrics (agent_run_started/total/awaiting_input/duration), run inspection (GET /runs list + /runs/{id}/events), run-events TTL pruner, queue global-concurrency. Verified over Supabase. Optional follow-ups: LLM-step retry/backoff, queue priorities, scheduled/cron agents, per-environment Supabase isolation (see note above). | runs/observability |
+| **P3** ✅ | Metrics (agent_run_started/total/awaiting_input/duration), run inspection (GET /runs list + /runs/{id}/events), run-events TTL pruner, queue global-concurrency, **LLM-step retry/backoff** (DBOS retries_allowed + should_retry: transient vendor errors retried with exponential backoff, non-retriable fail fast; composes with exactly-once). Verified over Supabase. Optional follow-ups: queue priorities, scheduled/cron agents, per-environment Supabase isolation (see note above). | runs/observability |
+
+> **✅ Durable-runs UX last mile (post-P1d).** Proxy reattach route
+> (GET /runs/{id}/stream) + resume route (POST /runs/{id}/resume), pendingRunId on
+> the conversation GET, and true durable cancel (Stop also cancels the run). Web app:
+> reattach-on-reload, the shared NDJSON reader + `ai` (awaiting_input) frame, and an
+> app-side HITL prompt/reply banner (the polished in-card UI belongs in the compiled
+> component library). All shipped; still behind DURABLE_RUNS_ENABLED.
 
 > **⚠️ Environment isolation (found during P2).** Every process pointed at the same
 > `DATABASE_URL` shares one DBOS system DB **and one `agent_runs` queue**, so their
