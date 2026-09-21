@@ -158,6 +158,19 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        // Per-customer, per-embedding-vendor list of models the customer's key
+        // can actually embed, discovered by probing (EmbeddingModelCatalogService
+        // in the proxy). PK = customerId, SK = vendor. A sentinel row
+        // (customerId = "__SWEEP__") holds the weekly-sweep lease.
+        const customerEmbeddingModelsTableProps: CreateTableProps = {
+            tableName: 'CustomerEmbeddingModels',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING
+            },
+            sortKey: { name: 'vendor', type: dynamodb.AttributeType.STRING },
+        };
+
         // Deprecated: the customer-BYO-Supabase-as-vector-DB feature is fully
         // removed from every service. This table is intentionally retained in
         // the stack for now — removing it requires a two-phase CloudFormation
@@ -483,6 +496,7 @@ export class DynamoDBStack extends cdk.Stack {
         const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
         const customerPreferencesTable = createDefaultDynamoDbTable(this, customerPreferencesTableProps);
         const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
+        const customerEmbeddingModelsTable = createDefaultDynamoDbTable(this, customerEmbeddingModelsTableProps);
         const customerSupabaseConfigTable = createDefaultDynamoDbTable(this, customerSupabaseConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
         const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
@@ -502,7 +516,7 @@ export class DynamoDBStack extends cdk.Stack {
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
-            customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
+            customerVectorDBConfigTable, customerEmbeddingModelsTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
