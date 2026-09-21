@@ -176,7 +176,9 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
         if resume_cycles > _MAX_RESUME_CYCLES:
             error = {"error": "run exceeded the resume-cycle limit", "error_type": "runaway"}
             break
-        await run_events.publish(run_id, {"awaiting_input": pending[0]})
+        _ai = pending[0]
+        _ai_payload = {**_ai, "run_id": run_id} if isinstance(_ai, dict) else {"value": _ai, "run_id": run_id}
+        await run_events.publish(run_id, {"awaiting_input": _ai_payload})
         count("agent_run_awaiting_input_total")
         from dbos import DBOS
         from langgraph.types import Command
