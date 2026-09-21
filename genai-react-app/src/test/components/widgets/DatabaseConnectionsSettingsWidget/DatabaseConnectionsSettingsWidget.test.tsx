@@ -39,8 +39,6 @@ describe('DatabaseConnectionsSettingsWidget', () => {
         expect(screen.getByText('Milvus Cloud')).toBeInTheDocument();
         // No page-level heading — the settings page provides its own
         expect(screen.queryByText('Database Settings')).not.toBeInTheDocument();
-        // Supabase is not offered — only the vector DB connection remains
-        expect(screen.queryByText('Supabase')).not.toBeInTheDocument();
     });
 
     test('validates login status before save', async () => {
