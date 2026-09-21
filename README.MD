@@ -285,3 +285,31 @@ Open a Pull Request against the `main` branch. When it merges, the per-service p
 ## Cloudflare Router Workers
 
 The workers that front the public domains live in `cloudflare/router-worker/` — one shared source (`src/worker.js`) plus per-app configs (`react-app.toml`, `admin-panel.toml`) whose `[env.development]` / `[env.production]` sections set the backend and Pages hostnames and pin the live worker names (`development`, `production`, `admin-panel-development`, `admin-panel-production`). Deployed by `dev-workers-deploy.yml` (on push) and `prod-workers-deploy.yml` (manual dispatch) — never edit worker code in the Cloudflare dashboard.
+
+
+
+## Scheduled / cron jobs
+
+Recurring background work runs in two places. There are no GitHub Actions crons, no Fly/Cloudflare scheduled triggers, and no Python schedulers.
+
+### In-proxy coroutine loops — `genai-proxy-server` (Ktor on Fly), started in `Application.kt`
+
+The proxy has no EventBridge scheduling (it runs on Fly, not Lambda), so its recurring jobs are supervised coroutine loops on `AppScope` — each runs once at startup, then on a fixed interval (`launch { while (true) { refresh(); delay(interval) } }`).
+
+| Service | Cadence | Purpose |
+| --- | --- | --- |
+| `ModelCatalogService.startDailyRefresh` | startup + every 24 h | Refresh the `AIModelCatalog` table (per-model token limits + pricing) from the vendors' model APIs. |
+| `EmbeddingModelCatalogService.startWeeklyRefresh` | startup + every 7 d | Re-probe every customer's embedding key so the model picker stays accurate and a vendor deprecating an in-use model is caught. Lease-guarded (`CustomerEmbeddingModels` sentinel row) so only one instance sweeps and no more than ~weekly. |
+
+Both loops swallow per-cycle errors (log and retry next interval) and cancel together on shutdown via the `ApplicationStopping` hook. Because they live in-process, multi-instance jobs need a guard (e.g. the sweep's DDB lease); a job that must run exactly once is a reason to add a lease, not to assume a single machine.
+
+### AWS EventBridge rules — `encoding-server-cdk/lib/lambda-stack.ts`
+
+Both feed the Voyage **batch** embedding pipeline.
+
+| Rule | Cadence | Target lambda | Purpose |
+| --- | --- | --- | --- |
+| `…-voyage-notes-accumulate` | every 30 min | `accumulate-voyage-notes` | Sweep `CustomerNotes` into Voyage batch jobs. |
+| `…-voyage-batch-poll` | every 10 min | `poll-voyage-batches` | Reconcile completed batch jobs and store their embeddings. |
+
+> Not schedules: `MemoryExtractionService`'s `delay(...)` is a per-conversation debounce (event-driven flush), not a recurring job.
