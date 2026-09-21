@@ -1,5 +1,6 @@
 package com.genflowly.activity.generation
 
+import com.genflowly.EmbeddingModelSupport
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.PreferencesRequest
@@ -48,6 +49,34 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
                     customerProfileService
                 )
 
+                // Reject embedding models the encoding pipeline can't actually
+                // encode (e.g. voyage-multimodal-*, which the picker's LiteLLM
+                // catalog lists but the Voyage text-embed SDK rejects). Without
+                // this gate the failure surfaces only days later, deep in the
+                // encoding server, and silently — the whole run aborts before
+                // the store step, so nothing ever reaches Milvus.
+                val prefs = request.aiConfigPreferences
+                val unsupported = EmbeddingModelSupport.findUnsupported(
+                    "embeddingModel" to prefs?.embeddingModel,
+                    "embeddingModelConversations" to prefs?.embeddingModelConversations,
+                    "embeddingModelNotes" to prefs?.embeddingModelNotes,
+                )
+                if (unsupported.isNotEmpty()) {
+                    val offending = unsupported.joinToString("; ") { (field, model) -> "$field='$model'" }
+                    logger.warn(
+                        "Rejected preferences save for customer {}: unsupported embedding model(s): {}",
+                        customerId,
+                        offending
+                    )
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf(
+                            "error" to ("Unsupported embedding model(s): $offending. " +
+                                "Supported models: ${EmbeddingModelSupport.supportedModels.joinToString(", ")}")
+                        )
+                    )
+                    return@post
+                }
 
                 customerProfileService.savePreferences(
                     customerId,

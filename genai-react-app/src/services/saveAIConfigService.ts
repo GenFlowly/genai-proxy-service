@@ -35,6 +35,17 @@ export async function saveAIConfigPreferences(
     })
 
     if (!response.ok) {
-        throw new Error(`Failed to save AI config preferences: ${response.statusText}`)
+        // Surface the server's validation message (e.g. an unsupported embedding
+        // model) so the caller's toast explains what to fix, not just the status.
+        let serverError: string | undefined
+        try {
+            const body = await response.json()
+            serverError = body?.error
+        } catch {
+            // No / invalid JSON body — fall back to the status line below.
+        }
+        throw new Error(
+            serverError || `Failed to save AI config preferences: ${response.statusText}`
+        )
     }
 }
