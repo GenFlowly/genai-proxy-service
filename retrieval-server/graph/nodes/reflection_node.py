@@ -10,6 +10,8 @@ from graph.credentials import credentials_for
 from graph.llm_factory import get_llm
 from graph.nodes.llm_node import (
     _content_summary,
+    _dbos_active,
+    _durable_llm_invoke,
     _trace_entry,
     _image_blocks,
     _make_ai,
@@ -83,12 +85,17 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
             model_override = config.get("model_override")
 
         effective_model = model_override or state.get("llm_model")
-        llm = get_llm(
-            state["llm_provider"],
-            credentials_for(state),
-            effective_model,
-            state.get("llm_max_tokens", 4096),
-        )
+        # Durable /runs path invokes the LLM as a memoized DBOS step (exactly-once);
+        # /retrieve builds + invokes inline. See llm_node for the rationale.
+        use_durable = _dbos_active()
+        llm = None
+        if not use_durable:
+            llm = get_llm(
+                state["llm_provider"],
+                credentials_for(state),
+                effective_model,
+                state.get("llm_max_tokens", 4096),
+            )
 
         provider = state["llm_provider"]
         request_source = state.get("request_source") or "conversation"
@@ -137,7 +144,14 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
 
         llm_start = time.perf_counter()
         try:
-            response = await llm.ainvoke(messages)
+            if use_durable:
+                out = await _durable_llm_invoke(
+                    state["llm_provider"], state["customer_id"], effective_model,
+                    state.get("llm_max_tokens", 4096), [], False, [], None, None, messages,
+                )
+                response = out["response"]
+            else:
+                response = await llm.ainvoke(messages)
         except Exception:
             count("llm_request_total", status="error", vendor=provider, model=effective_model,
                   source=request_source, operation=node_type.lower())
