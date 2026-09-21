@@ -34,3 +34,35 @@ Every outbound call to a third-party API MUST go through `encoding_library.utils
 - **LLM chat calls are the exception**: they retry inside the vendor SDKs (`max_retries` in `graph/llm_factory.py`), not through this util — re-issuing a generation from our layer can double-bill when the original request actually succeeded server-side. Same for key validation (SDK-level; auth errors must not retry).
 - **boto3 (DynamoDB/S3/KMS)** has its own built-in backoff — don't double-wrap.
 - **Voice realtime websockets** are stateful sessions; reconnection is session logic, deliberately not covered by this util.
+
+## Durable agentic runs (planned)
+
+Full design and rationale: `DURABLE_AGENTS_DBOS_PLAN.md`. Goal: evolve this service from a
+stateless-per-call graph runner into a durable runtime — runs that survive process crash/redeploy,
+in-graph human-in-the-loop, exactly-once LLM steps, reattachable streams — using DBOS (durable
+workflows, MIT-licensed library) plus a LangGraph Postgres checkpointer on a managed Supabase
+database. No new always-on infra on Fly.
+
+| Phase | What | Where |
+|---|---|---|
+| P0 | Spike: prove DBOS + checkpointer + Supabase locally (crash-resume, reattach, `interrupt()`) | here, throwaway branch |
+| **P1a** | Secrets out of `RetrievalState` — resolve `llm_credentials` from DynamoDB by `customer_id` at call time instead of carrying them in graph state | **here — start here, independent of everything else** |
+| P1b | Extract the proxy's SSE→chunk parser into a shared function (reused by the new run-stream reattach path later) | genai-proxy-server |
+| P1c | Durable `/runs` path — checkpointer-backed compile variant, a DBOS workflow driving `astream_events`, a reattach channel, `POST /runs` / `GET /runs/{id}/stream` / `POST /runs/{id}/cancel`. Ships dark (unused). | here |
+| P1d | Proxy wires one flow to `/runs` behind a flag | genai-proxy-server |
+| P2 | Exactly-once LLM step (wrap the vendor call as a `@DBOS.step()`) + in-graph `interrupt()`/resume for HITL and client-fulfilled tools | both |
+| P3 | Queue concurrency/retry tuning, run inspection, checkpoint/event TTL, cron | both |
+
+**Start with P1a.** It's a pure security refactor, ships independently, and is a hard prerequisite
+for checkpointing (state that will be persisted to Postgres must never carry secrets). New
+`graph/credentials.py`: resolve creds by `customer_id` from the `CustomerVendorApiKeys` DynamoDB
+table (PK=`customerId`, SK=`aiVendor`) and KMS-decrypt (no explicit key ARN needed — it's embedded
+in the ciphertext), memoized per run so a looping graph does one DDB+KMS round-trip, not one per
+node. Mirrors the proxy's own `CustomerCredentialsRepository`/`KMSProvider` path; needs
+`dynamodb:GetItem` on that table + `kms:Decrypt` granted to this service's IAM role.
+
+**Supabase connection mode matters.** DBOS, the checkpointer, and stream reattach (`LISTEN/NOTIFY`)
+all need session-level Postgres features. Use the **session pooler or direct connection** (port
+5432, `sslmode=require`) for `DATABASE_URL` — never the **transaction pooler** (6543), which
+silently breaks advisory locks and `LISTEN/NOTIFY` and is the easiest way to ship a subtly broken
+deploy.
