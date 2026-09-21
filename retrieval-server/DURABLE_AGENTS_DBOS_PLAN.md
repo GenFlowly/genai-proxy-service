@@ -355,7 +355,7 @@ Non-durable and internal generations keep the existing stateless `/retrieve` and
 | &nbsp;&nbsp;• P1b ✅ | Proxy SSE→`StreamChunk` parser extracted to a shared `parseRetrievalEvent` (reused by the runs client) | proxy |
 | &nbsp;&nbsp;• P1c ✅ | Durable `/runs` path: checkpointer compile variant, `run_events` reattach channel, `agent_run` DBOS workflow, `routes/runs.py`; verified over Supabase + in the deployed dev env | retrieval-server |
 | &nbsp;&nbsp;• P1d | Kotlin proxy `RunsClient` (start/reattach/resume/cancel/status) + wire one flow behind a flag; `conversationId → run_id` pointer for reload rediscovery | proxy |
-| **P2** | exactly-once LLM step; in-graph `interrupt()` for HITL/client tools; resume via `DBOS.send`; pending-run pointer + reload rediscovery | `llm_node.py`, `tool_executor.py`, proxy |
+| **P2** ✅ | exactly-once LLM step (memoized `@DBOS.step` in `llm_node`/`reflection_node`, creds resolved inside); in-graph `interrupt()` HITL (`HUMAN_INPUT` node) with durable wait (`DBOS.recv`) + resume (`Command(resume=…)`); proxy relays `awaiting_input`. Verified over Supabase (exactly-once across crash; streaming survives the step; HITL pause/resume end-to-end). Tail: render the HITL prompt in the web app. | `llm_node.py`, `reflection_node.py`, `human_input.py`, `runs.py`, `streaming.py`, proxy |
 | **P3** | queue concurrency/priorities, retry/backoff policy, run inspection + metrics, cron/scheduled agents (DBOS scheduled workflows) if wanted | runs/observability |
 
 ---
