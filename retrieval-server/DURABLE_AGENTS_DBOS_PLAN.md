@@ -1,5 +1,37 @@
 # Durable Agentic Runtime — DBOS Integration Plan (retrieval-server)
 
+Status: **P0 spike complete and green** (verified against the real Supabase session
+pooler). Building P1c on top of it. Verified: dbos 3.0.0, langgraph-checkpoint-postgres
+3.1.2, psycopg 3.3.6.
+
+## ✅ P0 spike results (supersede the assumptions below where they differ)
+
+Run against the project's Supabase **session pooler** (IPv4, port 5432, Postgres 17.6):
+
+- **Checkpointer works over the pooler** — `AsyncPostgresSaver.setup()` + checkpoint
+  put/get/list all pass.
+- **DBOS works over the pooler** — launch + migrations, sync & async workflows, queue
+  enqueue, `send`/`recv` (HITL), `set_event`/`get_event` all pass.
+- **Crash-resume works** — a workflow SIGKILL'd mid-run (after step 1, before step 2)
+  resumed on relaunch and completed; step 1 was not lost. This is the whole plan's core
+  claim, proven end-to-end.
+- **LISTEN/NOTIFY does NOT work over the Supavisor pooler** — even in session mode (it
+  multiplexes backends). Two consequences, both resolved:
+  - **DBOS**: run with **`use_listen_notify=False`** (a first-class DBOSConfig option) →
+    DBOS polls instead. Confirmed working.
+  - **Reattach channel (§5.6)**: **poll the events table** instead of `LISTEN/NOTIFY`
+    (see the corrected §5.6). No Redis, no IPv4 add-on, no direct (IPv6) connection needed.
+- **Single Supabase DB is fine** — DBOS puts its tables in a schema via
+  **`dbos_system_schema`** (no separate database / `CREATE DATABASE` needed).
+- **Locked DBOSConfig**: `system_database_url` = the session-pooler URL, `use_listen_notify:
+  False`, `dbos_system_schema: "dbos"`, `run_migrations: True`.
+
+The connection-mode table in §4 is now moot in one respect: since the reattach channel
+polls (no NOTIFY dependency) and DBOS runs with `use_listen_notify=False`, the **session
+pooler is fully sufficient** — the direct (IPv6) connection is not required.
+
+---
+
 Status: proposal / design. No code changed yet.
 
 Goal: evolve the retrieval-server from a **stateless per-call graph runner** into a
@@ -249,11 +281,15 @@ Implementation:
   latency.
 
 ### 5.6 Stream reattach channel (new small module, e.g. `run_events.py`)
-- An `events` table (or Postgres `LISTEN/NOTIFY`) keyed by `(run_id, seq)`.
-- `_publish(run_id, event)` appends with a monotonic `seq`.
-- The SSE endpoint subscribes; on reconnect the client sends `Last-Event-ID`/`?from_seq=` and
-  we replay missed events, then live-tail. This is the one piece the Platform would have given
-  us for free; it's ~a hundred lines.
+- An `events` table keyed by `(run_id, seq)` with a monotonic `seq` per run.
+- `publish(run_id, event)` appends the next `seq`.
+- The SSE endpoint **polls** `SELECT ... WHERE run_id=? AND seq > ? ORDER BY seq` on a short
+  interval (e.g. 250–500 ms), streaming out new rows; on reconnect the client sends
+  `Last-Event-ID`/`?from_seq=` and we replay from there, then keep tailing.
+- **Polling, not `LISTEN/NOTIFY`** — P0 proved NOTIFY doesn't work over the Supabase pooler.
+  Polling is pooler-safe, needs no Redis and no direct/IPv6 connection, and the added latency
+  is bounded by the poll interval. (If sub-100 ms latency ever matters, revisit with a direct
+  connection or Redis — not needed now.)
 
 ### 5.7 New run API (new `routes/runs.py`) — `/retrieve` stays as-is
 | Endpoint | Purpose |
