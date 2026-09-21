@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -440,6 +441,7 @@ def _render_template(template: str, state: dict) -> str:
             web_answer,
             state.get("node_configs", {}).get("WEB_SEARCH", {}).get("citation_instruction"),
         ),
+        "current_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     }
     scalars = lambda d: {k: v for k, v in d.items() if isinstance(v, (str, int, float, bool))}  # noqa: E731
     scratch = state.get("scratch", {}) or {}
@@ -513,6 +515,20 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             memories_block = state.get("memories_block")
             if memories_block:
                 system_prompt = f"{system_prompt}\n\n{memories_block}"
+            # Ground the model in the current date so it can judge whether its own
+            # knowledge is stale, and — when a web_search tool is bound — nudge it to
+            # search rather than answer time-sensitive questions from training data.
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            system_prompt = f"{system_prompt}\n\nThe current date is {today} (UTC)."
+            if "web_search" in (state.get("builtin_tools") or []):
+                system_prompt += (
+                    " When answering well depends on current, recent, or post-training "
+                    "information (news, prices, releases, events, or anything framed as "
+                    "'latest'/'current'/'today'), use the web_search tool and base your "
+                    "answer on the results, preferring the most recent sources. If web "
+                    "results conflict with your prior knowledge, trust the newer results "
+                    "and note when information may be outdated."
+                )
             model_override = None
         else:
             system_prompt = config.get("system_prompt", "You are a helpful assistant.")
