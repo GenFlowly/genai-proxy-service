@@ -22,6 +22,7 @@ DBOS not constructed) the module still imports, but agent_run is a stub and
 enqueue_run raises — routes/runs.py surfaces that as 503.
 """
 import logging
+import os
 
 import durable_runtime
 import run_events
@@ -43,6 +44,27 @@ logger = logging.getLogger(__name__)
 
 QUEUE_NAME = "agent_runs"
 _run_queue = None  # set by register_run_queue() after DBOS.launch()
+
+# In-graph HITL (interrupt/resume) config.
+_RESUME_TOPIC = "resume"
+# How long a run durably waits on POST /runs/{id}/resume before giving up.
+_RESUME_TIMEOUT_SEC = int(os.getenv("RUN_RESUME_TIMEOUT_SEC", "3600"))
+# Safety cap on interrupt→resume cycles per run (runaway guard).
+_MAX_RESUME_CYCLES = int(os.getenv("RUN_MAX_RESUME_CYCLES", "50"))
+
+
+async def _pending_interrupts(graph, cfg) -> list:
+    """Interrupt payloads the graph is currently paused on (empty if none)."""
+    try:
+        snap = await graph.aget_state(cfg)
+    except Exception:
+        logger.exception("could not read graph state for interrupt check")
+        return []
+    ints = list(getattr(snap, "interrupts", None) or [])
+    if not ints:
+        for t in getattr(snap, "tasks", []) or []:
+            ints.extend(getattr(t, "interrupts", None) or [])
+    return [getattr(i, "value", i) for i in ints]
 
 # Durable direct-LLM fallback (memory + one generation node), compiled once with
 # the checkpointer. Mirrors routes.retrieve._direct_graph for customers with no
@@ -117,22 +139,48 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
 
     usage: dict = {}
     error: dict = {}
-    async for payload in stream_events_dicts(
-        state,
-        graph=graph,
-        node_type_map=node_type_map,
-        node_name_map=node_name_map,
-        streaming_nodes=streaming_nodes,
-        recursion_limit=max_iterations,
-        structured_output=bool(req.response_schema),
-        builtin_tool_names=set(builtin_tools),
-        thread_id=run_id,
-    ):
-        await run_events.publish(run_id, payload)
-        if "usage" in payload:
-            usage = payload["usage"]
-        if "error" in payload:
-            error = payload
+    cfg = {"configurable": {"thread_id": run_id}}
+    graph_input = state  # dict on a fresh run; Command(resume=...) after an interrupt
+    resume_cycles = 0
+    while True:
+        async for payload in stream_events_dicts(
+            graph_input,
+            graph=graph,
+            node_type_map=node_type_map,
+            node_name_map=node_name_map,
+            streaming_nodes=streaming_nodes,
+            recursion_limit=max_iterations,
+            structured_output=bool(req.response_schema),
+            builtin_tool_names=set(builtin_tools),
+            thread_id=run_id,
+        ):
+            await run_events.publish(run_id, payload)
+            if "usage" in payload:
+                usage = payload["usage"]
+            if "error" in payload:
+                error = payload
+
+        if error:
+            break
+        # If the graph paused on interrupt() (a HUMAN_INPUT node), surface the
+        # request and durably wait for POST /runs/{id}/resume — survives
+        # crash/redeploy via DBOS.recv — then resume from the checkpoint.
+        pending = await _pending_interrupts(graph, cfg)
+        if not pending:
+            break
+        resume_cycles += 1
+        if resume_cycles > _MAX_RESUME_CYCLES:
+            error = {"error": "run exceeded the resume-cycle limit", "error_type": "runaway"}
+            break
+        await run_events.publish(run_id, {"awaiting_input": pending[0]})
+        from dbos import DBOS
+        from langgraph.types import Command
+
+        value = await DBOS.recv_async(topic=_RESUME_TOPIC, timeout_seconds=_RESUME_TIMEOUT_SEC)
+        if value is None:
+            error = {"error": "timed out waiting for input", "error_type": "resume_timeout"}
+            break
+        graph_input = Command(resume=value)
 
     # Authoritative final state from the checkpoint (post-resume-safe).
     final: dict = {}
