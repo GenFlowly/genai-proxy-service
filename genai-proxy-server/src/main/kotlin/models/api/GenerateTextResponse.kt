@@ -10,6 +10,19 @@ data class GenerateTextResponse(
     val model: String? = null,
     val conversationId: String?,
     val messageId: String?,
+    /**
+     * True while a durable run is still generating this response — the assistant
+     * message isn't persisted yet, so `text` is empty and token/cost are null.
+     * Surfaced on the last turn when the conversation has a pendingRunId so a
+     * reloading client renders the in-flight card and reattaches to the run's
+     * stream (by this deterministic messageId) instead of treating an empty
+     * response as "nothing generated". Always false for persisted responses.
+     */
+    val inFlight: Boolean = false,
+    /** For an in-flight placeholder: the durable run to reattach to for this
+     *  response. One per vendor, so a multi-vendor turn returns several. Null on
+     *  persisted responses. */
+    val runId: String? = null,
     val inputTokens: Int? = null,
     val outputTokens: Int? = null,
     val totalTokens: Int? = null,

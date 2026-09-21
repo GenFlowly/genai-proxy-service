@@ -471,6 +471,10 @@ class GenerationOrchestrator(
             val capturedThinkingSteps = mutableListOf<String>()
             var success = false
             var cancelled = false
+            // The durable run this generation added to the conversation's pending
+            // set (one entry per vendor), captured so the finally removes exactly
+            // this one — not the sibling vendors' still-in-flight runs.
+            var pendingRunEntry: com.genflowly.repository.PendingRun? = null
             try {
                 val resolvedMaxTokens = modelCatalogService.resolveMaxTokens(
                     vendor = config.aiVendor,
@@ -526,9 +530,14 @@ class GenerationOrchestrator(
                             graphId = agentId
                         )
                         if (startedRunId != null) {
-                            // Pointer for reload rediscovery ("assistant is mid-run"); best-effort.
-                            runCatching { conversationService.setPendingRunId(customerId, activeConversationId, startedRunId) }
-                                .onFailure { logger.warn("Failed to persist pendingRunId {} on conversation {}: {}", startedRunId, activeConversationId, it.message) }
+                            // Add this run to the conversation's pending set (one entry
+                            // per vendor) for reload rediscovery ("assistant is mid-run");
+                            // best-effort. Carries the deterministic responseMessageId +
+                            // vendor/model so a reload renders and reattaches this card.
+                            val entry = com.genflowly.repository.PendingRun(responseMessageId, startedRunId, config.aiVendor.name, config.model)
+                            pendingRunEntry = entry
+                            runCatching { conversationService.addPendingRun(customerId, activeConversationId, entry) }
+                                .onFailure { logger.warn("Failed to persist pending run {} on conversation {}: {}", startedRunId, activeConversationId, it.message) }
                             activeRunIds[responseMessageId] = startedRunId  // for durable cancel
                             runsClient.streamRun(startedRunId)
                         } else {
@@ -621,10 +630,11 @@ class GenerationOrchestrator(
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }
-                // Durable run finished — clear the reload-rediscovery pointer
-                // (no-op REMOVE when nothing was set / on the stateless path).
-                if (appConfig.durableRunsEnabled && agentic) {
-                    runCatching { conversationService.clearPendingRunId(customerId, activeConversationId) }
+                // Durable run finished — remove just this run from the pending set
+                // (the other vendors' in-flight runs stay reattachable). No-op when
+                // no durable run was started (stateless path / start failure).
+                pendingRunEntry?.let { entry ->
+                    runCatching { conversationService.removePendingRun(customerId, activeConversationId, entry) }
                 }
                 }
                 } catch (e: Exception) {
