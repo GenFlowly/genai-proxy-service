@@ -575,6 +575,13 @@ class GenerationOrchestrator(
                             )
                             emit("{\"t\":\"err\",\"v\":${chunk.message.toJsonStringValue()}}\n")
                         }
+                        is StreamChunk.AwaitingInput -> {
+                            // Durable run paused on an in-graph interrupt() — relay
+                            // the request so the client can prompt and reply via
+                            // the run's resume endpoint. chunk.json is a JSON object.
+                            logger.info("Generation {} awaiting input: {}", responseMessageId, chunk.json)
+                            emit("{\"t\":\"ai\",\"v\":${chunk.json}}\n")
+                        }
                     }
                 }
                 success = true

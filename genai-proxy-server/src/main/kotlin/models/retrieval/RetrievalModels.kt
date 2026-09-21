@@ -58,6 +58,14 @@ sealed class StreamChunk {
      * context_length, model_not_found, provider_error).
      */
     data class Error(val message: String, val errorType: String? = null) : StreamChunk()
+
+    /**
+     * A durable run paused on an in-graph interrupt() and is awaiting human /
+     * client input (DURABLE_AGENTS_DBOS_PLAN §5.4). Raw JSON of the interrupt
+     * payload: {"type","node","prompt",...}. Deliver the response via the runs
+     * client's resume(). Only emitted on the durable /runs reattach stream.
+     */
+    data class AwaitingInput(val json: String) : StreamChunk()
 }
 
 /**
@@ -68,8 +76,9 @@ sealed class StreamChunk {
  * Shared by the streaming `/retrieve` reader and the durable `/runs` reattach
  * stream: both transports emit the identical event vocabulary
  * (content / thinking_step / thinking / thinking_duration_ms / web_sources /
- * generated_artifacts / tool_calls / error / usage). Key precedence and the
- * null/empty guards mirror the original inline reader exactly.
+ * generated_artifacts / tool_calls / awaiting_input / error / usage). Key
+ * precedence and the null/empty guards mirror the original inline reader exactly.
+ * (`awaiting_input` is durable-runs-only — the /retrieve stream never emits it.)
  */
 fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
     jsonObj.containsKey("content") -> {
@@ -97,6 +106,10 @@ fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
     jsonObj.containsKey("tool_calls") -> {
         val toolCalls = jsonObj["tool_calls"]
         if (toolCalls != null && toolCalls !is JsonNull) StreamChunk.ToolCalls(toolCalls.toString()) else null
+    }
+    jsonObj.containsKey("awaiting_input") -> {
+        val payload = jsonObj["awaiting_input"]
+        if (payload != null && payload !is JsonNull) StreamChunk.AwaitingInput(payload.toString()) else null
     }
     jsonObj.containsKey("error") -> {
         val message = jsonObj["error"]?.jsonPrimitive?.content

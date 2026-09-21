@@ -50,6 +50,19 @@ class ParseRetrievalEventTest {
     }
 
     @Test
+    fun `awaiting_input keeps the raw payload json`() {
+        val chunk = parse("""{"awaiting_input":{"type":"human_input","node":"HITL","prompt":"Approve?"}}""")
+        assertTrue(chunk is StreamChunk.AwaitingInput)
+        val payload = (chunk as StreamChunk.AwaitingInput).json
+        assertEquals("HITL", json.parseToJsonElement(payload).jsonObject["node"]!!.toString().trim('"'))
+    }
+
+    @Test
+    fun `null awaiting_input is skipped`() {
+        assertNull(parse("""{"awaiting_input":null}"""))
+    }
+
+    @Test
     fun `tool_calls keeps the raw array json`() {
         val chunk = parse("""{"tool_calls":[{"id":"t1","name":"computer","args":{"action":"screenshot"}}]}""")
         assertTrue(chunk is StreamChunk.ToolCalls)
