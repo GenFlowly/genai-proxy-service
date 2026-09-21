@@ -29,6 +29,7 @@ import com.genflowly.models.retrieval.PayloadToolResult
 import com.genflowly.models.retrieval.RetrievalResult
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.VendorModelMetadata
+import com.genflowly.models.retrieval.parseRetrievalEvent
 import com.genflowly.models.aiVendorFromProviderString
 import com.genflowly.models.toProviderString
 import mu.KLogger
@@ -394,64 +395,7 @@ class RetrievalServerClient(
                     if (data == "[DONE]") break
                     try {
                         val jsonObj = json.parseToJsonElement(data).jsonObject
-                        when {
-                            jsonObj.containsKey("content") -> {
-                                val content = jsonObj["content"]?.jsonPrimitive?.content
-                                if (!content.isNullOrEmpty()) send(StreamChunk.Content(content))
-                            }
-                            jsonObj.containsKey("thinking_step") -> {
-                                jsonObj["thinking_step"]?.let { send(StreamChunk.ThinkingStep(it.toString())) }
-                            }
-                            jsonObj.containsKey("thinking") -> {
-                                val thinking = jsonObj["thinking"]?.jsonPrimitive?.content
-                                if (!thinking.isNullOrEmpty()) send(StreamChunk.Thinking(thinking))
-                            }
-                            jsonObj.containsKey("thinking_duration_ms") -> {
-                                val millis = jsonObj["thinking_duration_ms"]?.jsonPrimitive?.content?.toLongOrNull()
-                                if (millis != null) send(StreamChunk.ThinkingDuration(millis))
-                            }
-                            jsonObj.containsKey("web_sources") -> {
-                                val webSources = jsonObj["web_sources"]
-                                if (webSources != null && webSources !is kotlinx.serialization.json.JsonNull) {
-                                    send(StreamChunk.WebSources(webSources.toString()))
-                                }
-                            }
-                            jsonObj.containsKey("generated_artifacts") -> {
-                                val artifacts = jsonObj["generated_artifacts"]
-                                if (artifacts != null && artifacts !is kotlinx.serialization.json.JsonNull) {
-                                    send(StreamChunk.GeneratedArtifacts(artifacts.toString()))
-                                }
-                            }
-                            jsonObj.containsKey("tool_calls") -> {
-                                val toolCalls = jsonObj["tool_calls"]
-                                if (toolCalls != null && toolCalls !is kotlinx.serialization.json.JsonNull) {
-                                    send(StreamChunk.ToolCalls(toolCalls.toString()))
-                                }
-                            }
-                            jsonObj.containsKey("error") -> {
-                                val message = jsonObj["error"]?.jsonPrimitive?.content
-                                if (!message.isNullOrBlank()) {
-                                    send(
-                                        StreamChunk.Error(
-                                            message = message,
-                                            errorType = jsonObj["error_type"]?.jsonPrimitive?.content
-                                        )
-                                    )
-                                }
-                            }
-                            jsonObj.containsKey("usage") -> {
-                                val usageObj = jsonObj["usage"]!!.jsonObject
-                                send(
-                                    StreamChunk.Usage(
-                                        inputTokens = usageObj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                                        outputTokens = usageObj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                                        totalTokens = usageObj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                                        tokensReadFromCache = usageObj["cache_read_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                                        tokensWrittenToCache = usageObj["cache_creation_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
-                                    )
-                                )
-                            }
-                        }
+                        parseRetrievalEvent(jsonObj)?.let { send(it) }
                     } catch (_: Exception) {
                         // skip malformed SSE chunk
                     }
