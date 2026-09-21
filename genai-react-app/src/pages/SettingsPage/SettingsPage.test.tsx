@@ -92,7 +92,7 @@ describe('SettingsPage', () => {
             expect(screen.getByTestId('breadcrumb-Settings')).toBeInTheDocument();
         });
 
-        test('tapping a menu item opens that section as a full page without the sidebar', () => {
+        test('tapping a parent section expands its submenu in place, then a child opens that section full page', () => {
             render(
                 <MemoryRouter initialEntries={['/settings']}>
                     <Routes>
@@ -101,9 +101,15 @@ describe('SettingsPage', () => {
                 </MemoryRouter>
             );
 
+            // Tapping the parent expands its submenu without leaving the menu page:
+            // the child links appear and no section content is shown yet
             fireEvent.click(screen.getByText('AI Settings'));
+            expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
+            expect(screen.queryByTestId('ai-settings')).not.toBeInTheDocument();
+            expect(screen.getByText('Default Actions')).toBeInTheDocument();
 
-            // Section renders full page: no sidebar menu items around it
+            // Tapping a child opens that section full page: no sidebar menu items around it
+            fireEvent.click(screen.getByText('LLM API Keys'));
             expect(screen.getByTestId('ai-settings')).toBeInTheDocument();
             expect(screen.queryByText('Default Actions')).not.toBeInTheDocument();
         });
