@@ -129,3 +129,34 @@ class RetrieveRequest(BaseModel):
     # validates access (own-or-System) before sending; ownership is re-checked
     # here as defense in depth. None → default resolution.
     graph_id: Optional[str] = None
+
+
+class RunRequest(BaseModel):
+    """Start a durable agent run (POST /runs). Same shape as RetrieveRequest
+    minus `llm_credentials` (resolved server-side from DynamoDB by customer_id,
+    never sent or checkpointed — see DURABLE_AGENTS_DBOS_PLAN §5.5) and `stream`
+    (durable runs are always streamed via the reattachable /runs/{id}/stream).
+    Fields map 1:1 onto RetrievalState via the same builder as /retrieve."""
+    customer_id: str
+    client: str
+    data_type: str
+    request_source: str = "conversation"
+    raw_data: RawData
+    llm_provider: str = "openai"
+    llm_model: Optional[str] = None
+    llm_max_tokens: int = 4096
+    conversation_history: list[ConversationMessage] = []
+    model_type: Optional[str] = None
+    model_name: Optional[str] = None
+    system_prompt: Optional[str] = None
+    agentic: bool = True
+    tools: list[ToolDefinition] = []
+    tool_choice: Optional[str] = None
+    tool_results: list[ToolResult] = []
+    response_schema: Optional[dict] = None
+    memory_enabled: bool = False
+    graph_id: Optional[str] = None
+    # Optional client-supplied run id for idempotency / rediscovery. When set it
+    # becomes the DBOS workflow id (a duplicate re-attaches to the same run
+    # instead of starting a new one). Server-generated when omitted.
+    run_id: Optional[str] = None

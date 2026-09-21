@@ -53,6 +53,12 @@ def get_checkpointer():
     return _checkpointer
 
 
+def get_pool():
+    """The shared async connection pool (also used by run_events for the events
+    table), or None if durable runs aren't ready."""
+    return _pool
+
+
 def _construct_dbos() -> None:
     global _dbos_constructed
     if _dbos_constructed or not config_present():
@@ -106,7 +112,17 @@ async def startup() -> None:
         _checkpointer = AsyncPostgresSaver(_pool)
         await _checkpointer.setup()
 
+        # Reattach events table (poll-based stream channel) shares this pool.
+        import run_events
+        await run_events.setup(_pool)
+
         DBOS.launch()  # runs migrations + recovers any interrupted workflows
+
+        # Register the agent-runs queue now that the system DB is up (queues
+        # can't be registered before launch). Import here to avoid a heavy
+        # import at module load.
+        import runs
+        await runs.register_run_queue()
 
         _ready = True
         logger.info("Durable runs ENABLED (checkpointer ready, DBOS launched)")
