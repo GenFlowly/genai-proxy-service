@@ -26,11 +26,15 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL")
 DBOS_SYSTEM_SCHEMA = os.getenv("DBOS_SYSTEM_SCHEMA", "dbos")
 _CHECKPOINTER_POOL_MAX = int(os.getenv("CHECKPOINTER_POOL_MAX", "5"))
+# Run-events TTL (P3): prune the reattach channel so it doesn't grow unbounded.
+RUN_EVENTS_TTL_SEC = int(os.getenv("RUN_EVENTS_TTL_SEC", str(7 * 24 * 3600)))
+RUN_EVENTS_CLEANUP_INTERVAL_SEC = int(os.getenv("RUN_EVENTS_CLEANUP_INTERVAL_SEC", "3600"))
 
 _dbos_constructed = False  # DBOS() instance exists -> workflows may register/decorate
 _ready = False             # checkpointer setup + DBOS.launch() succeeded -> runs usable
 _checkpointer = None
 _pool = None
+_cleanup_task = None       # background run_events TTL pruner
 
 
 def config_present() -> bool:
@@ -124,6 +128,10 @@ async def startup() -> None:
         import runs
         await runs.register_run_queue()
 
+        import asyncio
+        global _cleanup_task
+        _cleanup_task = asyncio.create_task(_run_events_ttl_loop())
+
         _ready = True
         logger.info("Durable runs ENABLED (checkpointer ready, DBOS launched)")
     except Exception:
@@ -131,8 +139,29 @@ async def startup() -> None:
         _ready = False
 
 
+async def _run_events_ttl_loop() -> None:
+    """Periodically prune run_events past its TTL. Idempotent DELETE, so it's
+    safe for every process to run its own loop."""
+    import asyncio
+
+    import run_events
+    while True:
+        try:
+            await asyncio.sleep(RUN_EVENTS_CLEANUP_INTERVAL_SEC)
+            deleted = await run_events.delete_older_than(RUN_EVENTS_TTL_SEC)
+            if deleted:
+                logger.info("run_events TTL prune: deleted %d row(s) older than %ds", deleted, RUN_EVENTS_TTL_SEC)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("run_events TTL prune failed")
+
+
 async def shutdown() -> None:
-    global _pool
+    global _pool, _cleanup_task
+    if _cleanup_task is not None:
+        _cleanup_task.cancel()
+        _cleanup_task = None
     try:
         if _dbos_constructed:
             from dbos import DBOS
