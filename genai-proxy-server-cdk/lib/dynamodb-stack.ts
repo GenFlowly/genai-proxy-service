@@ -158,6 +158,20 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        // Deprecated: the customer-BYO-Supabase-as-vector-DB feature is fully
+        // removed from every service. This table is intentionally retained in
+        // the stack for now — removing it requires a two-phase CloudFormation
+        // migration (FlyioIamStack imports its ARN via a cross-stack export, so
+        // the export can't be deleted in the same deploy that drops the table).
+        // It is unused and PAY_PER_REQUEST, so it costs nothing while idle.
+        const customerSupabaseConfigTableProps: CreateTableProps = {
+            tableName: 'CustomerSupabaseConfig',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING
+            },
+        };
+
         const instructionsTableProps: CreateTableProps = {
             tableName: 'Instructions',
             partitionKey: {
@@ -469,6 +483,7 @@ export class DynamoDBStack extends cdk.Stack {
         const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
         const customerPreferencesTable = createDefaultDynamoDbTable(this, customerPreferencesTableProps);
         const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
+        const customerSupabaseConfigTable = createDefaultDynamoDbTable(this, customerSupabaseConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
         const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
         const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
@@ -487,7 +502,7 @@ export class DynamoDBStack extends cdk.Stack {
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
-            customerVectorDBConfigTable, instructionsTable,
+            customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
             customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
