@@ -5,6 +5,7 @@ import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import com.genflowly.models.retrieval.StreamChunk
+import com.genflowly.models.retrieval.toNdjsonFrame
 import com.genflowly.models.retrieval.parseGeneratedArtifacts
 import com.genflowly.models.retrieval.toConversationMessage
 import com.genflowly.models.retrieval.toImageRefs
@@ -64,6 +65,9 @@ class GenerationOrchestrator(
      */
     private data class ActiveGeneration(val customerId: String, val job: kotlinx.coroutines.Job)
     private val activeGenerations = java.util.concurrent.ConcurrentHashMap<String, ActiveGeneration>()
+    // responseMessageId -> durable run_id, for runs started on the /runs path. Lets
+    // cancelGeneration also stop the background run on the retrieval-server.
+    private val activeRunIds = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /**
      * True cancel for a streamed generation: stops the upstream LLM work (the
@@ -72,11 +76,17 @@ class GenerationOrchestrator(
      * is persisted. Returns false when nothing is running under that id for
      * this customer (already finished, or not the caller's generation).
      */
-    fun cancelGeneration(customerId: String, responseMessageId: String): Boolean {
+    suspend fun cancelGeneration(customerId: String, responseMessageId: String): Boolean {
         val active = activeGenerations[responseMessageId] ?: return false
         if (active.customerId != customerId) return false
         logger.info("Cancelling generation {} for customer {}", responseMessageId, customerId)
         active.job.cancel(kotlinx.coroutines.CancellationException("Cancelled by user"))
+        // Durable path: stop the background run on the retrieval-server too — the
+        // job cancel only stops the proxy's relay, not the durable workflow.
+        activeRunIds[responseMessageId]?.let { runId ->
+            runCatching { runsClient.cancelRun(runId) }
+                .onFailure { logger.warn("Failed to cancel durable run {}: {}", runId, it.message) }
+        }
         return true
     }
 
@@ -519,6 +529,7 @@ class GenerationOrchestrator(
                             // Pointer for reload rediscovery ("assistant is mid-run"); best-effort.
                             runCatching { conversationService.setPendingRunId(customerId, activeConversationId, startedRunId) }
                                 .onFailure { logger.warn("Failed to persist pendingRunId {} on conversation {}: {}", startedRunId, activeConversationId, it.message) }
+                            activeRunIds[responseMessageId] = startedRunId  // for durable cancel
                             runsClient.streamRun(startedRunId)
                         } else {
                             logger.warn("Durable run start failed for conversation {} — falling back to stateless stream", activeConversationId)
@@ -528,61 +539,33 @@ class GenerationOrchestrator(
                         statelessStream()
                     }
                 generationFlow.collect { chunk ->
+                    // Capture for persistence; the client frame is produced by the
+                    // shared StreamChunk.toNdjsonFrame() so the live and reattach
+                    // streams emit an identical wire protocol.
                     when (chunk) {
-                        is StreamChunk.Content -> {
-                            sb.append(chunk.text)
-                            emit("{\"t\":\"c\",\"v\":${chunk.text.toJsonStringValue()}}\n")
-                        }
-                        is StreamChunk.Thinking -> {
-                            emit("{\"t\":\"k\",\"v\":${chunk.text.toJsonStringValue()}}\n")
-                        }
-                        is StreamChunk.ThinkingStep -> {
-                            capturedThinkingSteps.add(chunk.json)
-                            // chunk.json is already a JSON object — embed as-is
-                            emit("{\"t\":\"ks\",\"v\":${chunk.json}}\n")
-                        }
-                        is StreamChunk.ThinkingDuration -> {
-                            capturedThinkingDurationMs = chunk.millis
-                            emit("{\"t\":\"kd\",\"v\":${chunk.millis}}\n")
-                        }
-                        is StreamChunk.ToolCalls -> {
-                            capturedToolCallsJson = chunk.json
-                            // chunk.json is already a JSON array — embed as-is
-                            emit("{\"t\":\"tc\",\"v\":${chunk.json}}\n")
-                        }
-                        is StreamChunk.WebSources -> {
-                            capturedWebSourcesJson = chunk.json
-                            // chunk.json is already a JSON array — embed as-is
-                            emit("{\"t\":\"ws\",\"v\":${chunk.json}}\n")
-                        }
-                        is StreamChunk.GeneratedArtifacts -> {
-                            // Multiple TOOL_EXECUTOR completions per turn are
-                            // possible in principle; keep the accumulated set.
+                        is StreamChunk.Content -> sb.append(chunk.text)
+                        is StreamChunk.ThinkingStep -> capturedThinkingSteps.add(chunk.json)
+                        is StreamChunk.ThinkingDuration -> capturedThinkingDurationMs = chunk.millis
+                        is StreamChunk.ToolCalls -> capturedToolCallsJson = chunk.json
+                        is StreamChunk.WebSources -> capturedWebSourcesJson = chunk.json
+                        is StreamChunk.GeneratedArtifacts ->
+                            // Multiple TOOL_EXECUTOR completions per turn are possible; accumulate.
                             capturedGeneratedArtifactsJson = mergeJsonArrays(capturedGeneratedArtifactsJson, chunk.json)
-                            // chunk.json is already a JSON array — embed as-is
-                            emit("{\"t\":\"ga\",\"v\":${chunk.json}}\n")
-                        }
                         is StreamChunk.Usage -> capturedUsage = chunk
                         is StreamChunk.Error -> {
-                            // Vendor failure surfaced mid-stream (quota, key
-                            // rejected, ...) — relay the concise reason so the
-                            // client can attach it to this vendor's response
-                            // card. Any partial text is kept and persisted.
+                            // Vendor failure surfaced mid-stream — the concise reason is
+                            // relayed (below) and any partial text is kept and persisted.
                             capturedErrorMessage = chunk.message
                             logger.warn(
                                 "Generation {} failed mid-stream ({}): {}",
                                 responseMessageId, chunk.errorType ?: "provider_error", chunk.message
                             )
-                            emit("{\"t\":\"err\",\"v\":${chunk.message.toJsonStringValue()}}\n")
                         }
-                        is StreamChunk.AwaitingInput -> {
-                            // Durable run paused on an in-graph interrupt() — relay
-                            // the request so the client can prompt and reply via
-                            // the run's resume endpoint. chunk.json is a JSON object.
+                        is StreamChunk.AwaitingInput ->
                             logger.info("Generation {} awaiting input: {}", responseMessageId, chunk.json)
-                            emit("{\"t\":\"ai\",\"v\":${chunk.json}}\n")
-                        }
+                        is StreamChunk.Thinking -> {}
                     }
+                    chunk.toNdjsonFrame()?.let { emit(it) }
                 }
                 success = true
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -654,7 +637,10 @@ class GenerationOrchestrator(
             }
         }
         activeGenerations[responseMessageId] = ActiveGeneration(customerId, generationJob)
-        generationJob.invokeOnCompletion { activeGenerations.remove(responseMessageId) }
+        generationJob.invokeOnCompletion {
+            activeGenerations.remove(responseMessageId)
+            activeRunIds.remove(responseMessageId)
+        }
         val flow = chunkChannel.consumeAsFlow()
 
         return StreamExecutionResult(

@@ -28,6 +28,7 @@ import com.genflowly.activity.customer.registerStoreApiKeyRoutes
 import com.genflowly.activity.customer.registerStoreVectorDBConfigRoutes
 import com.genflowly.activity.customer.registerToolCredentialsRoutes
 import com.genflowly.activity.generation.registerCancelGenerationRoute
+import com.genflowly.activity.generation.registerRunRoutes
 import com.genflowly.activity.generation.registerGenerateTextRoutes
 import com.genflowly.activity.generation.registerGenerateTextStreamRoutes
 import com.genflowly.activity.generation.registerGetAIUsageActivityRoutes
@@ -78,6 +79,9 @@ object Routes {
     const val GENERATE_TEXT = "$API_V1/generate-text"
     const val GENERATE_TEXT_STREAM = "$API_V1/generate-text-stream"
     const val CANCEL_GENERATION = "$API_V1/generations/cancel"
+    // Durable-run reattach (reload recovery) + resume (human-in-the-loop reply).
+    const val REATTACH_RUN = "$API_V1/runs/{runId}/stream"
+    const val RESUME_RUN = "$API_V1/runs/{runId}/resume"
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val STORE_VENDOR_CONFIG = "$API_V1/store-vendor-config"
     const val EMBEDDING_KEYS = "$API_V1/embedding-keys"
@@ -162,6 +166,7 @@ object Routes {
 
 fun Application.configureRouting(
     generationOrchestrator: GenerationOrchestrator,
+    runsClient: com.genflowly.providers.RunsClient,
     customerProfileService: CustomerProfileService,
     customerCredentialsService: CustomerCredentialsService,
     instructionService: InstructionService,
@@ -211,6 +216,7 @@ fun Application.configureRouting(
         registerGenerateTextRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
         registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
         registerCancelGenerationRoute(generationOrchestrator, customerProfileService)
+        registerRunRoutes(runsClient, customerProfileService, conversationService)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
         registerEmbeddingKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)

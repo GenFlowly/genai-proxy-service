@@ -403,6 +403,7 @@ fun Application.module() {
     monitor.subscribe(ApplicationStopping) { appScope.shutdown() }
 
     val generationOrchestrator = get<GenerationOrchestrator>()
+    val runsClient = get<com.genflowly.providers.RunsClient>()
     val customerCredentialsService = get<CustomerCredentialsService>()
     val instructionService = get<InstructionService>()
     val customerProfileService = get<CustomerProfileService>()
@@ -436,5 +437,5 @@ fun Application.module() {
     val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 
     val vendorAllowlistService = get<com.genflowly.service.VendorAllowlistService>()
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, appConfig)
+    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, appConfig)
 }

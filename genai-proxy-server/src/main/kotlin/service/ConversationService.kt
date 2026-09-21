@@ -48,6 +48,19 @@ class ConversationService(
         conversationRepository.getPendingRunId(customerId, conversationId)
 
     /**
+     * The conversation's pending run id IF [callerCustomerId] may access it (owner
+     * or share recipient); throws ConversationAccessDeniedException otherwise. Used
+     * to authorize run reattach/resume: you may only touch a run that is the
+     * pending run of a conversation you can access.
+     */
+    suspend fun pendingRunIdIfAccessible(conversationId: String, callerCustomerId: String): String? {
+        getConversationRole(conversationId, callerCustomerId)
+            ?: throw ConversationAccessDeniedException("Conversation not found or access denied")
+        val owner = conversationRepository.getConversationById(conversationId) ?: return null
+        return conversationRepository.getPendingRunId(owner.customerId, conversationId)
+    }
+
+    /**
      * Returns the effective role [callerCustomerId] has on [conversationId]:
      * [ShareRole.OWNER] if they own it, otherwise the role from a direct share,
      * otherwise the PUBLIC role if one exists, otherwise null (no access).
@@ -161,7 +174,9 @@ class ConversationService(
                 )
             }
 
-        return GetConversationResponse(pairs, title, role, vendorTotals)
+        // Surface an in-flight durable run so a reloading client can reattach.
+        val pendingRunId = conversationRepository.getPendingRunId(owner.customerId, conversationId)
+        return GetConversationResponse(pairs, title, role, vendorTotals, pendingRunId)
     }
 
     /**
