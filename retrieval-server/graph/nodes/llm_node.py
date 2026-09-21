@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 from typing import Any
@@ -68,15 +69,59 @@ async def _invoke_llm(llm, structured_llm, messages):
     return response, None, None
 
 
+# Retry/backoff policy for the durable LLM step (P3). Retries transient vendor
+# failures with exponential backoff; fails fast on non-retriable ones.
+_LLM_STEP_MAX_ATTEMPTS = int(os.getenv("LLM_STEP_MAX_ATTEMPTS", "3"))
+_LLM_STEP_INTERVAL_SEC = float(os.getenv("LLM_STEP_INTERVAL_SEC", "1.0"))
+_LLM_STEP_BACKOFF_RATE = float(os.getenv("LLM_STEP_BACKOFF_RATE", "2.0"))
+
+# Fail-fast markers: retrying these wastes time (the proxy has no failover mid-run).
+_LLM_NONRETRIABLE_MARKERS = (
+    "authentication", "unauthorized", "invalid api key", "api key not valid",
+    "invalid_api_key", "401", "403", "permission denied",
+    "context length", "context_length", "maximum context", "prompt is too long", "input is too long",
+    "model_not_found", "does not exist", "not found", "404",
+    "insufficient balance", "exceeded_current_quota", "billing", "suspended",
+)
+# Transient markers: brief spikes worth a backed-off retry.
+_LLM_TRANSIENT_MARKERS = (
+    "rate limit", "ratelimit", "429", "too many requests", "resource_exhausted",
+    "timeout", "timed out", "connection", "econnreset", "connection reset",
+    "temporarily unavailable", "overloaded", "unavailable", "503", "502", "500 internal",
+)
+
+
+def _is_transient_llm_error(e: BaseException) -> bool:
+    """should_retry predicate for the durable LLM step. Non-retriable markers win
+    (checked first) so a hard quota/auth/context error never burns retries;
+    unknown errors are treated as non-transient (conservative)."""
+    low = f"{type(e).__name__}: {e}".lower()
+    if any(m in low for m in _LLM_NONRETRIABLE_MARKERS):
+        return False
+    transient = any(m in low for m in _LLM_TRANSIENT_MARKERS)
+    if transient:
+        logger.warning("Durable LLM step: transient error, will retry — %s", str(e)[:200])
+    return transient
+
+
 # Exactly-once LLM step for the durable /runs path (P2). Registered only when DBOS
 # is constructed; on the stateless /retrieve path it's never used. Credentials are
 # resolved from DynamoDB INSIDE the step (never a step input/output), so no secret
 # is persisted to DBOS's system tables (DURABLE_AGENTS_DBOS_PLAN §5.5). On a
 # crash/redeploy the memoized response replays instead of re-billing the vendor.
+# retries_allowed + should_retry add bounded backoff on transient vendor failures
+# (P3); a successful (possibly retried) call is still memoized exactly once.
 if durable_runtime.dbos_constructed():
     from dbos import DBOS
 
-    @DBOS.step(name="llm_invoke")
+    @DBOS.step(
+        name="llm_invoke",
+        retries_allowed=True,
+        max_attempts=_LLM_STEP_MAX_ATTEMPTS,
+        interval_seconds=_LLM_STEP_INTERVAL_SEC,
+        backoff_rate=_LLM_STEP_BACKOFF_RATE,
+        should_retry=_is_transient_llm_error,
+    )
     async def _durable_llm_invoke(
         provider, customer_id, effective_model, max_tokens, llm_betas,
         tools_bound, tool_specs, tool_choice, response_schema, messages,
