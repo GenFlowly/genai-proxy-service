@@ -53,3 +53,10 @@ httpx
 # Voice sessions: upstream WebSocket client for OpenAI Realtime
 # (Gemini Live uses google-genai's built-in live support)
 websockets
+
+# Model Context Protocol client, for the `mcp` tool provider (graph_tools/
+# providers/mcp_tool.py). The SDK directly rather than langchain-mcp-adapters:
+# we have our own GraphTool contract, so the adapter would only add a layer,
+# and it pins mcp<2.0.0 while the SDK is on 2.x (where the streamable-http
+# entry point was renamed).
+mcp>=2.0.0

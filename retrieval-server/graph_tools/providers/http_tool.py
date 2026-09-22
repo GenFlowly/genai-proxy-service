@@ -77,7 +77,7 @@ def _validate_parameters(parameters) -> dict:
     return parameters
 
 
-def _as_dict(value, field: str) -> dict:
+def as_dict(value, field: str) -> dict:
     """Records arrive with JSON-encoded attributes from DynamoDB, or already
     decoded from an API payload. Accept both."""
     if value is None or value == "":
@@ -131,10 +131,10 @@ class HttpTool(GraphTool):
 
         self.name = name
         self.description = description
-        self.parameters = _validate_parameters(_as_dict(record.get("parameters"), "parameters"))
+        self.parameters = _validate_parameters(as_dict(record.get("parameters"), "parameters"))
         self.credential_ref = (record.get("credentialRef") or "").strip() or None
 
-        request = _as_dict(record.get("request"), "request")
+        request = as_dict(record.get("request"), "request")
         self.method = (request.get("method") or "GET").upper()
         if self.method not in safe_client.ALLOWED_METHODS:
             raise ToolDefinitionError(
@@ -150,7 +150,7 @@ class HttpTool(GraphTool):
                 f"Tool '{name}' has bodyType '{self.body_type}', expected json or form"
             )
 
-        transform = _as_dict(record.get("responseTransform"), "responseTransform")
+        transform = as_dict(record.get("responseTransform"), "responseTransform")
         self.response_mode = (transform.get("mode") or "text").lower()
         if self.response_mode not in ("text", "json", "json_path"):
             raise ToolDefinitionError(

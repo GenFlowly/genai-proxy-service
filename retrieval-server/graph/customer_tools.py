@@ -21,7 +21,7 @@ from typing import Optional
 import boto3
 from boto3.dynamodb.conditions import Key
 
-from graph_tools.providers import HttpTool, ToolDefinitionError
+from graph_tools.providers import HttpTool, ToolDefinitionError, mcp_tools_from_record
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +34,19 @@ _cache: dict[str, tuple[float, list[dict]]] = {}
 
 _dynamodb = None
 
-# provider value -> the class that interprets a record. The seam: an "mcp"
-# provider is added here and nothing else in the graph changes.
-_PROVIDERS = {"http": HttpTool}
+def _http_tools(record: dict) -> dict:
+    """The http provider: one record is exactly one tool."""
+    return {record["name"]: HttpTool(record)}
+
+
+# provider value -> a function turning one record into {model-facing name: tool}.
+# One record may yield SEVERAL tools: an MCP server is a single connection that
+# exposes many. The seam is this dict; nothing else in the graph changes when a
+# provider is added.
+_PROVIDERS = {
+    "http": _http_tools,
+    "mcp": mcp_tools_from_record,
+}
 
 
 def _get_dynamodb():
@@ -82,43 +92,62 @@ def records_for(customer_id: str) -> list[dict]:
         return cached[1] if cached else []
 
 
-def build_tool(record: dict) -> Optional[object]:
-    """Interpret one record, or None when it is unusable.
+def build_tools(record: dict) -> dict[str, object]:
+    """Interpret one record into {model-facing name: tool}, or {} if unusable.
 
     A malformed record is dropped with a warning rather than raised: one bad
     tool must not take down a customer's whole agent.
     """
+    if not record.get("name"):
+        logger.warning("Tool record without a name — dropped")
+        return {}
     provider = (record.get("provider") or "http").lower()
-    cls = _PROVIDERS.get(provider)
-    if cls is None:
+    builder = _PROVIDERS.get(provider)
+    if builder is None:
         logger.warning(
             "Tool '%s' uses unknown provider '%s' — dropped",
             record.get("name"), provider,
         )
-        return None
+        return {}
     try:
-        return cls(record)
+        return builder(record)
     except ToolDefinitionError as e:
         logger.warning("Tool '%s' is not a valid definition — dropped (%s)",
                        record.get("name"), e)
-        return None
+        return {}
     except Exception:
         logger.exception("Tool '%s' could not be built — dropped", record.get("name"))
-        return None
+        return {}
+
+
+def build_tool(record: dict) -> Optional[object]:
+    """One record's single tool, for providers that yield exactly one.
+    Convenience over build_tools; returns None when the record is unusable."""
+    built = build_tools(record)
+    return built.get(record.get("name")) or (next(iter(built.values()), None))
 
 
 def tools_for_customer(customer_id: str, names: set[str]) -> dict[str, object]:
-    """{name: tool} for the requested names that this customer actually has."""
+    """{name: tool} for the requested names that this customer actually has.
+
+    A record is only interpreted when it can contribute a requested name, so an
+    unrelated MCP server is never connected to just because another tool ran.
+    """
     if not customer_id or not names:
         return {}
     built: dict[str, object] = {}
     for record in records_for(customer_id):
-        name = record.get("name")
-        if name not in names or name in built:
+        record_name = record.get("name") or ""
+        # An http record owns exactly its own name; an mcp record owns the
+        # "<record>_<tool>" namespace beneath it.
+        relevant = record_name in names or any(
+            n.startswith(f"{record_name}_") for n in names
+        )
+        if not relevant:
             continue
-        tool = build_tool(record)
-        if tool is not None:
-            built[name] = tool
+        for name, tool in build_tools(record).items():
+            if name in names and name not in built:
+                built[name] = tool
     return built
 
 
