@@ -47,6 +47,8 @@ class CustomerToolsRepository(
                 DynamoDBConstants.VERSION_KEY to AttributeValue.builder().n(tool.version.toString()).build(),
                 DynamoDBConstants.TOOL_ORIGIN_KEY to AttributeValue.builder().s(tool.origin).build(),
                 DynamoDBConstants.TOOL_ORIGIN_REF_KEY to AttributeValue.builder().s(tool.originRef).build(),
+                DynamoDBConstants.TOOL_DISCOVERED_TOOLS_KEY to
+                    AttributeValue.builder().s(tool.discoveredTools).build(),
                 DynamoDBConstants.TOOL_LAST_DRY_RUN_AT_KEY to
                     AttributeValue.builder().s(tool.lastDryRunAt).build(),
                 // createdAt is preserved by the caller across an overwrite; only
@@ -123,6 +125,7 @@ class CustomerToolsRepository(
             version = item[DynamoDBConstants.VERSION_KEY]?.n()?.toIntOrNull() ?: 1,
             origin = item[DynamoDBConstants.TOOL_ORIGIN_KEY]?.s() ?: "manual",
             originRef = item[DynamoDBConstants.TOOL_ORIGIN_REF_KEY]?.s() ?: "",
+            discoveredTools = item[DynamoDBConstants.TOOL_DISCOVERED_TOOLS_KEY]?.s() ?: "",
             lastDryRunAt = item[DynamoDBConstants.TOOL_LAST_DRY_RUN_AT_KEY]?.s() ?: "",
             createdAt = item["createdAt"]?.s(),
             updatedAt = item["updatedAt"]?.s(),

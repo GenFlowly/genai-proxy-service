@@ -140,7 +140,9 @@ class CustomerToolsValidationTest {
 
     @Test
     fun `provider status and origin are closed sets`() {
-        rejects(request(provider = "mcp"), "provider")
+        // "mcp" is supported now and has its own shape, so it is validated in
+        // CustomerToolsMcpValidationTest rather than rejected here.
+        rejects(request(provider = "grpc"), "provider")
         rejects(request(status = "enabled"), "status")
         rejects(request(origin = "imported"), "origin")
         CustomerToolValidator.validate(request(status = "disabled"))

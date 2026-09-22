@@ -7,7 +7,7 @@ import styles from './SettingsSidebar.module.scss'
 
 import { useNavigate, useLocation } from 'react-router-dom'
 
-export type SettingsTab = 'profile' | 'ai' | 'actions' | 'developer'
+export type SettingsTab = 'profile' | 'ai' | 'actions' | 'tools' | 'developer'
 
 interface SettingsNavChild {
     key: string
@@ -77,6 +77,12 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
             label: t('settingsPage.settingsSidebar.actionAgents'),
             icon: ICONS.PROMPT_ICON,
             path: '/settings/actions',
+        },
+        {
+            key: 'tools',
+            label: t('settingsPage.settingsSidebar.tools'),
+            icon: ICONS.STEPS,
+            path: '/settings/tools',
         },
         {
             key: 'developer',

@@ -8,6 +8,7 @@ import { AISettings } from './components/AISettings'
 import { EmbeddingKeysSettings } from './components/EmbeddingKeysSettings'
 import { VectorDBSettings } from './components/VectorDBSettings'
 import { ActionAgentSettings } from './components/ActionAgentSettings'
+import { ToolsSettings } from './components/ToolsSettings'
 import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useWindowSize } from '../../hooks/useWindowSize'
@@ -24,6 +25,7 @@ const SECTION_LABEL_KEYS: Record<string, string> = {
     profile: 'settingsPage.settingsPage.sectionProfile',
     ai: 'settingsPage.settingsPage.sectionAi',
     actions: 'settingsPage.settingsPage.sectionActions',
+    tools: 'settingsPage.settingsPage.sectionTools',
     developer: 'settingsPage.settingsPage.sectionDeveloper',
     // AI sub-sections
     'llm-keys': 'settingsPage.settingsPage.sectionAiModelKeys',
@@ -92,6 +94,7 @@ export default function SettingsPage(): React.ReactElement {
                             {/* The Default Preferences page was folded into Default Actions */}
                             <Route path="ai/defaults" element={<Navigate to="/settings/actions" replace />} />
                             <Route path="actions" element={<ActionAgentSettings />} />
+                            <Route path="tools" element={<ToolsSettings />} />
                             <Route path="developer" element={<DeveloperSettings />} />
                         </Routes>
                     </div>

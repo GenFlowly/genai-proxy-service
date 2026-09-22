@@ -23,6 +23,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -73,6 +74,7 @@ class CustomerToolsService(
             request = request.request,
             credentialRef = request.credentialRef.trim(),
             responseTransform = request.responseTransform,
+            discoveredTools = request.discoveredTools,
             status = request.status,
             version = (existing?.version ?: 0) + 1,
             origin = request.origin,
@@ -137,6 +139,7 @@ class CustomerToolsService(
                 request = draft.request,
                 credentialRef = draft.credentialRef.trim(),
                 responseTransform = draft.responseTransform,
+                discoveredTools = draft.discoveredTools,
                 status = draft.status,
                 version = stored?.version ?: 0,
                 origin = draft.origin,
@@ -222,6 +225,7 @@ private fun CustomerTool.toUpsertRequest() = UpsertCustomerToolRequest(
     request = request,
     credentialRef = credentialRef,
     responseTransform = responseTransform,
+    discoveredTools = discoveredTools,
     status = status,
     origin = origin,
     originRef = originRef,
@@ -237,8 +241,11 @@ private fun CustomerTool.toUpsertRequest() = UpsertCustomerToolRequest(
  *  1. `name` matches `^[a-z][a-z0-9_]{2,63}$`.
  *  2. `name` does not collide with a built-in tool (web_search, generate_pdf).
  *  3. `description` is 10..1024 characters.
- *  4. `provider` is "http"; `status` is draft|active|disabled; `origin` is
- *     manual|openapi.
+ *  4. `provider` is http|mcp; `status` is draft|active|disabled; `origin` is
+ *     manual|openapi. Rules 5-9 below are the **http** shape; an mcp record is
+ *     a server rather than a call, so it is validated by [validateMcpRecord]
+ *     instead (https server url with no placeholders, plus an approved
+ *     discoveredTools manifest).
  *  5. `parameters` is a restricted JSON Schema object: root
  *     {type:"object", properties, required}, at most 20 properties, property
  *     types limited to string/number/integer/boolean, only `description` and
@@ -260,7 +267,7 @@ object CustomerToolValidator {
     val BUILTIN_TOOL_NAMES = setOf("web_search", "generate_pdf")
 
     val ALLOWED_METHODS = setOf("GET", "POST", "PUT", "PATCH", "DELETE")
-    val ALLOWED_PROVIDERS = setOf("http")
+    val ALLOWED_PROVIDERS = setOf("http", "mcp")
     val ALLOWED_STATUSES = setOf("draft", "active", "disabled")
     val ALLOWED_ORIGINS = setOf("manual", "openapi")
     val ALLOWED_PROPERTY_TYPES = setOf("string", "number", "integer", "boolean")
@@ -287,9 +294,89 @@ object CustomerToolValidator {
         validateEnums(request.provider, request.status, request.origin)
         validateDryRun(request.status, request.lastDryRunAt)
 
+        // An mcp record describes a SERVER, not a call: there is no method,
+        // body or response transform to check, and each discovered tool brings
+        // its own argument schema.
+        if (request.provider == "mcp") {
+            validateMcpRecord(request)
+            return
+        }
+
         val declaredArgs = validateParameters(request.parameters)
         validateRequest(request.request, declaredArgs)
         validateResponseTransform(request.responseTransform)
+    }
+
+    // ── mcp — a server, and the manifest we pinned from it ────────────────────
+
+    /**
+     * An mcp record names one server and carries the tool manifest captured when
+     * the customer connected it.
+     *
+     * The manifest is required because binding never calls the server: the
+     * runtime reads what was approved. A record with no manifest would silently
+     * contribute no tools, so it is rejected here where the message can say why.
+     */
+    private fun validateMcpRecord(request: UpsertCustomerToolRequest) {
+        val root = parseObject(request.request, "request")
+
+        val unknown = root.keys - setOf("url", "headers", "timeoutSeconds")
+        require(unknown.isEmpty()) {
+            "An MCP tool's request may only contain url, headers and timeoutSeconds. " +
+                "Unexpected: ${unknown.sorted().joinToString(", ")}."
+        }
+
+        val url = (root["url"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+        require(url.isNotBlank()) { "An MCP tool needs the server's url." }
+        require(url.startsWith("https://")) {
+            "The MCP server url must start with https:// — a plaintext connection would expose " +
+                "the credential it carries."
+        }
+        require(!url.contains("{{")) {
+            "The MCP server url cannot contain a placeholder. The server is fixed when the tool " +
+                "is connected, so no value supplied at call time can redirect it."
+        }
+
+        // Headers may carry {{credential.*}} but never {{args.*}}: they are sent
+        // once per connection, before any tool call has arguments.
+        (root["headers"] as? JsonObject)?.forEach { (headerName, value) ->
+            val text = (value as? JsonPrimitive)?.contentOrNull.orEmpty()
+            PLACEHOLDER_REGEX.findAll(text).forEach { match ->
+                val body = match.groupValues[1].trim()
+                require(PLACEHOLDER_BODY_REGEX.matches(body)) {
+                    "Header '$headerName' contains '{{$body}}', which is not a valid placeholder. " +
+                        "Use {{credential.some_key}}."
+                }
+                require(body.startsWith("credential.")) {
+                    "Header '$headerName' uses '{{$body}}'. An MCP server's headers are sent when " +
+                        "the connection opens, before any arguments exist, so only " +
+                        "{{credential.*}} may appear there."
+                }
+            }
+        }
+
+        val manifest = request.discoveredTools.trim()
+        require(manifest.isNotEmpty()) {
+            "This MCP server has no approved tool list yet. Connect it and approve the tools it " +
+                "offers before saving, so the agent binds a list you have seen."
+        }
+        val entries = try {
+            jsonParser.parseToJsonElement(manifest) as? JsonArray
+        } catch (e: Exception) {
+            throw IllegalArgumentException("The MCP tool list is not valid JSON.", e)
+        }
+        requireNotNull(entries) { "The MCP tool list must be a JSON array." }
+        require(entries.isNotEmpty()) {
+            "The MCP tool list is empty, so this server would contribute nothing."
+        }
+        entries.forEachIndexed { index, entry ->
+            val obj = entry as? JsonObject
+            requireNotNull(obj) { "Entry ${index + 1} in the MCP tool list is not an object." }
+            val toolName = (obj["name"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            require(toolName.isNotBlank()) {
+                "Entry ${index + 1} in the MCP tool list has no name."
+            }
+        }
     }
 
     // ── Identity ──────────────────────────────────────────────────────────────
