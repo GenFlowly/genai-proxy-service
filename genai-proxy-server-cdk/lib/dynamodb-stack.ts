@@ -297,6 +297,33 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        // Per-customer declarative HTTP tools ("bring your own tool").
+        // PK=customerId, SK=name (the model-facing tool name, ^[a-z][a-z0-9_]{2,63}$)
+        //   — name-as-sort-key makes per-customer uniqueness a schema property.
+        // description/parameters: what the model sees; parameters is a JSON string
+        //   holding a restricted, non-nested JSON Schema object.
+        // provider: "http" today — the seam value, "mcp" later.
+        // request: JSON string call template. Its url's scheme+host are literal
+        //   (placeholders rejected there), so a prompt-injected argument can never
+        //   redirect the call to another host.
+        // credentialRef: SK into CustomerToolCredentials, or "". This row holds NO
+        //   secrets, ever — credential values stay KMS-encrypted in that table.
+        // responseTransform: JSON string ({mode, path, maxChars}).
+        // status: "draft" | "active" | "disabled" — only "active" is ever bound.
+        // version: bumped on every save. origin/originRef: "manual" | "openapi" plus
+        //   the spec URL that produced the row, for audit.
+        const customerToolsTableProps: CreateTableProps = {
+            tableName: 'CustomerTools',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'name',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         const sharedInstructionsTableProps: CreateTableProps = {
             tableName: 'SharedInstructions',
             partitionKey: {
@@ -502,6 +529,7 @@ export class DynamoDBStack extends cdk.Stack {
         const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
         const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
         const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
+        const customerToolsTable = createDefaultDynamoDbTable(this, customerToolsTableProps);
         const sharedInstructionsTable = createDefaultDynamoDbTable(this, sharedInstructionsTableProps);
         const sharedConversationsTable = createDefaultDynamoDbTable(this, sharedConversationsTableProps);
         const instructionUsageTable = createDefaultDynamoDbTable(this, instructionUsageTableProps);
@@ -518,7 +546,7 @@ export class DynamoDBStack extends cdk.Stack {
             conversationTable, messageTable, customerPreferencesTable,
             customerVectorDBConfigTable, customerEmbeddingModelsTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
-            customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
+            customerToolCredentialsTable, customerToolsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
             requestAgentMapTable, customerMemoryTable, nodePresetsTable

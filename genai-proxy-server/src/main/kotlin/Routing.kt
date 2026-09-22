@@ -26,6 +26,7 @@ import com.genflowly.activity.customer.registerSearchRoutes
 import com.genflowly.activity.customer.registerEmbeddingKeyRoutes
 import com.genflowly.activity.customer.registerStoreApiKeyRoutes
 import com.genflowly.activity.customer.registerStoreVectorDBConfigRoutes
+import com.genflowly.activity.customer.registerCustomerToolsRoutes
 import com.genflowly.activity.customer.registerToolCredentialsRoutes
 import com.genflowly.activity.generation.registerCancelGenerationRoute
 import com.genflowly.activity.generation.registerRunRoutes
@@ -122,6 +123,10 @@ object Routes {
     const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
     const val TOOL_CREDENTIAL = "$API_V1/tool-credentials/{toolType}"
 
+    const val TOOLS = "$API_V1/tools"
+    const val TOOL = "$API_V1/tools/{name}"
+    const val TOOL_DRY_RUN = "$API_V1/tools/{name}/dry-run"
+
     const val REQUEST_AGENT_MAP = "$API_V1/request-agents"
     const val REQUEST_AGENT_MAP_ENTRY = "$API_V1/request-agents/{requestType}"
 
@@ -187,6 +192,7 @@ fun Application.configureRouting(
     unifiedSearchService: com.genflowly.service.UnifiedSearchService,
     nodePresetService: com.genflowly.service.NodePresetService,
     vendorAllowlistService: com.genflowly.service.VendorAllowlistService,
+    customerToolsService: com.genflowly.service.CustomerToolsService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -251,6 +257,7 @@ fun Application.configureRouting(
         registerCustomerRequestAgentRoutes(customerRequestAgentMapService, customerProfileService)
         registerDeleteAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
+        registerCustomerToolsRoutes(customerToolsService, customerProfileService)
         
         registerCustomerProfileSettingsRoutes(customerProfileService)
         registerSearchRoutes(customerProfileService)
