@@ -290,7 +290,11 @@ class HttpTool(GraphTool):
             logger.warning("HttpTool %s: refused — %s", self.name, e)
             return ToolResult(content=f"'{self.name}' could not be called: {e}")
         except Exception as e:
-            logger.error("HttpTool %s: request failed — %s", self.name, e, exc_info=True)
+            # An upstream error can quote the credential back at us.
+            logger.error(
+                "HttpTool %s: request failed — %s",
+                self.name, safe_client.redact(e, (credentials or {}).values()),
+            )
             return ToolResult(content=(
                 f"'{self.name}' failed to reach {self.origin}. "
                 "Try again, or answer without it and say the call did not go through."

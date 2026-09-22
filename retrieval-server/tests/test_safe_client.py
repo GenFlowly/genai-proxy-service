@@ -16,6 +16,7 @@ from graph_tools.providers import safe_client
 from graph_tools.providers.safe_client import (
     UnsafeRequestError,
     _is_public_address,
+    redact,
     resolve_public_addresses,
     sanitize_headers,
     validate_url,
@@ -153,6 +154,31 @@ class HeaderTests(unittest.TestCase):
 
     def test_none_value_becomes_empty_string(self):
         self.assertEqual(sanitize_headers({"X": None}), {"X": ""})
+
+
+class RedactionTests(unittest.TestCase):
+    """Upstream services quote credentials back in error messages more often
+    than you would hope, and those messages reach logs."""
+
+    def test_a_secret_in_a_message_is_replaced(self):
+        out = redact("401 invalid token sk-abc123def", ["sk-abc123def"])
+        self.assertNotIn("sk-abc123def", out)
+        self.assertIn("[redacted]", out)
+
+    def test_every_supplied_secret_is_replaced(self):
+        out = redact("user alice-secret pass bob-secret", ["alice-secret", "bob-secret"])
+        self.assertNotIn("secret", out.replace("[redacted]", ""))
+
+    def test_a_non_string_message_is_handled(self):
+        self.assertIn("boom", redact(RuntimeError("boom"), ["x" * 10]))
+
+    def test_very_short_values_are_not_redacted(self):
+        # Scrubbing a 2-character value would mangle unrelated text.
+        self.assertEqual(redact("abc def", ["ab"]), "abc def")
+
+    def test_no_secrets_is_a_no_op(self):
+        self.assertEqual(redact("plain message", []), "plain message")
+        self.assertEqual(redact("plain message", None), "plain message")
 
 
 class MethodTests(unittest.IsolatedAsyncioTestCase):

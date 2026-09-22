@@ -27,6 +27,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from encoding_library.observability import configure_observability, set_request_id, setup_logging
 
+from routes.connectors import router as connectors_router
 from routes.model_metadata import router as model_metadata_router
 from routes.models import router as models_router
 from routes.notes import router as notes_router
@@ -107,6 +108,7 @@ app.include_router(model_metadata_router)
 app.include_router(notes_router)
 app.include_router(search_router)
 app.include_router(tools_router)
+app.include_router(connectors_router)
 app.include_router(voice_router)
 app.include_router(validate_key_router)
 

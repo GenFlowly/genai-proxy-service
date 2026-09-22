@@ -147,6 +147,21 @@ def validate_url(url: str) -> tuple[str, int]:
     return parts.hostname, port
 
 
+def redact(text: str, secrets) -> str:
+    """Replace any of `secrets` appearing in `text` with a marker.
+
+    Upstream services echo credentials back in error messages more often than
+    you would hope ("invalid token sk-abc..."), and those messages end up in
+    logs. Since the values are in hand at the point of logging, scrub them
+    rather than trusting every upstream to be careful.
+    """
+    out = str(text)
+    for value in secrets or []:
+        if isinstance(value, str) and len(value) >= 6:
+            out = out.replace(value, "[redacted]")
+    return out
+
+
 def sanitize_headers(headers: dict) -> dict:
     """Drop headers the caller may not set, and reject header injection."""
     clean: dict[str, str] = {}

@@ -34,7 +34,7 @@ from typing import Any
 
 from graph_tools.base import GraphTool, ToolContext, ToolResult
 from graph_tools.providers.http_tool import ToolDefinitionError, as_dict
-from graph_tools.providers.safe_client import UnsafeRequestError, validate_url
+from graph_tools.providers.safe_client import UnsafeRequestError, redact, validate_url
 from graph_tools.providers.template import (
     TemplateError,
     has_placeholder,
@@ -124,7 +124,11 @@ class McpTool(GraphTool):
         try:
             result = await self._call(headers, args or {})
         except Exception as e:
-            logger.error("McpTool %s: failed — %s", self.name, e, exc_info=True)
+            # An upstream error can quote the credential back at us.
+            logger.error(
+                "McpTool %s: failed — %s",
+                self.name, redact(e, (credentials or {}).values()),
+            )
             return ToolResult(content=(
                 f"'{self.name}' failed to reach its server. Try again, or answer "
                 "without it and say the call did not go through."
