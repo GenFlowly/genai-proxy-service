@@ -8,12 +8,14 @@ a tool.
 
 Availability is per REQUEST, not per process. `tools_for` / `specs_for` take
 the names enabled for the current request (RetrievalState["builtin_tools"],
-derived from the customer's TOOL_EXECUTOR node config) and resolve them to
-tools. The built-in registry is a process-wide cache of customer-independent
-instances; it is never the authority on what a given request may call. That
-split is what lets customer-defined tools be added later without any node
-reaching for module state: `tools_for` is the one seam a new provider plugs
-into.
+derived from the customer's TOOL_EXECUTOR node config) plus that request's
+customer id, and resolve them to tools. The built-in registry is a process-wide
+cache of customer-independent instances; it is never the authority on what a
+given request may call.
+
+Resolution order is built-ins first, then the customer's own declarative tools.
+A built-in therefore always wins a name collision, so a customer cannot shadow
+`web_search` with something of their own and change what that name does.
 """
 import logging
 import os
@@ -58,34 +60,54 @@ def all_builtin_tool_names() -> list[str]:
     return get_registry().names()
 
 
-def tools_for(names: Iterable[str]) -> list[GraphTool]:
+def tools_for(names: Iterable[str], customer_id: str | None = None) -> list[GraphTool]:
     """The tools enabled for one request, in the order given.
 
-    Unknown names are dropped with a warning rather than raising, so a stale
-    node config cannot break a request. Duplicates collapse.
+    Built-ins resolve first; any remaining names are looked up among the
+    customer's own declarative tools. Names that match neither are dropped with
+    a warning rather than raising, so a stale node config or a tool the customer
+    has since deleted cannot break a request. Duplicates collapse.
+
+    customer_id is optional so callers that only care about built-ins (and the
+    tests) need not supply one; omitting it simply means no customer tools.
     """
     registry = get_registry()
-    resolved: list[GraphTool] = []
+    ordered: list[str] = []
     seen: set[str] = set()
-    unknown: list[str] = []
     for name in names or []:
         if not name or name in seen:
             continue
         seen.add(name)
+        ordered.append(name)
+
+    unresolved = {n for n in ordered if not registry.has(n)}
+    customer_tools: dict[str, GraphTool] = {}
+    if unresolved and customer_id:
+        # Imported here: graph.customer_tools reaches for boto3, and this
+        # module is imported by the graph_tools-only unit tests.
+        from graph.customer_tools import tools_for_customer
+
+        customer_tools = tools_for_customer(customer_id, unresolved)
+
+    resolved: list[GraphTool] = []
+    unknown: list[str] = []
+    for name in ordered:
         if registry.has(name):
             resolved.append(registry.get(name))
+        elif name in customer_tools:
+            resolved.append(customer_tools[name])
         else:
             unknown.append(name)
     if unknown:
         logger.warning(
-            "Enabled tool(s) %s are not registered — dropped from this request", unknown
+            "Enabled tool(s) %s resolved to nothing — dropped from this request", unknown
         )
     return resolved
 
 
-def specs_for(names: Iterable[str]) -> list[dict]:
+def specs_for(names: Iterable[str], customer_id: str | None = None) -> list[dict]:
     """Model-facing specs for the request's enabled tools."""
-    return [t.spec for t in tools_for(names)]
+    return [t.spec for t in tools_for(names, customer_id)]
 
 
 def credential_refs_for(tools: Iterable[GraphTool]) -> set[str]:

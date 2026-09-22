@@ -43,7 +43,10 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     calls = state.get("tool_calls") or []
     # Enabled for this request, resolved to instances. A name the model emitted
     # that is not enabled here is treated as caller-defined, exactly as before.
-    by_name = {t.name: t for t in tools_for(state.get("builtin_tools") or [])}
+    by_name = {
+        t.name: t
+        for t in tools_for(state.get("builtin_tools") or [], state.get("customer_id"))
+    }
     builtin_calls = [c for c in calls if c.get("name", "") in by_name]
     dropped = [c.get("name") for c in calls if c.get("name", "") not in by_name]
     if dropped:
