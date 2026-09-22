@@ -26,6 +26,7 @@ import com.genflowly.activity.customer.registerSearchRoutes
 import com.genflowly.activity.customer.registerEmbeddingKeyRoutes
 import com.genflowly.activity.customer.registerStoreApiKeyRoutes
 import com.genflowly.activity.customer.registerStoreVectorDBConfigRoutes
+import com.genflowly.activity.customer.registerConnectorsRoutes
 import com.genflowly.activity.customer.registerCustomerToolsRoutes
 import com.genflowly.activity.customer.registerToolCredentialsRoutes
 import com.genflowly.activity.generation.registerCancelGenerationRoute
@@ -127,6 +128,15 @@ object Routes {
     const val TOOL = "$API_V1/tools/{name}"
     const val TOOL_DRY_RUN = "$API_V1/tools/{name}/dry-run"
 
+    // A connector is one thing the customer connects that yields many tools.
+    // It has no table of its own: these routes group the CustomerTools rows.
+    const val CONNECTORS = "$API_V1/connectors"
+    const val CONNECTOR = "$API_V1/connectors/{id}"
+    const val CONNECTOR_OPENAPI_PREVIEW = "$API_V1/connectors/openapi/preview"
+    const val CONNECTOR_OPENAPI_IMPORT = "$API_V1/connectors/openapi/import"
+    const val CONNECTOR_MCP_DISCOVER = "$API_V1/connectors/mcp/discover"
+    const val CONNECTOR_MCP_CONNECT = "$API_V1/connectors/mcp/connect"
+
     const val REQUEST_AGENT_MAP = "$API_V1/request-agents"
     const val REQUEST_AGENT_MAP_ENTRY = "$API_V1/request-agents/{requestType}"
 
@@ -193,6 +203,7 @@ fun Application.configureRouting(
     nodePresetService: com.genflowly.service.NodePresetService,
     vendorAllowlistService: com.genflowly.service.VendorAllowlistService,
     customerToolsService: com.genflowly.service.CustomerToolsService,
+    connectorsService: com.genflowly.service.ConnectorsService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -258,6 +269,7 @@ fun Application.configureRouting(
         registerDeleteAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
         registerCustomerToolsRoutes(customerToolsService, customerProfileService)
+        registerConnectorsRoutes(connectorsService, customerProfileService)
         
         registerCustomerProfileSettingsRoutes(customerProfileService)
         registerSearchRoutes(customerProfileService)

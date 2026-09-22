@@ -189,6 +189,11 @@ fun appModule(): Module = module {
             get(), get(), get(), get<AppConfig>().retrievalServerUrl
         )
     }
+    single {
+        com.genflowly.service.ConnectorsService(
+            get(), get(), get(), get<AppConfig>().retrievalServerUrl
+        )
+    }
     single { com.genflowly.service.VendorAllowlistService(get()) }
     single { UtilityGenerationService(get(), get()) }
     single { GraphService(get(), get(), get()) }
