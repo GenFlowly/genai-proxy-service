@@ -14,7 +14,7 @@ from graph.credentials import credentials_for, resolve_credentials
 from graph.llm_factory import get_llm
 from graph.s3_images import fetch_image_base64
 from graph.state import RetrievalState
-from graph.tools_runtime import get_registry
+from graph.tools_runtime import specs_for
 
 import durable_runtime
 
@@ -565,7 +565,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         tools = state.get("tools") or []
         builtin_names = state.get("builtin_tools") or []
         if is_response_node and builtin_names:
-            builtin_specs = get_registry().specs(builtin_names)
+            # Resolved from the names enabled for THIS request, not from a
+            # process-global view of what exists. The customer id lets the
+            # customer's own declarative tools resolve alongside the built-ins.
+            builtin_specs = specs_for(builtin_names, state.get("customer_id"))
             # A caller-defined tool shadowing a built-in name would make its
             # calls ambiguous (executed in-graph vs. by the caller) — built-in wins.
             reserved = {s["name"] for s in builtin_specs}
