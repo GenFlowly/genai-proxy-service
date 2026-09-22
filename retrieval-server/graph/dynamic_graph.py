@@ -12,7 +12,6 @@ from graph.nodes.retrieval import retrieval
 from graph.nodes.tool_executor import tool_executor
 from graph.nodes.web_search import web_search
 from graph.state import RetrievalState
-from graph.tools_runtime import is_builtin_tool
 
 logger = logging.getLogger(__name__)
 
@@ -44,17 +43,25 @@ def _make_condition_router(condition: dict, routes: dict[str, str]):
         "value"      : the field's value (as a string) is matched against the
                        route labels; "__default__" is the fallback route
         "tool_route" : inspects state["tool_calls"] — routes["builtin"] when any
-                       call names a built-in (graph_tools) tool, routes["caller"]
-                       when only caller-defined calls exist, routes["none"] when
-                       there are no calls (condition_key is ignored)
+                       call names a tool enabled for THIS request
+                       (state["builtin_tools"]), routes["caller"] when only
+                       caller-defined calls exist, routes["none"] when there
+                       are no calls (condition_key is ignored)
     """
-    key = condition["condition_key"]
     ctype = condition.get("condition_type", "bool")
+    # tool_route ignores condition_key, so don't require one — demanding it here
+    # made an otherwise valid tool_route edge raise at graph-build time.
+    key = condition["condition_key"] if ctype != "tool_route" else None
 
     def router(state: RetrievalState) -> str:
         if ctype == "tool_route":
             calls = state.get("tool_calls") or []
-            if any(is_builtin_tool(c.get("name", "")) for c in calls):
+            # Availability is a property of the REQUEST, not the process: a
+            # name counts as in-graph only when it is enabled for this run.
+            # Reading state (rather than a module-global registry) is what
+            # lets per-customer tools route correctly.
+            enabled = set(state.get("builtin_tools") or [])
+            if any(c.get("name", "") in enabled for c in calls):
                 label = "builtin"
             else:
                 label = "caller" if calls else "none"

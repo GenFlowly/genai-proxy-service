@@ -5,9 +5,12 @@ to search, writes its own query, and picks the recency window — unlike a fixed
 graph node that searches on every turn with a static query.
 
 Provider: Tavily (a plain HTTPS call, independent of which LLM provider the
-request resolves to). The API key is read from the TAVILY_API_KEY environment
-variable — the same key the legacy WEB_SEARCH node used — so no per-request
-plumbing is needed. A missing key or an upstream failure degrades to a plain
+request resolves to). The API key is the customer's own, resolved per request
+by the host and delivered through context.secrets (credential_ref
+"WEB_SEARCH"). A customer who has not connected a key falls back to the
+platform-wide TAVILY_API_KEY environment variable, which keeps existing
+deployments working; that fallback is the only env var read here and it is
+never per-customer. A missing key or an upstream failure degrades to a plain
 message the model can act on (it may answer from its own knowledge or retry),
 never an exception that aborts the turn.
 
@@ -59,6 +62,9 @@ def _format_results(query: str, topic: str, data: dict) -> str:
 
 class WebSearchTool(GraphTool):
     name = "web_search"
+    # Sort key under which the proxy stores this tool's credentials in
+    # CustomerToolCredentials (see the table comment in the CDK).
+    credential_ref = "WEB_SEARCH"
     description = (
         "Search the web for current, recent, or factual information. Call this "
         "whenever answering well depends on information that may have changed "
@@ -112,9 +118,15 @@ class WebSearchTool(GraphTool):
         if not query:
             return ToolResult(content="Error: query is empty — pass a search query.")
 
-        api_key = os.getenv("TAVILY_API_KEY")
+        # Customer's own key first; the platform key is a deployment-wide
+        # fallback, not a per-tenant value.
+        credentials = context.secrets(self.credential_ref) or {}
+        api_key = credentials.get("api_key") or os.getenv("TAVILY_API_KEY")
         if not api_key:
-            logger.error("web_search: TAVILY_API_KEY is not set")
+            logger.error(
+                "web_search: customer=%s has no stored key and TAVILY_API_KEY is not set",
+                context.customer_id,
+            )
             return ToolResult(
                 content=(
                     "Web search is unavailable right now (search is not configured). "
@@ -145,8 +157,10 @@ class WebSearchTool(GraphTool):
             payload["days"] = max(1, days)
 
         logger.info(
-            "web_search: customer=%s topic=%s max_results=%d query='%s'",
-            context.customer_id, topic, max_results, query[:100],
+            "web_search: customer=%s key=%s topic=%s max_results=%d query='%s'",
+            context.customer_id,
+            "customer" if credentials.get("api_key") else "platform",
+            topic, max_results, query[:100],
         )
         try:
             data = await self._search(payload, api_key)
