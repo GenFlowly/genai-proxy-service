@@ -15,9 +15,12 @@ from graph_tools.base import ToolContext
 from graph_tools.tools.web_search import WebSearchTool
 
 
-def _ctx() -> ToolContext:
+def _ctx(secrets: dict | None = None) -> ToolContext:
     # web_search never touches the artifact store, so a placeholder is fine.
-    return ToolContext(customer_id="cust-1", store=object(), key_template="{artifact_id}")
+    context = ToolContext(customer_id="cust-1", store=object(), key_template="{artifact_id}")
+    if secrets is not None:
+        context.secrets = lambda ref: secrets.get(ref, {})
+    return context
 
 
 _SAMPLE = {
@@ -109,6 +112,71 @@ class WebSearchToolTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("failed", result.content.lower())
         self.assertEqual(result.artifacts, [])
 
+class WebSearchCredentialTest(unittest.IsolatedAsyncioTestCase):
+    """The customer's own key must win over the platform-wide env var, which
+    exists only so deployments without per-customer keys keep working."""
+
+    async def test_declares_its_credential_ref(self):
+        self.assertEqual(WebSearchTool().credential_ref, "WEB_SEARCH")
+
+    async def test_customer_key_is_preferred_over_the_platform_key(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value=_SAMPLE)
+        ctx = _ctx({"WEB_SEARCH": {"api_key": "tvly-customer"}})
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-platform"}), \
+                patch.object(tool, "_search", search):
+            await tool.run({"query": "x"}, ctx)
+
+        self.assertEqual(search.await_args.args[1], "tvly-customer")
+
+    async def test_falls_back_to_the_platform_key(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value=_SAMPLE)
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-platform"}), \
+                patch.object(tool, "_search", search):
+            await tool.run({"query": "x"}, _ctx({}))
+
+        self.assertEqual(search.await_args.args[1], "tvly-platform")
+
+    async def test_customer_key_works_with_no_platform_key_at_all(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value=_SAMPLE)
+        ctx = _ctx({"WEB_SEARCH": {"api_key": "tvly-customer"}})
+        with patch.dict("os.environ", {}, clear=True), patch.object(tool, "_search", search):
+            result = await tool.run({"query": "x"}, ctx)
+
+        self.assertEqual(search.await_args.args[1], "tvly-customer")
+        self.assertNotIn("unavailable", result.content.lower())
+
+    async def test_blank_customer_key_falls_through_to_the_platform_key(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value=_SAMPLE)
+        ctx = _ctx({"WEB_SEARCH": {"api_key": ""}})
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-platform"}), \
+                patch.object(tool, "_search", search):
+            await tool.run({"query": "x"}, ctx)
+
+        self.assertEqual(search.await_args.args[1], "tvly-platform")
+
+    async def test_neither_key_degrades_gracefully(self):
+        with patch.dict("os.environ", {}, clear=True):
+            result = await WebSearchTool().run({"query": "x"}, _ctx({}))
+
+        self.assertIn("unavailable", result.content.lower())
+
+    async def test_a_context_without_injected_secrets_still_works(self):
+        # ToolContext.secrets defaults to "no credentials", so a host that has
+        # not wired resolution yet keeps the platform key path.
+        tool = WebSearchTool()
+        search = AsyncMock(return_value=_SAMPLE)
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-platform"}), \
+                patch.object(tool, "_search", search):
+            await tool.run({"query": "x"}, _ctx())
+
+        self.assertEqual(search.await_args.args[1], "tvly-platform")
+
+
+class WebSearchRegistrationTest(unittest.TestCase):
     def test_registered_in_default_registry(self):
         registry = default_registry()
         self.assertTrue(registry.has("web_search"))
