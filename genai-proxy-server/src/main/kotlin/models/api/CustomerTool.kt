@@ -23,7 +23,7 @@ data class CustomerTool(
     val description: String,
     /** JSON string: a restricted, non-nested JSON Schema object. */
     val parameters: String,
-    /** "http" today — the seam value; "mcp" later. */
+    /** "http" (one record, one call) or "mcp" (one record, one server). */
     val provider: String = "http",
     /** JSON string: the call template (method/url/headers/query/body/bodyType). */
     val request: String,
@@ -41,6 +41,18 @@ data class CustomerTool(
     val originRef: String = "",
     /** ISO-8601; must be non-empty before the tool may leave "draft". */
     val lastDryRunAt: String = "",
+    /**
+     * mcp only. JSON string: the server's tool manifest, captured and approved
+     * when the customer connected it — `[{name, description, inputSchema}, ...]`.
+     *
+     * Pinned rather than discovered at bind time for two reasons. Discovery on
+     * every request would put a network round trip on the critical path, and,
+     * more importantly, a tool's description is text placed directly into the
+     * model's context: a server free to rewrite it between turns could steer the
+     * agent through a channel the customer never sees. A changed manifest is a
+     * change someone re-approves.
+     */
+    val discoveredTools: String = "",
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
@@ -53,11 +65,18 @@ data class CustomerTool(
 data class UpsertCustomerToolRequest(
     val name: String,
     val description: String,
-    val parameters: String,
+    /** http only: the restricted JSON Schema for the model's arguments. An mcp
+     *  record leaves this empty — each discovered tool carries its own schema. */
+    val parameters: String = "",
+    /** "http" (one record, one call) or "mcp" (one record, one server). */
     val provider: String = "http",
     val request: String,
     val credentialRef: String = "",
-    val responseTransform: String,
+    /** http only: {mode, path, maxChars}. Unused by mcp, whose results are
+     *  already content blocks. */
+    val responseTransform: String = "",
+    /** mcp only: the server's approved tool manifest. See [CustomerTool.discoveredTools]. */
+    val discoveredTools: String = "",
     val status: String = "draft",
     val origin: String = "manual",
     val originRef: String = "",

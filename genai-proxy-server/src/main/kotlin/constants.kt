@@ -122,6 +122,7 @@ object DynamoDBConstants {
     const val TOOL_STATUS_KEY = "status"
     const val TOOL_ORIGIN_KEY = "origin"
     const val TOOL_ORIGIN_REF_KEY = "originRef"
+    const val TOOL_DISCOVERED_TOOLS_KEY = "discoveredTools"
     const val TOOL_LAST_DRY_RUN_AT_KEY = "lastDryRunAt"
 
     const val SHARED_INSTRUCTIONS_TABLE = "SharedInstructions"
