@@ -422,4 +422,88 @@ class ConnectorsImportTest {
         assertTrue(e.message!!.contains("https"))
         coVerify(exactly = 0) { repository.saveCustomerTool(any(), any()) }
     }
+
+    // ── A derived name must never clobber someone else's connector ────────────
+
+    private fun mcpRow(name: String, serverUrl: String) = com.genflowly.models.api.CustomerTool(
+        name = name,
+        description = "An MCP server the customer connected earlier.",
+        parameters = "",
+        provider = "mcp",
+        request = """{"url":"$serverUrl"}""",
+        credentialRef = "",
+        responseTransform = "",
+        discoveredTools = """[{"name":"search"}]""",
+        status = "draft",
+        originRef = serverUrl,
+    )
+
+    private fun connectRequest(label: String, serverUrl: String) = ConnectMcpConnectorRequest(
+        serverUrl = serverUrl,
+        label = label,
+        credentialRef = "",
+        headers = emptyMap(),
+        tools = listOf(McpConnectorTool("search", "Search.", element("""{"type":"object"}"""))),
+    )
+
+    @Test
+    fun `a derived name is used as is when nothing holds it`() = runTest {
+        val service = serviceReturning(discoverResponse)
+        coEvery { repository.getCustomerTool(any(), any()) } returns null
+
+        val result = service.connectMcp("cust-1", connectRequest("Notion", "https://mcp.notion.com/mcp"))
+
+        assertEquals("notion", result.tool.name)
+    }
+
+    @Test
+    fun `a different server deriving the same name gets a suffix, not the other's row`() = runTest {
+        // Two labels can slug to the same thing, and the fallback chain ends at
+        // a constant. Overwriting would silently delete a working connector.
+        val service = serviceReturning(discoverResponse)
+        coEvery { repository.getCustomerTool("cust-1", "notion") } returns
+            mcpRow("notion", "https://mcp.other.com/mcp")
+        coEvery { repository.getCustomerTool("cust-1", "notion_2") } returns null
+
+        val result = service.connectMcp("cust-1", connectRequest("Notion", "https://mcp.notion.com/mcp"))
+
+        assertEquals("notion_2", result.tool.name)
+    }
+
+    @Test
+    fun `reconnecting the same server reuses its row rather than piling up`() = runTest {
+        // This is how a changed manifest gets re-approved; it must update.
+        val service = serviceReturning(discoverResponse)
+        coEvery { repository.getCustomerTool("cust-1", "notion") } returns
+            mcpRow("notion", "https://mcp.notion.com/mcp")
+
+        val result = service.connectMcp("cust-1", connectRequest("Notion", "https://mcp.notion.com/mcp"))
+
+        assertEquals("notion", result.tool.name)
+    }
+
+    @Test
+    fun `an explicitly supplied name keeps upsert semantics`() = runTest {
+        // An explicit name is a choice someone made; honour it.
+        val service = serviceReturning(discoverResponse)
+        coEvery { repository.getCustomerTool("cust-1", "notion_workspace") } returns
+            mcpRow("notion_workspace", "https://mcp.other.com/mcp")
+
+        val result = service.connectMcp(
+            "cust-1",
+            connectRequest("Notion", "https://mcp.notion.com/mcp").copy(name = "notion_workspace"),
+        )
+
+        assertEquals("notion_workspace", result.tool.name)
+    }
+
+    @Test
+    fun `a label that cannot form a name still lands on a legal one`() = runTest {
+        val service = serviceReturning(discoverResponse)
+        coEvery { repository.getCustomerTool(any(), any()) } returns null
+
+        val result = service.connectMcp("cust-1", connectRequest("!!!", "https://mcp.notion.com/mcp"))
+
+        assertTrue(Regex("^[a-z][a-z0-9_]{2,63}$").matches(result.tool.name), result.tool.name)
+    }
 }

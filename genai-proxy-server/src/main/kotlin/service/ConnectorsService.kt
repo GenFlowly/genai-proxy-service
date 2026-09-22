@@ -219,8 +219,15 @@ class ConnectorsService(
         }
 
         val label = request.label.trim().ifBlank { labelFor(serverUrl) }
+        // An explicit name is the caller's choice and keeps upsert semantics. A
+        // DERIVED name is not a choice anyone made, so it must never overwrite
+        // somebody else's connector: two labels can slug to the same thing, and
+        // the fallback chain ends at a constant, so a collision is not exotic.
+        val explicitName = request.name.trim()
         val draft = UpsertCustomerToolRequest(
-            name = request.name.trim().ifBlank { toolNameFrom(label, serverUrl) },
+            name = explicitName.ifBlank {
+                availableName(customerId, toolNameFrom(label, serverUrl), serverUrl)
+            },
             description = request.description.trim().ifBlank { describedBy(label, serverUrl, request.tools.size) },
             // An mcp record describes a server; each discovered tool carries its
             // own argument schema, so there is no shared `parameters` here.
@@ -248,6 +255,40 @@ class ConnectorsService(
         return ConnectMcpConnectorResponse(
             connector = mcpConnector(saved),
             tool = saved,
+        )
+    }
+
+
+    /**
+     * The derived name, or the first free variant of it.
+     *
+     * Re-connecting the SAME server reuses its existing row — that is how a
+     * changed manifest gets re-approved, and it must update rather than pile up
+     * `notion_2`. A different server that happens to derive the same name gets
+     * a suffix instead of silently replacing the first one.
+     */
+    private suspend fun availableName(
+        customerId: String,
+        derived: String,
+        serverUrl: String,
+    ): String {
+        val existing = customerToolsRepository.getCustomerTool(customerId, derived)
+            ?: return derived
+        if (existing.originRef.trim() == serverUrl || existing.mcpServerUrl() == serverUrl) {
+            return derived  // the same server, reconnecting
+        }
+        for (suffix in 2..99) {
+            val candidate = "${derived.take(60)}_$suffix"
+            if (!NAME_SHAPE.matches(candidate)) continue
+            val taken = customerToolsRepository.getCustomerTool(customerId, candidate)
+            if (taken == null) return candidate
+            if (taken.originRef.trim() == serverUrl || taken.mcpServerUrl() == serverUrl) {
+                return candidate
+            }
+        }
+        throw IllegalArgumentException(
+            "Too many connectors are already named like '$derived'. Give this one a " +
+                "different name."
         )
     }
 

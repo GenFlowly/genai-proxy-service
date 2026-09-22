@@ -271,7 +271,7 @@ export function parseJsonField<T>(raw: string | undefined | null, fallback: T): 
  * The user-facing message the server sent — validation failures come back as
  * `ErrorResponse { error }` — else a status-line fallback.
  */
-async function errorFrom(response: Response, fallback: string): Promise<Error> {
+export async function errorFrom(response: Response, fallback: string): Promise<Error> {
     let detail = ''
     try {
         detail = (await response.text()).trim()

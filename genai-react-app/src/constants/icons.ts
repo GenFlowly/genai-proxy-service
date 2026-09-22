@@ -34,6 +34,7 @@ import sunIcon from '../assets/icons/sun.svg'
 import brainIcon from '../assets/icons/brain.svg'
 import imageAttachmentIcon from '../assets/icons/image-attachment-icon.svg'
 import stepsIcon from '../assets/icons/steps.svg'
+import linkIcon from '../assets/icons/link.svg'
 
 export const ICONS = {
     EDIT: editIcon,
@@ -70,4 +71,5 @@ export const ICONS = {
     BRAIN: brainIcon,
     IMAGE_ATTACHMENT: imageAttachmentIcon,
     STEPS: stepsIcon,
+    LINK: linkIcon,
 }
