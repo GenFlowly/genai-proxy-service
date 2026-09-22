@@ -442,5 +442,6 @@ fun Application.module() {
     val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 
     val vendorAllowlistService = get<com.genflowly.service.VendorAllowlistService>()
-    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, appConfig)
+    val customerToolsService = get<com.genflowly.service.CustomerToolsService>()
+    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, appConfig)
 }

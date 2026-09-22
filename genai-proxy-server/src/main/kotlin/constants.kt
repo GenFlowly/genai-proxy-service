@@ -107,6 +107,23 @@ object DynamoDBConstants {
     const val TOOL_AUTH_TYPE_KEY = "authType"
     const val TOOL_CREDENTIALS_KEY = "credentials"
 
+    // Per-customer declarative HTTP tools. PK=customerId, SK=name (the
+    // model-facing tool name), so per-customer name uniqueness is a schema
+    // property. The row never contains a secret: credentialRef points at a
+    // CustomerToolCredentials sort key, and the values stay encrypted there.
+    const val CUSTOMER_TOOLS_TABLE = "CustomerTools"
+    const val TOOL_NAME_KEY = "name"
+    const val TOOL_DESCRIPTION_KEY = "description"
+    const val TOOL_PARAMETERS_KEY = "parameters"
+    const val TOOL_PROVIDER_KEY = "provider"
+    const val TOOL_REQUEST_KEY = "request"
+    const val TOOL_CREDENTIAL_REF_KEY = "credentialRef"
+    const val TOOL_RESPONSE_TRANSFORM_KEY = "responseTransform"
+    const val TOOL_STATUS_KEY = "status"
+    const val TOOL_ORIGIN_KEY = "origin"
+    const val TOOL_ORIGIN_REF_KEY = "originRef"
+    const val TOOL_LAST_DRY_RUN_AT_KEY = "lastDryRunAt"
+
     const val SHARED_INSTRUCTIONS_TABLE = "SharedInstructions"
     const val SHARED_WITH_CUSTOMER_ID_KEY = "sharedWithCustomerId"
     const val SHARED_BY_CUSTOMER_ID_KEY = "sharedByCustomerId"
