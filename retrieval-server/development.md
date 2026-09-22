@@ -35,6 +35,57 @@ Every outbound call to a third-party API MUST go through `encoding_library.utils
 - **boto3 (DynamoDB/S3/KMS)** has its own built-in backoff — don't double-wrap.
 - **Voice realtime websockets** are stateful sessions; reconnection is session logic, deliberately not covered by this util.
 
+## Customer-defined tools
+
+A customer's tool is a stored RECORD, not code, so adding one costs a row rather
+than a deploy. `graph/tools_runtime.tools_for` is the single seam that resolves
+a request's enabled names to tools: built-ins first, then the customer's own.
+A built-in always wins a name collision, so nobody can redefine `web_search`.
+
+| Provider | A record is | Interpreter |
+|---|---|---|
+| `http` | one HTTP call | `graph_tools/providers/http_tool.py` |
+| `mcp` | one MCP server, many tools | `graph_tools/providers/mcp_tool.py` |
+
+Two properties carry the security, because a tool's arguments are written by the
+model and a user can steer the model with pasted text.
+
+**The destination is pinned when the tool is defined.** Placeholders are rejected
+in the URL scheme and host; only the path, query, headers and body may be
+templated, and the assembled origin is re-checked before the call. A
+prompt-injected argument can change what a request says, never where it goes.
+
+**Substitution is not evaluation.** No expression language, no second pass. A
+value that is itself `{{credential.api_key}}` is not re-substituted, and a
+placeholder naming an unknown key is an error rather than an empty string.
+
+Credentials never enter graph state (the durable runtime checkpoints it) and
+never a process env var (one event loop serves every tenant). They are resolved
+per run by `graph/tool_credentials.py` — a sibling of `graph/credentials.py`,
+same rules — and reach a tool only through `ToolContext.secrets`.
+
+### Endpoints
+
+| Endpoint | Does | Writes |
+|---|---|---|
+| `POST /tools/dry-run` | run one tool definition, returning the outbound request with credentials masked, the raw response, and the exact string the model would see | nothing |
+| `POST /connectors/openapi/preview` | fetch an OpenAPI spec and return the tools it would produce | nothing |
+| `POST /connectors/mcp/discover` | connect to an MCP server and list the tools it offers, for the user to approve | nothing |
+
+All three are read-only by design: they return proposals the proxy then saves.
+The two connector endpoints take a URL the USER typed, which is why they live
+here rather than in the proxy — this is where the SSRF-hardened client
+(`graph_tools/providers/safe_client.py`) is. That module refuses non-https
+destinations, any host resolving to loopback/private/link-local/reserved space,
+redirects, unbounded time or size, and caller-set transport headers. Its one
+known gap, DNS rebinding between validation and connection, is documented in the
+module rather than left to be discovered.
+
+A tool stays `draft` until a dry run succeeds. Only `active` records are ever
+bound, and a customer-defined tool is never enabled implicitly — see
+`_enabled_builtin_tools` in `routes/retrieve.py`, whose no-config fallback
+covers built-ins only.
+
 ## Durable agentic runs (planned)
 
 Full design and rationale: `DURABLE_AGENTS_DBOS_PLAN.md`. Goal: evolve this service from a

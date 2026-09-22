@@ -47,7 +47,21 @@ nothing downstream knows the difference.
 | Provider | Record describes | Status |
 |---|---|---|
 | `http` (`HttpTool`) | one HTTP request: method, URL, headers, query, body, response transform | shipped |
-| `mcp` | a Model Context Protocol server to discover tools from | planned |
+| `mcp` (`McpTool`) | one Model Context Protocol server, expanding to many tools | shipped |
+
+`providers/openapi.py` is not a provider but a translator that feeds one: it
+turns an OpenAPI or Swagger document into `http` records, so importing a spec is
+the cheapest route from "I want my agent to use this service" to a working tool.
+It touches no network and no storage — fetching the document is the caller's job,
+through the hardened client, because the URL comes from the user. An operation it
+cannot represent honestly is skipped with a reason rather than imported
+half-built.
+
+The `mcp` provider binds from a manifest PINNED when the customer connected the
+server, and never calls it at bind time. A tool's description is text placed
+directly into the model's context, so a server free to rewrite it between turns
+could steer the agent through a channel the customer never sees. A changed
+manifest is something someone re-approves.
 
 Two properties carry the security of the `http` provider, because a tool's
 arguments are written by the model and a user can steer the model with pasted
