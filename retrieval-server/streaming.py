@@ -112,9 +112,14 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
         payload["items"] = [r.get("title", "")[:120] for r in results[:_MAX_ITEMS]]
     elif kind == "TOOL":
         artifacts = output.get("generated_artifacts", [])
+        sources = output.get("tool_sources", [])
         executed = [m for m in output.get("loop_messages", []) if m.get("role") == "tool"]
         payload["detail"] = f"Executed {len(executed)} tool(s)"
-        payload["items"] = [a.get("filename", "")[:120] for a in artifacts[:_MAX_ITEMS]]
+        # Surface artifact filenames and the newest cited source titles so the
+        # thinking panel shows what the tools produced, not just a bare count.
+        items = [a.get("filename", "")[:120] for a in artifacts]
+        items += [s.get("title", "")[:120] for s in sources[-_MAX_ITEMS:] if s.get("title")]
+        payload["items"] = items[:_MAX_ITEMS]
     elif kind == "MEMORY":
         block = output.get("memories_block") or ""
         memories = [line[2:] for line in block.splitlines() if line.startswith("- ")]
@@ -134,7 +139,13 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
             payload["detail"] = f"Rewrote the query to: {rewritten}"
         elif isinstance(ranked, list):
             payload["detail"] = f"Kept the {len(ranked)} most relevant result(s)"
-        elif output.get("generated_response") is not None:
+        elif output.get("tool_calls"):
+            # A tool-calling turn: the generator produced no user-facing answer,
+            # only tool calls — labelling it "Response generated" (as before) read
+            # as a broken, empty response step in the panel.
+            names = [c.get("name", "") for c in output["tool_calls"] if c.get("name")]
+            payload["detail"] = ("Calling tools: " + ", ".join(names)) if names else "Calling tools"
+        elif output.get("generated_response"):
             payload["detail"] = "Response generated"
     return payload
 
@@ -149,7 +160,7 @@ def _start_label(kind: str, name: str) -> str:
     }.get(kind, f"{name}: thinking…")
 
 
-async def stream_response(
+async def stream_events_dicts(
     state: RetrievalState,
     graph: Any = None,
     node_type_map: Optional[dict[str, str]] = None,
@@ -159,9 +170,20 @@ async def stream_response(
     request_start: Optional[float] = None,
     structured_output: bool = False,
     builtin_tool_names: Optional[set[str]] = None,
-) -> AsyncIterator[str]:
+    thread_id: Optional[str] = None,
+) -> AsyncIterator[dict]:
     """
-    Stream SSE events from a graph execution.
+    Run a graph and yield outbound stream events as plain dict payloads:
+    {'thinking_step': …}, {'content': …}, {'tool_calls': …}, {'web_sources': …},
+    {'generated_artifacts': …}, {'thinking_duration_ms': …}, {'usage': …}, or
+    {'error': …, 'error_type': …}.
+
+    Transport-agnostic — this is the single source of truth for the event
+    protocol. `stream_response` wraps each dict as an SSE `data:` frame for the
+    stateless /retrieve path; the durable agent_run workflow publishes each dict
+    to run_events for the /runs path. The `[DONE]` sentinel is a transport
+    concern and is NOT emitted here — the SSE wrapper / the run's terminal row
+    signal end-of-stream.
 
     Args:
         state:           Initial RetrievalState.
@@ -182,21 +204,28 @@ async def stream_response(
                          request. Their calls are executed in-graph by the
                          TOOL_EXECUTOR node and must never be emitted to the
                          caller as tool_calls events.
+        thread_id:       When set, passed as config.configurable.thread_id so a
+                         checkpointer-bound (durable) graph persists/resumes this
+                         run. The stateless /retrieve path leaves it None.
     """
     if graph is None:
-        raise ValueError("stream_response requires a compiled graph — no fallback available")
+        raise ValueError("stream_events_dicts requires a compiled graph — no fallback available")
 
     node_type_map = node_type_map or {}
     node_name_map = node_name_map or {}
     streaming_nodes = streaming_nodes or set()
     builtin_tool_names = builtin_tool_names or set()
 
-    logger.info(
-        "Stream: starting astream_events for customer=%s provider=%s streaming_nodes=%s",
-        state["customer_id"],
-        state["llm_provider"],
-        streaming_nodes,
-    )
+    # `state` is the initial RetrievalState dict on a fresh run, but on a durable
+    # resume it's a langgraph Command(resume=...) — guard the dict-only accesses.
+    _provider = state.get("llm_provider", "") if isinstance(state, dict) else ""
+    if isinstance(state, dict):
+        logger.info(
+            "Stream: starting astream_events for customer=%s provider=%s streaming_nodes=%s",
+            state.get("customer_id"), _provider, streaming_nodes,
+        )
+    else:
+        logger.info("Stream: resuming astream_events (Command) streaming_nodes=%s", streaming_nodes)
     token_count = 0
     event_count = 0
     usage = {
@@ -206,8 +235,12 @@ async def stream_response(
         "cache_read_tokens": 0,
         "cache_creation_tokens": 0,
     }
+    config: dict = {"recursion_limit": recursion_limit}
+    if thread_id is not None:
+        # Required by LangGraph whenever a checkpointer is attached (durable runs).
+        config["configurable"] = {"thread_id": thread_id}
     try:
-        async for event in graph.astream_events(state, config={"recursion_limit": recursion_limit}, version="v2"):
+        async for event in graph.astream_events(state, config=config, version="v2"):
             event_type = event.get("event", "")
             node = event.get("metadata", {}).get("langgraph_node", "")
             event_count += 1
@@ -235,7 +268,7 @@ async def stream_response(
                     "status": "running",
                     "label": _start_label(kind, name),
                 }
-                yield f"data: {json.dumps({'thinking_step': step})}\n\n"
+                yield {"thinking_step": step}
 
             elif event_type == "on_chain_end" and is_node_event:
                 logger.info("Stream: node END   → %s (type=%s)", node, node_type)
@@ -250,7 +283,7 @@ async def stream_response(
                         "status": "done",
                         **_step_done_payload(node_type, output),
                     }
-                    yield f"data: {json.dumps({'thinking_step': step})}\n\n"
+                    yield {"thinking_step": step}
                     # Web sources go to the caller so [n] citation markers in the
                     # generated text can be rendered as links. Emitted as soon as
                     # the search node completes — before generation streams.
@@ -259,14 +292,23 @@ async def stream_response(
                     if node_type and node_type.upper() == "TOOL_EXECUTOR":
                         artifacts = output.get("generated_artifacts", [])
                         if artifacts:
-                            yield f"data: {json.dumps({'generated_artifacts': artifacts})}\n\n"
+                            yield {"generated_artifacts": artifacts}
+                        # Citable sources any built-in tool surfaced (web_search
+                        # today). Already {index, title, url} with turn-global
+                        # indices — the full accumulated snapshot, so the answer's
+                        # [n] markers resolve to links. Same event and shape as
+                        # the legacy WEB_SEARCH node below; the caller can't tell
+                        # which produced them.
+                        tool_sources = output.get("tool_sources") or []
+                        if tool_sources:
+                            yield {"web_sources": tool_sources}
                     if node_type and node_type.upper() == "WEB_SEARCH":
                         sources = [
                             {"index": i, "title": r.get("title", ""), "url": r.get("url", "")}
                             for i, r in enumerate(output.get("web_search_results", []), 1)
                         ]
                         if sources:
-                            yield f"data: {json.dumps({'web_sources': sources})}\n\n"
+                            yield {"web_sources": sources}
                     # Structured output: the guaranteed-JSON response arrives as
                     # one content chunk when the generator node completes.
                     if structured_output and node in streaming_nodes:
@@ -274,9 +316,9 @@ async def stream_response(
                         if content:
                             if token_count == 0 and request_start is not None:
                                 thinking_duration_ms = int((time.monotonic() - request_start) * 1000)
-                                yield f"data: {json.dumps({'thinking_duration_ms': thinking_duration_ms})}\n\n"
+                                yield {"thinking_duration_ms": thinking_duration_ms}
                             token_count += 1
-                            yield f"data: {json.dumps({'content': content})}\n\n"
+                            yield {"content": content}
 
             if event_type == "on_chat_model_start":
                 logger.info("Stream: LLM call started in node=%s", node)
@@ -310,7 +352,7 @@ async def stream_response(
                             for c in raw_tool_calls
                         ]
                         logger.info("Stream: emitting %d tool call(s): %s", len(tool_calls), [c["name"] for c in tool_calls])
-                        yield f"data: {json.dumps({'tool_calls': tool_calls})}\n\n"
+                        yield {"tool_calls": tool_calls}
                     elif has_builtin:
                         logger.info(
                             "Stream: suppressing tool_calls event — built-in call(s) handled in-graph: %s",
@@ -334,9 +376,9 @@ async def stream_response(
                         # this point (retrieval, ranking, LLM ramp-up) was "thinking"
                         thinking_duration_ms = int((time.monotonic() - request_start) * 1000)
                         logger.info("Stream: thinking phase took %d ms", thinking_duration_ms)
-                        yield f"data: {json.dumps({'thinking_duration_ms': thinking_duration_ms})}\n\n"
+                        yield {"thinking_duration_ms": thinking_duration_ms}
                     token_count += 1
-                    yield f"data: {json.dumps({'content': chunk.content})}\n\n"
+                    yield {"content": chunk.content}
 
         logger.info(
             "Stream: completed — %d events processed, %d tokens emitted",
@@ -344,20 +386,51 @@ async def stream_response(
         )
         if token_count == 0:
             # Alarmed on: the user received an empty answer inside a 200 response.
-            count("stream_zero_tokens_total", vendor=state.get("llm_provider", ""))
+            count("stream_zero_tokens_total", vendor=_provider)
             logger.warning("Stream: ZERO tokens emitted — streaming node may have failed or produced no output")
         logger.info(
             "Stream: total usage — input_tokens=%d output_tokens=%d total_tokens=%d cache_read=%d cache_creation=%d",
             usage["input_tokens"], usage["output_tokens"], usage["total_tokens"],
             usage["cache_read_tokens"], usage["cache_creation_tokens"],
         )
-        yield f"data: {json.dumps({'usage': usage})}\n\n"
+        yield {"usage": usage}
     except Exception as e:
         # The HTTP status is already 200 by now — this counter is the only
         # failure signal for errors surfaced mid-stream.
-        count("stream_error_total", vendor=state.get("llm_provider", ""))
+        count("stream_error_total", vendor=_provider)
         logger.error("Stream: unhandled exception — %s", e, exc_info=True)
-        kind, message = user_facing_llm_error(e, state.get("llm_provider", ""))
-        yield f"data: {json.dumps({'error': message, 'error_type': kind})}\n\n"
+        kind, message = user_facing_llm_error(e, _provider)
+        yield {"error": message, "error_type": kind}
+
+
+async def stream_response(
+    state: RetrievalState,
+    graph: Any = None,
+    node_type_map: Optional[dict[str, str]] = None,
+    node_name_map: Optional[dict[str, str]] = None,
+    streaming_nodes: Optional[set[str]] = None,
+    recursion_limit: int = 25,
+    request_start: Optional[float] = None,
+    structured_output: bool = False,
+    builtin_tool_names: Optional[set[str]] = None,
+    thread_id: Optional[str] = None,
+) -> AsyncIterator[str]:
+    """SSE wrapper over stream_events_dicts for the stateless /retrieve path:
+    each event dict becomes a `data: {json}\\n\\n` frame, followed by the
+    terminating `data: [DONE]\\n\\n`."""
+    try:
+        async for payload in stream_events_dicts(
+            state,
+            graph=graph,
+            node_type_map=node_type_map,
+            node_name_map=node_name_map,
+            streaming_nodes=streaming_nodes,
+            recursion_limit=recursion_limit,
+            request_start=request_start,
+            structured_output=structured_output,
+            builtin_tool_names=builtin_tool_names,
+            thread_id=thread_id,
+        ):
+            yield f"data: {json.dumps(payload)}\n\n"
     finally:
         yield "data: [DONE]\n\n"

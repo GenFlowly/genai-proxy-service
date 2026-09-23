@@ -34,3 +34,99 @@ Every outbound call to a third-party API MUST go through `encoding_library.utils
 - **LLM chat calls are the exception**: they retry inside the vendor SDKs (`max_retries` in `graph/llm_factory.py`), not through this util — re-issuing a generation from our layer can double-bill when the original request actually succeeded server-side. Same for key validation (SDK-level; auth errors must not retry).
 - **boto3 (DynamoDB/S3/KMS)** has its own built-in backoff — don't double-wrap.
 - **Voice realtime websockets** are stateful sessions; reconnection is session logic, deliberately not covered by this util.
+
+## Customer-defined tools
+
+A customer's tool is a stored RECORD, not code, so adding one costs a row rather
+than a deploy. `graph/tools_runtime.tools_for` is the single seam that resolves
+a request's enabled names to tools: built-ins first, then the customer's own.
+A built-in always wins a name collision, so nobody can redefine `web_search`.
+
+| Provider | A record is | Interpreter |
+|---|---|---|
+| `http` | one HTTP call | `graph_tools/providers/http_tool.py` |
+| `mcp` | one MCP server, many tools | `graph_tools/providers/mcp_tool.py` |
+
+Two properties carry the security, because a tool's arguments are written by the
+model and a user can steer the model with pasted text.
+
+**The destination is pinned when the tool is defined.** Placeholders are rejected
+in the URL scheme and host; only the path, query, headers and body may be
+templated, and the assembled origin is re-checked before the call. A
+prompt-injected argument can change what a request says, never where it goes.
+
+**Substitution is not evaluation.** No expression language, no second pass. A
+value that is itself `{{credential.api_key}}` is not re-substituted, and a
+placeholder naming an unknown key is an error rather than an empty string.
+
+Credentials never enter graph state (the durable runtime checkpoints it) and
+never a process env var (one event loop serves every tenant). They are resolved
+per run by `graph/tool_credentials.py` — a sibling of `graph/credentials.py`,
+same rules — and reach a tool only through `ToolContext.secrets`.
+
+### Endpoints
+
+| Endpoint | Does | Writes |
+|---|---|---|
+| `POST /tools/dry-run` | run one tool definition, returning the outbound request with credentials masked, the raw response, and the exact string the model would see | nothing |
+| `POST /connectors/openapi/preview` | fetch an OpenAPI spec and return the tools it would produce | nothing |
+| `POST /connectors/mcp/discover` | connect to an MCP server and list the tools it offers, for the user to approve | nothing |
+
+All three are read-only by design: they return proposals the proxy then saves.
+The two connector endpoints take a URL the USER typed, which is why they live
+here rather than in the proxy — this is where the SSRF-hardened client
+(`graph_tools/providers/safe_client.py`) is. That module refuses non-https
+destinations, any host resolving to loopback/private/link-local/reserved space,
+redirects, unbounded time or size, and caller-set transport headers. Its one
+known gap, DNS rebinding between validation and connection, is documented in the
+module rather than left to be discovered.
+
+A tool stays `draft` until a dry run succeeds. Only `active` records are ever
+bound, and a customer-defined tool is never enabled implicitly — see
+`_enabled_builtin_tools` in `routes/retrieve.py`, whose no-config fallback
+covers built-ins only.
+
+## Durable agentic runs (planned)
+
+Full design and rationale: `DURABLE_AGENTS_DBOS_PLAN.md`. Goal: evolve this service from a
+stateless-per-call graph runner into a durable runtime — runs that survive process crash/redeploy,
+in-graph human-in-the-loop, exactly-once LLM steps, reattachable streams — using DBOS (durable
+workflows, MIT-licensed library) plus a LangGraph Postgres checkpointer on a managed Supabase
+database. No new always-on infra on Fly.
+
+| Phase | What | Where |
+|---|---|---|
+| P0 | Spike: prove DBOS + checkpointer + Supabase locally (crash-resume, reattach, `interrupt()`) | here, throwaway branch |
+| **P1a** | Secrets out of `RetrievalState` — resolve `llm_credentials` from DynamoDB by `customer_id` at call time instead of carrying them in graph state | **here — start here, independent of everything else** |
+| P1b | Extract the proxy's SSE→chunk parser into a shared function (reused by the new run-stream reattach path later) | genai-proxy-server |
+| P1c | Durable `/runs` path — checkpointer-backed compile variant, a DBOS workflow driving `astream_events`, a reattach channel, `POST /runs` / `GET /runs/{id}/stream` / `POST /runs/{id}/cancel`. Ships dark (unused). | here |
+| P1d | Proxy wires one flow to `/runs` behind a flag | genai-proxy-server |
+| P2 | Exactly-once LLM step (wrap the vendor call as a `@DBOS.step()`) + in-graph `interrupt()`/resume for HITL and client-fulfilled tools | both |
+| P3 | Queue concurrency/retry tuning, run inspection, checkpoint/event TTL, cron | both |
+
+**Start with P1a.** It's a pure security refactor, ships independently, and is a hard prerequisite
+for checkpointing (state that will be persisted to Postgres must never carry secrets). New
+`graph/credentials.py`: resolve creds by `customer_id` from the `CustomerVendorApiKeys` DynamoDB
+table (PK=`customerId`, SK=`aiVendor`) and KMS-decrypt (no explicit key ARN needed — it's embedded
+in the ciphertext), memoized per run so a looping graph does one DDB+KMS round-trip, not one per
+node. Mirrors the proxy's own `CustomerCredentialsRepository`/`KMSProvider` path; needs
+`dynamodb:GetItem` on that table + `kms:Decrypt` granted to this service's IAM role.
+
+**Supabase connection mode matters.** Use the Supabase **session pooler** URL (port 5432,
+`sslmode=require`) for `DATABASE_URL` — never the **transaction pooler** (6543), which breaks
+advisory locks. P0 confirmed `LISTEN/NOTIFY` does **not** work over Supabase's pooler in any mode,
+so DBOS runs with `use_listen_notify=False` (it polls) and the reattach channel polls the events
+table; neither needs NOTIFY. DBOS keeps its tables in a schema via `dbos_system_schema`, so the one
+Supabase `postgres` database is sufficient.
+
+**Required config — `DATABASE_URL` (the Supabase session-pooler connection string).** Without it
+the server starts normally and durable `/runs` is simply inactive; with it, durable runs are
+enabled.
+
+- **Local dev:** put it in `retrieval-server/.env.local` (gitignored — see `.env.example`).
+- **Deployed:** it's a **Fly secret on the `genai-retrieval-server-<stage>` app** (note: the CI app
+  name is `genai-retrieval-server-<stage>`, not the `retrieval-server` in `fly.toml`). Set it via
+  the Fly dashboard or `flyctl secrets set --app genai-retrieval-server-<stage> DATABASE_URL=…`.
+  CI (`dev`/`prod-proxy-server.yml`, "Deploy Retrieval Server" step) also sets it from an
+  environment-scoped **`DATABASE_URL` GitHub Actions secret** if that secret exists — so add it per
+  environment (dev/prod point at different Supabase projects) to keep deploys reproducible.

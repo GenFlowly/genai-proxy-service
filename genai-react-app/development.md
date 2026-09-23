@@ -241,7 +241,7 @@ Extract into `translation.json`:
 - Toast messages, `window.confirm` text, error messages that render in the UI (including thrown `Error` messages that a catch block displays via `err.message`)
 
 Do **not** extract:
-- Brand/product names ("OpenAI", "Claude", "Supabase", "Milvus Cloud")
+- Brand/product names ("OpenAI", "Claude", "Milvus Cloud")
 - `console.*` output, thrown errors that are only logged, technical error codes
 - localStorage/cache keys, routes/URLs, API field names, `data-testid` values
 - Enum values coming from the server (translate at the display mapping if needed, not the data)

@@ -7,7 +7,7 @@ import styles from './SettingsSidebar.module.scss'
 
 import { useNavigate, useLocation } from 'react-router-dom'
 
-export type SettingsTab = 'profile' | 'ai' | 'actions' | 'developer'
+export type SettingsTab = 'profile' | 'ai' | 'actions' | 'tools' | 'connectors' | 'developer'
 
 interface SettingsNavChild {
     key: string
@@ -79,6 +79,18 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
             path: '/settings/actions',
         },
         {
+            key: 'tools',
+            label: t('settingsPage.settingsSidebar.tools'),
+            icon: ICONS.STEPS,
+            path: '/settings/tools',
+        },
+        {
+            key: 'connectors',
+            label: t('settingsPage.settingsSidebar.connectors'),
+            icon: ICONS.LINK,
+            path: '/settings/connectors',
+        },
+        {
             key: 'developer',
             label: t('settingsPage.settingsSidebar.developer'),
             icon: ICONS.EDIT,
@@ -97,8 +109,12 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
             setExpandedOverride(prev => ({ ...prev, [item.key]: false }))
         } else {
             setExpandedOverride(prev => ({ ...prev, [item.key]: true }))
-            // Opening a section from outside also takes you to its first page
-            if (!isInSection(item)) navigate(item.children[0].path)
+            // Desktop: opening a section from outside also takes you to its first
+            // page — the sidebar stays visible alongside the content. On the mobile
+            // full-page menu we must NOT navigate: this menu is its own page, so
+            // routing to a child would leave the menu before the submenu can show.
+            // There, tapping the parent just expands it; the user then taps a child.
+            if (!fullPage && !isInSection(item)) navigate(item.children[0].path)
         }
     }
 

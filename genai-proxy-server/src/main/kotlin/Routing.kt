@@ -26,8 +26,11 @@ import com.genflowly.activity.customer.registerSearchRoutes
 import com.genflowly.activity.customer.registerEmbeddingKeyRoutes
 import com.genflowly.activity.customer.registerStoreApiKeyRoutes
 import com.genflowly.activity.customer.registerStoreVectorDBConfigRoutes
+import com.genflowly.activity.customer.registerConnectorsRoutes
+import com.genflowly.activity.customer.registerCustomerToolsRoutes
 import com.genflowly.activity.customer.registerToolCredentialsRoutes
 import com.genflowly.activity.generation.registerCancelGenerationRoute
+import com.genflowly.activity.generation.registerRunRoutes
 import com.genflowly.activity.generation.registerGenerateTextRoutes
 import com.genflowly.activity.generation.registerGenerateTextStreamRoutes
 import com.genflowly.activity.generation.registerGetAIUsageActivityRoutes
@@ -78,6 +81,9 @@ object Routes {
     const val GENERATE_TEXT = "$API_V1/generate-text"
     const val GENERATE_TEXT_STREAM = "$API_V1/generate-text-stream"
     const val CANCEL_GENERATION = "$API_V1/generations/cancel"
+    // Durable-run reattach (reload recovery) + resume (human-in-the-loop reply).
+    const val REATTACH_RUN = "$API_V1/runs/{runId}/stream"
+    const val RESUME_RUN = "$API_V1/runs/{runId}/resume"
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val STORE_VENDOR_CONFIG = "$API_V1/store-vendor-config"
     const val EMBEDDING_KEYS = "$API_V1/embedding-keys"
@@ -117,6 +123,19 @@ object Routes {
 
     const val TOOL_CREDENTIALS = "$API_V1/tool-credentials"
     const val TOOL_CREDENTIAL = "$API_V1/tool-credentials/{toolType}"
+
+    const val TOOLS = "$API_V1/tools"
+    const val TOOL = "$API_V1/tools/{name}"
+    const val TOOL_DRY_RUN = "$API_V1/tools/{name}/dry-run"
+
+    // A connector is one thing the customer connects that yields many tools.
+    // It has no table of its own: these routes group the CustomerTools rows.
+    const val CONNECTORS = "$API_V1/connectors"
+    const val CONNECTOR = "$API_V1/connectors/{id}"
+    const val CONNECTOR_OPENAPI_PREVIEW = "$API_V1/connectors/openapi/preview"
+    const val CONNECTOR_OPENAPI_IMPORT = "$API_V1/connectors/openapi/import"
+    const val CONNECTOR_MCP_DISCOVER = "$API_V1/connectors/mcp/discover"
+    const val CONNECTOR_MCP_CONNECT = "$API_V1/connectors/mcp/connect"
 
     const val REQUEST_AGENT_MAP = "$API_V1/request-agents"
     const val REQUEST_AGENT_MAP_ENTRY = "$API_V1/request-agents/{requestType}"
@@ -162,6 +181,7 @@ object Routes {
 
 fun Application.configureRouting(
     generationOrchestrator: GenerationOrchestrator,
+    runsClient: com.genflowly.providers.RunsClient,
     customerProfileService: CustomerProfileService,
     customerCredentialsService: CustomerCredentialsService,
     instructionService: InstructionService,
@@ -182,6 +202,8 @@ fun Application.configureRouting(
     unifiedSearchService: com.genflowly.service.UnifiedSearchService,
     nodePresetService: com.genflowly.service.NodePresetService,
     vendorAllowlistService: com.genflowly.service.VendorAllowlistService,
+    customerToolsService: com.genflowly.service.CustomerToolsService,
+    connectorsService: com.genflowly.service.ConnectorsService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -211,12 +233,13 @@ fun Application.configureRouting(
         registerGenerateTextRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
         registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
         registerCancelGenerationRoute(generationOrchestrator, customerProfileService)
+        registerRunRoutes(runsClient, customerProfileService, conversationService)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)
         registerEmbeddingKeyRoutes(customerCredentialsService, customerProfileService)
         registerStoreVectorDBConfigRoutes(customerCredentialsService, customerProfileService)
         registerOnboardCustomerRoutes(customerProfileService, appConfig)
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService, vendorAllowlistService)
-        registerSaveAIConfigPreferencesRoutes(customerProfileService)
+        registerSaveAIConfigPreferencesRoutes(customerProfileService, customerCredentialsService)
         registerGetConversationRoutes(customerProfileService, conversationService)
         registerCreateInstructionRoutes(instructionService, customerProfileService)
         registerCreateInstructionShareRoutes(instructionService, customerProfileService)
@@ -245,6 +268,8 @@ fun Application.configureRouting(
         registerCustomerRequestAgentRoutes(customerRequestAgentMapService, customerProfileService)
         registerDeleteAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
+        registerCustomerToolsRoutes(customerToolsService, customerProfileService)
+        registerConnectorsRoutes(connectorsService, customerProfileService)
         
         registerCustomerProfileSettingsRoutes(customerProfileService)
         registerSearchRoutes(customerProfileService)

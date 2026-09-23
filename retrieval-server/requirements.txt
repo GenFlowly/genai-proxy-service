@@ -13,6 +13,13 @@ prometheus-client
 prometheus-fastapi-instrumentator
 
 langgraph>=1.2
+# Durable agentic runs (see DURABLE_AGENTS_DBOS_PLAN.md): DBOS durable workflows
+# + LangGraph Postgres checkpointer on Supabase. Versions verified in the P0
+# spike against the Supabase session pooler (dbos 3.0.0, checkpoint-postgres
+# 3.1.2, psycopg 3.3.6). DBOS runs with use_listen_notify=False over the pooler.
+dbos>=3.0.0,<4
+langgraph-checkpoint-postgres>=3.1.2
+psycopg[binary,pool]>=3.3.6
 langchain-core
 langchain-openai
 langchain-anthropic
@@ -46,3 +53,10 @@ httpx
 # Voice sessions: upstream WebSocket client for OpenAI Realtime
 # (Gemini Live uses google-genai's built-in live support)
 websockets
+
+# Model Context Protocol client, for the `mcp` tool provider (graph_tools/
+# providers/mcp_tool.py). The SDK directly rather than langchain-mcp-adapters:
+# we have our own GraphTool contract, so the adapter would only add a layer,
+# and it pins mcp<2.0.0 while the SDK is on 2.x (where the streamable-http
+# entry point was renamed).
+mcp>=2.0.0

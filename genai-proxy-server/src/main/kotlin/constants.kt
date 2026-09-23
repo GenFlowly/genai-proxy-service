@@ -40,6 +40,10 @@ object DynamoDBConstants {
     const val CUSTOMER_VECTOR_DB_CONFIG_TABLE = "CustomerVectorDBConfig"
     const val VENDOR_KEY = "vendor"
 
+    // Per-customer, per-embedding-vendor list of models the customer's key can
+    // actually embed (discovered by probing). PK = customerId, SK = vendor.
+    const val CUSTOMER_EMBEDDING_MODELS_TABLE = "CustomerEmbeddingModels"
+
 
     const val INSTRUCTION_TABLE = "Instructions"
     const val INSTRUCTION_ID_KEY = "instructionId"
@@ -86,12 +90,40 @@ object DynamoDBConstants {
     const val DELETED_AT_KEY = "deletedAt"
     const val ARCHIVED_AT_KEY = "archivedAt"
     const val PINNED_AT_KEY = "pinnedAt"
+    // Points at the durable agent run currently generating this conversation's
+    // reply (DURABLE_AGENTS_DBOS_PLAN §5.8) — set while a /runs stream is live so
+    // a page reload can rediscover and reattach; cleared when the run ends.
+    const val PENDING_RUN_ID_KEY = "pendingRunId"
+    // Set of the durable runs currently generating this conversation's reply — one
+    // per vendor, since a multi-vendor turn fans out to N concurrent /runs. A
+    // String Set so parallel vendor requests ADD/DELETE their own entry atomically
+    // (the single PENDING_RUN_ID_KEY above only kept the last writer). Each element
+    // encodes responseMessageId, runId, vendor, model. Cleared per-run as each ends.
+    const val PENDING_RUNS_KEY = "pendingRuns"
 
     // Tool credentials — per-customer, per-toolType
     const val CUSTOMER_TOOL_CREDENTIALS_TABLE = "CustomerToolCredentials"
     const val TOOL_TYPE_KEY = "toolType"
     const val TOOL_AUTH_TYPE_KEY = "authType"
     const val TOOL_CREDENTIALS_KEY = "credentials"
+
+    // Per-customer declarative HTTP tools. PK=customerId, SK=name (the
+    // model-facing tool name), so per-customer name uniqueness is a schema
+    // property. The row never contains a secret: credentialRef points at a
+    // CustomerToolCredentials sort key, and the values stay encrypted there.
+    const val CUSTOMER_TOOLS_TABLE = "CustomerTools"
+    const val TOOL_NAME_KEY = "name"
+    const val TOOL_DESCRIPTION_KEY = "description"
+    const val TOOL_PARAMETERS_KEY = "parameters"
+    const val TOOL_PROVIDER_KEY = "provider"
+    const val TOOL_REQUEST_KEY = "request"
+    const val TOOL_CREDENTIAL_REF_KEY = "credentialRef"
+    const val TOOL_RESPONSE_TRANSFORM_KEY = "responseTransform"
+    const val TOOL_STATUS_KEY = "status"
+    const val TOOL_ORIGIN_KEY = "origin"
+    const val TOOL_ORIGIN_REF_KEY = "originRef"
+    const val TOOL_DISCOVERED_TOOLS_KEY = "discoveredTools"
+    const val TOOL_LAST_DRY_RUN_AT_KEY = "lastDryRunAt"
 
     const val SHARED_INSTRUCTIONS_TABLE = "SharedInstructions"
     const val SHARED_WITH_CUSTOMER_ID_KEY = "sharedWithCustomerId"

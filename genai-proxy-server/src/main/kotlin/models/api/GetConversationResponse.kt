@@ -12,7 +12,13 @@ data class GetConversationResponse(
     /** Caller's role on this conversation: OWNER, EDIT, or VIEW. */
     val role: ShareRole = ShareRole.OWNER,
     /** Whole-conversation usage + exact cost, one entry per AI vendor that responded. */
-    val vendorTotals: List<VendorUsageTotals> = emptyList()
+    val vendorTotals: List<VendorUsageTotals> = emptyList(),
+    /**
+     * Set when a durable agent run is currently generating this conversation's
+     * reply (DURABLE_AGENTS_DBOS_PLAN §5.8). A reloading client reattaches to
+     * GET /runs/{pendingRunId}/stream to resume watching the in-flight response.
+     */
+    val pendingRunId: String? = null
 )
 
 /** Conversation-wide token usage and exact USD cost for one AI vendor. */

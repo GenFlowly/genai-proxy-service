@@ -1,6 +1,7 @@
 """Core types: GraphTool, ToolContext, ToolResult, Artifact."""
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from graph_tools.storage import ArtifactStore
@@ -27,12 +28,53 @@ class Artifact:
 
 
 @dataclass
-class ToolResult:
-    """What a tool hands back to the model (content) and to the host
-    application (artifacts, for persistence and download links)."""
+class Source:
+    """A citable source a tool grounded its result in (a web page, a document,
+    an API record).
 
-    content: str
+    Tool-agnostic: any tool that answers from fetched sources returns these, and
+    the host numbers them with a running [n] index across the turn, renders them
+    into the tool's text for the model to read, and forwards {index, title, url}
+    to the client so the inline [n] markers in the answer become clickable
+    links. Tools therefore never number their own sources — the host owns the
+    numbering, which is the only way it stays consistent across several tool
+    calls in one turn."""
+
+    title: str
+    url: str
+    content: str = ""          # snippet the model reads under the [n] header
+    published_date: str = ""   # optional; surfaced when the tool has it
+
+    def to_dict(self) -> dict:
+        d: dict = {"title": self.title, "url": self.url}
+        if self.content:
+            d["content"] = self.content
+        if self.published_date:
+            d["published_date"] = self.published_date
+        return d
+
+
+@dataclass
+class ToolResult:
+    """What a tool hands back to the model (content + cited sources) and to the
+    host application (artifacts, for persistence and download links).
+
+    content   — free text the model reads. When `sources` is set, the host
+                appends the numbered source list to it, so `content` should be a
+                short preamble here, never a hand-numbered list.
+    sources   — citable sources (see Source); the host numbers, renders and
+                forwards them. Empty for tools that don't ground in sources.
+    artifacts — files the tool produced, for the host to persist."""
+
+    content: str = ""
     artifacts: list[Artifact] = field(default_factory=list)
+    sources: list["Source"] = field(default_factory=list)
+
+
+def _no_secrets(credential_ref: str) -> dict:
+    """Default secrets accessor: the host injected none, so every tool sees an
+    empty credential map and must degrade gracefully (see GraphTool.run)."""
+    return {}
 
 
 @dataclass
@@ -42,11 +84,20 @@ class ToolContext:
     key_template maps an artifact id to a storage key — the host owns the key
     convention (e.g. "customers/{customer_id}/attachments/{artifact_id}");
     tools only ever call save_artifact.
+
+    secrets maps a tool's credential_ref to the caller's decrypted credential
+    values for THIS request. It is a plain callable over an already-resolved
+    map, never a live fetch: the host resolves credentials once per run, off
+    the event loop, before any tool executes. Tools therefore never reach for
+    process environment variables (shared by every tenant in this single
+    async process) and no secret is ever placed in graph state (which the
+    durable runtime checkpoints to Postgres).
     """
 
     customer_id: str
     store: ArtifactStore
     key_template: str = "{artifact_id}"
+    secrets: Callable[[str], dict] = _no_secrets
 
     def save_artifact(self, data: bytes, media_type: str, filename: str) -> Artifact:
         artifact_id = str(uuid.uuid4())
@@ -69,11 +120,17 @@ class GraphTool(ABC):
     `name`/`description`/`parameters` (a JSON Schema object) form the spec the
     model sees — vendor-agnostic; the host translates it to each LLM provider.
     `run` is the implementation the backend executes when the model calls it.
+
+    `credential_ref` names the credential this tool needs, if any. The host
+    resolves it per request and exposes the values through
+    `context.secrets(credential_ref)`. None means the tool needs no caller
+    credential. The spec the model sees never includes it.
     """
 
     name: str
     description: str
     parameters: dict
+    credential_ref: str | None = None
 
     @property
     def spec(self) -> dict:

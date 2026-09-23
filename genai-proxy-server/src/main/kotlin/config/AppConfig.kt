@@ -26,7 +26,14 @@ data class AppConfig(
     /** Email domain required for admin-panel accounts (no leading @). */
     val adminEmailDomain: String,
     /** Deployment environment from APP_ENV: "production" on the prod Fly app, "development" otherwise. */
-    val environment: String
+    val environment: String,
+    /**
+     * Route agentic streaming chat through the retrieval-server's durable /runs
+     * path (DBOS workflow + Postgres checkpoint + reattachable stream) instead of
+     * the stateless /retrieve stream. Off by default; dark-shipped behind
+     * DURABLE_RUNS_ENABLED until the durable path is proven end-to-end.
+     */
+    val durableRunsEnabled: Boolean
 ) {
     val isProduction: Boolean get() = environment == "production"
 
@@ -63,7 +70,8 @@ data class AppConfig(
             adminEmailDomain = System.getenv("ADMIN_EMAIL_DOMAIN")?.trim()?.removePrefix("@")?.lowercase()
                 ?.takeIf { it.isNotEmpty() } ?: "genflowly.com",
             environment = System.getenv("APP_ENV")?.trim()?.lowercase()
-                ?.takeIf { it.isNotEmpty() } ?: "development"
+                ?.takeIf { it.isNotEmpty() } ?: "development",
+            durableRunsEnabled = System.getenv("DURABLE_RUNS_ENABLED")?.trim()?.lowercase() == "true"
         )
 
         private fun envList(name: String): Set<String> =

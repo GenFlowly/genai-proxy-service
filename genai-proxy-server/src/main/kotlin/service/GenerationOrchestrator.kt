@@ -5,16 +5,20 @@ import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import com.genflowly.models.retrieval.StreamChunk
+import com.genflowly.models.retrieval.toNdjsonFrame
 import com.genflowly.models.retrieval.parseGeneratedArtifacts
 import com.genflowly.models.retrieval.toConversationMessage
 import com.genflowly.models.retrieval.toImageRefs
 import com.genflowly.models.retrieval.toPayloadToolResults
 import com.genflowly.models.retrieval.toPayloadTools
 import com.genflowly.models.retrieval.toResultsJson
+import com.genflowly.config.AppConfig
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.providers.RunsClient
 import com.genflowly.repository.GraphRepository
 import com.genflowly.DynamoDBConstants.SYSTEM_GRAPH_OWNER
 import com.genflowly.di.AppScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
 import com.genflowly.models.AIConfig
@@ -49,7 +53,9 @@ class GenerationOrchestrator(
     private val memoryService: MemoryService,
     private val costCalculationService: CostCalculationService,
     private val graphRepository: GraphRepository,
-    private val appScope: AppScope
+    private val appScope: AppScope,
+    private val runsClient: RunsClient,
+    private val appConfig: AppConfig
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
@@ -59,6 +65,9 @@ class GenerationOrchestrator(
      */
     private data class ActiveGeneration(val customerId: String, val job: kotlinx.coroutines.Job)
     private val activeGenerations = java.util.concurrent.ConcurrentHashMap<String, ActiveGeneration>()
+    // responseMessageId -> durable run_id, for runs started on the /runs path. Lets
+    // cancelGeneration also stop the background run on the retrieval-server.
+    private val activeRunIds = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /**
      * True cancel for a streamed generation: stops the upstream LLM work (the
@@ -67,11 +76,17 @@ class GenerationOrchestrator(
      * is persisted. Returns false when nothing is running under that id for
      * this customer (already finished, or not the caller's generation).
      */
-    fun cancelGeneration(customerId: String, responseMessageId: String): Boolean {
+    suspend fun cancelGeneration(customerId: String, responseMessageId: String): Boolean {
         val active = activeGenerations[responseMessageId] ?: return false
         if (active.customerId != customerId) return false
         logger.info("Cancelling generation {} for customer {}", responseMessageId, customerId)
         active.job.cancel(kotlinx.coroutines.CancellationException("Cancelled by user"))
+        // Durable path: stop the background run on the retrieval-server too — the
+        // job cancel only stops the proxy's relay, not the durable workflow.
+        activeRunIds[responseMessageId]?.let { runId ->
+            runCatching { runsClient.cancelRun(runId) }
+                .onFailure { logger.warn("Failed to cancel durable run {}: {}", runId, it.message) }
+        }
         return true
     }
 
@@ -456,20 +471,27 @@ class GenerationOrchestrator(
             val capturedThinkingSteps = mutableListOf<String>()
             var success = false
             var cancelled = false
+            // The durable run this generation added to the conversation's pending
+            // set (one entry per vendor), captured so the finally removes exactly
+            // this one — not the sibling vendors' still-in-flight runs.
+            var pendingRunEntry: com.genflowly.repository.PendingRun? = null
             try {
-                retrievalService.retrieveAndGenerateStream(
+                val resolvedMaxTokens = modelCatalogService.resolveMaxTokens(
+                    vendor = config.aiVendor,
+                    model = config.model,
+                    requested = config.maxTokens,
+                    streaming = true
+                )
+                // Stateless /retrieve stream (the default path). Credentials are
+                // sent in the request body.
+                fun statelessStream(): Flow<StreamChunk> = retrievalService.retrieveAndGenerateStream(
                     customerId = customerId,
                     client = client,
                     query = userRequestRawPrompt,
                     llmCredentials = llmCredentials,
                     llmProvider = llmProvider,
                     llmModel = config.model,
-                    llmMaxTokens = modelCatalogService.resolveMaxTokens(
-                        vendor = config.aiVendor,
-                        model = config.model,
-                        requested = config.maxTokens,
-                        streaming = true
-                    ),
+                    llmMaxTokens = resolvedMaxTokens,
                     conversationHistory = conversationHistory,
                     systemPrompt = systemPrompt,
                     agentic = agentic,
@@ -480,55 +502,79 @@ class GenerationOrchestrator(
                     responseSchema = responseSchema,
                     memoryEnabled = memoryEnabled,
                     graphId = agentId
-                ).collect { chunk ->
+                )
+                // Durable /runs path (flagged): start a durable background run and
+                // reattach to its event stream. Credentials are NOT sent — the
+                // retrieval-server resolves them from DynamoDB by customer_id, so
+                // no secret is checkpointed (DURABLE_AGENTS_DBOS_PLAN §5.5). Only
+                // the agentic case is routed here; a start failure degrades to the
+                // stateless stream so a chat is never lost behind the flag.
+                val generationFlow: Flow<StreamChunk> =
+                    if (appConfig.durableRunsEnabled && agentic) {
+                        val startedRunId = runsClient.startRun(
+                            customerId = customerId,
+                            client = client,
+                            query = userRequestRawPrompt,
+                            llmProvider = llmProvider,
+                            llmModel = config.model,
+                            llmMaxTokens = resolvedMaxTokens,
+                            conversationHistory = conversationHistory,
+                            systemPrompt = systemPrompt,
+                            agentic = agentic,
+                            queryImages = attachments.toImageRefs(),
+                            tools = tools.toPayloadTools(),
+                            toolChoice = toolChoice,
+                            toolResults = toolResults.toPayloadToolResults(),
+                            responseSchema = responseSchema,
+                            memoryEnabled = memoryEnabled,
+                            graphId = agentId
+                        )
+                        if (startedRunId != null) {
+                            // Add this run to the conversation's pending set (one entry
+                            // per vendor) for reload rediscovery ("assistant is mid-run");
+                            // best-effort. Carries the deterministic responseMessageId +
+                            // vendor/model so a reload renders and reattaches this card.
+                            val entry = com.genflowly.repository.PendingRun(responseMessageId, startedRunId, config.aiVendor.name, config.model)
+                            pendingRunEntry = entry
+                            runCatching { conversationService.addPendingRun(customerId, activeConversationId, entry) }
+                                .onFailure { logger.warn("Failed to persist pending run {} on conversation {}: {}", startedRunId, activeConversationId, it.message) }
+                            activeRunIds[responseMessageId] = startedRunId  // for durable cancel
+                            runsClient.streamRun(startedRunId)
+                        } else {
+                            logger.warn("Durable run start failed for conversation {} — falling back to stateless stream", activeConversationId)
+                            statelessStream()
+                        }
+                    } else {
+                        statelessStream()
+                    }
+                generationFlow.collect { chunk ->
+                    // Capture for persistence; the client frame is produced by the
+                    // shared StreamChunk.toNdjsonFrame() so the live and reattach
+                    // streams emit an identical wire protocol.
                     when (chunk) {
-                        is StreamChunk.Content -> {
-                            sb.append(chunk.text)
-                            emit("{\"t\":\"c\",\"v\":${chunk.text.toJsonStringValue()}}\n")
-                        }
-                        is StreamChunk.Thinking -> {
-                            emit("{\"t\":\"k\",\"v\":${chunk.text.toJsonStringValue()}}\n")
-                        }
-                        is StreamChunk.ThinkingStep -> {
-                            capturedThinkingSteps.add(chunk.json)
-                            // chunk.json is already a JSON object — embed as-is
-                            emit("{\"t\":\"ks\",\"v\":${chunk.json}}\n")
-                        }
-                        is StreamChunk.ThinkingDuration -> {
-                            capturedThinkingDurationMs = chunk.millis
-                            emit("{\"t\":\"kd\",\"v\":${chunk.millis}}\n")
-                        }
-                        is StreamChunk.ToolCalls -> {
-                            capturedToolCallsJson = chunk.json
-                            // chunk.json is already a JSON array — embed as-is
-                            emit("{\"t\":\"tc\",\"v\":${chunk.json}}\n")
-                        }
-                        is StreamChunk.WebSources -> {
-                            capturedWebSourcesJson = chunk.json
-                            // chunk.json is already a JSON array — embed as-is
-                            emit("{\"t\":\"ws\",\"v\":${chunk.json}}\n")
-                        }
-                        is StreamChunk.GeneratedArtifacts -> {
-                            // Multiple TOOL_EXECUTOR completions per turn are
-                            // possible in principle; keep the accumulated set.
+                        is StreamChunk.Content -> sb.append(chunk.text)
+                        is StreamChunk.ThinkingStep -> capturedThinkingSteps.add(chunk.json)
+                        is StreamChunk.ThinkingDuration -> capturedThinkingDurationMs = chunk.millis
+                        is StreamChunk.ToolCalls -> capturedToolCallsJson = chunk.json
+                        is StreamChunk.WebSources -> capturedWebSourcesJson = chunk.json
+                        is StreamChunk.GeneratedArtifacts ->
+                            // Multiple TOOL_EXECUTOR completions per turn are possible; accumulate.
                             capturedGeneratedArtifactsJson = mergeJsonArrays(capturedGeneratedArtifactsJson, chunk.json)
-                            // chunk.json is already a JSON array — embed as-is
-                            emit("{\"t\":\"ga\",\"v\":${chunk.json}}\n")
-                        }
                         is StreamChunk.Usage -> capturedUsage = chunk
                         is StreamChunk.Error -> {
-                            // Vendor failure surfaced mid-stream (quota, key
-                            // rejected, ...) — relay the concise reason so the
-                            // client can attach it to this vendor's response
-                            // card. Any partial text is kept and persisted.
+                            // Vendor failure surfaced mid-stream — the concise reason is
+                            // relayed (below) and any partial text is kept and persisted.
                             capturedErrorMessage = chunk.message
                             logger.warn(
                                 "Generation {} failed mid-stream ({}): {}",
                                 responseMessageId, chunk.errorType ?: "provider_error", chunk.message
                             )
-                            emit("{\"t\":\"err\",\"v\":${chunk.message.toJsonStringValue()}}\n")
                         }
+                        is StreamChunk.AwaitingInput ->
+                            logger.info("Generation {} awaiting input: {}", responseMessageId, chunk.json)
+                        is StreamChunk.Thinking -> {}
                     }
+                    chunk.toNdjsonFrame()?.let { emit(it) }
                 }
                 success = true
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -584,6 +630,12 @@ class GenerationOrchestrator(
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }
+                // Durable run finished — remove just this run from the pending set
+                // (the other vendors' in-flight runs stay reattachable). No-op when
+                // no durable run was started (stateless path / start failure).
+                pendingRunEntry?.let { entry ->
+                    runCatching { conversationService.removePendingRun(customerId, activeConversationId, entry) }
+                }
                 }
                 } catch (e: Exception) {
                     logger.error("Failed to persist streamed response $responseMessageId", e)
@@ -595,7 +647,10 @@ class GenerationOrchestrator(
             }
         }
         activeGenerations[responseMessageId] = ActiveGeneration(customerId, generationJob)
-        generationJob.invokeOnCompletion { activeGenerations.remove(responseMessageId) }
+        generationJob.invokeOnCompletion {
+            activeGenerations.remove(responseMessageId)
+            activeRunIds.remove(responseMessageId)
+        }
         val flow = chunkChannel.consumeAsFlow()
 
         return StreamExecutionResult(

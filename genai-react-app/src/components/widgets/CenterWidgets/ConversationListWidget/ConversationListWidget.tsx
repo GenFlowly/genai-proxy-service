@@ -11,6 +11,7 @@ import { useToast } from '../../../../context/ToastContext'
 import { uploadAttachment, getAttachmentViewUrl } from '../../../../services/attachmentService'
 import { getLearnedFacts, deleteMemoryFact } from '../../../../services/learnedFactsService'
 import { useVendorDisplayNames } from '../../../../hooks/useVendorDisplayNames'
+import { RunHitlBanner } from './RunHitlBanner'
 
 /**
  * Adapter between the app's contexts/services and the shared
@@ -74,6 +75,7 @@ export default function ConversationListWidget() {
     return (
         <ConversationWidgetProvider value={value}>
             <ConversationWidget />
+            <RunHitlBanner />
         </ConversationWidgetProvider>
     )
 }

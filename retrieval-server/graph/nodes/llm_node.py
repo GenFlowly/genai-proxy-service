@@ -1,19 +1,149 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from encoding_library.observability import count, observe
+from graph.credentials import credentials_for, resolve_credentials
 from graph.llm_factory import get_llm
 from graph.s3_images import fetch_image_base64
 from graph.state import RetrievalState
-from graph.tools_runtime import get_registry
+from graph.tools_runtime import specs_for
+
+import durable_runtime
 
 logger = logging.getLogger(__name__)
+
+
+# --- LLM construction + invocation (shared by the stateless and durable paths) ---
+
+def _build_llm_and_structured(
+    provider, credentials, effective_model, max_tokens, llm_betas,
+    tools_bound, tool_specs, tool_choice, response_schema,
+):
+    """Build the chat model (with tools / structured-output binding) for one call.
+    Shared verbatim by the inline /retrieve path and the durable step so both
+    produce an identical model."""
+    llm = get_llm(provider, credentials, effective_model, max_tokens, betas=llm_betas or None)
+    if tools_bound:
+        bind_kwargs = {"tool_choice": tool_choice} if tool_choice else {}
+        llm = llm.bind_tools(tool_specs, **bind_kwargs)
+    structured_llm = None
+    if response_schema:
+        # include_raw keeps the AIMessage (usage_metadata) alongside the parsed
+        # object. Anthropic uses method="json_schema" (native grammar-constrained
+        # decoding, needs a top-level title); others take the function-format spec.
+        if provider == "anthropic":
+            structured_llm = llm.with_structured_output(
+                {"title": "structured_response", **response_schema},
+                method="json_schema",
+                include_raw=True,
+            )
+        else:
+            structured_llm = llm.with_structured_output(
+                {
+                    "name": "structured_response",
+                    "description": response_schema.get(
+                        "description", "Respond with a single object in this exact JSON structure."
+                    ),
+                    "parameters": response_schema,
+                },
+                include_raw=True,
+            )
+    return llm, structured_llm
+
+
+async def _invoke_llm(llm, structured_llm, messages):
+    """Invoke the model, returning (response, parsed, parsing_error). Token
+    streaming (on_chat_model_stream) surfaces through the outer astream_events on
+    both paths — verified to survive inside a DBOS step."""
+    if structured_llm is not None:
+        wrapped = await structured_llm.ainvoke(messages)
+        return wrapped["raw"], wrapped["parsed"], wrapped["parsing_error"]
+    response = await llm.ainvoke(messages)
+    return response, None, None
+
+
+# Retry/backoff policy for the durable LLM step (P3). Retries transient vendor
+# failures with exponential backoff; fails fast on non-retriable ones.
+_LLM_STEP_MAX_ATTEMPTS = int(os.getenv("LLM_STEP_MAX_ATTEMPTS", "3"))
+_LLM_STEP_INTERVAL_SEC = float(os.getenv("LLM_STEP_INTERVAL_SEC", "1.0"))
+_LLM_STEP_BACKOFF_RATE = float(os.getenv("LLM_STEP_BACKOFF_RATE", "2.0"))
+
+# Fail-fast markers: retrying these wastes time (the proxy has no failover mid-run).
+_LLM_NONRETRIABLE_MARKERS = (
+    "authentication", "unauthorized", "invalid api key", "api key not valid",
+    "invalid_api_key", "401", "403", "permission denied",
+    "context length", "context_length", "maximum context", "prompt is too long", "input is too long",
+    "model_not_found", "does not exist", "not found", "404",
+    "insufficient balance", "exceeded_current_quota", "billing", "suspended",
+)
+# Transient markers: brief spikes worth a backed-off retry.
+_LLM_TRANSIENT_MARKERS = (
+    "rate limit", "ratelimit", "429", "too many requests", "resource_exhausted",
+    "timeout", "timed out", "connection", "econnreset", "connection reset",
+    "temporarily unavailable", "overloaded", "unavailable", "503", "502", "500 internal",
+)
+
+
+def _is_transient_llm_error(e: BaseException) -> bool:
+    """should_retry predicate for the durable LLM step. Non-retriable markers win
+    (checked first) so a hard quota/auth/context error never burns retries;
+    unknown errors are treated as non-transient (conservative)."""
+    low = f"{type(e).__name__}: {e}".lower()
+    if any(m in low for m in _LLM_NONRETRIABLE_MARKERS):
+        return False
+    transient = any(m in low for m in _LLM_TRANSIENT_MARKERS)
+    if transient:
+        logger.warning("Durable LLM step: transient error, will retry — %s", str(e)[:200])
+    return transient
+
+
+# Exactly-once LLM step for the durable /runs path (P2). Registered only when DBOS
+# is constructed; on the stateless /retrieve path it's never used. Credentials are
+# resolved from DynamoDB INSIDE the step (never a step input/output), so no secret
+# is persisted to DBOS's system tables (DURABLE_AGENTS_DBOS_PLAN §5.5). On a
+# crash/redeploy the memoized response replays instead of re-billing the vendor.
+# retries_allowed + should_retry add bounded backoff on transient vendor failures
+# (P3); a successful (possibly retried) call is still memoized exactly once.
+if durable_runtime.dbos_constructed():
+    from dbos import DBOS
+
+    @DBOS.step(
+        name="llm_invoke",
+        retries_allowed=True,
+        max_attempts=_LLM_STEP_MAX_ATTEMPTS,
+        interval_seconds=_LLM_STEP_INTERVAL_SEC,
+        backoff_rate=_LLM_STEP_BACKOFF_RATE,
+        should_retry=_is_transient_llm_error,
+    )
+    async def _durable_llm_invoke(
+        provider, customer_id, effective_model, max_tokens, llm_betas,
+        tools_bound, tool_specs, tool_choice, response_schema, messages,
+    ):
+        credentials = resolve_credentials(customer_id, provider)
+        llm, structured_llm = _build_llm_and_structured(
+            provider, credentials, effective_model, max_tokens, llm_betas,
+            tools_bound, tool_specs, tool_choice, response_schema,
+        )
+        response, parsed, parsing_error = await _invoke_llm(llm, structured_llm, messages)
+        return {"response": response, "parsed": parsed, "parsing_error": parsing_error}
+else:
+    _durable_llm_invoke = None
+
+
+def _dbos_active() -> bool:
+    """True only while executing inside a DBOS workflow (the durable /runs path)."""
+    if _durable_llm_invoke is None:
+        return False
+    from dbos import DBOS
+    return DBOS.workflow_id is not None
 
 
 def _build_context(results: list) -> str:
@@ -311,6 +441,7 @@ def _render_template(template: str, state: dict) -> str:
             web_answer,
             state.get("node_configs", {}).get("WEB_SEARCH", {}).get("citation_instruction"),
         ),
+        "current_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     }
     scalars = lambda d: {k: v for k, v in d.items() if isinstance(v, (str, int, float, bool))}  # noqa: E731
     scratch = state.get("scratch", {}) or {}
@@ -384,6 +515,20 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             memories_block = state.get("memories_block")
             if memories_block:
                 system_prompt = f"{system_prompt}\n\n{memories_block}"
+            # Ground the model in the current date so it can judge whether its own
+            # knowledge is stale, and — when a web_search tool is bound — nudge it to
+            # search rather than answer time-sensitive questions from training data.
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            system_prompt = f"{system_prompt}\n\nThe current date is {today} (UTC)."
+            if "web_search" in (state.get("builtin_tools") or []):
+                system_prompt += (
+                    " When answering well depends on current, recent, or post-training "
+                    "information (news, prices, releases, events, or anything framed as "
+                    "'latest'/'current'/'today'), use the web_search tool and base your "
+                    "answer on the results, preferring the most recent sources. If web "
+                    "results conflict with your prior knowledge, trust the newer results "
+                    "and note when information may be outdated."
+                )
             model_override = None
         else:
             system_prompt = config.get("system_prompt", "You are a helpful assistant.")
@@ -420,7 +565,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         tools = state.get("tools") or []
         builtin_names = state.get("builtin_tools") or []
         if is_response_node and builtin_names:
-            builtin_specs = get_registry().specs(builtin_names)
+            # Resolved from the names enabled for THIS request, not from a
+            # process-global view of what exists. The customer id lets the
+            # customer's own declarative tools resolve alongside the built-ins.
+            builtin_specs = specs_for(builtin_names, state.get("customer_id"))
             # A caller-defined tool shadowing a built-in name would make its
             # calls ambiguous (executed in-graph vs. by the caller) — built-in wins.
             reserved = {s["name"] for s in builtin_specs}
@@ -434,45 +582,23 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         if tools_bound:
             tool_specs, llm_betas = _build_tool_specs(tools, state["llm_provider"])
 
-        llm = get_llm(
-            state["llm_provider"],
-            state["llm_credentials"],
-            effective_model,
-            state.get("llm_max_tokens", 4096),
-            betas=llm_betas or None,
-        )
+        tool_choice = _normalize_tool_choice(state.get("tool_choice")) if tools_bound else None
 
-        if tools_bound:
-            tool_choice = _normalize_tool_choice(state.get("tool_choice"))
-            bind_kwargs = {"tool_choice": tool_choice} if tool_choice else {}
-            llm = llm.bind_tools(tool_specs, **bind_kwargs)
-
-        # include_raw keeps the AIMessage (and its usage_metadata) alongside the
-        # parsed object. Anthropic gets method="json_schema" — Claude's native
-        # structured-outputs API (grammar-constrained decoding), which takes the
-        # raw JSON Schema and needs a top-level title as the schema name; the
-        # default forced-tool-call method only steers toward the schema. OpenAI
-        # and Gemini default to their own native json_schema methods and accept
-        # the OpenAI function-format spec.
+        # Durable /runs path: the LLM call runs as a memoized DBOS step so a
+        # crash/redeploy replays the saved response instead of re-billing the
+        # vendor (exactly-once). Build+invoke happen inside the step there, with
+        # credentials resolved from DynamoDB so no secret is persisted. The
+        # stateless /retrieve path builds the model inline and invokes it directly
+        # (request-provided credentials, no DBOS involvement).
+        use_durable = _dbos_active()
+        llm = None
         structured_llm = None
-        if response_schema:
-            if state["llm_provider"] == "anthropic":
-                structured_llm = llm.with_structured_output(
-                    {"title": "structured_response", **response_schema},
-                    method="json_schema",
-                    include_raw=True,
-                )
-            else:
-                structured_llm = llm.with_structured_output(
-                    {
-                        "name": "structured_response",
-                        "description": response_schema.get(
-                            "description", "Respond with a single object in this exact JSON structure."
-                        ),
-                        "parameters": response_schema,
-                    },
-                    include_raw=True,
-                )
+        if not use_durable:
+            llm, structured_llm = _build_llm_and_structured(
+                state["llm_provider"], credentials_for(state), effective_model,
+                state.get("llm_max_tokens", 4096), llm_betas, tools_bound, tool_specs,
+                tool_choice, response_schema,
+            )
 
         provider = state["llm_provider"]
         request_source = state.get("request_source") or "conversation"
@@ -566,14 +692,20 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         parsing_error = None
         llm_start = time.perf_counter()
         try:
-            if structured_llm is not None:
-                wrapped = await structured_llm.ainvoke(messages)
-                response = wrapped["raw"]
-                parsed = wrapped["parsed"]
-                parsing_error = wrapped["parsing_error"]
+            if use_durable:
+                out = await _durable_llm_invoke(
+                    state["llm_provider"], state["customer_id"], effective_model,
+                    state.get("llm_max_tokens", 4096), llm_betas, tools_bound, tool_specs,
+                    tool_choice, response_schema, messages,
+                )
+                response = out["response"]
+                parsed = out["parsed"]
+                parsing_error = out["parsing_error"]
+            else:
+                response, parsed, parsing_error = await _invoke_llm(llm, structured_llm, messages)
+            if response_schema:
                 logger.info("Node %s - Received structured response: parsed=%s error=%s", agent_type, parsed is not None, parsing_error)
             else:
-                response = await llm.ainvoke(messages)
                 logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
         except Exception:
             count("llm_request_total", status="error", vendor=provider, model=effective_model,
@@ -649,7 +781,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 return {**_route_output(output_key, source), "usage": usage,
                         **_trace_entry(agent_type, rendered_input, _get_text(response.content))}
 
-        if structured_llm is not None:
+        # response_schema set == structured output was requested (structured_llm is
+        # built inline on /retrieve, but not on the durable path where the step
+        # owns the model — so gate on the schema, which is truthy on both paths).
+        if response_schema:
             if parsed is not None:
                 return {**_route_output(output_key, json.dumps(parsed)), "usage": usage,
                         **_trace_entry(agent_type, rendered_input, json.dumps(parsed))}

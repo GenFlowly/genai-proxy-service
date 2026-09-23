@@ -403,6 +403,7 @@ fun Application.module() {
     monitor.subscribe(ApplicationStopping) { appScope.shutdown() }
 
     val generationOrchestrator = get<GenerationOrchestrator>()
+    val runsClient = get<com.genflowly.providers.RunsClient>()
     val customerCredentialsService = get<CustomerCredentialsService>()
     val instructionService = get<InstructionService>()
     val customerProfileService = get<CustomerProfileService>()
@@ -424,6 +425,11 @@ fun Application.module() {
     val modelCatalogService = get<com.genflowly.service.ModelCatalogService>()
     modelCatalogService.startDailyRefresh(this)
 
+    // Re-probe every customer's embedding key ~weekly (lease-guarded across
+    // instances) so a vendor deprecating a model a customer already selected is
+    // caught proactively, not on the next silent pipeline failure.
+    get<com.genflowly.service.EmbeddingModelCatalogService>().startWeeklyRefresh()
+
     // Eagerly load the bundled request-agent defaults (the fallback when the
     // RequestAgentMap table has no usable entry) so a broken bundle fails
     // startup, not the first persona/title generation.
@@ -436,5 +442,7 @@ fun Application.module() {
     val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 
     val vendorAllowlistService = get<com.genflowly.service.VendorAllowlistService>()
-    configureRouting(generationOrchestrator, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, appConfig)
+    val customerToolsService = get<com.genflowly.service.CustomerToolsService>()
+    val connectorsService = get<com.genflowly.service.ConnectorsService>()
+    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, appConfig)
 }
