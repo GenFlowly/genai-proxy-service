@@ -89,6 +89,15 @@ class RetrievalState(TypedDict):
     # as attachments on the assistant message.
     generated_artifacts: Annotated[list, _append_list]
 
+    # Citable sources any built-in tool grounded its results in this request:
+    # [{index, title, url}, ...] with a turn-global 1-based index. The
+    # TOOL_EXECUTOR node owns numbering and writes the FULL accumulated snapshot
+    # each round (plain overwrite, NOT an append reducer) so the streaming layer
+    # can emit the complete set as one `web_sources` event and the inline [n]
+    # markers in the answer line up with it. Distinct from web_search_results,
+    # which the legacy WEB_SEARCH *node* writes for graphs still using it.
+    tool_sources: list
+
     # JSON Schema the response generator's output must conform to (structured
     # output). Only the response-generator node honors it; mutually exclusive
     # with tools. None → free-text generation.

@@ -48,23 +48,59 @@ class WebSearchToolTest(unittest.IsolatedAsyncioTestCase):
             result = await WebSearchTool().run({"query": "anything"}, _ctx())
         self.assertIn("unavailable", result.content.lower())
         self.assertEqual(result.artifacts, [])
+        self.assertEqual(result.sources, [])
 
     async def test_empty_query_returns_error(self):
         with patch.dict("os.environ", {"TAVILY_API_KEY": "k"}):
             result = await WebSearchTool().run({"query": "   "}, _ctx())
         self.assertIn("empty", result.content.lower())
 
-    async def test_formats_results_with_publish_dates(self):
+    async def test_returns_structured_sources_with_publish_dates(self):
+        # The tool surfaces structured Source objects; the HOST numbers, renders
+        # and cites them (see tool_executor), so the tool must NOT number its own.
         tool = WebSearchTool()
         with patch.dict("os.environ", {"TAVILY_API_KEY": "k"}), \
                 patch.object(tool, "_search", AsyncMock(return_value=_SAMPLE)):
             result = await tool.run({"query": "latest news"}, _ctx())
-        self.assertIn("Headline One", result.content)
-        self.assertIn("https://example.com/1", result.content)
-        self.assertIn("published 2026-09-20", result.content)  # date surfaced
-        self.assertIn("[1]", result.content)
-        self.assertIn("[2]", result.content)
-        self.assertIn("cite", result.content.lower())
+        self.assertEqual(len(result.sources), 2)
+        first = result.sources[0]
+        self.assertEqual(first.title, "Headline One")
+        self.assertEqual(first.url, "https://example.com/1")
+        self.assertEqual(first.content, "First snippet.")
+        self.assertEqual(first.published_date, "2026-09-20")  # date surfaced
+        self.assertEqual(result.sources[1].published_date, "")  # absent → blank
+        # content is a bare preamble — no hand-numbered list, no [1]/[2].
+        self.assertNotIn("[1]", result.content)
+        self.assertIn("latest news", result.content)
+
+    async def test_domain_scoping_is_passed_to_tavily_and_normalized(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value={"results": []})
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "k"}), \
+                patch.object(tool, "_search", search):
+            await tool.run(
+                {
+                    "query": "x",
+                    # A stray 'site:' / scheme / trailing slash the model may add
+                    # is stripped so Tavily gets a bare domain.
+                    "include_domains": ["site:docs.anthropic.com/", "https://github.com"],
+                    "exclude_domains": ["reddit.com"],
+                },
+                _ctx(),
+            )
+        payload = search.await_args.args[0]
+        self.assertEqual(payload["include_domains"], ["docs.anthropic.com", "github.com"])
+        self.assertEqual(payload["exclude_domains"], ["reddit.com"])
+
+    async def test_domain_scoping_omitted_when_absent(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value={"results": []})
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "k"}), \
+                patch.object(tool, "_search", search):
+            await tool.run({"query": "x"}, _ctx())
+        payload = search.await_args.args[0]
+        self.assertNotIn("include_domains", payload)
+        self.assertNotIn("exclude_domains", payload)
 
     async def test_news_topic_sets_days_and_clamps_max_results(self):
         tool = WebSearchTool()

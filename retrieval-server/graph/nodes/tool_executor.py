@@ -30,6 +30,48 @@ from graph.tools_runtime import credential_refs_for, make_tool_context, tools_fo
 
 logger = logging.getLogger(__name__)
 
+# How much of each tool result to surface in the client's thinking panel. Web
+# results carry several dated snippets, so this is generous — the model always
+# sees the full untruncated content in loop_messages regardless.
+_TRACE_TOOL_LIMIT = 600
+_TRACE_TOTAL_LIMIT = 4000
+
+_CITATION_INSTRUCTION = (
+    "Cite each claim inline with the bracketed number shown next to the source "
+    "you drew it from, e.g. [1] or [2][3]."
+)
+
+
+def _render_sources(preamble: str, sources: list, base_index: int) -> str:
+    """Render a tool's structured sources into a numbered block the model reads.
+
+    Numbering is turn-global (starts at base_index + 1) so inline [n] markers
+    stay unique across several tool calls in one turn and line up with the
+    web_sources the client renders as links."""
+    lines: list[str] = []
+    if preamble:
+        lines.append(preamble)
+        lines.append("")
+    for offset, s in enumerate(sources, start=1):
+        header = f"[{base_index + offset}] {s.title} ({s.url})".rstrip()
+        if s.published_date:
+            header += f" — published {s.published_date}"
+        lines.append(header)
+        if s.content:
+            lines.append(s.content)
+        lines.append("")
+    lines.append(_CITATION_INSTRUCTION)
+    return "\n".join(lines).strip()
+
+
+def _summarize(name: str, result, content: str) -> str:
+    """One-line trace summary for a tool call — source titles when the tool
+    cited any, otherwise a (generously truncated) slice of its text."""
+    if result is not None and result.sources:
+        titles = "; ".join(s.title for s in result.sources if s.title)
+        return f"{name}: {len(result.sources)} source(s) — {titles}"[:_TRACE_TOOL_LIMIT]
+    return f"{name}: {content[:_TRACE_TOOL_LIMIT]}"
+
 
 def tool_executor(node_id: str | None = None):
     async def node(state: RetrievalState) -> dict:
@@ -98,14 +140,31 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     }]
     artifacts: list[dict] = []
     summaries: list[str] = []
+    # Turn-global citation numbering: sources already emitted by earlier
+    # TOOL_EXECUTOR rounds this turn set the base, so [n] markers never collide
+    # across rounds. tool_sources is a plain overwrite field (see state.py), so
+    # `running` starts wherever the previous round left off.
+    prior_sources: list[dict] = state.get("tool_sources") or []
+    new_sources: list[dict] = []
+    running = len(prior_sources)
 
     for call in builtin_calls:
         name = call.get("name", "")
         start = time.perf_counter()
+        result = None
         try:
             result = await by_name[name].run(call.get("args") or {}, context)
             content = result.content
             artifacts.extend(a.to_dict() for a in result.artifacts)
+            if result.sources:
+                # The host owns numbering and rendering — tools return a bare
+                # preamble + structured sources (see ToolResult / Source).
+                content = _render_sources(result.content, result.sources, running)
+                for offset, s in enumerate(result.sources, start=1):
+                    new_sources.append(
+                        {"index": running + offset, "title": s.title, "url": s.url}
+                    )
+                running += len(result.sources)
             count("tool_execution_total", status="ok", tool=name)
         except Exception as e:
             count("tool_execution_total", status="error", tool=name)
@@ -117,13 +176,13 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             "tool_call_id": call.get("id", ""),
             "content": content,
         })
-        summaries.append(f"{name}: {content[:200]}")
+        summaries.append(_summarize(name, result, content))
 
     logger.info(
-        "Node tool_executor: END — %d call(s) executed, %d artifact(s) produced",
-        len(builtin_calls), len(artifacts),
+        "Node tool_executor: END — %d call(s) executed, %d artifact(s), %d source(s)",
+        len(builtin_calls), len(artifacts), len(new_sources),
     )
-    return {
+    update: dict = {
         "loop_messages": loop_messages,
         "generated_artifacts": artifacts,
         # Consumed: the next generator run decides whether more calls are needed.
@@ -134,6 +193,13 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         "trace": [{
             "node": "TOOL_EXECUTOR",
             "prompt": ", ".join(c.get("name", "") for c in builtin_calls),
-            "response": "\n".join(summaries)[:1500],
+            "response": "\n".join(summaries)[:_TRACE_TOTAL_LIMIT],
         }],
     }
+    if new_sources:
+        # Full accumulated snapshot (prior + this round) with turn-global
+        # indices, so the streaming layer emits the complete citable set in one
+        # web_sources event and the proxy's last-write-wins capture keeps all of
+        # it across multiple search rounds.
+        update["tool_sources"] = prior_sources + new_sources
+    return update

@@ -19,9 +19,16 @@ standalone open-source library.
 - **`ToolContext`** — per-request context: customer id, an `ArtifactStore`,
   and the host's storage-key template. Tools persist files only through
   `context.save_artifact(...)`.
-- **`ToolResult`** — `content` (text fed back to the model as the tool result)
-  plus `artifacts` (files for the host to persist references to and expose for
-  download).
+- **`ToolResult`** — `content` (text fed back to the model as the tool result),
+  `artifacts` (files for the host to persist references to and expose for
+  download), and `sources` (see below).
+- **`Source`** — a citable source a tool grounded its result in (`title`, `url`,
+  optional `content` snippet and `published_date`). This is the one citation
+  path for every tool: a tool returns bare sources and **does not number them**;
+  the host assigns a turn-global `[n]` index, renders them into the tool's text
+  for the model, and forwards `{index, title, url}` to the client so the inline
+  `[n]` markers in the answer become clickable links. When `sources` is set,
+  keep `content` a short preamble, not a hand-numbered list.
 
 - **`ToolContext.secrets`** — maps a tool's `credential_ref` to the caller's
   decrypted credential values for this request. A plain callable over an
