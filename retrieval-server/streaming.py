@@ -112,9 +112,14 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
         payload["items"] = [r.get("title", "")[:120] for r in results[:_MAX_ITEMS]]
     elif kind == "TOOL":
         artifacts = output.get("generated_artifacts", [])
+        sources = output.get("tool_sources", [])
         executed = [m for m in output.get("loop_messages", []) if m.get("role") == "tool"]
         payload["detail"] = f"Executed {len(executed)} tool(s)"
-        payload["items"] = [a.get("filename", "")[:120] for a in artifacts[:_MAX_ITEMS]]
+        # Surface artifact filenames and the newest cited source titles so the
+        # thinking panel shows what the tools produced, not just a bare count.
+        items = [a.get("filename", "")[:120] for a in artifacts]
+        items += [s.get("title", "")[:120] for s in sources[-_MAX_ITEMS:] if s.get("title")]
+        payload["items"] = items[:_MAX_ITEMS]
     elif kind == "MEMORY":
         block = output.get("memories_block") or ""
         memories = [line[2:] for line in block.splitlines() if line.startswith("- ")]
@@ -134,7 +139,13 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
             payload["detail"] = f"Rewrote the query to: {rewritten}"
         elif isinstance(ranked, list):
             payload["detail"] = f"Kept the {len(ranked)} most relevant result(s)"
-        elif output.get("generated_response") is not None:
+        elif output.get("tool_calls"):
+            # A tool-calling turn: the generator produced no user-facing answer,
+            # only tool calls — labelling it "Response generated" (as before) read
+            # as a broken, empty response step in the panel.
+            names = [c.get("name", "") for c in output["tool_calls"] if c.get("name")]
+            payload["detail"] = ("Calling tools: " + ", ".join(names)) if names else "Calling tools"
+        elif output.get("generated_response"):
             payload["detail"] = "Response generated"
     return payload
 
@@ -282,6 +293,15 @@ async def stream_events_dicts(
                         artifacts = output.get("generated_artifacts", [])
                         if artifacts:
                             yield {"generated_artifacts": artifacts}
+                        # Citable sources any built-in tool surfaced (web_search
+                        # today). Already {index, title, url} with turn-global
+                        # indices — the full accumulated snapshot, so the answer's
+                        # [n] markers resolve to links. Same event and shape as
+                        # the legacy WEB_SEARCH node below; the caller can't tell
+                        # which produced them.
+                        tool_sources = output.get("tool_sources") or []
+                        if tool_sources:
+                            yield {"web_sources": tool_sources}
                     if node_type and node_type.upper() == "WEB_SEARCH":
                         sources = [
                             {"index": i, "title": r.get("title", ""), "url": r.get("url", "")}

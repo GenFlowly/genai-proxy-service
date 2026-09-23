@@ -20,7 +20,7 @@ the other tools import their renderers), so the package stays extractable.
 import logging
 import os
 
-from graph_tools.base import GraphTool, ToolContext, ToolResult
+from graph_tools.base import GraphTool, Source, ToolContext, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -31,33 +31,36 @@ _MAX_RESULTS_CAP = 10
 _DEFAULT_NEWS_DAYS = 7
 
 
-def _format_results(query: str, topic: str, data: dict) -> str:
-    """Render Tavily's payload into a compact, dated source list for the model.
+def _clean_domains(value) -> list[str]:
+    """Normalize a model-supplied domain list: keep non-empty strings, strip a
+    stray leading scheme/'site:' the model may add. Non-lists become []."""
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        d = item.strip().removeprefix("site:").strip()
+        d = d.removeprefix("https://").removeprefix("http://").strip("/ ").strip()
+        if d:
+            out.append(d)
+    return out
 
-    Publish dates (populated by Tavily on the "news" topic) are surfaced so the
-    model can prefer the most recent sources and flag stale information."""
-    results = data.get("results") or []
-    if not results:
-        return f"No web results found for '{query}'."
 
-    lines = [f"Web search results for '{query}' (topic: {topic}):", ""]
-    for i, r in enumerate(results, 1):
-        title = (r.get("title") or "").strip()
-        url = (r.get("url") or "").strip()
-        published = (r.get("published_date") or "").strip()
-        content = (r.get("content") or "").strip()
-        header = f"[{i}] {title} ({url})"
-        if published:
-            header += f" — published {published}"
-        lines.append(header)
-        if content:
-            lines.append(content)
-        lines.append("")
-    lines.append(
-        "Base your answer on these results, preferring the most recent sources. "
-        "Cite them inline with bracketed numbers, e.g. [1] or [2][3]."
-    )
-    return "\n".join(lines).strip()
+def _sources_from_data(data: dict) -> list[Source]:
+    """Map Tavily's payload into structured Source objects. Publish dates
+    (populated by Tavily on the "news" topic) are surfaced so the model can
+    prefer the most recent sources and flag stale information. The host owns
+    numbering, so nothing here carries an index."""
+    return [
+        Source(
+            title=(r.get("title") or "").strip(),
+            url=(r.get("url") or "").strip(),
+            content=(r.get("content") or "").strip(),
+            published_date=(r.get("published_date") or "").strip(),
+        )
+        for r in (data.get("results") or [])
+    ]
 
 
 class WebSearchTool(GraphTool):
@@ -71,9 +74,13 @@ class WebSearchTool(GraphTool):
         "since your training, or that you are not certain about: news and current "
         "events, prices, schedules, releases, people's current roles, sports "
         "results, weather, or anything the user frames as 'latest', 'current', "
-        "'today', or 'recent'. Prefer searching over guessing. Write a focused "
-        "query, and for time-sensitive topics set topic='news'. You may call this "
-        "more than once to refine or broaden a search before answering."
+        "'today', or 'recent'. Prefer searching over guessing. Write a focused, "
+        "keyword query, and for time-sensitive topics set topic='news'. To limit "
+        "the search to specific sites, pass include_domains (e.g. "
+        "['docs.anthropic.com']) rather than a 'site:' operator inside the query "
+        "— the query is matched as plain text, so 'site:' there does not work. "
+        "You may call this more than once to refine or broaden a search before "
+        "answering."
     )
     parameters = {
         "type": "object",
@@ -108,6 +115,19 @@ class WebSearchTool(GraphTool):
                     f"How many results to return (default {_DEFAULT_MAX_RESULTS}, "
                     f"max {_MAX_RESULTS_CAP})."
                 ),
+            },
+            "include_domains": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Restrict results to these domains, e.g. ['docs.anthropic.com', "
+                    "'github.com']. Use this instead of a 'site:' operator in the query."
+                ),
+            },
+            "exclude_domains": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Drop results from these domains.",
             },
         },
         "required": ["query"],
@@ -155,6 +175,15 @@ class WebSearchTool(GraphTool):
             except (TypeError, ValueError):
                 days = _DEFAULT_NEWS_DAYS
             payload["days"] = max(1, days)
+        # Domain scoping is a first-class Tavily param; the model should reach
+        # for these rather than a 'site:' operator, which Tavily matches as
+        # literal query text and returns junk for.
+        include_domains = _clean_domains(args.get("include_domains"))
+        exclude_domains = _clean_domains(args.get("exclude_domains"))
+        if include_domains:
+            payload["include_domains"] = include_domains
+        if exclude_domains:
+            payload["exclude_domains"] = exclude_domains
 
         logger.info(
             "web_search: customer=%s key=%s topic=%s max_results=%d query='%s'",
@@ -174,9 +203,18 @@ class WebSearchTool(GraphTool):
                 )
             )
 
-        content = _format_results(query, topic, data)
-        logger.info("web_search: returned %d result(s)", len(data.get("results") or []))
-        return ToolResult(content=content)
+        sources = _sources_from_data(data)
+        logger.info("web_search: returned %d result(s)", len(sources))
+        if not sources:
+            return ToolResult(content=f"No web results found for '{query}'.")
+        # A short preamble only — the host appends the numbered source list and
+        # the citation instruction, so numbering stays consistent across calls.
+        preamble = (
+            f"Web search results for '{query}' (topic: {topic}). Base your answer "
+            "on the sources below, preferring the most recent, and note when "
+            "information may be outdated."
+        )
+        return ToolResult(content=preamble, sources=sources)
 
     async def _search(self, payload: dict, api_key: str) -> dict:
         """POST to Tavily with a light retry on transient network errors — the

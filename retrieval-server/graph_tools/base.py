@@ -28,12 +28,47 @@ class Artifact:
 
 
 @dataclass
-class ToolResult:
-    """What a tool hands back to the model (content) and to the host
-    application (artifacts, for persistence and download links)."""
+class Source:
+    """A citable source a tool grounded its result in (a web page, a document,
+    an API record).
 
-    content: str
+    Tool-agnostic: any tool that answers from fetched sources returns these, and
+    the host numbers them with a running [n] index across the turn, renders them
+    into the tool's text for the model to read, and forwards {index, title, url}
+    to the client so the inline [n] markers in the answer become clickable
+    links. Tools therefore never number their own sources — the host owns the
+    numbering, which is the only way it stays consistent across several tool
+    calls in one turn."""
+
+    title: str
+    url: str
+    content: str = ""          # snippet the model reads under the [n] header
+    published_date: str = ""   # optional; surfaced when the tool has it
+
+    def to_dict(self) -> dict:
+        d: dict = {"title": self.title, "url": self.url}
+        if self.content:
+            d["content"] = self.content
+        if self.published_date:
+            d["published_date"] = self.published_date
+        return d
+
+
+@dataclass
+class ToolResult:
+    """What a tool hands back to the model (content + cited sources) and to the
+    host application (artifacts, for persistence and download links).
+
+    content   — free text the model reads. When `sources` is set, the host
+                appends the numbered source list to it, so `content` should be a
+                short preamble here, never a hand-numbered list.
+    sources   — citable sources (see Source); the host numbers, renders and
+                forwards them. Empty for tools that don't ground in sources.
+    artifacts — files the tool produced, for the host to persist."""
+
+    content: str = ""
     artifacts: list[Artifact] = field(default_factory=list)
+    sources: list["Source"] = field(default_factory=list)
 
 
 def _no_secrets(credential_ref: str) -> dict:

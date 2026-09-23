@@ -17,18 +17,19 @@ from unittest.mock import AsyncMock, patch
 
 import graph.nodes.tool_executor as tool_executor_module
 from graph.nodes.tool_executor import tool_executor
-from graph_tools.base import GraphTool, ToolContext, ToolResult
+from graph_tools.base import GraphTool, Source, ToolContext, ToolResult
 
 
 class _Recorder(GraphTool):
     """A tool that records the context it was handed."""
 
-    def __init__(self, name, credential_ref=None, raises=None):
+    def __init__(self, name, credential_ref=None, raises=None, sources=None):
         self.name = name
         self.description = f"stub {name}"
         self.parameters = {"type": "object", "properties": {}}
         self.credential_ref = credential_ref
         self._raises = raises
+        self._sources = sources or []
         self.seen_context: ToolContext | None = None
         self.seen_args: dict | None = None
 
@@ -37,7 +38,7 @@ class _Recorder(GraphTool):
         self.seen_context = context
         if self._raises:
             raise self._raises
-        return ToolResult(content=f"{self.name} ran")
+        return ToolResult(content=f"{self.name} ran", sources=self._sources)
 
 
 def _state(calls, enabled):
@@ -168,6 +169,55 @@ class CredentialTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertNotIn("tvly-secret-value", repr(out))
+
+
+class SourceTests(unittest.IsolatedAsyncioTestCase):
+    """Structured sources are the one citation path for all tools: the host
+    numbers them turn-globally, renders them into the tool message the model
+    reads, and returns the {index,title,url} snapshot the streaming layer emits
+    as web_sources — so inline [n] markers in the answer resolve to links."""
+
+    async def test_sources_are_numbered_and_rendered_into_the_tool_message(self):
+        tool = _Recorder("web_search", sources=[
+            Source(title="A", url="https://a", content="snippet a"),
+            Source(title="B", url="https://b", published_date="2026-09-01"),
+        ])
+        out = await _run(_state([{"id": "1", "name": "web_search"}], ["web_search"]), [tool])
+
+        msg = out["loop_messages"][1]["content"]
+        self.assertIn("[1] A (https://a)", msg)
+        self.assertIn("snippet a", msg)
+        self.assertIn("[2] B (https://b)", msg)
+        self.assertIn("published 2026-09-01", msg)
+        self.assertEqual(out["tool_sources"], [
+            {"index": 1, "title": "A", "url": "https://a"},
+            {"index": 2, "title": "B", "url": "https://b"},
+        ])
+
+    async def test_numbering_continues_across_rounds(self):
+        # A prior TOOL_EXECUTOR round this turn already emitted two sources.
+        state = _state([{"id": "1", "name": "web_search"}], ["web_search"])
+        state["tool_sources"] = [
+            {"index": 1, "title": "X", "url": "u1"},
+            {"index": 2, "title": "Y", "url": "u2"},
+        ]
+        tool = _Recorder("web_search", sources=[Source(title="C", url="https://c")])
+        out = await _run(state, [tool])
+
+        # New source is numbered [3], not [1] — no collision across rounds.
+        self.assertIn("[3] C (https://c)", out["loop_messages"][1]["content"])
+        # Full snapshot (prior + new) so the emitted web_sources is complete.
+        self.assertEqual(out["tool_sources"], [
+            {"index": 1, "title": "X", "url": "u1"},
+            {"index": 2, "title": "Y", "url": "u2"},
+            {"index": 3, "title": "C", "url": "https://c"},
+        ])
+
+    async def test_no_sources_means_no_tool_sources_key(self):
+        # A tool that cites nothing leaves tool_sources untouched (no empty write).
+        out = await _run(_state([{"id": "1", "name": "t"}], ["t"]), [_Recorder("t")])
+        self.assertNotIn("tool_sources", out)
+        self.assertEqual(out["loop_messages"][1]["content"], "t ran")
 
 
 class FailureTests(unittest.IsolatedAsyncioTestCase):
