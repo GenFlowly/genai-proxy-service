@@ -25,6 +25,13 @@ interface BackendResponse {
     model?: string | null;
     conversationId: string | null;
     messageId: string | null;
+    /** True while a durable run is still generating this response (empty text,
+     *  no usage yet) — surfaced so the client can render the in-flight card and
+     *  reattach by this deterministic messageId. */
+    inFlight?: boolean;
+    /** For an in-flight placeholder: the durable run to reattach to for this
+     *  response (one per vendor in a multi-vendor turn). */
+    runId?: string | null;
     inputTokens?: number | null;
     outputTokens?: number | null;
     totalTokens?: number | null;
@@ -53,6 +60,14 @@ interface BackendGetConversationResponse {
     promptAndResponseList: BackendPromptAndResponse[];
     title?: string | null;
     role?: ConversationRole;
+    /** Durable run currently generating this conversation's reply, if any. */
+    pendingRunId?: string | null;
+}
+
+/** An in-flight durable run to reattach to on reload, and the response message it feeds. */
+export interface PendingRunRef {
+    messageId: string;
+    runId: string;
 }
 
 export interface GetConversationResponse {
@@ -61,6 +76,12 @@ export interface GetConversationResponse {
     title?: string | null;
     instructionId?: string | null;
     role: ConversationRole;
+    /** Set when a durable run is mid-flight — the client reattaches to its stream.
+     *  Kept for back-compat; prefer `pendingRuns` (one per vendor). */
+    pendingRunId?: string | null;
+    /** Every in-flight run for the latest turn — one per vendor. The client
+     *  reattaches to each, feeding its own response card. */
+    pendingRuns?: PendingRunRef[];
 }
 
 export async function getConversation(
@@ -91,6 +112,10 @@ export async function getConversation(
 
     const data: BackendGetConversationResponse = await response.json();
 
+    // In-flight durable runs (one per vendor) surfaced as placeholders, collected
+    // so loadConversation can reattach to each on reload.
+    const pendingRuns: PendingRunRef[] = [];
+
     const blocks: ConversationBlock[] = data.promptAndResponseList.map((item, index) => {
         const responses: Message[] = [];
 
@@ -99,16 +124,21 @@ export async function getConversation(
             : [];
 
         responsesToProcess.forEach((resp, respIndex) => {
-            // Only map if we have minimal valid response data
-            if (resp && resp.text) {
+            // Map responses with text, plus an in-flight placeholder (empty text)
+            // for a durable run still generating — the latter must survive so the
+            // client can render the loading card and reattach to its stream.
+            if (resp && (resp.text || resp.inFlight)) {
                 // Map backend vendor string to frontend Enum if possible, default to something safe or keep string
                 const vendor = (resp.aiVendor as AIVendor) || AIVendor.OPENAI;
 
                 responses.push({
                     aiVendor: vendor,
                     model: resp.model ?? null,
-                    text: resp.text,
+                    text: resp.text ?? '',
                     messageId: resp.messageId || `msg-${index}-${respIndex}`,
+                    // In-flight placeholder renders as a generating card (spinner),
+                    // never the "No responses were generated" empty state.
+                    isLoading: resp.inFlight ?? false,
                     inputTokens: resp.inputTokens ?? null,
                     outputTokens: resp.outputTokens ?? null,
                     totalTokens: resp.totalTokens ?? null,
@@ -130,6 +160,11 @@ export async function getConversation(
                     // outcome unknown) so the UI knows not to poll for them
                     learnedFacts: resp.learnedFacts ?? null,
                 });
+                // An in-flight placeholder carries the run to reattach to; collect
+                // it so every vendor's run is resumed on reload (not just one).
+                if (resp.inFlight && resp.runId && resp.messageId) {
+                    pendingRuns.push({ messageId: resp.messageId, runId: resp.runId });
+                }
             }
         });
 
@@ -145,7 +180,7 @@ export async function getConversation(
             prompt: item.prompt.prompt,
             attachments: item.prompt.attachments ?? [],
             responseMessages: responses,
-            isLoading: false,
+            isLoading: responses.some(r => r.isLoading),
             status: 'resolved',
             ...(Number.isFinite(sentAtMs) ? { sentAt: sentAtMs } : {}),
             ...(item.sender ? { sender: item.sender } : {})
@@ -165,6 +200,8 @@ export async function getConversation(
         title: data.title ?? null,
         instructionId: lastPromptWithInstruction?.prompt.instructionId ?? null,
         role: data.role ?? 'OWNER',
+        pendingRunId: data.pendingRunId ?? null,
+        pendingRuns,
     };
 }
 

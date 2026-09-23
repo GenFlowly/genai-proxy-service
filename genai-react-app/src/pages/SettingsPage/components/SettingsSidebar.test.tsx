@@ -70,8 +70,52 @@ describe('SettingsSidebar', () => {
                 <SettingsSidebar />
             </MemoryRouter>
         );
-        
+
         const profileTab = screen.getByText('Profile').closest('button');
         expect(profileTab).toHaveClass('active');
+    });
+
+    test('desktop: clicking a parent section navigates to its first child', async () => {
+        render(
+            <MemoryRouter initialEntries={['/settings/profile']}>
+                <SettingsSidebar />
+            </MemoryRouter>
+        );
+
+        await userEvent.click(screen.getByText('AI Settings'));
+
+        expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/llm-keys');
+    });
+
+    test('mobile full page: tapping a parent expands the submenu without navigating', async () => {
+        render(
+            <MemoryRouter initialEntries={['/settings']}>
+                <SettingsSidebar fullPage />
+            </MemoryRouter>
+        );
+
+        // Collapsed to start: child links are not shown
+        expect(screen.queryByText('LLM API Keys')).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getByText('AI Settings'));
+
+        // Submenu expands in place, and we stay on the menu page (no navigation)
+        expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
+        expect(screen.getByText('Embedding Model API Keys')).toBeInTheDocument();
+        expect(screen.getByText('Vector DB Connection')).toBeInTheDocument();
+        expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    test('mobile full page: tapping a child navigates to its page', async () => {
+        render(
+            <MemoryRouter initialEntries={['/settings']}>
+                <SettingsSidebar fullPage />
+            </MemoryRouter>
+        );
+
+        await userEvent.click(screen.getByText('AI Settings'));
+        await userEvent.click(screen.getByText('Vector DB Connection'));
+
+        expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/vector-db');
     });
 });

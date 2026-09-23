@@ -1,5 +1,37 @@
 # Durable Agentic Runtime — DBOS Integration Plan (retrieval-server)
 
+Status: **P0 spike complete and green** (verified against the real Supabase session
+pooler). Building P1c on top of it. Verified: dbos 3.0.0, langgraph-checkpoint-postgres
+3.1.2, psycopg 3.3.6.
+
+## ✅ P0 spike results (supersede the assumptions below where they differ)
+
+Run against the project's Supabase **session pooler** (IPv4, port 5432, Postgres 17.6):
+
+- **Checkpointer works over the pooler** — `AsyncPostgresSaver.setup()` + checkpoint
+  put/get/list all pass.
+- **DBOS works over the pooler** — launch + migrations, sync & async workflows, queue
+  enqueue, `send`/`recv` (HITL), `set_event`/`get_event` all pass.
+- **Crash-resume works** — a workflow SIGKILL'd mid-run (after step 1, before step 2)
+  resumed on relaunch and completed; step 1 was not lost. This is the whole plan's core
+  claim, proven end-to-end.
+- **LISTEN/NOTIFY does NOT work over the Supavisor pooler** — even in session mode (it
+  multiplexes backends). Two consequences, both resolved:
+  - **DBOS**: run with **`use_listen_notify=False`** (a first-class DBOSConfig option) →
+    DBOS polls instead. Confirmed working.
+  - **Reattach channel (§5.6)**: **poll the events table** instead of `LISTEN/NOTIFY`
+    (see the corrected §5.6). No Redis, no IPv4 add-on, no direct (IPv6) connection needed.
+- **Single Supabase DB is fine** — DBOS puts its tables in a schema via
+  **`dbos_system_schema`** (no separate database / `CREATE DATABASE` needed).
+- **Locked DBOSConfig**: `system_database_url` = the session-pooler URL, `use_listen_notify:
+  False`, `dbos_system_schema: "dbos"`, `run_migrations: True`.
+
+The connection-mode table in §4 is now moot in one respect: since the reattach channel
+polls (no NOTIFY dependency) and DBOS runs with `use_listen_notify=False`, the **session
+pooler is fully sufficient** — the direct (IPv6) connection is not required.
+
+---
+
 Status: proposal / design. No code changed yet.
 
 Goal: evolve the retrieval-server from a **stateless per-call graph runner** into a
@@ -218,6 +250,22 @@ async def agent_run(run_id: str, state: dict, run_cfg: dict):
      resume endpoint does `DBOS.send(run_id, results)`, graph resumes from the checkpoint.
      Use this when you want a deep pause without unwinding the whole graph.
 
+> **✅ P2 spike results (verified over Supabase).**
+> - **`@DBOS.step()` works inside a LangGraph node** run within `agent_run` — the DBOS
+>   workflow context propagates through LangGraph's async node execution; the step is
+>   recorded against the workflow and memoized.
+> - **Exactly-once across crash-resume is real.** Crash *after* the step commits but
+>   *before* LangGraph checkpoints the node (the double-bill window): on DBOS recovery the
+>   node re-runs but the step is memoized → the LLM body runs **once** (1 bill). Proven with
+>   a SIGKILL-style crash + persistent bill counter.
+> - **Design tension found (llm_node):** the node calls `llm.ainvoke(messages)` and token
+>   streaming is surfaced by the *outer* `astream_events` (`on_chat_model_stream`), only for
+>   `is_streaming` nodes (the response generator). Wrapping the call as a step is clean for
+>   non-streaming/internal nodes (rewrite, rank, reflection, memory) with no UX change; for
+>   the streaming response node it interacts with token streaming and needs care. Also §5.5:
+>   the step's inputs/outputs are persisted, so **credentials must be resolved *inside* the
+>   step** (never passed as a step arg) — the response (no secret) is what gets memoized.
+
 ### 5.5 Credentials: fetch from DDB by `customer_id`, never checkpoint them
 Decision (product): resolve BYOK credentials **server-side from DynamoDB, keyed by
 `customer_id`** (already KMS-encrypted at rest there) rather than passing them in the request
@@ -249,11 +297,15 @@ Implementation:
   latency.
 
 ### 5.6 Stream reattach channel (new small module, e.g. `run_events.py`)
-- An `events` table (or Postgres `LISTEN/NOTIFY`) keyed by `(run_id, seq)`.
-- `_publish(run_id, event)` appends with a monotonic `seq`.
-- The SSE endpoint subscribes; on reconnect the client sends `Last-Event-ID`/`?from_seq=` and
-  we replay missed events, then live-tail. This is the one piece the Platform would have given
-  us for free; it's ~a hundred lines.
+- An `events` table keyed by `(run_id, seq)` with a monotonic `seq` per run.
+- `publish(run_id, event)` appends the next `seq`.
+- The SSE endpoint **polls** `SELECT ... WHERE run_id=? AND seq > ? ORDER BY seq` on a short
+  interval (e.g. 250–500 ms), streaming out new rows; on reconnect the client sends
+  `Last-Event-ID`/`?from_seq=` and we replay from there, then keep tailing.
+- **Polling, not `LISTEN/NOTIFY`** — P0 proved NOTIFY doesn't work over the Supabase pooler.
+  Polling is pooler-safe, needs no Redis and no direct/IPv6 connection, and the added latency
+  is bounded by the poll interval. (If sub-100 ms latency ever matters, revisit with a direct
+  connection or Redis — not needed now.)
 
 ### 5.7 New run API (new `routes/runs.py`) — `/retrieve` stays as-is
 | Endpoint | Purpose |
@@ -297,10 +349,29 @@ Non-durable and internal generations keep the existing stateless `/retrieve` and
 
 | Phase | Deliverable | Touches |
 |---|---|---|
-| **P0 spike** | Point at a **Supabase** dev project (session-mode URL); DBOS + checkpointer wired; run one graph through `agent_run` with a trivial `interrupt()`; prove crash-resume + reattach; **confirm the §4 Supabase items** (session vs txn pooler, IPv4 from Fly, DBOS system-tables-in-a-schema) | `app.py`, `dynamic_graph.py`, `runs.py`, Supabase project |
+| **P0 spike** ✅ | Point at a **Supabase** dev project (session-mode URL); DBOS + checkpointer wired; run one graph through `agent_run` with a trivial `interrupt()`; prove crash-resume + reattach; **confirm the §4 Supabase items** (session vs txn pooler, IPv4 from Fly, DBOS system-tables-in-a-schema) | `app.py`, `dynamic_graph.py`, `runs.py`, Supabase project |
 | **P1** | `/runs` durable background path for the agentic case (start/stream/cancel) + proxy run client + event translation; **secrets out of state**; `/retrieve` untouched | retrieval-server + proxy |
-| **P2** | exactly-once LLM step; in-graph `interrupt()` for HITL/client tools; resume via `DBOS.send`; pending-run pointer + reload rediscovery | `llm_node.py`, `tool_executor.py`, proxy |
-| **P3** | queue concurrency/priorities, retry/backoff policy, run inspection + metrics, cron/scheduled agents (DBOS scheduled workflows) if wanted | runs/observability |
+| &nbsp;&nbsp;• P1a ✅ | Credentials resolved from DDB by `customer_id` (`graph/credentials.py`, `credentials_for`); nodes cut over; secret left out of the durable state | retrieval-server |
+| &nbsp;&nbsp;• P1b ✅ | Proxy SSE→`StreamChunk` parser extracted to a shared `parseRetrievalEvent` (reused by the runs client) | proxy |
+| &nbsp;&nbsp;• P1c ✅ | Durable `/runs` path: checkpointer compile variant, `run_events` reattach channel, `agent_run` DBOS workflow, `routes/runs.py`; verified over Supabase + in the deployed dev env | retrieval-server |
+| &nbsp;&nbsp;• P1d | Kotlin proxy `RunsClient` (start/reattach/resume/cancel/status) + wire one flow behind a flag; `conversationId → run_id` pointer for reload rediscovery | proxy |
+| **P2** ✅ | exactly-once LLM step (memoized `@DBOS.step` in `llm_node`/`reflection_node`, creds resolved inside); in-graph `interrupt()` HITL (`HUMAN_INPUT` node) with durable wait (`DBOS.recv`) + resume (`Command(resume=…)`); proxy relays `awaiting_input`. Verified over Supabase (exactly-once across crash; streaming survives the step; HITL pause/resume end-to-end). Tail: render the HITL prompt in the web app. | `llm_node.py`, `reflection_node.py`, `human_input.py`, `runs.py`, `streaming.py`, proxy |
+| **P3** ✅ | Metrics (agent_run_started/total/awaiting_input/duration), run inspection (GET /runs list + /runs/{id}/events), run-events TTL pruner, queue global-concurrency, **LLM-step retry/backoff** (DBOS retries_allowed + should_retry: transient vendor errors retried with exponential backoff, non-retriable fail fast; composes with exactly-once). Verified over Supabase. Optional follow-ups: queue priorities, scheduled/cron agents, per-environment Supabase isolation (see note above). | runs/observability |
+
+> **✅ Durable-runs UX last mile (post-P1d).** Proxy reattach route
+> (GET /runs/{id}/stream) + resume route (POST /runs/{id}/resume), pendingRunId on
+> the conversation GET, and true durable cancel (Stop also cancels the run). Web app:
+> reattach-on-reload, the shared NDJSON reader + `ai` (awaiting_input) frame, and an
+> app-side HITL prompt/reply banner (the polished in-card UI belongs in the compiled
+> component library). All shipped; still behind DURABLE_RUNS_ENABLED.
+
+> **⚠️ Environment isolation (found during P2).** Every process pointed at the same
+> `DATABASE_URL` shares one DBOS system DB **and one `agent_runs` queue**, so their
+> workers cross-execute each other's runs. During P2, the deployed dev server's
+> worker dequeued a run enqueued from a local process and executed it with the
+> deployed code. This is fine for the throwaway dev DB, but **before real use each
+> environment (local / dev / prod) must have its own Supabase** (or a distinct DBOS
+> app name / queue) so runs execute only where intended. Track in P3.
 
 ---
 

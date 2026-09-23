@@ -12,12 +12,14 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import org.slf4j.LoggerFactory
+import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService
 
 private val logger = LoggerFactory.getLogger("SaveAIConfigPreferences")
 
 fun Route.registerSaveAIConfigPreferencesRoutes(
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    customerCredentialsService: CustomerCredentialsService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.SAVE_AI_CONFIG_PREFERENCES, {
@@ -48,6 +50,23 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
                     customerProfileService
                 )
 
+                // Reject embedding models the customer's key can't actually
+                // encode (e.g. voyage-multimodal-*, which the picker's LiteLLM
+                // catalog lists but the Voyage text-embed SDK rejects). The valid
+                // set is discovered by probing the key, not a hardcoded list.
+                // Without this gate the failure surfaces only days later, deep in
+                // the encoding server, and silently — the whole run aborts before
+                // the store step, so nothing ever reaches Milvus.
+                val prefs = request.aiConfigPreferences
+                try {
+                    customerCredentialsService.assertEmbeddingModelSupported(customerId, prefs?.embeddingModel)
+                    customerCredentialsService.assertEmbeddingModelSupported(customerId, prefs?.embeddingModelConversations)
+                    customerCredentialsService.assertEmbeddingModelSupported(customerId, prefs?.embeddingModelNotes)
+                } catch (e: IllegalArgumentException) {
+                    logger.warn("Rejected preferences save for customer {}: {}", customerId, e.message)
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Unsupported embedding model")))
+                    return@post
+                }
 
                 customerProfileService.savePreferences(
                     customerId,

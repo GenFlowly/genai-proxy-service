@@ -158,6 +158,25 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        // Per-customer, per-embedding-vendor list of models the customer's key
+        // can actually embed, discovered by probing (EmbeddingModelCatalogService
+        // in the proxy). PK = customerId, SK = vendor. A sentinel row
+        // (customerId = "__SWEEP__") holds the weekly-sweep lease.
+        const customerEmbeddingModelsTableProps: CreateTableProps = {
+            tableName: 'CustomerEmbeddingModels',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING
+            },
+            sortKey: { name: 'vendor', type: dynamodb.AttributeType.STRING },
+        };
+
+        // Deprecated: the customer-BYO-Supabase-as-vector-DB feature is fully
+        // removed from every service. This table is intentionally retained in
+        // the stack for now — removing it requires a two-phase CloudFormation
+        // migration (FlyioIamStack imports its ARN via a cross-stack export, so
+        // the export can't be deleted in the same deploy that drops the table).
+        // It is unused and PAY_PER_REQUEST, so it costs nothing while idle.
         const customerSupabaseConfigTableProps: CreateTableProps = {
             tableName: 'CustomerSupabaseConfig',
             partitionKey: {
@@ -274,6 +293,33 @@ export class DynamoDBStack extends cdk.Stack {
             },
             sortKey: {
                 name: 'toolType',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
+        // Per-customer declarative HTTP tools ("bring your own tool").
+        // PK=customerId, SK=name (the model-facing tool name, ^[a-z][a-z0-9_]{2,63}$)
+        //   — name-as-sort-key makes per-customer uniqueness a schema property.
+        // description/parameters: what the model sees; parameters is a JSON string
+        //   holding a restricted, non-nested JSON Schema object.
+        // provider: "http" today — the seam value, "mcp" later.
+        // request: JSON string call template. Its url's scheme+host are literal
+        //   (placeholders rejected there), so a prompt-injected argument can never
+        //   redirect the call to another host.
+        // credentialRef: SK into CustomerToolCredentials, or "". This row holds NO
+        //   secrets, ever — credential values stay KMS-encrypted in that table.
+        // responseTransform: JSON string ({mode, path, maxChars}).
+        // status: "draft" | "active" | "disabled" — only "active" is ever bound.
+        // version: bumped on every save. origin/originRef: "manual" | "openapi" plus
+        //   the spec URL that produced the row, for audit.
+        const customerToolsTableProps: CreateTableProps = {
+            tableName: 'CustomerTools',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'name',
                 type: dynamodb.AttributeType.STRING,
             },
         };
@@ -477,11 +523,13 @@ export class DynamoDBStack extends cdk.Stack {
         const messageTable = createDefaultDynamoDbTable(this, messageTableProps);
         const customerPreferencesTable = createDefaultDynamoDbTable(this, customerPreferencesTableProps);
         const customerVectorDBConfigTable = createDefaultDynamoDbTable(this, customerVectorDBConfigTableProps);
+        const customerEmbeddingModelsTable = createDefaultDynamoDbTable(this, customerEmbeddingModelsTableProps);
         const customerSupabaseConfigTable = createDefaultDynamoDbTable(this, customerSupabaseConfigTableProps);
         const instructionsTable = createDefaultDynamoDbTable(this, instructionsTableProps);
         const customerGraphNodesTable = createDefaultDynamoDbTable(this, customerGraphNodesTableProps);
         const customerGraphsTable = createDefaultDynamoDbTable(this, customerGraphsTableProps);
         const customerToolCredentialsTable = createDefaultDynamoDbTable(this, customerToolCredentialsTableProps);
+        const customerToolsTable = createDefaultDynamoDbTable(this, customerToolsTableProps);
         const sharedInstructionsTable = createDefaultDynamoDbTable(this, sharedInstructionsTableProps);
         const sharedConversationsTable = createDefaultDynamoDbTable(this, sharedConversationsTableProps);
         const instructionUsageTable = createDefaultDynamoDbTable(this, instructionUsageTableProps);
@@ -496,9 +544,9 @@ export class DynamoDBStack extends cdk.Stack {
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
             conversationTable, messageTable, customerPreferencesTable,
-            customerVectorDBConfigTable, customerSupabaseConfigTable, instructionsTable,
+            customerVectorDBConfigTable, customerEmbeddingModelsTable, customerSupabaseConfigTable, instructionsTable,
             customerGraphNodesTable, customerGraphsTable,
-            customerToolCredentialsTable, sharedInstructionsTable, sharedConversationsTable,
+            customerToolCredentialsTable, customerToolsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
             requestAgentMapTable, customerMemoryTable, nodePresetsTable

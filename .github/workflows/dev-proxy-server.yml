@@ -33,6 +33,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: retrieval-server/requirements.txt
+
+      - name: Test Retrieval Server
+        working-directory: retrieval-server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m unittest discover -s tests -t . -v
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -103,6 +117,15 @@ jobs:
           # Tavily key for the WEB_SEARCH graph node; staged so the deploy below picks it up
           if [ -n "${{ secrets.TAVILY_API_KEY }}" ]; then
             flyctl secrets set --app $APP_NAME --stage TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY }}"
+          fi
+
+          # Supabase Postgres for durable agent runs (DBOS + LangGraph checkpointer;
+          # see retrieval-server/DURABLE_AGENTS_DBOS_PLAN.md). Use the SESSION-pooler
+          # URL (port 5432, sslmode=require) — NOT the transaction pooler (6543).
+          # Set it as an environment-scoped GitHub Actions secret. Inert if unset:
+          # the server starts as today and durable /runs stays inactive.
+          if [ -n "${{ secrets.DATABASE_URL }}" ]; then
+            flyctl secrets set --app $APP_NAME --stage DATABASE_URL="${{ secrets.DATABASE_URL }}"
           fi
 
           flyctl deploy --app $APP_NAME --yes

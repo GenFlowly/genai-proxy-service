@@ -47,6 +47,7 @@ import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import com.genflowly.providers.EncodingServerClient
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.providers.RunsClient
 import com.genflowly.providers.S3Provider
 import com.genflowly.service.GraphService
 
@@ -157,6 +158,7 @@ fun appModule(): Module = module {
     single { KMSProvider(get(), get(), get<AppConfig>().kmsKeyId) }
     single { S3Provider(get(), get(), get(), get<AppConfig>().attachmentsBucket) }
     single { RetrievalServerClient(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
+    single { RunsClient(get(), get(), get(), get<AppConfig>().retrievalServerUrl) }
     single { EncodingServerClient(get(), get(), get<AppConfig>().encodingServerUrl) }
 
     // Per-domain repositories (the dissolved DynamoDBProvider)
@@ -164,6 +166,8 @@ fun appModule(): Module = module {
     single { CustomerProfileRepository(get(), get()) }
     single { ShareRepository(get(), get()) }
     single { CustomerCredentialsRepository(get(), get()) }
+    single { com.genflowly.repository.CustomerToolsRepository(get(), get()) }
+    single { com.genflowly.repository.EmbeddingModelCatalogRepository(get(), get()) }
     single { DeveloperApiKeyRepository(get(), get()) }
     single { SystemApiKeyRepository(get(), get()) }
     single { ModelCatalogRepository(get(), get()) }
@@ -174,7 +178,22 @@ fun appModule(): Module = module {
     single { RequestAgentMapRepository(get(), get()) }
 
     single { SharedUsersResolver(get(), get()) }
-    single { CustomerCredentialsService(get(), get(), get(), get(), get(), get(), get()) }
+    single {
+        com.genflowly.service.EmbeddingModelCatalogService(
+            get(), get(), get(), get(), get<com.genflowly.di.AppScope>()
+        )
+    }
+    single { CustomerCredentialsService(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single {
+        com.genflowly.service.CustomerToolsService(
+            get(), get(), get(), get<AppConfig>().retrievalServerUrl
+        )
+    }
+    single {
+        com.genflowly.service.ConnectorsService(
+            get(), get(), get(), get<AppConfig>().retrievalServerUrl
+        )
+    }
     single { com.genflowly.service.VendorAllowlistService(get()) }
     single { UtilityGenerationService(get(), get()) }
     single { GraphService(get(), get(), get()) }
@@ -200,7 +219,7 @@ fun appModule(): Module = module {
     single { com.genflowly.service.ConversationIndexingService(get(), get(), get(), get()) }
     single { com.genflowly.service.ExchangeSideEffects(get(), get()) }
     single { com.genflowly.service.UnifiedSearchService(get(), get(), get(), get()) }
-    single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
     single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }

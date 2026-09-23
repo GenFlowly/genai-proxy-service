@@ -4,6 +4,11 @@ import com.genflowly.models.AIVendor
 import com.genflowly.models.ModelCatalogEntry
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Exchange types for the Python retrieval-server: streaming chunks, generation
@@ -53,6 +58,77 @@ sealed class StreamChunk {
      * context_length, model_not_found, provider_error).
      */
     data class Error(val message: String, val errorType: String? = null) : StreamChunk()
+
+    /**
+     * A durable run paused on an in-graph interrupt() and is awaiting human /
+     * client input (DURABLE_AGENTS_DBOS_PLAN §5.4). Raw JSON of the interrupt
+     * payload: {"type","node","prompt",...}. Deliver the response via the runs
+     * client's resume(). Only emitted on the durable /runs reattach stream.
+     */
+    data class AwaitingInput(val json: String) : StreamChunk()
+}
+
+/**
+ * Map one retrieval-server SSE event object (the parsed JSON of a `data: {...}`
+ * line) to a StreamChunk, or null when it carries no recognized event key (or
+ * a recognized key with an empty/blank payload that should be skipped).
+ *
+ * Shared by the streaming `/retrieve` reader and the durable `/runs` reattach
+ * stream: both transports emit the identical event vocabulary
+ * (content / thinking_step / thinking / thinking_duration_ms / web_sources /
+ * generated_artifacts / tool_calls / awaiting_input / error / usage). Key
+ * precedence and the null/empty guards mirror the original inline reader exactly.
+ * (`awaiting_input` is durable-runs-only — the /retrieve stream never emits it.)
+ */
+fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
+    jsonObj.containsKey("content") -> {
+        val content = jsonObj["content"]?.jsonPrimitive?.content
+        if (!content.isNullOrEmpty()) StreamChunk.Content(content) else null
+    }
+    jsonObj.containsKey("thinking_step") ->
+        jsonObj["thinking_step"]?.let { StreamChunk.ThinkingStep(it.toString()) }
+    jsonObj.containsKey("thinking") -> {
+        val thinking = jsonObj["thinking"]?.jsonPrimitive?.content
+        if (!thinking.isNullOrEmpty()) StreamChunk.Thinking(thinking) else null
+    }
+    jsonObj.containsKey("thinking_duration_ms") -> {
+        val millis = jsonObj["thinking_duration_ms"]?.jsonPrimitive?.content?.toLongOrNull()
+        if (millis != null) StreamChunk.ThinkingDuration(millis) else null
+    }
+    jsonObj.containsKey("web_sources") -> {
+        val webSources = jsonObj["web_sources"]
+        if (webSources != null && webSources !is JsonNull) StreamChunk.WebSources(webSources.toString()) else null
+    }
+    jsonObj.containsKey("generated_artifacts") -> {
+        val artifacts = jsonObj["generated_artifacts"]
+        if (artifacts != null && artifacts !is JsonNull) StreamChunk.GeneratedArtifacts(artifacts.toString()) else null
+    }
+    jsonObj.containsKey("tool_calls") -> {
+        val toolCalls = jsonObj["tool_calls"]
+        if (toolCalls != null && toolCalls !is JsonNull) StreamChunk.ToolCalls(toolCalls.toString()) else null
+    }
+    jsonObj.containsKey("awaiting_input") -> {
+        val payload = jsonObj["awaiting_input"]
+        if (payload != null && payload !is JsonNull) StreamChunk.AwaitingInput(payload.toString()) else null
+    }
+    jsonObj.containsKey("error") -> {
+        val message = jsonObj["error"]?.jsonPrimitive?.content
+        if (!message.isNullOrBlank()) StreamChunk.Error(
+            message = message,
+            errorType = jsonObj["error_type"]?.jsonPrimitive?.content
+        ) else null
+    }
+    jsonObj.containsKey("usage") -> {
+        val usageObj = jsonObj["usage"]!!.jsonObject
+        StreamChunk.Usage(
+            inputTokens = usageObj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+            outputTokens = usageObj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+            totalTokens = usageObj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+            tokensReadFromCache = usageObj["cache_read_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+            tokensWrittenToCache = usageObj["cache_creation_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+        )
+    }
+    else -> null
 }
 
 data class RetrievalResult(

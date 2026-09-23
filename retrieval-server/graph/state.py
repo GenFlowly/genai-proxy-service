@@ -46,7 +46,12 @@ class RetrievalState(TypedDict):
     similarity_threshold: float
 
     # LLM config — credentials forwarded from genai-proxy-service, provider selected per request
-    llm_credentials: dict  # keys: openai_api_key, anthropic_api_key, gemini_api_key
+    # keys: openai_api_key, anthropic_api_key, gemini_api_key, ...
+    # Set on the stateless /retrieve path (creds supplied in the request). The
+    # durable /runs path deliberately LEAVES THIS UNSET so no secret is ever
+    # checkpointed; nodes then resolve creds from DynamoDB by customer_id via
+    # graph.credentials.credentials_for(state).
+    llm_credentials: dict
     llm_provider: str      # "openai" | "anthropic" | "gemini"
     llm_model: Optional[str]  # model name forwarded from request (e.g. "gpt-4o", "claude-sonnet-4-6")
     llm_max_tokens: Optional[int]  # max tokens for generation, defaults to 4096
@@ -83,6 +88,15 @@ class RetrievalState(TypedDict):
     # media_type, filename, size_bytes}, ...]. The proxy server persists them
     # as attachments on the assistant message.
     generated_artifacts: Annotated[list, _append_list]
+
+    # Citable sources any built-in tool grounded its results in this request:
+    # [{index, title, url}, ...] with a turn-global 1-based index. The
+    # TOOL_EXECUTOR node owns numbering and writes the FULL accumulated snapshot
+    # each round (plain overwrite, NOT an append reducer) so the streaming layer
+    # can emit the complete set as one `web_sources` event and the inline [n]
+    # markers in the answer line up with it. Distinct from web_search_results,
+    # which the legacy WEB_SEARCH *node* writes for graphs still using it.
+    tool_sources: list
 
     # JSON Schema the response generator's output must conform to (structured
     # output). Only the response-generator node honors it; mutually exclusive

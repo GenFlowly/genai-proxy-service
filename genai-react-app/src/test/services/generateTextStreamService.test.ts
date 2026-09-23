@@ -376,6 +376,33 @@ describe('generateTextStreamService', () => {
             jest.fn()
         )).rejects.toThrow('Session expired');
     });
+
+    test('generateTextStream surfaces an "ai" awaiting_input frame via onAwaitingInput', async () => {
+        const encoder = new TextEncoder();
+        const payload = { type: 'human_input', node: 'HITL', prompt: 'Approve?', run_id: 'r1' };
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ai","v":${JSON.stringify(payload)}}\n`) })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"resumed"}\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn(),
+        };
+        mockFetchWithRetry.mockResolvedValue({ ok: true, headers: new Map(), body: { getReader: () => mockReader } });
+
+        const onDelta = jest.fn();
+        const onAwaitingInput = jest.fn();
+        await generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            onDelta,
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            onAwaitingInput
+        );
+
+        expect(onAwaitingInput).toHaveBeenCalledWith(payload);
+        // Content after the pause still flows through as normal text
+        expect(onDelta).toHaveBeenCalledWith('resumed');
+    });
 });
 // Trigger coverage run
 // Trigger coverage run

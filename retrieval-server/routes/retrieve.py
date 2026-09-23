@@ -9,7 +9,7 @@ from langgraph.graph import END, StateGraph
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.instruction_loader import get_instruction_text
-from graph.tools_runtime import get_registry
+from graph.tools_runtime import all_builtin_tool_names
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
 from graph.state import RetrievalState
@@ -22,16 +22,23 @@ router = APIRouter()
 
 
 def _enabled_builtin_tools(node_type_map: dict, node_configs: dict) -> list[str]:
-    """Built-in tool names enabled by the graph's TOOL_EXECUTOR node(s): the
-    node config's "tools" list, or every registered tool when unspecified.
-    No TOOL_EXECUTOR node → no built-in tools bound."""
+    """Tool names enabled by the graph's TOOL_EXECUTOR node(s): the node
+    config's "tools" list, or every BUILT-IN tool when unspecified.
+    No TOOL_EXECUTOR node → no tools bound.
+
+    The unspecified case deliberately falls back to built-ins only. Built-ins
+    are first-party code we ship, so enabling them implicitly is safe and
+    preserves the behavior existing graphs rely on. A customer-defined tool
+    must always be named explicitly, so adding one can never silently widen
+    what an existing agent is allowed to call.
+    """
     enabled: list[str] = []
     for node_id, node_type in node_type_map.items():
         if node_type != "TOOL_EXECUTOR":
             continue
         names = node_configs.get(node_id, {}).get("tools")
         if names is None:
-            names = get_registry().names()
+            names = all_builtin_tool_names()
         enabled.extend(n for n in names if n not in enabled)
     return enabled
 

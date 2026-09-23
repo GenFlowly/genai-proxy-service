@@ -7,7 +7,9 @@ import { AIConfig, useAI } from './AIContext'
 import { useLayout } from './LayoutContext'
 import { useToast } from './ToastContext'
 import { generateText } from '../services/generateTextService'
-import { generateTextStream, StreamMetadata } from '../services/generateTextStreamService'
+import { generateTextStream, StreamMetadata, AwaitingInput } from '../services/generateTextStreamService'
+import { reattachRun } from '../services/reattachRunService'
+import { resumeRun as resumeRunApi } from '../services/resumeRunService'
 import { getAIUsageActivity } from '../services/getAIUsageService'
 import { getConversation } from '../services/conversationService'
 import { cancelGeneration } from '../services/cancelGenerationService'
@@ -26,6 +28,24 @@ import i18n from '../i18n'
 
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
 const ConversationUIContext = createContext<IConversationUIContext | undefined>(undefined)
+
+/**
+ * Human-in-the-loop state for durable runs paused on an in-graph interrupt().
+ * Kept in a small app-owned context because the main conversation value is typed
+ * by the component library's IConversationContext (which doesn't model this).
+ */
+export interface RunHitlContextValue {
+    /** messageId -> the run's pending input request ({prompt, run_id, node, ...}). */
+    awaitingInputs: Record<string, AwaitingInput>
+    /** Deliver a reply to the durable run generating [messageId]; resumes it. */
+    submitRunReply: (messageId: string, reply: string) => Promise<void>
+}
+const RunHitlContext = createContext<RunHitlContextValue | undefined>(undefined)
+export const useRunHitl = (): RunHitlContextValue => {
+    const ctx = useContext(RunHitlContext)
+    if (!ctx) throw new Error('useRunHitl must be used within a ConversationProvider')
+    return ctx
+}
 
 /**
  * Fast-changing UI state (draft prompt text, viewport tracking) lives in its
@@ -76,6 +96,9 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     const [activeBlockId, setActiveBlockId] = useState<string>('')
     const [conversationTitle, setConversationTitle] = useState<string | null>(null)
     const [conversationRole, setConversationRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER')
+    // Durable-run HITL: messageId -> the run's pending input request. Set when an
+    // "ai" frame arrives; cleared on reply or when the message finishes.
+    const [awaitingInputs, setAwaitingInputs] = useState<Record<string, AwaitingInput>>({})
     
     // Manage aborted streams natively
     const abortControllers = useRef<Map<string, AbortController>>(new Map())
@@ -280,7 +303,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         attachments: AttachmentRef[] = [],
         onWebSources?: (sources: WebSource[]) => void,
         onThinkingStep?: (step: ThinkingStep) => void,
-        onGeneratedAttachments?: (attachments: AttachmentRef[]) => void
+        onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
+        onAwaitingInput?: (payload: AwaitingInput) => void
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -294,7 +318,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
             agentId: selectedAgentId,
-        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments)
+        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -324,6 +348,101 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
 
                 // Restore the selected instruction from the conversation
                 setSelectedInstructionId(data.instructionId ?? null)
+
+                // Durable runs are still generating the latest reply — reattach to
+                // each so the responses continue live after this reload. A
+                // multi-vendor turn has one run per vendor (data.pendingRuns), each
+                // feeding its own response card.
+                const pendingRuns = data.pendingRuns ?? []
+                if (data.blocks.length > 0 && (pendingRuns.length > 0 || data.pendingRunId)) {
+                    const lastBlock = data.blocks[data.blocks.length - 1]
+                    const bId = lastBlock.conversationBlockId
+
+                    // Reattach one response message to its durable run: reset text,
+                    // stream the replay in, then (for a real backend id) fetch
+                    // usage/cost and poll for the persisted message if the run already
+                    // finished. `synthetic` = we invented the id (legacy proxy, no
+                    // placeholder), so there's no server record to fetch usage for.
+                    const reattachOne = (targetId: string, runId: string, synthetic: boolean) => {
+                        const patch = (fn: (m: any) => any) => setConversationBlockList(prev => prev.map(b =>
+                            b.conversationBlockId === bId
+                                ? { ...b, responseMessages: b.responseMessages.map(m => m.messageId === targetId ? fn(m) : m) }
+                                : b))
+                        // Reset text: the reattach replays the run from the start.
+                        patch(m => ({ ...m, isLoading: true, text: '' }))
+                        let acc = ''
+                        let gotContent = false
+                        const finish = async () => {
+                            if (!synthetic) {
+                                // Run finished before we reconnected → poll for the
+                                // persisted message so we never leave an empty card.
+                                if (!gotContent) {
+                                    try {
+                                        const recovered = await recoverPersistedResponse(token, data.conversationId, targetId)
+                                        if (recovered) patch(m => ({
+                                            ...m,
+                                            text: recovered.text,
+                                            webSources: recovered.webSources ?? m.webSources,
+                                            generatedAttachments: recovered.generatedAttachments ?? m.generatedAttachments,
+                                        }))
+                                    } catch (e) { console.warn('Recover after reattach failed', e) }
+                                }
+                                try {
+                                    const metrics = await getAIUsageActivity(token, data.conversationId, targetId)
+                                    if (metrics) patch(m => ({
+                                        ...m,
+                                        inputTokens: metrics.inputTokens,
+                                        outputTokens: metrics.outputTokens,
+                                        totalTokens: metrics.totalTokens,
+                                        tokensReadFromCache: metrics.tokensReadFromCache ?? 0,
+                                        costUsd: metrics.costUsd ?? null,
+                                    }))
+                                } catch (e) { console.warn('Usage fetch after reattach failed', e) }
+                            }
+                            setConversationBlockList(prev => prev.map(b =>
+                                b.conversationBlockId === bId
+                                    ? { ...b, isLoading: b.responseMessages.some(m => m.messageId !== targetId && m.isLoading), responseMessages: b.responseMessages.map(m => m.messageId === targetId ? { ...m, isLoading: false } : m) }
+                                    : b))
+                        }
+                        reattachRun(token, runId, data.conversationId, {
+                            onDelta: (c) => { acc += c; gotContent = true; patch(m => ({ ...m, text: acc })) },
+                            onThinkingStep: (s) => { gotContent = true; patch(m => ({ ...m, thinkingStepList: applyThinkingStep(m.thinkingStepList ?? [], s) })) },
+                            onThinkingDuration: (ms) => patch(m => ({ ...m, thinkingDurationMs: ms })),
+                            onWebSources: (ws) => patch(m => ({ ...m, webSources: ws })),
+                            onGeneratedAttachments: (ga) => patch(m => ({ ...m, generatedAttachments: [...(m.generatedAttachments ?? []), ...ga] })),
+                            onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: runId } })),
+                        }).catch(e => console.warn('Reattach to pending run failed', e))
+                            .finally(finish)
+                    }
+
+                    if (pendingRuns.length > 0) {
+                        // Backend surfaced a placeholder per run (real ids already in
+                        // the block via the service mapping) — reattach to every one.
+                        pendingRuns.forEach(pr => reattachOne(pr.messageId, pr.runId, false))
+                    } else if (data.pendingRunId) {
+                        // Legacy single-run proxy without placeholders: synthesize one
+                        // to receive the stream (no server record → usage-fetch skipped).
+                        const existing = lastBlock.responseMessages[lastBlock.responseMessages.length - 1]
+                        const targetId = existing?.messageId ?? `reattach-${data.pendingRunId}`
+                        if (!existing) {
+                            const priorMsg = [...data.blocks].reverse()
+                                .flatMap(b => b.responseMessages)
+                                .find(m => m.aiVendor)
+                            const placeholder: Message = {
+                                aiVendor: priorMsg?.aiVendor ?? '',
+                                model: priorMsg?.model ?? null,
+                                text: '',
+                                messageId: targetId,
+                                isLoading: true,
+                            }
+                            setConversationBlockList(prev => prev.map(b =>
+                                b.conversationBlockId === bId
+                                    ? { ...b, isLoading: true, responseMessages: [...b.responseMessages, placeholder] }
+                                    : b))
+                        }
+                        reattachOne(targetId, data.pendingRunId, !existing)
+                    }
+                }
             }
         } catch (err: any) {
             if (err?.status === 403) {
@@ -338,6 +457,31 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             }
         }
     }, [isAuthenticated, getAccessTokenSilently, showToast, navigate, setSelectedInstructionId, loginWithRedirect])
+
+    // Deliver a human/client reply to the durable run generating [messageId]. The
+    // run resumes from its checkpoint; the still-open stream delivers what follows.
+    const submitRunReply = useCallback(async (messageId: string, reply: string) => {
+        const pending = awaitingInputs[messageId]
+        const runId = (pending?.run_id ?? (pending as any)?.runId) as string | undefined
+        if (!runId) {
+            console.warn('No run id for awaiting message', messageId)
+            return
+        }
+        let token = ''
+        try {
+            token = await getAccessTokenSilently()
+        } catch (e) {
+            console.warn('Could not get access token', e)
+        }
+        // Optimistically clear the prompt; the open stream delivers the continuation.
+        setAwaitingInputs(prev => {
+            const next = { ...prev }
+            delete next[messageId]
+            return next
+        })
+        const ok = await resumeRunApi(token, runId, conversationIdRef.current, { reply })
+        if (!ok) showToast('Failed to send your reply — please try again')
+    }, [awaitingInputs, getAccessTokenSilently, showToast])
 
     const resetConversation = useCallback(() => {
         navigate('/chat')
@@ -627,10 +771,23 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                     }))
                 }
 
+                // Durable run paused on interrupt() — record the pending input
+                // request against this message so the UI can prompt + reply.
+                const handleAwaitingInput = (payload: AwaitingInput) => {
+                    setAwaitingInputs(prev => ({ ...prev, [currentMsgId]: payload }))
+                }
+
                 // Finish THIS vendor's message only — on failure the streamed
                 // text is kept and the reason is attached; other vendors'
                 // streams are untouched
                 const finishVendorMessage = (errorReason: string | null) => {
+                    setAwaitingInputs(prev => {
+                        if (!(currentMsgId in prev) && !(msgId in prev)) return prev
+                        const next = { ...prev }
+                        delete next[currentMsgId]
+                        delete next[msgId]
+                        return next
+                    })
                     setConversationBlockList(prev => prev.map(block => {
                         if (block.conversationBlockId !== id) return block
                         const msgs = block.responseMessages.map(m => {
@@ -732,7 +889,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         attachmentsToUse,
                         handleWebSources,
                         handleThinkingStep,
-                        handleGeneratedAttachments
+                        handleGeneratedAttachments,
+                        handleAwaitingInput
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer
@@ -1056,9 +1214,16 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         setVendorSelectionForBlock,
     ])
 
+    const hitlValue = useMemo<RunHitlContextValue>(() => ({
+        awaitingInputs,
+        submitRunReply,
+    }), [awaitingInputs, submitRunReply])
+
     return (
         <ConversationContext.Provider value={value}>
-            {children}
+            <RunHitlContext.Provider value={hitlValue}>
+                {children}
+            </RunHitlContext.Provider>
         </ConversationContext.Provider>
     )
 }
