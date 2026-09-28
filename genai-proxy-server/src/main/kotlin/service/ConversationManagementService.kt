@@ -1,12 +1,18 @@
 package com.genflowly.service
 
+import com.genflowly.di.AppScope
 import com.genflowly.models.RequestType
 import com.genflowly.models.ShareRole
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ShareRepository
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Conversation lifecycle administration: titles (manual and AI-generated),
@@ -19,9 +25,73 @@ class ConversationManagementService(
     private val shareRepository: ShareRepository,
     private val sharedUsersResolver: SharedUsersResolver,
     private val agentResolutionService: AgentResolutionService,
-    private val generationAgentExecutor: GenerationAgentExecutor
+    private val generationAgentExecutor: GenerationAgentExecutor,
+    private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger("ConversationManagementService")
+
+    /**
+     * Title generations currently running, keyed by conversationId, so the
+     * server-side kickoff (GenerationOrchestrator, fired the moment a new
+     * conversation is created) and the clients' POST /conversation/title
+     * dedupe into a single generation. In-memory is sufficient: deployment is
+     * single-instance, and a lost entry only costs one extra generation.
+     */
+    private val inFlightTitles = ConcurrentHashMap<String, Deferred<String?>>()
+
+    /**
+     * Start title generation in the background (fire-and-forget) unless one
+     * is already running for this conversation. Never throws: the generation
+     * body catches everything and resolves to null on failure.
+     */
+    fun launchTitleGenerationAsync(
+        conversationId: String,
+        customerId: String,
+        prompt: String,
+        instructionName: String? = null
+    ): Deferred<String?> {
+        inFlightTitles[conversationId]?.let { return it }
+        // LAZY so the deferred can't complete (and self-deregister) before it
+        // has been registered in the map.
+        val deferred = appScope.async(start = CoroutineStart.LAZY) {
+            generateAndStoreTitle(conversationId, customerId, prompt, instructionName)
+        }
+        val existing = inFlightTitles.putIfAbsent(conversationId, deferred)
+        if (existing != null) {
+            deferred.cancel()
+            return existing
+        }
+        deferred.invokeOnCompletion { inFlightTitles.remove(conversationId, deferred) }
+        deferred.start()
+        return deferred
+    }
+
+    /**
+     * Idempotent title fetch for POST /conversation/title: awaits the
+     * in-flight generation the orchestrator kicked off (the common case for
+     * new UI conversations), else returns the stored title, else generates
+     * now (old clients, restart mid-generation). Checked in that order — an
+     * in-flight job that completes between checks lands in the stored read.
+     */
+    suspend fun createConversationTitle(
+        conversationId: String,
+        customerId: String,
+        prompt: String,
+        instructionName: String? = null
+    ): String? {
+        inFlightTitles[conversationId]?.let { inFlight ->
+            return withTimeoutOrNull(TITLE_AWAIT_TIMEOUT_MS) { inFlight.await() }
+        }
+        // Title lives on the OWNER's row (the caller may be a shared editor)
+        conversationRepository.getConversationById(conversationId)?.let { owner ->
+            conversationRepository.getConversationTitle(conversationId, owner.customerId)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { return it }
+        }
+        return withTimeoutOrNull(TITLE_AWAIT_TIMEOUT_MS) {
+            launchTitleGenerationAsync(conversationId, customerId, prompt, instructionName).await()
+        }
+    }
 
     /**
      * Uses AI (via the retrieval-server) to generate and store a short title
@@ -30,7 +100,7 @@ class ConversationManagementService(
      * (RequestAgentMap, or the bundled default). Returns the title, or null
      * when generation failed or produced nothing usable.
      */
-    suspend fun createConversationTitle(
+    private suspend fun generateAndStoreTitle(
         conversationId: String,
         customerId: String,
         prompt: String,
@@ -176,5 +246,11 @@ class ConversationManagementService(
         if (role == null || !role.canEdit) {
             throw SecurityException("Customer $callerCustomerId cannot $action conversation $conversationId")
         }
+    }
+
+    private companion object {
+        // Below the shared HTTP client's 60s request timeout, so a slow
+        // generation surfaces as {title: null} instead of a client error.
+        const val TITLE_AWAIT_TIMEOUT_MS = 45_000L
     }
 }

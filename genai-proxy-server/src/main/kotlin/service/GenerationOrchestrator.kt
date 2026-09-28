@@ -55,7 +55,8 @@ class GenerationOrchestrator(
     private val graphRepository: GraphRepository,
     private val appScope: AppScope,
     private val runsClient: RunsClient,
-    private val appConfig: AppConfig
+    private val appConfig: AppConfig,
+    private val conversationManagementService: ConversationManagementService
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
@@ -298,6 +299,7 @@ class GenerationOrchestrator(
             totalTokens = result.totalTokens,
             tokensReadFromCache = result.tokensReadFromCache,
             tokensWrittenToCache = result.tokensWrittenToCache,
+            reasoningTokens = result.reasoningTokens,
             costUsd = costCalculationService.computeCostUsd(
                 aiVendor, model,
                 TokenUsageBreakdown(
@@ -306,6 +308,9 @@ class GenerationOrchestrator(
                     cacheReadTokens = result.tokensReadFromCache,
                     tokensWrittenToCache = result.tokensWrittenToCache
                 )
+            ),
+            reasoningCostUsd = costCalculationService.computeReasoningCostUsd(
+                aiVendor, model, result.reasoningTokens
             )
         )
 
@@ -367,6 +372,21 @@ class GenerationOrchestrator(
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId = conversationService.resolveWritableConversationId(customerId, client, conversationId)
+
+        // Brand-new UI conversation: kick off title generation now, in
+        // parallel with the rest of the setup and the vendor stream, instead
+        // of waiting for the client's POST /conversation/title round-trip
+        // (that POST awaits this same job via the in-flight registry).
+        // Blank-id gating means multi-vendor sibling streams (explicit id)
+        // and tool continuations (blank prompt) never fire it; the client
+        // gate keeps titles opt-in for developer API-key traffic.
+        if (conversationId.isNullOrBlank() && userRequestRawPrompt.isNotBlank() &&
+            client == AppConfig.CLIENT_REACT_APP
+        ) {
+            conversationManagementService.launchTitleGenerationAsync(
+                activeConversationId, customerId, userRequestRawPrompt, instructionResp?.name
+            )
+        }
 
         var actualPreviousMessageId = selectedResponseId
         // A parallel per-vendor stream call for the same turn may have already
@@ -468,6 +488,7 @@ class GenerationOrchestrator(
             var capturedToolCallsJson: String? = null
             var capturedWebSourcesJson: String? = null
             var capturedGeneratedArtifactsJson: String? = null
+            var capturedStopReason: String? = null
             val capturedThinkingSteps = mutableListOf<String>()
             var success = false
             var cancelled = false
@@ -553,6 +574,16 @@ class GenerationOrchestrator(
                     // streams emit an identical wire protocol.
                     when (chunk) {
                         is StreamChunk.Content -> sb.append(chunk.text)
+                        // The round that just streamed ended in in-graph tool
+                        // calls — its text was a preamble, not the answer.
+                        // Drop it so the persisted message text holds only the
+                        // final round; the preamble is kept on the thinking
+                        // step (reasoning) inside capturedThinkingSteps.
+                        is StreamChunk.ContentReset -> sb.setLength(0)
+                        // Last writer wins: only the terminal round emits this,
+                        // and after a content_reset any earlier round's reason is
+                        // moot — so the final value is the turn's real stop reason.
+                        is StreamChunk.StopReason -> capturedStopReason = chunk.reason
                         is StreamChunk.ThinkingStep -> capturedThinkingSteps.add(chunk.json)
                         is StreamChunk.ThinkingDuration -> capturedThinkingDurationMs = chunk.millis
                         is StreamChunk.ToolCalls -> capturedToolCallsJson = chunk.json
@@ -614,6 +645,7 @@ class GenerationOrchestrator(
                         totalTokens = capturedUsage?.totalTokens,
                         tokensReadFromCache = capturedUsage?.tokensReadFromCache,
                         tokensWrittenToCache = capturedUsage?.tokensWrittenToCache,
+                        reasoningTokens = capturedUsage?.reasoningTokens,
                         costUsd = capturedUsage?.let {
                             costCalculationService.computeCostUsd(
                                 config.aiVendor, config.model,
@@ -625,8 +657,14 @@ class GenerationOrchestrator(
                                 )
                             )
                         },
+                        reasoningCostUsd = capturedUsage?.let {
+                            costCalculationService.computeReasoningCostUsd(
+                                config.aiVendor, config.model, it.reasoningTokens
+                            )
+                        },
                         thinkingDurationMs = capturedThinkingDurationMs,
-                        thinkingStepsJson = thinkingStepsToJson(capturedThinkingSteps)
+                        thinkingStepsJson = thinkingStepsToJson(capturedThinkingSteps),
+                        stopReason = capturedStopReason
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }
