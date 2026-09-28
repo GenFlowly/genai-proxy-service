@@ -16,6 +16,7 @@ def _merge_usage(current: dict, update: dict) -> dict:
         "total_tokens": current.get("total_tokens", 0) + update.get("total_tokens", 0),
         "cache_read_tokens": current.get("cache_read_tokens", 0) + update.get("cache_read_tokens", 0),
         "cache_creation_tokens": current.get("cache_creation_tokens", 0) + update.get("cache_creation_tokens", 0),
+        "reasoning_tokens": current.get("reasoning_tokens", 0) + update.get("reasoning_tokens", 0),
     }
 
 

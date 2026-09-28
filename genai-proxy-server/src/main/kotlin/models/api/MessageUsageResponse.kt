@@ -9,5 +9,9 @@ data class MessageUsageResponse(
     val outputTokens: Int? = null,
     val totalTokens: Int? = null,
     val tokensReadFromCache: Int? = null,
-    val costUsd: Double? = null
+    /** Reasoning/thinking tokens — a subset of outputTokens, not additional to it. */
+    val reasoningTokens: Int? = null,
+    val costUsd: Double? = null,
+    /** USD spent on the reasoning subset — already included in costUsd, never add the two. */
+    val reasoningCostUsd: Double? = null
 )

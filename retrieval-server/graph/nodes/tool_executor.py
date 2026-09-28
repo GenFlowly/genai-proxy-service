@@ -147,13 +147,22 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     prior_sources: list[dict] = state.get("tool_sources") or []
     new_sources: list[dict] = []
     running = len(prior_sources)
+    # Per-call breakdown for the thinking panel — one entry per call, distinct
+    # from `summaries`/`new_sources` above which flatten the whole round into
+    # one line / one list. Without this, three web_search calls in one round
+    # are indistinguishable in the trace ("web_search, web_search, web_search"
+    # with no query, no per-call source attribution).
+    calls_trace: list[dict] = []
 
     for call in builtin_calls:
         name = call.get("name", "")
+        args = call.get("args") or {}
         start = time.perf_counter()
         result = None
+        error: str | None = None
+        call_sources_start = len(new_sources)
         try:
-            result = await by_name[name].run(call.get("args") or {}, context)
+            result = await by_name[name].run(args, context)
             content = result.content
             artifacts.extend(a.to_dict() for a in result.artifacts)
             if result.sources:
@@ -170,6 +179,7 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             count("tool_execution_total", status="error", tool=name)
             logger.error("Node tool_executor: %s failed — %s", name, e, exc_info=True)
             content = f"Error executing {name}: {e}"
+            error = str(e)
         observe("tool_execution_duration_seconds", time.perf_counter() - start, tool=name)
         loop_messages.append({
             "role": "tool",
@@ -177,6 +187,15 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             "content": content,
         })
         summaries.append(_summarize(name, result, content))
+        calls_trace.append({
+            "name": name,
+            "args": args,
+            # This call's own slice of new_sources — reuses the already-numbered
+            # entries above rather than re-deriving titles/urls from result.sources.
+            "sources": new_sources[call_sources_start:],
+            "artifacts": [a.to_dict() for a in result.artifacts] if result else [],
+            "error": error,
+        })
 
     logger.info(
         "Node tool_executor: END — %d call(s) executed, %d artifact(s), %d source(s)",
@@ -194,6 +213,7 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             "node": "TOOL_EXECUTOR",
             "prompt": ", ".join(c.get("name", "") for c in builtin_calls),
             "response": "\n".join(summaries)[:_TRACE_TOTAL_LIMIT],
+            "calls": calls_trace,
         }],
     }
     if new_sources:

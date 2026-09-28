@@ -83,9 +83,42 @@ def _kind_of(node_type: str) -> str:
     return "LLM"
 
 
+def _stop_reason_of(output) -> str:
+    """The vendor's raw finish reason for one LLM call, lowercased, or "".
+
+    stop_reason on Anthropic, finish_reason on OpenAI/Gemini — read both so this
+    is vendor-agnostic. Surfaced verbatim to the caller (a refusal, a length cap,
+    a normal end) rather than translated here: the client owns how each reason is
+    worded and how prominently it's shown. A refusal returns empty content and no
+    exception, so without streaming this back the turn would look like a silent
+    blank failure."""
+    meta = getattr(output, "response_metadata", None) or {}
+    reason = meta.get("stop_reason") or meta.get("finish_reason") or ""
+    return reason.lower() if isinstance(reason, str) else ""
+
+
 def _doc_title(result: dict) -> str:
     entity = result.get("entity", {}) or {}
     return (entity.get("title") or entity.get("subject") or entity.get("note_value") or "")[:120]
+
+
+def _fmt_tool_call(call: dict) -> str:
+    """Human-readable call signature for the thinking panel, e.g.
+    web_search(query="...", topic="news") — generic over any tool's args, not
+    just web_search's, so a customer's own declarative tools render the same
+    way. Args are shown in full, untruncated — the query text is often the
+    one thing worth reading a tool call for."""
+    name = call.get("name", "")
+    args = call.get("args") or {}
+    if not args:
+        return name
+    parts = []
+    for k, v in args.items():
+        if isinstance(v, str):
+            parts.append(f'{k}="{v}"')
+        else:
+            parts.append(f"{k}={json.dumps(v, default=str)}")
+    return f"{name}({', '.join(parts)})"
 
 
 _MAX_ITEMS = 5
@@ -110,13 +143,23 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
         results = output.get("web_search_results", [])
         payload["detail"] = f"Found {len(results)} web result(s)"
         payload["items"] = [r.get("title", "")[:120] for r in results[:_MAX_ITEMS]]
+        # Untruncated {index, title, url} triples — items above stays
+        # title-only/capped for older clients. index matches the numbering the
+        # separate web_sources event uses below, so a client can correlate a
+        # source shown here with the [n] marker it becomes in the final answer.
+        payload["sources"] = [
+            {"index": i, "title": r.get("title", ""), "url": r.get("url", "")}
+            for i, r in enumerate(results, 1)
+        ]
     elif kind == "TOOL":
         artifacts = output.get("generated_artifacts", [])
         sources = output.get("tool_sources", [])
-        executed = [m for m in output.get("loop_messages", []) if m.get("role") == "tool"]
-        payload["detail"] = f"Executed {len(executed)} tool(s)"
-        # Surface artifact filenames and the newest cited source titles so the
-        # thinking panel shows what the tools produced, not just a bare count.
+        # Per-call breakdown (name, args, its own sources/artifacts/error) — see
+        # tool_executor.py. Falls back to [] for any trace predating this field.
+        calls = (trace[-1].get("calls") if trace else None) or []
+        payload["detail"] = f"Executed {len(calls)} tool(s)"
+        payload["calls"] = calls
+        # Back-compat flat view: artifact filenames + newest cited titles, capped.
         items = [a.get("filename", "")[:120] for a in artifacts]
         items += [s.get("title", "")[:120] for s in sources[-_MAX_ITEMS:] if s.get("title")]
         payload["items"] = items[:_MAX_ITEMS]
@@ -140,11 +183,21 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
         elif isinstance(ranked, list):
             payload["detail"] = f"Kept the {len(ranked)} most relevant result(s)"
         elif output.get("tool_calls"):
-            # A tool-calling turn: the generator produced no user-facing answer,
-            # only tool calls — labelling it "Response generated" (as before) read
-            # as a broken, empty response step in the panel.
-            names = [c.get("name", "") for c in output["tool_calls"] if c.get("name")]
-            payload["detail"] = ("Calling tools: " + ", ".join(names)) if names else "Calling tools"
+            # A tool-calling turn. The model may still have written text before
+            # deciding to call tools (its reasoning for searching again, e.g.)
+            # — surface it instead of silently dropping it in favor of the
+            # generic "Calling tools" label.
+            reasoning = (output.get("generated_response") or "").strip()
+            if reasoning:
+                payload["reasoning"] = reasoning
+            calls = output["tool_calls"]
+            labels = [_fmt_tool_call(c) for c in calls if c.get("name")]
+            payload["detail"] = ("Calling tools: " + ", ".join(labels)) if labels else "Calling tools"
+            # Structured form of the same calls, for clients that want to render
+            # name/args separately rather than parsing the label string.
+            payload["tool_calls"] = [
+                {"name": c.get("name", ""), "args": c.get("args") or {}} for c in calls
+            ]
         elif output.get("generated_response"):
             payload["detail"] = "Response generated"
     return payload
@@ -174,9 +227,20 @@ async def stream_events_dicts(
 ) -> AsyncIterator[dict]:
     """
     Run a graph and yield outbound stream events as plain dict payloads:
-    {'thinking_step': …}, {'content': …}, {'tool_calls': …}, {'web_sources': …},
-    {'generated_artifacts': …}, {'thinking_duration_ms': …}, {'usage': …}, or
+    {'thinking_step': …}, {'content': …}, {'content_reset': True},
+    {'tool_calls': …}, {'web_sources': …}, {'generated_artifacts': …},
+    {'thinking_duration_ms': …}, {'stop_reason': …}, {'usage': …}, or
     {'error': …, 'error_type': …}.
+
+    stop_reason is the vendor's raw finish reason (end_turn / stop / max_tokens /
+    refusal / content_filter / …) for the round that ends the turn — streamed
+    verbatim so the client can always show why generation stopped, and so a
+    refusal (empty content, no exception) isn't a silent blank.
+
+    content_reset fires when a generation round ends in tool calls that will be
+    executed in-graph: the round's streamed content was a tool-call preamble,
+    and consumers accumulating content into answer text must discard it before
+    the next round streams.
 
     Transport-agnostic — this is the single source of truth for the event
     protocol. `stream_response` wraps each dict as an SSE `data:` frame for the
@@ -234,6 +298,9 @@ async def stream_events_dicts(
         "total_tokens": 0,
         "cache_read_tokens": 0,
         "cache_creation_tokens": 0,
+        # Reasoning/thinking tokens — a subset of output_tokens (billed at the
+        # output rate), reported separately for spend granularity.
+        "reasoning_tokens": 0,
     }
     config: dict = {"recursion_limit": recursion_limit}
     if thread_id is not None:
@@ -326,11 +393,13 @@ async def stream_events_dicts(
                 output = event["data"].get("output")
                 meta = getattr(output, "usage_metadata", None) or {}
                 details = meta.get("input_token_details") or {}
+                output_details = meta.get("output_token_details") or {}
                 usage["input_tokens"] += meta.get("input_tokens", 0)
                 usage["output_tokens"] += meta.get("output_tokens", 0)
                 usage["total_tokens"] += meta.get("total_tokens", 0)
                 usage["cache_read_tokens"] += details.get("cache_read", 0)
                 usage["cache_creation_tokens"] += details.get("cache_creation", 0)
+                usage["reasoning_tokens"] += output_details.get("reasoning", 0)
                 logger.info(
                     "Stream: LLM call ended node=%s — chunk_usage=%s running_total=%s",
                     node, meta, usage,
@@ -358,6 +427,28 @@ async def stream_events_dicts(
                             "Stream: suppressing tool_calls event — built-in call(s) handled in-graph: %s",
                             [c.get("name") for c in raw_tool_calls],
                         )
+                        # Any text this round streamed was a tool-call preamble
+                        # ("Let me look up…"), not answer text — the graph loops
+                        # through TOOL_EXECUTOR and a fresh generation round
+                        # follows. Tell consumers to discard what they have
+                        # accumulated so far: the proxy resets its persistence
+                        # buffer and the client clears the visible text. The
+                        # preamble itself is preserved in the thinking step's
+                        # `reasoning` field, so nothing is lost from the panel.
+                        yield {"content_reset": True}
+                    if not raw_tool_calls:
+                        # This round produced no tool calls, so it terminates the
+                        # turn — a plain answer (end_turn/stop), a length cap
+                        # (max_tokens), or a refusal/safety block (empty content).
+                        # Stream the raw reason so the client can always show why
+                        # generation ended, and so a refusal isn't a silent blank.
+                        # In-graph tool rounds are skipped: the reason there is
+                        # "tool_use", and the *next* round carries the real
+                        # terminal reason.
+                        stop_reason = _stop_reason_of(output)
+                        if stop_reason:
+                            logger.info("Stream: node=%s stop_reason=%s", node, stop_reason)
+                            yield {"stop_reason": stop_reason}
 
             if event_type == "on_chat_model_stream" and node in streaming_nodes and not structured_output:
                 chunk = event["data"].get("chunk")
@@ -389,9 +480,9 @@ async def stream_events_dicts(
             count("stream_zero_tokens_total", vendor=_provider)
             logger.warning("Stream: ZERO tokens emitted — streaming node may have failed or produced no output")
         logger.info(
-            "Stream: total usage — input_tokens=%d output_tokens=%d total_tokens=%d cache_read=%d cache_creation=%d",
+            "Stream: total usage — input_tokens=%d output_tokens=%d total_tokens=%d cache_read=%d cache_creation=%d reasoning=%d",
             usage["input_tokens"], usage["output_tokens"], usage["total_tokens"],
-            usage["cache_read_tokens"], usage["cache_creation_tokens"],
+            usage["cache_read_tokens"], usage["cache_creation_tokens"], usage["reasoning_tokens"],
         )
         yield {"usage": usage}
     except Exception as e:

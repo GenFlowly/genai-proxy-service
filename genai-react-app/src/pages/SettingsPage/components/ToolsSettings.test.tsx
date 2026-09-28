@@ -26,6 +26,7 @@ jest.mock('../../../services/customerToolsService', () => ({
     dryRunCustomerTool: jest.fn(),
     getToolCredentialStatuses: jest.fn(),
     storeToolCredentials: jest.fn(),
+    deleteToolCredentials: jest.fn(),
 }))
 // Render library inputs/buttons as native elements so the form is inspectable
 jest.mock('@genflowly/component-library', () => ({
@@ -58,6 +59,17 @@ jest.mock('@genflowly/component-library', () => ({
         <button onClick={onClick} disabled={disabled} data-testid={testId}>
             {label}
         </button>
+    ),
+    CredentialCard: ({ label, pills, message, children, 'data-testid': testId }: any) => (
+        <div data-testid={testId}>
+            <span>{label}</span>
+            {pills}
+            {children}
+            {message && <span>{message}</span>}
+        </div>
+    ),
+    CredentialStatusPill: ({ children, 'data-testid': testId }: any) => (
+        <span data-testid={testId}>{children}</span>
     ),
 }))
 

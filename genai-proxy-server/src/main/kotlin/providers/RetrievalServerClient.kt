@@ -310,6 +310,7 @@ class RetrievalServerClient(
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
                 tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
                 tokensWrittenToCache = usageObj?.get("cache_creation_tokens")?.jsonPrimitive?.intOrNull,
+                reasoningTokens = usageObj?.get("reasoning_tokens")?.jsonPrimitive?.intOrNull,
                 toolCallsJson = toolCallsElement?.toString(),
                 generatedArtifactsJson = artifactsElement?.toString(),
             )
@@ -373,6 +374,7 @@ class RetrievalServerClient(
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
                 tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
                 tokensWrittenToCache = usageObj?.get("cache_creation_tokens")?.jsonPrimitive?.intOrNull,
+                reasoningTokens = usageObj?.get("reasoning_tokens")?.jsonPrimitive?.intOrNull,
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to execute agent graph $graphId" }

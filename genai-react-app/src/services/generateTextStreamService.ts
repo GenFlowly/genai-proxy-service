@@ -36,6 +36,21 @@ export interface AwaitingInput {
 /** Handlers for the NDJSON chat wire protocol, shared by the live and reattach streams. */
 export interface StreamCallbacks {
     onDelta: (chunk: string) => void;
+    /**
+     * The generation round that just streamed ended in tool calls executed
+     * in-graph — its streamed text was a tool-call preamble ("Let me look
+     * up…"), not the answer, and a fresh round follows. Discard the text
+     * accumulated so far; the preamble stays visible in the thinking flow as
+     * the generator step's `reasoning`.
+     */
+    onContentReset?: () => void;
+    /**
+     * The vendor's raw finish reason for the turn (end_turn / stop / max_tokens
+     * / refusal / content_filter / …). Streamed once, when generation ends —
+     * lets the UI always show why it stopped, and a refusal (empty text) isn't
+     * a silent blank.
+     */
+    onStopReason?: (reason: string) => void;
     onThinking?: (step: string) => void;
     onThinkingStep?: (step: ThinkingStep) => void;
     onThinkingDuration?: (millis: number) => void;
@@ -65,6 +80,10 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
         try {
             const msg = JSON.parse(trimmed);
             if (msg.t === "c") cb.onDelta(msg.v);
+            else if (msg.t === "cr") cb.onContentReset?.();
+            else if (msg.t === "sr") {
+                if (typeof msg.v === "string" && msg.v) cb.onStopReason?.(msg.v);
+            }
             else if (msg.t === "k") cb.onThinking?.(msg.v);
             else if (msg.t === "ks") {
                 // Structured per-node thinking step from the agent graph
@@ -157,7 +176,9 @@ export async function generateTextStream(
     onWebSources?: (sources: WebSource[]) => void,
     onThinkingStep?: (step: ThinkingStep) => void,
     onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
-    onAwaitingInput?: (payload: AwaitingInput) => void
+    onAwaitingInput?: (payload: AwaitingInput) => void,
+    onContentReset?: () => void,
+    onStopReason?: (reason: string) => void
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -220,6 +241,8 @@ export async function generateTextStream(
 
     await readNdjsonStream(response, {
         onDelta,
+        onContentReset,
+        onStopReason,
         onThinking,
         onThinkingStep,
         onThinkingDuration,
