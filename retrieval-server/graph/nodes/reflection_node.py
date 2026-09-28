@@ -166,6 +166,7 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
             "input_tokens": meta.get("input_tokens", 0),
             "output_tokens": meta.get("output_tokens", 0),
             "total_tokens": meta.get("total_tokens", 0),
+            "reasoning_tokens": (meta.get("output_token_details") or {}).get("reasoning", 0),
         }
         if usage["input_tokens"]:
             count("llm_tokens_total", usage["input_tokens"], vendor=provider, model=effective_model, direction="input")

@@ -219,6 +219,34 @@ class SourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("tool_sources", out)
         self.assertEqual(out["loop_messages"][1]["content"], "t ran")
 
+    async def test_trace_carries_a_per_call_breakdown_with_its_own_sources(self):
+        # Two calls to the SAME tool in one round must stay distinguishable in
+        # the trace — this is what the thinking panel renders instead of a
+        # flattened "web_search, web_search" with no query and no per-call
+        # source attribution.
+        tool = _Recorder("web_search", sources=[Source(title="A", url="https://a")])
+        out = await _run(
+            _state(
+                [
+                    {"id": "1", "name": "web_search", "args": {"query": "first"}},
+                    {"id": "2", "name": "web_search", "args": {"query": "second"}},
+                ],
+                ["web_search"],
+            ),
+            [tool],
+        )
+
+        calls = out["trace"][0]["calls"]
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0]["name"], "web_search")
+        self.assertEqual(calls[0]["args"], {"query": "first"})
+        self.assertEqual(calls[1]["args"], {"query": "second"})
+        # Each call's sources are numbered turn-globally and attributed only
+        # to that call, not merged across both.
+        self.assertEqual(calls[0]["sources"], [{"index": 1, "title": "A", "url": "https://a"}])
+        self.assertEqual(calls[1]["sources"], [{"index": 2, "title": "A", "url": "https://a"}])
+        self.assertIsNone(calls[0]["error"])
+
 
 class FailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_failing_tool_becomes_content_not_an_exception(self):
@@ -239,6 +267,14 @@ class FailureTests(unittest.IsolatedAsyncioTestCase):
         contents = [m["content"] for m in out["loop_messages"][1:]]
         self.assertIn("Error executing a", contents[0])
         self.assertEqual(contents[1], "b ran")
+
+    async def test_a_failing_call_records_its_error_in_the_trace(self):
+        tool = _Recorder("web_search", raises=RuntimeError("upstream down"))
+        out = await _run(_state([{"id": "1", "name": "web_search"}], ["web_search"]), [tool])
+
+        call = out["trace"][0]["calls"][0]
+        self.assertEqual(call["error"], "upstream down")
+        self.assertEqual(call["sources"], [])
 
 
 if __name__ == "__main__":

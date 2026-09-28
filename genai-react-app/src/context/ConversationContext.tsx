@@ -304,7 +304,9 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         onWebSources?: (sources: WebSource[]) => void,
         onThinkingStep?: (step: ThinkingStep) => void,
         onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
-        onAwaitingInput?: (payload: AwaitingInput) => void
+        onAwaitingInput?: (payload: AwaitingInput) => void,
+        onContentReset?: () => void,
+        onStopReason?: (reason: string) => void
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -318,7 +320,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
             agentId: selectedAgentId,
-        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput)
+        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -406,6 +408,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         }
                         reattachRun(token, runId, data.conversationId, {
                             onDelta: (c) => { acc += c; gotContent = true; patch(m => ({ ...m, text: acc })) },
+                            onContentReset: () => { acc = ''; patch(m => ({ ...m, text: '' })) },
+                            onStopReason: (reason) => patch(m => ({ ...m, stopReason: reason })),
                             onThinkingStep: (s) => { gotContent = true; patch(m => ({ ...m, thinkingStepList: applyThinkingStep(m.thinkingStepList ?? [], s) })) },
                             onThinkingDuration: (ms) => patch(m => ({ ...m, thinkingDurationMs: ms })),
                             onWebSources: (ws) => patch(m => ({ ...m, webSources: ws })),
@@ -777,6 +781,35 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                     setAwaitingInputs(prev => ({ ...prev, [currentMsgId]: payload }))
                 }
 
+                // The round that just streamed ended in in-graph tool calls —
+                // its text was a preamble, not the answer. Clear it so the
+                // next round starts from empty; the narration stays visible in
+                // the thinking flow (the generator step's `reasoning`).
+                const handleContentReset = () => {
+                    accumulatedText = ""
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, text: "" }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
+                // The vendor's raw finish reason for the turn — recorded on the
+                // message so the card can always show why generation ended.
+                const handleStopReason = (reason: string) => {
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, stopReason: reason }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+
                 // Finish THIS vendor's message only — on failure the streamed
                 // text is kept and the reason is attached; other vendors'
                 // streams are untouched
@@ -890,7 +923,9 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         handleWebSources,
                         handleThinkingStep,
                         handleGeneratedAttachments,
-                        handleAwaitingInput
+                        handleAwaitingInput,
+                        handleContentReset,
+                        handleStopReason
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer

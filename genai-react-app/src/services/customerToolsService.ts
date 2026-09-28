@@ -419,3 +419,17 @@ export async function storeToolCredentials(
 
     return (await response.json()) as StoreToolCredentialsResponse
 }
+
+/** Remove a tool's stored credential values. */
+export async function deleteToolCredentials(token: string, toolType: string): Promise<void> {
+    const response = await fetchWithRetry(endpoints.toolCredential(toolType), {
+        method: HttpMethod.DELETE,
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw await errorFrom(response, 'Delete tool credentials failed')
+    }
+}

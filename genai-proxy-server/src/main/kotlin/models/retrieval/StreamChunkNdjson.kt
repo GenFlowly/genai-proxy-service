@@ -11,12 +11,16 @@ import kotlinx.serialization.json.JsonPrimitive
  *   c  = content token      k  = thinking            ks = thinking step
  *   kd = thinking duration  tc = tool calls          ws = web sources
  *   ga = generated files    ai = awaiting input       err = error
+ *   cr = content reset (discard accumulated content — a new round follows)
+ *   sr = stop reason (vendor's raw finish reason for the terminated turn)
  *
  * `json`-backed chunks are already valid JSON (object/array) and are embedded
  * as-is; text values are JSON-escaped via JsonPrimitive.
  */
 fun StreamChunk.toNdjsonFrame(): String? = when (this) {
     is StreamChunk.Content -> "{\"t\":\"c\",\"v\":${JsonPrimitive(text)}}\n"
+    is StreamChunk.ContentReset -> "{\"t\":\"cr\"}\n"
+    is StreamChunk.StopReason -> "{\"t\":\"sr\",\"v\":${JsonPrimitive(reason)}}\n"
     is StreamChunk.Thinking -> "{\"t\":\"k\",\"v\":${JsonPrimitive(text)}}\n"
     is StreamChunk.ThinkingStep -> "{\"t\":\"ks\",\"v\":$json}\n"
     is StreamChunk.ThinkingDuration -> "{\"t\":\"kd\",\"v\":$millis}\n"
