@@ -140,6 +140,17 @@
             "responseNodeHint": "The system prompt and model for this node come from the instruction and model selected at request time.",
             "systemPrompt": "System Prompt",
             "systemPromptPlaceholder": "You are a helpful assistant.",
+            "thinkingLevel": "Thinking",
+            "thinkingLevelDefault": "Default (model's own behavior)",
+            "thinkingLevel_none": "Off / minimal",
+            "thinkingLevel_low": "Low",
+            "thinkingLevel_medium": "Medium",
+            "thinkingLevel_high": "High",
+            "thinkingHint_openai": "Maps to OpenAI's reasoning_effort for this model.",
+            "thinkingHint_anthropic": "Maps to Claude adaptive thinking with the selected effort.",
+            "thinkingHint_gemini": "Maps to Gemini's thinking budget or level for this model.",
+            "thinkingHint_generic": "Applied to whichever model serves this node at request time; models without thinking controls ignore it.",
+            "thinkingHint_unsupported": "This model has no thinking controls — the setting is ignored.",
             "versionControlAriaLabel": "Instruction version"
         },
         "nodeTypes": {
