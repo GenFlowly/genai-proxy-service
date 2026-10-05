@@ -53,6 +53,7 @@ import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.memory.registerMemoryRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
+import com.genflowly.activity.voice.registerVoiceClientSecretRoutes
 import com.genflowly.activity.voice.registerVoiceSessionRoutes
 import com.genflowly.service.DeveloperApiKeyService
 import io.github.smiley4.ktoropenapi.get
@@ -167,6 +168,7 @@ object Routes {
 
     const val VOICE_SESSION = "$API_V1/voice/session"
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
+    const val VOICE_CLIENT_SECRET = "$API_V1/voice/client-secret"
 
     const val CREATE_ATTACHMENT = "$API_V1/attachments"
     const val GET_ATTACHMENT_URL = "$API_V1/attachments/url"
@@ -287,5 +289,6 @@ fun Application.configureRouting(
         registerNodePresetRoutes(nodePresetService, customerProfileService, appConfig)
         registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
+        registerVoiceClientSecretRoutes(customerProfileService, voiceSessionService)
     }
 }

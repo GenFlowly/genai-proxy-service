@@ -36,6 +36,7 @@ from routes.providers import router as providers_router
 from routes.retrieve import router as retrieve_router
 from routes.search import router as search_router
 from routes.tools import router as tools_router
+from routes.realtime_secret import router as realtime_secret_router
 from routes.validate_key import router as validate_key_router
 from routes.voice import router as voice_router
 
@@ -111,6 +112,7 @@ app.include_router(tools_router)
 app.include_router(connectors_router)
 app.include_router(voice_router)
 app.include_router(validate_key_router)
+app.include_router(realtime_secret_router)
 
 
 @app.get("/health")
