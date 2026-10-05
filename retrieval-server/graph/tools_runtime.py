@@ -37,6 +37,14 @@ _registry: ToolRegistry | None = None
 # Must match attachmentS3Key() in the proxy server's Attachment.kt.
 _ATTACHMENT_KEY_TEMPLATE = "customers/{customer_id}/attachments/{artifact_id}"
 
+# Built-ins a TOOL_EXECUTOR node must name EXPLICITLY in its config's "tools"
+# list — excluded from the all-built-ins enablement default. These are tools
+# whose implicit arrival would change the behavior of existing graphs:
+# search_knowledge_base would make every pipeline graph with an unscoped
+# TOOL_EXECUTOR node retrieve twice (once via its RETRIEVAL node, once when
+# the model calls the tool).
+_EXPLICIT_ONLY_TOOLS = {"search_knowledge_base"}
+
 
 def get_registry() -> ToolRegistry:
     """The process-wide registry of BUILT-IN tools.
@@ -45,19 +53,29 @@ def get_registry() -> ToolRegistry:
     tenant; only their credentials differ, and those arrive through
     ToolContext.secrets), so one shared instance is correct. Callers deciding
     what a REQUEST may use must go through tools_for/specs_for instead.
+
+    The registry is default_registry() (the extractable graph_tools package)
+    plus the server-local tools that need this server's stacks and therefore
+    cannot live inside graph_tools (search_knowledge_base → pymilvus/
+    encoding_library).
     """
     global _registry
     if _registry is None:
-        _registry = default_registry()
+        registry = default_registry()
+        from graph.knowledge_tool import SearchKnowledgeBaseTool
+
+        registry.register(SearchKnowledgeBaseTool())
+        _registry = registry
     return _registry
 
 
 def all_builtin_tool_names() -> list[str]:
-    """Every built-in tool name. Used as the enablement default for a
-    TOOL_EXECUTOR node that does not name a subset — note this deliberately
-    covers BUILT-INS ONLY, so a customer-defined tool is never implicitly
-    enabled and must always be named explicitly."""
-    return get_registry().names()
+    """Built-in tool names eligible for IMPLICIT enablement — the default for a
+    TOOL_EXECUTOR node that does not name a subset. Deliberately covers
+    BUILT-INS ONLY (a customer-defined tool is never implicitly enabled) and
+    excludes _EXPLICIT_ONLY_TOOLS (see above), so neither a customer tool nor
+    a behavior-changing built-in can silently widen an existing graph."""
+    return [n for n in get_registry().names() if n not in _EXPLICIT_ONLY_TOOLS]
 
 
 def tools_for(names: Iterable[str], customer_id: str | None = None) -> list[GraphTool]:

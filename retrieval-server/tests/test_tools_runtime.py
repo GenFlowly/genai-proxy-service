@@ -133,6 +133,18 @@ class BuiltinNamesTests(unittest.TestCase):
         self.assertIn("web_search", names)
         self.assertIn("generate_pdf", names)
 
+    def test_search_knowledge_base_is_registered_but_never_implicit(self):
+        # Registered: a TOOL_EXECUTOR config naming it resolves it as a
+        # built-in. Excluded from the implicit all-built-ins default: an
+        # existing pipeline graph with an unscoped TOOL_EXECUTOR node must not
+        # start retrieving twice just because this tool shipped.
+        self.assertTrue(tools_runtime.get_registry().has("search_knowledge_base"))
+        self.assertEqual(
+            [t.name for t in tools_for(["search_knowledge_base"])],
+            ["search_knowledge_base"],
+        )
+        self.assertNotIn("search_knowledge_base", all_builtin_tool_names())
+
 
 if __name__ == "__main__":
     unittest.main()

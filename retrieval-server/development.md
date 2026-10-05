@@ -86,6 +86,40 @@ bound, and a customer-defined tool is never enabled implicitly — see
 `_enabled_builtin_tools` in `routes/retrieve.py`, whose no-config fallback
 covers built-ins only.
 
+## Agent-loop graphs
+
+The same engine runs two graph shapes. A **pipeline** graph wires retrieval
+decisions into the topology (query → RETRIEVAL → rank → generate): fixed
+latency, predictable cost, retrieval on every turn. An **agent** graph is the
+degenerate two-node form — response generator cycling with TOOL_EXECUTOR until
+the model stops calling tools — where retrieval, search rounds, and when to
+answer are the model's per-turn decisions. Template (topology, node configs,
+loop-budget rationale): `graph/templates/agent_loop.json`; it is published as
+ordinary `CustomerGraphs`/`CustomerGraphNodes` records, so the request API,
+streaming, and the durable /runs path treat both shapes identically.
+
+The bridge between the shapes is `search_knowledge_base`
+(`graph/knowledge_tool.py`): the RETRIEVAL node's exact search core
+(`graph.nodes.retrieval.search_knowledge`) exposed as a built-in tool, so the
+model writes its own queries and can refine them after reading results —
+multi-hop retrieval a feed-forward pipeline cannot express. It is
+**explicit-only**: excluded from the all-built-ins enablement default
+(`_EXPLICIT_ONLY_TOOLS` in `graph/tools_runtime.py`) so an existing pipeline
+graph with an unscoped TOOL_EXECUTOR node never starts retrieving twice; a
+TOOL_EXECUTOR config must name it in `"tools"`.
+
+A turn's tool calls execute **concurrently** (`asyncio.gather` in
+`graph/nodes/tool_executor.py`) with per-call error isolation; rendering and
+citation numbering stay sequential in the model's call order, so
+`loop_messages` and `[n]` source indices are deterministic regardless of
+completion order.
+
+Planned next (in order): a `run_graph` tool exposing a pipeline graph as one
+callable step for agents; a `spawn_agent` tool (child agent loops with depth +
+token budgets) — which is what makes orchestrator/parallel-worker/judge
+patterns emergent model behavior rather than topology; an AGENT node type so
+pipelines can embed a bounded agent loop as one node.
+
 ## Durable agentic runs (planned)
 
 Full design and rationale: `DURABLE_AGENTS_DBOS_PLAN.md`. Goal: evolve this service from a
