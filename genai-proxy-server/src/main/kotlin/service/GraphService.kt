@@ -148,6 +148,17 @@ class GraphService(
     }
 
     /**
+     * Publishes a NON-default System-owned agent (admin only): a shared
+     * template every customer sees read-only in their agent picker (e.g. the
+     * agent-loop template) and forks on first edit — the same ownership model
+     * as the default graph, minus the "served to graphless customers" role.
+     * isDefault is pinned to false so this can never displace the System
+     * default graph and flip graphless customers to a different behavior.
+     */
+    suspend fun publishSystemAgent(req: CreateGraphAgentRequest): AgentResponse =
+        createGraphAgent(SYSTEM_GRAPH_OWNER, req.copy(isDefault = false), isSystem = true)
+
+    /**
      * Applies an agent update to the published System default graph (admin only).
      * isDefault is pinned to true — the System graph must stay the default.
      * @throws IllegalStateException when no System graph is published yet.

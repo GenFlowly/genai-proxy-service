@@ -161,17 +161,23 @@ object GraphValidationService {
                 "Conditional edge 'from' references unknown nodeId '$from'."
             }
 
-            val conditionKey = cond["condition_key"]?.jsonPrimitive?.content
-                ?: throw IllegalArgumentException("Conditional edge is missing 'condition_key'.")
-            require(conditionKey.isNotBlank()) {
-                "Conditional edge from '$from' has a blank condition_key."
+            val conditionType = cond["condition_type"]?.jsonPrimitive?.content ?: "bool"
+            // tool_route inspects state["tool_calls"], never a condition key —
+            // the retrieval-server's router ignores the field entirely, so
+            // demanding one here would reject an otherwise valid edge (its
+            // runtime learned the same lesson; see _make_condition_router).
+            if (conditionType != "tool_route") {
+                val conditionKey = cond["condition_key"]?.jsonPrimitive?.content
+                    ?: throw IllegalArgumentException("Conditional edge is missing 'condition_key'.")
+                require(conditionKey.isNotBlank()) {
+                    "Conditional edge from '$from' has a blank condition_key."
+                }
             }
 
             val routes = cond["routes"]?.jsonObject
                 ?: throw IllegalArgumentException(
                     "Conditional edge from '$from' is missing 'routes' map."
                 )
-            val conditionType = cond["condition_type"]?.jsonPrimitive?.content ?: "bool"
             if (conditionType in BOOLEAN_CONDITION_TYPES) {
                 require(routes.keys == setOf("true", "false")) {
                     "Conditional edge from '$from' ($conditionType) must have exactly " +

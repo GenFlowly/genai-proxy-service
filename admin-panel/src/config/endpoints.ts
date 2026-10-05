@@ -20,6 +20,7 @@ export const endpoints = {
     adminNodePresets: `${BASE}${API_PREFIX}/admin/node-presets`,
     adminNodePreset: (presetId: string) => `${BASE}${API_PREFIX}/admin/node-presets/${presetId}`,
     defaultGraph: `${BASE}${API_PREFIX}/admin/default-graph`,
+    systemAgents: `${BASE}${API_PREFIX}/admin/system-agents`,
     requestAgentMapEntry: (requestType: string) =>
         `${BASE}${API_PREFIX}/admin/request-agent-map/${requestType}`,
 }
