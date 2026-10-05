@@ -41,6 +41,7 @@ import {
     storeToolCredentials,
     urlOriginIsLiteral,
 } from '../../../services/customerToolsService'
+import { WebSearchToolSettings } from './WebSearchToolSettings'
 import styles from './ToolsSettings.module.scss'
 
 /** Credentials stored from this page are plain secret values, not OAuth. */
@@ -670,6 +671,18 @@ export function ToolsSettings(): React.ReactElement {
             <div className={styles.headerBlock}>
                 <h2 className={styles.title}>{t('settingsPage.toolsSettings.title')}</h2>
                 <p className={styles.subtitle}>{t('settingsPage.toolsSettings.subtitle')}</p>
+            </div>
+
+            <div className={styles.listSection}>
+                <div className={styles.listHeader}>
+                    <h3 className={styles.listTitle}>{t('settingsPage.toolsSettings.builtInTitle')}</h3>
+                </div>
+                <p className={styles.subtitle}>{t('settingsPage.toolsSettings.builtInSubtitle')}</p>
+                <WebSearchToolSettings
+                    connected={credentialConnected('WEB_SEARCH')}
+                    getAccessTokenSilently={getAccessTokenSilently}
+                    onChanged={loadTools}
+                />
             </div>
 
             <div className={styles.listSection}>

@@ -1,0 +1,21 @@
+@import '../../../styles/themes.scss';
+
+// Card shell, header, pills and message styles live in CredentialCard
+// (@genflowly/component-library) — this file only keeps the body layout.
+
+.description {
+    font-size: 0.9rem;
+    color: $color-text-muted;
+    margin: 0 0 0.75rem;
+}
+
+.keyRow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.keyInput {
+    flex: 1 1 240px;
+}

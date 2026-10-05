@@ -121,8 +121,11 @@ class ConversationService(
                                 outputTokens = nextMsg.outputTokens,
                                 totalTokens = nextMsg.totalTokens,
                                 tokensReadFromCache = nextMsg.tokensReadFromCache,
+                                reasoningTokens = nextMsg.reasoningTokens,
                                 costUsd = nextMsg.costUsd,
+                                reasoningCostUsd = nextMsg.reasoningCostUsd,
                                 thinkingDurationMs = nextMsg.thinkingDurationMs,
+                                stopReason = nextMsg.stopReason,
                                 thinkingSteps = nextMsg.thinkingStepsJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
                                 },
@@ -170,7 +173,10 @@ class ConversationService(
                     outputTokens = msgs.sumOf { it.outputTokens ?: 0 },
                     totalTokens = msgs.sumOf { it.totalTokens ?: 0 },
                     tokensReadFromCache = msgs.sumOf { it.tokensReadFromCache ?: 0 },
+                    reasoningTokens = msgs.sumOf { it.reasoningTokens ?: 0 },
                     costUsd = msgs.mapNotNull { it.costUsd }.takeIf { it.isNotEmpty() }
+                        ?.sum()?.let { Math.round(it * 1e10) / 1e10 },
+                    reasoningCostUsd = msgs.mapNotNull { it.reasoningCostUsd }.takeIf { it.isNotEmpty() }
                         ?.sum()?.let { Math.round(it * 1e10) / 1e10 }
                 )
             }
@@ -281,7 +287,9 @@ class ConversationService(
             outputTokens = message.outputTokens,
             totalTokens = message.totalTokens,
             tokensReadFromCache = message.tokensReadFromCache,
-            costUsd = message.costUsd
+            reasoningTokens = message.reasoningTokens,
+            costUsd = message.costUsd,
+            reasoningCostUsd = message.reasoningCostUsd
         )
     }
 

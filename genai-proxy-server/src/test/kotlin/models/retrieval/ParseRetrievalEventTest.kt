@@ -31,6 +31,21 @@ class ParseRetrievalEventTest {
     }
 
     @Test
+    fun `content_reset maps to ContentReset`() {
+        assertEquals(StreamChunk.ContentReset, parse("""{"content_reset":true}"""))
+    }
+
+    @Test
+    fun `stop_reason maps to StopReason`() {
+        assertEquals(StreamChunk.StopReason("refusal"), parse("""{"stop_reason":"refusal"}"""))
+    }
+
+    @Test
+    fun `blank stop_reason is skipped`() {
+        assertNull(parse("""{"stop_reason":"  "}"""))
+    }
+
+    @Test
     fun `thinking maps to Thinking`() {
         assertEquals(StreamChunk.Thinking("pondering"), parse("""{"thinking":"pondering"}"""))
     }
@@ -109,14 +124,14 @@ class ParseRetrievalEventTest {
     @Test
     fun `usage maps to Usage with all buckets`() {
         val chunk = parse(
-            """{"usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30,"cache_read_tokens":5,"cache_creation_tokens":2}}"""
+            """{"usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30,"cache_read_tokens":5,"cache_creation_tokens":2,"reasoning_tokens":7}}"""
         )
-        assertEquals(StreamChunk.Usage(10, 20, 30, 5, 2), chunk)
+        assertEquals(StreamChunk.Usage(10, 20, 30, 5, 2, 7), chunk)
     }
 
     @Test
     fun `usage defaults missing buckets to zero`() {
-        assertEquals(StreamChunk.Usage(0, 0, 0, 0, 0), parse("""{"usage":{}}"""))
+        assertEquals(StreamChunk.Usage(0, 0, 0, 0, 0, 0), parse("""{"usage":{}}"""))
     }
 
     @Test

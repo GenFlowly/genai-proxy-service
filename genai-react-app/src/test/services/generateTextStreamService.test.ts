@@ -403,6 +403,39 @@ describe('generateTextStreamService', () => {
         // Content after the pause still flows through as normal text
         expect(onDelta).toHaveBeenCalledWith('resumed');
     });
+
+    test('generateTextStream surfaces a "cr" content-reset frame between tool rounds', async () => {
+        // A tool-calling round streams a preamble, then "cr" says discard it —
+        // only the final round's text is the answer.
+        const encoder = new TextEncoder();
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"Let me search."}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"cr"}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"The answer is 9."}\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn(),
+        };
+        mockFetchWithRetry.mockResolvedValue({ ok: true, headers: new Map(), body: { getReader: () => mockReader } });
+
+        const seen: string[] = [];
+        let text = '';
+        const onDelta = jest.fn((c: string) => { text += c; seen.push(`delta:${c}`); });
+        const onContentReset = jest.fn(() => { text = ''; seen.push('reset'); });
+        await generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            onDelta,
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined,
+            onContentReset
+        );
+
+        expect(onContentReset).toHaveBeenCalledTimes(1);
+        // The reset arrived between the preamble and the final answer
+        expect(seen).toEqual(['delta:Let me search.', 'reset', 'delta:The answer is 9.']);
+        expect(text).toBe('The answer is 9.');
+    });
 });
 // Trigger coverage run
 // Trigger coverage run

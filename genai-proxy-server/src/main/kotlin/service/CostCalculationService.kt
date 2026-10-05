@@ -109,6 +109,18 @@ class CostCalculationService(
         return rounded
     }
 
+    /**
+     * USD spent on reasoning/thinking tokens alone. These are a subset of the
+     * output bucket (already inside computeCostUsd's total — never add the
+     * two), priced at the output rate like any other output token. Null when
+     * no reasoning tokens were reported or the model has no output pricing.
+     */
+    suspend fun computeReasoningCostUsd(vendor: AIVendor, model: String, reasoningTokens: Int?): Double? {
+        if (reasoningTokens == null || reasoningTokens == 0) return null
+        val outRate = modelCatalogService.getCatalogEntry(vendor, model)?.outputCostPerMTok ?: return null
+        return (perMTok(reasoningTokens, outRate) * 1e10).roundToLong() / 1e10
+    }
+
     private fun perMTok(tokens: Int, ratePerMTok: Double): Double =
         tokens * ratePerMTok / 1_000_000.0
 }

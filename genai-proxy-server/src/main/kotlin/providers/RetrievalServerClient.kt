@@ -154,6 +154,32 @@ private data class ValidateKeyResponse(
 /** Outcome of a provider key check, with the provider's rejection message. */
 data class KeyValidationResult(val valid: Boolean, val error: String? = null)
 
+// --- /voice/client-secret wire types ---
+
+@Serializable
+private data class RealtimeClientSecretPayload(
+    val api_key: String,
+    val model: String,
+    val instructions: String,
+    val voice: String? = null,
+    val input_transcription_model: String? = null,
+)
+
+@Serializable
+private data class RealtimeClientSecretServerResponse(
+    val value: String? = null,
+    val expires_at: Long? = null,
+    val model: String? = null,
+    val error: String? = null,
+)
+
+/** Outcome of an ephemeral-secret mint; [value] null means it failed with [error]. */
+data class RealtimeClientSecretResult(
+    val value: String? = null,
+    val expiresAt: Long? = null,
+    val error: String? = null,
+)
+
 // --- /models/metadata wire types ---
 
 @Serializable
@@ -310,6 +336,7 @@ class RetrievalServerClient(
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
                 tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
                 tokensWrittenToCache = usageObj?.get("cache_creation_tokens")?.jsonPrimitive?.intOrNull,
+                reasoningTokens = usageObj?.get("reasoning_tokens")?.jsonPrimitive?.intOrNull,
                 toolCallsJson = toolCallsElement?.toString(),
                 generatedArtifactsJson = artifactsElement?.toString(),
             )
@@ -373,6 +400,7 @@ class RetrievalServerClient(
                 totalTokens = usageObj?.get("total_tokens")?.jsonPrimitive?.intOrNull,
                 tokensReadFromCache = usageObj?.get("cache_read_tokens")?.jsonPrimitive?.intOrNull,
                 tokensWrittenToCache = usageObj?.get("cache_creation_tokens")?.jsonPrimitive?.intOrNull,
+                reasoningTokens = usageObj?.get("reasoning_tokens")?.jsonPrimitive?.intOrNull,
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to execute agent graph $graphId" }
@@ -639,6 +667,51 @@ class RetrievalServerClient(
         } catch (e: Exception) {
             logger.warn { "Failed to validate API key for provider $provider: ${e.message}" }
             KeyValidationResult(valid = false, error = "Key validation service unavailable")
+        }
+    }
+
+    /**
+     * Mints an OpenAI Realtime ephemeral client secret via
+     * /voice/client-secret. The retrieval server is the only component that
+     * talks to OpenAI; the long-lived vendor key never leaves the backend.
+     */
+    suspend fun createRealtimeClientSecret(
+        apiKey: String,
+        model: String,
+        instructions: String,
+        voice: String?,
+        inputTranscriptionModel: String?
+    ): RealtimeClientSecretResult {
+        val payload = json.encodeToString(
+            RealtimeClientSecretPayload(
+                api_key = apiKey,
+                model = model,
+                instructions = instructions,
+                voice = voice,
+                input_transcription_model = inputTranscriptionModel,
+            )
+        )
+        return try {
+            val response: HttpResponse = httpClient.post("$retrievalServerUrl/voice/client-secret") {
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            if (!response.status.isSuccess()) {
+                logger.warn { "Retrieval server /voice/client-secret returned ${response.status}" }
+                return RealtimeClientSecretResult(error = "Client-secret service unavailable")
+            }
+            val parsed = json.decodeFromString<RealtimeClientSecretServerResponse>(response.bodyAsText())
+            if (parsed.value == null) {
+                logger.info { "Realtime client-secret mint failed: ${parsed.error}" }
+            }
+            RealtimeClientSecretResult(
+                value = parsed.value,
+                expiresAt = parsed.expires_at,
+                error = parsed.error,
+            )
+        } catch (e: Exception) {
+            logger.warn { "Failed to mint realtime client secret: ${e.message}" }
+            RealtimeClientSecretResult(error = "Client-secret service unavailable")
         }
     }
 

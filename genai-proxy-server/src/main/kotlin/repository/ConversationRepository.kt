@@ -669,14 +669,23 @@ class ConversationRepository(
                     message.tokensWrittenToCache?.let {
                         map["tokensWrittenToCache"] = AttributeValue.builder().n(it.toString()).build()
                     }
+                    message.reasoningTokens?.let {
+                        map["reasoningTokens"] = AttributeValue.builder().n(it.toString()).build()
+                    }
                     message.costUsd?.let {
                         map["costUsd"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    message.reasoningCostUsd?.let {
+                        map["reasoningCostUsd"] = AttributeValue.builder().n(it.toString()).build()
                     }
                     message.thinkingDurationMs?.let {
                         map["thinkingDurationMs"] = AttributeValue.builder().n(it.toString()).build()
                     }
                     message.thinkingStepsJson?.let {
                         map["thinkingStepsJson"] = AttributeValue.builder().s(it).build()
+                    }
+                    message.stopReason?.let {
+                        map["stopReason"] = AttributeValue.builder().s(it).build()
                     }
                 }
             )
@@ -742,10 +751,13 @@ class ConversationRepository(
             totalTokens = totalTokens,
             tokensReadFromCache = tokensReadFromCache,
             tokensWrittenToCache = item["tokensWrittenToCache"]?.n()?.toIntOrNull(),
+            reasoningTokens = item["reasoningTokens"]?.n()?.toIntOrNull(),
             costUsd = item["costUsd"]?.n()?.toDoubleOrNull(),
+            reasoningCostUsd = item["reasoningCostUsd"]?.n()?.toDoubleOrNull(),
             learnedFactsJson = item["learnedFactsJson"]?.s(),
             thinkingDurationMs = item["thinkingDurationMs"]?.n()?.toLongOrNull(),
             thinkingStepsJson = item["thinkingStepsJson"]?.s()?.takeIf { it.isNotBlank() },
+            stopReason = item["stopReason"]?.s()?.takeIf { it.isNotBlank() },
             createdAt = item["createdAt"]?.s()
         )
     }

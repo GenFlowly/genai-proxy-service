@@ -13,6 +13,7 @@ import { InstructionResponse } from '../../../models/instruction.models'
 import { ScrollArea } from '@genflowly/component-library'
 import styles from './EditAgentPage.module.scss'
 import { formatServerDateTime } from '../../../utils/timeUtils'
+import { getThinkingLevelInfo } from '../../../utils/thinkingLevels'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,11 @@ function NodeConfigEditor({
         : ''
     const inputTemplate: string = parsedConfig.input_template ?? ''
     const modelOverride: string = parsedConfig.model_override ?? ''
+    const thinkingLevel: string = typeof parsedConfig.thinking_level === 'string' ? parsedConfig.thinking_level : ''
+    // Response generators run on the model picked at request time, so their
+    // valid values are the generic set; other nodes derive options from the
+    // model override (or the generic set when no override is given).
+    const thinkingInfo = getThinkingLevelInfo(isResponseNode ? undefined : modelOverride)
 
     const selectedInstruction = instructionId
         ? instructions?.find(inst => inst.id === instructionId)
@@ -363,6 +369,34 @@ function NodeConfigEditor({
                                         />
                                     </div>
                                 )}
+                            </div>
+
+                            <div className={styles.fieldGroup}>
+                                <label className={styles.fieldLabel} htmlFor={`thinking-level-${node.nodeId}`}>
+                                    {t('agentsPage.nodeConfigEditor.thinkingLevel')} <span className={styles.optional}>{t('agentsPage.nodeConfigEditor.optional')}</span>
+                                </label>
+                                <select
+                                    id={`thinking-level-${node.nodeId}`}
+                                    className={styles.fieldInput}
+                                    value={thinkingLevel}
+                                    onChange={e => updateConfigField('thinking_level', e.target.value)}
+                                    data-testid={`thinking-level-${node.nodeId}`}
+                                >
+                                    <option value="">{t('agentsPage.nodeConfigEditor.thinkingLevelDefault')}</option>
+                                    {thinkingInfo.options.map(o => (
+                                        <option key={o.value} value={o.value}>
+                                            {t(`agentsPage.nodeConfigEditor.thinkingLevel_${o.value}`)}{o.native ? ` — ${o.native}` : ''}
+                                        </option>
+                                    ))}
+                                    {/* A stored level the current model doesn't support stays
+                                        visible so it can be seen and cleared */}
+                                    {thinkingLevel && !thinkingInfo.options.some(o => o.value === thinkingLevel) && (
+                                        <option value={thinkingLevel}>{thinkingLevel}</option>
+                                    )}
+                                </select>
+                                <p className={styles.fieldHint}>
+                                    {t(`agentsPage.nodeConfigEditor.thinkingHint_${thinkingInfo.options.length > 0 ? thinkingInfo.vendor : 'unsupported'}`)}
+                                </p>
                             </div>
                         </>
                     )}

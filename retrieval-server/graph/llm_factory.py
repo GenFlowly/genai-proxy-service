@@ -35,6 +35,35 @@ NATIVE_PROVIDERS = {
 # double-bill when the original request actually succeeded server-side.
 _MAX_RETRIES = 3
 
+# Claude models that accept thinking={"type": "adaptive"} (the 4.6+/5
+# families). Older models (haiku-4-5, sonnet-4-5, ...) only take the
+# deprecated budget_tokens form, so thinking stays off for them — which also
+# keeps the cheap internal request-agents (title, memory extraction on haiku)
+# thinking-free.
+_ADAPTIVE_THINKING_MODELS = (
+    "claude-sonnet-4-6",
+    "claude-sonnet-5",
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
+
+def supports_adaptive_thinking(model: Optional[str]) -> bool:
+    return bool(model) and model.startswith(_ADAPTIVE_THINKING_MODELS)
+
+
+# Normalized thinking levels an LLM node may set via its "thinking_level"
+# config. Each provider maps them to its native control below; unset (None)
+# preserves the vendor's default behavior, so existing graphs are unaffected.
+THINKING_LEVELS = ("none", "low", "medium", "high")
+
+# OpenAI models whose API accepts reasoning_effort. "none"/"minimal" is a
+# gpt-5-family concept; the o-series only accepts low/medium/high.
+_OPENAI_REASONING_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
 
 def get_llm(
     provider: str,
@@ -42,6 +71,8 @@ def get_llm(
     model: Optional[str] = None,
     max_tokens: int = 4096,
     betas: Optional[list[str]] = None,
+    thinking: bool = False,
+    thinking_level: Optional[str] = None,
 ) -> BaseChatModel:
     resolved_model = model or _DEFAULTS.get(provider)
     logger.info("LLM factory: provider=%s model=%s max_tokens=%d betas=%s", provider, resolved_model, max_tokens, betas)
@@ -54,6 +85,17 @@ def get_llm(
         else:
             logger.info("LLM factory: anthropic_api_key present (len=%d)", len(key))
         kwargs = {"betas": betas} if betas else {}
+        # Adaptive thinking: the model decides when/how much to reason before
+        # answering; thinking tokens are billed inside output_tokens. Callers
+        # opt in per call — it must stay off when tool_choice is forced or when
+        # continuing a client-side tool loop whose replayed assistant turn has
+        # no thinking blocks (the API rejects both). Only the 4.6+/5 families
+        # accept the adaptive form. A node-level thinking_level of "none"
+        # keeps thinking off; low/medium/high additionally pin the effort.
+        if thinking_level != "none" and thinking and supports_adaptive_thinking(resolved_model):
+            kwargs["thinking"] = {"type": "adaptive"}
+            if thinking_level in ("low", "medium", "high"):
+                kwargs["effort"] = thinking_level
         return ChatAnthropic(
             model=resolved_model,
             api_key=key,
@@ -77,6 +119,18 @@ def get_llm(
         # -pro variants it knows about, which lags behind new model releases.
         if (resolved_model or "").startswith("gpt-5"):
             kwargs["use_responses_api"] = True
+        if thinking_level and (resolved_model or "").startswith(_OPENAI_REASONING_PREFIXES):
+            if thinking_level == "none":
+                if (resolved_model or "").startswith("gpt-5"):
+                    kwargs["reasoning_effort"] = "minimal"
+                else:
+                    # o-series has no minimal/none — leave the vendor default
+                    logger.info(
+                        "LLM factory: thinking_level=none unsupported on %s — ignored",
+                        resolved_model,
+                    )
+            else:
+                kwargs["reasoning_effort"] = thinking_level
         return ChatOpenAI(
             model=resolved_model,
             api_key=key,
@@ -92,14 +146,39 @@ def get_llm(
             logger.error("LLM factory: gemini_api_key is MISSING in credentials")
         else:
             logger.info("LLM factory: gemini_api_key present (len=%d)", len(key))
+        kwargs = {}
+        if thinking_level:
+            model_id = resolved_model or ""
+            if model_id.startswith("gemini-3"):
+                # Gemini 3 exposes discrete thinking levels
+                kwargs["thinking_level"] = (
+                    "minimal" if thinking_level == "none" else thinking_level
+                )
+            elif model_id.startswith("gemini-2.5"):
+                # Gemini 2.5 takes a token budget; 0 disables (2.5 Pro can't
+                # disable — 128 is its documented floor)
+                budget = {"none": 0, "low": 1024, "medium": 8192, "high": 24576}[thinking_level]
+                if thinking_level == "none" and "pro" in model_id:
+                    budget = 128
+                kwargs["thinking_budget"] = budget
+            else:
+                logger.info(
+                    "LLM factory: thinking_level unsupported on %s — ignored", model_id
+                )
         return ChatGoogleGenerativeAI(
             model=resolved_model,
             google_api_key=key,
             max_tokens=max_tokens,
             max_retries=_MAX_RETRIES,
+            **kwargs,
         )
 
     elif provider in NATIVE_PROVIDERS:
+        if thinking_level:
+            logger.info(
+                "LLM factory: thinking_level not supported for provider %s — ignored",
+                provider,
+            )
         module_name, class_name, key_kwarg = NATIVE_PROVIDERS[provider]
         key = credentials.get(f"{provider}_api_key", "")
         if not key:
@@ -125,6 +204,11 @@ def get_llm(
     else:
         # Long-tail BYOK providers: one normalized client over each vendor's
         # native API. Model ids are namespaced "<provider>/<model>".
+        if thinking_level:
+            logger.info(
+                "LLM factory: thinking_level not supported for provider %s — ignored",
+                provider,
+            )
         return _litellm_llm(provider, credentials, resolved_model, max_tokens)
 
 
