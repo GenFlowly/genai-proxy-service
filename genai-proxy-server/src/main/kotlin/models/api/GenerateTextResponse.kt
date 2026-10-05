@@ -28,13 +28,28 @@ data class GenerateTextResponse(
     val totalTokens: Int? = null,
     val tokensReadFromCache: Int? = null,
     /**
+     * Reasoning/thinking tokens for this turn — a subset of outputTokens
+     * (already included in it), broken out for spend granularity. Null for
+     * pre-feature records and non-reasoning models.
+     */
+    val reasoningTokens: Int? = null,
+    /**
      * Exact USD cost of this turn (vendor-reported token buckets × catalog
      * rates). Null for messages persisted before cost tracking or when the
      * model had no catalog pricing.
      */
     val costUsd: Double? = null,
+    /** USD spent on the reasoning subset — already included in costUsd, never add the two. */
+    val reasoningCostUsd: Double? = null,
     /** Retrieval-server thinking time (request receipt → first generated token), ms */
     val thinkingDurationMs: Long? = null,
+    /**
+     * The vendor's raw finish reason for this turn (end_turn / stop /
+     * max_tokens / refusal / content_filter / …). Lets a reloaded conversation
+     * still show why generation ended; null for user messages and records
+     * predating the feature.
+     */
+    val stopReason: String? = null,
     /**
      * The agent graph's thinking-step events for this turn, as streamed ("ks"
      * chunks): [{"node","name","kind","status",...}]. Raw running+done events —

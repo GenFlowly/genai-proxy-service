@@ -38,6 +38,8 @@ interface BackendResponse {
     tokensReadFromCache?: number | null;
     costUsd?: number | null;
     thinkingDurationMs?: number | null;
+    /** Vendor's raw finish reason for the turn (end_turn / max_tokens / refusal / …) */
+    stopReason?: string | null;
     /** Raw thinking-step events ("ks" chunks) persisted with the message */
     thinkingSteps?: ThinkingStep[] | null;
     webSources?: WebSource[] | null;
@@ -145,6 +147,7 @@ export async function getConversation(
                     tokensReadFromCache: resp.tokensReadFromCache ?? null,
                     costUsd: resp.costUsd ?? null,
                     thinkingDurationMs: resp.thinkingDurationMs ?? null,
+                    stopReason: resp.stopReason ?? null,
                     // Persisted raw running/done events fold into the same
                     // per-node list the live "ks" stream builds. Any step
                     // without a done event (aborted stream) must not pulse

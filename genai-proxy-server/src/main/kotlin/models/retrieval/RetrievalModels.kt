@@ -19,6 +19,23 @@ import kotlinx.serialization.json.jsonPrimitive
 
 sealed class StreamChunk {
     data class Content(val text: String) : StreamChunk()
+    /**
+     * The generation round that just streamed ended in tool calls executed
+     * in-graph — its streamed Content was a tool-call preamble ("Let me look
+     * up…"), not answer text, and a fresh generation round follows. Consumers
+     * accumulating Content into answer text must discard what they hold: the
+     * orchestrator resets its persistence buffer, the web app clears the
+     * visible text. The preamble survives in the thinking step's `reasoning`.
+     */
+    object ContentReset : StreamChunk()
+    /**
+     * The vendor's raw finish reason for the round that ended the turn
+     * (end_turn / stop / max_tokens / refusal / content_filter / …), streamed
+     * verbatim so the client can always show why generation stopped — a refusal
+     * returns empty content, so without this it would look like a silent blank.
+     * Persisted on the Message so it survives a reload.
+     */
+    data class StopReason(val reason: String) : StreamChunk()
     data class Thinking(val text: String) : StreamChunk()
     /**
      * Raw JSON of one structured graph-execution step for the thinking panel:
@@ -48,7 +65,9 @@ sealed class StreamChunk {
         val totalTokens: Int,
         val tokensReadFromCache: Int,
         /** Prompt-cache write (cache_creation) tokens — billed at the cache-write rate. */
-        val tokensWrittenToCache: Int = 0
+        val tokensWrittenToCache: Int = 0,
+        /** Reasoning/thinking tokens — a subset of [outputTokens], billed at the output rate. */
+        val reasoningTokens: Int = 0
     ) : StreamChunk()
 
     /**
@@ -84,6 +103,11 @@ fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
     jsonObj.containsKey("content") -> {
         val content = jsonObj["content"]?.jsonPrimitive?.content
         if (!content.isNullOrEmpty()) StreamChunk.Content(content) else null
+    }
+    jsonObj.containsKey("content_reset") -> StreamChunk.ContentReset
+    jsonObj.containsKey("stop_reason") -> {
+        val reason = jsonObj["stop_reason"]?.jsonPrimitive?.content
+        if (!reason.isNullOrBlank()) StreamChunk.StopReason(reason) else null
     }
     jsonObj.containsKey("thinking_step") ->
         jsonObj["thinking_step"]?.let { StreamChunk.ThinkingStep(it.toString()) }
@@ -126,6 +150,7 @@ fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
             totalTokens = usageObj["total_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
             tokensReadFromCache = usageObj["cache_read_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
             tokensWrittenToCache = usageObj["cache_creation_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+            reasoningTokens = usageObj["reasoning_tokens"]?.jsonPrimitive?.intOrNull ?: 0,
         )
     }
     else -> null
@@ -139,6 +164,8 @@ data class RetrievalResult(
     val tokensReadFromCache: Int?,
     /** Prompt-cache write (cache_creation) tokens — billed at the cache-write rate. */
     val tokensWrittenToCache: Int? = null,
+    /** Reasoning/thinking tokens — a subset of outputTokens, billed at the output rate. */
+    val reasoningTokens: Int? = null,
     /** JSON array of tool calls the model made, null when it answered directly */
     val toolCallsJson: String? = null,
     /** JSON array of artifacts built-in tools produced (see StreamChunk.GeneratedArtifacts) */

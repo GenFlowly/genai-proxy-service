@@ -219,6 +219,93 @@ class SourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("tool_sources", out)
         self.assertEqual(out["loop_messages"][1]["content"], "t ran")
 
+    async def test_trace_carries_a_per_call_breakdown_with_its_own_sources(self):
+        # Two calls to the SAME tool in one round must stay distinguishable in
+        # the trace — this is what the thinking panel renders instead of a
+        # flattened "web_search, web_search" with no query and no per-call
+        # source attribution.
+        tool = _Recorder("web_search", sources=[Source(title="A", url="https://a")])
+        out = await _run(
+            _state(
+                [
+                    {"id": "1", "name": "web_search", "args": {"query": "first"}},
+                    {"id": "2", "name": "web_search", "args": {"query": "second"}},
+                ],
+                ["web_search"],
+            ),
+            [tool],
+        )
+
+        calls = out["trace"][0]["calls"]
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0]["name"], "web_search")
+        self.assertEqual(calls[0]["args"], {"query": "first"})
+        self.assertEqual(calls[1]["args"], {"query": "second"})
+        # Each call's sources are numbered turn-globally and attributed only
+        # to that call, not merged across both.
+        self.assertEqual(calls[0]["sources"], [{"index": 1, "title": "A", "url": "https://a"}])
+        self.assertEqual(calls[1]["sources"], [{"index": 2, "title": "A", "url": "https://a"}])
+        self.assertIsNone(calls[0]["error"])
+
+
+class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
+    """A turn's calls execute concurrently (the model issued them together,
+    before seeing any result), but rendering stays in call order so
+    loop_messages and citation numbering are deterministic."""
+
+    async def test_calls_in_one_turn_run_concurrently(self):
+        # Each tool waits for the OTHER to start before finishing. Sequential
+        # execution deadlocks here; the wait_for timeout is the failure mode.
+        import asyncio
+
+        started_a, started_b = asyncio.Event(), asyncio.Event()
+
+        class _Gate(GraphTool):
+            def __init__(self, name, mine, other):
+                self.name, self.description = name, "gate"
+                self.parameters = {"type": "object", "properties": {}}
+                self.credential_ref = None
+                self._mine, self._other = mine, other
+
+            async def run(self, args, context):
+                self._mine.set()
+                await asyncio.wait_for(self._other.wait(), timeout=2)
+                return ToolResult(content=f"{self.name} ran")
+
+        out = await asyncio.wait_for(
+            _run(
+                _state([{"id": "1", "name": "a"}, {"id": "2", "name": "b"}], ["a", "b"]),
+                [_Gate("a", started_a, started_b), _Gate("b", started_b, started_a)],
+            ),
+            timeout=5,
+        )
+
+        self.assertEqual([m["content"] for m in out["loop_messages"][1:]], ["a ran", "b ran"])
+
+    async def test_results_and_numbering_follow_call_order_not_completion_order(self):
+        # The FIRST call finishes last; its message and its sources must still
+        # come first, with turn-global numbering unchanged.
+        import asyncio
+
+        class _Slow(_Recorder):
+            async def run(self, args, context):
+                await asyncio.sleep(0.05)
+                return ToolResult(content="slow ran", sources=[Source(title="S", url="https://s")])
+
+        slow = _Slow("slow", sources=[Source(title="S", url="https://s")])
+        fast = _Recorder("fast", sources=[Source(title="F", url="https://f")])
+        out = await _run(
+            _state([{"id": "1", "name": "slow"}, {"id": "2", "name": "fast"}], ["slow", "fast"]),
+            [slow, fast],
+        )
+
+        self.assertIn("[1] S (https://s)", out["loop_messages"][1]["content"])
+        self.assertIn("[2] F (https://f)", out["loop_messages"][2]["content"])
+        self.assertEqual(out["tool_sources"], [
+            {"index": 1, "title": "S", "url": "https://s"},
+            {"index": 2, "title": "F", "url": "https://f"},
+        ])
+
 
 class FailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_failing_tool_becomes_content_not_an_exception(self):
@@ -239,6 +326,14 @@ class FailureTests(unittest.IsolatedAsyncioTestCase):
         contents = [m["content"] for m in out["loop_messages"][1:]]
         self.assertIn("Error executing a", contents[0])
         self.assertEqual(contents[1], "b ran")
+
+    async def test_a_failing_call_records_its_error_in_the_trace(self):
+        tool = _Recorder("web_search", raises=RuntimeError("upstream down"))
+        out = await _run(_state([{"id": "1", "name": "web_search"}], ["web_search"]), [tool])
+
+        call = out["trace"][0]["calls"][0]
+        self.assertEqual(call["error"], "upstream down")
+        self.assertEqual(call["sources"], [])
 
 
 if __name__ == "__main__":

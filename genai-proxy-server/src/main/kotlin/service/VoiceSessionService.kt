@@ -76,6 +76,30 @@ class VoiceSessionService(
     suspend fun connectUpstream(handler: suspend DefaultClientWebSocketSession.() -> Unit) =
         retrievalServerClient.voiceSession(handler)
 
+    /**
+     * Mints an OpenAI Realtime ephemeral client secret with the customer's
+     * stored OPENAI key, for browser WebRTC voice clients that connect to
+     * OpenAI directly instead of through the genflowly voice WebSocket. The
+     * long-lived vendor key never leaves the backend; the caller gets only the
+     * short-lived secret.
+     */
+    suspend fun createClientSecret(
+        customerId: String,
+        request: com.genflowly.models.api.CreateVoiceClientSecretRequest
+    ): com.genflowly.providers.RealtimeClientSecretResult {
+        val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(AIVendor.OPENAI, customerId)
+            ?: return com.genflowly.providers.RealtimeClientSecretResult(
+                error = "No OpenAI API key stored for this account — store one before minting voice client secrets."
+            )
+        return retrievalServerClient.createRealtimeClientSecret(
+            apiKey = apiKey,
+            model = request.model,
+            instructions = request.instructions,
+            voice = request.voice,
+            inputTranscriptionModel = request.inputTranscriptionModel,
+        )
+    }
+
     sealed class SessionInitResult {
         /** Handshake invalid — send the message to the client and close. */
         data class Rejected(val message: String) : SessionInitResult()

@@ -29,8 +29,12 @@ data class VendorUsageTotals(
     val outputTokens: Int,
     val totalTokens: Int,
     val tokensReadFromCache: Int,
+    /** Reasoning/thinking tokens — a subset of outputTokens, not additional to it. */
+    val reasoningTokens: Int = 0,
     /** Sum of per-message exact costs; null when no message has a computed cost. */
-    val costUsd: Double? = null
+    val costUsd: Double? = null,
+    /** Sum of per-message reasoning costs — already included in costUsd, never add the two. */
+    val reasoningCostUsd: Double? = null
 )
 
 

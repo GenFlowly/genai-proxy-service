@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from encoding_library.observability import count, observe
 from graph.credentials import credentials_for, resolve_credentials
-from graph.llm_factory import get_llm
+from graph.llm_factory import THINKING_LEVELS, get_llm
 from graph.s3_images import fetch_image_base64
 from graph.state import RetrievalState
 from graph.tools_runtime import specs_for
@@ -26,11 +26,26 @@ logger = logging.getLogger(__name__)
 def _build_llm_and_structured(
     provider, credentials, effective_model, max_tokens, llm_betas,
     tools_bound, tool_specs, tool_choice, response_schema,
+    allow_thinking=False, thinking_level=None,
 ):
     """Build the chat model (with tools / structured-output binding) for one call.
     Shared verbatim by the inline /retrieve path and the durable step so both
     produce an identical model."""
-    llm = get_llm(provider, credentials, effective_model, max_tokens, betas=llm_betas or None)
+    # Anthropic extended (adaptive) thinking. Two hard API constraints gate it
+    # here: (1) forced tool use (tool_choice "any" / a named tool) is rejected
+    # when thinking is on; (2) callers must additionally pass
+    # allow_thinking=False when replaying an assistant tool-call turn that has
+    # no thinking blocks (client-side tool-result continuations — we persist
+    # tool_calls JSON, not thinking blocks). In-graph TOOL_EXECUTOR loops are
+    # fine: their AIMessages keep the thinking blocks in state.
+    # thinking_level is the node's normalized reasoning knob ("none"/"low"/
+    # "medium"/"high") — mapped per vendor in get_llm; the gates above still
+    # win, so a level can never re-enable thinking where the API rejects it.
+    thinking = allow_thinking and tool_choice in (None, "auto")
+    llm = get_llm(
+        provider, credentials, effective_model, max_tokens,
+        betas=llm_betas or None, thinking=thinking, thinking_level=thinking_level,
+    )
     if tools_bound:
         bind_kwargs = {"tool_choice": tool_choice} if tool_choice else {}
         llm = llm.bind_tools(tool_specs, **bind_kwargs)
@@ -126,11 +141,13 @@ if durable_runtime.dbos_constructed():
     async def _durable_llm_invoke(
         provider, customer_id, effective_model, max_tokens, llm_betas,
         tools_bound, tool_specs, tool_choice, response_schema, messages,
+        allow_thinking=False, thinking_level=None,
     ):
         credentials = resolve_credentials(customer_id, provider)
         llm, structured_llm = _build_llm_and_structured(
             provider, credentials, effective_model, max_tokens, llm_betas,
             tools_bound, tool_specs, tool_choice, response_schema,
+            allow_thinking=allow_thinking, thinking_level=thinking_level,
         )
         response, parsed, parsing_error = await _invoke_llm(llm, structured_llm, messages)
         return {"response": response, "parsed": parsed, "parsing_error": parsing_error}
@@ -490,10 +507,18 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
       json_indices_source_key      (str)  — state list to reorder for response_format=json_indices
       include_conversation_history (bool) — prepend prior turns before the user message
       model_override               (str)  — override the request-level llm_model
+      thinking_level               (str)  — "none" | "low" | "medium" | "high":
+                                            normalized reasoning depth, mapped to the
+                                            serving vendor's native control (OpenAI
+                                            reasoning_effort, Anthropic adaptive
+                                            thinking + effort, Gemini thinking
+                                            budget/level). Unset keeps each vendor's
+                                            default behavior.
 
     Note: system_prompt and model_override are ignored when output_key is
     "generated_response" — response generators always use the request's resolved
-    instruction as system prompt and the request's llm_model.
+    instruction as system prompt and the request's llm_model. thinking_level IS
+    honored on response generators.
     """
     async def node(state: RetrievalState) -> dict:
         # Config keyed by node identity first — the same node type can appear
@@ -529,10 +554,35 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                     "results conflict with your prior knowledge, trust the newer results "
                     "and note when information may be outdated."
                 )
+            # Tool-call preambles: without this, reasoning models (OpenAI's in
+            # particular) deliberate in their hidden reasoning channel and attach
+            # tool calls to an EMPTY message, so the thinking panel shows bare
+            # call signatures with no stated motive. One narrated sentence per
+            # round gives every vendor the "why I'm searching" visibility some
+            # models (Grok, often Claude) already provide by habit. The sentence
+            # is surfaced as the thinking step's `reasoning` field and recorded
+            # in loop_messages; tool_executor clears generated_response after
+            # each round so it can never stand in for the final answer.
+            if state.get("builtin_tools") or state.get("tools"):
+                system_prompt += (
+                    "\n\nWhenever you decide to call one or more tools, first write a "
+                    "single short sentence telling the user what you are about to do "
+                    "and why (for example: \"Let me look up the current property list "
+                    "to get an accurate count.\"), then make the call(s) in that same "
+                    "turn. One sentence only — it announces the lookup, it is never a "
+                    "substitute for the full answer once the results are in."
+                )
             model_override = None
         else:
             system_prompt = config.get("system_prompt", "You are a helpful assistant.")
             model_override = config.get("model_override")
+        thinking_level = config.get("thinking_level")
+        if thinking_level is not None and thinking_level not in THINKING_LEVELS:
+            logger.warning(
+                "Node %s: invalid thinking_level %r (expected one of %s) — ignored",
+                agent_type, thinking_level, ", ".join(THINKING_LEVELS),
+            )
+            thinking_level = None
         response_format = config.get("response_format", "text")
         json_output_mapping: dict = config.get("json_output_mapping", {})
         json_indices_source_key: str = config.get("json_indices_source_key", "retrieval_results")
@@ -584,6 +634,22 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
 
         tool_choice = _normalize_tool_choice(state.get("tool_choice")) if tools_bound else None
 
+        # Extended thinking (Anthropic adaptive): response generator by
+        # default — internal graph nodes (rankers, classifiers) don't need
+        # reasoning latency, but an explicit thinking_level opts one in (their
+        # history is replayed as condensed text, so the tool-replay constraint
+        # below doesn't apply). Must be OFF on client-side tool-result
+        # continuations: the replayed assistant tool-call turn is rebuilt from
+        # persisted JSON without its thinking blocks, which the API rejects
+        # when thinking is on. (In-graph TOOL_EXECUTOR loops keep AIMessages —
+        # with thinking blocks — in state, so they're unaffected.)
+        # Forced-tool_choice and model-support gates live in
+        # _build_llm_and_structured / get_llm.
+        if is_response_node:
+            allow_thinking = not state.get("query_tool_results")
+        else:
+            allow_thinking = thinking_level in ("low", "medium", "high")
+
         # Durable /runs path: the LLM call runs as a memoized DBOS step so a
         # crash/redeploy replays the saved response instead of re-billing the
         # vendor (exactly-once). Build+invoke happen inside the step there, with
@@ -597,7 +663,8 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             llm, structured_llm = _build_llm_and_structured(
                 state["llm_provider"], credentials_for(state), effective_model,
                 state.get("llm_max_tokens", 4096), llm_betas, tools_bound, tool_specs,
-                tool_choice, response_schema,
+                tool_choice, response_schema, allow_thinking=allow_thinking,
+                thinking_level=thinking_level,
             )
 
         provider = state["llm_provider"]
@@ -697,6 +764,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                     state["llm_provider"], state["customer_id"], effective_model,
                     state.get("llm_max_tokens", 4096), llm_betas, tools_bound, tool_specs,
                     tool_choice, response_schema, messages,
+                    allow_thinking=allow_thinking, thinking_level=thinking_level,
                 )
                 response = out["response"]
                 parsed = out["parsed"]
@@ -717,12 +785,16 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
 
         meta = getattr(response, "usage_metadata", None) or {}
         details = meta.get("input_token_details") or {}
+        output_details = meta.get("output_token_details") or {}
         usage = {
             "input_tokens": meta.get("input_tokens", 0),
             "output_tokens": meta.get("output_tokens", 0),
             "total_tokens": meta.get("total_tokens", 0),
             "cache_read_tokens": details.get("cache_read", 0),
             "cache_creation_tokens": details.get("cache_creation", 0),
+            # Reasoning/thinking tokens — a subset of output_tokens (billed at
+            # the output rate), reported separately for spend granularity.
+            "reasoning_tokens": output_details.get("reasoning", 0),
         }
         # vendor+model token totals back the cost dashboards until exact
         # costUsd is emitted from the Kotlin proxy (Micrometer pass).
@@ -734,6 +806,8 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             count("llm_tokens_total", usage["cache_read_tokens"], vendor=provider, model=effective_model, direction="cache_read")
         if usage["cache_creation_tokens"]:
             count("llm_tokens_total", usage["cache_creation_tokens"], vendor=provider, model=effective_model, direction="cache_creation")
+        if usage["reasoning_tokens"]:
+            count("llm_tokens_total", usage["reasoning_tokens"], vendor=provider, model=effective_model, direction="reasoning")
         if usage["cache_read_tokens"] or usage["cache_creation_tokens"]:
             logger.info(
                 "Node %s: cache stats — read=%d creation=%d (provider=%s)",

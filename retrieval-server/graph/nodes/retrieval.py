@@ -79,7 +79,6 @@ async def _retrieval(state: RetrievalState, node_id: str | None) -> dict:
         return {"retrieval_results": [], "error": str(e)}
 
 
-@track("vector_retrieval", source="retrieve")
 async def _retrieval_impl(state: RetrievalState, node_id: str | None) -> dict:
     query = state.get("rewritten_query") or state["original_query"]
     customer_id = state["customer_id"]
@@ -91,28 +90,59 @@ async def _retrieval_impl(state: RetrievalState, node_id: str | None) -> dict:
     similarity_threshold = config.get("similarity_threshold") or state["similarity_threshold"]
     search_params = config.get("search_params") or state["search_params"]
 
+    results = await search_knowledge(
+        customer_id=customer_id,
+        query=query,
+        top_n=top_n,
+        similarity_threshold=similarity_threshold,
+        search_params=search_params,
+        model_type=state.get("model_type"),
+        model_name=state.get("model_name"),
+    )
+    return {"retrieval_results": results}
+
+
+@track("vector_retrieval", source="retrieve")
+async def search_knowledge(
+    customer_id: str,
+    query: str,
+    top_n: int,
+    similarity_threshold: float,
+    search_params: dict,
+    model_type: str | None = None,
+    model_name: str | None = None,
+) -> list[dict]:
+    """Semantic search over a customer's knowledge collections.
+
+    The shared core behind the RETRIEVAL node and the search_knowledge_base
+    built-in tool (graph.knowledge_tool) — one implementation so relevance
+    changes land on both the pipeline and the agent path. Returns the result
+    dicts the pipeline has always produced ({id, distance, entity,
+    source_collection}), sorted by score, at most top_n. Raises on
+    infrastructure failure; callers own their degradation story.
+    """
     logger.info("Node retrieval: connecting to Zilliz for customer=%s", customer_id)
     # get_milvus_client returns a retry-wrapped client (backoff on every call)
     client = get_milvus_client(customer_id)
     logger.info("Node retrieval: connected to Zilliz")
 
-    grouped = _discover_collections(client, customer_id, (state.get("model_type"), state.get("model_name")))
+    grouped = _discover_collections(client, customer_id, (model_type, model_name))
     if not grouped:
         logger.warning("Node retrieval: no collections found for customer=%s", customer_id)
-        return {"retrieval_results": []}
+        return []
 
     all_results = []
 
     # Embed the query once per distinct model, then search that model's collections.
     # Distances from different models are merged as-is; scores are only strictly
     # comparable within one model, but COSINE keeps them on the same [0,1]-ish scale.
-    for (model_type, model_name), collection_names in grouped.items():
-        logger.info("Node retrieval: embedding query with model_type=%s model_name=%s for %d collection(s)", model_type, model_name, len(collection_names))
-        encoder = _get_cached_embedding_model(model_type, model_name)
+    for (group_model_type, group_model_name), collection_names in grouped.items():
+        logger.info("Node retrieval: embedding query with model_type=%s model_name=%s for %d collection(s)", group_model_type, group_model_name, len(collection_names))
+        encoder = _get_cached_embedding_model(group_model_type, group_model_name)
         query_embeddings = create_embeddings([query], encoder)
         if not query_embeddings:
-            count("embedding_failure_total", source="retrieve", model=model_name)
-            logger.error("Node retrieval: embedding creation returned empty result for model %s/%s", model_type, model_name)
+            count("embedding_failure_total", source="retrieve", model=group_model_name)
+            logger.error("Node retrieval: embedding creation returned empty result for model %s/%s", group_model_type, group_model_name)
             continue
 
         query_vector = query_embeddings[0].get("vector")
@@ -150,4 +180,4 @@ async def _retrieval_impl(state: RetrievalState, node_id: str | None) -> dict:
     all_results.sort(key=lambda x: x["distance"], reverse=True)
     top_results = all_results[:top_n]
     logger.info("Node retrieval: END — %d total results returned", len(top_results))
-    return {"retrieval_results": top_results}
+    return top_results

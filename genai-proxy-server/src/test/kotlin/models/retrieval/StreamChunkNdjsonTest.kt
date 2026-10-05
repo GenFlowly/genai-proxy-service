@@ -18,6 +18,16 @@ class StreamChunkNdjsonTest {
     }
 
     @Test
+    fun `content reset frame carries no value`() {
+        assertEquals("{\"t\":\"cr\"}\n", StreamChunk.ContentReset.toNdjsonFrame())
+    }
+
+    @Test
+    fun `stop reason frame carries the reason`() {
+        assertEquals("{\"t\":\"sr\",\"v\":\"max_tokens\"}\n", StreamChunk.StopReason("max_tokens").toNdjsonFrame())
+    }
+
+    @Test
     fun `thinking step embeds raw object`() {
         assertEquals("{\"t\":\"ks\",\"v\":{\"node\":\"n\"}}\n", StreamChunk.ThinkingStep("{\"node\":\"n\"}").toNdjsonFrame())
     }

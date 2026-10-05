@@ -41,11 +41,22 @@ data class Message(
     /** Prompt-cache write (cache_creation) tokens for this turn; billed at the cache-write rate. */
     val tokensWrittenToCache: Int? = null,
     /**
+     * Reasoning/thinking tokens for this turn — a subset of [outputTokens]
+     * (already included in it and in costUsd), broken out for spend
+     * granularity. Null for pre-feature records and non-reasoning models.
+     */
+    val reasoningTokens: Int? = null,
+    /**
      * Exact USD cost of this turn: the vendor-reported token buckets (text /
      * audio / cached, from the API response) priced at the AIModelCatalog
      * rates. Null when the model has no catalog pricing at persist time.
      */
     val costUsd: Double? = null,
+    /**
+     * USD spent on the [reasoningTokens] subset (output rate × reasoning
+     * tokens). Already included in [costUsd] — never add the two.
+     */
+    val reasoningCostUsd: Double? = null,
     /**
      * Facts learned about the user from this exchange, written by the async
      * memory extraction: JSON [{"memoryId","text"},...]. null = extraction
@@ -65,6 +76,14 @@ data class Message(
      * Null for user messages and records predating the feature.
      */
     val thinkingStepsJson: String? = null,
+    /**
+     * Assistant messages: the vendor's raw finish reason for the turn
+     * (end_turn / stop / max_tokens / refusal / content_filter / …), streamed
+     * as the "sr" chunk and persisted so a reload can still explain why
+     * generation ended — a refusal has empty text, so this is the only record
+     * of it. Null for user messages and records predating the feature.
+     */
+    val stopReason: String? = null,
     /**
      * ISO-8601 instant stamped by the repository's withTimestamps on write.
      * Read-only: populated when loading from DDB, ignored on create (the

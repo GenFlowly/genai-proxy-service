@@ -207,7 +207,7 @@ fun appModule(): Module = module {
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get(), get()) }
-    single { ConversationManagementService(get(), get(), get(), get(), get(), get()) }
+    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
     single {
@@ -219,7 +219,7 @@ fun appModule(): Module = module {
     single { com.genflowly.service.ConversationIndexingService(get(), get(), get(), get()) }
     single { com.genflowly.service.ExchangeSideEffects(get(), get()) }
     single { com.genflowly.service.UnifiedSearchService(get(), get(), get(), get()) }
-    single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }
     single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
