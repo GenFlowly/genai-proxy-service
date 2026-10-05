@@ -95,6 +95,29 @@ class GraphValidationServiceTest {
     }
 
     @Test
+    fun `tool_route edge needs no condition_key`() {
+        // The retrieval-server's router ignores condition_key on tool_route
+        // (it inspects state's tool_calls), so the agent-loop template omits
+        // it — the validator must accept that, while every other condition
+        // type still requires the key.
+        validate(
+            edges = """{"edges":[{"from":"T","to":"A"}],
+                "conditional_edges":[{"from":"A","condition_type":"tool_route",
+                "routes":{"builtin":"T","caller":"__end__","none":"__end__"}}]}""",
+            nodeTypes = mapOf("A" to "RESPONSE_GENERATOR", "T" to "TOOL_EXECUTOR"),
+        )
+
+        val e = assertFailsWith<IllegalArgumentException> {
+            validate(
+                edges = """{"edges":[{"from":"B","to":"__end__"},{"from":"C","to":"__end__"}],
+                    "conditional_edges":[{"from":"A","routes":{"true":"B","false":"C"}}]}""",
+                nodeTypes = mapOf("A" to "GENERATION", "B" to "GENERATION", "C" to "GENERATION"),
+            )
+        }
+        assertTrue(e.message!!.contains("condition_key"))
+    }
+
+    @Test
     fun `non-tool cycle still requires reflection even when a tool_route edge exists`() {
         // A ⇄ B is a plain bool cycle; the separate tool_route loop must not
         // exempt it.

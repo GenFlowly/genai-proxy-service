@@ -96,7 +96,11 @@ the model stops calling tools — where retrieval, search rounds, and when to
 answer are the model's per-turn decisions. Template (topology, node configs,
 loop-budget rationale): `graph/templates/agent_loop.json`; it is published as
 ordinary `CustomerGraphs`/`CustomerGraphNodes` records, so the request API,
-streaming, and the durable /runs path treat both shapes identically.
+streaming, and the durable /runs path treat both shapes identically. To
+publish it fleet-wide, use the admin panel's Agents page ("Publish Agent
+Loop" → proxy `POST /admin/system-agents`, a System-owned NON-default agent
+every customer can select); the TS mirror of the template lives in
+`admin-panel/src/constants/agentTemplates.ts` — keep the two in sync.
 
 The bridge between the shapes is `search_knowledge_base`
 (`graph/knowledge_tool.py`): the RETRIEVAL node's exact search core

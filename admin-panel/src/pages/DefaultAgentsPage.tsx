@@ -5,7 +5,9 @@ import { DefaultGraphResponse } from '../models/defaultGraph.models'
 import { AgentResponse, RequestAgentMapStatus } from '../models/requestAgents.models'
 import { getDefaultGraph } from '../services/defaultGraphService'
 import { deleteAgent, getAgents, getRequestAgentMap } from '../services/requestAgentsService'
+import { publishSystemAgent } from '../services/systemAgentsService'
 import { REQUEST_TYPE_LABELS, RequestType } from '../constants/requestTypes'
+import { AGENT_LOOP_TEMPLATE } from '../constants/agentTemplates'
 import AgentManager, { generationNode } from '../components/AgentManager'
 
 // ── Node type display helpers (mirrors the customer app's Agents page) ────────
@@ -45,6 +47,7 @@ export default function DefaultAgentsPage() {
     const [editingAgent, setEditingAgent] = useState<AgentResponse | null>(null)
     const [actionMessage, setActionMessage] = useState<string | null>(null)
     const [actionMessageKind, setActionMessageKind] = useState<'success' | 'error' | null>(null)
+    const [publishingTemplate, setPublishingTemplate] = useState(false)
 
     const refresh = useCallback(async () => {
         setLoadError(null)
@@ -90,6 +93,47 @@ export default function DefaultAgentsPage() {
     const closeForm = () => {
         setFormOpen(false)
         setEditingAgent(null)
+    }
+
+    /**
+     * One-click publish of the agent-loop template as a System agent. It
+     * appears in every customer's agent picker (read-only, forked on first
+     * edit) but changes nothing for customers who don't select it — the
+     * System DEFAULT graph is untouched.
+     */
+    const handlePublishAgentLoop = async () => {
+        const alreadyPublished = agents.some((agent) => agent.name === AGENT_LOOP_TEMPLATE.name)
+        const duplicateWarning = alreadyPublished
+            ? `\n\nWARNING: an agent named "${AGENT_LOOP_TEMPLATE.name}" already exists — this publishes a second copy.`
+            : ''
+        if (
+            !window.confirm(
+                `Publish the "${AGENT_LOOP_TEMPLATE.name}" agent-loop template as a System agent?\n\n` +
+                    'It becomes visible in every customer\'s agent picker. It does NOT replace the ' +
+                    'conversation default graph — customers opt in by selecting it.' +
+                    duplicateWarning
+            )
+        )
+            return
+        setPublishingTemplate(true)
+        setActionMessage(null)
+        setActionMessageKind(null)
+        try {
+            const token = await getAccessTokenSilently()
+            const published = await publishSystemAgent(token, AGENT_LOOP_TEMPLATE)
+            setActionMessage(
+                `Agent-loop template published as ${published.graphId} — customers can now select it.`
+            )
+            setActionMessageKind('success')
+            await refresh()
+        } catch (e) {
+            setActionMessage(
+                e instanceof Error ? e.message : 'Publishing the agent-loop template failed'
+            )
+            setActionMessageKind('error')
+        } finally {
+            setPublishingTemplate(false)
+        }
     }
 
     const handleDelete = async (agent: AgentResponse) => {
@@ -148,17 +192,26 @@ export default function DefaultAgentsPage() {
                         <Link to="/mappings">Default Actions Mapping</Link> page.
                     </p>
                 </div>
-                <button
-                    className="primary"
-                    onClick={() => {
-                        setEditingAgent(null)
-                        setFormOpen((open) => !open || editingAgent !== null)
-                        setActionMessage(null)
-                        setActionMessageKind(null)
-                    }}
-                >
-                    ＋ New agent
-                </button>
+                <span className="agent-card-actions">
+                    <button
+                        disabled={publishingTemplate}
+                        onClick={() => void handlePublishAgentLoop()}
+                        title="Publish the tool-driven agent-loop template (memory → generator ⇄ tools) as a System agent every customer can select"
+                    >
+                        {publishingTemplate ? 'Publishing…' : '🔁 Publish Agent Loop'}
+                    </button>
+                    <button
+                        className="primary"
+                        onClick={() => {
+                            setEditingAgent(null)
+                            setFormOpen((open) => !open || editingAgent !== null)
+                            setActionMessage(null)
+                            setActionMessageKind(null)
+                        }}
+                    >
+                        ＋ New agent
+                    </button>
+                </span>
             </div>
 
             {loadError && <div className="banner error">{loadError}</div>}
