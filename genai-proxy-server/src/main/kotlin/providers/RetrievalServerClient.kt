@@ -154,6 +154,28 @@ private data class ValidateKeyResponse(
 /** Outcome of a provider key check, with the provider's rejection message. */
 data class KeyValidationResult(val valid: Boolean, val error: String? = null)
 
+// --- /voice/calls/* wire types ---
+
+@Serializable
+private data class AttachCallPayload(
+    val api_key: String,
+    val call_id: String,
+    val customer_id: String,
+    val session_update: kotlinx.serialization.json.JsonObject? = null,
+    val webhook_url: String? = null,
+    val webhook_secret: String? = null,
+)
+
+@Serializable
+private data class SendCallEventsPayload(
+    val call_id: String,
+    val customer_id: String,
+    val events: List<kotlinx.serialization.json.JsonObject>,
+)
+
+@Serializable
+private data class CallRefPayload(val call_id: String, val customer_id: String)
+
 // --- /voice/client-secret wire types ---
 
 @Serializable
@@ -667,6 +689,72 @@ class RetrievalServerClient(
         } catch (e: Exception) {
             logger.warn { "Failed to validate API key for provider $provider: ${e.message}" }
             KeyValidationResult(valid = false, error = "Key validation service unavailable")
+        }
+    }
+
+    /**
+     * Attaches the server-side control channel to a live WebRTC call
+     * (/voice/calls/attach). The retrieval server opens and holds the
+     * wss://api.openai.com/v1/realtime?call_id=... WebSocket.
+     * Returns the raw status JSON ({"attached": bool, "error"?: string, ...}).
+     */
+    suspend fun attachVoiceCall(
+        apiKey: String,
+        callId: String,
+        customerId: String,
+        sessionUpdate: kotlinx.serialization.json.JsonObject?,
+        webhookUrl: String?,
+        webhookSecret: String?
+    ): kotlinx.serialization.json.JsonObject = voiceCallPost(
+        "/voice/calls/attach",
+        json.encodeToString(
+            AttachCallPayload(
+                api_key = apiKey,
+                call_id = callId,
+                customer_id = customerId,
+                session_update = sessionUpdate,
+                webhook_url = webhookUrl,
+                webhook_secret = webhookSecret,
+            )
+        )
+    )
+
+    /** Forwards raw Realtime client events over the call's control channel. */
+    suspend fun sendVoiceCallEvents(
+        callId: String,
+        customerId: String,
+        events: List<kotlinx.serialization.json.JsonObject>
+    ): kotlinx.serialization.json.JsonObject = voiceCallPost(
+        "/voice/calls/events",
+        json.encodeToString(SendCallEventsPayload(call_id = callId, customer_id = customerId, events = events))
+    )
+
+    /** Live status + accumulated usage for an attached call. */
+    suspend fun voiceCallStatus(callId: String, customerId: String): kotlinx.serialization.json.JsonObject =
+        voiceCallPost("/voice/calls/status", json.encodeToString(CallRefPayload(callId, customerId)))
+
+    /** Closes the control channel; returns the final usage summary. */
+    suspend fun detachVoiceCall(callId: String, customerId: String): kotlinx.serialization.json.JsonObject =
+        voiceCallPost("/voice/calls/detach", json.encodeToString(CallRefPayload(callId, customerId)))
+
+    private suspend fun voiceCallPost(path: String, payload: String): kotlinx.serialization.json.JsonObject {
+        return try {
+            val response: HttpResponse = httpClient.post("$retrievalServerUrl$path") {
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            if (!response.status.isSuccess()) {
+                logger.warn { "Retrieval server $path returned ${response.status}" }
+                return kotlinx.serialization.json.buildJsonObject {
+                    put("error", kotlinx.serialization.json.JsonPrimitive("Call-control service unavailable"))
+                }
+            }
+            json.parseToJsonElement(response.bodyAsText()).jsonObject
+        } catch (e: Exception) {
+            logger.warn { "Call-control request $path failed: ${e.message}" }
+            kotlinx.serialization.json.buildJsonObject {
+                put("error", kotlinx.serialization.json.JsonPrimitive("Call-control service unavailable"))
+            }
         }
     }
 

@@ -77,6 +77,48 @@ class VoiceSessionService(
         retrievalServerClient.voiceSession(handler)
 
     /**
+     * Attaches genflowly's server-side control channel to a live WebRTC call
+     * using the customer's stored OPENAI key. The browser keeps the audio
+     * leg; this channel carries session.update, steering injections, tool
+     * relay and usage metering.
+     */
+    suspend fun attachCallControl(
+        customerId: String,
+        request: com.genflowly.models.api.AttachVoiceCallRequest
+    ): kotlinx.serialization.json.JsonObject {
+        val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(AIVendor.OPENAI, customerId)
+            ?: return kotlinx.serialization.json.buildJsonObject {
+                put("attached", kotlinx.serialization.json.JsonPrimitive(false))
+                put(
+                    "error",
+                    kotlinx.serialization.json.JsonPrimitive(
+                        "No OpenAI API key stored for this account — store one before attaching call control."
+                    )
+                )
+            }
+        return retrievalServerClient.attachVoiceCall(
+            apiKey = apiKey,
+            callId = request.callId,
+            customerId = customerId,
+            sessionUpdate = request.sessionUpdate,
+            webhookUrl = request.webhookUrl,
+            webhookSecret = request.webhookSecret,
+        )
+    }
+
+    suspend fun sendCallEvents(
+        customerId: String,
+        request: com.genflowly.models.api.SendVoiceCallEventsRequest
+    ): kotlinx.serialization.json.JsonObject =
+        retrievalServerClient.sendVoiceCallEvents(request.callId, customerId, request.events)
+
+    suspend fun callStatus(customerId: String, callId: String): kotlinx.serialization.json.JsonObject =
+        retrievalServerClient.voiceCallStatus(callId, customerId)
+
+    suspend fun detachCall(customerId: String, callId: String): kotlinx.serialization.json.JsonObject =
+        retrievalServerClient.detachVoiceCall(callId, customerId)
+
+    /**
      * Mints an OpenAI Realtime ephemeral client secret with the customer's
      * stored OPENAI key, for browser WebRTC voice clients that connect to
      * OpenAI directly instead of through the genflowly voice WebSocket. The
