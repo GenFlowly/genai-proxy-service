@@ -54,6 +54,7 @@ import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.memory.registerMemoryRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
+import com.genflowly.activity.voice.registerVoiceCallControlRoutes
 import com.genflowly.activity.voice.registerVoiceClientSecretRoutes
 import com.genflowly.activity.voice.registerVoiceSessionRoutes
 import com.genflowly.service.DeveloperApiKeyService
@@ -171,6 +172,10 @@ object Routes {
     const val VOICE_SESSION = "$API_V1/voice/session"
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
     const val VOICE_CLIENT_SECRET = "$API_V1/voice/client-secret"
+    const val VOICE_CALL_ATTACH = "$API_V1/voice/calls/attach"
+    const val VOICE_CALL_EVENTS = "$API_V1/voice/calls/events"
+    const val VOICE_CALL_STATUS = "$API_V1/voice/calls/status"
+    const val VOICE_CALL_DETACH = "$API_V1/voice/calls/detach"
 
     const val CREATE_ATTACHMENT = "$API_V1/attachments"
     const val GET_ATTACHMENT_URL = "$API_V1/attachments/url"
@@ -293,5 +298,6 @@ fun Application.configureRouting(
         registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
         registerVoiceClientSecretRoutes(customerProfileService, voiceSessionService)
+        registerVoiceCallControlRoutes(customerProfileService, voiceSessionService)
     }
 }
