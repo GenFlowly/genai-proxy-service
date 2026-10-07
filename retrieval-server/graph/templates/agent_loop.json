@@ -3,26 +3,34 @@
     "Agent-loop graph template: the Claude-Code-shaped degenerate graph —",
     "no retrieval/rank pipeline, just memory + a response generator cycling",
     "with TOOL_EXECUTOR until the model stops calling tools. All 'architecture'",
-    "(whether to search the knowledge base, how many search rounds, when to",
-    "answer) is decided by the model per turn via tools, not by graph topology.",
+    "(whether to search the knowledge base, how many search rounds, whether to",
+    "delegate to subagents, when to answer) is decided by the model per turn",
+    "via tools, not by graph topology.",
     "",
-    "Publish by creating these records through the admin panel / proxy server",
-    "(owner 'System' for the shared template, or a customerId for a tenant",
-    "copy). DDB stores `edges` and each node `config` as JSON STRINGS —",
-    "stringify the objects below when seeding; nodeIds must be regenerated",
-    "to real NOD… ids and referenced consistently from edges/entryPoint.",
+    "Harness-as-data: the generator's harness_prompt below is the v1 harness",
+    "text. For fleet-editable prompts, create an instruction record with this",
+    "text and set harness_instruction_id on the node config instead — the",
+    "runtime resolves it per request and the inline text becomes the fallback.",
+    "Subagent profiles live in the TOOL_EXECUTOR config ('subagents'); the",
+    "built-in 'general' profile always exists. max_turn_tokens is the turn's",
+    "token budget (forces a final answer when exhausted);",
+    "compaction_threshold_tokens triggers LLM summarization of older tool",
+    "rounds; max_tool_result_chars spills oversized tool results to the",
+    "run's scratch filesystem.",
     "",
-    "maxIterations is the generator↔tools loop budget. 40 (vs the pipeline",
-    "default 10) because an agent legitimately runs many rounds; LangGraph",
-    "aborts the run beyond it, which is the runaway backstop.",
+    "Publish via the admin panel ('Publish Agent Loop' — the TS mirror of this",
+    "file is admin-panel/src/constants/agentTemplates.ts; keep the two in",
+    "sync). DDB stores edges/config as JSON STRINGS; nodeIds are regenerated",
+    "to real NOD… ids on publish.",
     "",
-    "The tool_route edge is the loop's exit contract: 'builtin' loops through",
-    "the executor, 'caller' exits so caller-defined tool calls reach the API",
-    "caller, 'none' means the model answered — the natural agent exit."
+    "maxIterations 40 (vs pipeline default 10): an agent legitimately runs",
+    "many rounds; LangGraph aborts beyond it (runaway backstop). The",
+    "tool_route edge is the loop's exit contract: 'builtin' loops through the",
+    "executor, 'caller' exits to the API caller, 'none' = the model answered."
   ],
   "graph": {
     "name": "Agent",
-    "description": "Tool-driven agent loop: the model decides when to search its knowledge base or the web, iterates until done, then answers.",
+    "description": "Tool-driven agent loop: plans with todos, searches its knowledge base and the web, keeps scratch files, delegates to subagents, and iterates until done.",
     "entryPoint": "memory",
     "maxIterations": 40,
     "edges": {
@@ -59,7 +67,10 @@
         "include_conversation_history": true,
         "is_streaming": true,
         "output_key": "generated_response",
-        "input_template": "{original_query}"
+        "input_template": "{original_query}",
+        "max_turn_tokens": 120000,
+        "compaction_threshold_tokens": 40000,
+        "harness_prompt": "You are an autonomous agent. Work in a loop: plan, act with your tools, observe the results, and continue until the task is complete — then give one final, complete answer.\n\nPlanning: for any task with three or more steps, write your plan with write_todos before starting, keep exactly one item in_progress, and mark items completed the moment they are done.\n\nKnowledge: when the answer may depend on the user's own data, search the knowledge base with search_knowledge_base before answering, and refine the query and search again if the first results do not cover the question. Use web_search for current public information. Cite sources inline with their [n] markers.\n\nWorking files: fs_write/fs_read/fs_list are your private scratch space for notes and large intermediate results. Oversized tool outputs are saved there automatically — re-read them with fs_read instead of re-running the tool.\n\nDelegation: for substantial self-contained subtasks, spawn_agent runs a subagent that works autonomously and returns one report. Its prompt must be complete and self-contained (it sees nothing of this conversation). Prefer several spawn_agent calls in one turn for independent subtasks. Never delegate trivial work.\n\nDiscipline: do not call tools for things you already know. Stop as soon as you can answer well. If tools fail repeatedly, say what you tried and answer with what you have, stating what is unverified."
       }
     },
     {
@@ -67,7 +78,17 @@
       "nodeType": "TOOL_EXECUTOR",
       "name": "Tools",
       "config": {
-        "tools": ["search_knowledge_base", "web_search", "generate_pdf"]
+        "tools": [
+          "search_knowledge_base",
+          "web_search",
+          "generate_pdf",
+          "write_todos",
+          "fs_write",
+          "fs_read",
+          "fs_list",
+          "spawn_agent"
+        ],
+        "subagents": []
       }
     }
   ]

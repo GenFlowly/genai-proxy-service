@@ -157,3 +157,7 @@ class RetrievalState(TypedDict):
     # True means the node decided it needs more context and the graph should loop back.
     # Must always be explicitly set to False to exit a cycle safely.
     needs_more_context: Optional[bool]
+
+    # Subagent nesting depth: 0 for a root run, incremented per spawn_agent
+    # level. The spawn tool refuses beyond graph.subagent.MAX_DEPTH.
+    agent_depth: int

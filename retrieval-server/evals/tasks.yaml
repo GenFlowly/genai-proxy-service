@@ -1,0 +1,80 @@
+# Harness eval suite — run with: python evals/run_evals.py
+#
+# Each task drives one /retrieve request against a live server (see README)
+# and checks assertions over the SSE event stream. These are BEHAVIORAL pins
+# for the agent harness: run them on every harness-prompt or kernel change and
+# diff the pass/fail (and tool-call) profile against evals/baseline.json —
+# "state of the art" here means this suite, on your workloads, not vibes.
+#
+# Assertion vocabulary (all optional per task):
+#   must_call_tools:      [names] — every listed tool appears in a tool round
+#   must_not_call_tools:  [names] — none of these appears
+#   answer_regex:         final answer (concatenated content) matches
+#   answer_not_regex:     final answer does not match
+#   min_answer_chars:     final answer at least this long
+#   expect_citations:     true — answer contains [n] markers AND web_sources/
+#                         tool sources were emitted
+#   expect_todos:         true — a thinking_step carried a todos checklist
+#   min_tool_rounds / max_tool_rounds: bounds on TOOL_EXECUTOR rounds
+#   expect_no_error:      true — no error event in the stream (default true)
+
+- name: kb-multi-hop
+  description: Multi-part question over the customer's own data — the agent
+    should search the knowledge base (likely more than once), then answer.
+  query: "Compare our refund policy for digital purchases with the one for
+    physical goods, and point out any difference in the time limits."
+  must_call_tools: [search_knowledge_base]
+  min_tool_rounds: 1
+  min_answer_chars: 200
+
+- name: chitchat-no-retrieval
+  description: A pipeline retrieves on every turn; the agent must know NOT to.
+  query: "thanks, that's great!"
+  must_not_call_tools: [search_knowledge_base, web_search, spawn_agent]
+  max_tool_rounds: 0
+
+- name: long-research-loop
+  description: Open-ended research that needs several web rounds and a plan.
+    Exercises write_todos and multi-round tool use.
+  query: "Research the current state of EU AI Act enforcement: what is already
+    in force, what applies from 2026, and what are companies struggling with?
+    Use the web, keep a todo plan, and give me a structured summary with
+    citations."
+  must_call_tools: [web_search, write_todos]
+  expect_todos: true
+  expect_citations: true
+  min_tool_rounds: 2
+  min_answer_chars: 600
+
+- name: delegation
+  description: Two independent research tracks — the agent should delegate at
+    least one to a subagent rather than serializing everything itself.
+  query: "I need two things researched independently: (1) what changed in
+    Kotlin 2.1's K2 compiler, and (2) what Python 3.13's free-threading mode
+    means for library authors. Delegate the research and combine the findings."
+  must_call_tools: [spawn_agent]
+  min_answer_chars: 400
+
+- name: compaction-survival
+  description: A run long enough to cross the compaction threshold must still
+    end with a coherent, cited answer — the summarizer is load-bearing and
+    regresses silently without this.
+  query: "Do a deep survey of recent developments in battery chemistry for
+    grid storage (sodium-ion, iron-air, flow batteries): key players, recent
+    milestones, open problems. Search broadly — many searches — and cite
+    everything."
+  config_overrides:
+    compaction_threshold_tokens: 8000
+  must_call_tools: [web_search]
+  min_tool_rounds: 3
+  expect_citations: true
+  min_answer_chars: 600
+
+- name: budget-exhaustion
+  description: With a tiny turn budget the agent must stop calling tools and
+    still produce an answer that admits what it could not verify — not error.
+  query: "Give me a thorough overview of yesterday's tech news."
+  config_overrides:
+    max_turn_tokens: 1500
+  expect_no_error: true
+  min_answer_chars: 100
