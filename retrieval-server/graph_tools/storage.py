@@ -16,23 +16,54 @@ class ArtifactStore(Protocol):
         """Persist `data` under `key`. Raises on failure."""
         ...
 
+    def get(self, key: str) -> bytes:
+        """Read the object at `key`. Raises KeyError when it does not exist,
+        any other exception on infrastructure failure."""
+        ...
+
+    def list(self, prefix: str) -> list[dict]:
+        """Objects under `prefix` as [{"key": str, "size": int}, ...]."""
+        ...
+
 
 class LocalDiskArtifactStore:
-    """Writes artifacts under a base directory, mirroring the key as a path."""
+    """Stores artifacts under a base directory, mirroring the key as a path."""
 
     def __init__(self, base_dir: str):
         self._base_dir = base_dir
 
+    def _path(self, key: str) -> str:
+        return os.path.join(self._base_dir, *key.split("/"))
+
     def put(self, key: str, data: bytes, content_type: str) -> None:
-        path = os.path.join(self._base_dir, *key.split("/"))
+        path = self._path(key)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
             f.write(data)
         logger.info("Stored artifact %s (%d bytes) at %s", key, len(data), path)
 
+    def get(self, key: str) -> bytes:
+        path = self._path(key)
+        if not os.path.isfile(path):
+            raise KeyError(key)
+        with open(path, "rb") as f:
+            return f.read()
+
+    def list(self, prefix: str) -> list[dict]:
+        base = self._path(prefix)
+        out: list[dict] = []
+        if not os.path.isdir(base):
+            return out
+        for root, _dirs, files in os.walk(base):
+            for name in files:
+                path = os.path.join(root, name)
+                rel = os.path.relpath(path, self._base_dir).replace(os.sep, "/")
+                out.append({"key": rel, "size": os.path.getsize(path)})
+        return sorted(out, key=lambda o: o["key"])
+
 
 class S3ArtifactStore:
-    """Writes artifacts to an S3 bucket. boto3 is imported lazily so the
+    """Stores artifacts in an S3 bucket. boto3 is imported lazily so the
     package stays installable without AWS dependencies."""
 
     def __init__(self, bucket: str, client=None):
@@ -55,3 +86,23 @@ class S3ArtifactStore:
         logger.info(
             "Stored artifact %s (%d bytes) in s3://%s", key, len(data), self._bucket
         )
+
+    def get(self, key: str) -> bytes:
+        try:
+            response = self._s3().get_object(Bucket=self._bucket, Key=key)
+        except Exception as e:
+            # Missing-key surfaces uniformly as KeyError; anything else
+            # (permissions, networking) propagates as the infrastructure
+            # failure it is.
+            if type(e).__name__ in ("NoSuchKey",) or "NoSuchKey" in str(e):
+                raise KeyError(key) from e
+            raise
+        return response["Body"].read()
+
+    def list(self, prefix: str) -> list[dict]:
+        out: list[dict] = []
+        paginator = self._s3().get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                out.append({"key": obj["Key"], "size": obj["Size"]})
+        return out

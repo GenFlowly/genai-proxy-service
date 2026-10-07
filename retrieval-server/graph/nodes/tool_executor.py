@@ -24,6 +24,7 @@ on the next iteration if it still needs them.
 import asyncio
 import logging
 import time
+import uuid
 
 from encoding_library.observability import count, observe
 from graph.state import RetrievalState
@@ -31,6 +32,65 @@ from graph.tool_credentials import resolve_tool_credentials, secrets_accessor
 from graph.tools_runtime import credential_refs_for, make_tool_context, tools_for
 
 logger = logging.getLogger(__name__)
+
+# Scratch-FS key layout — must stay in sync with graph/fs_tools.py's docs.
+_FS_PREFIX_TEMPLATE = "customers/{customer_id}/agent-fs/{namespace}/"
+
+# A tool result longer than this (node config "max_tool_result_chars") is
+# spilled: full content to the scratch FS, a structure-preserving excerpt into
+# loop_messages. Bounds per-round context growth AND checkpoint size.
+_DEFAULT_MAX_TOOL_RESULT_CHARS = 8_000
+
+_USAGE_KEYS = (
+    "input_tokens", "output_tokens", "total_tokens",
+    "cache_read_tokens", "cache_creation_tokens", "reasoning_tokens",
+)
+
+
+def _add_usage(total: dict | None, inc: dict | None) -> dict:
+    return {k: (total or {}).get(k, 0) + (inc or {}).get(k, 0) for k in _USAGE_KEYS}
+
+
+def _truncate_for_context(content: str, max_chars: int, note: str) -> str:
+    """Head + tail excerpt with an elision marker. The tail is kept because
+    rendered source lists put the citation instruction last and summaries/
+    conclusions tend to live at the end; the head keeps the preamble and the
+    first source headers. Messages are never dropped and tool_call_id pairing
+    is untouched — only this content string shrinks."""
+    head = content[: int(max_chars * 0.6)]
+    tail = content[len(content) - int(max_chars * 0.25):]
+    omitted = len(content) - len(head) - len(tail)
+    return f"{head}\n\n[... {omitted} characters omitted. {note}]\n\n{tail}"
+
+
+def _spill_oversized(
+    content: str, tool_name: str, seq: int, max_chars: int,
+    store, fs_prefix: str, fs_read_enabled: bool,
+) -> tuple[str, tuple[str, int] | None]:
+    """Spill one oversized result: full content to the scratch FS, excerpt for
+    the context. Returns (replacement_content, (fs_path, size) | None).
+    A failed store write degrades to excerpt-only — the context budget wins."""
+    path = f"results/{tool_name}_{seq}.txt"
+    data = content.encode("utf-8")
+    try:
+        store.put(f"{fs_prefix}{path}", data, "text/plain; charset=utf-8")
+    except Exception as e:
+        logger.error("Spill of %s result failed — %s", tool_name, e, exc_info=True)
+        return (
+            _truncate_for_context(
+                content, max_chars,
+                "The full output could not be saved — work with this excerpt.",
+            ),
+            None,
+        )
+    if fs_read_enabled:
+        note = (
+            f"Full output saved to scratch file '{path}' — use "
+            f'fs_read(path="{path}", offset=…) to read the rest.'
+        )
+    else:
+        note = f"Full output saved to scratch file '{path}'."
+    return _truncate_for_context(content, max_chars, note), (path, len(data))
 
 # How much of each tool result to surface in the client's thinking panel. Web
 # results carry several dated snippets, so this is generous — the model always
@@ -109,6 +169,18 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         customer_id, [c.get("name") for c in builtin_calls],
     )
 
+    configs = state.get("node_configs", {})
+    config = (configs.get(node_id) if node_id else None) or configs.get("TOOL_EXECUTOR") or {}
+    max_result_chars = int(config.get("max_tool_result_chars") or _DEFAULT_MAX_TOOL_RESULT_CHARS)
+
+    # One scratch-FS namespace per request, minted on the first executor round
+    # and pinned in scratch so every later round — and every spawned subagent —
+    # addresses the same space. Survives durable resume via the checkpoint.
+    scratch_state = state.get("scratch") or {}
+    fs_namespace = scratch_state.get("fs_namespace") or uuid.uuid4().hex
+    fs_prefix = _FS_PREFIX_TEMPLATE.format(customer_id=customer_id, namespace=fs_namespace)
+    agent_depth = int(state.get("agent_depth") or 0)
+
     # Resolve every credential this turn needs in one pass, off the event loop
     # (DynamoDB + KMS through boto3 are blocking, and this process serves every
     # tenant on a single loop). A failure here must not abort the turn: tools
@@ -132,6 +204,21 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             count("tool_credential_resolution_total", status="ok")
 
     context = make_tool_context(customer_id, secrets=secrets_accessor(resolved))
+
+    async def _spawn(profile: dict, prompt: str) -> dict:
+        # Imported lazily: subagent builds a child graph from llm_node + THIS
+        # module, so a module-level import would be a cycle.
+        from graph.subagent import run_subagent
+
+        return await run_subagent(state, profile, prompt, agent_depth + 1)
+
+    context.runtime.update({
+        "fs_namespace": fs_namespace,
+        "fs_prefix": fs_prefix,
+        "depth": agent_depth,
+        "subagents": config.get("subagents") or [],
+        "spawn": _spawn,
+    })
 
     # The assistant turn that made the calls, replayed to the model next
     # iteration together with the results below.
@@ -174,12 +261,30 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             observe("tool_execution_duration_seconds", time.perf_counter() - start, tool=name)
 
     # All of a turn's calls run CONCURRENTLY — three web searches (or three
-    # spawned sub-runs, once that tool exists) take one round-trip, not three.
-    # Post-processing below stays sequential in the model's call order, which
-    # is what keeps citation numbering and loop_messages deterministic.
-    outcomes = await asyncio.gather(*(_run_one(c) for c in builtin_calls))
+    # spawned subagents) take one round-trip, not three. Post-processing below
+    # stays sequential in the model's call order, which is what keeps citation
+    # numbering and loop_messages deterministic. EXCEPT on the durable /runs
+    # path: DBOS memoizes steps by execution order, and concurrent children
+    # make LLM-step order nondeterministic across a crash/resume — so durable
+    # runs execute the calls sequentially (correctness over latency there).
+    try:
+        from graph.nodes.llm_node import _dbos_active
 
-    for call, (result, error) in zip(builtin_calls, outcomes):
+        durable = _dbos_active()
+    except Exception:
+        durable = False
+    if durable:
+        outcomes = [await _run_one(c) for c in builtin_calls]
+    else:
+        outcomes = await asyncio.gather(*(_run_one(c) for c in builtin_calls))
+
+    # Accumulated across the round, merged into the update once at the end.
+    round_scratch: dict = {}
+    round_usage: dict | None = None
+    spilled_files: dict[str, int] = {}
+    fs_read_enabled = "fs_read" in by_name
+
+    for seq, (call, (result, error)) in enumerate(zip(builtin_calls, outcomes), start=1):
         name = call.get("name", "")
         args = call.get("args") or {}
         call_sources_start = len(new_sources)
@@ -197,13 +302,31 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
                         {"index": running + offset, "title": s.title, "url": s.url}
                     )
                 running += len(result.sources)
+            # Tool-declared state changes (todo list, fs index entries) and
+            # LLM spend (a spawned subagent's) fold into the round's totals.
+            for key, value in (result.state_patch or {}).items():
+                if isinstance(value, dict) and isinstance(round_scratch.get(key), dict):
+                    round_scratch[key] = {**round_scratch[key], **value}
+                else:
+                    round_scratch[key] = value
+            if result.usage:
+                round_usage = _add_usage(round_usage, result.usage)
+            # Oversized results spill to the scratch FS: the model gets a
+            # structure-preserving excerpt plus the path to the full output.
+            if len(content) > max_result_chars:
+                content, spilled = _spill_oversized(
+                    content, name, seq, max_result_chars,
+                    context.store, fs_prefix, fs_read_enabled,
+                )
+                if spilled:
+                    spilled_files[spilled[0]] = spilled[1]
         loop_messages.append({
             "role": "tool",
             "tool_call_id": call.get("id", ""),
             "content": content,
         })
         summaries.append(_summarize(name, result, content))
-        calls_trace.append({
+        call_entry = {
             "name": name,
             "args": args,
             # This call's own slice of new_sources — reuses the already-numbered
@@ -211,12 +334,40 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             "sources": new_sources[call_sources_start:],
             "artifacts": [a.to_dict() for a in result.artifacts] if result else [],
             "error": error,
-        })
+        }
+        if result is not None and result.details:
+            # Structured extras (e.g. a subagent's own step trace) for the
+            # thinking panel — never part of what the model sees.
+            call_entry["details"] = result.details
+        calls_trace.append(call_entry)
 
     logger.info(
         "Node tool_executor: END — %d call(s) executed, %d artifact(s), %d source(s)",
         len(builtin_calls), len(artifacts), len(new_sources),
     )
+    # Scratch update: the FS namespace is pinned EVERY round (a spawned child
+    # or a later round must address the same space even if nothing was written
+    # yet), plus whatever the tools patched. fs_files merges over the prior
+    # index — scratch's reducer is last-writer-wins per key, so the full
+    # accumulated map is written each time, like tool_sources.
+    if spilled_files:
+        round_scratch["fs_files"] = {**round_scratch.get("fs_files", {}), **spilled_files}
+    if "fs_files" in round_scratch:
+        round_scratch["fs_files"] = {
+            **(scratch_state.get("fs_files") or {}), **round_scratch["fs_files"],
+        }
+    scratch_update = {"fs_namespace": fs_namespace, **round_scratch}
+    trace_entry = {
+        "node": "TOOL_EXECUTOR",
+        "prompt": ", ".join(c.get("name", "") for c in builtin_calls),
+        "response": "\n".join(summaries)[:_TRACE_TOTAL_LIMIT],
+        "calls": calls_trace,
+    }
+    if "todos" in round_scratch:
+        # The round updated the plan — surface the current checklist on this
+        # step so the streaming layer can emit it (and the proxy persist it)
+        # with the turn's thinking content.
+        trace_entry["todos"] = round_scratch["todos"]
     update: dict = {
         "loop_messages": loop_messages,
         "generated_artifacts": artifacts,
@@ -225,13 +376,13 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         # Cleared so a failing follow-up generation can't surface the pre-tool
         # preamble as if it were the final answer.
         "generated_response": None,
-        "trace": [{
-            "node": "TOOL_EXECUTOR",
-            "prompt": ", ".join(c.get("name", "") for c in builtin_calls),
-            "response": "\n".join(summaries)[:_TRACE_TOTAL_LIMIT],
-            "calls": calls_trace,
-        }],
+        "scratch": scratch_update,
+        "trace": [trace_entry],
     }
+    if round_usage:
+        # LLM spend incurred INSIDE tools (spawned subagents) joins the run's
+        # usage channel — the reducer accumulates it with the nodes' own.
+        update["usage"] = round_usage
     if new_sources:
         # Full accumulated snapshot (prior + this round) with turn-global
         # indices, so the streaming layer emits the complete citable set in one

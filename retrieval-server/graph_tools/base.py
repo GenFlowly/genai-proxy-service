@@ -64,11 +64,23 @@ class ToolResult:
                 short preamble here, never a hand-numbered list.
     sources   — citable sources (see Source); the host numbers, renders and
                 forwards them. Empty for tools that don't ground in sources.
-    artifacts — files the tool produced, for the host to persist."""
+    artifacts — files the tool produced, for the host to persist.
+    state_patch — key/values the host merges into its free-form run state
+                (the graph's scratch channel). How keys are merged is the
+                host's policy; tools just declare what changed (e.g. a todo
+                list, a file-index entry). Never carries secrets.
+    usage     — LLM token usage this tool itself incurred (a tool that runs a
+                sub-agent reports the child's spend here), accumulated by the
+                host into the run's usage accounting. None for ordinary tools.
+    details   — structured extras for the host's observability/trace layer
+                (e.g. a sub-agent's own step trace). Never shown to the model."""
 
     content: str = ""
     artifacts: list[Artifact] = field(default_factory=list)
     sources: list["Source"] = field(default_factory=list)
+    state_patch: dict = field(default_factory=dict)
+    usage: dict | None = None
+    details: dict = field(default_factory=dict)
 
 
 def _no_secrets(credential_ref: str) -> dict:
@@ -98,6 +110,13 @@ class ToolContext:
     store: ArtifactStore
     key_template: str = "{artifact_id}"
     secrets: Callable[[str], dict] = _no_secrets
+    # Host-injected runtime services/facts beyond credentials: the scratch-FS
+    # key prefix for this run ("fs_prefix"), the agent-nesting depth ("depth"),
+    # the configured subagent profiles ("subagents"), a spawn callable
+    # ("spawn"), … Kept a plain dict so this package needs no knowledge of the
+    # host's agent machinery; tools that need an entry must degrade gracefully
+    # when the host did not provide it.
+    runtime: dict = field(default_factory=dict)
 
     def save_artifact(self, data: bytes, media_type: str, filename: str) -> Artifact:
         artifact_id = str(uuid.uuid4())

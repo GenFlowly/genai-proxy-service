@@ -130,5 +130,96 @@ class ToolPreambleTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("The current date is", prompt)
 
 
+class HarnessPromptTests(unittest.IsolatedAsyncioTestCase):
+    """The harness prompt is agent-loop scaffolding, resolved from node config
+    (data), composed BEFORE the customer persona — the persona says who the
+    agent is, the harness says how it works."""
+
+    def _configs(self, **generator_extra):
+        return {
+            "RESPONSE_GENERATOR": {
+                "output_key": "generated_response",
+                "input_template": "{query}",
+                **generator_extra,
+            },
+        }
+
+    async def test_harness_precedes_the_persona(self):
+        prompt = await _run(
+            "RESPONSE_GENERATOR",
+            _state(node_configs=self._configs(harness_prompt="You are an autonomous agent.")),
+        )
+        self.assertTrue(prompt.startswith("You are an autonomous agent."))
+        self.assertIn("You are a helpful assistant.", prompt)
+        self.assertLess(
+            prompt.index("autonomous agent"), prompt.index("helpful assistant")
+        )
+
+    async def test_no_harness_leaves_the_prompt_unchanged(self):
+        prompt = await _run("RESPONSE_GENERATOR", _state())
+        self.assertTrue(prompt.startswith("You are a helpful assistant."))
+
+    async def test_spawn_agent_binding_lists_the_agent_types(self):
+        state = _state(
+            builtin_tools=["spawn_agent"],
+            node_configs={
+                **self._configs(),
+                "TOOL_EXECUTOR": {
+                    "tools": ["spawn_agent"],
+                    "subagents": [{"name": "researcher", "description": "digs deep"}],
+                },
+            },
+        )
+        prompt = await _run("RESPONSE_GENERATOR", state)
+        self.assertIn("Available agent types:", prompt)
+        self.assertIn("- general:", prompt)
+        self.assertIn("- researcher: digs deep", prompt)
+
+    async def test_no_spawn_agent_means_no_listing(self):
+        prompt = await _run("RESPONSE_GENERATOR", _state(builtin_tools=["web_search"]))
+        self.assertNotIn("Available agent types:", prompt)
+
+
+class TurnBudgetTests(unittest.IsolatedAsyncioTestCase):
+    """Past max_turn_tokens the generator binds NO tools and is told to give
+    its final answer — a clean exit for runaway loops, not a mid-turn abort."""
+
+    def _state_with_budget(self, spent: int):
+        return _state(
+            builtin_tools=["web_search"],
+            usage={"total_tokens": spent},
+            node_configs={
+                "RESPONSE_GENERATOR": {
+                    "output_key": "generated_response",
+                    "input_template": "{query}",
+                    "max_turn_tokens": 1000,
+                },
+            },
+        )
+
+    async def _run_capturing(self, state):
+        recorder = _RecorderLLM()
+        with patch.object(
+            llm_node_module, "_build_llm_and_structured", return_value=(recorder, None)
+        ) as build, patch.object(llm_node_module, "credentials_for", return_value={}):
+            await make_llm_node("RESPONSE_GENERATOR")(state)
+        system = recorder.messages[0]
+        content = system.content
+        if isinstance(content, list):
+            content = "".join(b.get("text", "") for b in content)
+        tools_bound = build.call_args.args[5]
+        return content, tools_bound
+
+    async def test_exhausted_budget_unbinds_tools_and_forces_an_answer(self):
+        prompt, tools_bound = await self._run_capturing(self._state_with_budget(spent=1500))
+        self.assertFalse(tools_bound)
+        self.assertIn("tool budget for this turn is exhausted", prompt)
+
+    async def test_under_budget_binds_tools_normally(self):
+        prompt, tools_bound = await self._run_capturing(self._state_with_budget(spent=100))
+        self.assertTrue(tools_bound)
+        self.assertNotIn("budget", prompt)
+
+
 if __name__ == "__main__":
     unittest.main()
