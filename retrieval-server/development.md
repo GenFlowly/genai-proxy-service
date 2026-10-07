@@ -118,11 +118,44 @@ citation numbering stay sequential in the model's call order, so
 `loop_messages` and `[n]` source indices are deterministic regardless of
 completion order.
 
-Planned next (in order): a `run_graph` tool exposing a pipeline graph as one
-callable step for agents; a `spawn_agent` tool (child agent loops with depth +
-token budgets) — which is what makes orchestrator/parallel-worker/judge
-patterns emergent model behavior rather than topology; an AGENT node type so
-pipelines can embed a bounded agent loop as one node.
+### The harness
+
+The agent harness is a **thin code kernel + prompts-as-data**. The kernel
+(own it, nothing external to track):
+
+| Piece | Where | What |
+|---|---|---|
+| `write_todos` | `graph_tools/tools/write_todos.py` | the agent's plan as a checklist; full-list replace; current list lands in `scratch["todos"]`, rides the TOOL_EXECUTOR `thinking_step` (`todos` field) and is persisted by the proxy with the turn's thinking JSON |
+| scratch FS | `graph/fs_tools.py` | `fs_write`/`fs_read`/`fs_list` on run-scoped S3 keys `customers/{cid}/agent-fs/{namespace}/…`; one namespace per request, pinned in scratch, shared down the subagent tree |
+| result spill | `tool_executor.py` | tool results over `max_tool_result_chars` (default 8k) spill: full content → scratch FS, head+tail excerpt + fs path → `loop_messages`; messages are never dropped, `tool_call_id` pairing never breaks |
+| compaction | `llm_node.py` | past `compaction_threshold_tokens` (default 40k) older loop rounds fold into an LLM-written summary (durable-step billed, `operation=compaction`), pinned in `scratch["compaction"]`; whole rounds fold as a unit so pairing stays vendor-legal; a failed summarization degrades to clipping and retries next iteration |
+| turn budget | `llm_node.py` | past `max_turn_tokens` the generator binds no tools and must answer with what it has |
+| `spawn_agent` | `graph/spawn_tool.py` + `graph/subagent.py` | child agent loops (same generator⇄executor engine): context-isolated, depth-capped (2), usage merged back, artifacts forwarded, child trace in the call's `details`; concurrent per turn on /retrieve, sequential on durable /runs (DBOS step-order determinism) |
+
+Tool-side contracts: `ToolResult.state_patch` (merged into scratch),
+`ToolResult.usage` (joins the run's usage channel), `ToolResult.details`
+(trace-only), `ToolContext.runtime` (host-injected fs prefix / depth /
+subagent profiles / spawn callable).
+
+**Prompts are data.** The harness prompt is `harness_prompt` on the generator
+node config (or `harness_instruction_id` → a versioned instruction record,
+resolved per request; inline text is the fallback), prepended before the
+customer persona. Subagent profiles (`subagents` on the TOOL_EXECUTOR config:
+`{name, description, prompt|instruction_id, tools, model?, max_turn_tokens?}`)
+are listed in the model's system prompt for description-driven dispatch; the
+built-in `general` profile always exists. Updating any of it is a DDB edit
+with ~60s propagation, not a deploy.
+
+**Evals, not parity.** `evals/` is the behavioral suite (multi-hop KB, don't-
+retrieve chitchat, long research loop, delegation, compaction survival,
+budget exhaustion) run against a live server — see `evals/README.md`. Fold
+ideas from Claude Code / Deep Agents release notes into the prompt records on
+a periodic review; the evals decide whether they helped on OUR workloads.
+
+Planned next: a `run_graph` tool exposing a pipeline graph as one callable
+step for agents; an AGENT node type so pipelines can embed a bounded agent
+loop as one node; concurrent spawn on the durable path (step names keyed by
+agent path); first-class agent-path fields on streamed events.
 
 ## Durable agentic runs (planned)
 

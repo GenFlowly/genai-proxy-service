@@ -42,8 +42,17 @@ _ATTACHMENT_KEY_TEMPLATE = "customers/{customer_id}/attachments/{artifact_id}"
 # whose implicit arrival would change the behavior of existing graphs:
 # search_knowledge_base would make every pipeline graph with an unscoped
 # TOOL_EXECUTOR node retrieve twice (once via its RETRIEVAL node, once when
-# the model calls the tool).
-_EXPLICIT_ONLY_TOOLS = {"search_knowledge_base"}
+# the model calls the tool); the agent-harness tools (todos, scratch FS,
+# subagent spawning) are opt-in capabilities an agent graph names, never a
+# behavior an untouched pipeline graph silently grows.
+_EXPLICIT_ONLY_TOOLS = {
+    "search_knowledge_base",
+    "write_todos",
+    "fs_write",
+    "fs_read",
+    "fs_list",
+    "spawn_agent",
+}
 
 
 def get_registry() -> ToolRegistry:
@@ -62,9 +71,15 @@ def get_registry() -> ToolRegistry:
     global _registry
     if _registry is None:
         registry = default_registry()
+        from graph.fs_tools import FsListTool, FsReadTool, FsWriteTool
         from graph.knowledge_tool import SearchKnowledgeBaseTool
+        from graph.spawn_tool import SpawnAgentTool
 
         registry.register(SearchKnowledgeBaseTool())
+        registry.register(FsWriteTool())
+        registry.register(FsReadTool())
+        registry.register(FsListTool())
+        registry.register(SpawnAgentTool())
         _registry = registry
     return _registry
 
@@ -147,13 +162,22 @@ class _LazyAttachmentStore:
     def __init__(self):
         self._store: ArtifactStore | None = None
 
-    def put(self, key: str, data: bytes, content_type: str) -> None:
+    def _backing(self) -> ArtifactStore:
         if self._store is None:
             bucket = os.environ.get("ATTACHMENTS_BUCKET", "")
             if not bucket:
                 raise RuntimeError("ATTACHMENTS_BUCKET environment variable is not set")
             self._store = S3ArtifactStore(bucket)
-        self._store.put(key, data, content_type)
+        return self._store
+
+    def put(self, key: str, data: bytes, content_type: str) -> None:
+        self._backing().put(key, data, content_type)
+
+    def get(self, key: str) -> bytes:
+        return self._backing().get(key)
+
+    def list(self, prefix: str) -> list[dict]:
+        return self._backing().list(prefix)
 
 
 def make_tool_context(

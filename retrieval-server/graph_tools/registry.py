@@ -32,8 +32,10 @@ def default_registry() -> ToolRegistry:
     """Registry with every built-in tool registered."""
     from graph_tools.tools.generate_pdf import GeneratePdfTool
     from graph_tools.tools.web_search import WebSearchTool
+    from graph_tools.tools.write_todos import WriteTodosTool
 
     registry = ToolRegistry()
     registry.register(GeneratePdfTool())
     registry.register(WebSearchTool())
+    registry.register(WriteTodosTool())
     return registry
