@@ -51,12 +51,26 @@ class AgentTemplateTests(unittest.TestCase):
         self.assertEqual(cond["routes"]["none"], "__end__")
 
     def test_tools_are_scoped_explicitly(self):
-        # The TOOL_EXECUTOR config must NAME its tools: search_knowledge_base
-        # is explicit-only (never part of the implicit all-built-ins default),
-        # so an unscoped config would silently drop it from the agent.
+        # The TOOL_EXECUTOR config must NAME its tools: the harness tools are
+        # all explicit-only (never part of the implicit all-built-ins
+        # default), so an unscoped config would silently drop them.
         _, nodes = _load()
         executor = next(n for n in nodes if n["nodeType"] == "TOOL_EXECUTOR")
-        self.assertIn("search_knowledge_base", executor["config"]["tools"])
+        for tool in ("search_knowledge_base", "write_todos", "fs_write",
+                     "fs_read", "fs_list", "spawn_agent"):
+            self.assertIn(tool, executor["config"]["tools"])
+
+    def test_generator_carries_the_harness_config(self):
+        # Harness prompt + budgets are DATA on the node config — the runtime
+        # reads exactly these keys (llm_node), so renames here break silently
+        # without this pin.
+        _, nodes = _load()
+        generator = next(n for n in nodes if n["nodeType"] == "RESPONSE_GENERATOR")
+        config = generator["config"]
+        self.assertIn("write_todos", config["harness_prompt"])
+        self.assertIn("spawn_agent", config["harness_prompt"])
+        self.assertGreater(config["max_turn_tokens"], 0)
+        self.assertGreater(config["compaction_threshold_tokens"], 0)
 
 
 if __name__ == "__main__":

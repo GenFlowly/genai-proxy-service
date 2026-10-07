@@ -307,6 +307,159 @@ class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         ])
 
 
+class HarnessStateTests(unittest.IsolatedAsyncioTestCase):
+    """The executor is the host side of the harness contract: tool
+    state_patches land in scratch, tool-incurred LLM spend lands in usage,
+    the scratch-FS namespace is pinned, and an updated todo list rides the
+    trace entry (→ the thinking_step event → proxy persistence)."""
+
+    async def test_state_patch_lands_in_scratch_and_namespace_is_pinned(self):
+        class _Patcher(_Recorder):
+            async def run(self, args, context):
+                return ToolResult(content="ok", state_patch={
+                    "todos": [{"content": "step", "status": "pending"}],
+                })
+
+        out = await _run(_state([{"id": "1", "name": "t"}], ["t"]), [_Patcher("t")])
+
+        self.assertEqual(out["scratch"]["todos"], [{"content": "step", "status": "pending"}])
+        self.assertTrue(out["scratch"]["fs_namespace"])
+        # ...and the trace entry carries the updated checklist for streaming.
+        self.assertEqual(out["trace"][0]["todos"], out["scratch"]["todos"])
+
+    async def test_existing_fs_namespace_is_reused_and_fs_index_accumulates(self):
+        class _FsWriter(_Recorder):
+            async def run(self, args, context):
+                return ToolResult(content="ok", state_patch={"fs_files": {"b.txt": 2}})
+
+        state = _state([{"id": "1", "name": "t"}], ["t"])
+        state["scratch"] = {"fs_namespace": "ns-fixed", "fs_files": {"a.txt": 1}}
+        out = await _run(state, [_FsWriter("t")])
+
+        self.assertEqual(out["scratch"]["fs_namespace"], "ns-fixed")
+        self.assertEqual(out["scratch"]["fs_files"], {"a.txt": 1, "b.txt": 2})
+
+    async def test_tool_usage_joins_the_usage_channel(self):
+        class _Spender(_Recorder):
+            async def run(self, args, context):
+                return ToolResult(content="ok", usage={
+                    "input_tokens": 10, "output_tokens": 5, "total_tokens": 15,
+                })
+
+        out = await _run(
+            _state([{"id": "1", "name": "a"}, {"id": "2", "name": "b"}], ["a", "b"]),
+            [_Spender("a"), _Spender("b")],
+        )
+
+        self.assertEqual(out["usage"]["total_tokens"], 30)
+
+    async def test_no_tool_usage_means_no_usage_key(self):
+        out = await _run(_state([{"id": "1", "name": "t"}], ["t"]), [_Recorder("t")])
+        self.assertNotIn("usage", out)
+
+    async def test_details_surface_in_the_calls_trace_only(self):
+        class _Detailed(_Recorder):
+            async def run(self, args, context):
+                return ToolResult(content="report", details={"subagent": "general"})
+
+        out = await _run(_state([{"id": "1", "name": "t"}], ["t"]), [_Detailed("t")])
+
+        self.assertEqual(out["trace"][0]["calls"][0]["details"], {"subagent": "general"})
+        self.assertEqual(out["loop_messages"][1]["content"], "report")
+
+    async def test_runtime_hands_tools_the_fs_prefix_depth_and_spawn(self):
+        tool = _Recorder("t")
+        state = _state([{"id": "1", "name": "t"}], ["t"])
+        state["agent_depth"] = 1
+        await _run(state, [tool])
+
+        runtime = tool.seen_context.runtime
+        self.assertEqual(runtime["depth"], 1)
+        self.assertTrue(runtime["fs_prefix"].startswith("customers/cust-1/agent-fs/"))
+        self.assertTrue(callable(runtime["spawn"]))
+
+
+class SpillTests(unittest.IsolatedAsyncioTestCase):
+    """Oversized tool results spill: full content to the scratch FS, a
+    structure-preserving excerpt (head + tail, elision marker, fs path) into
+    loop_messages — never a dropped message, never a broken tool_call_id."""
+
+    class _Store:
+        def __init__(self, fail=False):
+            self.fail = fail
+            self.writes: dict[str, bytes] = {}
+
+        def put(self, key, data, content_type):
+            if self.fail:
+                raise RuntimeError("s3 down")
+            self.writes[key] = data
+
+    async def _run_with_store(self, state, tools, store):
+        from graph.tools_runtime import make_tool_context
+
+        def _context_with_store(customer_id, secrets=None):
+            context = make_tool_context(customer_id, secrets=secrets)
+            context.store = store
+            return context
+
+        resolver = AsyncMock(return_value={})
+        with patch.object(tool_executor_module, "tools_for", return_value=tools), \
+                patch.object(tool_executor_module, "make_tool_context", _context_with_store), \
+                patch.object(tool_executor_module.asyncio, "to_thread", resolver):
+            return await tool_executor("node-1")(state)
+
+    def _big_tool(self):
+        class _Big(_Recorder):
+            async def run(self, args, context):
+                return ToolResult(content="S" + "x" * 20_000 + "E")
+
+        return _Big("big")
+
+    async def test_oversized_result_spills_and_excerpt_keeps_head_and_tail(self):
+        store = self._Store()
+        state = _state([{"id": "1", "name": "big"}], ["big", "fs_read"])
+        out = await self._run_with_store(state, [self._big_tool(), _Recorder("fs_read")], store)
+
+        [key] = store.writes
+        self.assertIn("/results/big_1.txt", key)
+        self.assertEqual(len(store.writes[key]), 20_002)
+
+        content = out["loop_messages"][1]["content"]
+        self.assertLess(len(content), 9_000)
+        self.assertTrue(content.startswith("S"))          # head kept
+        self.assertTrue(content.endswith("E"))            # tail kept
+        self.assertIn("characters omitted", content)
+        self.assertIn('fs_read(path="results/big_1.txt"', content)
+        self.assertEqual(out["loop_messages"][1]["tool_call_id"], "1")
+        # The spilled file joins the run's fs index.
+        self.assertEqual(out["scratch"]["fs_files"], {"results/big_1.txt": 20_002})
+
+    async def test_spill_without_fs_read_enabled_does_not_advertise_it(self):
+        store = self._Store()
+        state = _state([{"id": "1", "name": "big"}], ["big"])
+        out = await self._run_with_store(state, [self._big_tool()], store)
+
+        self.assertNotIn("fs_read(", out["loop_messages"][1]["content"])
+
+    async def test_failed_spill_still_truncates(self):
+        store = self._Store(fail=True)
+        state = _state([{"id": "1", "name": "big"}], ["big"])
+        out = await self._run_with_store(state, [self._big_tool()], store)
+
+        content = out["loop_messages"][1]["content"]
+        self.assertLess(len(content), 9_000)
+        self.assertIn("could not be saved", content)
+        self.assertNotIn("fs_files", out["scratch"])
+
+    async def test_small_results_are_untouched(self):
+        store = self._Store()
+        state = _state([{"id": "1", "name": "t"}], ["t"])
+        out = await self._run_with_store(state, [_Recorder("t")], store)
+
+        self.assertEqual(out["loop_messages"][1]["content"], "t ran")
+        self.assertEqual(store.writes, {})
+
+
 class FailureTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_failing_tool_becomes_content_not_an_exception(self):
         tool = _Recorder("web_search", raises=RuntimeError("upstream down"))

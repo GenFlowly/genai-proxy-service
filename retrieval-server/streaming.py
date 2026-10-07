@@ -159,6 +159,12 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
         calls = (trace[-1].get("calls") if trace else None) or []
         payload["detail"] = f"Executed {len(calls)} tool(s)"
         payload["calls"] = calls
+        # The agent's current todo checklist, when this round updated it
+        # (write_todos). Rides the thinking_step so the client renders it live
+        # and the proxy persists it with the turn's thinking content.
+        todos = trace[-1].get("todos") if trace else None
+        if todos is not None:
+            payload["todos"] = todos
         # Back-compat flat view: artifact filenames + newest cited titles, capped.
         items = [a.get("filename", "")[:120] for a in artifacts]
         items += [s.get("title", "")[:120] for s in sources[-_MAX_ITEMS:] if s.get("title")]

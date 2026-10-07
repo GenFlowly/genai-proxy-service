@@ -85,6 +85,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         scratch={},
         generated_response=None,
         error=None,
+        agent_depth=0,
     )
 
 
@@ -156,6 +157,21 @@ def _build_node_configs(nodes: list[dict]) -> tuple[dict, dict, set[str]]:
                 logger.warning(
                     "Node %s: instruction %s v%s unresolvable — using inline prompt",
                     n["nodeId"], instruction_id, version,
+                )
+        # Agent-harness scaffolding as a versioned instruction record: resolves
+        # into config["harness_prompt"], which llm_node prepends to the persona
+        # on response generators. An unresolvable ref degrades to the inline
+        # harness_prompt (if any) rather than failing the request.
+        harness_ref = config.get("harness_instruction_id")
+        if harness_ref:
+            version = config.get("harness_instruction_version")
+            text = get_instruction_text(harness_ref, int(version) if version is not None else None)
+            if text is not None:
+                config["harness_prompt"] = text
+            else:
+                logger.warning(
+                    "Node %s: harness instruction %s v%s unresolvable — using inline harness prompt",
+                    n["nodeId"], harness_ref, version,
                 )
         # Keyed by node identity — the same nodeType can appear many times with
         # different configs. The first node of each type also lands under the
@@ -365,6 +381,7 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
         scratch={},
         generated_response=None,
         error=None,
+        agent_depth=0,
     )
 
     logger.info(

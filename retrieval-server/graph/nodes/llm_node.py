@@ -404,6 +404,198 @@ _DIRECT_OUTPUT_KEYS = {
 _TRACE_TEXT_LIMIT = 1500
 
 
+def _text_of(content) -> str:
+    """Plain text of an AIMessage content (string or block list)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            b.get("text", "") if isinstance(b, dict) else str(b) for b in content
+        )
+    return str(content)
+
+
+def _subagent_listing(state: dict) -> str:
+    """The 'available agent types' block appended to the system prompt when
+    spawn_agent is bound — the model dispatches by reading these descriptions
+    (profiles are data in the TOOL_EXECUTOR node config; the built-in general
+    profile is always available)."""
+    from graph.subagent import GENERAL_PROFILE
+
+    profiles: list = []
+    for cfg in (state.get("node_configs") or {}).values():
+        if isinstance(cfg, dict) and cfg.get("subagents"):
+            profiles = [p for p in cfg["subagents"] if isinstance(p, dict) and p.get("name")]
+            break
+    if not any(p.get("name") == "general" for p in profiles):
+        profiles = [GENERAL_PROFILE, *profiles]
+    lines = "\n".join(f"- {p['name']}: {p.get('description', '')}" for p in profiles)
+    return (
+        "\n\nYou can delegate self-contained tasks with the spawn_agent tool. "
+        f"Available agent types:\n{lines}"
+    )
+
+
+# ── Loop-message compaction (agent loops that outgrow the context window) ────
+#
+# When a turn's accumulated tool exchanges (loop_messages) pass a token
+# threshold, the OLDER rounds are folded into one LLM-written summary — kept in
+# scratch so the fold happens once per threshold crossing, not per iteration —
+# and only the summary plus the newest round(s) are replayed to the model.
+# Whole rounds (assistant turn + its tool results) are folded as a unit, so
+# tool_call_id pairing in what remains is intact by construction. The
+# summarization call runs through the durable LLM step on /runs (exactly-once
+# billed); on failure the round degrades to clipped tool results rather than
+# crashing mid-run, and the fold is retried next iteration.
+
+_DEFAULT_COMPACTION_THRESHOLD_TOKENS = 40_000
+_COMPACTION_MAX_TOKENS = 1500
+# Rough chars→tokens for threshold checks; precision is not load-bearing.
+_CHARS_PER_TOKEN = 4
+
+_COMPACTION_SYSTEM = (
+    "You compress an AI agent's tool-use history so the agent can keep "
+    "working with less context. Write a dense, factual summary (under 800 "
+    "words) that preserves: every finding and fact, with its inline [n] "
+    "citation markers and source URLs; decisions made and why; open questions "
+    "and dead ends; scratch file paths mentioned (fs paths); and what each "
+    "remaining task needs. Drop raw payloads, boilerplate, and repetition. "
+    "Output only the summary."
+)
+
+_SUMMARY_PREFIX = "[Summary of my earlier tool activity this turn]\n"
+
+
+def _estimate_tokens(messages: list[dict], extra: str = "") -> int:
+    chars = sum(len(m.get("content") or "") + 40 for m in messages) + len(extra)
+    return chars // _CHARS_PER_TOKEN
+
+
+def _serialize_rounds(prior_summary: str, messages: list[dict]) -> str:
+    parts = []
+    if prior_summary:
+        parts.append(f"Previous summary (fold its content in):\n{prior_summary}")
+    for m in messages:
+        if m.get("role") == "assistant":
+            calls = ", ".join(
+                f"{c.get('name')}({json.dumps(c.get('args') or {}, default=str)})"
+                for c in m.get("tool_calls") or []
+            )
+            parts.append(f"ASSISTANT: {m.get('content') or ''}\nCALLED: {calls}")
+        else:
+            parts.append(f"TOOL RESULT: {(m.get('content') or '')[:6000]}")
+    return "\n\n".join(parts)
+
+
+def _usage_of(response) -> dict:
+    meta = getattr(response, "usage_metadata", None) or {}
+    details = meta.get("input_token_details") or {}
+    output_details = meta.get("output_token_details") or {}
+    return {
+        "input_tokens": meta.get("input_tokens", 0),
+        "output_tokens": meta.get("output_tokens", 0),
+        "total_tokens": meta.get("total_tokens", 0),
+        "cache_read_tokens": details.get("cache_read", 0),
+        "cache_creation_tokens": details.get("cache_creation", 0),
+        "reasoning_tokens": output_details.get("reasoning", 0),
+    }
+
+
+async def _summarize_for_compaction(
+    state: dict, config: dict, serialized: str, use_durable: bool
+) -> tuple[str, dict]:
+    """One summarization LLM call. Returns (summary_text, usage); raises on
+    failure — the caller owns degradation."""
+    provider = state["llm_provider"]
+    model = config.get("compaction_model") or state.get("llm_model")
+    messages = [
+        SystemMessage(content=_COMPACTION_SYSTEM),
+        HumanMessage(content=serialized),
+    ]
+    llm_start = time.perf_counter()
+    try:
+        if use_durable:
+            out = await _durable_llm_invoke(
+                provider, state["customer_id"], model, _COMPACTION_MAX_TOKENS,
+                [], False, [], None, None, messages,
+            )
+            response = out["response"]
+        else:
+            llm = get_llm(provider, credentials_for(state), model, _COMPACTION_MAX_TOKENS)
+            response = await llm.ainvoke(messages)
+    except Exception:
+        count("llm_request_total", status="error", vendor=provider, model=model,
+              source=state.get("request_source") or "conversation", operation="compaction")
+        raise
+    count("llm_request_total", status="ok", vendor=provider, model=model,
+          source=state.get("request_source") or "conversation", operation="compaction")
+    observe("llm_request_duration_seconds", time.perf_counter() - llm_start, vendor=provider)
+    return _text_of(response.content), _usage_of(response)
+
+
+async def _compact_loop_messages(
+    state: dict, config: dict, loop_msgs: list[dict], use_durable: bool
+) -> tuple[list[dict], dict, dict | None]:
+    """Returns (messages_to_replay, scratch_update, compaction_usage)."""
+    prior = (state.get("scratch") or {}).get("compaction") or {}
+    upto = int(prior.get("upto") or 0)
+    summary = prior.get("summary") or ""
+    if upto > len(loop_msgs):
+        # Defensive: scratch from an inconsistent state — ignore it.
+        upto, summary = 0, ""
+    active = loop_msgs[upto:]
+
+    def with_summary(messages: list[dict]) -> list[dict]:
+        if not summary:
+            return messages
+        return [
+            {"role": "assistant", "content": _SUMMARY_PREFIX + summary, "tool_calls": []},
+            *messages,
+        ]
+
+    threshold = int(
+        config.get("compaction_threshold_tokens") or _DEFAULT_COMPACTION_THRESHOLD_TOKENS
+    )
+    if _estimate_tokens(active, summary) < threshold:
+        return with_summary(active), {}, None
+
+    # Newest round stays verbatim; everything before it is folded.
+    last_assistant = max(
+        (i for i, m in enumerate(active) if m.get("role") == "assistant"),
+        default=None,
+    )
+    if not last_assistant:  # None, or 0 == the newest round is all there is
+        return with_summary(active), {}, None
+    to_fold, keep = active[:last_assistant], active[last_assistant:]
+
+    try:
+        new_summary, usage = await _summarize_for_compaction(
+            state, config, _serialize_rounds(summary, to_fold), use_durable
+        )
+        count("agent_compaction_total", status="ok")
+    except Exception as e:
+        count("agent_compaction_total", status="error")
+        logger.error("Compaction summarization failed — degrading to clipping: %s", e)
+        clipped = [
+            {**m, "content": f"{(m.get('content') or '')[:400]} …[truncated]"}
+            if m.get("role") == "tool" and len(m.get("content") or "") > 400
+            else m
+            for m in to_fold
+        ]
+        # No scratch update: the fold is retried on the next iteration.
+        return with_summary(clipped + keep), {}, None
+
+    logger.info(
+        "Compaction: folded %d loop message(s) into a %d-char summary",
+        len(to_fold), len(new_summary),
+    )
+    replay = [
+        {"role": "assistant", "content": _SUMMARY_PREFIX + new_summary.strip(), "tool_calls": []},
+        *keep,
+    ]
+    return replay, {"compaction": {"summary": new_summary.strip(), "upto": upto + last_assistant}}, usage
+
+
 def _trace_entry(node_label: str, prompt: str, response) -> dict:
     text = response if isinstance(response, str) else json.dumps(response, default=str)
     return {"trace": [{
@@ -540,11 +732,22 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             memories_block = state.get("memories_block")
             if memories_block:
                 system_prompt = f"{system_prompt}\n\n{memories_block}"
+            # Harness scaffolding (agent-loop discipline: planning, tool use,
+            # delegation, stop conditions) PRECEDES the customer persona — the
+            # persona says who the agent is, the harness says how it works.
+            # Data, not code: resolved from the node config (inline
+            # harness_prompt, or a harness_instruction_id resolved upstream in
+            # routes/_build_node_configs), so it is editable without a deploy.
+            harness_prompt = (config.get("harness_prompt") or "").strip()
+            if harness_prompt:
+                system_prompt = f"{harness_prompt}\n\n{system_prompt}"
             # Ground the model in the current date so it can judge whether its own
             # knowledge is stale, and — when a web_search tool is bound — nudge it to
             # search rather than answer time-sensitive questions from training data.
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             system_prompt = f"{system_prompt}\n\nThe current date is {today} (UTC)."
+            if "spawn_agent" in (state.get("builtin_tools") or []):
+                system_prompt += _subagent_listing(state)
             if "web_search" in (state.get("builtin_tools") or []):
                 system_prompt += (
                     " When answering well depends on current, recent, or post-training "
@@ -576,6 +779,28 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         else:
             system_prompt = config.get("system_prompt", "You are a helpful assistant.")
             model_override = config.get("model_override")
+
+        # Per-turn token budget (agent loops): once the run's accumulated usage
+        # crosses max_turn_tokens, this call binds NO tools and instructs the
+        # model to answer with what it has — a clean exit, not a mid-turn
+        # abort. The graph's maxIterations stays the loop-count backstop.
+        budget_exhausted = False
+        if is_response_node:
+            max_turn_tokens = int(config.get("max_turn_tokens") or 0)
+            if max_turn_tokens:
+                spent = (state.get("usage") or {}).get("total_tokens", 0)
+                if spent >= max_turn_tokens:
+                    budget_exhausted = True
+                    logger.warning(
+                        "Node %s: turn token budget exhausted (%d >= %d) — forcing a final answer",
+                        agent_type, spent, max_turn_tokens,
+                    )
+                    system_prompt += (
+                        "\n\nYour tool budget for this turn is exhausted. Do not "
+                        "call any more tools — give your best final answer now "
+                        "from what you already have, and say plainly what you "
+                        "could not verify."
+                    )
         thinking_level = config.get("thinking_level")
         if thinking_level is not None and thinking_level not in THINKING_LEVELS:
             logger.warning(
@@ -614,6 +839,8 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # in-graph by the TOOL_EXECUTOR node instead of exiting to the caller.
         tools = state.get("tools") or []
         builtin_names = state.get("builtin_tools") or []
+        if budget_exhausted:
+            tools, builtin_names = [], []
         if is_response_node and builtin_names:
             # Resolved from the names enabled for THIS request, not from a
             # process-global view of what exists. The customer id lets the
@@ -737,8 +964,20 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # In-graph agent loop (TOOL_EXECUTOR): replay this request's built-in
         # tool exchanges after the current user turn, so on re-entry the model
         # sees its own tool calls answered and produces the final response.
+        # Long loops are compacted first: older rounds fold into an LLM-written
+        # summary (see _compact_loop_messages) so the turn never outgrows the
+        # context window.
+        compaction_scratch: dict = {}
+        compaction_usage: dict | None = None
         if is_response_node:
-            for lm in state.get("loop_messages") or []:
+            loop_msgs = state.get("loop_messages") or []
+            if loop_msgs:
+                replay_msgs, compaction_scratch, compaction_usage = (
+                    await _compact_loop_messages(state, config, loop_msgs, use_durable)
+                )
+            else:
+                replay_msgs = []
+            for lm in replay_msgs:
                 if lm.get("role") == "assistant":
                     messages.append(
                         _history_ai_message(lm.get("content", ""), lm.get("tool_calls") or [], False)
@@ -796,6 +1035,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             # the output rate), reported separately for spend granularity.
             "reasoning_tokens": output_details.get("reasoning", 0),
         }
+        if compaction_usage:
+            # The compaction summarization call's spend belongs to this node's
+            # turn — fold it in so the run's usage accounting stays complete.
+            usage = {k: usage.get(k, 0) + compaction_usage.get(k, 0) for k in usage}
         # vendor+model token totals back the cost dashboards until exact
         # costUsd is emitted from the Kotlin proxy (Micrometer pass).
         if usage["input_tokens"]:
@@ -874,6 +1117,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # response_format == "text"
         result = {**_route_output(output_key, _get_text(response.content)), "usage": usage,
                   **_trace_entry(agent_type, rendered_input, _get_text(response.content))}
+        if compaction_scratch:
+            # Pin the fold (summary + high-water mark) so later iterations
+            # reuse it instead of re-summarizing every round.
+            result["scratch"] = {**result.get("scratch", {}), **compaction_scratch}
         if tools_bound:
             raw_tool_calls = getattr(response, "tool_calls", None) or []
             if raw_tool_calls:
