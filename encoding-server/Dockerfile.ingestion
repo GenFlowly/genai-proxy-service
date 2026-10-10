@@ -19,5 +19,6 @@ COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 COPY services ${LAMBDA_TASK_ROOT}/services
 
-# Set the handler
-CMD [ "handlers.ingestion_lambda.handler" ]
+# Default handler only — the CDK stack overrides cmd per function
+# (handlers.ingest_email_lambda.handler / handlers.ingest_notes_lambda.handler)
+CMD [ "handlers.ingest_notes_lambda.handler" ]
