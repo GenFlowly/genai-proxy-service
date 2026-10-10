@@ -62,6 +62,10 @@ export class LambdaStack extends cdk.Stack {
         const NOTES_EMBEDDING_STATUS_INDEX = 'embedding-status-index';
         const instructionsTable = dynamodb.Table.fromTableName(this, 'InstructionsTable', props.instructionsTableName);
 
+        // Drives each lambda's log level and user-content gating — see
+        // genai-proxy-server/development.md "Logging policy".
+        const appEnv = { APP_ENV: props.stage === STAGES.PROD ? 'production' : 'development' };
+
         /**
          * Ingest Email Lambda
          * Validates payloads and pushes to SQS
@@ -76,6 +80,7 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
+                ...appEnv,
                 QUEUE_URL: props.ingestionQueue.queueUrl,
                 CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
             },
@@ -98,6 +103,7 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
+                ...appEnv,
                 QUEUE_URL: props.ingestionQueue.queueUrl,
                 CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
             },
@@ -136,6 +142,7 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
+                ...appEnv,
                 JOBLIB_TEMP_FOLDER: '/tmp',
                 ...modelRegistryEnv,
                 // API keys for hosted embedding providers (voyage/openai model types).
@@ -157,6 +164,7 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
+                ...appEnv,
                 JOBLIB_TEMP_FOLDER: '/tmp',
                 // API keys for hosted embedding providers (voyage/openai model types)
                 ...(process.env.VOYAGE_API_KEY ? { VOYAGE_API_KEY: process.env.VOYAGE_API_KEY } : {}),
@@ -175,6 +183,7 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
+                ...appEnv,
                 ZILLIZ_ENDPOINT: props.zillizEndpoint,
                 ZILLIZ_TOKEN: props.zillizToken,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
@@ -240,6 +249,7 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
+                ...appEnv,
                 ZILLIZ_ENDPOINT: props.zillizEndpoint,
                 ZILLIZ_TOKEN: props.zillizToken,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
@@ -271,6 +281,7 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
+                ...appEnv,
                 CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
                 NOTES_EMBEDDING_STATUS_INDEX,
                 ...modelRegistryEnv,
@@ -312,6 +323,7 @@ export class LambdaStack extends cdk.Stack {
             timeout: cdk.Duration.seconds(900),
             architecture: lambda.Architecture.X86_64,
             environment: {
+                ...appEnv,
                 ZILLIZ_ENDPOINT: props.zillizEndpoint,
                 ZILLIZ_TOKEN: props.zillizToken,
                 CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,

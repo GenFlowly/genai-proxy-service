@@ -11,9 +11,10 @@ from handlers.http_metrics import track_http_status
 
 # Trigger build - separated ECR repos
 
-setup_logging("encoding-server")
+from services.content_logging import LOG_USER_CONTENT, default_log_level
+
+setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 # We initialize these inside the handler to prevent INIT phase credential timeouts 
 # if the environment is missing AWS_REGION.
@@ -42,7 +43,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Adopt the caller's X-Request-Id (or mint one) and carry it through
         # SQS/Step Functions via the state payload for end-to-end correlation
         request_id = set_request_id(request_id_from_lambda_event(event))
-        logger.info(f"Received event: {json.dumps(event)}")
+        # The raw event carries the user's content and the Authorization
+        # header — full dump is dev-only; production logs the shape.
+        if LOG_USER_CONTENT:
+            logger.info(f"Received event: {json.dumps(event)}")
+        else:
+            logger.info("Received event — keys=%s", sorted(event.keys()))
         
         # Initialize AWS clients inside the handler so they don't block the INIT phase
         global sqs, auth_service

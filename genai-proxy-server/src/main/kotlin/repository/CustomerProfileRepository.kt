@@ -1,6 +1,7 @@
 package com.genflowly.repository
 
 import com.genflowly.DynamoDBConstants
+import com.genflowly.utils.LogSanitize
 import com.genflowly.DynamoDBConstants.CLIENT_SORT_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_PREFERENCES_TABLE
@@ -168,7 +169,7 @@ class CustomerProfileRepository(
                     }
                     item = updatedItem
                 } catch (e: Exception) {
-                    logger.error("Failed to lazy generate username for $sub", e)
+                    logger.error("Failed to lazy generate username for ${LogSanitize.sub(sub)}", e)
                 }
             }
 

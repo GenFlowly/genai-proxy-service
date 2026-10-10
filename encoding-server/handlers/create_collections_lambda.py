@@ -14,9 +14,10 @@ from services.authorization_service import AuthorizationService
 from encoding_library.observability import request_id_from_lambda_event, set_request_id, setup_logging, track
 from handlers.http_metrics import track_http_status
 
-setup_logging("encoding-server")
+from services.content_logging import LOG_USER_CONTENT, default_log_level
+
+setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 auth_service = None
 
@@ -29,7 +30,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         set_request_id(request_id_from_lambda_event(event))
-        logger.info(f"Received create collections request: {json.dumps(event)}")
+        # The raw event carries the Authorization header — full dump is
+        # dev-only; production logs the shape.
+        if LOG_USER_CONTENT:
+            logger.info(f"Received create collections request: {json.dumps(event)}")
+        else:
+            logger.info("Received create collections request — keys=%s", sorted(event.keys()))
         
         global auth_service
         if auth_service is None:

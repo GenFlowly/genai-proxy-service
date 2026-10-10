@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from langgraph.graph import END, StateGraph
 
+from content_logging import LOG_USER_CONTENT
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.instruction_loader import get_instruction_text
@@ -221,19 +222,22 @@ async def retrieve(req: RetrieveRequest):
     creds_keys = list(req.llm_credentials.keys())
     logger.info(
         "Incoming /retrieve — customer=%s client=%s provider=%s stream=%s agentic=%s "
-        "query='%s' credential_keys=%s has_system_prompt=%s system_prompt_len=%d "
-        "system_prompt=%r",
+        "credential_keys=%s has_system_prompt=%s system_prompt_len=%d",
         req.customer_id,
         req.client,
         req.llm_provider,
         req.stream,
         req.agentic,
-        req.raw_data.query_data[:80],
         creds_keys,
         bool(req.system_prompt),
         len(req.system_prompt) if req.system_prompt else 0,
-        req.system_prompt,
     )
+    if LOG_USER_CONTENT:
+        logger.info(
+            "Incoming /retrieve content — query='%s' system_prompt=%r",
+            req.raw_data.query_data[:80],
+            req.system_prompt,
+        )
 
     if req.response_schema and req.tools:
         raise HTTPException(

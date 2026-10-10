@@ -5,6 +5,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from content_logging import LOG_USER_CONTENT
 from encoding_library.observability import count, observe
 from graph.credentials import credentials_for
 from graph.llm_factory import get_llm
@@ -139,8 +140,9 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
             messages.append(HumanMessage(content=current_content))
 
         logger.info("Node %s (reflection): calling LLM model=%s", node_type, effective_model)
-        for idx, m in enumerate(messages):
-            logger.info("Node %s - Message %d [%s]:\n%s\n---", node_type, idx, type(m).__name__, _content_summary(m.content))
+        if LOG_USER_CONTENT:
+            for idx, m in enumerate(messages):
+                logger.info("Node %s - Message %d [%s]:\n%s\n---", node_type, idx, type(m).__name__, _content_summary(m.content))
 
         llm_start = time.perf_counter()
         try:
@@ -159,7 +161,8 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
         count("llm_request_total", status="ok", vendor=provider, model=effective_model,
               source=request_source, operation=node_type.lower())
         observe("llm_request_duration_seconds", time.perf_counter() - llm_start, vendor=provider)
-        logger.info("Node %s - Received Response:\n%s\n---", node_type, response.content)
+        if LOG_USER_CONTENT:
+            logger.info("Node %s - Received Response:\n%s\n---", node_type, response.content)
 
         meta = getattr(response, "usage_metadata", None) or {}
         usage = {

@@ -19,9 +19,10 @@ from encoding_library.utils.voyage_batch import (
 
 from encoding_library.observability import setup_logging, track
 
-setup_logging("encoding-server")
+from services.content_logging import default_log_level
+
+setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 CUSTOMER_NOTES_TABLE = os.environ.get("CUSTOMER_NOTES_TABLE", "CustomerNotes")
 NOTES_STATUS_INDEX = os.environ.get("NOTES_EMBEDDING_STATUS_INDEX", "embedding-status-index")

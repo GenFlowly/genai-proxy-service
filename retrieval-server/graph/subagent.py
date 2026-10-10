@@ -26,6 +26,8 @@ import logging
 
 from langgraph.graph import END, StateGraph
 
+from content_logging import redact
+
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -215,7 +217,7 @@ async def run_subagent(
     recursion_limit = int(profile.get("max_iterations") or _DEFAULT_CHILD_MAX_ITERATIONS)
     logger.info(
         "Subagent '%s' START — depth=%d tools=%s prompt='%s'",
-        profile.get("name"), depth, tools, prompt[:120],
+        profile.get("name"), depth, tools, redact(prompt, 120),
     )
     try:
         result = await _get_child_graph().ainvoke(

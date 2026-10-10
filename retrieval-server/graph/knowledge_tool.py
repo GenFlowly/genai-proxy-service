@@ -19,6 +19,7 @@ server-held connection the RETRIEVAL node uses, not a caller credential.
 """
 import logging
 
+from content_logging import redact
 from graph_tools.base import GraphTool, ToolContext, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,7 @@ class SearchKnowledgeBaseTool(GraphTool):
 
         logger.info(
             "search_knowledge_base: customer=%s top_k=%d min_score=%.2f query='%s'",
-            context.customer_id, top_k, min_score, query[:100],
+            context.customer_id, top_k, min_score, redact(query, 100),
         )
         # Imported here, not at module top: pulls in pymilvus + the embedding
         # stack, which registry construction (and the graph_tools-only unit

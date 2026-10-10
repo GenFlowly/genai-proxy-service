@@ -214,6 +214,24 @@ All services follow ONE set of metric-naming and dimension conventions, pinned h
 
 Dashboard JSONs live in `observability/grafana/`. All charts share a global status color scheme (green = success/2xx, yellow = warnings, red = errors/4xx/5xx) defined once in `observability/grafana/color-scheme.json` and stamped into every panel by `apply_color_scheme.py` — see the README there; never hand-edit colors in the dashboard JSONs.
 
+### Logging policy — production logs problems only, never user content
+
+Two independent layers keep production logs clean. Both key off `APP_ENV`: set in each Fly service's toml (`production` in `fly.production.toml`, `development` in `fly.toml`) and stamped on every encoding lambda by the CDK stacks from the deploy `STAGE`; unset — e.g. a local machine — means development.
+
+1. **Level.** Production emits WARN/WARNING and above only; development logs the full INFO narrative (per-node traces, prompts, responses). Wiring:
+   - **Kotlin proxy**: logback levels are `${LOG_LEVEL:-INFO}`; `fly.production.toml` sets `LOG_LEVEL=WARN`.
+   - **retrieval-server**: `app.py` derives the level from `APP_ENV` (production → WARNING); an explicit `LOG_LEVEL` env var overrides it — e.g. a temporary INFO window while debugging production, which is safe because of layer 2.
+   - **encoding-server lambdas**: every handler passes `default_log_level()` from `encoding-server/services/content_logging.py` to `setup_logging` (same WARNING/INFO/`LOG_LEVEL` semantics).
+2. **Content gate (defense in depth).** Lines carrying user content — prompts, system prompts/instructions, LLM responses, memories, queries, request payloads, raw lambda events — are *additionally* gated per environment, so content cannot leak even when production runs at INFO: Python `content_logging.py` in each service (`if LOG_USER_CONTENT:` for whole-line dumps, `redact(value, limit)` for a single field), Kotlin `logContent = !appConfig.isProduction` threaded to where it's needed (see `Routing.kt`, `di/Modules.kt`).
+
+Rules for every log line you add:
+
+- **Never log PII or message content at any level** — emails, names, user/AI message text, tool payloads, API keys. ERROR lines included: if an error needs a content snippet to be debuggable, wrap it in `redact()` (Python) or gate it on `logContent` (Kotlin).
+- **IDs are the correlators** — `customerId`, `conversationId`, `messageId`, `request_id` are fine at any level; ids + counts + error text is how production issues are traced (search `request_id:<id>`, see Request-id propagation below).
+- **Auth subs are masked in production** — a sub is a pseudonymous *user* identifier, one step closer to a person than a customerId. In any WARN/ERROR line (they survive the production level cut), pass it through `LogSanitize.sub(...)` (Kotlin) or `mask_sub(...)` (lambdas) — production then shows `auth0|ab…`.
+- **Write WARN/ERROR lines to stand alone** without the surrounding INFO story — in production they are all you get.
+- INFO lines are dev-only by construction, but still gate any that embed user content: they must stay safe under a temporary `LOG_LEVEL=INFO` in production.
+
 ### API metrics & dashboards (proxy server)
 
 Every proxy API automatically emits success/failure and latency metrics — the `MicrometerMetrics` plugin records each request on the `ktor_http_server_requests_seconds` timer with `route`, `method` and `status` labels (counts + duration histogram buckets). Nothing needs to be emitted by hand for a new route.

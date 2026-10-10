@@ -7,6 +7,9 @@ primary_region = "iad"
 
 [env]
   PORT = "5001"
+  # Dev logs everything: INFO level + user content (prompts, responses,
+  # memories) — see app.py and content_logging.py
+  APP_ENV = "development"
 
 # Dev only (prod uses fly.production.toml): traffic arrives via Flycast
 # (http://<app-name>.flycast, port 80) so fly-proxy can auto stop/start the
