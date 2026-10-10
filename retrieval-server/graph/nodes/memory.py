@@ -108,6 +108,13 @@ def memory(node_id: Optional[str] = None):
 
         block = _render_block(memories, max_memories)
         if not block:
+            # Logged so "ran but had nothing to inject" is distinguishable from
+            # the node not running at all (e.g. on the non-streaming path,
+            # which has no per-node START/END logging).
+            logger.info(
+                "Node memory: nothing to inject for customer=%s — %d CORE memori(es) loaded, max_memories=%d",
+                state["customer_id"], len(memories), max_memories,
+            )
             return {}
         logger.info(
             "Node memory: injecting %d memori(es) for customer=%s",

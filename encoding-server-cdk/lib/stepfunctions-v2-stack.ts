@@ -94,6 +94,8 @@ export class StepFunctionsV2Stack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
             environment: {
                 STATE_MACHINE_ARN: this.processingStateMachine.stateMachineArn,
+                // Log level + content gating — see genai-proxy-server/development.md
+                APP_ENV: props.stage === STAGES.PROD ? 'production' : 'development',
             },
         });
 

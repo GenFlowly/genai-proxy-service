@@ -6,9 +6,10 @@ from encoding_library.models.memory_request_internal_state import MemoryRequestI
 from encoding_library.observability import count, set_request_id, setup_logging, track
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 
-setup_logging("encoding-server")
+from services.content_logging import default_log_level
+
+setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 
 @track("create_embeddings")

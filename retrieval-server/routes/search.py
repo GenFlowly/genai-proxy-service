@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from content_logging import redact
 from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
@@ -86,7 +87,7 @@ async def search(req: SearchRequest):
     wanted_types = {t.strip().lower() for t in req.types} if req.types else None
     logger.info(
         "Unified search — customer=%s types=%s query='%s'",
-        req.customer_id, sorted(wanted_types) if wanted_types else "all", req.query[:100],
+        req.customer_id, sorted(wanted_types) if wanted_types else "all", redact(req.query, 100),
     )
 
     try:

@@ -24,6 +24,8 @@ Setup is already done once in `app.py` — `configure_observability(service="ret
 
 **Request id**: the middleware in `app.py` adopts the proxy's `X-Request-Id` (or mints one) and binds it to the logging contextvar, so every log line of a request carries `request_id` automatically — nothing to do per-module.
 
+**Production logs problems only — and never user content.** Two layers, both keyed off `APP_ENV` (`production` in `fly.production.toml`; the dev Fly app and local machines are development). (1) Level: `app.py` sets WARNING+ in production, INFO in development; an explicit `LOG_LEVEL` env var overrides. (2) Content gate: lines carrying user content — prompts, system prompts/instructions, LLM responses, memories, queries — are gated by `content_logging.py`: wrap whole-line dumps in `if LOG_USER_CONTENT:` and single content fields in `redact(value, limit)`. The gate is independent of level, so content stays out of production logs even under a temporary `LOG_LEVEL=INFO`. When adding a log line, ask: could this contain something a user typed or the model generated for them? If yes, gate it — and never log emails or names at any level. Repo-wide policy: `genai-proxy-server/development.md` → "Logging policy".
+
 ## Third-party calls: retry with exponential backoff
 
 Every outbound call to a third-party API MUST go through `encoding_library.utils.retry` (`@retry`, `retry_call`, or a `RetryingProxy`-wrapped client). Each retry emits `retry_attempt_total{operation}`; giving up emits `retry_exhausted_total{operation}`.

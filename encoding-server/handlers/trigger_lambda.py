@@ -8,9 +8,10 @@ from encoding_library.observability import set_request_id, setup_logging, track
 
 # Trigger build - separated ECR repos
 
-setup_logging("encoding-server")
+from services.content_logging import default_log_level
+
+setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 sfn = boto3.client('stepfunctions')
 STATE_MACHINE_ARN = os.environ.get('STATE_MACHINE_ARN')

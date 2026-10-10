@@ -9,6 +9,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
+from content_logging import LOG_USER_CONTENT, redact
 from encoding_library.observability import count, observe
 from graph.credentials import credentials_for, resolve_credentials
 from graph.llm_factory import THINKING_LEVELS, get_llm
@@ -991,8 +992,9 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             "Node %s: calling LLM, format=%s model=%s caching=%s query_images=%d",
             agent_type, response_format, effective_model, cache_anthropic, len(query_image_blocks),
         )
-        for idx, m in enumerate(messages):
-            logger.info("Node %s - Message %d [%s]:\n%s\n---", agent_type, idx, type(m).__name__, _content_summary(m.content))
+        if LOG_USER_CONTENT:
+            for idx, m in enumerate(messages):
+                logger.info("Node %s - Message %d [%s]:\n%s\n---", agent_type, idx, type(m).__name__, _content_summary(m.content))
 
         parsed = None
         parsing_error = None
@@ -1012,8 +1014,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 response, parsed, parsing_error = await _invoke_llm(llm, structured_llm, messages)
             if response_schema:
                 logger.info("Node %s - Received structured response: parsed=%s error=%s", agent_type, parsed is not None, parsing_error)
-            else:
+            elif LOG_USER_CONTENT:
                 logger.info("Node %s - Received Response:\n%s\n---", agent_type, response.content)
+            else:
+                logger.info("Node %s - Received response", agent_type)
         except Exception:
             count("llm_request_total", status="error", vendor=provider, model=effective_model,
                   source=request_source, operation=agent_type.lower())
@@ -1079,7 +1083,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 result.update(_trace_entry(agent_type, rendered_input, content))
                 return result
             except json.JSONDecodeError:
-                logger.error("Node %s: expected JSON, got: %s", agent_type, _get_text(response.content)[:200])
+                logger.error("Node %s: expected JSON, got: %s", agent_type, redact(_get_text(response.content), 200))
                 return {"usage": usage, **_trace_entry(agent_type, rendered_input, _get_text(response.content))}
 
         if response_format == "json_indices":
@@ -1094,7 +1098,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 return {**_route_output(output_key, reordered), "usage": usage,
                         **_trace_entry(agent_type, rendered_input, content)}
             except (json.JSONDecodeError, TypeError, ValueError):
-                logger.error("Node %s: expected index array, got: %s — using original order", agent_type, _get_text(response.content)[:200])
+                logger.error("Node %s: expected index array, got: %s — using original order", agent_type, redact(_get_text(response.content), 200))
                 return {**_route_output(output_key, source), "usage": usage,
                         **_trace_entry(agent_type, rendered_input, _get_text(response.content))}
 

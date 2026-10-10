@@ -8,9 +8,10 @@ from encoding_library.models.memory_request_internal_state import MemoryRequestI
 from encoding_library.observability import count, set_request_id, setup_logging, track
 from encoding_library.utils.vector_db import get_milvus_client
 
-setup_logging("encoding-server")
+from services.content_logging import default_log_level
+
+setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 
 @track("vector_store")

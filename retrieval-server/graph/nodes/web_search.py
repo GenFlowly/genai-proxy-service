@@ -3,6 +3,7 @@ import os
 
 import httpx
 
+from content_logging import redact
 from encoding_library.observability import count, track
 from encoding_library.utils.retry import is_transient_http_error, retry
 from graph.state import RetrievalState
@@ -66,7 +67,7 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
     customer_id = state["customer_id"]
     logger.info(
         "Node web_search: START — customer=%s focused=%s query='%s'",
-        customer_id, bool(focused_query), query[:100],
+        customer_id, bool(focused_query), redact(query, 100),
     )
 
     api_key = config.get("api_key") or os.getenv("TAVILY_API_KEY")

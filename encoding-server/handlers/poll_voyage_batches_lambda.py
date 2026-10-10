@@ -16,9 +16,10 @@ from handlers.voyage_batch_store import store_batch_results
 
 from encoding_library.observability import setup_logging, track
 
-setup_logging("encoding-server")
+from services.content_logging import default_log_level
+
+setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 DOCUMENTS_BUCKET = os.environ.get("DOCUMENTS_BUCKET")
 VOYAGE_BATCH_TABLE = os.environ.get("VOYAGE_BATCH_TABLE", "VoyageBatchJobs")

@@ -67,7 +67,17 @@ except Exception:
     )
 
 configure_observability(service="retrieval-server", backend="prometheus")
-setup_logging("retrieval-server")
+# Production logs problems only (WARNING+); development logs the full INFO
+# narrative. An explicit LOG_LEVEL env var overrides either — safe even as a
+# temporary INFO window in production, because user content is independently
+# gated by content_logging.py.
+_IS_PRODUCTION = (os.getenv("APP_ENV") or "development").strip().lower() == "production"
+LOG_LEVEL = getattr(
+    logging,
+    (os.getenv("LOG_LEVEL") or ("WARNING" if _IS_PRODUCTION else "INFO")).strip().upper(),
+    logging.INFO,
+)
+setup_logging("retrieval-server", level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 
@@ -134,5 +144,7 @@ if __name__ == "__main__":
     # while proxy traffic (IPv6 via .internal) worked. One socket, both
     # families.
     sock = socket.create_server(("", port), family=socket.AF_INET6, dualstack_ipv6=True)
-    uvicorn.run(app, fd=sock.fileno())
+    # Same level for uvicorn's own loggers — silences per-request access lines
+    # (incl. /health polling) in production.
+    uvicorn.run(app, fd=sock.fileno(), log_level=LOG_LEVEL)
 

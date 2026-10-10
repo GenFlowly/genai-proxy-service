@@ -239,8 +239,16 @@ fun Application.configureRouting(
             call.respondText(scalarDocsHtml, ContentType.Text.Html)
         }
 
-        registerGenerateTextRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
-        registerGenerateTextStreamRoutes(generationOrchestrator, customerProfileService, exchangeSideEffects)
+        // Request payloads carry user content (prompts, tool results) — logged
+        // outside production only, same convention as MemoryExtractionService.
+        registerGenerateTextRoutes(
+            generationOrchestrator, customerProfileService, exchangeSideEffects,
+            logContent = !appConfig.isProduction
+        )
+        registerGenerateTextStreamRoutes(
+            generationOrchestrator, customerProfileService, exchangeSideEffects,
+            logContent = !appConfig.isProduction
+        )
         registerCancelGenerationRoute(generationOrchestrator, customerProfileService)
         registerRunRoutes(runsClient, customerProfileService, conversationService)
         registerStoreApiKeyRoutes(customerCredentialsService, customerProfileService)

@@ -4,6 +4,8 @@ import json
 import logging
 from typing import Dict, Any, Tuple, Optional
 
+from services.content_logging import mask_sub
+
 logger = logging.getLogger()
 
 class AuthorizationService:
@@ -55,7 +57,7 @@ class AuthorizationService:
             )
             
             if not response.get('Items'):
-                logger.warning(f"User {user_sub} not found in CustomerProfile table")
+                logger.warning(f"User {mask_sub(user_sub)} not found in CustomerProfile table")
                 return False, None, {
                     'statusCode': 403,
                     'headers': {
@@ -71,7 +73,7 @@ class AuthorizationService:
             customer_id = item.get('customerId')
             
             if not customer_id:
-                logger.error(f"User {user_sub} found but missing customerId")
+                logger.error(f"User {mask_sub(user_sub)} found but missing customerId")
                 return False, None, {
                     'statusCode': 500,
                     'headers': {
@@ -81,7 +83,7 @@ class AuthorizationService:
                     'body': json.dumps({'error': 'Internal Server Error: Invalid user profile'})
                 }
                 
-            logger.info(f"User {user_sub} authorized with customerId: {customer_id}")
+            logger.info(f"User {mask_sub(user_sub)} authorized with customerId: {customer_id}")
             return True, customer_id, None
             
         except Exception as e:

@@ -10,9 +10,10 @@ from encoding_library.observability import set_request_id, setup_logging, track
 from encoding_library.utils.embedding_utils import create_chunks, get_embedding_model
 from encoding_library.utils.model_registry import get_chunking_params
 
-setup_logging("encoding-server")
+from services.content_logging import default_log_level
+
+setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 BATCH_SIZE = int(os.environ.get('BATCH_SIZE', 25))
 
