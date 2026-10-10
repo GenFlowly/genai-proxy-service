@@ -232,7 +232,8 @@ class ConversationRepository(
                 .build()
 
             dynamoDbClient.updateItem(updateReq)
-            logger.info("Updated title for conversation $conversationId to '$title'")
+            // Title text is derived from the user's conversation — id only.
+            logger.info("Updated title for conversation $conversationId")
         } catch (e: Exception) {
             logger.error("Failed to update conversation title in DynamoDB", e)
         }

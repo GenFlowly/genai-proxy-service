@@ -24,7 +24,9 @@ private val logger = LoggerFactory.getLogger("GenerateTextRoute")
 fun Route.registerGenerateTextRoutes(
     generationOrchestrator: GenerationOrchestrator,
     customerProfileService: CustomerProfileService,
-    exchangeSideEffects: ExchangeSideEffects
+    exchangeSideEffects: ExchangeSideEffects,
+    /** Log request payloads (user content) — off in production, see Routing.kt. */
+    logContent: Boolean = false
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT, {
@@ -91,10 +93,15 @@ fun Route.registerGenerateTextRoutes(
                 }
 
                 logger.info(
-                    "Received GenerateText request from customerId {} : {}",
-                    customerId,
-                    request.toString()
+                    "Received GenerateText request from customerId {} — client={} conversationId={} " +
+                            "agentic={} vendors={} tools={} toolResults={} attachments={} agentId={}",
+                    customerId, request.client, request.conversationId, request.agentic,
+                    request.aiConfig.map { it.aiVendor }, request.tools.size,
+                    request.toolResults.size, request.prompt.attachments.size, request.agentId
                 )
+                if (logContent) {
+                    logger.info("GenerateText request payload: {}", request)
+                }
 
 
                 val responseMessageList = generationOrchestrator

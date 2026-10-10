@@ -7,6 +7,10 @@ primary_region = "iad"
 
 [env]
   PORT = "5001"
+  # Production logging: WARNING+ only (app.py derives the level from APP_ENV;
+  # LOG_LEVEL env overrides), and user-content logging (prompts, responses,
+  # memories) is disabled regardless of level — see content_logging.py.
+  APP_ENV = "production"
 
 # No http_service section means this app won't be exposed to the public internet.
 # It will be accessible internally via `http://<app-name>.internal:5001`

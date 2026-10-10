@@ -4,6 +4,7 @@ import com.genflowly.Routes
 import com.genflowly.config.AppConfig
 import com.genflowly.models.api.OnboardCustomerResponse
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.utils.LogSanitize
 import com.genflowly.utils.authenticatedAzp
 import com.genflowly.utils.authenticatedSub
 import io.github.smiley4.ktoropenapi.post
@@ -50,7 +51,10 @@ fun Route.registerOnboardCustomerRoutes(
             // caller must not be able to onboard (or read) another sub's profile.
             val tokenSub = call.authenticatedSub()
             if (tokenSub == null || tokenSub != request.sub) {
-                logger.warn("Onboarding sub mismatch: body sub={} token sub={}", request.sub, tokenSub)
+                logger.warn(
+                    "Onboarding sub mismatch: body sub={} token sub={}",
+                    LogSanitize.sub(request.sub), LogSanitize.sub(tokenSub)
+                )
                 call.respond(HttpStatusCode.Forbidden, mapOf("error" to "sub does not match token"))
                 return@post
             }
@@ -66,7 +70,10 @@ fun Route.registerOnboardCustomerRoutes(
             if (client == AppConfig.CLIENT_ADMIN_PANEL) {
                 val emailDomain = request.email?.substringAfterLast('@', "")?.lowercase()
                 if (emailDomain != appConfig.adminEmailDomain) {
-                    logger.warn("Rejected admin-panel onboarding for email {}", request.email ?: "not provided")
+                    // Email is PII — production logs only the (failing) domain.
+                    val rejected = if (appConfig.isProduction) "domain=${emailDomain ?: "none"}"
+                                   else (request.email ?: "not provided")
+                    logger.warn("Rejected admin-panel onboarding for {}", rejected)
                     call.respond(
                         HttpStatusCode.Forbidden,
                         mapOf("error" to "Admin panel requires a @${appConfig.adminEmailDomain} account")

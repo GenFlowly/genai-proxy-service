@@ -3,6 +3,7 @@ from typing import Any
 
 from pymilvus import MilvusClient
 
+from content_logging import redact
 from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
@@ -82,7 +83,7 @@ async def _retrieval(state: RetrievalState, node_id: str | None) -> dict:
 async def _retrieval_impl(state: RetrievalState, node_id: str | None) -> dict:
     query = state.get("rewritten_query") or state["original_query"]
     customer_id = state["customer_id"]
-    logger.info("Node retrieval: START — customer=%s query='%s'", customer_id, query[:100])
+    logger.info("Node retrieval: START — customer=%s query='%s'", customer_id, redact(query, 100))
 
     configs = state.get("node_configs", {})
     config = (configs.get(node_id) if node_id else None) or configs.get("RETRIEVAL", {})

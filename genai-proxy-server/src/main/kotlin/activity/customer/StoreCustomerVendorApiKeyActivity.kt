@@ -47,7 +47,8 @@ fun Route.registerStoreApiKeyRoutes(
                 customerProfileService
             )
             
-            logger.info("Received SaveApiKeyRequest from customerId {}: {}", customerId, request)
+            // Never log the request itself — it carries the plaintext API key.
+            logger.info("Received SaveApiKeyRequest from customerId {} for vendor {}", customerId, request.aiVendor)
 
             val aiVendor = com.genflowly.models.AIVendor.valueOf(request.aiVendor)
 
