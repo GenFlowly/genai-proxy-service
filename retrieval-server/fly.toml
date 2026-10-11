@@ -22,6 +22,18 @@ primary_region = "iad"
   auto_start_machines = true
   min_machines_running = 0
 
+# Machine-level health check: `fly deploy` won't call a running machine good
+# until /health answers, so an image that can't boot fails the deploy (red CI
+# run) instead of shipping green.
+[checks]
+  [checks.health]
+    type = "http"
+    port = 5001
+    path = "/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
+
 # Fly's org-level Prometheus scrapes /metrics over the private network —
 # the app stays internal-only. Dashboards: fly-metrics.net / Grafana Cloud.
 [metrics]
