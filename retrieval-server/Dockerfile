@@ -12,6 +12,7 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 COPY app.py .
+COPY content_logging.py .
 COPY durable_runtime.py .
 COPY run_events.py .
 COPY runs.py .
