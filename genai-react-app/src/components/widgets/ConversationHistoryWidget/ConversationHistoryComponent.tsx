@@ -10,12 +10,16 @@ import {
     archiveConversation,
     pinConversation,
     unpinConversation,
+    getProjects,
+    createProject,
+    assignConversationToProject,
+    unassignConversationFromProject,
 } from '../../../services/conversationHistoryService'
-import { ConversationSummary } from '../../../models/conversationHistory.models'
+import { ConversationSummary, Project } from '../../../models/conversationHistory.models'
 import { CollapsedVendorBrandName } from '../../common/BrandName/BrandName'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
-import { SidebarListPanel, SidebarListGroup, SidebarListLoadMore } from '@genflowly/component-library'
+import { SidebarListPanel, SidebarListGroup, SidebarListLoadMore, Modal, InputTextWithHint } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
 import { loadHistoryCache, saveHistoryCache, getExpandedProject, setExpandedProject } from './historyCache'
@@ -49,6 +53,14 @@ export default function ConversationHistoryComponent() {
     const [isLoading, setIsLoading] = useState(false)
     const [hasMore, setHasMore] = useState(!!cached?.hasMore)
     const [error, setError] = useState(false)
+    const [projects, setProjects] = useState<Project[]>(cached?.projects ?? [])
+
+    // Project dialogs: the create form, and the conversation a
+    // "Move to project" picker is currently open for
+    const [isCreateProjectOpen, setCreateProjectOpen] = useState(false)
+    const [newProjectName, setNewProjectName] = useState('')
+    const [isCreatingProject, setIsCreatingProject] = useState(false)
+    const [moveTarget, setMoveTarget] = useState<ConversationSummary | null>(null)
 
     // Only persist state to the cache once a real load has happened, so an
     // empty "never loaded" state can't masquerade as "no conversations"
@@ -86,18 +98,33 @@ export default function ConversationHistoryComponent() {
         }
     }, [isAuthenticated, getAccessTokenSilently])
 
+    // The user's projects; they render in the Projects section even while
+    // empty, so a project is visible from the moment it is created
+    const fetchProjects = useCallback(async () => {
+        if (!isAuthenticated) return
+        try {
+            const token = await getAccessTokenSilently()
+            const resp = await getProjects(token)
+            setProjects(resp.projects)
+        } catch {
+            // Keep whatever projects state we already have; a failed projects
+            // refresh must not take down the history list
+        }
+    }, [isAuthenticated, getAccessTokenSilently])
+
     // Load first page on mount / auth change (background refresh when cached)
     useEffect(() => {
         fetchPage(null)
         fetchPinned()
-    }, [fetchPage, fetchPinned])
+        fetchProjects()
+    }, [fetchPage, fetchPinned, fetchProjects])
 
     // Mirror every loaded/mutated state (fetch, archive, pin, title patch) to
     // the cache so the next mount paints instantly
     useEffect(() => {
         if (!hasLoadedRef.current) return
-        saveHistoryCache(customerId, { items, pinned, lastKey, hasMore })
-    }, [customerId, items, pinned, lastKey, hasMore])
+        saveHistoryCache(customerId, { items, pinned, lastKey, hasMore, projects })
+    }, [customerId, items, pinned, lastKey, hasMore, projects])
 
     // Patch title in list when the active conversation gets a generated title
     useEffect(() => {
@@ -187,6 +214,69 @@ export default function ConversationHistoryComponent() {
         }
     }
 
+    // ─── Projects ────────────────────────────────────────────────────────────
+
+    const applyProjectLocally = (convId: string, projectId: string | null, projectName: string | null) => {
+        const patch = (c: ConversationSummary) =>
+            c.conversationId === convId ? { ...c, projectId, projectName } : c
+        setItems(prev => prev.map(patch))
+        setPinned(prev => prev.map(patch))
+    }
+
+    const handleCreateProject = async () => {
+        const name = newProjectName.trim()
+        if (!name || isCreatingProject) return
+        setIsCreatingProject(true)
+        try {
+            const token = await getAccessTokenSilently()
+            const project = await createProject(token, name)
+            // The server lists most-recently-updated first, so prepend
+            setProjects(prev => [project, ...prev])
+            setExpandedProject(project.projectId, true)
+            setCreateProjectOpen(false)
+            setNewProjectName('')
+            showToast(t('conversation.conversationHistory.projectCreated'))
+        } catch (err) {
+            console.error('Failed to create project:', err)
+            showToast(t('conversation.conversationHistory.createProjectFailed'))
+        } finally {
+            setIsCreatingProject(false)
+        }
+    }
+
+    const handleMoveToProject = async (conv: ConversationSummary, project: Project) => {
+        setMoveTarget(null)
+        const previous = { projectId: conv.projectId ?? null, projectName: conv.projectName ?? null }
+        // Optimistic: regroup immediately; assign overwrites any previous
+        // assignment server-side, so this is also the move-between-projects path
+        applyProjectLocally(conv.conversationId, project.projectId, project.name)
+        setExpandedProject(project.projectId, true)
+        try {
+            const token = await getAccessTokenSilently()
+            await assignConversationToProject(token, conv.conversationId, project.projectId)
+            showToast(t('conversation.conversationHistory.movedToProject', { name: project.name }))
+        } catch (err) {
+            console.error('Failed to move conversation to project:', err)
+            applyProjectLocally(conv.conversationId, previous.projectId, previous.projectName)
+            showToast(t('conversation.conversationHistory.moveToProjectFailed'))
+        }
+    }
+
+    const handleRemoveFromProject = async (conv: ConversationSummary) => {
+        setMoveTarget(null)
+        const previous = { projectId: conv.projectId ?? null, projectName: conv.projectName ?? null }
+        applyProjectLocally(conv.conversationId, null, null)
+        try {
+            const token = await getAccessTokenSilently()
+            await unassignConversationFromProject(token, conv.conversationId)
+            showToast(t('conversation.conversationHistory.removedFromProject'))
+        } catch (err) {
+            console.error('Failed to remove conversation from project:', err)
+            applyProjectLocally(conv.conversationId, previous.projectId, previous.projectName)
+            showToast(t('conversation.conversationHistory.removeFromProjectFailed'))
+        }
+    }
+
     // Pinned conversations render only in a Pinned section (global or their
     // project's), never in a Recent section, even though they stay in `items`
     const pinnedIds = useMemo(() => new Set(pinned.map(c => c.conversationId)), [pinned])
@@ -199,8 +289,13 @@ export default function ConversationHistoryComponent() {
     // the Projects section; the rest fall through to the global sections.
     // Projects keep first-appearance order (pinned before recent, each list
     // already sorted by the server)
-    const { projects, globalPinned, globalRecent } = useMemo(() => {
+    const { projectBuckets, globalPinned, globalRecent } = useMemo(() => {
         const buckets = new Map<string, ProjectBucket>()
+        // Every project the user owns gets an entry up front, so freshly
+        // created and empty projects are visible; conversations fill them in
+        for (const project of projects) {
+            buckets.set(project.projectId, { id: project.projectId, name: project.name, pinned: [], recent: [] })
+        }
         const bucketFor = (conv: ConversationSummary, projectId: string) => {
             let bucket = buckets.get(projectId)
             if (!bucket) {
@@ -219,8 +314,8 @@ export default function ConversationHistoryComponent() {
             if (conv.projectId) bucketFor(conv, conv.projectId).recent.push(conv)
             else globalRecent.push(conv)
         }
-        return { projects: Array.from(buckets.values()), globalPinned, globalRecent }
-    }, [pinned, recentItems])
+        return { projectBuckets: Array.from(buckets.values()), globalPinned, globalRecent }
+    }, [pinned, recentItems, projects])
 
     const isToday = (value: string) => {
         const d = parseServerDate(value)
@@ -262,6 +357,16 @@ export default function ConversationHistoryComponent() {
             onSelect: () => handleNavigate(conv.conversationId),
             testId: `conv-history-item-${conv.conversationId}`,
             actions: [
+                {
+                    icon: <Icon src={ICONS.FOLDER} size={14} aria-hidden={true} />,
+                    label: t('conversation.conversationHistory.moveToProject'),
+                    onClick: (e: React.MouseEvent) => {
+                        e.stopPropagation()
+                        setMoveTarget(conv)
+                    },
+                    revealOnHover: true,
+                    testId: `conv-move-btn-${conv.conversationId}`,
+                },
                 {
                     icon: <Icon src={isPinned ? ICONS.PIN_OFF : ICONS.PIN} size={14} aria-hidden={true} />,
                     label: isPinned
@@ -315,14 +420,34 @@ export default function ConversationHistoryComponent() {
         }
     }
 
-    // Projects on top, then the global Pinned and Recents sections; sections
-    // with nothing to show are omitted
+    // The Projects section renders whenever there is anything to show or the
+    // first load has settled, so projects are discoverable and creatable right
+    // from the sidebar; it only steps aside for the initial skeleton and the
+    // nothing-at-all error state
+    const hasAnyData = items.length > 0 || pinned.length > 0 || projects.length > 0
+    const showProjectsSection = hasAnyData || (!isLoading && !error)
+
+    const newProjectRow = {
+        id: 'new-project',
+        label: (
+            <span className={styles.newProjectLabel}>
+                <Icon src={ICONS.PLUS} size={12} aria-hidden={true} />
+                {t('conversation.conversationHistory.newProject')}
+            </span>
+        ),
+        onSelect: () => setCreateProjectOpen(true),
+        testId: 'conv-history-new-project',
+    }
+
+    // Projects on top, then the global Pinned and Recents sections; the
+    // global sections are omitted when empty
     const groups: SidebarListGroup[] = [
-        ...(projects.length > 0
+        ...(showProjectsSection
             ? [{
                 id: 'projects',
                 label: t('conversation.conversationHistory.projects'),
-                groups: projects.map(toProjectGroup),
+                items: [newProjectRow],
+                groups: projectBuckets.map(toProjectGroup),
             }]
             : []),
         ...(globalPinned.length > 0
@@ -342,21 +467,103 @@ export default function ConversationHistoryComponent() {
     ]
 
     return (
-        <SidebarListPanel
-            groups={groups}
-            isLoading={isLoading}
-            hasError={error}
-            errorText={t('conversation.conversationHistory.failedToLoad')}
-            emptyText={t('conversation.conversationHistory.noConversationsYet')}
-            listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
-            footer={hasMore && (
-                <SidebarListLoadMore
-                    label={isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
-                    onClick={handleLoadMore}
-                    disabled={isLoading}
-                    testId="conv-history-load-more"
-                />
-            )}
-        />
+        <>
+            <SidebarListPanel
+                groups={groups}
+                isLoading={isLoading}
+                hasError={error}
+                errorText={t('conversation.conversationHistory.failedToLoad')}
+                emptyText={t('conversation.conversationHistory.noConversationsYet')}
+                listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
+                footer={hasMore && (
+                    <SidebarListLoadMore
+                        label={isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
+                        onClick={handleLoadMore}
+                        disabled={isLoading}
+                        testId="conv-history-load-more"
+                    />
+                )}
+            />
+
+            <Modal
+                isOpen={isCreateProjectOpen}
+                onClose={() => setCreateProjectOpen(false)}
+                title={t('conversation.conversationHistory.newProjectTitle')}
+                maxWidth="26rem"
+            >
+                <form
+                    className={styles.projectForm}
+                    onSubmit={e => {
+                        e.preventDefault()
+                        handleCreateProject()
+                    }}
+                >
+                    <InputTextWithHint
+                        placeholder={t('conversation.conversationHistory.projectNamePlaceholder')}
+                        value={newProjectName}
+                        onChange={e => setNewProjectName(e.target.value)}
+                        autoFocus
+                        data-testid="new-project-name-input"
+                    />
+                    <button
+                        type="submit"
+                        className={styles.projectPrimaryBtn}
+                        disabled={!newProjectName.trim() || isCreatingProject}
+                        data-testid="new-project-create-btn"
+                    >
+                        {isCreatingProject
+                            ? t('conversation.conversationHistory.creatingProject')
+                            : t('conversation.conversationHistory.createProject')}
+                    </button>
+                </form>
+            </Modal>
+
+            <Modal
+                isOpen={moveTarget != null}
+                onClose={() => setMoveTarget(null)}
+                title={t('conversation.conversationHistory.moveToProjectTitle')}
+                maxWidth="26rem"
+            >
+                {moveTarget != null && (
+                    <div className={styles.projectPicker}>
+                        {projects.length === 0 ? (
+                            <p className={styles.pickerHint}>
+                                {t('conversation.conversationHistory.noProjectsYet')}
+                            </p>
+                        ) : (
+                            <ul className={styles.projectOptions}>
+                                {projects.map(project => (
+                                    <li key={project.projectId}>
+                                        <button
+                                            className={styles.projectOption}
+                                            onClick={() => handleMoveToProject(moveTarget, project)}
+                                            disabled={project.projectId === moveTarget.projectId}
+                                            data-testid={`move-to-project-${project.projectId}`}
+                                        >
+                                            <Icon src={ICONS.FOLDER} size={14} aria-hidden={true} />
+                                            <span className={styles.projectOptionName}>{project.name}</span>
+                                            {project.projectId === moveTarget.projectId && (
+                                                <span className={styles.projectOptionCurrent}>
+                                                    {t('conversation.conversationHistory.currentProject')}
+                                                </span>
+                                            )}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {moveTarget.projectId && (
+                            <button
+                                className={styles.projectSecondaryBtn}
+                                onClick={() => handleRemoveFromProject(moveTarget)}
+                                data-testid="remove-from-project-btn"
+                            >
+                                {t('conversation.conversationHistory.removeFromProject')}
+                            </button>
+                        )}
+                    </div>
+                )}
+            </Modal>
+        </>
     )
 }

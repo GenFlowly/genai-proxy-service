@@ -1,7 +1,12 @@
 import { HttpMethod } from '../constants/http';
 import { endpoints } from '../config/endpoints';
 import { fetchWithRetry } from '../utils/apiUtils';
-import { GetCustomerConversationsResponse, GetPinnedConversationsResponse } from '../models/conversationHistory.models';
+import {
+    GetCustomerConversationsResponse,
+    GetPinnedConversationsResponse,
+    GetProjectsResponse,
+    Project,
+} from '../models/conversationHistory.models';
 
 export const getCustomerConversations = async (
     token: string,
@@ -82,6 +87,80 @@ export const unpinConversation = async (
 
     if (!response.ok) {
         throw new Error(`Failed to unpin conversation: ${response.statusText}`);
+    }
+};
+
+export const getProjects = async (token: string): Promise<GetProjectsResponse> => {
+    const response = await fetchWithRetry(endpoints.getProjects, {
+        method: HttpMethod.GET,
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch projects: ${response.statusText}`);
+    }
+
+    return response.json();
+};
+
+export const createProject = async (
+    token: string,
+    name: string
+): Promise<Project> => {
+    const response = await fetchWithRetry(endpoints.createProject, {
+        method: HttpMethod.POST,
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to create project: ${response.statusText}`);
+    }
+
+    return response.json();
+};
+
+export const assignConversationToProject = async (
+    token: string,
+    conversationId: string,
+    projectId: string
+): Promise<void> => {
+    const response = await fetchWithRetry(
+        endpoints.assignConversationProject(conversationId, projectId),
+        {
+            method: HttpMethod.POST,
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to assign conversation to project: ${response.statusText}`);
+    }
+};
+
+export const unassignConversationFromProject = async (
+    token: string,
+    conversationId: string
+): Promise<void> => {
+    const response = await fetchWithRetry(
+        endpoints.unassignConversationProject(conversationId),
+        {
+            method: HttpMethod.POST,
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to unassign conversation from project: ${response.statusText}`);
     }
 };
 
