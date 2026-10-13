@@ -164,6 +164,14 @@ object DynamoDBConstants {
     const val MEMORY_ITEM_PREFIX = "MEM#"
     const val MEMORY_CONV_META_PREFIX = "META#CONV#"
 
+    // Customer-owned projects grouping conversations in the history sidebar.
+    // PK=customerId, SK=projectId. Conversations reference a project via a
+    // plain projectId attribute on their Conversation row (REMOVEd on project
+    // delete — deleting a project never deletes its conversations).
+    const val CUSTOMER_PROJECTS_TABLE = "CustomerProjects"
+    const val PROJECT_ID_KEY = "projectId"
+    const val PROJECT_NAME_KEY = "name"
+
     // Username reservation/lookup — PK=username; recordTypeIndex GSI supports
     // prefix search across USER records.
     const val USERNAME_LOOKUP_TABLE = "UsernameLookup"

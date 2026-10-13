@@ -152,7 +152,8 @@ class GenerationOrchestrator(
         toolResults: List<ToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         useLearnedPreferences: Boolean = true,
-        agentId: String? = null
+        agentId: String? = null,
+        projectId: String? = null
 
     ): List<Message> {
 
@@ -176,7 +177,7 @@ class GenerationOrchestrator(
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =
-            conversationService.resolveWritableConversationId(customerId, client, conversationId)
+            conversationService.resolveWritableConversationId(customerId, client, conversationId, projectId)
 
         var actualPreviousMessageId = selectedResponseId
         if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
@@ -349,7 +350,8 @@ class GenerationOrchestrator(
         toolResults: List<ToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         useLearnedPreferences: Boolean = true,
-        agentId: String? = null
+        agentId: String? = null,
+        projectId: String? = null
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -371,7 +373,8 @@ class GenerationOrchestrator(
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 
         // Step 1 - Fetch existing or Create new conversation
-        val activeConversationId = conversationService.resolveWritableConversationId(customerId, client, conversationId)
+        val activeConversationId =
+            conversationService.resolveWritableConversationId(customerId, client, conversationId, projectId)
 
         // Brand-new UI conversation: kick off title generation now, in
         // parallel with the rest of the setup and the vendor stream, instead

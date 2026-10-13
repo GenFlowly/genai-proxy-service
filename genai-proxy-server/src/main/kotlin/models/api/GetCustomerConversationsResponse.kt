@@ -12,7 +12,12 @@ data class ConversationSummary(
     val role: ShareRole = ShareRole.OWNER,
     val archivedAt: String? = null,
     val pinnedAt: String? = null,
-    val vendors: List<String>? = null
+    val vendors: List<String>? = null,
+    // Project grouping for the history sidebar. projectName is resolved at
+    // read time from the projects table (never denormalized), so a rename
+    // shows up immediately; a dangling projectId yields projectName = null.
+    val projectId: String? = null,
+    val projectName: String? = null
 )
 
 @Serializable

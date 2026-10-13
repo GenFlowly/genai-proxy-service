@@ -131,6 +131,30 @@ jobs:
           # Pin the prod config: the default fly.toml is dev-only (Flycast + auto_stop)
           flyctl deploy --config fly.production.toml --app $APP_NAME --yes
 
+      # A rolling deploy updates a crash-stopped machine without starting it and
+      # still reports success (2026-10-10 outage): start anything stopped, then
+      # require the fly.toml [checks] to pass so a dead retrieval server can't
+      # ship green.
+      - name: Gate on retrieval server health
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          APP_NAME="genai-retrieval-server-${{ env.STAGE }}"
+          flyctl machines list --app $APP_NAME --json \
+            | jq -r '.[] | select(.state=="stopped") | .id' \
+            | xargs -r -n1 flyctl machine start --app $APP_NAME
+          for i in $(seq 1 24); do
+            STATUS=$(flyctl machines list --app $APP_NAME --json | jq -r '[.[].checks[]?.status] | unique | join(",")')
+            echo "machine check status: ${STATUS:-<none reported yet>}"
+            if [ "$STATUS" = "passing" ]; then
+              echo "Retrieval server is healthy."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Retrieval server did not reach passing health checks" >&2
+          exit 1
+
       - name: Deploy Proxy Server to Fly.io
         working-directory: ${{ env.SERVICE_APP_PATH }}
         env:
@@ -154,6 +178,6 @@ jobs:
           ATTACHMENTS_BUCKET=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-S3Stack --query "Stacks[0].Outputs[?OutputKey=='AttachmentsBucketName'].OutputValue" --output text)
 
           # Set secrets and deploy
-          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.internal:5001" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET ADMIN_EMAILS="${{ env.ADMIN_EMAILS }}" AUTH0_REACT_APP_CLIENT_IDS="${{ env.AUTH0_REACT_APP_CLIENT_IDS }}" AUTH0_ADMIN_PANEL_CLIENT_IDS="${{ env.AUTH0_ADMIN_PANEL_CLIENT_IDS }}"
+          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.flycast" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET ADMIN_EMAILS="${{ env.ADMIN_EMAILS }}" AUTH0_REACT_APP_CLIENT_IDS="${{ env.AUTH0_REACT_APP_CLIENT_IDS }}" AUTH0_ADMIN_PANEL_CLIENT_IDS="${{ env.AUTH0_ADMIN_PANEL_CLIENT_IDS }}"
 
           flyctl deploy --config fly.production.toml --app $APP_NAME --yes

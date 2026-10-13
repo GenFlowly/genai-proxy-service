@@ -57,10 +57,24 @@ export function saveHistoryCache(customerId: string | null, next: HistoryCacheSt
     }
 }
 
+// Session-scoped memory of which project entries are expanded, so the panel
+// keeps its shape across sidebar toggles and route changes. Deliberately not
+// persisted: a fresh browser session starts from the defaults again.
+const expandedProjects = new Map<string, boolean>()
+
+export function getExpandedProject(projectId: string): boolean | undefined {
+    return expandedProjects.get(projectId)
+}
+
+export function setExpandedProject(projectId: string, expanded: boolean): void {
+    expandedProjects.set(projectId, expanded)
+}
+
 /** Logout hook / test helper: forget everything, for every customer. */
 export function clearHistoryCache(): void {
     cache = null
     cacheCustomerId = null
+    expandedProjects.clear()
     try {
         Object.keys(localStorage).forEach(key => {
             if (key.endsWith(KEY_SUFFIX)) localStorage.removeItem(key)
