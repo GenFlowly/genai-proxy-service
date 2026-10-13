@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import ConversationHistoryComponent from '../../../../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent'
 import { useAuth } from '../../../../context/AuthContext'
@@ -129,7 +129,7 @@ describe('ConversationHistoryComponent', () => {
         expect(screen.getByText('conv-2')).toBeInTheDocument()
     })
 
-    test('with no conversations the panel still offers the Projects section', async () => {
+    test('with no conversations the Projects panel still offers its create control', async () => {
         mockGetCustomerConversations.mockResolvedValue({
             conversations: [],
             lastEvaluatedKey: null,
@@ -137,13 +137,33 @@ describe('ConversationHistoryComponent', () => {
 
         render(<ConversationHistoryComponent />)
 
-        // The create-project row counts as content, so the old empty state is
-        // replaced by a Projects section holding just the control
         await waitFor(() => {
             expect(screen.getByTestId('conv-history-new-project')).toBeInTheDocument()
         })
         expect(screen.getByText('Projects')).toBeInTheDocument()
-        expect(screen.queryByText('No conversations yet')).not.toBeInTheDocument()
+        // The History panel below shows its own empty state
+        expect(within(screen.getByTestId('history-pane')).getByText('No conversations yet')).toBeInTheDocument()
+    })
+
+    test('Projects and History render as separate stacked panels', async () => {
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('projects-pane')).toBeInTheDocument()
+        })
+        const projectsPane = screen.getByTestId('projects-pane')
+        const historyPane = screen.getByTestId('history-pane')
+
+        // Projects panel holds the Projects content; History holds Pinned/Recents
+        expect(within(projectsPane).getByText('Projects')).toBeInTheDocument()
+        expect(within(projectsPane).getByTestId('conv-history-new-project')).toBeInTheDocument()
+        expect(within(historyPane).getByText('Recents')).toBeInTheDocument()
+        expect(within(historyPane).queryByText('Projects')).not.toBeInTheDocument()
+
+        // Stacked: Projects pane precedes the History pane
+        expect(
+            projectsPane.compareDocumentPosition(historyPane) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
     })
 
     test('shows error state when fetch fails', async () => {
