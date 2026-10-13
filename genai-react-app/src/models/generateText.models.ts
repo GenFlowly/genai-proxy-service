@@ -17,6 +17,8 @@ export interface GenerateTextRequest {
     client: string
     /** Agent (graph) to run the generation through; omitted/null = server default. */
     agentId?: string | null
+    /** Project a brand-new conversation is created into; only read when conversationId is empty. */
+    projectId?: string | null
 }
 
 export interface GenerateTextStreamRequest {
@@ -27,6 +29,8 @@ export interface GenerateTextStreamRequest {
     client: string
     /** Agent (graph) to run the generation through; omitted/null = server default. */
     agentId?: string | null
+    /** Project a brand-new conversation is created into; only read when conversationId is empty. */
+    projectId?: string | null
 }
 
 export interface GenerateTextResponse {

@@ -225,6 +225,19 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         return null
     }
 
+    // Project the NEXT brand-new conversation is created into (set by the
+    // history sidebar's per-project "new conversation" action; cleared by
+    // resetConversation). Sent only when the generate request carries no
+    // conversationId. Ref + state pair: the ref gives the request builders an
+    // always-current read regardless of closure age, the state lets consumers
+    // (the history sidebar) react to it.
+    const [pendingProjectId, setPendingProjectIdState] = useState<string | null>(null)
+    const pendingProjectIdRef = useRef<string | null>(null)
+    const setPendingProjectId = useCallback((projectId: string | null) => {
+        pendingProjectIdRef.current = projectId
+        setPendingProjectIdState(projectId)
+    }, [])
+
     const fetchVendorResponses = async (
         token: string,
         aiConfigs: AIConfig[],
@@ -247,6 +260,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             conversationId: conversationIdRef.current,
             client: 'REACT_APP',
             agentId: selectedAgentId,
+            // Starting fresh inside a project: the new conversation is born in it
+            projectId: conversationIdRef.current ? undefined : pendingProjectIdRef.current,
         })
 
         console.log('DEBUGGING response RECEVIEVED:', response)
@@ -320,6 +335,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             conversationId: idOverride || conversationIdRef.current,
             client: 'REACT_APP',
             agentId: selectedAgentId,
+            // Starting fresh inside a project: the new conversation is born in it
+            projectId: (idOverride || conversationIdRef.current) ? undefined : pendingProjectIdRef.current,
         }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
     }
 
@@ -511,7 +528,19 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         setSelectedResponseByBlock({})
         setConversationTitle(null)
         setConversationRole('OWNER')
-    }, [navigate, customerId])
+        setPendingProjectId(null)
+    }, [navigate, customerId, setPendingProjectId])
+
+    /**
+     * Start a fresh conversation that will be created inside the given
+     * project when its first message is sent (the message+ action on a
+     * project row). Same reset as a plain new chat, plus the pending
+     * project — reset clears it, so it is set after.
+     */
+    const startConversationInProject = useCallback((projectId: string) => {
+        resetConversation()
+        setPendingProjectId(projectId)
+    }, [resetConversation, setPendingProjectId])
 
     // --- Core Actions ---
     const addNewConversationBlock = useCallback(() => {
@@ -1220,6 +1249,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         getSelectedResponseForBlock,
         loadConversation,
         resetConversation,
+        startConversationInProject,
+        pendingProjectId,
         conversationTitle,
         conversationRole,
         getVendorSelectionForBlock,
@@ -1243,6 +1274,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         getSelectedResponseForBlock,
         loadConversation,
         resetConversation,
+        startConversationInProject,
+        pendingProjectId,
         conversationTitle,
         conversationRole,
         getVendorSelectionForBlock,

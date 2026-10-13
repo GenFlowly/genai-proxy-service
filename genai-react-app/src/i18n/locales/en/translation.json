@@ -266,6 +266,7 @@
             "moveToProjectFailed": "Failed to move conversation",
             "moveToProjectTitle": "Move to project",
             "movedToProject": "Moved to {{name}}",
+            "newConversationInProject": "New conversation",
             "newProject": "New project",
             "newProjectTitle": "Create project",
             "noConversationsYet": "No conversations yet",
