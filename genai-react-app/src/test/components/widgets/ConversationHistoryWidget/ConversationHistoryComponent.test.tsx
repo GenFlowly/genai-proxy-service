@@ -602,14 +602,17 @@ describe('ConversationHistoryComponent', () => {
             ).toBeTruthy()
         })
 
-        test('Projects section shows the create control even when nothing is grouped', async () => {
+        test('Projects header shows the create control even when nothing is grouped', async () => {
             render(<ConversationHistoryComponent />)
 
             await waitFor(() => {
                 expect(screen.getByText('Recents')).toBeInTheDocument()
             })
             expect(screen.getByText('Projects')).toBeInTheDocument()
-            expect(screen.getByTestId('conv-history-new-project')).toBeInTheDocument()
+            // The create control is a header icon button with a tooltip
+            const createBtn = screen.getByTestId('conv-history-new-project')
+            expect(createBtn).toHaveAttribute('title', 'New project')
+            expect(createBtn).toHaveAttribute('aria-label', 'New project')
         })
 
         test('lists a project from the API as a collapsed entry even when empty', async () => {

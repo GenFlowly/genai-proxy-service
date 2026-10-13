@@ -427,24 +427,21 @@ export default function ConversationHistoryComponent() {
     const hasAnyData = items.length > 0 || pinned.length > 0 || projects.length > 0
     const showProjectsPanel = hasAnyData || (!isLoading && !error)
 
-    const newProjectRow = {
-        id: 'new-project',
-        label: (
-            <span className={styles.newProjectLabel}>
-                <Icon src={ICONS.PLUS} size={12} aria-hidden={true} />
-                {t('conversation.conversationHistory.newProject')}
-            </span>
-        ),
-        onSelect: () => setCreateProjectOpen(true),
-        testId: 'conv-history-new-project',
-    }
-
-    // The Projects panel's own library sidebar panel, stacked above History
+    // The Projects panel's own library sidebar panel, stacked above History.
+    // Creating a project lives in the header as a folder+ icon button
+    // (tooltip from its label), so the list itself holds only projects
     const projectsGroups: SidebarListGroup[] = [
         {
             id: 'projects',
             label: t('conversation.conversationHistory.projects'),
-            items: [newProjectRow],
+            actions: [
+                {
+                    icon: <Icon src={ICONS.FOLDER_PLUS} size={14} aria-hidden={true} />,
+                    label: t('conversation.conversationHistory.newProject'),
+                    onClick: () => setCreateProjectOpen(true),
+                    testId: 'conv-history-new-project',
+                },
+            ],
             groups: projectBuckets.map(toProjectGroup),
         },
     ]
