@@ -6,6 +6,7 @@ import com.genflowly.models.ShareRole
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.ProjectRepository
 import com.genflowly.repository.ShareRepository
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -23,6 +24,7 @@ class ConversationManagementService(
     private val conversationService: ConversationService,
     private val conversationRepository: ConversationRepository,
     private val shareRepository: ShareRepository,
+    private val projectRepository: ProjectRepository,
     private val sharedUsersResolver: SharedUsersResolver,
     private val agentResolutionService: AgentResolutionService,
     private val generationAgentExecutor: GenerationAgentExecutor,
@@ -188,8 +190,36 @@ class ConversationManagementService(
         conversationRepository.unpinConversation(conversationId, customerId)
     }
 
+    /**
+     * Puts the conversation into one of the caller's projects (replacing any
+     * previous assignment — this is also the move-between-projects path).
+     * Owner-only for the same reason as pinning: the assignment is written to
+     * the caller's own row and surfaces in the caller's own history sidebar.
+     */
+    suspend fun assignConversationToProject(
+        conversationId: String,
+        customerId: String,
+        projectId: String
+    ) {
+        requireOwner(conversationId, customerId, action = "assign-project")
+        projectRepository.getProject(customerId, projectId)
+            ?: throw ProjectNotFoundException(projectId)
+        conversationRepository.setConversationProject(conversationId, customerId, projectId)
+    }
+
+    suspend fun unassignConversationFromProject(
+        conversationId: String,
+        customerId: String
+    ) {
+        requireOwner(conversationId, customerId, action = "unassign-project")
+        conversationRepository.removeConversationProject(conversationId, customerId)
+    }
+
     suspend fun getPinnedConversations(customerId: String): List<ConversationSummary> {
-        return conversationRepository.getPinnedConversationsByCustomer(customerId)
+        return enrichWithProjectNames(
+            conversationRepository.getPinnedConversationsByCustomer(customerId),
+            customerId
+        )
     }
 
     suspend fun getCustomerConversationsPaginated(
@@ -197,7 +227,26 @@ class ConversationManagementService(
         pageSize: Int = 10,
         exclusiveStartKey: String? = null
     ): GetCustomerConversationsResponse {
-        return conversationRepository.getConversationsByCustomerPaginated(customerId, pageSize, exclusiveStartKey)
+        val page = conversationRepository.getConversationsByCustomerPaginated(customerId, pageSize, exclusiveStartKey)
+        return page.copy(conversations = enrichWithProjectNames(page.conversations, customerId))
+    }
+
+    /**
+     * Resolves projectName at read time (names are never denormalized onto
+     * conversations, so a rename is immediately visible). One partition Query,
+     * and only when the page references a project at all. A dangling projectId
+     * resolves to projectName = null — the client falls back to showing the id.
+     */
+    private suspend fun enrichWithProjectNames(
+        summaries: List<ConversationSummary>,
+        customerId: String
+    ): List<ConversationSummary> {
+        if (summaries.none { it.projectId != null }) return summaries
+        val namesById = projectRepository.getProjects(customerId).associate { it.projectId to it.name }
+        return summaries.map { summary ->
+            if (summary.projectId == null) summary
+            else summary.copy(projectName = namesById[summary.projectId])
+        }
     }
 
     // ─── Sharing ──────────────────────────────────────────────────────────────

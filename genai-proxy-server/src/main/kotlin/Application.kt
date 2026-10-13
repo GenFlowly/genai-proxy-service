@@ -304,6 +304,7 @@ fun Application.module() {
             tag("Tool Credentials") { description = "Credentials for external tools" }
             tag("Agents") { description = "Agent graph management" }
             tag("Notes") { description = "Customer notes" }
+            tag("Projects") { description = "Projects grouping conversations in the history sidebar" }
             tag("Voice") { description = "Realtime voice sessions and voice model listing" }
             tag("Attachments") {
                 description = "Image attachments for AI requests. Flow: POST /attachments with the " +
@@ -444,5 +445,6 @@ fun Application.module() {
     val vendorAllowlistService = get<com.genflowly.service.VendorAllowlistService>()
     val customerToolsService = get<com.genflowly.service.CustomerToolsService>()
     val connectorsService = get<com.genflowly.service.ConnectorsService>()
-    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, appConfig)
+    val projectService = get<com.genflowly.service.ProjectService>()
+    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, projectService, appConfig)
 }

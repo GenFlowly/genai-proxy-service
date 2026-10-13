@@ -5,7 +5,9 @@ import kotlinx.coroutines.delay
 import com.genflowly.models.AIConfig
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.BatchGetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
+import software.amazon.awssdk.services.dynamodb.model.KeysAndAttributes
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
 import com.genflowly.models.AIVendor
 
@@ -62,4 +64,41 @@ internal suspend fun DynamoDbClient.batchWriteWithRetry(requestItems: Map<String
         request = BatchWriteItemRequest.builder().requestItems(response.unprocessedItems()).build()
         response = batchWriteItem(request)
     }
+}
+
+/**
+ * BatchGetItem with chunking (100-key API limit) and retry of unprocessed
+ * (throttled) keys — up to 3 attempts with linear backoff, mirroring
+ * [batchWriteWithRetry] — so a partial batch never silently drops rows.
+ */
+internal suspend fun DynamoDbClient.batchGetWithRetry(
+    tableName: String,
+    keys: List<Map<String, AttributeValue>>,
+    projectionExpression: String? = null,
+    expressionAttributeNames: Map<String, String>? = null
+): List<Map<String, AttributeValue>> {
+    val results = mutableListOf<Map<String, AttributeValue>>()
+    for (chunk in keys.chunked(100)) {
+        var requestKeys = chunk
+        var retries = 0
+        while (requestKeys.isNotEmpty()) {
+            val keysAndAttributes = KeysAndAttributes.builder().keys(requestKeys)
+            if (projectionExpression != null) keysAndAttributes.projectionExpression(projectionExpression)
+            if (!expressionAttributeNames.isNullOrEmpty()) {
+                keysAndAttributes.expressionAttributeNames(expressionAttributeNames)
+            }
+            val response = batchGetItem(
+                BatchGetItemRequest.builder()
+                    .requestItems(mapOf(tableName to keysAndAttributes.build()))
+                    .build()
+            )
+            results.addAll(response.responses()[tableName].orEmpty())
+            val unprocessed = response.unprocessedKeys()[tableName]?.keys().orEmpty()
+            if (unprocessed.isEmpty() || retries >= 3) break
+            retries++
+            delay(200L * retries)
+            requestKeys = unprocessed
+        }
+    }
+    return results
 }
