@@ -45,7 +45,9 @@ const TestComponent = () => {
         addNewConversationBlockWithId,
         conversationBlockList,
         getSelectedResponseForBlock,
-        setSelectedResponseForBlock
+        setSelectedResponseForBlock,
+        startConversationInProject,
+        pendingProjectId
     } = useConversation();
 
     return (
@@ -53,6 +55,8 @@ const TestComponent = () => {
             <div data-testid="block-count">{conversationBlockList.length}</div>
             <button onClick={() => loadConversation('fail-id')}>Load Fail</button>
             <button onClick={() => resetConversation()}>Reset</button>
+            <button onClick={() => startConversationInProject?.('proj-9')}>Start In Project</button>
+            <div data-testid="pending-project">{pendingProjectId ?? 'none'}</div>
             <button onClick={() => updateResponseInConversationBlock('conv-default', 'new prompt')}>Update Prompt</button>
             <button onClick={() => addNewConversationBlockWithId('manual-id')}>Add Manual</button>
             <button onClick={() => setSelectedResponseForBlock('conv-default', 'msg-123')}>Set Selected</button>
@@ -106,6 +110,30 @@ describe('ConversationContext Gaps', () => {
 
         expect(localStorage.getItem('user-1_prompt_editor_content_1')).toBeNull();
         expect(localStorage.getItem('other_key')).toBe('keep me');
+    });
+
+    test('startConversationInProject stores the pending project and reset clears it', () => {
+        render(
+            <MemoryRouter>
+                <ConversationProvider>
+                    <TestComponent />
+                </ConversationProvider>
+            </MemoryRouter>
+        );
+
+        expect(screen.getByTestId('pending-project')).toHaveTextContent('none');
+
+        act(() => {
+            screen.getByText('Start In Project').click();
+        });
+        expect(screen.getByTestId('pending-project')).toHaveTextContent('proj-9');
+
+        // A plain new chat drops the pending project — only the very next
+        // conversation started via the project action is born inside it
+        act(() => {
+            screen.getByText('Reset').click();
+        });
+        expect(screen.getByTestId('pending-project')).toHaveTextContent('none');
     });
 
     test('updateResponseInConversationBlock (line 244)', () => {

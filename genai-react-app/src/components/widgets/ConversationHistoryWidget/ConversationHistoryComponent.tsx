@@ -39,7 +39,7 @@ interface ProjectBucket {
 export default function ConversationHistoryComponent() {
     const { t } = useTranslation()
     const { getAccessTokenSilently, isAuthenticated, customerId } = useAuth()
-    const { conversationId, conversationTitle } = useConversation()
+    const { conversationId, conversationTitle, pendingProjectId, startConversationInProject } = useConversation()
     const { showToast } = useToast()
     const navigate = useNavigate()
     const { conversationId: activeId } = useParams<{ conversationId: string }>()
@@ -61,6 +61,12 @@ export default function ConversationHistoryComponent() {
     const [newProjectName, setNewProjectName] = useState('')
     const [isCreatingProject, setIsCreatingProject] = useState(false)
     const [moveTarget, setMoveTarget] = useState<ConversationSummary | null>(null)
+
+    // The library's collapsible groups are uncontrolled (defaultExpanded is
+    // read on mount), so force-expanding a project when a conversation is
+    // started inside it works by bumping the group's id: the remounted group
+    // re-reads the session expansion memory
+    const [expandEpochs, setExpandEpochs] = useState<Record<string, number>>({})
 
     // Only persist state to the cache once a real load has happened, so an
     // empty "never loaded" state can't masquerade as "no conversations"
@@ -132,8 +138,20 @@ export default function ConversationHistoryComponent() {
         setItems(prev => {
             const idx = prev.findIndex(c => c.conversationId === conversationId)
             if (idx === -1) {
-                // Conversation not yet in list (e.g. brand new) — prepend it
-                return [{ conversationId, title: conversationTitle, createdAt: null, updatedAt: null }, ...prev]
+                // Conversation not yet in list (e.g. brand new) — prepend it.
+                // One started inside a project (message+ on the project row)
+                // is stamped with it so it groups there immediately instead
+                // of flashing in Recents until the next server fetch
+                return [{
+                    conversationId,
+                    title: conversationTitle,
+                    createdAt: null,
+                    updatedAt: null,
+                    projectId: pendingProjectId ?? undefined,
+                    projectName: pendingProjectId
+                        ? projects.find(p => p.projectId === pendingProjectId)?.name
+                        : undefined,
+                }, ...prev]
             }
             if (prev[idx].title === conversationTitle) return prev
             const next = [...prev]
@@ -147,7 +165,7 @@ export default function ConversationHistoryComponent() {
             next[idx] = { ...next[idx], title: conversationTitle }
             return next
         })
-    }, [conversationId, conversationTitle])
+    }, [conversationId, conversationTitle, pendingProjectId, projects])
 
     const handleLoadMore = () => fetchPage(lastKey)
 
@@ -389,18 +407,39 @@ export default function ConversationHistoryComponent() {
     // A project renders as a collapsible row holding its own Pinned/Recent
     // subsections. First mount expands the project of the active conversation;
     // after that the user's own toggles win for the rest of the session
+    // Start a fresh conversation that will be born inside the project on its
+    // first message; keep the project open so it is visible once it appears
+    const handleNewConversationInProject = (project: ProjectBucket) => {
+        setExpandedProject(project.id, true)
+        setExpandEpochs(prev => ({ ...prev, [project.id]: (prev[project.id] ?? 0) + 1 }))
+        startConversationInProject?.(project.id)
+    }
+
     const toProjectGroup = (project: ProjectBucket): SidebarListGroup => {
         const containsActive =
             !!activeId &&
             [...project.pinned, ...project.recent].some(c => c.conversationId === activeId)
+        const expandEpoch = expandEpochs[project.id]
         return {
-            id: `project-${project.id}`,
+            id: expandEpoch ? `project-${project.id}-x${expandEpoch}` : `project-${project.id}`,
             label: project.name,
             collapsible: true,
             defaultExpanded: getExpandedProject(project.id) ?? containsActive,
             icon: <Icon src={ICONS.FOLDER} size={14} aria-hidden={true} />,
             onToggle: expanded => setExpandedProject(project.id, expanded),
             testId: `conv-history-project-${project.id}`,
+            actions: [
+                {
+                    icon: <Icon src={ICONS.MESSAGE_PLUS} size={14} aria-hidden={true} />,
+                    label: t('conversation.conversationHistory.newConversationInProject'),
+                    onClick: (e: React.MouseEvent) => {
+                        e.stopPropagation()
+                        handleNewConversationInProject(project)
+                    },
+                    revealOnHover: true,
+                    testId: `conv-history-project-new-conv-${project.id}`,
+                },
+            ],
             groups: [
                 ...(project.pinned.length > 0
                     ? [{

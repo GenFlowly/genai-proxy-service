@@ -33,6 +33,7 @@ jest.mock('../../../../components/widgets/ConversationHistoryWidget/Conversation
 
 const mockNavigate = jest.fn()
 const mockShowToast = jest.fn()
+const mockStartConversationInProject = jest.fn()
 const mockGetAccessTokenSilently = jest.fn().mockResolvedValue('mock-token')
 const mockGetCustomerConversations = getCustomerConversations as jest.Mock
 const mockGetPinnedConversations = getPinnedConversations as jest.Mock
@@ -51,6 +52,7 @@ function setupMocks({
     conversationId = '',
     conversationTitle = null as string | null,
     activeId = undefined as string | undefined,
+    pendingProjectId = null as string | null,
 } = {}) {
     mockParams = { conversationId: activeId }
     mockGetAccessTokenSilently.mockResolvedValue('mock-token')
@@ -62,6 +64,8 @@ function setupMocks({
     ;(useConversation as jest.Mock).mockReturnValue({
         conversationId,
         conversationTitle,
+        pendingProjectId,
+        startConversationInProject: mockStartConversationInProject,
     })
 }
 
@@ -714,6 +718,60 @@ describe('ConversationHistoryComponent', () => {
             // Back in the global Recents list (project row itself remains)
             expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
             expect(screen.getByText('Recents')).toBeInTheDocument()
+        })
+
+        test('project rows offer a new-conversation action that starts a chat in the project', async () => {
+            mockGetProjects.mockResolvedValue({
+                projects: [
+                    { projectId: 'proj-1', name: 'Research', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+                ],
+            })
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-project-new-conv-proj-1')).toBeInTheDocument()
+            })
+            const btn = screen.getByTestId('conv-history-project-new-conv-proj-1')
+            expect(btn).toHaveAttribute('title', 'New conversation')
+            expect(btn).toHaveAttribute('aria-label', 'New conversation')
+
+            fireEvent.click(btn)
+
+            expect(mockStartConversationInProject).toHaveBeenCalledWith('proj-1')
+            // The project force-expands so the upcoming conversation is
+            // visible inside it once the first message creates it
+            expect(screen.getByTestId('conv-history-project-proj-1')).toHaveAttribute('aria-expanded', 'true')
+        })
+
+        test('a conversation born in a project groups under it when its title arrives', async () => {
+            setupMocks({ conversationId: 'conv-new', conversationTitle: null, pendingProjectId: 'proj-1' })
+            mockGetProjects.mockResolvedValue({
+                projects: [
+                    { projectId: 'proj-1', name: 'Research', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+                ],
+            })
+
+            const { rerender } = render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-project-proj-1')).toBeInTheDocument()
+            })
+
+            // First message sent: the title generator names the new conversation
+            ;(useConversation as jest.Mock).mockReturnValue({
+                conversationId: 'conv-new',
+                conversationTitle: 'Fresh idea',
+                pendingProjectId: 'proj-1',
+                startConversationInProject: mockStartConversationInProject,
+            })
+            rerender(<ConversationHistoryComponent />)
+
+            // It sits inside the (collapsed) project, not in global Recents
+            expect(screen.queryByTestId('conv-history-item-conv-new')).not.toBeInTheDocument()
+            fireEvent.click(screen.getByTestId('conv-history-project-proj-1'))
+            expect(screen.getByTestId('conv-history-item-conv-new')).toBeInTheDocument()
+            expect(screen.getAllByTestId('conv-history-item-conv-new')).toHaveLength(1)
         })
     })
 })
