@@ -270,7 +270,9 @@ class GenerationOrchestrator(
             llmModel = model,
             llmMaxTokens = resolvedMaxTokens,
             conversationHistory = conversationHistory,
-            systemPrompt = message.systemPrompt,
+            systemPrompt = ResponseFormatting.decorateSystemPrompt(
+                message.systemPrompt, message.client, structuredOutput = responseSchema != null
+            ),
             agentic = agentic,
             queryImages = message.attachments.toImageRefs(),
             tools = tools.toPayloadTools(),
@@ -368,6 +370,10 @@ class GenerationOrchestrator(
         // Memory injection is a graph concern (the MEMORY node): here we only
         // make the governance call — request consent AND the account setting.
         val systemPrompt = instructionResp?.instruction ?: ""
+        // What the vendor sees; the messages persist the raw instruction only.
+        val vendorSystemPrompt = ResponseFormatting.decorateSystemPrompt(
+            systemPrompt, client, structuredOutput = responseSchema != null
+        )
         val memoryEnabled = useLearnedPreferences && memoryService.isMemoryEnabled(customerId)
         val effectiveInstructionId = instructionResp?.id ?: ""
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
@@ -517,7 +523,7 @@ class GenerationOrchestrator(
                     llmModel = config.model,
                     llmMaxTokens = resolvedMaxTokens,
                     conversationHistory = conversationHistory,
-                    systemPrompt = systemPrompt,
+                    systemPrompt = vendorSystemPrompt,
                     agentic = agentic,
                     queryImages = attachments.toImageRefs(),
                     tools = tools.toPayloadTools(),
@@ -543,7 +549,7 @@ class GenerationOrchestrator(
                             llmModel = config.model,
                             llmMaxTokens = resolvedMaxTokens,
                             conversationHistory = conversationHistory,
-                            systemPrompt = systemPrompt,
+                            systemPrompt = vendorSystemPrompt,
                             agentic = agentic,
                             queryImages = attachments.toImageRefs(),
                             tools = tools.toPayloadTools(),
