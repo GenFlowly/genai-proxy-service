@@ -39,7 +39,7 @@ class ConversationTitleGenerationTest {
     private val executor = mockk<GenerationAgentExecutor>()
     private val service = ConversationManagementService(
         conversationService, conversationRepo, mockk<ShareRepository>(relaxed = true),
-        mockk(relaxed = true),
+        mockk(relaxed = true), mockk(relaxed = true),
         mockk<AgentResolutionService> { coEvery { resolve(any(), any()) } returns mockk(relaxed = true) },
         executor,
         AppScope()

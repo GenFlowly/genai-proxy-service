@@ -28,3 +28,8 @@ fun generatePresetId(): String {
     val uuid = UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
     return "NPR$uuid"
 }
+
+fun generateProjectId(): String {
+    val uuid = UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
+    return "PRJ$uuid"
+}

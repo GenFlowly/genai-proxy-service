@@ -18,10 +18,19 @@ import { ICONS } from '../../../constants/icons'
 import { SidebarListPanel, SidebarListGroup, SidebarListLoadMore } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
-import { loadHistoryCache, saveHistoryCache } from './historyCache'
+import { loadHistoryCache, saveHistoryCache, getExpandedProject, setExpandedProject } from './historyCache'
 import { formatServerDateTime, formatServerTime, parseServerDate } from '../../../utils/timeUtils'
 
 const PAGE_SIZE = 15
+
+// One entry in the Projects section: the project's own pinned and recent
+// conversations, rendered as subsections under a collapsible project row
+interface ProjectBucket {
+    id: string
+    name: string
+    pinned: ConversationSummary[]
+    recent: ConversationSummary[]
+}
 
 export default function ConversationHistoryComponent() {
     const { t } = useTranslation()
@@ -178,13 +187,40 @@ export default function ConversationHistoryComponent() {
         }
     }
 
-    // Pinned conversations render only in the Pinned section, never in the
-    // Recent section, even though they stay in `items`
+    // Pinned conversations render only in a Pinned section (global or their
+    // project's), never in a Recent section, even though they stay in `items`
     const pinnedIds = useMemo(() => new Set(pinned.map(c => c.conversationId)), [pinned])
     const recentItems = useMemo(
         () => items.filter(c => !pinnedIds.has(c.conversationId)),
         [items, pinnedIds]
     )
+
+    // Conversations carrying a projectId group under their project's entry in
+    // the Projects section; the rest fall through to the global sections.
+    // Projects keep first-appearance order (pinned before recent, each list
+    // already sorted by the server)
+    const { projects, globalPinned, globalRecent } = useMemo(() => {
+        const buckets = new Map<string, ProjectBucket>()
+        const bucketFor = (conv: ConversationSummary, projectId: string) => {
+            let bucket = buckets.get(projectId)
+            if (!bucket) {
+                bucket = { id: projectId, name: conv.projectName?.trim() || projectId, pinned: [], recent: [] }
+                buckets.set(projectId, bucket)
+            }
+            return bucket
+        }
+        const globalPinned: ConversationSummary[] = []
+        const globalRecent: ConversationSummary[] = []
+        for (const conv of pinned) {
+            if (conv.projectId) bucketFor(conv, conv.projectId).pinned.push(conv)
+            else globalPinned.push(conv)
+        }
+        for (const conv of recentItems) {
+            if (conv.projectId) bucketFor(conv, conv.projectId).recent.push(conv)
+            else globalRecent.push(conv)
+        }
+        return { projects: Array.from(buckets.values()), globalPinned, globalRecent }
+    }, [pinned, recentItems])
 
     const isToday = (value: string) => {
         const d = parseServerDate(value)
@@ -245,20 +281,62 @@ export default function ConversationHistoryComponent() {
         }
     }
 
-    // Pinned on top, then Recent — two group headings with the same style
+    // A project renders as a collapsible row holding its own Pinned/Recent
+    // subsections. First mount expands the project of the active conversation;
+    // after that the user's own toggles win for the rest of the session
+    const toProjectGroup = (project: ProjectBucket): SidebarListGroup => {
+        const containsActive =
+            !!activeId &&
+            [...project.pinned, ...project.recent].some(c => c.conversationId === activeId)
+        return {
+            id: `project-${project.id}`,
+            label: project.name,
+            collapsible: true,
+            defaultExpanded: getExpandedProject(project.id) ?? containsActive,
+            icon: <Icon src={ICONS.FOLDER} size={14} aria-hidden={true} />,
+            onToggle: expanded => setExpandedProject(project.id, expanded),
+            testId: `conv-history-project-${project.id}`,
+            groups: [
+                ...(project.pinned.length > 0
+                    ? [{
+                        id: `project-${project.id}-pinned`,
+                        label: t('conversation.conversationHistory.pinned'),
+                        items: project.pinned.map(conv => toRow(conv, true)),
+                    }]
+                    : []),
+                ...(project.recent.length > 0
+                    ? [{
+                        id: `project-${project.id}-recent`,
+                        label: t('conversation.conversationHistory.recent'),
+                        items: project.recent.map(conv => toRow(conv, false)),
+                    }]
+                    : []),
+            ],
+        }
+    }
+
+    // Projects on top, then the global Pinned and Recents sections; sections
+    // with nothing to show are omitted
     const groups: SidebarListGroup[] = [
-        ...(pinned.length > 0
+        ...(projects.length > 0
+            ? [{
+                id: 'projects',
+                label: t('conversation.conversationHistory.projects'),
+                groups: projects.map(toProjectGroup),
+            }]
+            : []),
+        ...(globalPinned.length > 0
             ? [{
                 id: 'pinned',
                 label: t('conversation.conversationHistory.pinned'),
-                items: pinned.map(conv => toRow(conv, true)),
+                items: globalPinned.map(conv => toRow(conv, true)),
             }]
             : []),
-        ...(recentItems.length > 0
+        ...(globalRecent.length > 0
             ? [{
                 id: 'recent',
-                label: t('conversation.conversationHistory.recent'),
-                items: recentItems.map(conv => toRow(conv, false)),
+                label: t('conversation.conversationHistory.recents'),
+                items: globalRecent.map(conv => toRow(conv, false)),
             }]
             : []),
     ]

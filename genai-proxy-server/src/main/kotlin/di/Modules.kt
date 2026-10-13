@@ -173,6 +173,7 @@ fun appModule(): Module = module {
     single { ModelCatalogRepository(get(), get()) }
     single { NotesRepository(get(), get()) }
     single { com.genflowly.repository.MemoryRepository(get(), get()) }
+    single { com.genflowly.repository.ProjectRepository(get(), get()) }
     single { InstructionRepository(get(), get()) }
     single { GraphRepository(get(), get()) }
     single { RequestAgentMapRepository(get(), get()) }
@@ -206,8 +207,9 @@ fun appModule(): Module = module {
     single { com.genflowly.service.CustomerRequestAgentMapService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { ConversationService(get(), get(), get()) }
-    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get()) }
+    single { ConversationService(get(), get(), get(), get()) }
+    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.ProjectService(get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
     single {

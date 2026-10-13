@@ -5,6 +5,11 @@ export interface ConversationSummary {
     updatedAt: string | null;
     pinnedAt?: string | null;
     vendors?: string[];
+    // Project association; absent until the backend ships projects. The
+    // history panel groups conversations carrying these under a Projects
+    // section and hides that section while no conversation has one.
+    projectId?: string | null;
+    projectName?: string | null;
 }
 
 export interface GetCustomerConversationsResponse {

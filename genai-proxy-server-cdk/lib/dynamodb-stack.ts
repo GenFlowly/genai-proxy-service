@@ -514,6 +514,23 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        // Customer-owned projects grouping conversations in the history
+        // sidebar. PK=customerId, SK=projectId. No GSI: every access path
+        // (list, get, rename, delete) already carries the authenticated
+        // customerId. Conversations reference a project via a plain projectId
+        // attribute on their Conversation row.
+        const customerProjectsTableProps: CreateTableProps = {
+            tableName: 'CustomerProjects',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'projectId',
+                type: dynamodb.AttributeType.STRING,
+            },
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const systemVendorApiKeyTable = createDefaultDynamoDbTable(this, systemVendorApiKeyTableProps);
@@ -540,6 +557,7 @@ export class DynamoDBStack extends cdk.Stack {
         const requestAgentMapTable = createDefaultDynamoDbTable(this, requestAgentMapTableProps);
         const customerMemoryTable = createDefaultDynamoDbTable(this, customerMemoryTableProps);
         const nodePresetsTable = createDefaultDynamoDbTable(this, nodePresetsTableProps);
+        const customerProjectsTable = createDefaultDynamoDbTable(this, customerProjectsTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
@@ -549,7 +567,7 @@ export class DynamoDBStack extends cdk.Stack {
             customerToolCredentialsTable, customerToolsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
-            requestAgentMapTable, customerMemoryTable, nodePresetsTable
+            requestAgentMapTable, customerMemoryTable, nodePresetsTable, customerProjectsTable
         );
     }
 }

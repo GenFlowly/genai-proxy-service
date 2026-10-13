@@ -13,8 +13,10 @@ import com.genflowly.activity.conversation.registerCreateConversationTitleRoutes
 import com.genflowly.activity.conversation.registerDeleteConversationRoutes
 import com.genflowly.activity.conversation.registerGetConversationRoutes
 import com.genflowly.activity.conversation.registerGetConversationSharedUsersRoutes
+import com.genflowly.activity.conversation.registerAssignConversationProjectRoutes
 import com.genflowly.activity.conversation.registerGetCustomerConversationsPaginatedRoutes
 import com.genflowly.activity.conversation.registerGetPinnedConversationsRoutes
+import com.genflowly.activity.project.registerProjectRoutes
 import com.genflowly.activity.search.registerSearchRoutes
 import com.genflowly.activity.conversation.registerPinConversationRoutes
 import com.genflowly.activity.conversation.registerUnarchiveConversationRoutes
@@ -121,6 +123,14 @@ object Routes {
     const val PIN_CONVERSATION = "$API_V1/conversation/pin"
     const val UNPIN_CONVERSATION = "$API_V1/conversation/unpin"
     const val GET_PINNED_CONVERSATIONS = "$API_V1/conversations/pinned"
+    const val ASSIGN_CONVERSATION_PROJECT = "$API_V1/conversation/assign-project"
+    const val UNASSIGN_CONVERSATION_PROJECT = "$API_V1/conversation/unassign-project"
+    // Projects grouping conversations in the history sidebar. Ids in query
+    // params (same metrics rationale as pin/unpin above).
+    const val CREATE_PROJECT = "$API_V1/project"
+    const val GET_PROJECTS = "$API_V1/projects"
+    const val RENAME_PROJECT = "$API_V1/project/rename"
+    const val DELETE_PROJECT = "$API_V1/project"
     const val SEARCH = "$API_V1/search"
     const val GET_PROFILE = "$API_V1/profile"
 
@@ -213,6 +223,7 @@ fun Application.configureRouting(
     vendorAllowlistService: com.genflowly.service.VendorAllowlistService,
     customerToolsService: com.genflowly.service.CustomerToolsService,
     connectorsService: com.genflowly.service.ConnectorsService,
+    projectService: com.genflowly.service.ProjectService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -276,6 +287,8 @@ fun Application.configureRouting(
         registerPinConversationRoutes(customerProfileService, conversationManagementService)
         registerUnpinConversationRoutes(customerProfileService, conversationManagementService)
         registerGetPinnedConversationsRoutes(customerProfileService, conversationManagementService)
+        registerAssignConversationProjectRoutes(customerProfileService, conversationManagementService)
+        registerProjectRoutes(projectService, customerProfileService)
         registerSearchRoutes(customerProfileService, unifiedSearchService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerCreateAgentRoutes(graphService, customerProfileService)

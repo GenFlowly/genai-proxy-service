@@ -12,10 +12,31 @@ primary_region = "iad"
   # memories) is disabled regardless of level — see content_logging.py.
   APP_ENV = "production"
 
-# No http_service section means this app won't be exposed to the public internet.
-# It will be accessible internally via `http://<app-name>.internal:5001`
-# Production stays always-on (no fly-proxy routing, no auto stop/start) to avoid
-# cold starts; the dev fly.toml uses Flycast + auto_stop instead.
+# Traffic arrives via Flycast (http://<app-name>.flycast, port 80), same as dev:
+# fly-proxy can start a crash-stopped machine on the next request — on the old
+# .internal path nothing could (2026-10-10 outage: a boot-crashing image
+# exhausted Fly's restart budget and the machine stayed stopped through a
+# "successful" redeploy). Only a private Flycast IP is allocated — no public
+# IPs — so the app remains unreachable from the public internet. Unlike dev,
+# production stays always-on (no auto stop) to avoid cold starts.
+[http_service]
+  internal_port = 5001
+  force_https = false
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+# Machine-level health check: `fly deploy` won't call the machine good until
+# /health answers, so an image that can't boot fails the deploy (red CI run)
+# instead of shipping green.
+[checks]
+  [checks.health]
+    type = "http"
+    port = 5001
+    path = "/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
 
 # Fly's org-level Prometheus scrapes /metrics over the private network —
 # the app stays internal-only. Dashboards: fly-metrics.net / Grafana Cloud.

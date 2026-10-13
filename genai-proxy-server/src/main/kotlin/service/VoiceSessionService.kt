@@ -206,8 +206,11 @@ class VoiceSessionService(
 
         // --- Resolve or create the conversation (enforces write access) ---
         val requestedConversationId = init["conversationId"]?.jsonPrimitive?.content
+        val requestedProjectId = init["projectId"]?.jsonPrimitive?.content
         val conversationId = try {
-            conversationService.resolveWritableConversationId(customerId, client, requestedConversationId)
+            conversationService.resolveWritableConversationId(
+                customerId, client, requestedConversationId, requestedProjectId
+            )
         } catch (e: Exception) {
             return SessionInitResult.Rejected("Cannot use conversation: ${e.message}")
         }

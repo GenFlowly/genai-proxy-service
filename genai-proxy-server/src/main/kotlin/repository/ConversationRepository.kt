@@ -10,6 +10,7 @@ import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
 import com.genflowly.DynamoDBConstants.PENDING_RUNS_KEY
 import com.genflowly.DynamoDBConstants.PINNED_AT_KEY
+import com.genflowly.DynamoDBConstants.PROJECT_ID_KEY
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import java.time.Instant
@@ -62,14 +63,18 @@ class ConversationRepository(
         conversation: Conversation
     ) = withContext(Dispatchers.IO) {
         try {
-            val item = withTimestamps(mapOf(
+            val base = mutableMapOf(
                 CUSTOMER_ID_KEY to AttributeValue.builder()
                     .s(conversation.customerId).build(),
                 CONVERSATION_ID_KEY to AttributeValue.builder().s
                     (conversation.conversationId)
                     .build(),
                 "client" to AttributeValue.builder().s(conversation.client).build(),
-            ))
+            )
+            conversation.projectId?.takeIf { it.isNotBlank() }?.let {
+                base[PROJECT_ID_KEY] = AttributeValue.builder().s(it).build()
+            }
+            val item = withTimestamps(base)
 
             val putReq = PutItemRequest.builder()
                 .tableName(CONVERSATION_TABLE)
@@ -336,6 +341,61 @@ class ConversationRepository(
         }
     }
 
+    /**
+     * Puts the conversation into a project. SET overwrites any previous
+     * assignment, so this is also the "move between projects" write.
+     */
+    suspend fun setConversationProject(
+        conversationId: String,
+        customerId: String,
+        projectId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("SET #pid = :pid")
+                    // Guard against creating a phantom row for a conversation that doesn't exist
+                    .conditionExpression("attribute_exists($CONVERSATION_ID_KEY)")
+                    .expressionAttributeNames(mapOf("#pid" to PROJECT_ID_KEY))
+                    .expressionAttributeValues(mapOf(":pid" to AttributeValue.builder().s(projectId).build()))
+                    .build()
+            )
+            logger.info("Assigned conversation $conversationId to project $projectId for customer $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to assign conversation $conversationId to project $projectId", e)
+            throw e
+        }
+    }
+
+    suspend fun removeConversationProject(
+        conversationId: String,
+        customerId: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("REMOVE #pid")
+                    .conditionExpression("attribute_exists($CONVERSATION_ID_KEY)")
+                    .expressionAttributeNames(mapOf("#pid" to PROJECT_ID_KEY))
+                    .build()
+            )
+            logger.info("Unassigned conversation $conversationId from its project for customer $customerId")
+        } catch (e: Exception) {
+            logger.error("Failed to unassign conversation $conversationId from its project", e)
+            throw e
+        }
+    }
+
     suspend fun isConversationArchived(
         conversationId: String,
         customerId: String
@@ -444,6 +504,28 @@ class ConversationRepository(
 
         val response = dynamoDbClient.query(queryBuilder.build())
 
+        // The listing GSI's INCLUDE projection doesn't carry projectId (same
+        // reason the pinned query reads the base table), and changing a GSI
+        // projection means replacing the index. One BatchGetItem on the base
+        // table per page (≤50 keys) fills the gap instead.
+        val pageConversationIds = response.items().mapNotNull { it[CONVERSATION_ID_KEY]?.s() }
+        val projectIdByConversation: Map<String, String> =
+            if (pageConversationIds.isEmpty()) emptyMap()
+            else dynamoDbClient.batchGetWithRetry(
+                tableName = CONVERSATION_TABLE,
+                keys = pageConversationIds.map {
+                    mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(it).build()
+                    )
+                },
+                projectionExpression = "$CONVERSATION_ID_KEY, #pid",
+                expressionAttributeNames = mapOf("#pid" to PROJECT_ID_KEY)
+            ).mapNotNull { item ->
+                val convId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
+                item[PROJECT_ID_KEY]?.s()?.let { convId to it }
+            }.toMap()
+
         val conversations = response.items().mapNotNull { item ->
             val convId    = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
             val title     = item["title"]?.s()
@@ -458,7 +540,8 @@ class ConversationRepository(
                 title = title,
                 createdAt = createdAt,
                 updatedAt = updatedAt,
-                vendors = vendors
+                vendors = vendors,
+                projectId = projectIdByConversation[convId]
             )
         }
 
@@ -525,9 +608,48 @@ class ConversationRepository(
                     createdAt = item["createdAt"]?.s(),
                     updatedAt = item["updatedAt"]?.s(),
                     pinnedAt = item[PINNED_AT_KEY]?.s(),
-                    vendors = vendors
+                    vendors = vendors,
+                    projectId = item[PROJECT_ID_KEY]?.s()
                 )
             }
+    }
+
+    /**
+     * Ids of every (non-archived or archived alike) conversation currently
+     * assigned to the project. Used by project delete to unassign them, so the
+     * pagination loop is exhaustive — no early exit, no item cap.
+     */
+    suspend fun getConversationIdsByProject(
+        customerId: String,
+        projectId: String
+    ): List<String> = withContext(Dispatchers.IO) {
+        val ids = mutableListOf<String>()
+        var startKey: Map<String, AttributeValue>? = null
+
+        do {
+            val queryBuilder = QueryRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .keyConditionExpression("#cid = :cid")
+                .filterExpression("#pid = :pid")
+                .expressionAttributeNames(mapOf(
+                    "#cid" to CUSTOMER_ID_KEY,
+                    "#pid" to PROJECT_ID_KEY
+                ))
+                .expressionAttributeValues(mapOf(
+                    ":cid" to AttributeValue.builder().s(customerId).build(),
+                    ":pid" to AttributeValue.builder().s(projectId).build()
+                ))
+                .projectionExpression(CONVERSATION_ID_KEY)
+            startKey?.let { queryBuilder.exclusiveStartKey(it) }
+
+            val response = dynamoDbClient.query(queryBuilder.build())
+            ids += response.items().mapNotNull { it[CONVERSATION_ID_KEY]?.s() }
+            startKey = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
+                response.lastEvaluatedKey()
+            } else null
+        } while (startKey != null)
+
+        ids
     }
 
     // ─── Messages ─────────────────────────────────────────────────────────────

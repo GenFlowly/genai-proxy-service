@@ -13,7 +13,9 @@ import com.genflowly.models.api.VendorUsageTotals
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.PendingRun
+import com.genflowly.repository.ProjectRepository
 import com.genflowly.repository.ShareRepository
+import org.slf4j.LoggerFactory
 
 class ConversationAccessDeniedException(message: String) : Exception(message)
 class ConversationArchivedException(message: String) : Exception(message)
@@ -29,8 +31,11 @@ private val webSourcesJsonParser = kotlinx.serialization.json.Json { ignoreUnkno
 class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val shareRepository: ShareRepository,
-    private val customerProfileRepository: CustomerProfileRepository
+    private val customerProfileRepository: CustomerProfileRepository,
+    private val projectRepository: ProjectRepository
 ) {
+    private val logger = LoggerFactory.getLogger("ConversationService")
+
 
     /** Async memory-extraction outcome for a message ("[]" = nothing learned). */
     suspend fun setMessageLearnedFacts(conversationId: String, messageId: String, factsJson: String) =
@@ -235,11 +240,13 @@ class ConversationService(
 
     suspend fun createConversation(
         customerId: String,
-        client: String
+        client: String,
+        projectId: String? = null
     ): String {
         val conversation = Conversation(
             customerId = customerId, client =
-            client
+            client,
+            projectId = projectId
         )
         conversationRepository.createConversation(conversation)
         return conversation.conversationId
@@ -248,15 +255,29 @@ class ConversationService(
     /**
      * Returns a conversation id the caller may write to: creates a fresh
      * conversation when none is given, otherwise enforces write access
-     * (OWNER/EDIT) on the existing one.
+     * (OWNER/EDIT) on the existing one. [projectId] only applies to the
+     * create branch — it places the new conversation in that project.
      */
     suspend fun resolveWritableConversationId(
         customerId: String,
         client: String,
-        conversationId: String? = null
+        conversationId: String? = null,
+        projectId: String? = null
     ): String {
         if (conversationId.isNullOrBlank()) {
-            return createConversation(customerId, client)
+            // A project that doesn't exist for this customer is dropped rather
+            // than failing the generation: sending a message must never fail
+            // because a sidebar grouping went stale (e.g. the project was
+            // deleted between selecting it and sending the first message).
+            val validProjectId = projectId?.takeIf { it.isNotBlank() }?.let {
+                if (projectRepository.getProject(customerId, it) != null) {
+                    it
+                } else {
+                    logger.warn("Dropping unknown project $it for new conversation of customer $customerId")
+                    null
+                }
+            }
+            return createConversation(customerId, client, validProjectId)
         }
         // Enforce that the caller can write to this conversation. New conversations
         // just created above have no shares yet, so this check only applies when

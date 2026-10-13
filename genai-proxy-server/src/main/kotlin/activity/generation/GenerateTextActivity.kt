@@ -121,7 +121,8 @@ fun Route.registerGenerateTextRoutes(
                         request.toolResults,
                         request.responseSchema,
                         request.useLearnedPreferences,
-                        request.agentId
+                        request.agentId,
+                        request.projectId
                     )
 
                 val generateTextResponseList =
