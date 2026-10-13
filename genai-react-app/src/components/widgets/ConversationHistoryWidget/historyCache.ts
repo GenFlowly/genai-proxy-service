@@ -1,4 +1,4 @@
-import { ConversationSummary } from '../../../models/conversationHistory.models'
+import { ConversationSummary, Project } from '../../../models/conversationHistory.models'
 
 /**
  * Stale-while-revalidate store for the conversation-history list, following
@@ -13,6 +13,7 @@ export interface HistoryCacheState {
     pinned: ConversationSummary[]
     lastKey: string | null
     hasMore: boolean
+    projects: Project[]
 }
 
 const KEY_SUFFIX = '_conversation_history_cache_v1'
@@ -31,10 +32,11 @@ export function loadHistoryCache(customerId: string | null): HistoryCacheState |
             if (parsed && Array.isArray(parsed.items)) {
                 cache = {
                     items: parsed.items,
-                    // Entries written before the Pinned feature have no pinned array
+                    // Entries written before the Pinned/Projects features lack these arrays
                     pinned: Array.isArray(parsed.pinned) ? parsed.pinned : [],
                     lastKey: parsed.lastKey ?? null,
                     hasMore: !!parsed.hasMore,
+                    projects: Array.isArray(parsed.projects) ? parsed.projects : [],
                 }
                 cacheCustomerId = customerId
                 return cache
