@@ -735,6 +735,8 @@ describe('ConversationHistoryComponent', () => {
             const btn = screen.getByTestId('conv-history-project-new-conv-proj-1')
             expect(btn).toHaveAttribute('title', 'New conversation')
             expect(btn).toHaveAttribute('aria-label', 'New conversation')
+            // Permanently visible — not a hover-revealed action
+            expect(btn.className).not.toContain('hoverReveal')
 
             fireEvent.click(btn)
 

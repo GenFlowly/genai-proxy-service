@@ -430,13 +430,15 @@ export default function ConversationHistoryComponent() {
             testId: `conv-history-project-${project.id}`,
             actions: [
                 {
-                    icon: <Icon src={ICONS.MESSAGE_PLUS} size={14} aria-hidden={true} />,
+                    // Always visible (no revealOnHover): starting a chat in a
+                    // project is a primary affordance, not a row-management
+                    // one. Same plus icon as the app's New Chat button.
+                    icon: <Icon src={ICONS.PLUS} size={14} aria-hidden={true} />,
                     label: t('conversation.conversationHistory.newConversationInProject'),
                     onClick: (e: React.MouseEvent) => {
                         e.stopPropagation()
                         handleNewConversationInProject(project)
                     },
-                    revealOnHover: true,
                     testId: `conv-history-project-new-conv-${project.id}`,
                 },
             ],
