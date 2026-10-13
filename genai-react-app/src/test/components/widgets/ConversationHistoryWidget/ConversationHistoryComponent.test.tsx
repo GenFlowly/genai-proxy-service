@@ -10,6 +10,10 @@ import {
     archiveConversation,
     pinConversation,
     unpinConversation,
+    getProjects,
+    createProject,
+    assignConversationToProject,
+    unassignConversationFromProject,
 } from '../../../../services/conversationHistoryService'
 import { clearHistoryCache } from '../../../../components/widgets/ConversationHistoryWidget/historyCache'
 
@@ -32,6 +36,10 @@ const mockShowToast = jest.fn()
 const mockGetAccessTokenSilently = jest.fn().mockResolvedValue('mock-token')
 const mockGetCustomerConversations = getCustomerConversations as jest.Mock
 const mockGetPinnedConversations = getPinnedConversations as jest.Mock
+const mockGetProjects = getProjects as jest.Mock
+const mockCreateProject = createProject as jest.Mock
+const mockAssignToProject = assignConversationToProject as jest.Mock
+const mockUnassignFromProject = unassignConversationFromProject as jest.Mock
 
 const defaultConversations = [
     { conversationId: 'conv-1', title: 'First Chat', createdAt: null, updatedAt: null },
@@ -67,6 +75,7 @@ describe('ConversationHistoryComponent', () => {
             lastEvaluatedKey: null,
         })
         mockGetPinnedConversations.mockResolvedValue({ conversations: [] })
+        mockGetProjects.mockResolvedValue({ projects: [] })
     })
 
     test('renders Recents heading once conversations load', async () => {
@@ -120,7 +129,7 @@ describe('ConversationHistoryComponent', () => {
         expect(screen.getByText('conv-2')).toBeInTheDocument()
     })
 
-    test('shows empty state when no conversations', async () => {
+    test('with no conversations the panel still offers the Projects section', async () => {
         mockGetCustomerConversations.mockResolvedValue({
             conversations: [],
             lastEvaluatedKey: null,
@@ -128,9 +137,13 @@ describe('ConversationHistoryComponent', () => {
 
         render(<ConversationHistoryComponent />)
 
+        // The create-project row counts as content, so the old empty state is
+        // replaced by a Projects section holding just the control
         await waitFor(() => {
-            expect(screen.getByText('No conversations yet')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-new-project')).toBeInTheDocument()
         })
+        expect(screen.getByText('Projects')).toBeInTheDocument()
+        expect(screen.queryByText('No conversations yet')).not.toBeInTheDocument()
     })
 
     test('shows error state when fetch fails', async () => {
@@ -569,13 +582,115 @@ describe('ConversationHistoryComponent', () => {
             ).toBeTruthy()
         })
 
-        test('history without project conversations shows no Projects section', async () => {
+        test('Projects section shows the create control even when nothing is grouped', async () => {
             render(<ConversationHistoryComponent />)
 
             await waitFor(() => {
                 expect(screen.getByText('Recents')).toBeInTheDocument()
             })
-            expect(screen.queryByText('Projects')).not.toBeInTheDocument()
+            expect(screen.getByText('Projects')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-new-project')).toBeInTheDocument()
+        })
+
+        test('lists a project from the API as a collapsed entry even when empty', async () => {
+            mockGetProjects.mockResolvedValue({
+                projects: [
+                    { projectId: 'proj-9', name: 'Empty One', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+                ],
+            })
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-project-proj-9')).toBeInTheDocument()
+            })
+            expect(screen.getByText('Empty One')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-project-proj-9')).toHaveAttribute('aria-expanded', 'false')
+        })
+
+        test('creates a project from the sidebar', async () => {
+            mockCreateProject.mockResolvedValue({
+                projectId: 'PRJNEW', name: 'My Research', createdAt: '2026-10-13T00:00:00Z', updatedAt: '2026-10-13T00:00:00Z',
+            })
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-new-project')).toBeInTheDocument()
+            })
+            fireEvent.click(screen.getByTestId('conv-history-new-project'))
+
+            const nameInput = screen.getByPlaceholderText('Project name')
+            fireEvent.change(nameInput, { target: { value: 'My Research' } })
+            fireEvent.click(screen.getByTestId('new-project-create-btn'))
+
+            await waitFor(() => {
+                expect(createProject).toHaveBeenCalledWith('mock-token', 'My Research')
+            })
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-project-PRJNEW')).toBeInTheDocument()
+            })
+            expect(mockShowToast).toHaveBeenCalledWith('Project created')
+        })
+
+        test('moves a conversation into a project via the picker', async () => {
+            mockGetProjects.mockResolvedValue({
+                projects: [
+                    { projectId: 'proj-1', name: 'Research', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+                ],
+            })
+            mockAssignToProject.mockResolvedValue(undefined)
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-move-btn-conv-1')).toBeInTheDocument()
+            })
+            fireEvent.click(screen.getByTestId('conv-move-btn-conv-1'))
+            fireEvent.click(screen.getByTestId('move-to-project-proj-1'))
+
+            await waitFor(() => {
+                expect(assignConversationToProject).toHaveBeenCalledWith('mock-token', 'conv-1', 'proj-1')
+            })
+
+            // Regrouped optimistically: gone from Recents, inside the
+            // (collapsed) project; expanding reveals it
+            expect(screen.queryByTestId('conv-history-item-conv-1')).not.toBeInTheDocument()
+            fireEvent.click(screen.getByTestId('conv-history-project-proj-1'))
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        })
+
+        test('removes a conversation from its project via the picker', async () => {
+            setupMocks({ activeId: 'conv-p1' })
+            mockGetCustomerConversations.mockResolvedValue({
+                conversations: [...projectConversations, ...defaultConversations],
+                lastEvaluatedKey: null,
+            })
+            mockGetProjects.mockResolvedValue({
+                projects: [
+                    { projectId: 'proj-1', name: 'Project One', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+                ],
+            })
+            mockUnassignFromProject.mockResolvedValue(undefined)
+
+            render(<ConversationHistoryComponent />)
+
+            // Project auto-expands (holds the active conversation)
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
+            })
+            fireEvent.click(screen.getByTestId('conv-move-btn-conv-p1'))
+
+            // Its current project is offered but disabled
+            expect(screen.getByTestId('move-to-project-proj-1')).toBeDisabled()
+            fireEvent.click(screen.getByTestId('remove-from-project-btn'))
+
+            await waitFor(() => {
+                expect(unassignConversationFromProject).toHaveBeenCalledWith('mock-token', 'conv-p1')
+            })
+            // Back in the global Recents list (project row itself remains)
+            expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
+            expect(screen.getByText('Recents')).toBeInTheDocument()
         })
     })
 })
