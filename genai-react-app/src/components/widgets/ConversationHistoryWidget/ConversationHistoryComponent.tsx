@@ -420,12 +420,12 @@ export default function ConversationHistoryComponent() {
         }
     }
 
-    // The Projects section renders whenever there is anything to show or the
+    // The Projects panel renders whenever there is anything to show or the
     // first load has settled, so projects are discoverable and creatable right
     // from the sidebar; it only steps aside for the initial skeleton and the
     // nothing-at-all error state
     const hasAnyData = items.length > 0 || pinned.length > 0 || projects.length > 0
-    const showProjectsSection = hasAnyData || (!isLoading && !error)
+    const showProjectsPanel = hasAnyData || (!isLoading && !error)
 
     const newProjectRow = {
         id: 'new-project',
@@ -439,17 +439,19 @@ export default function ConversationHistoryComponent() {
         testId: 'conv-history-new-project',
     }
 
-    // Projects on top, then the global Pinned and Recents sections; the
-    // global sections are omitted when empty
-    const groups: SidebarListGroup[] = [
-        ...(showProjectsSection
-            ? [{
-                id: 'projects',
-                label: t('conversation.conversationHistory.projects'),
-                items: [newProjectRow],
-                groups: projectBuckets.map(toProjectGroup),
-            }]
-            : []),
+    // The Projects panel's own library sidebar panel, stacked above History
+    const projectsGroups: SidebarListGroup[] = [
+        {
+            id: 'projects',
+            label: t('conversation.conversationHistory.projects'),
+            items: [newProjectRow],
+            groups: projectBuckets.map(toProjectGroup),
+        },
+    ]
+
+    // The History panel below it: global Pinned and Recents only; each
+    // section is omitted when empty
+    const historyGroups: SidebarListGroup[] = [
         ...(globalPinned.length > 0
             ? [{
                 id: 'pinned',
@@ -468,22 +470,38 @@ export default function ConversationHistoryComponent() {
 
     return (
         <>
-            <SidebarListPanel
-                groups={groups}
-                isLoading={isLoading}
-                hasError={error}
-                errorText={t('conversation.conversationHistory.failedToLoad')}
-                emptyText={t('conversation.conversationHistory.noConversationsYet')}
-                listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
-                footer={hasMore && (
-                    <SidebarListLoadMore
-                        label={isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
-                        onClick={handleLoadMore}
-                        disabled={isLoading}
-                        testId="conv-history-load-more"
-                    />
+            <div className={styles.stack}>
+                {showProjectsPanel && (
+                    <div className={styles.projectsPane} data-testid="projects-pane">
+                        <SidebarListPanel
+                            groups={projectsGroups}
+                            isLoading={false}
+                            hasError={false}
+                            errorText={t('conversation.conversationHistory.failedToLoad')}
+                            emptyText={t('conversation.conversationHistory.noProjectsYet')}
+                            listAriaLabel={t('conversation.conversationHistory.projects')}
+                        />
+                    </div>
                 )}
-            />
+                <div className={styles.historyPane} data-testid="history-pane">
+                    <SidebarListPanel
+                        groups={historyGroups}
+                        isLoading={isLoading}
+                        hasError={error}
+                        errorText={t('conversation.conversationHistory.failedToLoad')}
+                        emptyText={t('conversation.conversationHistory.noConversationsYet')}
+                        listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
+                        footer={hasMore && (
+                            <SidebarListLoadMore
+                                label={isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
+                                onClick={handleLoadMore}
+                                disabled={isLoading}
+                                testId="conv-history-load-more"
+                            />
+                        )}
+                    />
+                </div>
+            </div>
 
             <Modal
                 isOpen={isCreateProjectOpen}
