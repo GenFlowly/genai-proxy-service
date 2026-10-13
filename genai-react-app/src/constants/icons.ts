@@ -29,6 +29,7 @@ import logoutIcon from '../assets/icons/logout.svg'
 import archiveIcon from '../assets/icons/archive.svg'
 import folderIcon from '../assets/icons/folder.svg'
 import folderPlusIcon from '../assets/icons/folder-plus.svg'
+import messagePlusIcon from '../assets/icons/message-plus.svg'
 import pinIcon from '../assets/icons/pin.svg'
 import pinOffIcon from '../assets/icons/pin-off.svg'
 import historyIcon from '../assets/icons/history.svg'
@@ -69,6 +70,7 @@ export const ICONS = {
     ARCHIVE: archiveIcon,
     FOLDER: folderIcon,
     FOLDER_PLUS: folderPlusIcon,
+    MESSAGE_PLUS: messagePlusIcon,
     PIN: pinIcon,
     PIN_OFF: pinOffIcon,
     HISTORY: historyIcon,
