@@ -20,3 +20,14 @@ export interface GetCustomerConversationsResponse {
 export interface GetPinnedConversationsResponse {
     conversations: ConversationSummary[];
 }
+
+export interface Project {
+    projectId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface GetProjectsResponse {
+    projects: Project[];
+}
