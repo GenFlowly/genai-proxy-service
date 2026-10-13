@@ -40,6 +40,7 @@ PROXY_GROUP_ALIASES = {
     "chat": "conversation",
     "conversations": "conversation",
     "instructions": "instruction",
+    "projects": "project",
     "generate-text": "generation",
     "generate-text-stream": "generation",
     "generations": "generation",

@@ -37,6 +37,14 @@ data class GenerateTextRequest(
      * resolution: the customer's default agent, falling back to the System one.
      */
     val agentId: String? = null,
+
+    /**
+     * Project a brand-new conversation is created into (history-sidebar
+     * grouping). Only read when [conversationId] is absent; a projectId that
+     * doesn't exist for the caller is dropped with a warning rather than
+     * failing the generation.
+     */
+    val projectId: String? = null,
 )
 
 /**
