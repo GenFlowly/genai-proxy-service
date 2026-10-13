@@ -69,14 +69,14 @@ describe('ConversationHistoryComponent', () => {
         mockGetPinnedConversations.mockResolvedValue({ conversations: [] })
     })
 
-    test('renders Recent heading once conversations load', async () => {
+    test('renders Recents heading once conversations load', async () => {
         render(<ConversationHistoryComponent />)
         await waitFor(() => {
-            expect(screen.getByText('Recent')).toBeInTheDocument()
+            expect(screen.getByText('Recents')).toBeInTheDocument()
         })
     })
 
-    test('renders Pinned heading above Recent when there are pinned conversations', async () => {
+    test('renders Pinned heading above Recents when there are pinned conversations', async () => {
         mockGetPinnedConversations.mockResolvedValue({
             conversations: [
                 { conversationId: 'conv-pinned', title: 'Pinned Chat', createdAt: null, updatedAt: null },
@@ -89,7 +89,7 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByText('Pinned')).toBeInTheDocument()
         })
         const pinnedHeading = screen.getByText('Pinned')
-        const recentHeading = screen.getByText('Recent')
+        const recentHeading = screen.getByText('Recents')
         // Pinned section renders before Recent
         expect(
             pinnedHeading.compareDocumentPosition(recentHeading) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -475,6 +475,107 @@ describe('ConversationHistoryComponent', () => {
                 expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
             })
             expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
+        })
+    })
+
+    describe('projects section', () => {
+        const projectConversations = [
+            { conversationId: 'conv-p1', title: 'Project chat 1', createdAt: null, updatedAt: null, projectId: 'proj-1', projectName: 'Project One' },
+            { conversationId: 'conv-p2', title: 'Project chat 2', createdAt: null, updatedAt: null, projectId: 'proj-1', projectName: 'Project One' },
+        ]
+
+        test('groups project conversations under a collapsible project entry', async () => {
+            mockGetCustomerConversations.mockResolvedValue({
+                conversations: [...projectConversations, ...defaultConversations],
+                lastEvaluatedKey: null,
+            })
+            mockGetPinnedConversations.mockResolvedValue({
+                conversations: [
+                    { conversationId: 'conv-p3', title: 'Pinned project chat', createdAt: null, updatedAt: null, pinnedAt: '2026-08-30T00:00:00Z', projectId: 'proj-1', projectName: 'Project One' },
+                ],
+            })
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByText('Projects')).toBeInTheDocument()
+            })
+
+            // The project renders as a collapsed row named after the project;
+            // its conversations stay hidden until it is expanded
+            const projectRow = screen.getByTestId('conv-history-project-proj-1')
+            expect(projectRow).toHaveAttribute('aria-expanded', 'false')
+            expect(screen.getByText('Project One')).toBeInTheDocument()
+            expect(screen.queryByTestId('conv-history-item-conv-p1')).not.toBeInTheDocument()
+            // Non-project conversations stay in the global Recents section
+            expect(screen.getByText('Recents')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+            // The only pinned conversation belongs to the project, so there is
+            // no global Pinned section
+            expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
+
+            fireEvent.click(projectRow)
+
+            expect(projectRow).toHaveAttribute('aria-expanded', 'true')
+            // Project subsections: Pinned then Recent, holding its conversations
+            expect(screen.getByText('Pinned')).toBeInTheDocument()
+            expect(screen.getByText('Recent')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-item-conv-p3')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-item-conv-p2')).toBeInTheDocument()
+        })
+
+        test('project holding the active conversation starts expanded', async () => {
+            setupMocks({ activeId: 'conv-p1' })
+            mockGetCustomerConversations.mockResolvedValue({
+                conversations: [...projectConversations, ...defaultConversations],
+                lastEvaluatedKey: null,
+            })
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-project-proj-1')).toBeInTheDocument()
+            })
+            expect(screen.getByTestId('conv-history-project-proj-1')).toHaveAttribute('aria-expanded', 'true')
+            expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
+        })
+
+        test('Projects section renders above the global Pinned and Recents sections', async () => {
+            mockGetCustomerConversations.mockResolvedValue({
+                conversations: [...projectConversations, ...defaultConversations],
+                lastEvaluatedKey: null,
+            })
+            mockGetPinnedConversations.mockResolvedValue({
+                conversations: [
+                    { conversationId: 'conv-g1', title: 'Globally pinned', createdAt: null, updatedAt: null, pinnedAt: '2026-08-30T00:00:00Z' },
+                ],
+            })
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByText('Projects')).toBeInTheDocument()
+            })
+
+            const projectsHeading = screen.getByText('Projects')
+            const pinnedHeading = screen.getByText('Pinned')
+            const recentsHeading = screen.getByText('Recents')
+            expect(
+                projectsHeading.compareDocumentPosition(pinnedHeading) & Node.DOCUMENT_POSITION_FOLLOWING
+            ).toBeTruthy()
+            expect(
+                pinnedHeading.compareDocumentPosition(recentsHeading) & Node.DOCUMENT_POSITION_FOLLOWING
+            ).toBeTruthy()
+        })
+
+        test('history without project conversations shows no Projects section', async () => {
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByText('Recents')).toBeInTheDocument()
+            })
+            expect(screen.queryByText('Projects')).not.toBeInTheDocument()
         })
     })
 })
