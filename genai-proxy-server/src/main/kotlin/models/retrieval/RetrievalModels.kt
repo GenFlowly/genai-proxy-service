@@ -169,7 +169,13 @@ data class RetrievalResult(
     /** JSON array of tool calls the model made, null when it answered directly */
     val toolCallsJson: String? = null,
     /** JSON array of artifacts built-in tools produced (see StreamChunk.GeneratedArtifacts) */
-    val generatedArtifactsJson: String? = null
+    val generatedArtifactsJson: String? = null,
+    /**
+     * User-facing reason the turn could not run (e.g. an attachment that could
+     * not be decoded as an image), set instead of [text] when the
+     * retrieval-server rejected the request with a readable message.
+     */
+    val errorMessage: String? = null
 )
 
 /** Image reference passed to the retrieval-server, which fetches the bytes from S3 itself. */

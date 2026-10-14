@@ -2,14 +2,13 @@ package com.genflowly.service
 
 import com.genflowly.providers.S3Provider
 import java.util.UUID
-import com.genflowly.models.ALLOWED_ATTACHMENT_MEDIA_TYPES
 import com.genflowly.models.AttachmentUpload
-import com.genflowly.models.MAX_ATTACHMENT_SIZE_BYTES
 import com.genflowly.models.attachmentS3Key
+import com.genflowly.models.normalizeAttachmentMediaType
 import org.slf4j.LoggerFactory
 
 /**
- * Attachment uploads/downloads: media-type and size validation, id minting,
+ * Attachment uploads/downloads: media-type normalization, id minting,
  * customer-scoped S3 keys and presigned URL orchestration. S3Provider stays a
  * thin presigning client underneath.
  */
@@ -19,28 +18,35 @@ class AttachmentService(
     private val logger = LoggerFactory.getLogger("AttachmentService")
 
     /**
-     * Validates the declared media type and size, then mints an attachment id
-     * and presigns the upload. Throws IllegalArgumentException with a
-     * client-facing message on validation failure.
+     * Mints an attachment id and presigns the upload. Any media type and size
+     * are accepted: the declared type is normalized (blank or malformed values
+     * become application/octet-stream, never rejected) and the retrieval-server
+     * later converts/compresses the image for each LLM vendor. The returned
+     * [AttachmentUpload.mediaType] is the effective type bound into the
+     * presigned PUT — the client must upload with exactly that Content-Type.
+     * Throws IllegalArgumentException with a client-facing message only for a
+     * non-positive size.
      */
-    suspend fun createUploadUrl(customerId: String, mediaType: String, sizeBytes: Long): AttachmentUpload {
-        require(mediaType in ALLOWED_ATTACHMENT_MEDIA_TYPES) {
-            "Unsupported media type '$mediaType'. Allowed: $ALLOWED_ATTACHMENT_MEDIA_TYPES"
-        }
-        require(sizeBytes in 1..MAX_ATTACHMENT_SIZE_BYTES) {
-            "Attachment size must be between 1 byte and $MAX_ATTACHMENT_SIZE_BYTES bytes"
-        }
+    suspend fun createUploadUrl(customerId: String, mediaType: String?, sizeBytes: Long): AttachmentUpload {
+        require(sizeBytes >= 1) { "Attachment size must be at least 1 byte" }
 
+        val effectiveMediaType = normalizeAttachmentMediaType(mediaType)
         val attachmentId = UUID.randomUUID().toString()
         val s3Key = attachmentS3Key(customerId, attachmentId)
-        val uploadUrl = s3Provider.presignPut(s3Key, mediaType)
+        val uploadUrl = s3Provider.presignPut(s3Key, effectiveMediaType)
 
+        // The declared type is raw client input of any length: log a bounded prefix only
         logger.info(
-            "Presigned attachment upload for customer {}: id={} mediaType={} sizeBytes={}",
-            customerId, attachmentId, mediaType, sizeBytes
+            "Presigned attachment upload for customer {}: id={} declaredMediaType={} mediaType={} sizeBytes={}",
+            customerId, attachmentId, mediaType?.take(100), effectiveMediaType, sizeBytes
         )
 
-        return AttachmentUpload(attachmentId = attachmentId, s3Key = s3Key, uploadUrl = uploadUrl)
+        return AttachmentUpload(
+            attachmentId = attachmentId,
+            s3Key = s3Key,
+            mediaType = effectiveMediaType,
+            uploadUrl = uploadUrl
+        )
     }
 
     /**

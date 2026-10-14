@@ -20,6 +20,7 @@ from graph.nodes.llm_node import (
     _make_system,
     _render_template,
     _user_content,
+    plan_request_images,
 )
 from graph.state import RetrievalState
 
@@ -107,8 +108,11 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
 
         # Response generators send the current turn's images; other nodes stay text-only
         query_image_blocks: list = []
+        image_plan = plan_request_images(state, provider, with_history=include_history and is_response_node)
         if is_response_node:
-            query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True)
+            query_image_blocks = await _image_blocks(
+                state.get("query_images", []), strict=True, limits=image_plan.limits,
+            )
         current_content = _user_content(rendered_input, query_image_blocks)
 
         if include_history:
@@ -126,7 +130,9 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
                     is_last = (i == last_idx)
                     cache_this = cache_anthropic and is_last
                     if role == "user":
-                        turn_blocks = await _image_blocks(turn.get("images", []), strict=False)
+                        turn_blocks = await _image_blocks(
+                            turn.get("images", []), strict=False, limits=image_plan.limits, omitted=image_plan.omitted,
+                        )
                         messages.append(_make_human(_user_content(content, turn_blocks), cache_this))
                     else:
                         messages.append(_make_ai(content, cache_this))
