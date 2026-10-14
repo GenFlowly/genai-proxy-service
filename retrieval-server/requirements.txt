@@ -40,6 +40,15 @@ langchain-litellm
 
 boto3
 
+# Attachment image normalization (graph/image_normalize.py): uploads may be any
+# image type/size; we sniff and losslessly convert/downscale for the vendors.
+# Pillow >= 11.3: first manylinux wheels bundling libavif (native AVIF decode).
+# pi-heif: the decode-only HEIF/HEIC build of pillow-heif (BSD + LGPL libheif/
+# libde265; no GPL x265 encoder). Both ship manylinux_2_28 wheels for CPython
+# 3.11 x86_64 — no build deps needed in the python:3.11-slim image.
+Pillow>=11.3
+pi-heif>=1.0
+
 # Built-in graph tools (graph_tools/): markdown -> PDF rendering
 markdown
 xhtml2pdf

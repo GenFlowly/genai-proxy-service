@@ -13,7 +13,8 @@ from content_logging import LOG_USER_CONTENT, redact
 from encoding_library.observability import count, observe
 from graph.credentials import credentials_for, resolve_credentials
 from graph.llm_factory import THINKING_LEVELS, get_llm
-from graph.s3_images import fetch_image_base64
+from graph.image_normalize import ImageNormalizationError
+from graph.s3_images import fetch_image_for_llm
 from graph.state import RetrievalState
 from graph.tools_runtime import specs_for
 
@@ -230,24 +231,30 @@ def _make_human(content, cache: bool) -> HumanMessage:
     return HumanMessage(content=blocks)
 
 
-async def _image_blocks(images: list, strict: bool) -> list:
+async def _image_blocks(images: list, strict: bool, provider: str | None = None) -> list:
     """
     Resolve [{s3_key, media_type}, ...] into data-URL image blocks. The
     image_url form is normalized by langchain-anthropic/-openai/-google-genai
     into each provider's native image format, so one shape covers all vendors.
 
-    strict=True (current turn): a fetch failure fails the request.
+    Uploads may be any image type/size: fetch_image_for_llm sniffs the real
+    format and converts/downscales for `provider` (see graph/image_normalize.py),
+    so the data URL carries the media type of the bytes actually sent — the
+    declared img["media_type"] is not trusted.
+
+    strict=True (current turn): a failure fails the request; an
+    ImageNormalizationError message reaches the user verbatim (streaming.py).
     strict=False (history replay): failed images degrade to a text note.
     """
     blocks = []
     for img in images or []:
         s3_key = img.get("s3_key", "")
         try:
-            b64 = await asyncio.to_thread(fetch_image_base64, s3_key)
-            media_type = img.get("media_type") or "image/png"
+            b64, media_type = await asyncio.to_thread(fetch_image_for_llm, s3_key, provider)
             blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{b64}"}})
         except Exception as e:
-            logger.error("Failed to fetch attachment image %s: %s", s3_key, e)
+            log = logger.warning if isinstance(e, ImageNormalizationError) else logger.error
+            log("Failed to prepare attachment image %s: %s", s3_key, e)
             if strict:
                 raise
             blocks.append({"type": "text", "text": "[attached image unavailable]"})
@@ -350,7 +357,8 @@ async def _tool_messages(tool_results: list, provider: str) -> list:
             data = img.get("data")
             if not data and img.get("s3_key"):
                 try:
-                    data = await asyncio.to_thread(fetch_image_base64, img["s3_key"])
+                    # Normalized like attachments; the media type is the sniffed one.
+                    data, media_type = await asyncio.to_thread(fetch_image_for_llm, img["s3_key"], provider)
                 except Exception as e:
                     logger.error("Failed to fetch tool-result image %s: %s", img.get("s3_key"), e)
                     blocks.append({"type": "text", "text": "[image unavailable]"})
@@ -916,7 +924,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # nodes stay text-only (they don't need pixels, and it keeps them cheap).
         query_image_blocks: list = []
         if is_response_node:
-            query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True)
+            query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True, provider=provider)
         current_content = _user_content(rendered_input, query_image_blocks)
 
         # Tool results for the current turn — must directly follow the assistant
@@ -950,7 +958,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                     if role == "user":
                         # Replayed tool results precede the turn's own text
                         messages.extend(await _tool_messages(turn.get("tool_results"), provider))
-                        turn_blocks = await _image_blocks(turn.get("images", []), strict=False)
+                        turn_blocks = await _image_blocks(turn.get("images", []), strict=False, provider=provider)
                         if content or turn_blocks:
                             messages.append(_make_human(_user_content(content, turn_blocks), cache_this))
                     else:

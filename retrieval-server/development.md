@@ -37,6 +37,40 @@ Every outbound call to a third-party API MUST go through `encoding_library.utils
 - **boto3 (DynamoDB/S3/KMS)** has its own built-in backoff — don't double-wrap.
 - **Voice realtime websockets** are stateful sessions; reconnection is session logic, deliberately not covered by this util.
 
+## Image attachments: any type, any size
+
+Uploads are unrestricted: the proxy accepts any media type (blank → `application/octet-stream`) and any size. The retrieval server makes the bytes acceptable to the LLM vendor at call time. `graph/s3_images.fetch_image_for_llm(s3_key, provider)` reads the S3 object, and `graph/image_normalize.normalize_image` (pure, no S3) returns `(bytes, media_type)`. The result is LRU-cached per `(s3_key, format set)`; the original S3 object is never modified.
+
+- **Sniffed, never trusted.** The format comes from the bytes (Pillow + `pi-heif` for HEIC/HEIF; AVIF, TIFF, BMP, WebP, GIF, ICO, PSD, … via Pillow). The data URL always carries the media type of the bytes actually sent.
+- **Passthrough** (bytes untouched, decided from the header without decoding): the format is one the vendor documents (`passthrough_formats_for`: Anthropic/OpenAI JPEG/PNG/GIF/WebP, Gemini JPEG/PNG/WebP, everyone else incl. xAI and LiteLLM-routed vendors JPEG/PNG), the base64 size is within budget, both edges are ≤ the max edge, there's no EXIF rotation, and the image isn't animated. Multi-frame JPEGs (MPO / Ultra HDR) count as plain JPEGs.
+- **Otherwise: lossless PNG** (accepted by every vendor). The first frame is decoded, EXIF orientation applied, and the mode normalized to 8-bit L/RGB/RGBA. The ICC profile is kept when it matches the colour space; EXIF (incl. GPS) is dropped. If it is over budget, it is downscaled (LANCZOS) and re-encoded losslessly. The target size comes from a 6×6 tile-mosaic size estimate, so a typical photo needs one full encode. Downscaling stops at a 1568 px long edge (Claude's standard-tier max); only if lossless can't fit there does it fall back to **JPEG q90→50** (alpha flattened onto white).
+- **Unusable files fail the turn with a readable message.** These are `ImageNormalizationError` (a `ValueError`) and its subclasses `UnsupportedImageError` (SVG, PDF, camera RAW, video, garbage, truncated) and `ImageTooLargeError`. `streaming.user_facing_llm_error` passes the message through verbatim as `error_type: "attachment_error"`, instead of "The provider returned an error". In history replay (`strict=False`) a failed image degrades to `[attached image unavailable]`.
+- **Resource guards** (one process, 1 GB RAM, one shared CPU serves everyone):
+  - Pixel limits are checked from the header before decoding: 52 MP, or half that for images with alpha, because resampling premultiplies into a full-size copy.
+  - Baseline JPEGs up to 256 MP (Samsung 200 MP = 199.7 MP) decode at 1/2–1/8 scale via `draft()`. Progressive JPEGs over the pixel limit are refused.
+  - The source size is checked from S3 `ContentLength` before the body is read.
+  - Heavy decode/encode is serialized by a module-level lock.
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `IMAGE_MAX_BASE64_BYTES` | 5 MiB | Per-image budget on the **base64** string. Anthropic's 5 MB limit on Bedrock/Vertex is measured on base64 (10 MB on the direct API); this is the strictest per-image vendor limit. |
+| `IMAGE_MAX_EDGE_PX` | 8000 | Anthropic's max dimension. |
+| `IMAGE_MAX_DECODE_PIXELS` | 52,000,000 | Decompression-bomb / OOM guard. Admits iPhone 48 MP (48.8 MP) and 50 MP Android modes. |
+| `IMAGE_MAX_SOURCE_BYTES` | 100 MiB | Operational OOM guard, not a product limit. Covers 200 MP JPEGs (~25–60 MB) and 48 MP PNGs (~75 MB). |
+
+Measured on one core (`taskset -c 0`, synthetic photo-like fixtures, median of 3):
+
+| Input | Wall time | Peak RSS growth | Output |
+|---|---|---|---|
+| 12 MP HEIC | 1.5 s | +93 MB | 2005×1504 lossless PNG |
+| 48 MP HEIC | 3.9 s | +336 MB | 2123×1592 |
+| 48 MP JPEG | 1.2 s | +88 MB | |
+| 200 MP JPEG | 1.6 s | +87 MB | |
+| 48 MP PNG (77 MB) | 3.0 s | +252 MB | |
+| Rotated 12 MP JPEG | 1.2 s | | upright 1456×1941 |
+
+In-budget JPEG/PNG pass through in under 50 ms.
+
 ## Customer-defined tools
 
 A customer's tool is a stored RECORD, not code, so adding one costs a row rather
