@@ -468,6 +468,26 @@ export class DynamoDBStack extends cdk.Stack {
                 name: 'memoryId',
                 type: dynamodb.AttributeType.STRING,
             },
+            // Sparse work queue (same pattern as CustomerNotes'
+            // embedding-status-index): only "META#PENDING#<conversationId>"
+            // rows carry `pendingShard` (constant "PENDING"), so this index
+            // holds exactly the extraction jobs awaiting a run/retry and the
+            // proxy's reconciler drains it by dueAt. It shrinks to near-empty
+            // in steady state.
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'pending-extraction-index',
+                    partitionKey: {
+                        name: 'pendingShard',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'dueAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
         };
 
         // Maps a request type (e.g. INSTRUCTION_PERSONA) to the agent graph

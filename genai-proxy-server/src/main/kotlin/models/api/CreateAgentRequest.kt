@@ -16,5 +16,7 @@ data class CreateAgentRequest(
     val outputFormat: String = "text",
     val modelPreference: AIConfig? = null,
     val inputTemplate: String = "",
-    val maxTokens: Int? = null
+    val maxTokens: Int? = null,
+    /** Reasoning effort pinned on the node ("none"|"low"|"medium"|"high"); null = vendor default. */
+    val thinkingLevel: String? = null
 )

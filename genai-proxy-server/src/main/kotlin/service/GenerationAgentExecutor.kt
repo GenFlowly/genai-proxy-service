@@ -2,16 +2,13 @@ package com.genflowly.service
 
 import com.genflowly.EmbeddingConstants
 import com.genflowly.config.AppConfig
-import com.genflowly.models.AIConfig
 import com.genflowly.models.AIGenerateResult
 import com.genflowly.models.CustomerAIProviderConfig
-import com.genflowly.models.Message
 import com.genflowly.models.ResolvedAgent
 import com.genflowly.models.toCredentialKey
 import com.genflowly.models.toProviderString
 import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.repository.CustomerProfileRepository
-import com.genflowly.utils.PromptTemplateRenderer
 import kotlinx.coroutines.CancellationException
 import mu.KotlinLogging
 
@@ -30,31 +27,35 @@ class CustomerAIFailoverException(
 ) : RuntimeException(message)
 
 /**
- * Executes a [ResolvedAgent] (a 1-node generation graph) for internal flows
- * (titles, personas, memory extraction) — always on the CUSTOMER's stored
- * vendor keys, never the system keys: customers pay for their own activity.
- * The one deliberate exception: ADMIN_PANEL accounts with no keys of their
- * own fall back to the system keys, since admin operations are ours to pay
- * for and the admin panel only manages the system key store.
+ * Executes a [ResolvedAgent] (a published request-agent graph) for internal
+ * flows (titles, personas, memory extraction) — always through the retrieval
+ * server's LangGraph runtime (the single execution path for request agents),
+ * and always on the CUSTOMER's stored vendor keys, never the system keys:
+ * customers pay for their own activity. The one deliberate exception:
+ * ADMIN_PANEL accounts with no keys of their own fall back to the system
+ * keys, since admin operations are ours to pay for and the admin panel only
+ * manages the system key store.
  *
  * Provider candidates, in order:
  *  1. The customer's own prioritized (vendor, model, priority) configs from
  *     their settings, when any are set.
  *  2. Otherwise, derived from whichever vendors they have a valid key for:
  *     the agent's preferred vendor first (with the agent's model), then the
- *     remaining keyed vendors with the bundled per-vendor default model — so
+ *     remaining keyed vendors with the seeded per-vendor default model — so
  *     a customer who only has, say, a CLAUDE key still gets titles even when
  *     the agent prefers OPENAI.
  *  3. For keyless ADMIN_PANEL accounts only: the system provider configs.
  *
- * Candidates are tried in order; any generation (or parse) failure moves on
- * to the next one. Templates render eagerly, before any provider call, so a
- * template error surfaces immediately instead of burning failover attempts.
+ * Candidates are tried in order; any generation failure — including BLANK
+ * output and a parse failure — moves on to the next one. Customer-key
+ * candidates run durably (DBOS) when the retrieval server has the durable
+ * runtime configured; system-key candidates always run plain, because the
+ * durable path resolves credentials server-side from the customer's stored
+ * keys.
  */
 class GenerationAgentExecutor(
-    private val utilityGenerationService: UtilityGenerationService,
     private val customerCredentialsService: CustomerCredentialsService,
-    private val defaultsLoader: RequestAgentDefaultsLoader,
+    private val requestAgentSeeds: RequestAgentSeeds,
     private val systemApiKeyService: SystemApiKeyService,
     private val customerProfileRepository: CustomerProfileRepository,
     private val retrievalServerClient: RetrievalServerClient
@@ -73,7 +74,7 @@ class GenerationAgentExecutor(
         conversationId: String
     ): AIGenerateResult {
         return try {
-            runWithFailover(agent, variables, customerId, conversationId, agent.requestType.name) { it }
+            runWithFailover(agent, variables, customerId, agent.requestType.name) { it }
         } catch (e: NoCustomerAIKeyException) {
             logger.warn { "${agent.requestType}: skipped for customer $customerId — ${e.message}" }
             emptyResult()
@@ -90,10 +91,11 @@ class GenerationAgentExecutor(
 
     /**
      * Generate and [parse] the response text, with provider failover on the
-     * customer's keys. A parse failure (e.g. unparseable persona JSON) counts
-     * as a provider failure and advances to the next candidate. THROWS
-     * ([NoCustomerAIKeyException] / [CustomerAIFailoverException]) when no
-     * candidate succeeds, so callers can react.
+     * customer's keys. A parse failure (e.g. unparseable persona or
+     * memory-operations JSON) counts as a provider failure and advances to
+     * the next candidate. THROWS ([NoCustomerAIKeyException] /
+     * [CustomerAIFailoverException]) when no candidate succeeds, so callers
+     * can react.
      */
     suspend fun <T> executeWithCustomerFailover(
         agent: ResolvedAgent,
@@ -104,20 +106,16 @@ class GenerationAgentExecutor(
         /** JSON Schema for vendor-enforced structured output — makes [parse] failures near-impossible */
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         parse: (String) -> T
-    ): T = runWithFailover(agent, variables, customerId, conversationId, operationName, responseSchema) { parse(it.text) }
+    ): T = runWithFailover(agent, variables, customerId, operationName, responseSchema) { parse(it.text) }
 
     private suspend fun <T> runWithFailover(
         agent: ResolvedAgent,
         variables: Map<String, String>,
         customerId: String,
-        conversationId: String,
         operationName: String,
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         transform: (AIGenerateResult) -> T
     ): T {
-        val systemPrompt = PromptTemplateRenderer.render(agent.systemPromptTemplate, variables)
-        val userMessage = PromptTemplateRenderer.render(agent.userMessageTemplate, variables)
-
         val candidates = buildCandidates(agent, customerId)
         if (candidates.isEmpty()) {
             throw NoCustomerAIKeyException(
@@ -130,27 +128,9 @@ class GenerationAgentExecutor(
             try {
                 logger.info {
                     "[$operationName] Trying customer provider ${candidate.aiVendor}/${candidate.model} " +
-                            "(priority ${candidate.priority}, graph=${agent.executeAsGraph})"
+                            "(priority ${candidate.priority}, graph=${agent.graphId}, systemKey=${candidate.systemKey})"
                 }
-                val result = if (agent.executeAsGraph && agent.graphId != null) {
-                    executeGraph(agent, variables, customerId, candidate, responseSchema)
-                } else {
-                    utilityGenerationService.generateTextWithApiKey(
-                        aiVendor = candidate.aiVendor,
-                        model = candidate.model,
-                        messages = listOf(
-                            buildMessage(
-                                conversationId, userMessage, customerId,
-                                AIConfig(candidate.aiVendor, candidate.model)
-                            )
-                        ),
-                        systemPrompt = systemPrompt,
-                        apiKey = candidate.apiKey,
-                        maxTokens = agent.maxTokens,
-                        responseSchema = responseSchema,
-                        requestSource = agent.requestType.name.lowercase()
-                    )
-                }
+                val result = executeGraph(agent, variables, customerId, candidate, responseSchema)
                 return transform(result)
             } catch (e: CancellationException) {
                 throw e
@@ -170,9 +150,10 @@ class GenerationAgentExecutor(
     }
 
     /**
-     * Multi-node request agents run through the retrieval server's LangGraph
-     * runtime — the same engine that serves customer chat — so every node the
-     * user added (retrieval, ranking, extra generations) actually executes.
+     * Runs the agent's graph through the retrieval server's LangGraph runtime
+     * — the same engine that serves customer chat — so every node (single
+     * GENERATION agents included) actually executes there: one template
+     * dialect, node-level thinking control, and DBOS durability all apply.
      * A blank response counts as a provider failure and advances failover.
      */
     private suspend fun executeGraph(
@@ -183,7 +164,7 @@ class GenerationAgentExecutor(
         responseSchema: kotlinx.serialization.json.JsonObject?
     ): AIGenerateResult {
         val result = retrievalServerClient.executeAgentGraph(
-            graphId = requireNotNull(agent.graphId),
+            graphId = agent.graphId,
             customerId = customerId,
             variables = variables,
             llmCredentials = mapOf(candidate.aiVendor.toCredentialKey() to candidate.apiKey),
@@ -193,7 +174,10 @@ class GenerationAgentExecutor(
             modelType = EmbeddingConstants.MODEL_TYPE,
             modelName = EmbeddingConstants.MODEL_NAME,
             responseSchema = responseSchema,
-            requestSource = agent.requestType.name.lowercase()
+            requestSource = agent.requestType.name.lowercase(),
+            // Durable execution resolves credentials from the customer's
+            // stored keys server-side — meaningless for a system key.
+            durable = !candidate.systemKey
         )
         val text = result.text
         check(!text.isNullOrBlank()) {
@@ -232,8 +216,9 @@ class GenerationAgentExecutor(
         val usableKeys = customerCredentialsService.getUsableVendorKeys(customerId)
         if (usableKeys.isEmpty()) return emptyList()
 
+        // The published agent's own model preference (from its GENERATION node
+        // config) — the only place a request agent's model comes from.
         val preference = agent.modelPreference
-            ?: defaultsLoader.defaults[agent.requestType]?.modelPreference
 
         return buildList {
             val preferredKey = preference?.let { usableKeys[it.aiVendor] }
@@ -243,7 +228,7 @@ class GenerationAgentExecutor(
             usableKeys
                 .filterKeys { it != preference?.aiVendor }
                 .forEach { (vendor, key) ->
-                    val model = defaultsLoader.vendorDefaultModels[vendor] ?: return@forEach
+                    val model = requestAgentSeeds.vendorDefaultModels[vendor] ?: return@forEach
                     add(CustomerAIProviderConfig(vendor, model, key, priority = size + 1))
                 }
         }
@@ -270,27 +255,11 @@ class GenerationAgentExecutor(
             }
         }
         return systemConfigs.map {
-            CustomerAIProviderConfig(it.aiVendor, it.model, it.apiKey, it.priority)
+            CustomerAIProviderConfig(it.aiVendor, it.model, it.apiKey, it.priority, systemKey = true)
         }
     }
 
     private fun emptyResult() = AIGenerateResult(
         text = "", inputTokens = null, outputTokens = null, totalTokens = null, tokensReadFromCache = null
-    )
-
-    private fun buildMessage(
-        conversationId: String,
-        text: String,
-        customerId: String,
-        aiConfig: AIConfig
-    ) = Message(
-        conversationId = conversationId,
-        text = text,
-        client = "internal",
-        role = "user",
-        customerId = customerId,
-        systemPrompt = "",
-        aiConfig = listOf(aiConfig),
-        previousMessageId = null
     )
 }

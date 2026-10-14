@@ -23,12 +23,13 @@ import {
     CollapsedVendorBrandName
 } from '../../../common/BrandName/BrandName'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
+import { getThinkingLevelInfo } from '../../../../utils/thinkingLevels'
 import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 
 export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
     const { t } = useTranslation()
     const { ai, auth } = useSidebarWidget()
-    const { config, setSelectedModelForAIVendor, resetConfig } = ai
+    const { config, setSelectedModelForAIVendor, setThinkingLevelForAIVendor, resetConfig } = ai
     const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList } = auth
     const { showToast } = useToast()
 
@@ -50,6 +51,9 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
 
     const getSelectedModel = (aiVendor: string) =>
         config.find(c => c.aiVendor === aiVendor)?.model ?? ''
+
+    const getThinkingLevel = (aiVendor: string): string =>
+        config.find(c => c.aiVendor === aiVendor)?.thinkingLevel ?? ''
 
     const isVendorEnabled = (vendor: string) => {
         const status = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
@@ -306,6 +310,32 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                                     {models.map(model => (
                                         <option key={model} value={model}>
                                             {model}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
+                            {/* Reasoning effort for this vendor's responses; rides the
+                                request's aiConfig and overrides the agent's node-level
+                                thinking_level on the response generator. */}
+                            {isActive && isEnabled && selectedModel &&
+                                getThinkingLevelInfo(selectedModel).options.length > 0 && (
+                                <select
+                                    value={getThinkingLevel(vendor)}
+                                    onChange={e =>
+                                        setThinkingLevelForAIVendor(vendor, e.target.value)
+                                    }
+                                    className={styles.modelSelect}
+                                    aria-label={t('sidebar.aiVendorWidget.reasoning')}
+                                    data-testid={`thinking-select-${vendor}`}
+                                >
+                                    <option value="">
+                                        {t('sidebar.aiVendorWidget.reasoningDefault')}
+                                    </option>
+                                    {getThinkingLevelInfo(selectedModel).options.map(o => (
+                                        <option key={o.value} value={o.value}>
+                                            {t(`agentsPage.nodeConfigEditor.thinkingLevel_${o.value}`)}
+                                            {o.native ? ` — ${o.native}` : ''}
                                         </option>
                                     ))}
                                 </select>

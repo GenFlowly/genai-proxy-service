@@ -19,6 +19,8 @@ type CreateAgentForm = {
     outputFormat: 'text' | 'json'
     vendor: string // '' = no preference (system failover picks the model)
     model: string
+    /** '' = vendor default; else none|low|medium|high */
+    thinkingLevel: string
     inputTemplate: string
 }
 
@@ -28,6 +30,7 @@ const emptyCreateForm = (): CreateAgentForm => ({
     outputFormat: 'text',
     vendor: '',
     model: '',
+    thinkingLevel: '',
     inputTemplate: '',
 })
 
@@ -157,6 +160,7 @@ export default function AgentManager({
             outputFormat: config.output_format === 'json' ? 'json' : 'text',
             vendor: config.model_preference?.vendor ?? '',
             model: config.model_preference?.model ?? '',
+            thinkingLevel: config.thinking_level ?? '',
             inputTemplate: config.input_template ?? '',
         })
         if (config.model_preference?.vendor) void loadModelsForVendor(config.model_preference.vendor)
@@ -172,6 +176,7 @@ export default function AgentManager({
         if (editing?.instructionVersion != null) config.instruction_version = editing.instructionVersion
         if (editing?.maxTokens != null) config.max_tokens = editing.maxTokens
         if (form.vendor) config.model_preference = { vendor: form.vendor, model: form.model.trim() }
+        if (form.thinkingLevel) config.thinking_level = form.thinkingLevel
         return JSON.stringify(config)
     }
 
@@ -209,6 +214,7 @@ export default function AgentManager({
                     modelPreference: form.vendor
                         ? { aiVendor: form.vendor, model: form.model.trim() }
                         : null,
+                    thinkingLevel: form.thinkingLevel || null,
                     inputTemplate: form.inputTemplate,
                 })
                 setCreateMessage(
@@ -283,6 +289,21 @@ export default function AgentManager({
                                 {vendorDisplayName(vendor)}
                             </option>
                         ))}
+                    </select>
+                </label>
+                <label className="config-field">
+                    Reasoning effort
+                    <select
+                        value={form.thinkingLevel}
+                        disabled={creating}
+                        onChange={(e) => updateForm({ thinkingLevel: e.target.value })}
+                        data-testid="agent-thinking-level"
+                    >
+                        <option value="">Vendor default</option>
+                        <option value="none">None (fastest)</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
                     </select>
                 </label>
                 {form.vendor && (

@@ -862,7 +862,9 @@
             "preferencesSavedSuccessfully": "Preferences saved successfully!",
             "refreshModels": "Refresh Models",
             "setAsDefault": "Set as default",
-            "title": "Models"
+            "title": "Models",
+            "reasoning": "Reasoning effort",
+            "reasoningDefault": "Default reasoning"
         },
         "conversationHistorySidebarWidget": {
             "history": "History",

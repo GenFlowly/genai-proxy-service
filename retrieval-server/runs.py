@@ -30,15 +30,17 @@ import run_events
 from encoding_library.observability import count, observe
 from graph.dynamic_graph import get_or_build_durable_graph
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
-from models import RetrieveRequest
+from models import ExecuteAgentGraphRequest, RetrieveRequest
 from routes.retrieve import (
     _FALLBACK_CONFIG,
     _FALLBACK_MEMORY_NODE_ID,
     _FALLBACK_NODE_ID,
     _FALLBACK_NODE_TYPE,
+    _build_agent_graph_state,
     _build_node_configs,
     _build_state,
     _enabled_builtin_tools,
+    _prepare_agent_node_configs,
 )
 from streaming import stream_events_dicts
 
@@ -215,6 +217,58 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     return summary
 
 
+async def _request_agent_run(run_id: str, run_input: dict) -> dict:
+    """
+    Durable request-agent execution (titles, personas, memory extraction — see
+    routes.retrieve.execute_agent_graph, which dispatches here on durable=true).
+    Kept plain so it can be unit-tested without DBOS.
+
+    Unlike agent_run there is no event stream and no interrupt handling: a
+    request agent is a short internal generation whose caller awaits the
+    result. Durability means the LLM calls inside run as exactly-once DBOS
+    steps (credentials resolved from DynamoDB — never checkpointed), and a
+    crash/redeploy re-invokes the workflow, which resumes from the LangGraph
+    checkpoint (thread_id = run_id) instead of re-billing completed calls.
+    """
+    checkpointer = durable_runtime.get_checkpointer()
+    if checkpointer is None:
+        raise RuntimeError("durable runs not ready — no checkpointer")
+
+    # Credentials are forced empty regardless of input: the workflow input is
+    # checkpointed to Postgres, so a secret here would be persisted (§5.5).
+    req = ExecuteAgentGraphRequest.model_validate({**run_input, "llm_credentials": {}})
+
+    graph_data = get_graph_and_nodes_by_id(req.graph_id)
+    if graph_data is None:
+        raise ValueError(f"graph {req.graph_id} not found")
+    graph_record, nodes = graph_data
+    graph, max_iterations = get_or_build_durable_graph(
+        f"graph#{req.graph_id}", graph_record, nodes, checkpointer
+    )
+    node_configs, response_prompt = _prepare_agent_node_configs(nodes, req.variables)
+    state = _build_agent_graph_state(req, node_configs, response_prompt)
+
+    logger.info(
+        "request_agent_run START run_id=%s customer=%s graph_id=%s source=%s",
+        run_id, req.customer_id, req.graph_id, req.request_source,
+    )
+    run_start = time.perf_counter()
+    result = await graph.ainvoke(
+        state,
+        config={"recursion_limit": max_iterations, "configurable": {"thread_id": run_id}},
+    )
+    summary = {
+        "generated_response": result.get("generated_response"),
+        "error": result.get("error"),
+        "usage": result.get("usage", {}),
+    }
+    status = "error" if summary["error"] else "completed"
+    count("request_agent_run_total", status=status, source=req.request_source or "internal")
+    observe("request_agent_run_duration_seconds", time.perf_counter() - run_start)
+    logger.info("request_agent_run END run_id=%s status=%s", run_id, status)
+    return summary
+
+
 # --- DBOS binding (only when durable runs are configured) --------------------
 if durable_runtime.dbos_constructed():
     from dbos import DBOS
@@ -222,8 +276,15 @@ if durable_runtime.dbos_constructed():
     @DBOS.workflow(name="agent_run")
     async def agent_run(run_id: str, run_input: dict) -> dict:
         return await _run_agent_graph(run_id, run_input)
+
+    @DBOS.workflow(name="request_agent_run")
+    async def request_agent_run(run_id: str, run_input: dict) -> dict:
+        return await _request_agent_run(run_id, run_input)
 else:
     async def agent_run(run_id: str, run_input: dict) -> dict:  # type: ignore[misc]
+        raise RuntimeError("durable runs not configured (DATABASE_URL unset)")
+
+    async def request_agent_run(run_id: str, run_input: dict) -> dict:  # type: ignore[misc]
         raise RuntimeError("durable runs not configured (DATABASE_URL unset)")
 
 

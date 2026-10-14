@@ -99,7 +99,7 @@ class ConversationManagementService(
      * Uses AI (via the retrieval-server) to generate and store a short title
      * for the conversation based on the first prompt and instruction name.
      * The prompt template and model come from the CONVERSATION_TITLE agent
-     * (RequestAgentMap, or the bundled default). Returns the title, or null
+     * (the published RequestAgentMap graph). Returns the title, or null
      * when generation failed or produced nothing usable.
      */
     private suspend fun generateAndStoreTitle(

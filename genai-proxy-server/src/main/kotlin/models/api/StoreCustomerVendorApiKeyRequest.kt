@@ -16,5 +16,7 @@ data class StoreCustomerVendorApiKeyRequest(
 data class StoreCustomerVendorConfigRequest(
     val aiVendor: String,
     val model: String,
-    val priority: Int
+    val priority: Int,
+    /** Default reasoning effort for this vendor ("none"|"low"|"medium"|"high"; null/blank = vendor default). */
+    val thinkingLevel: String? = null
 )

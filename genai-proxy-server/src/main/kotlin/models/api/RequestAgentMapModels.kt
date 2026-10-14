@@ -14,7 +14,7 @@ data class PutRequestAgentMapRequest(
 
 /**
  * Effective mapping status for one request type: what currently resolves
- * (DDB entry or bundled config default) plus the raw DDB row when present.
+ * (published DDB agent, or UNRESOLVED) plus the raw DDB row when present.
  */
 @Serializable
 data class RequestAgentMapStatus(
@@ -23,7 +23,9 @@ data class RequestAgentMapStatus(
     val displayName: String,
     /** Template variables the server supplies to this action's prompts. */
     val templateVariables: List<String>,
-    val effectiveMapKey: String,
+    /** Map key of the agent currently serving the action; null when unresolved. */
+    val effectiveMapKey: String? = null,
+    /** "DDB" when a published agent serves the action; "UNRESOLVED" when none does (disabled/missing). */
     val effectiveSource: String,
     val ddbEntry: RequestAgentMapEntry? = null
 )

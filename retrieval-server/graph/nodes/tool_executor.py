@@ -218,6 +218,11 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         "depth": agent_depth,
         "subagents": config.get("subagents") or [],
         "spawn": _spawn,
+        # Consent flag for memory tools (search_memories): mirrors the
+        # request's governance decision so the tool can refuse on paths where
+        # it is bound without consent (notably subagents, whose state pins
+        # memory_enabled=False).
+        "memory_enabled": bool(state.get("memory_enabled")),
     })
 
     # The assistant turn that made the calls, replayed to the model next
