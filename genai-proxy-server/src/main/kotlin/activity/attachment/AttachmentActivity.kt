@@ -27,18 +27,23 @@ fun Route.registerAttachmentRoutes(
     authenticate("auth0", "apiKey") {
         post(Routes.CREATE_ATTACHMENT, {
             tags("Attachments")
-            summary = "Request a presigned URL to upload an image attachment"
-            description = "Validates the declared media type and size, then returns a short-lived " +
-                    "presigned S3 PUT URL. Upload the raw image bytes to that URL with " +
-                    "Content-Type set to the declared media type, then reference the returned " +
-                    "attachmentId/s3Key in a generate-text request."
+            summary = "Request a presigned URL to upload an attachment"
+            description = "Returns a short-lived presigned S3 PUT URL for an image of any type and " +
+                    "size (e.g. HEIC photos straight from an iPhone). The declared media type is " +
+                    "normalized — parameters are dropped and blank or malformed values become " +
+                    "application/octet-stream — and returned as mediaType. Upload the raw bytes " +
+                    "to uploadUrl with Content-Type set to exactly that returned mediaType (it is " +
+                    "part of the signature), then reference the returned attachmentId/s3Key/" +
+                    "mediaType in a generate-text request. Images are converted/compressed " +
+                    "losslessly server-side to fit each AI vendor's limits; the original upload " +
+                    "is kept unchanged."
             request {
                 body<CreateAttachmentUploadRequest> { required = true }
             }
             response {
                 code(HttpStatusCode.OK) { body<CreateAttachmentUploadResponse>() }
                 code(HttpStatusCode.BadRequest) {
-                    description = "Unsupported media type or size over the 5 MB limit"
+                    description = "Malformed request body or sizeBytes below 1"
                     body<ErrorResponse>()
                 }
                 code(HttpStatusCode.Forbidden) {
@@ -62,7 +67,8 @@ fun Route.registerAttachmentRoutes(
                     CreateAttachmentUploadResponse(
                         attachmentId = upload.attachmentId,
                         s3Key = upload.s3Key,
-                        mediaType = request.mediaType,
+                        // Normalized type bound into the presigned PUT — the client must upload with it
+                        mediaType = upload.mediaType,
                         uploadUrl = upload.uploadUrl
                     )
                 )

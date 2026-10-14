@@ -1,9 +1,11 @@
 package com.genflowly.models.retrieval
 
 import com.genflowly.models.AttachmentRef
+import com.genflowly.models.DEFAULT_ATTACHMENT_MEDIA_TYPE
 import com.genflowly.models.Message
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
+import com.genflowly.models.normalizeAttachmentMediaType
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -16,11 +18,23 @@ import kotlinx.serialization.json.jsonPrimitive
 
 private val jsonParser = Json { ignoreUnknownKeys = true }
 
-// Images only: generated artifacts (e.g. PDFs) also live in attachments but
-// must not be replayed to the LLM as image blocks.
+/**
+ * Attachments to send to the LLM as images: every "image/..." type, plus
+ * application/octet-stream — the type uploads get when the browser declares
+ * none (typical for iPhone HEIC photos). The retrieval-server identifies the
+ * real format from the bytes, so the declared type is only a hint here.
+ * Explicitly non-image types are skipped: generated artifacts (e.g. PDFs) also
+ * live in attachments but must not be replayed to the LLM as image blocks.
+ */
 fun List<AttachmentRef>.toImageRefs(): List<ImageRef> =
-    filter { it.mediaType.startsWith("image/") }
-        .map { ImageRef(s3Key = it.s3Key, mediaType = it.mediaType) }
+    mapNotNull { attachment ->
+        val mediaType = normalizeAttachmentMediaType(attachment.mediaType)
+        if (mediaType.startsWith("image/") || mediaType == DEFAULT_ATTACHMENT_MEDIA_TYPE) {
+            ImageRef(s3Key = attachment.s3Key, mediaType = mediaType)
+        } else {
+            null
+        }
+    }
 
 /**
  * Parse the retrieval-server's generated_artifacts JSON —

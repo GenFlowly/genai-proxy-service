@@ -309,12 +309,16 @@ fun Application.module() {
             tag("Attachments") {
                 description = "Image attachments for AI requests. Flow: POST /attachments with the " +
                         "image's media type and size to get a presigned S3 upload URL, PUT the raw " +
-                        "bytes to that URL, then include the returned attachmentId/s3Key/mediaType " +
+                        "bytes to that URL with Content-Type set to the mediaType returned by " +
+                        "POST /attachments, then include the returned attachmentId/s3Key/mediaType " +
                         "in the prompt.attachments array of a generate-text or generate-text-stream " +
                         "request. The s3Key is also accepted in toolResults[].images to send " +
                         "computer-use screenshots by reference (see the API introduction). " +
-                        "Supported types: PNG, JPEG, WebP, GIF; max 5 MB per image, " +
-                        "10 images per message."
+                        "Any image type (including HEIC/HEIF from phones) and any size is accepted; " +
+                        "the real format is detected from the bytes and each image is converted/" +
+                        "compressed losslessly server-side (downscaled only when needed to fit a " +
+                        "vendor's hard limits) before it reaches the model. The original upload is " +
+                        "stored unchanged. Up to 10 images per message."
             }
         }
     }

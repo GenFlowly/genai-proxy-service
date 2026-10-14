@@ -3,7 +3,6 @@ package com.genflowly.service
 import com.genflowly.models.AIVendor
 import com.genflowly.models.AttachmentRef
 import com.genflowly.models.MAX_ATTACHMENTS_PER_MESSAGE
-import com.genflowly.models.MAX_ATTACHMENT_SIZE_BYTES
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import com.genflowly.providers.S3Provider
@@ -18,9 +17,11 @@ class GenerationRequestValidator(
 ) {
 
     /**
-     * Rejects attachments the caller doesn't own (key must sit under the
-     * authenticated customer's prefix) or that were never actually uploaded /
-     * exceed the size limit. Runs only for the current turn's attachments —
+     * Rejects more than [MAX_ATTACHMENTS_PER_MESSAGE] attachments, attachments
+     * the caller doesn't own (key must sit under the authenticated customer's
+     * prefix) and ones that were never actually uploaded. There is no size or
+     * type check: the retrieval-server converts/compresses each image to fit
+     * the target vendor. Runs only for the current turn's attachments —
      * history attachments were validated when their message was created.
      */
     suspend fun validateAttachments(attachments: List<AttachmentRef>, customerId: String) {
@@ -33,11 +34,8 @@ class GenerationRequestValidator(
             require(attachment.s3Key.startsWith(ownedPrefix)) {
                 "Attachment ${attachment.attachmentId} does not belong to the authenticated customer"
             }
-            val info = s3Provider.head(attachment.s3Key)
+            s3Provider.head(attachment.s3Key)
                 ?: throw IllegalArgumentException("Attachment ${attachment.attachmentId} has not been uploaded")
-            require(info.sizeBytes <= MAX_ATTACHMENT_SIZE_BYTES) {
-                "Attachment ${attachment.attachmentId} exceeds the $MAX_ATTACHMENT_SIZE_BYTES byte limit"
-            }
         }
     }
 
