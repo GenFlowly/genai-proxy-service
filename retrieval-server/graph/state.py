@@ -56,6 +56,11 @@ class RetrievalState(TypedDict):
     llm_provider: str      # "openai" | "anthropic" | "gemini"
     llm_model: Optional[str]  # model name forwarded from request (e.g. "gpt-4o", "claude-sonnet-4-6")
     llm_max_tokens: Optional[int]  # max tokens for generation, defaults to 4096
+    # End user's per-request reasoning depth (RetrieveRequest.thinking_level).
+    # Response generators prefer it over their node config's thinking_level —
+    # the same precedence the request's model already has there; pipeline
+    # nodes keep their node-level setting.
+    request_thinking_level: Optional[str]
     conversation_history: list  # prior + current turns: [{role, content, images?}, ...]
 
     # Images attached to the current-turn query: [{s3_key, media_type}, ...].

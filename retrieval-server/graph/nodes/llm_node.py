@@ -803,6 +803,12 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                         "could not verify."
                     )
         thinking_level = config.get("thinking_level")
+        if is_response_node and state.get("request_thinking_level"):
+            # The end user's per-request choice (AI-config widget / vendor
+            # settings) wins over the agent author's node config — the same
+            # precedence the request's model already has on response
+            # generators. Pipeline nodes keep their node-level setting.
+            thinking_level = state.get("request_thinking_level")
         if thinking_level is not None and thinking_level not in THINKING_LEVELS:
             logger.warning(
                 "Node %s: invalid thinking_level %r (expected one of %s) — ignored",
