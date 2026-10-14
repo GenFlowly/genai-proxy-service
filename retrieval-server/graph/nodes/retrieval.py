@@ -48,6 +48,13 @@ def _discover_collections(
         # injected into generation context.
         if name.startswith(f"{customer_id}_instructions"):
             continue
+        # Memory collections have their own consent-gated read paths (the
+        # MEMORY node's recall and the search_memories tool), both of which
+        # join hits back to DynamoDB — the source of truth. Surfacing raw
+        # memory chunks here would bypass consent and resurface deleted
+        # memories (stale vectors) as anonymous "knowledge".
+        if name.startswith(f"{customer_id}_memory"):
+            continue
         model = resolve_model(*fallback_model)
         try:
             meta = parse_collection_description(client.describe_collection(name).get("description"))

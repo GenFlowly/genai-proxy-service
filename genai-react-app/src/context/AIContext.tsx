@@ -6,11 +6,18 @@ export interface AIConfig {
     /** Vendor id: legacy enum name (OPENAI/CLAUDE/GEMINI) or a BYOK provider id */
     aiVendor: string
     model: string
+    /**
+     * Reasoning effort for this vendor's responses ('' /undefined = vendor
+     * default, else none|low|medium|high). Rides the generate request's
+     * aiConfig, where it overrides the agent's node-level thinking_level.
+     */
+    thinkingLevel?: string
 }
 
 interface AIContextType {
     config: AIConfig[]
     setSelectedModelForAIVendor: (aiVendor: string, model: string) => void
+    setThinkingLevelForAIVendor: (aiVendor: string, thinkingLevel: string) => void
     resetConfig: () => void
     activeBlockId: string
     setActiveBlockId: (id: string) => void
@@ -115,6 +122,9 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
             aiConfigPreferences.preferredModels.forEach(pref => {
                 if (pref.aiVendor && pref.model) {
                     setSelectedModelForAIVendor(pref.aiVendor, pref.model)
+                    if (pref.thinkingLevel) {
+                        setThinkingLevelForAIVendor(pref.aiVendor, pref.thinkingLevel)
+                    }
                 }
             })
         }
@@ -148,6 +158,19 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         })
     }
 
+    // 🔹 Per-vendor reasoning effort ('' clears back to the vendor default).
+    // Only meaningful once the vendor has a config entry (a model selected).
+    const setThinkingLevelForAIVendor = (aiVendor: string, thinkingLevel: string) => {
+        if (!aiVendor) return
+        setConfig(prevConfigs =>
+            prevConfigs.map(c =>
+                c.aiVendor === aiVendor
+                    ? { ...c, thinkingLevel: thinkingLevel || undefined }
+                    : c
+            )
+        )
+    }
+
 
 
     const resetConfig = () => {
@@ -163,6 +186,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
             value={{
                 config,
                 setSelectedModelForAIVendor,
+                setThinkingLevelForAIVendor,
                 resetConfig,
                 activeBlockId,
                 setActiveBlockId,
@@ -191,6 +215,7 @@ export const useAI = (): AIContextType => {
         return {
             config: [],
             setSelectedModelForAIVendor: () => { },
+            setThinkingLevelForAIVendor: () => { },
             resetConfig: () => { },
             activeBlockId: '',
             setActiveBlockId: () => { },

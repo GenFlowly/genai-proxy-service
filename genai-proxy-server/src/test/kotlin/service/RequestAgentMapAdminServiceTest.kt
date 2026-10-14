@@ -78,10 +78,36 @@ class RequestAgentMapAdminServiceTest {
     }
 
     @Test
-    fun `deleteMapEntry removes the SYSTEM row and invalidates`() = runTest {
-        service.deleteMapEntry(RequestType.NOTE_TITLE)
+    fun `disableMapEntry writes the row back disabled instead of deleting it`() = runTest {
+        // A deleted row would be resurrected by the startup seeder; disabling
+        // preserves the admin's intent across restarts.
+        val existing = com.genflowly.models.RequestAgentMapEntry(
+            scope = SYSTEM_SCOPE,
+            requestType = RequestType.NOTE_TITLE.name,
+            mapKey = "NoteTitleDefault",
+            graphId = "GRP7",
+            enabled = true,
+        )
+        coEvery { mapRepo.getMapEntry(SYSTEM_SCOPE, "NOTE_TITLE") } returns existing
 
-        coVerify { mapRepo.deleteMapEntry(SYSTEM_SCOPE, "NOTE_TITLE") }
+        service.disableMapEntry(RequestType.NOTE_TITLE, "CU-admin")
+
+        coVerify {
+            mapRepo.putMapEntry(match {
+                it.scope == SYSTEM_SCOPE && it.requestType == "NOTE_TITLE" &&
+                        !it.enabled && it.graphId == "GRP7" && it.updatedBy == "CU-admin"
+            })
+        }
+        coVerify(exactly = 0) { mapRepo.deleteMapEntry(any(), any()) }
         coVerify { resolution.invalidate(RequestType.NOTE_TITLE) }
+    }
+
+    @Test
+    fun `disableMapEntry on a never-mapped action is an error, not a no-op`() = runTest {
+        coEvery { mapRepo.getMapEntry(SYSTEM_SCOPE, "NOTE_TITLE") } returns null
+
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            service.disableMapEntry(RequestType.NOTE_TITLE, "CU-admin")
+        }
     }
 }

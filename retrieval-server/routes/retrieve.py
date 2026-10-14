@@ -1,16 +1,20 @@
 import json
 import logging
+import re
 import time
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from langgraph.graph import END, StateGraph
 
+import durable_runtime
+
 from content_logging import LOG_USER_CONTENT
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.instruction_loader import get_instruction_text
-from graph.tools_runtime import all_builtin_tool_names
+from graph.tools_runtime import MEMORY_CONSENT_TOOLS, all_builtin_tool_names
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
 from graph.state import RetrievalState
@@ -45,6 +49,12 @@ def _enabled_builtin_tools(node_type_map: dict, node_configs: dict) -> list[str]
 
 
 def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[str]) -> RetrievalState:
+    if not req.memory_enabled:
+        # Memory consent gates the memory tools at BIND time — without it the
+        # model never sees them (same governance the MEMORY node honors). This
+        # is the single choke point: the chat, durable-run and voice paths all
+        # build their state here.
+        builtin_tools = [t for t in builtin_tools if t not in MEMORY_CONSENT_TOOLS]
     return RetrievalState(
         customer_id=req.customer_id,
         client=req.client,
@@ -72,6 +82,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         llm_provider=req.llm_provider,
         llm_model=req.llm_model,
         llm_max_tokens=req.llm_max_tokens,
+        request_thinking_level=req.thinking_level,
         conversation_history=[m.model_dump() for m in req.conversation_history],
         node_configs=node_configs,
         request_system_prompt=req.system_prompt,
@@ -293,25 +304,48 @@ async def retrieve(req: RetrieveRequest):
         raise HTTPException(status_code=500, detail=f"Graph error: {e}")
 
 
-@router.post("/execute-agent-graph")
-async def execute_agent_graph(req: ExecuteAgentGraphRequest):
+def _render_agent_variables(node_configs: dict, variables: dict) -> None:
     """
-    Execute a specific agent graph (request agents — titles, personas, …)
-    through the same LangGraph runtime that serves customer chat, so
-    multi-node request agents genuinely run as graphs. The caller supplies
-    provider/credentials (failover stays in the proxy server) and reads the
-    final state's generated_response.
-    """
-    graph_data = get_graph_and_nodes_by_id(req.graph_id)
-    if graph_data is None:
-        raise HTTPException(status_code=404, detail=f"graph {req.graph_id} not found")
-    graph_record, nodes = graph_data
-    graph, max_iterations = get_or_build_graph(f"graph#{req.graph_id}", graph_record, nodes)
-    _, node_configs, _ = _build_node_configs(nodes)
+    Render request-agent variables into every node's prompt templates up front
+    — the LangGraph state schema is fixed, so variables can't ride through
+    state. Mutates the config dicts in place (node_configs aliases the same
+    dict under nodeId and nodeType keys, so unique objects are deduped first).
 
-    # node_configs carries each dict under its nodeId AND (first per type) its
-    # nodeType — dedupe to the unique config objects before mutating them.
+    Two placeholder spellings are accepted, both replaced VERBATIM (no format
+    parsing, so JSON-valued variables containing braces are safe):
+
+      {{name}} — the authoring dialect, with optional inner whitespace: what
+                 every published instruction uses (it is the dialect the
+                 Kotlin proxy's PromptTemplateRenderer historically rendered).
+      {name}   — the graph-native spelling, kept for compatibility.
+
+    {{name}} is replaced FIRST so the single-brace pass can't corrupt it into
+    a stray-braced value. Runtime placeholders ({context}, {query}, custom
+    scratch keys, …) are left for the node's own _render_template pass.
+    """
     unique_configs = list({id(c): c for c in node_configs.values()}.values())
+    for config in unique_configs:
+        for key in ("system_prompt", "input_template"):
+            template = config.get(key)
+            if not isinstance(template, str):
+                continue
+            for name, value in variables.items():
+                double_brace = re.compile(r"\{\{\s*" + re.escape(name) + r"\s*\}\}")
+                template = double_brace.sub(lambda _m: value, template)
+                template = template.replace("{%s}" % name, value)
+            config[key] = template
+
+
+def _prepare_agent_node_configs(nodes: list[dict], variables: dict) -> tuple[dict, str | None]:
+    """
+    Shared by the plain and durable request-agent paths: build node configs
+    (instruction refs resolved), adapt GENERATION nodes to the llm_node
+    contract, render variables, and lift the response-producing node's prompt
+    (response generators take their persona from request_system_prompt — node
+    prompts are ignored there by design of the chat path).
+    Returns (node_configs, response_prompt).
+    """
+    _, node_configs, _ = _build_node_configs(nodes)
 
     # GENERATION nodes store executor-style config keys; adapt each one to the
     # llm_node contract. Their output is the graph's result by convention.
@@ -323,28 +357,24 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
         config.setdefault("response_format", "text")
         config.setdefault("include_conversation_history", False)
 
-    # Render {name} variables into every node's prompt templates up front —
-    # the LangGraph state schema is fixed, so variables can't ride through
-    # state. Runtime placeholders ({context}, {query}, custom scratch keys, …)
-    # are left for the node's own _render_template pass.
-    for config in unique_configs:
-        for key in ("system_prompt", "input_template"):
-            template = config.get(key)
-            if isinstance(template, str):
-                for name, value in req.variables.items():
-                    template = template.replace("{%s}" % name, value)
-                config[key] = template
+    _render_agent_variables(node_configs, variables)
 
-    # Response-producing nodes take their persona from request_system_prompt
-    # (node-level prompts are ignored there, by design of the chat path) —
-    # lift the producing node's resolved prompt into that slot.
     response_prompt = None
-    for config in unique_configs:
+    for config in {id(c): c for c in node_configs.values()}.values():
         if config.get("output_key") == "generated_response" and config.get("system_prompt"):
             response_prompt = config["system_prompt"]
             break
+    return node_configs, response_prompt
 
-    state = RetrievalState(
+
+def _build_agent_graph_state(
+    req: ExecuteAgentGraphRequest, node_configs: dict, response_prompt: str | None
+) -> RetrievalState:
+    """Initial state for a request-agent execution — shared by the plain route
+    and the durable workflow (runs._request_agent_run), so the two paths can
+    never drift. The durable caller passes req with llm_credentials stripped;
+    nodes then resolve keys from DynamoDB (graph.credentials)."""
+    return RetrievalState(
         customer_id=req.customer_id,
         client=req.client,
         data_type="internal",
@@ -371,6 +401,9 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
         llm_provider=req.llm_provider,
         llm_model=req.llm_model,
         llm_max_tokens=req.llm_max_tokens,
+        # Request agents control reasoning via their node config's
+        # thinking_level — there is no end-user per-request choice here.
+        request_thinking_level=None,
         conversation_history=[],
         node_configs=node_configs,
         request_system_prompt=response_prompt,
@@ -387,6 +420,49 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
         error=None,
         agent_depth=0,
     )
+
+
+@router.post("/execute-agent-graph")
+async def execute_agent_graph(req: ExecuteAgentGraphRequest):
+    """
+    Execute a specific agent graph (request agents — titles, personas, memory
+    extraction, …) through the same LangGraph runtime that serves customer
+    chat, so multi-node request agents genuinely run as graphs. The caller
+    supplies provider/credentials (failover stays in the proxy server) and
+    reads the final state's generated_response.
+
+    durable=true runs the execution as a DBOS workflow (runs.request_agent_run)
+    when the durable runtime is up: exactly-once LLM steps, credentials
+    resolved from DynamoDB instead of the request (nothing secret is
+    checkpointed). Runtime down → degrade to the plain in-process path.
+    """
+    graph_data = get_graph_and_nodes_by_id(req.graph_id)
+    if graph_data is None:
+        raise HTTPException(status_code=404, detail=f"graph {req.graph_id} not found")
+
+    if req.durable and durable_runtime.is_ready():
+        # Late import: runs.py imports this module at load, so a module-level
+        # import here would be circular.
+        import runs as runs_module
+
+        run_id = f"ra-{uuid4()}"
+        run_input = req.model_dump()
+        run_input["llm_credentials"] = {}
+        logger.info(
+            "Executing agent graph %s DURABLY for customer=%s (run_id=%s, provider=%s)",
+            req.graph_id, req.customer_id, run_id, req.llm_provider,
+        )
+        try:
+            result = await runs_module.request_agent_run(run_id, run_input)
+            return JSONResponse(result)
+        except Exception as e:
+            logger.error("Durable agent graph %s failed: %s", req.graph_id, e, exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Graph error: {e}")
+
+    graph_record, nodes = graph_data
+    graph, max_iterations = get_or_build_graph(f"graph#{req.graph_id}", graph_record, nodes)
+    node_configs, response_prompt = _prepare_agent_node_configs(nodes, req.variables)
+    state = _build_agent_graph_state(req, node_configs, response_prompt)
 
     logger.info(
         "Executing agent graph %s for customer=%s (%d node(s), provider=%s)",

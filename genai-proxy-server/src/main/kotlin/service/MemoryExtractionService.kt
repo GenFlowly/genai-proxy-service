@@ -7,20 +7,24 @@ import com.genflowly.models.api.CustomerMemory
 import com.genflowly.models.api.LearnedFactView
 import com.genflowly.models.api.MemoryKind
 import com.genflowly.models.api.MemorySourceType
-import com.genflowly.models.encoding.EncodingMemoryData
-import com.genflowly.models.encoding.EncodingSaveMemoryRequest
 import com.genflowly.observability.Metrics
-import com.genflowly.providers.EncodingServerClient
 import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.MemoryRepository
+import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import org.slf4j.LoggerFactory
 
 @Serializable
@@ -45,12 +49,20 @@ private data class ExistingMemoryView(
 
 /**
  * Learns durable facts about a customer from their conversations and notes via
- * the MEMORY_EXTRACTION agent (RequestAgentMap, or the bundled default). The
- * agent sees existing memories plus new content and returns ADD/UPDATE/DELETE
- * operations, so the memory set converges instead of accumulating duplicates.
+ * the MEMORY_EXTRACTION agent (the published RequestAgentMap graph). The agent
+ * sees existing memories plus new content and returns ADD/UPDATE/DELETE
+ * operations — vendor-enforced to the operations JSON Schema, with blank or
+ * unparseable output counting as a provider failure that advances the
+ * customer-key failover.
  *
- * All entry points are fire-and-forget (appScope) — extraction runs after the
- * user-facing work has completed and must never affect it.
+ * Conversation extraction is DURABLE: the trigger writes a pending-work row
+ * (META#PENDING#<conversationId>) before anything runs, the extraction window
+ * is a conditional claim → finalize/rollback on the mark row, and the
+ * reconciler ([startPendingReconciler]) re-dispatches due rows across
+ * restarts/failures with an attempts cap — so a failed or interrupted run on a
+ * conversation's final exchange retries instead of being silently unlearned.
+ * Note extraction (content not re-derivable later) keeps the simpler
+ * run-once-now behavior.
  */
 class MemoryExtractionService(
     private val agentResolutionService: AgentResolutionService,
@@ -59,7 +71,6 @@ class MemoryExtractionService(
     private val memoryService: MemoryService,
     private val conversationService: ConversationService,
     private val customerProfileRepository: CustomerProfileRepository,
-    private val encodingServerClient: EncodingServerClient,
     private val retrievalServerClient: RetrievalServerClient,
     private val appScope: AppScope,
     /**
@@ -72,45 +83,123 @@ class MemoryExtractionService(
     private val logger = LoggerFactory.getLogger(MemoryExtractionService::class.java)
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    // Customers whose vector collections were already ensured by this process.
-    // ensureCollections is idempotent server-side; this only trims HTTP calls.
-    private val collectionsEnsured = ConcurrentHashMap.newKeySet<String>()
-
     /**
-     * Debounced conversation trigger, called after an exchange completes. Runs
-     * extraction when the conversation gained enough messages since the last
-     * run: the first pass after one full exchange, later passes every
-     * [MESSAGES_PER_EXTRACTION] messages. A turn below the threshold is NOT
-     * dropped: it schedules a deferred flush [DEBOUNCE_FLUSH_DELAY_MS] later
-     * that extracts whatever accumulated, so short conversations still learn
-     * and the outcome lands on the turn that produced it (within the client's
-     * learned-facts polling window).
+     * Conversation trigger, called after an exchange completes. Persists the
+     * pending-work row FIRST (suspend — one small DynamoDB put), so the work
+     * survives a process restart, then runs extraction in the background:
+     * immediately when the conversation gained enough messages since the last
+     * run, otherwise via a deferred in-process flush (the pending row's dueAt
+     * is the restart-proof backstop for both).
      */
-    fun maybeExtractFromConversationAsync(
+    suspend fun enqueueConversationExtraction(
         customerId: String,
         conversationId: String,
-        bearerToken: String?,
         /**
-         * Assistant message this exchange produced. When set, the extraction
-         * outcome is written onto it as learnedFactsJson — "[]" on every
-         * terminal skipped/failed path (the marker that stops client polling),
-         * the added facts on a successful run. The debounced path defers
-         * instead of writing the marker, keeping the client polling until the
-         * flush resolves.
+         * Assistant message this exchange produced. The extraction outcome is
+         * written onto it as learnedFactsJson — the added facts on success,
+         * "[]" on every TERMINAL skipped/exhausted path (the marker that stops
+         * client polling). Retryable failures write nothing, so a retry inside
+         * the client's polling window can still land real facts.
          */
         responseMessageId: String? = null,
     ) {
+        try {
+            memoryRepository.putPendingExtraction(
+                customerId, conversationId,
+                dueAt = Instant.now().plusSeconds(PENDING_BACKSTOP_SECONDS),
+                responseMessageId = responseMessageId,
+            )
+        } catch (e: Exception) {
+            // Queue write failing must not break the exchange — extraction
+            // degrades to the in-process attempt only.
+            Metrics.count("memory_pending_write_failure_total")
+            logger.warn("Failed to persist pending extraction for $conversationId: ${e.message}")
+        }
         appScope.launch {
-            runConversationExtraction(customerId, conversationId, bearerToken, responseMessageId, deferred = false)
+            runConversationExtraction(customerId, conversationId, responseMessageId, deferred = false)
+        }
+    }
+
+    /**
+     * Startup hook: sweep the pending-extraction queue every
+     * [RECONCILER_INTERVAL_SECONDS], re-dispatching due rows — work lost to a
+     * restart, retryable failures, and the debounce backstop. Safe on every
+     * instance: the conditional window claim prevents double extraction and
+     * row deletes are idempotent.
+     */
+    fun startPendingReconciler() {
+        appScope.launch {
+            logger.info("Memory-extraction pending reconciler started (every ${RECONCILER_INTERVAL_SECONDS}s)")
+            while (true) {
+                try {
+                    processDuePendingExtractions()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.warn("Pending-extraction sweep failed: ${e.message}")
+                }
+                delay(RECONCILER_INTERVAL_SECONDS * 1000)
+            }
+        }
+    }
+
+    /** One reconciler sweep; package-visible for tests. */
+    internal suspend fun processDuePendingExtractions() {
+        val due = memoryRepository.duePendingExtractions(Instant.now(), RECONCILER_BATCH_SIZE)
+        if (due.isEmpty()) return
+        logger.info("Pending-extraction sweep: ${due.size} due row(s)")
+        for (pending in due) {
+            // Bump attempts and push dueAt out BEFORE running, so a crash during
+            // this attempt re-dispatches later instead of hot-looping.
+            val attempts = memoryRepository.startPendingAttempt(
+                pending.customerId, pending.conversationId, RETRY_DELAY_SECONDS
+            ) ?: continue // row vanished — a concurrent run completed it
+            if (attempts > MAX_PENDING_ATTEMPTS) {
+                Metrics.count(
+                    "memory_extraction_skipped_total", 1.0,
+                    "status" to "attempts_exhausted", "source" to SOURCE_CONVERSATION
+                )
+                logger.warn(
+                    "Giving up on extraction for conversation {} after {} attempt(s)",
+                    pending.conversationId, attempts - 1
+                )
+                finishConversation(pending.customerId, pending.conversationId, pending.responseMessageId)
+                continue
+            }
+            recoverStaleClaim(pending.customerId, pending.conversationId)
+            runConversationExtraction(
+                pending.customerId, pending.conversationId, pending.responseMessageId, deferred = true
+            )
+        }
+    }
+
+    /**
+     * A claim whose claimedAt is old marks a run that died mid-extraction (the
+     * success path finalizes, every failure path rolls back) — release its
+     * window so the retry has something to extract.
+     */
+    private suspend fun recoverStaleClaim(customerId: String, conversationId: String) {
+        try {
+            val mark = memoryRepository.getExtractionMark(customerId, conversationId) ?: return
+            val claimedAt = mark.claimedAt ?: return
+            val processed = mark.processed ?: return
+            if (Duration.between(claimedAt, Instant.now()).seconds < STALE_CLAIM_SECONDS) return
+            val from = mark.claimedFrom?.takeIf { it >= 0 }
+            logger.warn(
+                "Recovering stale extraction claim on {} (claimed {} at {}) — rolling back to {}",
+                conversationId, processed, claimedAt, from
+            )
+            memoryRepository.rollbackConversationExtractionMark(customerId, conversationId, from, processed)
+        } catch (e: Exception) {
+            logger.warn("Stale-claim recovery failed for $conversationId: ${e.message}")
         }
     }
 
     private suspend fun runConversationExtraction(
         customerId: String,
         conversationId: String,
-        bearerToken: String?,
         responseMessageId: String?,
-        /** True on the delayed flush pass — the message-count threshold no longer applies. */
+        /** True on the delayed flush / reconciler pass — the message-count threshold no longer applies. */
         deferred: Boolean,
     ) {
         suspend fun markNothingLearned() {
@@ -122,13 +211,16 @@ class MemoryExtractionService(
                 logger.warn("Failed to write learned-facts marker for $responseMessageId: ${e.message}")
             }
         }
-        suspend fun skip(reason: String, detail: String = "") {
+        // Terminal skip: the outcome is settled — stop client polling and
+        // drain the pending row so the reconciler never retries it.
+        suspend fun terminalSkip(reason: String, detail: String = "") {
             Metrics.count(
                 "memory_extraction_skipped_total", 1.0,
                 "status" to reason, "source" to SOURCE_CONVERSATION
             )
             logger.info("Memory extraction skipped for conversation {}: {}{}", conversationId, reason, detail)
             markNothingLearned()
+            deletePending(customerId, conversationId)
         }
         try {
             logger.info(
@@ -136,18 +228,18 @@ class MemoryExtractionService(
                 conversationId, customerId, deferred
             )
             if (!memoryService.isMemoryEnabled(customerId)) {
-                skip("disabled"); return
+                terminalSkip("disabled"); return
             }
 
             val latestMessageId = conversationService.getLatestMessageId(conversationId)
-            if (latestMessageId == null) { skip("empty"); return }
+            if (latestMessageId == null) { terminalSkip("empty"); return }
             val thread = conversationService.getMessageThread(conversationId, latestMessageId)
-            val processed = memoryRepository.getConversationExtractionMark(customerId, conversationId)
+            val processed = memoryRepository.getExtractionMark(customerId, conversationId)?.processed
             val newMessages = thread.size - (processed ?: 0)
             if (newMessages < 1) {
                 // Nothing unprocessed (e.g. a parallel-vendor duplicate trigger,
-                // or an interim run beat the flush to it) — terminal marker.
-                skip(if (deferred) "flush_noop" else "debounced", " (0 new messages)"); return
+                // or an interim run beat the flush to it) — terminal.
+                terminalSkip(if (deferred) "flush_noop" else "debounced", " (0 new messages)"); return
             }
             val threshold = if (processed == null) FIRST_EXTRACTION_MIN_MESSAGES else MESSAGES_PER_EXTRACTION
             if (!deferred && newMessages < threshold) {
@@ -155,7 +247,8 @@ class MemoryExtractionService(
                 // after a short delay instead. No "[]" marker is written here,
                 // so the client's learning indicator keeps polling and the
                 // flush outcome (which runs well inside the poll timeout)
-                // lands on THIS response.
+                // lands on THIS response. The pending row's dueAt backstops a
+                // restart during this in-memory wait.
                 Metrics.count(
                     "memory_extraction_skipped_total", 1.0,
                     "status" to "debounced", "source" to SOURCE_CONVERSATION
@@ -165,16 +258,25 @@ class MemoryExtractionService(
                     conversationId, newMessages, threshold, DEBOUNCE_FLUSH_DELAY_MS
                 )
                 delay(DEBOUNCE_FLUSH_DELAY_MS)
-                runConversationExtraction(customerId, conversationId, bearerToken, responseMessageId, deferred = true)
+                runConversationExtraction(customerId, conversationId, responseMessageId, deferred = true)
                 return
             }
 
-            Metrics.tracked("memory_extraction", "source" to SOURCE_CONVERSATION) {
-                    // Claim the window before the LLM call so concurrent completions
-                    // of parallel turns don't double-extract; a failed run forfeits
-                    // its window, which the next exchange re-opens.
-                    memoryRepository.setConversationExtractionMark(customerId, conversationId, thread.size)
+            // Claim the window before the LLM call so concurrent completions of
+            // parallel turns don't double-extract. The loser settles its own
+            // message marker but leaves the pending row to the claim's owner.
+            if (!memoryRepository.claimConversationExtraction(customerId, conversationId, processed, thread.size)) {
+                Metrics.count(
+                    "memory_extraction_skipped_total", 1.0,
+                    "status" to "claim_lost", "source" to SOURCE_CONVERSATION
+                )
+                logger.info("Extraction window for {} claimed by a concurrent run", conversationId)
+                markNothingLearned()
+                return
+            }
 
+            try {
+                Metrics.tracked("memory_extraction", "source" to SOURCE_CONVERSATION) {
                     val transcript = thread.takeLast(MAX_TRANSCRIPT_MESSAGES).joinToString("\n") { message ->
                         val speaker = if (message.role == "assistant") "Assistant" else "User"
                         "$speaker: ${message.text.take(MAX_MESSAGE_CHARS)}"
@@ -182,20 +284,75 @@ class MemoryExtractionService(
                     if (logContent) {
                         logger.info("Memory extraction transcript for conversation {}:\n{}", conversationId, transcript)
                     }
-                    val added = extract(customerId, transcript, MemorySourceType.CONVERSATION, conversationId, bearerToken)
+                    val added = extract(customerId, transcript, MemorySourceType.CONVERSATION, conversationId)
                     if (responseMessageId != null) {
                         val factsJson = json.encodeToString(added.map { LearnedFactView(it.memoryId, it.text) })
                         conversationService.setMessageLearnedFacts(conversationId, responseMessageId, factsJson)
                     }
                 }
+                memoryRepository.finalizeConversationExtraction(customerId, conversationId, thread.size)
+                deletePending(customerId, conversationId)
+            } catch (e: CancellationException) {
+                // Shutdown mid-run: the stale-claim recovery releases the
+                // window and the pending row re-dispatches after restart.
+                throw e
+            } catch (e: Exception) {
+                // The claimed window is released on EVERY failure so a retry
+                // (or the next exchange) can re-extract it.
+                memoryRepository.rollbackConversationExtractionMark(
+                    customerId, conversationId, processed, thread.size
+                )
+                when (e) {
+                    is RequestAgentUnresolvedException ->
+                        // Admin disabled the action — retrying is wrong; the
+                        // rolled-back window reopens if it's re-enabled.
+                        terminalSkip("unresolved")
+                    is NoCustomerAIKeyException ->
+                        // No keys stored — nothing a retry can do; the next
+                        // exchange re-triggers once keys exist.
+                        terminalSkip("no_api_key")
+                    else -> {
+                        // Retryable (provider failures, transport): keep the
+                        // pending row for the reconciler and do NOT settle the
+                        // message marker — an in-window retry can still land
+                        // real facts on it.
+                        logger.warn(
+                            "Memory extraction attempt failed for conversation {} — window released for retry: {}",
+                            conversationId, e.message
+                        )
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.warn("Memory extraction from conversation $conversationId failed: ${e.message}")
-            markNothingLearned()
         }
     }
 
+    private suspend fun deletePending(customerId: String, conversationId: String) {
+        try {
+            memoryRepository.deletePendingExtraction(customerId, conversationId)
+        } catch (e: Exception) {
+            logger.warn("Failed to delete pending-extraction row for $conversationId: ${e.message}")
+        }
+    }
+
+    /** Terminal settle used by the reconciler's give-up path. */
+    private suspend fun finishConversation(customerId: String, conversationId: String, responseMessageId: String?) {
+        if (responseMessageId != null) {
+            try {
+                conversationService.setMessageLearnedFacts(conversationId, responseMessageId, "[]")
+            } catch (e: Exception) {
+                Metrics.count("memory_learned_facts_write_failure_total")
+                logger.warn("Failed to write learned-facts marker for $responseMessageId: ${e.message}")
+            }
+        }
+        deletePending(customerId, conversationId)
+    }
+
     /** Note trigger, called on the final (encode=true) save of an editing session. */
-    fun maybeExtractFromNoteAsync(customerId: String, noteKey: String, title: String?, content: String, bearerToken: String?) {
+    fun maybeExtractFromNoteAsync(customerId: String, noteKey: String, title: String?, content: String) {
         appScope.launch {
             fun skip(reason: String) {
                 Metrics.count(
@@ -210,7 +367,7 @@ class MemoryExtractionService(
                 val noteText = listOfNotNull(title?.takeIf { it.isNotBlank() && it != "Untitled" }, content)
                     .joinToString("\n").take(MAX_NOTE_CHARS)
                 Metrics.tracked("memory_extraction", "source" to SOURCE_NOTE) {
-                    extract(customerId, noteText, MemorySourceType.NOTE, noteKey, bearerToken)
+                    extract(customerId, noteText, MemorySourceType.NOTE, noteKey)
                 }
             } catch (e: Exception) {
                 logger.warn("Memory extraction from note $noteKey failed: ${e.message}")
@@ -218,36 +375,41 @@ class MemoryExtractionService(
         }
     }
 
-    /** Runs extraction and returns the memories ADDed by this run. */
+    /**
+     * Runs the published extraction agent with vendor-enforced structured
+     * output and customer-key failover — blank/unparseable output advances to
+     * the next provider — and returns the memories ADDed by this run. Throws
+     * when resolution or every provider fails; callers own the retry story.
+     */
     private suspend fun extract(
         customerId: String,
         content: String,
         sourceType: MemorySourceType,
-        sourceId: String,
-        bearerToken: String?
+        sourceId: String
     ): List<CustomerMemory> {
         val existing = memoryRepository.getMemories(customerId)
         val existingJson = json.encodeToString(existing.map {
             ExistingMemoryView(it.memoryId, it.kind.name, it.category, it.text)
         })
 
+        val source = sourceType.name.lowercase()
         val agent = agentResolutionService.resolve(RequestType.MEMORY_EXTRACTION, customerId)
-        val result = generationAgentExecutor.executeWithCustomerKey(
+        val operations = generationAgentExecutor.executeWithCustomerFailover(
             agent = agent,
             variables = mapOf(
                 "existingMemories" to existingJson,
-                "sourceType" to sourceType.name.lowercase(),
+                "sourceType" to source,
                 "content" to content
             ),
             customerId = customerId,
-            conversationId = "memory-extraction"
-        )
+            conversationId = "memory-extraction",
+            operationName = "memory_extraction",
+            responseSchema = OPERATIONS_SCHEMA,
+        ) { text -> parseOperationsOrThrow(text, source) }
 
-        val source = sourceType.name.lowercase()
         if (logContent) {
-            logger.info("Memory-extraction agent output for {} {}: {}", source, sourceId, result.text)
+            logger.info("Memory-extraction operations for {} {}: {}", source, sourceId, operations)
         }
-        val operations = parseOperations(result.text, source) ?: return emptyList()
         if (operations.isEmpty()) {
             logger.info("Memory extraction returned no operations for {} {}", source, sourceId)
             return emptyList()
@@ -259,7 +421,7 @@ class MemoryExtractionService(
         operations.forEach { op ->
             val opName = op.op.lowercase().takeIf { it in KNOWN_OPERATIONS } ?: "unknown"
             try {
-                val changed = applyOperation(customerId, op, existingById, sourceType, sourceId, bearerToken, addedMemories)
+                val changed = applyOperation(customerId, op, existingById, sourceType, sourceId, addedMemories)
                 if (changed) applied++
                 Metrics.count(
                     "memory_operation_total", 1.0,
@@ -285,7 +447,6 @@ class MemoryExtractionService(
         existingById: Map<String, CustomerMemory>,
         sourceType: MemorySourceType,
         sourceId: String,
-        bearerToken: String?,
         addedMemories: MutableList<CustomerMemory> = mutableListOf()
     ): Boolean = when (op.op.uppercase()) {
         "ADD" -> {
@@ -301,7 +462,7 @@ class MemoryExtractionService(
                     sourceType = sourceType,
                     sourceId = sourceId
                 )
-                encodeMemoryVector(customerId, memory, bearerToken)
+                encodeMemoryVector(customerId, memory)
                 addedMemories.add(memory)
                 true
             }
@@ -311,8 +472,9 @@ class MemoryExtractionService(
             val text = op.text?.trim()?.take(MAX_MEMORY_CHARS)
             if (target == null || text.isNullOrBlank()) false
             else if (memoryRepository.updateMemoryText(customerId, target.memoryId, text)) {
-                deleteMemoryVector(customerId, target.memoryId)
-                encodeMemoryVector(customerId, target.copy(text = text), bearerToken)
+                // /encode-memory deletes the memory_key's prior vectors before
+                // inserting, so the re-encode replaces rather than duplicates.
+                encodeMemoryVector(customerId, target.copy(text = text))
                 true
             } else false
         }
@@ -330,39 +492,26 @@ class MemoryExtractionService(
     }
 
     /**
-     * Best-effort push into the embedding pipeline for semantic recall.
-     * Memories are tiny and rewritten in place, so they always take the
-     * realtime path — never the batch accumulator.
+     * Best-effort push into the vector store for semantic recall, via the
+     * retrieval-server's service-to-service /encode-memory — no end-user
+     * bearer token involved, so reconciler retries embed exactly like live
+     * runs. Memories are tiny and rewritten in place: always the realtime
+     * path, never the batch accumulator.
      */
-    private suspend fun encodeMemoryVector(customerId: String, memory: CustomerMemory, bearerToken: String?) {
-        if (bearerToken == null) return
+    private suspend fun encodeMemoryVector(customerId: String, memory: CustomerMemory) {
         try {
             val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
             // Memories are extracted from conversations, so they follow the
             // conversations-category default.
             val model = prefs?.embeddingModelConversations ?: prefs?.embeddingModel
-            if (collectionsEnsured.add(customerId)) {
-                // Customers onboarded before the MEMORY data type existed have
-                // no memory collection yet; creation is idempotent.
-                encodingServerClient.ensureCollections(customerId, "Bearer $bearerToken", model)
-            }
-            val now = Instant.now().toString()
-            encodingServerClient.encodeMemory(
-                EncodingSaveMemoryRequest(
-                    client = "memory",
-                    modelType = EmbeddingConstants.modelTypeFor(model),
-                    modelName = model ?: EmbeddingConstants.MODEL_NAME,
-                    data = EncodingMemoryData(
-                        memory_key = memory.memoryId,
-                        memoryKey = memory.memoryId,
-                        memory_value = memory.text,
-                        memoryValue = memory.text,
-                        title = "[memory] ${memory.category ?: memory.kind.name.lowercase()}",
-                        created_at = now,
-                        createdAt = now
-                    )
-                ),
-                bearerToken
+            retrievalServerClient.encodeMemoryVector(
+                customerId = customerId,
+                memoryKey = memory.memoryId,
+                memoryValue = memory.text,
+                title = "[memory] ${memory.category ?: memory.kind.name.lowercase()}",
+                createdAt = memory.createdAt,
+                modelType = EmbeddingConstants.modelTypeFor(model),
+                modelName = model ?: EmbeddingConstants.MODEL_NAME,
             )
         } catch (e: Exception) {
             Metrics.count("memory_vector_failure_total", 1.0, "operation" to "encode")
@@ -379,22 +528,26 @@ class MemoryExtractionService(
         }
     }
 
-    private fun parseOperations(raw: String, source: String): List<MemoryOperation>? {
+    /**
+     * Parses the agent's operations JSON, THROWING on blank or unparseable
+     * output so the failure advances provider failover instead of masquerading
+     * as "nothing learned" (structured output makes this near-impossible, but
+     * a provider degrading to raw text must not be a silent success).
+     */
+    private fun parseOperationsOrThrow(raw: String, source: String): List<MemoryOperation> {
         val cleaned = raw.trim()
             .removePrefix("```json").removePrefix("```")
             .removeSuffix("```").trim()
         if (cleaned.isBlank()) {
             Metrics.count("memory_extraction_unparseable_total", 1.0, "source" to source)
-            logger.warn("Blank memory-extraction output")
-            return null
+            throw IllegalStateException("blank memory-extraction output")
         }
         return try {
             json.decodeFromString<MemoryOperations>(cleaned).operations
         } catch (e: Exception) {
             Metrics.count("memory_extraction_unparseable_total", 1.0, "source" to source)
             val snippet = if (logContent) " (${cleaned.take(120)}...)" else " (${cleaned.length} chars)"
-            logger.warn("Unparseable memory-extraction output$snippet: ${e.message}")
-            null
+            throw IllegalStateException("unparseable memory-extraction output$snippet: ${e.message}", e)
         }
     }
 
@@ -418,5 +571,54 @@ class MemoryExtractionService(
         private const val MIN_NOTE_CHARS = 30
         private const val MAX_NOTE_CHARS = 8000
         private const val MAX_MEMORY_CHARS = 300
+
+        /**
+         * dueAt offset on the pending row written at enqueue: past the worst
+         * normal in-process path (30s debounce flush + extraction + failover),
+         * so the reconciler only fires when that path died — a restart or a
+         * swallowed failure — not while it is still running.
+         */
+        private const val PENDING_BACKSTOP_SECONDS = 75L
+        /** How far a reconciler-dispatched attempt pushes the next retry out. */
+        private const val RETRY_DELAY_SECONDS = 90L
+        /** Reconciler attempts before a conversation's pending work is abandoned. */
+        private const val MAX_PENDING_ATTEMPTS = 3
+        private const val RECONCILER_INTERVAL_SECONDS = 60L
+        private const val RECONCILER_BATCH_SIZE = 25
+        /** An unfinalized claim older than this is a crashed run — recoverable. */
+        private const val STALE_CLAIM_SECONDS = 120L
+
+        /**
+         * Vendor-enforced schema for the extraction output (same mechanism as
+         * InstructionService.PERSONA_SCHEMA): the model cannot emit free-form
+         * prose, so "unparseable" shrinks to providers that degrade to raw
+         * text — which failover then skips past.
+         */
+        internal val OPERATIONS_SCHEMA: JsonObject = buildJsonObject {
+            put("type", "object")
+            putJsonObject("properties") {
+                putJsonObject("operations") {
+                    put("type", "array")
+                    putJsonObject("items") {
+                        put("type", "object")
+                        putJsonObject("properties") {
+                            putJsonObject("op") {
+                                put("type", "string")
+                                putJsonArray("enum") { add("ADD"); add("UPDATE"); add("DELETE") }
+                            }
+                            putJsonObject("text") { put("type", "string") }
+                            putJsonObject("kind") {
+                                put("type", "string")
+                                putJsonArray("enum") { add("CORE"); add("EPISODIC") }
+                            }
+                            putJsonObject("category") { put("type", "string") }
+                            putJsonObject("memoryId") { put("type", "string") }
+                        }
+                        putJsonArray("required") { add("op") }
+                    }
+                }
+            }
+            putJsonArray("required") { add("operations") }
+        }
     }
 }

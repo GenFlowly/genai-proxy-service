@@ -431,14 +431,19 @@ fun Application.module() {
     // caught proactively, not on the next silent pipeline failure.
     get<com.genflowly.service.EmbeddingModelCatalogService>().startWeeklyRefresh()
 
-    // Eagerly load the bundled request-agent defaults (the fallback when the
-    // RequestAgentMap table has no usable entry) so a broken bundle fails
-    // startup, not the first persona/title generation.
-    get<com.genflowly.service.RequestAgentDefaultsLoader>().defaults
+    // One source of truth for request agents: publish any missing SYSTEM
+    // request-agent (fresh environments) from the bundled seeds BEFORE serving.
+    // Idempotent — existing rows (enabled or disabled) are never touched; the
+    // seed manifest itself fails fast on a broken bundle.
+    kotlinx.coroutines.runBlocking { get<com.genflowly.service.RequestAgentSeeder>().seedMissing() }
 
     val requestAgentMapAdminService = get<com.genflowly.service.RequestAgentMapAdminService>()
     val customerRequestAgentMapService = get<com.genflowly.service.CustomerRequestAgentMapService>()
     val memoryService = get<com.genflowly.service.MemoryService>()
+
+    // Memory-extraction reconciler: re-dispatches pending extraction work
+    // (restart-lost runs, retryable failures, debounce backstops) every minute.
+    get<com.genflowly.service.MemoryExtractionService>().startPendingReconciler()
     val exchangeSideEffects = get<com.genflowly.service.ExchangeSideEffects>()
     val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 

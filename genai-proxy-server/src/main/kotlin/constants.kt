@@ -163,6 +163,14 @@ object DynamoDBConstants {
     const val MEMORY_ID_KEY = "memoryId"
     const val MEMORY_ITEM_PREFIX = "MEM#"
     const val MEMORY_CONV_META_PREFIX = "META#CONV#"
+    // Durable extraction work queue: one row per conversation awaiting an
+    // extraction run/retry, drained by the reconciler via the sparse GSI
+    // (only pending rows carry the constant pendingShard attribute).
+    const val MEMORY_PENDING_PREFIX = "META#PENDING#"
+    const val MEMORY_PENDING_SHARD_KEY = "pendingShard"
+    const val MEMORY_PENDING_SHARD_VALUE = "PENDING"
+    const val MEMORY_PENDING_DUE_AT_KEY = "dueAt"
+    const val MEMORY_PENDING_INDEX = "pending-extraction-index"
 
     // Customer-owned projects grouping conversations in the history sidebar.
     // PK=customerId, SK=projectId. Conversations reference a project via a

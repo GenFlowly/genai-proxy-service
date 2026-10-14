@@ -114,8 +114,9 @@ export function AISettings(): React.ReactElement {
             // preferredModels (shared with the sidebar AI-config widget) is the
             // source of truth for the default model; the vendor-config
             // selectedModel is a legacy fallback.
-            const preferred = aiConfigPreferences?.preferredModels
-                ?.find(m => m.aiVendor === vendor)?.model
+            const preferredEntry = aiConfigPreferences?.preferredModels
+                ?.find(m => m.aiVendor === vendor)
+            const preferred = preferredEntry?.model
             // Legacy vendors keep the live key-scoped model fetch; the long
             // tail lists models from the provider catalog.
             const models = vendorModels.find(vm => vm.aiVendor === vendor)?.modelsList
@@ -127,6 +128,7 @@ export function AISettings(): React.ReactElement {
                 keySet: isKeySet(vendor),
                 savedModel: preferred ?? status?.selectedModel ?? null,
                 savedPriority: status?.priority ?? null,
+                savedThinkingLevel: preferredEntry?.thinkingLevel ?? status?.thinkingLevel ?? '',
                 models,
             }
         })
@@ -153,22 +155,37 @@ export function AISettings(): React.ReactElement {
         }
     }
 
-    const handleSaveConfig = async (vendor: string, model: string, priority: number) => {
+    const handleSaveConfig = async (
+        vendor: string,
+        model: string,
+        priority: number,
+        thinkingLevel: string
+    ) => {
         requireAuth()
         const token = await getAccessTokenSilently()
-        // The server mirrors the model into preferredModels; mirror it locally
+        // The server mirrors the config into preferredModels; mirror it locally
         // too so the sidebar AI-config widget reflects it this session.
-        await storeCustomerVendorConfig(token, { aiVendor: vendor, model, priority })
+        await storeCustomerVendorConfig(token, { aiVendor: vendor, model, priority, thinkingLevel })
         const vendorStatus = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
         if (vendorStatus) {
-            updateVendorApiKeyStatus({ ...vendorStatus, selectedModel: model, priority })
+            updateVendorApiKeyStatus({
+                ...vendorStatus,
+                selectedModel: model,
+                priority,
+                thinkingLevel: thinkingLevel || null,
+            })
         }
         const current = aiConfigPreferences?.preferredModels ?? []
         const existing = current.find(m => m.aiVendor === vendor)
         updateAiConfigPreferences({
             preferredModels: [
                 ...current.filter(m => m.aiVendor !== vendor),
-                { ...existing, aiVendor: vendor as AIVendor, model },
+                {
+                    ...existing,
+                    aiVendor: vendor as AIVendor,
+                    model,
+                    thinkingLevel: thinkingLevel || undefined,
+                },
             ],
         })
     }

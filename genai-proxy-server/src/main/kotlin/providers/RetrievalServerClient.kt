@@ -61,7 +61,12 @@ private data class RetrievalAgentPayload(
      * Explicit agent graph to run instead of the customer's default; access
      * is validated proxy-side (own-or-System) before it reaches this payload.
      */
-    val graph_id: String? = null
+    val graph_id: String? = null,
+    /**
+     * End user's per-request reasoning depth ("none"|"low"|"medium"|"high");
+     * overrides the response generator's node-config thinking_level.
+     */
+    val thinking_level: String? = null
 )
 
 @Serializable
@@ -88,7 +93,13 @@ private data class ExecuteAgentGraphPayload(
     val model_name: String? = null,
     val response_schema: kotlinx.serialization.json.JsonObject? = null,
     /** Purpose label for llm_request_total{source=...}: the RequestType lowercased. */
-    val request_source: String = "internal"
+    val request_source: String = "internal",
+    /**
+     * Run as a DBOS durable workflow when the retrieval server's durable
+     * runtime is up (exactly-once LLM steps; credentials resolved server-side
+     * from the customer's stored keys). Only set for customer-key candidates.
+     */
+    val durable: Boolean = false
 )
 
 // --- /models and /validate-key wire types ---
@@ -283,7 +294,8 @@ class RetrievalServerClient(
         responseSchema: kotlinx.serialization.json.JsonObject?,
         memoryEnabled: Boolean,
         requestSource: String,
-        graphId: String? = null
+        graphId: String? = null,
+        thinkingLevel: String? = null
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
@@ -304,7 +316,8 @@ class RetrievalServerClient(
             response_schema = responseSchema,
             memory_enabled = memoryEnabled,
             request_source = requestSource,
-            graph_id = graphId
+            graph_id = graphId,
+            thinking_level = thinkingLevel
         )
     )
 
@@ -326,10 +339,11 @@ class RetrievalServerClient(
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
-        graphId: String? = null
+        graphId: String? = null,
+        thinkingLevel: String? = null
     ): RetrievalResult {
         logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -384,9 +398,10 @@ class RetrievalServerClient(
         modelType: String? = null,
         modelName: String? = null,
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
-        requestSource: String = "internal"
+        requestSource: String = "internal",
+        durable: Boolean = false
     ): RetrievalResult {
-        logger.info { "Executing agent graph $graphId for customer $customerId (provider $llmProvider, model $llmModel)" }
+        logger.info { "Executing agent graph $graphId for customer $customerId (provider $llmProvider, model $llmModel, durable=$durable)" }
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/execute-agent-graph") {
                 contentType(ContentType.Application.Json)
@@ -401,7 +416,8 @@ class RetrievalServerClient(
                     model_type = modelType,
                     model_name = modelName,
                     response_schema = responseSchema,
-                    request_source = requestSource
+                    request_source = requestSource,
+                    durable = durable
                 )))
                 timeout {
                     requestTimeoutMillis = 300_000L
@@ -448,10 +464,11 @@ class RetrievalServerClient(
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
-        graphId: String? = null
+        graphId: String? = null,
+        thinkingLevel: String? = null
     ): Flow<StreamChunk> = channelFlow {
         logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -924,6 +941,46 @@ class RetrievalServerClient(
     }
 
     /**
+     * Embeds one user memory and upserts it into the customer's memory vector
+     * collection via the service-to-service /encode-memory (no end-user bearer
+     * token — the retrieval server holds the embedding key and vector-store
+     * connection). The route deletes the memory_key's prior vectors before
+     * inserting, so re-encodes (UPDATE operations, extraction retries) replace
+     * rather than duplicate. Throws on failure — callers decide severity.
+     */
+    suspend fun encodeMemoryVector(
+        customerId: String,
+        memoryKey: String,
+        memoryValue: String,
+        title: String,
+        createdAt: String,
+        modelType: String?,
+        modelName: String?
+    ) {
+        val response = httpClient.post("$retrievalServerUrl/encode-memory") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                json.encodeToString(
+                    EncodeMemoryPayload(
+                        customer_id = customerId,
+                        memory_key = memoryKey,
+                        memory_value = memoryValue,
+                        title = title,
+                        created_at = createdAt,
+                        model_type = modelType,
+                        model_name = modelName,
+                    )
+                )
+            )
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            throw IllegalStateException("encode-memory failed for $memoryKey: ${response.status} $errorBody")
+        }
+        logger.info { "Encoded memory $memoryKey into the vector store" }
+    }
+
+    /**
      * Hard-deletes a memory's embeddings in the vector DB via
      * /delete-memory-vectors. Throws on transport errors — callers decide
      * whether that is fatal.
@@ -948,6 +1005,18 @@ private data class DeleteNoteVectorsPayload(val customer_id: String, val note_ke
 
 @Serializable
 private data class DeleteMemoryVectorsPayload(val customer_id: String, val memory_key: String)
+
+@Serializable
+private data class EncodeMemoryPayload(
+    val customer_id: String,
+    val memory_key: String,
+    val memory_value: String,
+    val title: String = "",
+    val client: String = "memory",
+    val created_at: String = "",
+    val model_type: String? = null,
+    val model_name: String? = null,
+)
 
 @Serializable
 private data class DeleteInstructionVectorsPayload(val customer_id: String, val instruction_key: String)

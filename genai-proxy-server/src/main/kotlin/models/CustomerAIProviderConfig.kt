@@ -9,5 +9,13 @@ data class CustomerAIProviderConfig(
     val aiVendor: AIVendor,
     val model: String,
     val apiKey: String,
-    val priority: Int
+    val priority: Int,
+    /**
+     * True when [apiKey] is one of OUR system keys (the admin-panel keyless
+     * fallback) rather than the customer's own. Durable request-agent
+     * execution is disabled for these: the retrieval server resolves
+     * credentials from CustomerVendorApiKeys by customer_id, which only holds
+     * customer keys.
+     */
+    val systemKey: Boolean = false
 )

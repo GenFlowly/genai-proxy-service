@@ -71,6 +71,9 @@ class GraphService(
      */
     suspend fun createGenerationAgent(customerId: String, req: CreateAgentRequest): AgentResponse {
         require(req.name.isNotBlank()) { "name must not be blank" }
+        require(req.thinkingLevel == null || req.thinkingLevel in setOf("none", "low", "medium", "high")) {
+            "thinkingLevel must be one of none|low|medium|high"
+        }
         val instructionVersion = req.instructionVersion
             ?: instructionRepository.getLatestInstructionVersion(req.instructionId)
         requireNotNull(instructionVersion) { "instruction ${req.instructionId} not found" }
@@ -86,7 +89,8 @@ class GraphService(
             modelPreference = req.modelPreference?.let {
                 NodeModelPreference(vendor = it.aiVendor.name, model = it.model)
             },
-            maxTokens = req.maxTokens
+            maxTokens = req.maxTokens,
+            thinkingLevel = req.thinkingLevel
         )
         val configJson = nodeConfigJson.encodeToString(GenerationNodeConfig.serializer(), nodeConfig)
 

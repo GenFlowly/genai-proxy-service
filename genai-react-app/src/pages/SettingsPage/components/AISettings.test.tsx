@@ -216,16 +216,47 @@ describe('AISettings', () => {
                 aiVendor: AIVendor.OPENAI,
                 model: 'gpt-5',
                 priority: 1,
+                thinkingLevel: '',
             });
             expect(mockUpdateVendorApiKeyStatus).toHaveBeenCalledWith({
                 ...validOpenAIStatus,
                 selectedModel: 'gpt-5',
                 priority: 1,
+                thinkingLevel: null,
             });
             // The model default is mirrored into the shared preferredModels
             // so the sidebar AI-config widget picks it up this session.
             expect(mockUpdateAiConfigPreferences).toHaveBeenCalledWith({
-                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5' }],
+                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5', thinkingLevel: undefined }],
+            });
+        });
+    });
+
+    test('reasoning effort rides the vendor-config save', async () => {
+        mockUseAuth.mockReturnValue(authValue({
+            aiVendorAPIKeyStatusList: [validOpenAIStatus],
+        }));
+
+        render(<AISettings />);
+        const saveConfig = await screen.findByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-config`);
+        await screen.findByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-model-option-gpt-5`);
+        fireEvent.change(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-model`), {
+            target: { value: 'gpt-5' },
+        });
+        fireEvent.change(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-thinking`), {
+            target: { value: 'low' },
+        });
+        await userEvent.click(saveConfig);
+
+        await waitFor(() => {
+            expect(mockStoreCustomerVendorConfig).toHaveBeenCalledWith('test-token', {
+                aiVendor: AIVendor.OPENAI,
+                model: 'gpt-5',
+                priority: 1,
+                thinkingLevel: 'low',
+            });
+            expect(mockUpdateAiConfigPreferences).toHaveBeenCalledWith({
+                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5', thinkingLevel: 'low' }],
             });
         });
     });

@@ -86,7 +86,16 @@ data class ToolResultImage(
 data class AIConfig(
     val aiVendor: AIVendor,
     val model: String,
-    val maxTokens: Int? = null
+    val maxTokens: Int? = null,
+    /**
+     * Reasoning effort for this vendor/model ("none"|"low"|"medium"|"high";
+     * null = vendor default). On generate requests it rides to the response
+     * generator, where it overrides the agent's node-config thinking_level;
+     * in AIConfigPreferences.preferredModels it is the vendor's stored
+     * default. Invalid values are warned-and-ignored downstream, never an
+     * error.
+     */
+    val thinkingLevel: String? = null
 )
 
 

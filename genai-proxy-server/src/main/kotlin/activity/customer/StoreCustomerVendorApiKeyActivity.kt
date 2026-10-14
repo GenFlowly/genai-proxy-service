@@ -96,13 +96,20 @@ fun Route.registerStoreApiKeyRoutes(
             if (request.priority < 1) {
                 return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Priority must be >= 1"))
             }
+            val thinkingLevel = request.thinkingLevel?.takeIf { it.isNotBlank() }
+            if (thinkingLevel != null && thinkingLevel !in setOf("none", "low", "medium", "high")) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "thinkingLevel must be one of none|low|medium|high")
+                )
+            }
 
             logger.info(
                 "Customer {} setting vendor config for {}: model={} priority={}",
                 customerId, aiVendor, request.model, request.priority
             )
             try {
-                customerCredentialsService.updateVendorConfig(customerId, aiVendor, request.model, request.priority)
+                customerCredentialsService.updateVendorConfig(customerId, aiVendor, request.model, request.priority, thinkingLevel)
             } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
                 return@post call.respond(
                     HttpStatusCode.Conflict,
