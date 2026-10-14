@@ -13,9 +13,9 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Current-turn attachment checks: count, ownership and existence only. There
- * is no size or type check — the retrieval-server converts/compresses images
- * for each vendor.
+ * Current-turn attachment checks: count, ownership, image-ness and existence.
+ * There is no size or image-type check — the retrieval-server
+ * converts/compresses images for each vendor.
  */
 class GenerationRequestValidatorAttachmentsTest {
 
@@ -54,6 +54,12 @@ class GenerationRequestValidatorAttachmentsTest {
             customerId
         )
         coVerify(exactly = 2) { s3Provider.head(any()) }
+    }
+
+    @Test
+    fun `rejects attachments declared as a non-image type instead of dropping them`() = runTest {
+        stubUploaded(sizeBytes = 10)
+        rejects(listOf(ref("a"), ref("pdf", mediaType = "application/pdf")), "not an image")
     }
 
     @Test

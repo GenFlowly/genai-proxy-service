@@ -26,17 +26,37 @@ const val MAX_ATTACHMENTS_PER_MESSAGE = 10
 private val RESTRICTED_MEDIA_TYPE =
     Regex("^[a-z0-9][a-z0-9!#\$&^_.+-]{0,126}/[a-z0-9][a-z0-9!#\$&^_.+-]{0,126}$")
 
+/** Trims, drops any `;parameters` and lowercases a declared media type. */
+private fun canonicalMediaType(raw: String?): String =
+    raw.orEmpty().substringBefore(';').trim().lowercase()
+
 /**
  * Normalizes a client-declared attachment media type into the effective one
- * stored with the object: trims, drops any `;parameters`, lowercases, and
- * keeps the result only when it is a syntactically valid `type/subtype`.
- * Anything else (null, blank, garbage, over-long) becomes
- * [DEFAULT_ATTACHMENT_MEDIA_TYPE]. Never rejects — the declared type is only a
- * hint; the retrieval-server identifies the real format from the bytes.
+ * stored with the object (it is bound into the presigned PUT, and S3 serves
+ * the object with it). Kept only when it is a syntactically valid, passive
+ * image type; anything else (null, blank, garbage, over-long, non-image, or
+ * scriptable like image/svg+xml) becomes [DEFAULT_ATTACHMENT_MEDIA_TYPE], so a
+ * presigned GET can never serve an uploaded page or script under the bucket's
+ * hostname. Never rejects — the declared type is only a hint; the
+ * retrieval-server identifies the real format from the bytes.
  */
 fun normalizeAttachmentMediaType(raw: String?): String {
-    val candidate = raw.orEmpty().substringBefore(';').trim().lowercase()
-    return if (RESTRICTED_MEDIA_TYPE.matches(candidate)) candidate else DEFAULT_ATTACHMENT_MEDIA_TYPE
+    val candidate = canonicalMediaType(raw)
+    val passiveImage = RESTRICTED_MEDIA_TYPE.matches(candidate) &&
+        candidate.startsWith("image/") &&
+        "svg" !in candidate && !candidate.endsWith("+xml")
+    return if (passiveImage) candidate else DEFAULT_ATTACHMENT_MEDIA_TYPE
+}
+
+/**
+ * Whether an attachment declared with [mediaType] is meant as an image for the
+ * model: any image type, or untyped (blank / application/octet-stream — what
+ * uploads get when the browser declares none, typical for iPhone HEIC photos).
+ * False for explicitly non-image types such as generated PDF artifacts.
+ */
+fun isImageAttachmentMediaType(mediaType: String?): Boolean {
+    val candidate = canonicalMediaType(mediaType)
+    return candidate.isEmpty() || candidate.startsWith("image/") || candidate == DEFAULT_ATTACHMENT_MEDIA_TYPE
 }
 
 /**

@@ -5,6 +5,7 @@ import com.genflowly.models.AttachmentRef
 import com.genflowly.models.MAX_ATTACHMENTS_PER_MESSAGE
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
+import com.genflowly.models.isImageAttachmentMediaType
 import com.genflowly.providers.S3Provider
 
 /**
@@ -19,10 +20,12 @@ class GenerationRequestValidator(
     /**
      * Rejects more than [MAX_ATTACHMENTS_PER_MESSAGE] attachments, attachments
      * the caller doesn't own (key must sit under the authenticated customer's
-     * prefix) and ones that were never actually uploaded. There is no size or
-     * type check: the retrieval-server converts/compresses each image to fit
-     * the target vendor. Runs only for the current turn's attachments —
-     * history attachments were validated when their message was created.
+     * prefix), ones declared as a non-image type (they would otherwise be
+     * silently left out of the model's input) and ones that were never
+     * actually uploaded. There is no size or image-type check: the
+     * retrieval-server converts/compresses each image to fit the target
+     * vendor. Runs only for the current turn's attachments — history
+     * attachments were validated when their message was created.
      */
     suspend fun validateAttachments(attachments: List<AttachmentRef>, customerId: String) {
         if (attachments.isEmpty()) return
@@ -33,6 +36,10 @@ class GenerationRequestValidator(
         for (attachment in attachments) {
             require(attachment.s3Key.startsWith(ownedPrefix)) {
                 "Attachment ${attachment.attachmentId} does not belong to the authenticated customer"
+            }
+            require(isImageAttachmentMediaType(attachment.mediaType)) {
+                "Attachment ${attachment.attachmentId} is not an image (mediaType " +
+                    "'${attachment.mediaType.take(100)}'); only images can be attached"
             }
             s3Provider.head(attachment.s3Key)
                 ?: throw IllegalArgumentException("Attachment ${attachment.attachmentId} has not been uploaded")

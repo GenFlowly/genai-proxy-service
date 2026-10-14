@@ -12,6 +12,7 @@ import io.github.smiley4.ktoropenapi.get
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -30,13 +31,15 @@ fun Route.registerAttachmentRoutes(
             summary = "Request a presigned URL to upload an attachment"
             description = "Returns a short-lived presigned S3 PUT URL for an image of any type and " +
                     "size (e.g. HEIC photos straight from an iPhone). The declared media type is " +
-                    "normalized — parameters are dropped and blank or malformed values become " +
-                    "application/octet-stream — and returned as mediaType. Upload the raw bytes " +
-                    "to uploadUrl with Content-Type set to exactly that returned mediaType (it is " +
-                    "part of the signature), then reference the returned attachmentId/s3Key/" +
-                    "mediaType in a generate-text request. Images are converted/compressed " +
-                    "losslessly server-side to fit each AI vendor's limits; the original upload " +
-                    "is kept unchanged."
+                    "normalized — parameters are dropped, and blank, malformed, non-image or " +
+                    "scriptable (SVG) values become application/octet-stream — and returned as " +
+                    "mediaType. Upload the raw bytes to uploadUrl with Content-Type set to exactly " +
+                    "that returned mediaType (it is part of the signature), then reference the " +
+                    "returned attachmentId/s3Key/mediaType in a generate-text request. The real " +
+                    "format is detected from the bytes at generation time and converted/compressed " +
+                    "to fit each AI vendor's limits (losslessly where possible); files that cannot " +
+                    "be decoded as an image fail the generation with a clear error. The original " +
+                    "upload is kept unchanged."
             request {
                 body<CreateAttachmentUploadRequest> { required = true }
             }
@@ -74,6 +77,10 @@ fun Route.registerAttachmentRoutes(
                 )
             } catch (e: SerializationException) {
                 logger.error("Malformed CreateAttachment request: {}", e.message, e)
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid request format: ${e.message}"))
+            } catch (e: BadRequestException) {
+                // Ktor 3 wraps body conversion failures (bad JSON, missing sizeBytes)
+                logger.warn("Malformed CreateAttachment request: {}", e.message)
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid request format: ${e.message}"))
             } catch (e: Exception) {
                 logger.error("Unexpected error creating attachment upload URL: {}", e.message, e)

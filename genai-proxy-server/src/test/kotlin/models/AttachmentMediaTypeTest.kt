@@ -22,7 +22,7 @@ class AttachmentMediaTypeTest {
         for (type in listOf(
             "image/png", "image/jpeg", "image/webp", "image/gif",
             "image/heic", "image/heif", "image/heic-sequence", "image/avif",
-            "image/tiff", "image/bmp", "image/svg+xml", "image/x-adobe-dng",
+            "image/tiff", "image/bmp", "image/x-adobe-dng",
             "image/vnd.microsoft.icon"
         )) {
             assertEquals(type, normalizeAttachmentMediaType(type))
@@ -30,9 +30,16 @@ class AttachmentMediaTypeTest {
     }
 
     @Test
-    fun `non-image types are accepted, not coerced`() {
-        assertEquals("application/pdf", normalizeAttachmentMediaType("application/pdf"))
-        assertEquals("application/octet-stream", normalizeAttachmentMediaType("application/octet-stream"))
+    fun `non-image and scriptable types are stored as octet-stream, never rejected`() {
+        // A presigned GET serves the object with its stored type: an uploaded
+        // page or SVG must not render (and run script) under the bucket's host
+        for (type in listOf(
+            "application/pdf", "text/html", "application/xhtml+xml", "text/xml",
+            "application/javascript", "image/svg+xml", "IMAGE/SVG+XML; charset=utf-8",
+            "image/svg", "image/foo+xml", "application/octet-stream"
+        )) {
+            assertEquals(octet, normalizeAttachmentMediaType(type), "for '$type'")
+        }
     }
 
     @Test
@@ -105,5 +112,23 @@ class AttachmentMediaTypeTest {
     @Test
     fun `explicitly non-image attachments such as generated PDFs are not forwarded`() {
         assertEquals(emptyList<ImageRef>(), listOf(ref("application/pdf"), ref("text/plain")).toImageRefs())
+    }
+
+    @Test
+    fun `a declared SVG is forwarded untyped so the retrieval-server sniffs it`() {
+        assertEquals(
+            listOf(ImageRef("customers/c1/attachments/a1", octet)),
+            listOf(ref("image/svg+xml")).toImageRefs()
+        )
+    }
+
+    @Test
+    fun `image attachment types are recognized case-insensitively`() {
+        for (type in listOf("image/heic", "IMAGE/PNG; q=1", "", "  ", "application/octet-stream", "image/svg+xml")) {
+            assertEquals(true, isImageAttachmentMediaType(type), "for '$type'")
+        }
+        for (type in listOf("application/pdf", "text/plain", "text/html")) {
+            assertEquals(false, isImageAttachmentMediaType(type), "for '$type'")
+        }
     }
 }
