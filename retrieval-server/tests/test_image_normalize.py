@@ -13,9 +13,11 @@ Fixtures are generated in memory; the HEIC ones are committed 1 KB files
 because the runtime dependency (pi-heif) is decode-only.
 """
 import base64
+import errno
 import io
 import json
 import os
+import signal
 import struct
 import subprocess
 import sys
@@ -512,7 +514,8 @@ class RejectionTests(unittest.TestCase):
 
     def test_tiff_only_declared_as_raw_is_converted_as_a_tiff(self):
         tiff = _encode(_photo_like(64, 48), "TIFF")
-        out = normalize_image(tiff, "image/x-nikon-nef")
+        with patch.object(image_normalize.subprocess, "Popen", _no_child):
+            out = normalize_image(tiff, "image/x-nikon-nef")
         self.assertEqual((out.source_format, out.strategy), ("TIFF", "lossless"))
 
     def test_decompression_bomb_header_is_refused_before_decoding(self):
@@ -812,20 +815,112 @@ class RequestLimitsTests(unittest.TestCase):
         self.assertEqual(plan(59).limits, limits_for_request("anthropic", 48))
 
 
+def _fixture(name: str) -> bytes:
+    with open(os.path.join(_FIXTURES, name), "rb") as f:
+        return f.read()
+
+
+def _tiff_ifd0_only(entries: list, big_endian: bool = False, gap: bytes = b"") -> bytes:
+    """A TIFF header and an IFD0 of single-value entries [(tag, type, value)]
+    (type 3 SHORT / 4 LONG take an int, type 1 BYTE takes <= 4 bytes) and no
+    image data. `gap` goes between the header and the IFD."""
+    order = ">" if big_endian else "<"
+    out = (b"MM\x00*" if big_endian else b"II*\x00") + struct.pack(order + "I", 8 + len(gap)) + gap
+    out += struct.pack(order + "H", len(entries))
+    for tag, field_type, value in sorted(entries):
+        if field_type == 3:
+            payload, count = struct.pack(order + "H", value), 1
+        elif field_type == 4:
+            payload, count = struct.pack(order + "I", value), 1
+        else:
+            payload, count = bytes(value), len(value)
+        out += struct.pack(order + "HHI", tag, field_type, count) + payload.ljust(4, b"\0")
+    return out + struct.pack(order + "I", 0)
+
+
+class _FakePopen:
+    """Stands in for subprocess.Popen in _decode_camera_raw."""
+
+    def __init__(self, returncode=0, stdout=b"", stderr=b"", timeout=False):
+        self.returncode, self._out, self._err, self._timeout = returncode, stdout, stderr, timeout
+        self.pid = 4242
+        self.calls = []
+        self.spooled = None
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append((cmd, kwargs))
+        with open(json.loads(cmd[3])["path"], "rb") as f:
+            self.spooled = f.read()  # what the child would have read
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def communicate(self, timeout=None):
+        self.timeout = timeout
+        if self._timeout:
+            raise subprocess.TimeoutExpired("raw_decode", timeout)
+        return self._out, self._err
+
+    def kill(self):
+        pass
+
+
+def _no_child(*args, **kwargs):
+    raise AssertionError("the RAW child must not be started")
+
+
+def _nobody_can_run_this_python() -> bool:
+    try:
+        subprocess.run([sys.executable, "-I", "-c", "import rawpy"], user=65534, group=65534, extra_groups=[],
+                       check=True, capture_output=True, timeout=30)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def setUpModule():
+    # As root, the server starts the RAW child as nobody. Where nobody can't
+    # reach this interpreter (a root dev container with a venv under /root),
+    # the real-child tests run it as root instead, as IMAGE_RAW_UID=0 would;
+    # test_child_runs_as_nobody_when_the_server_is_root then skips.
+    if hasattr(os, "geteuid") and os.geteuid() == 0 and not _nobody_can_run_this_python():
+        as_root = patch.object(image_normalize, "_RAW_UID", 0)
+        as_root.start()
+        unittest.addModuleCleanup(as_root.stop)
+
+
 class CameraRawTests(unittest.TestCase):
     """Camera RAW goes through graph/raw_decode.py in a child process."""
 
     def test_dng_is_demosaiced_upright_in_the_child(self):
         # Fixture: 160x96 Bayer mosaic, red left / blue right, Orientation 6.
-        with open(os.path.join(_FIXTURES, "camera_raw.dng"), "rb") as f:
-            dng = f.read()
-        out = normalize_image(dng, "image/x-adobe-dng")
-        self.assertEqual((out.source_format, out.media_type, out.strategy), ("RAW (demosaic)", "image/png", "lossless"))
-        self.assertEqual((out.source_size, out.output_size), ((160, 96), (96, 160)))
-        result = _decode(out.data).convert("RGB")
-        top, bottom = result.getpixel((48, 20)), result.getpixel((48, 140))
-        self.assertGreater(top[0], 2 * top[2])  # red on top after a clockwise turn
-        self.assertGreater(bottom[2], 2 * bottom[0])
+        # Pillow can't open it (its first IFD is the sensor data); browsers
+        # send .dng as octet-stream or with no type at all.
+        dng = _fixture("camera_raw.dng")
+        for declared in ("image/x-adobe-dng", "application/octet-stream", None):
+            with self.subTest(declared=declared):
+                out = normalize_image(dng, declared)
+                self.assertEqual((out.source_format, out.media_type, out.strategy), ("RAW (demosaic)", "image/png", "lossless"))
+                self.assertEqual((out.source_size, out.output_size), ((160, 96), (96, 160)))
+                result = _decode(out.data).convert("RGB")
+                top, bottom = result.getpixel((48, 20)), result.getpixel((48, 140))
+                self.assertGreater(top[0], 2 * top[2])  # red on top after a clockwise turn
+                self.assertGreater(bottom[2], 2 * bottom[0])
+
+    def test_raw_whose_sensor_data_cant_be_decoded_falls_back_to_its_preview(self):
+        # Fixture: 160x120 JPEG preview, sensor data cut off (an interrupted
+        # upload). The demosaic fails, which leaves LibRaw's handle unusable.
+        for render in ("preview", "demosaic"):
+            with self.subTest(render=render), patch.object(image_normalize, "RAW_RENDER", render):
+                out = normalize_image(_fixture("camera_raw_truncated.dng"), None)
+                self.assertEqual((out.source_format, out.output_size), ("RAW (preview)", (160, 120)))
+                left, right = _decode(out.data).convert("RGB").getpixel((20, 60)), _decode(out.data).convert("RGB").getpixel((140, 60))
+                self.assertGreater(left[0], 2 * left[2])
+                self.assertGreater(right[2], 2 * right[0])
 
     def test_raw_signatures_and_declarations_reach_libraw(self):
         junk = os.urandom(4096)
@@ -841,8 +936,55 @@ class CameraRawTests(unittest.TestCase):
                 self.assertIn(label, str(ctx.exception))
                 self.assertIn("couldn't be read", str(ctx.exception))
 
-    def _proc(self, returncode=0, stdout=b"", stderr=b""):
-        return MagicMock(returncode=returncode, stdout=stdout, stderr=stderr)
+    def test_camera_raw_is_recognized_by_structure(self):
+        dng_version = (50706, 1, b"\x01\x04\x00\x00")
+        raw = {
+            "DNG": (_tiff_ifd0_only([(256, 4, 64), dng_version]), "camera RAW (DNG)"),
+            "big-endian DNG": (_tiff_ifd0_only([dng_version], big_endian=True), "camera RAW (DNG)"),
+            "CR2": (_tiff_ifd0_only([(256, 4, 64)], gap=b"CR\x02\x00\x00\x00\x00\x00"), "camera RAW (CR2)"),
+            "CFA sensor data first (PEF, SRW)": (_tiff_ifd0_only([(262, 3, 32803)]), "camera RAW"),
+            "linear raw first": (_tiff_ifd0_only([(262, 3, 34892)]), "camera RAW"),
+            "maker compression": (_tiff_ifd0_only([(259, 3, 65535)]), "camera RAW"),
+            "preview IFD + SubIFDs (NEF, ARW)": (_tiff_ifd0_only([(254, 4, 1), (330, 4, 4096)]), "camera RAW"),
+            "CR3": (b"\x00\x00\x00\x18ftypcrx " + bytes(32), "camera RAW (CR3)"),
+            "CRW": (b"II\x1a\x00\x00\x00HEAPCCDR" + bytes(32), "camera RAW (CRW)"),
+            "IIQ": (b"IIII\x01\x00\x00\x00" + bytes(32), "camera RAW (IIQ)"),
+            "RW2": (b"IIU\x00\x18\x00\x00\x00" + bytes(32), "camera RAW (RW2)"),
+        }
+        for name, (data, label) in raw.items():
+            with self.subTest(name=name):
+                self.assertEqual(image_normalize.camera_raw_kind(data), label)
+        not_raw = {
+            "RGB TIFF": _encode(_photo_like(64, 48), "TIFF"),
+            "16-bit grey TIFF": _encode(Image.new("I;16", (64, 48)), "TIFF"),
+            "pixel bytes spelling CR": _tiff_ifd0_only([(262, 3, 2)], gap=b"CRZ\x00\x00\x00\x00\x00"),
+            "IFD past the end": b"II*\x00" + struct.pack("<I", 10**6) + bytes(64),
+            "IFD cut off": _tiff_ifd0_only([dng_version, (256, 4, 64)])[:20],
+            "JPEG": _encode(_photo_like(64, 48), "JPEG"),
+            "random bytes": os.urandom(786432),
+        }
+        for name, data in not_raw.items():
+            with self.subTest(name=name):
+                self.assertIsNone(image_normalize.camera_raw_kind(data))
+
+    def test_unrecognized_bytes_never_reach_libraw(self):
+        # LibRaw "reads" headerless sensor dumps identified by file size alone
+        # (786432 B: a 1024x768 dump), and demosaics Pillow-unsupported or
+        # merely mislabelled TIFFs as if they were Bayer data.
+        grey16 = _encode(Image.new("I;16", (64, 48), 1000), "TIFF")
+        corrupt_tiff = _encode(_photo_like(64, 48), "TIFF", compression="tiff_lzw")
+        corrupt_tiff = corrupt_tiff[:200] + b"\xff" * 400 + corrupt_tiff[600:]
+        with patch.object(image_normalize.subprocess, "Popen", _no_child):
+            for declared in ("application/octet-stream", "text/csv"):
+                with self.subTest(declared=declared):
+                    with self.assertRaises(UnsupportedImageError) as ctx:
+                        normalize_image(os.urandom(786432), declared)
+                    self.assertIn("format not recognized", str(ctx.exception))
+            out = normalize_image(grey16, "image/x-adobe-dng")
+            self.assertEqual(out.source_format, "TIFF")
+            with self.assertRaises(UnsupportedImageError) as ctx:
+                normalize_image(corrupt_tiff, None)
+            self.assertIn("corrupt or truncated", str(ctx.exception))
 
     def _raw_output(self, im, **header):
         meta = json.dumps({"width": im.width, "height": im.height, "source": "preview", "sensor": [6000, 4000], **header}).encode()
@@ -850,67 +992,129 @@ class CameraRawTests(unittest.TestCase):
 
     def test_child_is_isolated_and_limited(self):
         im = _photo_like(300, 200)
-        with patch.object(image_normalize.subprocess, "run", return_value=self._proc(stdout=self._raw_output(im))) as run:
-            out = normalize_image(b"FOVb" + os.urandom(64), None)
-        self.assertEqual((out.source_format, out.source_size, out.output_size), ("RAW (preview)", (6000, 4000), (300, 200)))
-        self.assertEqual(_pixels(_decode(out.data)), _pixels(im))  # lossless from the child's pixels
-        args, kwargs = run.call_args
-        cmd = args[0]
-        self.assertEqual(cmd[:3], [sys.executable, "-I", image_normalize._RAW_DECODER])
-        params = json.loads(cmd[3])
-        self.assertGreater(params["max_address_space"], params["max_decode_bytes"])
-        self.assertEqual(params["max_cpu_seconds"], image_normalize._RAW_CPU_SECONDS)
-        self.assertEqual(kwargs["timeout"], image_normalize._RAW_TIMEOUT_S)
-        self.assertEqual(kwargs["env"]["OMP_NUM_THREADS"], "1")
-        self.assertNotIn("ATTACHMENTS_BUCKET", kwargs["env"])  # no server secrets in the child
+        data = b"FOVb" + os.urandom(64)
+        for euid in (0, 1000):
+            with self.subTest(server_euid=euid):
+                popen = _FakePopen(stdout=self._raw_output(im))
+                with patch.object(image_normalize.subprocess, "Popen", popen), \
+                        patch.object(image_normalize.os, "geteuid", return_value=euid), \
+                        patch.object(image_normalize, "_RAW_UID", 65534), \
+                        patch.object(image_normalize.os, "fchown") as fchown:
+                    out = normalize_image(data, None)
+                self.assertEqual((out.source_format, out.source_size, out.output_size), ("RAW (preview)", (6000, 4000), (300, 200)))
+                self.assertEqual(_pixels(_decode(out.data)), _pixels(im))  # lossless from the child's pixels
+                (cmd, kwargs), = popen.calls
+                self.assertEqual(cmd[:3], [sys.executable, "-I", image_normalize._RAW_DECODER])
+                params = json.loads(cmd[3])
+                self.assertEqual(popen.spooled, data)  # the child reads the bytes from disk...
+                self.assertFalse(os.path.exists(params["path"]))  # ...and the file is gone afterwards
+                self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+                self.assertTrue(kwargs["start_new_session"])
+                self.assertGreater(params["max_address_space"], params["max_decode_bytes"])
+                self.assertEqual(params["max_cpu_seconds"], image_normalize._RAW_CPU_SECONDS)
+                self.assertEqual(popen.timeout, image_normalize._RAW_TIMEOUT_S)
+                self.assertEqual(kwargs["env"]["OMP_NUM_THREADS"], "1")
+                self.assertNotIn("ATTACHMENTS_BUCKET", kwargs["env"])
+                if euid == 0:  # a root server starts the child as nobody, who may read the spool file
+                    self.assertEqual((kwargs["user"], kwargs["group"], kwargs["extra_groups"]), (65534, 65534, []))
+                    fchown.assert_called_once()
+                    self.assertEqual(fchown.call_args[0][1:], (65534, 65534))
+                else:
+                    self.assertNotIn("user", kwargs)
+                    fchown.assert_not_called()
 
     def test_child_failures_become_readable_errors(self):
         raf = b"FUJIFILMCCD-RAW " + os.urandom(64)
         too_large = json.dumps({"error": "too_large", "detail": "x"}).encode()
+        internal = json.dumps({"error": "error", "detail": "input file not readable"}).encode()
         cases = (
-            ("oom-killed", self._proc(-9), ImageTooLargeError),
-            ("cpu cap", self._proc(-24), ImageTooLargeError),
-            ("too large", self._proc(2, stderr=too_large), ImageTooLargeError),
-            ("crash", self._proc(-11, stderr=b"Segmentation fault"), UnsupportedImageError),
-            ("malformed", self._proc(0, stdout=b"\x00\x00\x00\x02{}garbage"), UnsupportedImageError),
+            ("oom-killed", _FakePopen(-signal.SIGKILL), ImageTooLargeError, "too large"),
+            ("cpu cap", _FakePopen(-signal.SIGXCPU), ImageTooLargeError, "took too long"),
+            ("too large", _FakePopen(2, stderr=too_large), ImageTooLargeError, "too large"),
+            ("timeout", _FakePopen(timeout=True), ImageTooLargeError, "took too long"),
+            ("crash", _FakePopen(-signal.SIGSEGV, stderr=b"Segmentation fault"), UnsupportedImageError, "couldn't be read"),
+            ("internal error", _FakePopen(2, stderr=internal), UnsupportedImageError, "couldn't be read"),
+            ("not a JSON object", _FakePopen(2, stderr=b"[1, 2]"), UnsupportedImageError, "couldn't be read"),
+            ("malformed", _FakePopen(0, stdout=b"\x00\x00\x00\x02{}garbage"), UnsupportedImageError, "couldn't be read"),
         )
-        for name, proc, error in cases:
+        for name, popen, error, message in cases:
             with self.subTest(name=name):
-                with patch.object(image_normalize.subprocess, "run", return_value=proc):
-                    with self.assertRaises(error):
+                with patch.object(image_normalize.subprocess, "Popen", popen), \
+                        patch.object(image_normalize.os, "killpg") as killpg:
+                    with self.assertRaises(error) as ctx:
                         normalize_image(raf, None)
-        with patch.object(image_normalize.subprocess, "run",
-                          side_effect=image_normalize.subprocess.TimeoutExpired("raw", 90)):
-            with self.assertRaises(ImageTooLargeError):
+                self.assertIn(message, str(ctx.exception))
+                self.assertIn("RAW", str(ctx.exception))
+                if name == "timeout":  # the child and anything it started
+                    killpg.assert_called_once_with(popen.pid, signal.SIGKILL)
+                else:
+                    killpg.assert_not_called()
+        with patch.object(image_normalize.subprocess, "Popen", side_effect=PermissionError(13, "denied")):
+            with self.assertRaises(UnsupportedImageError):
                 normalize_image(raf, None)
 
-    def test_tiff_pillow_cannot_decode_falls_back_to_libraw(self):
-        # e.g. a PEF whose first IFD uses Pentax's own compression
-        tiff = _encode(_photo_like(64, 48), "TIFF")
-        rendered = _photo_like(120, 80)
-        real_load = ImageFile.ImageFile.load
-
-        def failing_tiff_load(im):
-            if im.format == "TIFF":
-                raise OSError("unknown compression")
-            return real_load(im)
-
-        with patch.object(ImageFile.ImageFile, "load", failing_tiff_load), \
-                patch.object(image_normalize, "_decode_camera_raw", return_value=(rendered, {"source": "demosaic", "sensor": [120, 80]})):
-            out = normalize_image(tiff, None, max_edge=100)
-        self.assertEqual(out.source_format, "RAW (demosaic)")
-
-    def test_child_caps_its_own_memory_cpu_and_oom_priority(self):
+    def test_child_caps_its_own_memory_cpu_and_privileges(self):
         script = (
             "import importlib.util, resource, sys; "
             f"spec = importlib.util.spec_from_file_location('rd', {image_normalize._RAW_DECODER!r}); "
             "rd = importlib.util.module_from_spec(spec); spec.loader.exec_module(rd); "
             "rd._limit_self(900_000_000, 42); "
-            "print(open('/proc/self/oom_score_adj').read().strip(), "
-            "resource.getrlimit(resource.RLIMIT_AS)[0], resource.getrlimit(resource.RLIMIT_CPU)[0])"
+            "nnp = [l.split()[1] for l in open('/proc/self/status') if l.startswith('NoNewPrivs')]; "
+            "print(open('/proc/self/oom_score_adj').read().strip(), resource.getrlimit(resource.RLIMIT_AS)[0], "
+            "*resource.getrlimit(resource.RLIMIT_CPU), *resource.getrlimit(resource.RLIMIT_CORE), *nnp)"
         )
         out = subprocess_run([sys.executable, "-I", "-c", script])
-        self.assertEqual(out.split(), ["1000", "900000000", "42"])
+        self.assertEqual(out.split(), ["1000", "900000000", "42", "47", "0", "0", "1"])
+
+    def test_child_locks_itself_down_before_libraw_opens_the_file(self):
+        # After _lock_down() there is room for exactly one more descriptor —
+        # the RAW file LibRaw opens — and none for sockets or other files.
+        script = (
+            "import errno, importlib.util, os, resource, socket; "
+            f"spec = importlib.util.spec_from_file_location('rd', {image_normalize._RAW_DECODER!r}); "
+            "rd = importlib.util.module_from_spec(spec); spec.loader.exec_module(rd); "
+            "rd._lock_down(); "
+            "os.open(os.devnull, os.O_RDONLY); "
+            "out = []\n"
+            "for attempt in (lambda: os.open('/etc/hostname', os.O_RDONLY), socket.socket):\n"
+            "    try:\n"
+            "        attempt(); out.append('opened')\n"
+            "    except OSError as e:\n"
+            "        out.append(errno.errorcode[e.errno])\n"
+            "print(*out, *resource.getrlimit(resource.RLIMIT_NPROC), *resource.getrlimit(resource.RLIMIT_FSIZE))"
+        )
+        out = subprocess_run([sys.executable, "-I", "-c", script])
+        self.assertEqual(out.split(), ["EMFILE", "EMFILE", "0", "0", "0", "0"])
+
+    def test_child_runs_as_nobody_when_the_server_is_root(self):
+        if os.geteuid() != 0:
+            self.skipTest("the server drops the child's privileges only when it runs as root")
+        if image_normalize._RAW_UID == 0:
+            self.skipTest("this interpreter isn't reachable as nobody (e.g. a venv under /root)")
+        import tempfile
+
+        probe = (
+            "import json, os, struct, sys\n"
+            "r = {'uid': os.getuid()}\n"
+            "for name, path in (('environ', f'/proc/{os.getppid()}/environ'), ('input', json.loads(sys.argv[1])['path'])):\n"
+            "    try:\n"
+            "        open(path, 'rb').read(1); r[name] = 'readable'\n"
+            "    except OSError as e:\n"
+            "        r[name] = e.errno\n"
+            "h = json.dumps({'width': 1, 'height': 1, 'source': 'probe', 'sensor': [1, 1], 'probe': r}).encode()\n"
+            "sys.stdout.buffer.write(struct.pack('>I', len(h)) + h + bytes(3))\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            os.chmod(tmp, 0o755)
+            path = os.path.join(tmp, "probe.py")
+            with open(path, "w") as f:
+                f.write(probe)
+            os.chmod(path, 0o644)
+            with patch.object(image_normalize, "_RAW_DECODER", path), image_normalize.camera_raw_spool() as spool:
+                spool.write(b"RAW")
+                spool.flush()
+                _, header = image_normalize._decode_camera_raw(spool.name, "", "camera RAW", 10**8, 100)
+        self.assertEqual(header["probe"], {"uid": 65534, "environ": errno.EACCES, "input": "readable"})
 
 
 class RawRenderTests(unittest.TestCase):
@@ -924,19 +1128,27 @@ class RawRenderTests(unittest.TestCase):
         cls.rd = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.rd)
 
-    def _raw(self, thumb=None, flip=0, sensor=(4000, 3000), demosaic=None):
+    def _raw(self, thumb=None, flip=0, sensor=(4000, 3000), demosaic=None, stacked=False):
         import rawpy
 
         raw = MagicMock()
         raw.sizes = MagicMock(flip=flip, raw_width=sensor[0], raw_height=sensor[1], width=sensor[0], height=sensor[1])
+        raw.raw_type = rawpy.RawType.Stack if stacked else rawpy.RawType.Flat
         if thumb is None:
             raw.extract_thumb.side_effect = rawpy.LibRawNoThumbnailError()
         else:
             raw.extract_thumb.return_value = thumb
-        if isinstance(demosaic, Exception):
-            raw.postprocess.side_effect = demosaic
-        else:
-            raw.postprocess.return_value = demosaic
+
+        def postprocess(**kwargs):
+            if isinstance(demosaic, BaseException):
+                # Like LibRaw: a failed unpack resets the handle — its sizes
+                # and its preview are gone too.
+                raw.extract_thumb.side_effect = rawpy.LibRawOutOfOrderCallError()
+                raw.sizes = MagicMock(flip=0, raw_width=0, raw_height=0, width=0, height=0)
+                raise demosaic
+            return demosaic
+
+        raw.postprocess.side_effect = postprocess
         return raw
 
     def _jpeg_thumb(self, w, h, orientation=None):
@@ -951,11 +1163,13 @@ class RawRenderTests(unittest.TestCase):
             kw["exif"] = exif.tobytes()
         return MagicMock(format=rawpy.ThumbFormat.JPEG, data=_encode(im, "JPEG", quality=95, **kw))
 
+    def _render(self, raw, budget=100_000_000, **params):
+        return self.rd.render_opened(raw, {"max_decode_bytes": budget, **params})
+
     def test_preview_is_rotated_by_the_raw_flip_exactly_once(self):
         for orientation in (None, 6):  # LibRaw's flip alone, or also in the preview's own EXIF
             with self.subTest(preview_exif=orientation):
-                raw = self._raw(self._jpeg_thumb(2000, 1000, orientation), flip=6)
-                im = self.rd._preview(raw, 1568)
+                im = self.rd._preview(self._jpeg_thumb(2000, 1000, orientation), 6, 1568)
                 self.assertEqual(im.size, (1000, 2000))
                 top, bottom = im.getpixel((500, 100)), im.getpixel((500, 1900))
                 self.assertGreater(top[0], top[2])
@@ -966,25 +1180,80 @@ class RawRenderTests(unittest.TestCase):
 
         demosaiced = np.zeros((1500, 2000, 3), dtype=np.uint8)
         big = self._raw(self._jpeg_thumb(2000, 1500), demosaic=demosaiced)
-        self.assertEqual(self.rd.render_opened(big, {"max_decode_bytes": 10**9})[1:], ("preview", [4000, 3000]))
+        self.assertEqual(self._render(big, 10**9)[1:], ("preview", [4000, 3000]))
+        big.postprocess.assert_not_called()
         small = self._raw(self._jpeg_thumb(640, 480), demosaic=demosaiced)
-        image, source, _ = self.rd.render_opened(small, {"max_decode_bytes": 10**9})
-        self.assertEqual((source, image.size), ("demosaic", (2000, 1500)))
+        image, source, _ = self._render(small, 10**9)
+        self.assertEqual((source, image.size, image.mode), ("demosaic", (2000, 1500), "RGB"))
         small.postprocess.assert_called_once_with(half_size=True, use_camera_wb=True, output_bps=8)
 
     def test_preview_is_the_fallback_when_demosaic_fails_or_does_not_fit(self):
         import rawpy
 
-        for name, raw in (
-            ("libraw error", self._raw(self._jpeg_thumb(640, 480), demosaic=rawpy.LibRawDataError())),
-            ("over budget", self._raw(self._jpeg_thumb(640, 480), sensor=(12000, 9000))),
+        for name, demosaic, sensor in (
+            ("unreadable sensor data", rawpy.LibRawDataError(), (4000, 3000)),
+            ("truncated sensor data", rawpy.LibRawIOError(), (4000, 3000)),
+            ("over the memory cap", rawpy.LibRawUnsufficientMemoryError(), (4000, 3000)),
+            ("over the budget", None, (12000, 9000)),
         ):
             with self.subTest(name=name):
-                image, source, _ = self.rd.render_opened(raw, {"max_decode_bytes": 100_000_000})
-                self.assertEqual((source, image.size), ("preview", (640, 480)))
-        with self.assertRaises(self.rd._Fail) as ctx:
-            self.rd.render_opened(self._raw(None, sensor=(12000, 9000)), {"max_decode_bytes": 100_000_000})
-        self.assertEqual(ctx.exception.kind, "too_large")
+                raw = self._raw(self._jpeg_thumb(640, 480), sensor=sensor, demosaic=demosaic)
+                image, source, reported = self._render(raw)
+                # The sensor size is from before the failure reset the handle.
+                self.assertEqual((source, image.size, reported), ("preview", (640, 480), list(sensor)))
+
+    def test_without_any_preview_a_failed_demosaic_says_why(self):
+        import rawpy
+
+        for name, raw, kind in (
+            ("over the budget", self._raw(None, sensor=(12000, 9000)), "too_large"),
+            ("over the memory cap", self._raw(None, demosaic=MemoryError()), "too_large"),
+            ("unreadable sensor data", self._raw(None, demosaic=rawpy.LibRawDataError()), "unsupported"),
+        ):
+            with self.subTest(name=name):
+                with self.assertRaises(self.rd._Fail) as ctx:
+                    self._render(raw)
+                self.assertEqual(ctx.exception.kind, kind)
+
+    def test_non_bayer_sensor_data_is_costed_at_full_size(self):
+        # Linear DNG (ProRAW, Expert RAW), sRAW, Foveon: half_size doesn't
+        # shrink them, and they take ~4x the memory per sensor pixel.
+        import numpy as np
+
+        demosaiced = np.zeros((4000, 6000, 3), dtype=np.uint8)
+        raw = self._raw(self._jpeg_thumb(1024, 683), sensor=(6000, 4000), demosaic=demosaiced, stacked=True)
+        image, source, _ = self._render(raw, 300_000_000)  # fits as Bayer data, not as 24 MP of linear data
+        self.assertEqual((source, image.size), ("preview", (1024, 683)))
+        raw.postprocess.assert_not_called()
+        raw = self._raw(self._jpeg_thumb(1024, 683), sensor=(6000, 4000), demosaic=demosaiced, stacked=True)
+        self.assertEqual(self._render(raw, 10**9)[1], "demosaic")
+        raw.postprocess.assert_called_once_with(half_size=False, use_camera_wb=True, output_bps=8)
+
+    def test_damaged_or_unusual_previews_fall_back_to_the_sensor_data(self):
+        import numpy as np
+        import rawpy
+
+        demosaiced = np.zeros((1500, 2000, 3), dtype=np.uint8)
+        jpeg = self._jpeg_thumb(2000, 1500)
+        jpeg.data = jpeg.data[: len(jpeg.data) // 2]  # header intact, scan data cut off
+        image, source, _ = self._render(self._raw(jpeg, demosaic=demosaiced), 10**9)
+        self.assertEqual(source, "demosaic")
+        # Monochrome sensors and their previews come as (h, w, 1) arrays.
+        grey = MagicMock(format=rawpy.ThumbFormat.BITMAP, data=np.full((1500, 2000, 1), 90, dtype=np.uint8))
+        image, source, _ = self._render(self._raw(grey))
+        self.assertEqual((source, image.mode, image.size, image.getpixel((0, 0))), ("preview", "RGB", (2000, 1500), (90, 90, 90)))
+        mono = self._raw(None, demosaic=np.full((1500, 2000, 1), 40, dtype=np.uint8))
+        image, source, _ = self._render(mono, 10**9)
+        self.assertEqual((source, image.mode, image.getpixel((0, 0))), ("demosaic", "RGB", (40, 40, 40)))
+
+    def test_out_of_memory_is_recognized_in_all_its_forms(self):
+        import rawpy
+
+        for e in (MemoryError(), rawpy.LibRawUnsufficientMemoryError(), OSError((errno.ENOMEM, "Cannot allocate memory")),
+                  OSError(errno.ENOMEM, "Cannot allocate memory")):
+            self.assertTrue(self.rd._out_of_memory(e), repr(e))
+        for e in (rawpy.LibRawDataError(), OSError((errno.EIO, "I/O error")), ValueError("x")):
+            self.assertFalse(self.rd._out_of_memory(e), repr(e))
 
 
 class S3FetchTests(unittest.TestCase):
@@ -1024,6 +1293,62 @@ class S3FetchTests(unittest.TestCase):
                 s3_images.fetch_image_for_llm("cust/huge", limits_for_request(None, 1))
         body.read.assert_not_called()
         body.close.assert_called_once()
+
+    def test_large_objects_other_than_camera_raw_are_refused_after_a_peek(self):
+        client, body = self._client(_encode(_photo_like(64, 48), "PNG"))
+        client.get_object.return_value["ContentLength"] = 150 * _MiB
+        with patch.object(s3_images, "_client", return_value=client), \
+                patch.object(image_normalize.subprocess, "Popen", _no_child):
+            with self.assertRaises(ImageTooLargeError) as ctx:
+                s3_images.fetch_image_for_llm("cust/big-png", limits_for_request(None, 1))
+        self.assertIn("the limit is 100 MB", str(ctx.exception))
+        body.read.assert_called_once_with(s3_images._RAW_HEAD_BYTES)
+        body.close.assert_called_once()
+
+    def test_large_camera_raw_is_streamed_to_disk_for_the_child(self):
+        # e.g. a 50 MP phone DNG: over the in-memory limit, never held in memory.
+        client, body = self._client(b"")
+        body.read.side_effect = io.BytesIO(_fixture("camera_raw.dng")).read
+        client.get_object.return_value["ContentLength"] = 150 * _MiB
+        spools = []
+        real_spool = image_normalize.camera_raw_spool
+
+        def spool():
+            spools.append(real_spool())
+            return spools[-1]
+
+        with patch.object(s3_images, "_client", return_value=client), \
+                patch.object(image_normalize, "camera_raw_spool", spool):
+            b64, media_type = s3_images.fetch_image_for_llm("cust/big.dng", limits_for_request("anthropic", 1))
+        self.assertEqual((media_type, _decode(base64.b64decode(b64)).size), ("image/png", (96, 160)))
+        self.assertFalse(os.path.exists(spools[0].name))
+        body.close.assert_called_once()
+        for amount in (s3_images._RAW_HEAD_BYTES, 1024 * 1024):  # a peek, then 1 MiB chunks
+            self.assertIn(unittest.mock.call(amount), body.read.call_args_list)
+
+    def test_disk_trouble_while_spooling_a_camera_raw_is_not_remembered(self):
+        client, body = self._client(_fixture("camera_raw.dng"))
+        body.read.side_effect = lambda n=None: _fixture("camera_raw.dng")[:n]
+        client.get_object.return_value["ContentLength"] = 150 * _MiB
+        limits = limits_for_request(None, 1)
+        with patch.object(s3_images, "_client", return_value=client), \
+                patch.object(image_normalize, "camera_raw_spool", side_effect=OSError(errno.ENOSPC, "No space left")):
+            for _ in range(2):
+                with self.assertRaises(s3_images.AttachmentFetchError) as ctx:
+                    s3_images.fetch_image_for_llm("cust/big.dng", limits)
+        self.assertIn("try again", str(ctx.exception))
+        self.assertEqual(client.get_object.call_count, 2)  # transient: retried next time
+
+    def test_disk_cache_directory_is_private(self):
+        # The camera RAW decoder runs as another user: it must not read anyone's attachments.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = os.path.join(tmp, "attachment-images")
+            os.makedirs(cache_dir, mode=0o755)
+            disk = s3_images._DiskCache(cache_dir, 10 * _MiB)
+            disk.put(("k", limits_for_request(None, 1)), b"PNG", "image/png")
+            self.assertEqual(os.stat(cache_dir).st_mode & 0o777, 0o700)
 
     def test_storage_errors_become_readable_attachment_errors_and_are_not_cached(self):
         client = MagicMock()

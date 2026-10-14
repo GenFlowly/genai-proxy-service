@@ -16,7 +16,8 @@ doesn't refetch and reconvert the same images on every turn — also when
 several image-heavy conversations take turns (each replay walks its images in
 order, which defeats any LRU smaller than the combined working set). Failures
 are remembered for a few minutes so an unusable file isn't re-downloaded on
-every turn.
+every turn. A camera RAW too large to hold in memory is streamed to a
+temporary file for the RAW decoder instead (see _normalize_large_camera_raw).
 """
 import asyncio
 import base64
@@ -105,6 +106,7 @@ class _DiskCache:
         self._dir = directory
         self._max_bytes = max_bytes
         self._bytes: int | None = None  # lazily summed from the directory
+        self._dir_ready = False
 
     @staticmethod
     def _name(key) -> str:
@@ -134,7 +136,7 @@ class _DiskCache:
         if self._max_bytes <= 0 or ext is None or len(data) > self._max_bytes:
             return
         try:
-            os.makedirs(self._dir, exist_ok=True)
+            self._ensure_dir()
             if self._bytes is None:
                 self._bytes = sum(e.stat().st_size for e in os.scandir(self._dir) if e.is_file())
             path = os.path.join(self._dir, f"{self._name(key)}.{ext}")
@@ -147,6 +149,18 @@ class _DiskCache:
                 self._evict()
         except OSError as e:
             logger.debug("Image disk cache write failed: %s", e)
+
+    def _ensure_dir(self) -> None:
+        """Private to the server's user: the camera RAW decoder runs as
+        another user and must not read anyone's cached attachments."""
+        if self._dir_ready:
+            return
+        os.makedirs(self._dir, mode=0o700, exist_ok=True)
+        try:
+            os.chmod(self._dir, 0o700)
+        except OSError:
+            pass  # a configured directory we don't own: leave its mode alone
+        self._dir_ready = True
 
     def _evict(self) -> None:
         entries = sorted(
@@ -242,27 +256,76 @@ def _fetch_normalized(s3_key: str, limits: ImageLimits) -> tuple[bytes, str]:
         obj = _client().get_object(Bucket=bucket, Key=s3_key)
         # Operational OOM guard, checked before the body is read into memory.
         size = obj.get("ContentLength")
-        limit = image_normalize.MAX_SOURCE_BYTES
-        if size is not None and size > limit:
-            obj["Body"].close()
-            raise ImageTooLargeError(image_normalize.source_too_large_message(size, limit))
-        data = obj["Body"].read()
-    except (ClientError, BotoCoreError) as e:
-        code = getattr(e, "response", {}).get("Error", {}).get("Code") or type(e).__name__
-        logger.warning("Attachment %s could not be read from S3: %s", s3_key, code)
-        if code in ("NoSuchKey", "404", "NotFound"):
-            message = "An attached image is no longer available. Please attach it again."
+        if size is not None and size > image_normalize.MAX_SOURCE_BYTES:
+            result = _normalize_large_camera_raw(obj, size, limits)
         else:
-            message = "An attached image could not be loaded right now. Please try again."
-        raise AttachmentFetchError(message) from e
+            data = obj["Body"].read()
+            result = None
+    except (ClientError, BotoCoreError) as e:
+        raise _fetch_error(s3_key, e) from e
 
-    result = image_normalize.normalize_image(
-        data, obj.get("ContentType"),
-        passthrough_formats=limits.passthrough_formats,
-        max_base64_bytes=limits.max_base64_bytes,
-        max_edge=limits.max_edge,
-    )
-    del data
+    if result is None:
+        result = image_normalize.normalize_image(
+            data, obj.get("ContentType"),
+            passthrough_formats=limits.passthrough_formats,
+            max_base64_bytes=limits.max_base64_bytes,
+            max_edge=limits.max_edge,
+        )
+        del data
     # Dimensions/sizes only — never pixel data or base64.
     logger.info("Attachment %s: %s", s3_key, result.log_summary())
     return result.data, result.media_type
+
+
+# Enough of an object's start to recognize a camera RAW: magic numbers and the
+# first TIFF IFD (which camera RAWs write right after the header).
+_RAW_HEAD_BYTES = 256 * 1024
+
+
+def _normalize_large_camera_raw(obj: dict, size: int, limits: ImageLimits) -> image_normalize.NormalizedImage:
+    """An object over MAX_SOURCE_BYTES: only a camera RAW (phone DNGs and
+    uncompressed or medium-format RAWs are often that large) up to
+    MAX_RAW_SOURCE_BYTES is processed, streamed straight to a file the RAW
+    child reads — never held in memory. Anything else is refused. S3 read
+    errors propagate (ClientError / BotoCoreError)."""
+    body = obj["Body"]
+    try:
+        raw_kind = None
+        if size <= image_normalize.MAX_RAW_SOURCE_BYTES:
+            head = body.read(_RAW_HEAD_BYTES)
+            raw_kind = image_normalize.camera_raw_kind(head)
+        if raw_kind is None:
+            raise ImageTooLargeError(image_normalize.source_too_large_message(size, image_normalize.MAX_SOURCE_BYTES))
+        try:
+            spool = image_normalize.camera_raw_spool()
+        except OSError as e:
+            raise _spool_error(e) from e
+        with spool:
+            try:
+                spool.write(head)
+                del head
+                while chunk := body.read(1024 * 1024):
+                    spool.write(chunk)
+                spool.flush()
+            except OSError as e:
+                raise _spool_error(e) from e
+            return image_normalize.normalize_camera_raw_file(
+                spool.name, size, obj.get("ContentType"), raw_kind,
+                max_base64_bytes=limits.max_base64_bytes, max_edge=limits.max_edge,
+            )
+    finally:
+        body.close()
+
+
+def _spool_error(e: OSError) -> AttachmentFetchError:
+    """Local disk trouble (full, ...): transient, not a property of the file."""
+    logger.error("Camera RAW could not be written to disk: %s", e)
+    return AttachmentFetchError("An attached image could not be loaded right now. Please try again.")
+
+
+def _fetch_error(s3_key: str, e: Exception) -> AttachmentFetchError:
+    code = getattr(e, "response", {}).get("Error", {}).get("Code") or type(e).__name__
+    logger.warning("Attachment %s could not be read from S3: %s", s3_key, code)
+    if code in ("NoSuchKey", "404", "NotFound"):
+        return AttachmentFetchError("An attached image is no longer available. Please attach it again.")
+    return AttachmentFetchError("An attached image could not be loaded right now. Please try again.")
