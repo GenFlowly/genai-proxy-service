@@ -356,7 +356,7 @@ class RetrievalServerClient(
             if (!response.status.isSuccess()) {
                 val errorBody = response.bodyAsText()
                 logger.error { "Retrieval server error ${response.status}: $errorBody" }
-                return RetrievalResult(null, null, null, null, null)
+                return RetrievalResult(null, null, null, null, null, errorMessage = attachmentErrorMessage(errorBody))
             }
             val body = response.bodyAsText()
             val root = json.parseToJsonElement(body).jsonObject
@@ -380,6 +380,19 @@ class RetrievalServerClient(
             logger.error(e) { "Failed to call retrieval server (non-streaming)" }
             RetrievalResult(null, null, null, null, null)
         }
+    }
+
+    /**
+     * The user-facing message of a retrieval-server 422 for an unusable
+     * attachment — `{"detail": {"error_type": "attachment_error", "message": ...}}`
+     * — or null for any other error body.
+     */
+    internal fun attachmentErrorMessage(errorBody: String): String? = try {
+        val detail = json.parseToJsonElement(errorBody).jsonObject["detail"]?.jsonObject
+        detail?.takeIf { it["error_type"]?.jsonPrimitive?.content == "attachment_error" }
+            ?.get("message")?.jsonPrimitive?.content
+    } catch (e: Exception) {
+        null
     }
 
     /**

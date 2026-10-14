@@ -37,6 +37,53 @@ Every outbound call to a third-party API MUST go through `encoding_library.utils
 - **boto3 (DynamoDB/S3/KMS)** has its own built-in backoff — don't double-wrap.
 - **Voice realtime websockets** are stateful sessions; reconnection is session logic, deliberately not covered by this util.
 
+## Image attachments: any type, any size
+
+Uploads are unrestricted: the proxy accepts any image type (blank, non-image or SVG declarations are stored as `application/octet-stream`) and any size. The retrieval server makes the bytes acceptable to the LLM vendor at call time. `graph/s3_images.image_for_llm(s3_key, limits)` reads the S3 object and runs `graph/image_normalize.normalize_image` (pure, no S3), returning `(base64, media_type)`. The original S3 object is never modified.
+
+- **Sniffed, never trusted.** The format comes from the bytes (Pillow + `pi-heif` for HEIC/HEIF). Only common formats are opened at all: JPEG (incl. MPO), PNG, GIF, WebP, HEIF/HEIC, AVIF, TIFF, BMP, PSD (merged composite), JPEG 2000, TGA, PPM, QOI. Pillow's other decoders (ICO/ICNS decode inside `open()`, FITS/BLP decode in Python loops, EPS runs Ghostscript) are refused, with the format named and an "export it as PNG or JPEG" hint. The data URL always carries the media type of the bytes actually sent.
+- **Limits are per request.** Every image in a request (current turn, replayed history, Claude tool results) shares the vendor's request limit. `llm_node.request_image_limits` counts them, and `image_normalize.limits_for_request(provider, count)` gives each an even share, rounded down to a tier (5, 4, 3, 2.5, 2, 1.5, 1, ¾, ½ MiB of base64) so the share only changes at a few counts as a thread grows. Image budgets per request: Anthropic 24 MiB (32 MB limit), OpenAI 40 MiB, Gemini and unknown/LiteLLM vendors 15 MiB, Groq 3 MiB (4 MB). Edges: 8000 px; 2000 px once a request has more than 20 images (Anthropic's rule, applied to every provider since Claude is also reachable through routers); 5760 px for Groq (33 MP). A request carries at most `max_images_for_request` images: the vendor's count limit (Anthropic 100, Groq 5) and no more than fit its budget at the smallest tier (Anthropic 48, OpenAI 80, Gemini/others 30). Beyond that the **oldest history attachments** are replaced by a text note, in blocks of a quarter of the cap, so the replayed history (and the vendor's prompt cache over it) only changes every few image turns. Current-turn and tool-result images are always sent.
+- **Passthrough** (bytes untouched): the vendor documents the format (`passthrough_formats_for`: Anthropic/OpenAI JPEG/PNG/GIF/WebP, Gemini JPEG/PNG/WebP, everyone else incl. xAI JPEG/PNG), the base64 fits the per-image budget, edges fit, no EXIF rotation, not animated. Decided from the header, plus a cheap integrity check (PNG chunk CRCs through IEND, JPEG decoded at 1/8 scale, GIF trailer). A file that fails the check isn't refused; it takes the conversion path, whose full decode is lenient (a bad ancillary-chunk CRC or a missing IEND still converts) and reports real truncation readably, instead of a broken file breaking every later turn at the vendor.
+- **Otherwise: lossless PNG** (accepted by every vendor). The first frame is decoded, EXIF orientation applied, and the mode normalized to 8-bit L/RGB/RGBA. 16-bit/32-bit greyscale maps by the smallest standard depth (8/10/12/14/16 bits) holding its maximum, so 12-bit camera/medical data in a 16-bit container isn't black; float greyscale as 0..1. The ICC profile is kept when it matches the colour space; EXIF (incl. GPS) is dropped. If it is over budget, it is downscaled (LANCZOS) and re-encoded losslessly; a 6×6 tile-mosaic size estimate picks the size, so a typical photo needs one full encode. Downscaling stops at the size Claude's standard tier works at (1568 px long edge / ~1.2 MP). Only if lossless can't fit there does it fall back to **JPEG at a 1568 px long edge, q90→50**, then smaller (alpha flattened onto white). In practice that happens with roughly 20+ images in one request.
+- **Unusable files fail the turn with a readable message.** These are `ImageNormalizationError` (a `ValueError`) and its subclasses `UnsupportedImageError` (SVG, PDF, camera RAW, video, unsupported formats, corrupt/truncated) and `ImageTooLargeError`. Streaming: `streaming.user_facing_llm_error` passes the message through verbatim as `error_type: "attachment_error"`. Non-streaming `/retrieve` returns 422 `{"detail": {"error_type": "attachment_error", "message": ...}}`, which the proxy returns as the response text. In history replay (`strict=False`) a failed image degrades to `[attached image unavailable]`.
+- **Resource guards** (one process, 1 GB RAM, one shared CPU serves everyone):
+  - Before decoding, the memory a decode → resize → encode will need is estimated from the header: decoded pixels × a measured per-format cost (PNG/TIFF/PSD 6 B/px, JPEG 7.5 of its drafted size, WebP 17, JPEG 2000 20; ×2 with alpha or >8-bit samples). HEIF and AVIF costs come from the file's bit depth and chroma subsampling (HEIF: 7.2 for 8-bit 4:2:0 up to 15.2 for 10-bit 4:4:4; unknown layouts get the worst case). Anything over `IMAGE_MAX_DECODE_BYTES` is refused. This admits a 48 MP iPhone HEIC (8-bit 4:2:0) and refuses a 48 MP 10-bit 4:2:2 camera HEIF. The limit for WebP is ~22 MP, and for 8-bit 4:2:0 AVIF ~41 MP.
+  - Baseline JPEGs up to 256 MP decode at 1/2–1/8 scale via `draft()`, and JPEG 2000 via OpenJPEG's reduce (stepping down for codestreams with fewer resolution levels). Progressive JPEGs, and sequential ones whose scans aren't interleaved (detected by walking the markers up to the first scan), keep a full coefficient buffer: 3 B/px at 4:2:0 up to 6 at 4:4:4, read from the header. That buffer is sized against the same budget, and `JPEGMEM` (matched to the budget) is the backstop.
+  - The source size is checked from S3 `ContentLength` before the body is read.
+  - Fetch + normalize run on one dedicated worker thread (not asyncio's default executor), so one source is resident and decoding at a time.
+  - Results are cached by `(s3_key, ImageLimits)`: a byte-bounded in-memory LRU (`IMAGE_CACHE_BYTES`) over a local-disk tier (`IMAGE_DISK_CACHE_BYTES` in `IMAGE_DISK_CACHE_DIR`). Without the disk tier, several image-heavy conversations taking turns defeat the LRU, because each replay walks its images in order. Failures are remembered for 10 minutes, then retried, since they may have been transient.
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `IMAGE_MAX_BASE64_BYTES` | 5 MiB | Per-image cap on the **base64** string (Anthropic's 5 MB limit on Bedrock/Vertex is measured on base64). Per-request shares are tiers at or below it. |
+| `IMAGE_MAX_EDGE_PX` | 8000 | Anthropic's max dimension. |
+| `IMAGE_MAX_DECODE_BYTES` | 370,000,000 | Decompression-bomb / OOM guard: estimated peak bytes for one conversion. |
+| `IMAGE_MAX_SOURCE_BYTES` | 100 MiB | Operational OOM guard, not a product limit. Covers 200 MP JPEGs (~25–60 MB) and 48 MP PNGs (~75 MB). |
+| `IMAGE_CACHE_BYTES` | 64 MiB | In-memory normalized-image cache (base64 bytes). |
+| `IMAGE_DISK_CACHE_BYTES` | 512 MiB | Local-disk normalized-image cache (0 disables). |
+| `IMAGE_DISK_CACHE_DIR` | `$TMPDIR/attachment-images` | Where the disk cache lives. |
+
+Measured on one core (`taskset -c 0`, synthetic photo-like fixtures; output for a single image to Claude unless noted):
+
+| Input | Wall time | Peak RSS growth | Output |
+|---|---|---|---|
+| 12 MP HEIC | 1.4 s | +93 MB | 2005×1504 lossless PNG |
+| 12 MP HEIC, 10 images in the request | 1.0 s | +92 MB | 1275×956 lossless PNG (1.8 MiB) |
+| 12 MP HEIC, 20+ images | 1.2 s | +93 MB | 1568×1176 JPEG (0.25 MiB) |
+| 48 MP HEIC | 2.8 s | +335 MB | 2123×1592 lossless PNG |
+| 48 MP JPEG / 200 MP JPEG | 1.0 / 1.2 s | +85 MB | ~2000 px lossless PNG |
+| 48 MP CMYK JPEG | 1.3 s | +93 MB | |
+| 48 MP progressive JPEG (4:2:0 / 4:4:4) | 1.3 / 1.6 s | +188 / +327 MB | |
+| 48 MP 10-bit HEIC (4:2:0) | 4.3 s | +362 MB | |
+| 48 MP JPEG 2000 | 2.4 s | +241 MB | |
+| 48 MP PNG (77 MB) | 2.3 s | +249 MB | |
+| 24 MP RGBA PNG | 2.1 s | +229 MB | |
+| 48 MP WebP / AVIF, 10-bit 4:2:2 or 4:4:4 HEIF | — | +4–6 MB | refused: over the decode budget |
+
+In-budget JPEG/PNG pass through in under 30 ms (integrity check included).
+
+The HEIC test fixtures are committed; `tests/fixtures/make_heic_fixtures.py` regenerates them (it needs the full pillow-heif encoder, not a runtime dependency).
+
 ## Customer-defined tools
 
 A customer's tool is a stored RECORD, not code, so adding one costs a row rather

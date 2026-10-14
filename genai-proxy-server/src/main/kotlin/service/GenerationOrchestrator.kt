@@ -292,7 +292,8 @@ class GenerationOrchestrator(
             client = message.client,
             role = "assistant",
             // A pure tool-call response has no text — don't fake an error message
-            text = result.text ?: if (result.toolCallsJson != null) "" else "No response received. Please try again.",
+            text = result.text ?: if (result.toolCallsJson != null) "" else
+                result.errorMessage ?: "No response received. Please try again.",
             toolCallsJson = result.toolCallsJson,
             // Files built-in tools produced (e.g. generated PDFs) — served for
             // download through the existing attachment endpoint.

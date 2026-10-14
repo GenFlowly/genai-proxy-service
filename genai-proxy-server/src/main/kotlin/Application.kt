@@ -309,12 +309,20 @@ fun Application.module() {
             tag("Attachments") {
                 description = "Image attachments for AI requests. Flow: POST /attachments with the " +
                         "image's media type and size to get a presigned S3 upload URL, PUT the raw " +
-                        "bytes to that URL, then include the returned attachmentId/s3Key/mediaType " +
+                        "bytes to that URL with Content-Type set to the mediaType returned by " +
+                        "POST /attachments, then include the returned attachmentId/s3Key/mediaType " +
                         "in the prompt.attachments array of a generate-text or generate-text-stream " +
                         "request. The s3Key is also accepted in toolResults[].images to send " +
                         "computer-use screenshots by reference (see the API introduction). " +
-                        "Supported types: PNG, JPEG, WebP, GIF; max 5 MB per image, " +
-                        "10 images per message."
+                        "Uploads have no image-type or size limit (HEIC/HEIF from phones, AVIF, " +
+                        "TIFF, multi-MB photos, ...). At generation time the real format is " +
+                        "detected from the bytes and each image is converted/compressed for the " +
+                        "target vendor: passed through untouched when already accepted, otherwise " +
+                        "re-encoded losslessly, downscaled only to fit a vendor's hard limits, and " +
+                        "lossy only as a last resort. Files that cannot be decoded as an image " +
+                        "(e.g. SVG, RAW, PDF) or that exceed the server's processing limits fail " +
+                        "the generation with a clear error. The original upload is stored " +
+                        "unchanged. Up to 10 images per message."
             }
         }
     }

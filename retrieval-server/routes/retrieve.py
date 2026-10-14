@@ -13,6 +13,7 @@ import durable_runtime
 from content_logging import LOG_USER_CONTENT
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
+from graph.image_normalize import ImageNormalizationError
 from graph.instruction_loader import get_instruction_text
 from graph.tools_runtime import MEMORY_CONSENT_TOOLS, all_builtin_tool_names
 from graph.nodes.llm_node import make_llm_node
@@ -299,6 +300,11 @@ async def retrieve(req: RetrieveRequest):
             "error": result.get("error"),
             "usage": usage,
         })
+    except ImageNormalizationError as e:
+        # A user-input problem (unsupported / unreadable / too large attachment),
+        # not a server failure: the message is a user-facing sentence.
+        logger.warning("Attachment could not be prepared (non-streaming): %s", e)
+        raise HTTPException(status_code=422, detail={"error_type": "attachment_error", "message": str(e)})
     except Exception as e:
         logger.error("Graph invocation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Graph error: {e}")
