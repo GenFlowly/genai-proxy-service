@@ -291,8 +291,6 @@
         "request": {
             "generate": "Generate",
             "noApiKeysSet": "No API keys set",
-            "attachmentUnsupportedType": "Unsupported image type. Use PNG, JPEG, WebP, or GIF",
-            "attachmentTooLarge": "Image is too large (max 5 MB)",
             "attachmentLimitReached": "You can attach at most {{max}} images per message",
             "attachmentUploadFailed": "Image upload failed. Please try again",
             "attachmentsUploading": "Images are still uploading",
