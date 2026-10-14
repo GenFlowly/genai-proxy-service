@@ -56,3 +56,35 @@ body {
   color: var(--color-text-primary);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* =========================
+   Markdown tables (component-library TextContainer)
+========================= */
+// The library gives table cells overflow-wrap: anywhere, which drops a cell's
+// min-content width to a single character. Auto table layout then hands the
+// short column (dates, labels) almost nothing next to a long prose column, so
+// it renders one or two letters per line on phones ("W/h/e/n", "2/0/2/0").
+// break-word wraps the same at layout time but keeps whole words in the
+// min-content width, so every column is at least its longest word wide.
+// A token wider than the card (raw URL, hash) then scrolls inside the
+// library's .tableScroll strip instead of splitting mid-word.
+//
+// Only for tables shown as a grid: in the stacked card layout the library
+// switches to below a container width (see the @container rules in its
+// TextContainer.module.scss) cells keep wrapping anywhere, so a long token
+// still fits the card. 1–2 column tables have no data-stack and never stack.
+article table:not([data-stack]) :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+@container not (max-width: 500px) {
+  article table[data-stack='late'] :is(th, td) {
+    overflow-wrap: break-word;
+  }
+}
+
+@container not (max-width: 760px) {
+  article table[data-stack='early'] :is(th, td) {
+    overflow-wrap: break-word;
+  }
+}
