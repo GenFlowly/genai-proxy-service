@@ -16,27 +16,39 @@ Vendor limits this is built around (vendor docs, checked 2026-10):
 - xAI: JPEG/PNG only. Groq: 4 MB per base64 request.
 JPEG and PNG are the only formats every vendor in the BYOK catalog accepts.
 
+Limits are per request, not just per image: every image in a request
+(current turn, replayed history, tool results) shares the vendor's request
+size limit, so limits_for_request() gives each one a tiered share of it and
+applies Anthropic's 2000 px rule for requests with more than 20 images.
+
 Policy (never trusts the declared media type — the format is sniffed from the
 bytes; the declaration is only a hint for messages/logs):
 1. Passthrough, bytes untouched, when the sniffed format is one the target
    vendor accepts (passthrough_formats_for), the base64 size is within budget,
    both edges are <= the max edge, there is no EXIF rotation and it is not
-   animated. Decided from the header alone — no pixel decode.
+   animated. Decided from the header plus a cheap integrity check (PNG chunk
+   CRCs, JPEG decoded at 1/8 scale) — never a full pixel decode.
 2. Otherwise decode the first frame, apply EXIF orientation, normalize the
    mode (8-bit L/RGB/RGBA, ICC profile kept when the colour space is
    unchanged) and encode losslessly as PNG (universally accepted).
 3. If lossless output exceeds the budget, downscale (LANCZOS) and re-encode
    losslessly. The first target size comes from a sampled size estimate, so a
-   typical photo needs a single full encode. Downscaling stops at a 1568 px
-   long edge (Claude's standard-tier maximum).
-4. Only if lossless still cannot fit at that floor: JPEG, quality 90 stepping
-   down (last resort; alpha is flattened onto white).
+   typical photo needs a single full encode. Downscaling stops at the size
+   Claude's standard tier works at (1568 px long edge / ~1.15 MP); below that
+   a model would see less, not just fewer bytes.
+4. Only if lossless still cannot fit at that floor: JPEG at a 1568 px long
+   edge, quality 90 stepping down, then smaller (last resort; alpha is
+   flattened onto white). In practice this happens when many images share
+   one request.
 
 Resource safety (the retrieval server is one process on 1 GB RAM / one shared
-CPU serving everyone): explicit pixel limits are checked from the header before
-any decode; huge JPEGs decode at 1/2–1/8 scale via draft(); heavy decode/encode
-work is serialized by a module-level lock so concurrent requests cannot stack
-peak memory; large intermediates are dropped as soon as they are replaced.
+CPU serving everyone): only common image formats are opened at all; the
+memory a decode will need (pixels x a measured per-format cost) is checked
+from the header before any decode; huge JPEGs decode at 1/2–1/8 scale via
+draft() and JPEG 2000 via reduce; heavy decode/encode work is serialized by a
+module-level lock (graph/s3_images.py also runs fetch + normalize on one
+dedicated worker thread); large intermediates are dropped as soon as they are
+replaced.
 """
 from __future__ import annotations
 
@@ -47,8 +59,17 @@ import threading
 import time
 from dataclasses import dataclass
 
-import pi_heif
-from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError
+# libjpeg-turbo's memory cap per (de)compress object. A JPEG whose scans don't
+# each cover every component (progressive, or sequential with non-interleaved
+# scans) needs a full-size coefficient buffer whatever draft() scale is asked
+# for; this turns a huge one into a decode error instead of an OOM. Read by
+# libjpeg when each decoder/encoder is created, so setting it here (before any
+# JPEG work) is enough. Process-wide and generous: a 48 MP 4:2:0 progressive
+# photo needs ~150 MB; our own encodes need a few MB.
+os.environ.setdefault("JPEGMEM", "256M")
+
+import pi_heif  # noqa: E402
+from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError  # noqa: E402
 
 # HEIF/HEIC decoding (decode-only build of pillow-heif: BSD + LGPL libheif/
 # libde265, no GPL x265 encoder). Thumbnails/depth/aux images are never needed.
@@ -76,14 +97,14 @@ MAX_EDGE_PX = _env_int("IMAGE_MAX_EDGE_PX", 8000)
 # uncompressed 8-bit 30 MP TIFF ~90 MB. Checked from S3 ContentLength before
 # the body is read.
 MAX_SOURCE_BYTES = _env_int("IMAGE_MAX_SOURCE_BYTES", 100 * 1024 * 1024)
-# Decompression-bomb guard: pixels we will fully decode. Decoding a 48 MP HEIC
-# peaks at ~+330 MB RSS (libheif's buffer + Pillow's copy); 52 MP admits iPhone
-# 48 MP (8064x6048 = 48.8 MP) and 50 MP Android full-res modes (<= 50.2 MP).
+# Decompression-bomb / OOM guard: peak memory one decode -> resize -> encode
+# may take, estimated before decoding as decoded pixels x _BYTES_PER_PIXEL of
+# the format (x2 with alpha or >8-bit samples). 360 MB admits a 48 MP iPhone
+# HEIC (8064x6048 = 48.8 MP x 7.2 = 351 MB) and 50 MP PNG/TIFF; WebP and
+# JPEG 2000 decode at 2-3x the cost per pixel, so their pixel limits are lower.
 # Larger JPEGs (Samsung 108/200 MP) still work: they decode at 1/2–1/8 scale
-# via draft(), so what is decoded stays under this limit. Images with an alpha
-# channel get half (see _decode_pixel_limit). Sized for a ~200-350 MB server
-# baseline on the 1 GB VM: worst case stays around +350 MB.
-MAX_DECODE_PIXELS = _env_int("IMAGE_MAX_DECODE_PIXELS", 52_000_000)
+# via draft(). Sized for a ~200-350 MB server baseline on the 1 GB VM.
+MAX_DECODE_BYTES = _env_int("IMAGE_MAX_DECODE_BYTES", 360_000_000)
 
 # Header ceiling for baseline JPEGs decoded through draft(): Samsung 200 MP is
 # 16320x12240 = 199.7 MP. Huffman decoding still walks every coefficient, so a
@@ -91,11 +112,24 @@ MAX_DECODE_PIXELS = _env_int("IMAGE_MAX_DECODE_PIXELS", 52_000_000)
 _JPEG_MAX_HEADER_PIXELS = 256_000_000
 # draft() target: decode big JPEGs at the smallest 1/2^n scale whose long edge
 # is still >= this. Photo content never fits the lossless budget above a
-# ~2300 px long edge, and no vendor uses more than 3072 px, so 4000 keeps
-# >1.3x oversampling for the final LANCZOS step.
-_JPEG_DRAFT_MIN_EDGE = 4000
-# Downscaling floor for the lossless loop: Claude's standard-tier long edge.
+# ~2300 px long edge, and no vendor uses more than 3072 px, so 3200 keeps
+# >1.35x oversampling for the final LANCZOS step (and lets a 7900 px 48 MP
+# JPEG decode at 1/2).
+_JPEG_DRAFT_MIN_EDGE = 3200
+# A JPEG this large that fails to decode most likely hit the JPEGMEM cap
+# (multi-scan coefficient buffer) rather than being corrupt.
+_JPEG_SUSPECT_COEFFICIENT_PIXELS = 40_000_000
+# Passthrough JPEGs are integrity-checked by a 1/8-scale decode; progressive
+# ones still buffer every coefficient, so only below this size.
+_VERIFY_PROGRESSIVE_MAX_PIXELS = 24_000_000
+# Size Claude's standard tier works at: it downscales anything with a longer
+# edge than 1568 px or more than ~1.15 MP. The lossless loop stops there (the
+# floor); the lossy last resort starts at the long edge.
 _FLOOR_EDGE_PX = 1568
+_FLOOR_PIXELS = 1_200_000
+# The lossy last resort shrinks below the floor only when even JPEG q50 at
+# the floor does not fit (many images sharing one request); never below this.
+_MIN_LOSSY_EDGE_PX = 512
 # zlib level for PNG output. Measured on one core (12 MP photo-like, 3 MP
 # crop): level 1 = 305 ms / 3.69 MB, level 3 = 461 ms / 3.49 MB, level 6 =
 # 1373 ms / 3.19 MB. Level 3 buys ~6% more pixels per budget than level 1 for
@@ -109,6 +143,29 @@ _LOSSY_QUALITIES = (90, 80, 70, 60, 50)
 _SCALE_SAFETY = 0.95
 _MAX_LOSSLESS_ATTEMPTS = 4
 
+# Peak RSS growth per decoded pixel for the whole decode -> resize -> encode
+# pipeline (8-bit, no alpha), measured on one core with 48 MP photo-like
+# inputs: PNG 5.2, HEIC 6.9, AVIF 8.6, WebP 15.4 (libwebp decodes through its
+# animation decoder), JPEG 2000 18.5 (OpenJPEG), drafted JPEG 5.6-7.2 — plus
+# a margin. Alpha and >8-bit samples roughly double it (measured x1.9).
+_BYTES_PER_PIXEL = {
+    "JPEG": 7.5, "PNG": 6.0, "TIFF": 6.0, "BMP": 6.0, "DIB": 6.0, "TGA": 6.0,
+    "PPM": 6.0, "QOI": 6.0, "GIF": 6.0, "AVIF": 9.5, "HEIF": 7.2, "WEBP": 17.0,
+    "JPEG2000": 20.0,
+}
+# Formats opened at all (Pillow format ids): what phones, cameras' JPEG/HEIF
+# output, screenshot tools, browsers and common editor exports produce.
+# Multi-frame JPEGs (MPO) open through "JPEG". Tried in this order: AVIF
+# before HEIF, because pi-heif also claims AVIF files with a generic "mif1"
+# brand but has no AV1 decoder. Pillow registers ~30 more —
+# ICO/ICNS decode inside open() before any guard can run, FITS/BLP decode in
+# pure-Python loops, EPS shells out to Ghostscript — and in a process shared
+# by every user those are refused with the usual "isn't a supported image".
+_OPEN_FORMATS = list(_BYTES_PER_PIXEL)
+# Progressive JPEGs keep every DCT coefficient (2 bytes x 1.5 samples per
+# pixel at 4:2:0) regardless of draft scale.
+_PROGRESSIVE_JPEG_BYTES_PER_PIXEL = 3.0
+
 # Formats each vendor documents as accepted (see module docstring). Anything
 # else — including unknown/LiteLLM-routed vendors — gets the universal set.
 _UNIVERSAL_FORMATS = frozenset({"JPEG", "PNG"})
@@ -119,8 +176,28 @@ _VENDOR_FORMATS = {
 }
 _MEDIA_TYPES = {"JPEG": "image/jpeg", "PNG": "image/png", "GIF": "image/gif", "WEBP": "image/webp"}
 
-# Formats never opened: EPS decoding shells out to Ghostscript.
-_NEVER_OPEN = frozenset({"EPS"})
+_MiB = 1024 * 1024
+# Base64 bytes all images of one request may take together, per vendor —
+# below each documented request limit, leaving room for text, history and
+# tools: Anthropic 32 MB per request, OpenAI 50 MB, Gemini ~20 MB inline,
+# Groq 4 MB with base64 images. Unknown/LiteLLM-routed vendors: Gemini-like.
+_REQUEST_IMAGE_BUDGET = {
+    "anthropic": 24 * _MiB,
+    "openai": 40 * _MiB,
+    "gemini": 15 * _MiB,
+    "groq": 3 * _MiB,
+}
+_DEFAULT_REQUEST_IMAGE_BUDGET = 15 * _MiB
+# Per-image budgets are rounded down to one of these tiers, so the share (and
+# the cache key built from it) only changes at a few image counts as a
+# conversation grows, not on every turn.
+_BUDGET_TIERS = (5 * _MiB, 4 * _MiB, 3 * _MiB, 5 * _MiB // 2, 2 * _MiB, 3 * _MiB // 2,
+                 _MiB, 3 * _MiB // 4, _MiB // 2)
+# Anthropic rejects every image over 2000 px in a request with > 20 images.
+_ANTHROPIC_MANY_IMAGES = 20
+_ANTHROPIC_MANY_IMAGES_EDGE = 2000
+# Groq: 33,177,600 px per image (= 5760 x 5760).
+_MAX_EDGE_BY_PROVIDER = {"groq": 5760}
 # Camera RAW is out of scope (needs a demosaicing pipeline). TIFF-based RAWs
 # (DNG, CR2, NEF, ARW...) would otherwise "open" as their embedded thumbnail.
 _RAW_MEDIA_TYPES = frozenset({
@@ -146,6 +223,15 @@ class UnsupportedImageError(ImageNormalizationError):
 
 class ImageTooLargeError(ImageNormalizationError):
     """The image exceeds an operational memory guard (source bytes / pixels)."""
+
+
+@dataclass(frozen=True)
+class ImageLimits:
+    """What one image may take in a request to a given vendor. Hashable: it is
+    part of the normalized-image cache key."""
+    passthrough_formats: frozenset[str]
+    max_base64_bytes: int
+    max_edge: int
 
 
 @dataclass(frozen=True)
@@ -177,6 +263,23 @@ def passthrough_formats_for(provider: str | None) -> frozenset[str]:
     return _VENDOR_FORMATS.get((provider or "").lower(), _UNIVERSAL_FORMATS)
 
 
+def limits_for_request(provider: str | None, image_count: int) -> ImageLimits:
+    """Per-image limits when `image_count` images go to `provider` in one
+    request: an even, tiered share of the vendor's request budget (capped at
+    the per-image MAX_BASE64_BYTES), and the vendor's edge limit."""
+    name = (provider or "").lower()
+    count = max(1, image_count)
+    share = _REQUEST_IMAGE_BUDGET.get(name, _DEFAULT_REQUEST_IMAGE_BUDGET) // count
+    tiers = [t for t in _BUDGET_TIERS if t <= MAX_BASE64_BYTES] or [MAX_BASE64_BYTES]
+    # Below the smallest tier the request may exceed the vendor's limit anyway
+    # (dozens of images); the smallest tier still keeps each one legible.
+    budget = next((t for t in tiers if t <= share), tiers[-1])
+    max_edge = min(MAX_EDGE_PX, _MAX_EDGE_BY_PROVIDER.get(name, MAX_EDGE_PX))
+    if name == "anthropic" and count > _ANTHROPIC_MANY_IMAGES:
+        max_edge = min(max_edge, _ANTHROPIC_MANY_IMAGES_EDGE)
+    return ImageLimits(passthrough_formats_for(name), budget, max_edge)
+
+
 def base64_len(n: int) -> int:
     return 4 * ((n + 2) // 3)
 
@@ -189,7 +292,7 @@ def normalize_image(
     max_base64_bytes: int | None = None,
     max_edge: int | None = None,
     max_source_bytes: int | None = None,
-    max_decode_pixels: int | None = None,
+    max_decode_bytes: int | None = None,
 ) -> NormalizedImage:
     """Return image bytes + media type that every targeted vendor accepts.
 
@@ -201,7 +304,7 @@ def normalize_image(
     budget_b64 = MAX_BASE64_BYTES if max_base64_bytes is None else max_base64_bytes
     max_edge = MAX_EDGE_PX if max_edge is None else max_edge
     max_source_bytes = MAX_SOURCE_BYTES if max_source_bytes is None else max_source_bytes
-    max_decode_pixels = MAX_DECODE_PIXELS if max_decode_pixels is None else max_decode_pixels
+    max_decode_bytes = MAX_DECODE_BYTES if max_decode_bytes is None else max_decode_bytes
     # Largest raw byte count whose base64 encoding fits the budget.
     budget = (budget_b64 // 4) * 3
     declared = _clean_media_type(declared_media_type)
@@ -218,6 +321,7 @@ def normalize_image(
     pixels = im.size[0] * im.size[1]
 
     if _can_pass_through(im, fmt, len(data), passthrough_formats, budget, max_edge):
+        _verify_passthrough(data, im, fmt, declared)
         return NormalizedImage(
             data=data, media_type=_MEDIA_TYPES[fmt], strategy="passthrough",
             source_format=fmt, source_bytes=len(data), source_size=source_size,
@@ -226,40 +330,57 @@ def normalize_image(
 
     # Header-level guards, before anything is allocated for pixels.
     is_jpeg = fmt == "JPEG"
+    jp2_reduce = 0
     if is_jpeg:
-        jpeg_limit = max(_JPEG_MAX_HEADER_PIXELS, max_decode_pixels)
+        jpeg_limit = max(_JPEG_MAX_HEADER_PIXELS, int(max_decode_bytes / _BYTES_PER_PIXEL["JPEG"]))
         if pixels > jpeg_limit:
             raise ImageTooLargeError(_pixels_message(im.size, jpeg_limit, fmt))
         # Progressive JPEGs buffer every DCT coefficient regardless of draft scale.
-        if pixels > max_decode_pixels and (im.info.get("progressive") or im.info.get("progression")):
-            raise ImageTooLargeError(_pixels_message(im.size, max_decode_pixels, "progressive JPEG"))
+        progressive_limit = int(max_decode_bytes / _PROGRESSIVE_JPEG_BYTES_PER_PIXEL)
+        if pixels > progressive_limit and (im.info.get("progressive") or im.info.get("progression")):
+            raise ImageTooLargeError(_pixels_message(im.size, progressive_limit, "progressive JPEG"))
     else:
-        limit = _decode_pixel_limit(im, max_decode_pixels)
-        if pixels > limit:
-            label = f"{fmt} (with transparency)" if limit < max_decode_pixels else fmt
-            raise ImageTooLargeError(_pixels_message(im.size, limit, label))
+        if fmt == "JPEG2000":
+            jp2_reduce = _jp2_reduce_factor(im.size, max_edge)
+        decoded = _scaled_size(im.size, jp2_reduce)
+        _check_decode_cost(im, fmt, decoded, source_size, max_decode_bytes)
 
     wait_started = time.perf_counter()
     with _HEAVY_LOCK:
         lock_wait_ms = (time.perf_counter() - wait_started) * 1000
         if is_jpeg:
             _jpeg_draft(im, max_edge)
-            if im.size[0] * im.size[1] > max_decode_pixels:
-                raise ImageTooLargeError(_pixels_message(source_size, max_decode_pixels, fmt))
+            _check_decode_cost(im, fmt, im.size, source_size, max_decode_bytes)
+        elif jp2_reduce and hasattr(im, "_reduce"):
+            im._reduce = jp2_reduce  # OpenJPEG decodes at 1/2^n resolution (Pillow's reduce)
         try:
             im.load()
+        except MemoryError:
+            raise ImageTooLargeError(_pixels_message(source_size, 0, fmt)) from None
         except Exception as e:  # truncated / corrupt / unsupported codec inside a known container
+            if is_jpeg and pixels > _JPEG_SUSPECT_COEFFICIENT_PIXELS:
+                # Most likely libjpeg's JPEGMEM cap on a multi-scan JPEG, which
+                # surfaces as the same "broken data stream" error as corruption.
+                raise ImageTooLargeError(_pixels_message(source_size, 0, fmt)) from e
             raise UnsupportedImageError(
                 f"The attached image could not be decoded{_paren(_join(fmt, _declared(declared)))}: "
                 "the file appears to be corrupt or truncated."
             ) from e
+        if fmt == "WEBP":
+            # libwebp's animation decoder keeps ~10 B/px of buffers alive until
+            # the file is closed: keep only the decoded frame.
+            frame = im.copy()
+            im.close()
+            im = frame
         try:
             if _orientation(im) not in (None, 1):
                 ImageOps.exif_transpose(im, in_place=True)
             im = _normalize_mode(im)
             out, out_size, strategy = _encode_within_budget(im, budget, max_edge)
-        except (ImageNormalizationError, MemoryError):
+        except ImageNormalizationError:
             raise
+        except MemoryError:
+            raise ImageTooLargeError(_pixels_message(source_size, 0, fmt)) from None
         except Exception as e:  # e.g. a colour mode Pillow cannot convert
             raise UnsupportedImageError(
                 f"The attached image uses a colour format that couldn't be converted ({fmt}, {im.mode}). "
@@ -284,21 +405,11 @@ def source_too_large_message(size: int, limit: int) -> str:
 
 # --- sniffing / guards -------------------------------------------------------
 
-_open_formats: list[str] | None = None
-
-
-def _formats() -> list[str]:
-    global _open_formats
-    if _open_formats is None:
-        Image.init()
-        _open_formats = [f for f in Image.OPEN if f not in _NEVER_OPEN]
-    return _open_formats
-
-
 def _open(data: bytes, declared: str) -> Image.Image:
-    """Image.open (header parse only — no pixel decode) with readable errors."""
+    """Image.open (header parse only — no pixel decode for the allowed
+    formats) with readable errors."""
     try:
-        return Image.open(io.BytesIO(data), formats=_formats())
+        return Image.open(io.BytesIO(data), formats=_OPEN_FORMATS)
     except Image.DecompressionBombError:
         # Pillow's own guard (> ~179 MP) fires before our draft() path can
         # shrink a huge JPEG; reopen baseline JPEGs directly and apply our own
@@ -312,7 +423,11 @@ def _open(data: bytes, declared: str) -> Image.Image:
             "The attached image is too large to process (more than "
             f"{2 * Image.MAX_IMAGE_PIXELS / 1e6:.0f} megapixels). Please export a smaller version."
         ) from None
-    except (UnidentifiedImageError, OSError, SyntaxError, ValueError, EOFError) as e:
+    except MemoryError:
+        raise ImageTooLargeError(
+            "The attached image is too large to process. Please export a smaller version."
+        ) from None
+    except Exception as e:  # any plugin failure on untrusted bytes: not a supported image
         raise _unsupported(data, declared) from e
 
 
@@ -386,8 +501,13 @@ def _can_pass_through(im, fmt, nbytes, passthrough_formats, budget, max_edge) ->
         return False
     # Vendors want stills (OpenAI rejects animated GIF). Multi-frame JPEGs (MPO:
     # Ultra HDR gain maps, stereo pairs) are plain JPEGs to every decoder.
-    if fmt != "JPEG" and getattr(im, "is_animated", False):
-        return False
+    if fmt != "JPEG":
+        try:
+            animated = getattr(im, "is_animated", False)
+        except Exception:  # e.g. a truncated GIF: let the full decode report it
+            return False
+        if animated:
+            return False
     if fmt == "JPEG" and im.mode not in ("L", "RGB"):  # CMYK/YCCK render wrongly in many decoders
         return False
     return _orientation(im) in (None, 1)
@@ -407,12 +527,67 @@ def _orientation(im: Image.Image) -> int | None:
         return None
 
 
-def _decode_pixel_limit(im: Image.Image, max_decode_pixels: int) -> int:
-    """Pixel limit for a full decode. Resampling an image that has (or gains)
-    an alpha channel makes a full-size premultiplied copy first, so peak memory
-    is ~2x: measured +436 MB for a 48 MP RGBA PNG vs +252 MB for RGB."""
-    has_alpha = im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info
-    return max_decode_pixels // 2 if has_alpha else max_decode_pixels
+def _verify_passthrough(data: bytes, im: Image.Image, fmt: str, declared: str) -> None:
+    """Passthrough is decided from the header, so a corrupt or truncated file
+    would go to the vendor as-is — and, replayed with the history, fail every
+    later turn. Cheap integrity checks: PNG chunk CRCs through IEND (no
+    inflate), JPEG entropy data decoded at 1/8 scale. GIF/WebP: header only."""
+    try:
+        if fmt == "PNG":
+            Image.open(io.BytesIO(data), formats=["PNG"]).verify()
+        elif fmt == "JPEG":
+            w, h = im.size
+            progressive = im.info.get("progressive") or im.info.get("progression")
+            if progressive and w * h > _VERIFY_PROGRESSIVE_MAX_PIXELS:
+                return
+            check = Image.open(io.BytesIO(data), formats=["JPEG"])
+            check.draft(check.mode if check.mode in ("L", "RGB") else None, (max(1, w // 8), max(1, h // 8)))
+            check.load()
+    except MemoryError:
+        raise ImageTooLargeError(_pixels_message(im.size, 0, fmt)) from None
+    except Exception as e:
+        raise UnsupportedImageError(
+            f"The attached image could not be decoded{_paren(_join(fmt, _declared(declared)))}: "
+            "the file appears to be corrupt or truncated."
+        ) from e
+
+
+def _decode_cost_per_pixel(im: Image.Image, fmt: str) -> float:
+    """Estimated peak bytes per decoded pixel (see _BYTES_PER_PIXEL). Resampling
+    an image that has (or gains) an alpha channel makes a full-size
+    premultiplied copy first, and >8-bit samples are converted through 32-bit
+    intermediates: each roughly doubles the cost."""
+    cost = _BYTES_PER_PIXEL.get(fmt, max(_BYTES_PER_PIXEL.values()))
+    if im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info:
+        cost *= 2
+    if im.mode.startswith("I") or im.mode == "F" or im.mode in ("RGB;16", "RGBA;16"):
+        cost *= 2
+    return cost
+
+
+def _check_decode_cost(im: Image.Image, fmt: str, decoded: tuple[int, int],
+                       source_size: tuple[int, int], max_decode_bytes: int) -> None:
+    per_pixel = _decode_cost_per_pixel(im, fmt)
+    if decoded[0] * decoded[1] * per_pixel > max_decode_bytes:
+        has_alpha = im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info
+        label = f"{fmt} (with transparency)" if has_alpha else fmt
+        raise ImageTooLargeError(_pixels_message(source_size, int(max_decode_bytes / per_pixel), label))
+
+
+def _jp2_reduce_factor(size: tuple[int, int], max_edge: int) -> int:
+    """Resolution levels to skip when decoding JPEG 2000 (OpenJPEG decodes at
+    1/2^n directly), keeping the long edge >= min(max_edge, 4000) like JPEG's
+    draft()."""
+    target = min(max_edge, _JPEG_DRAFT_MIN_EDGE)
+    n = 0
+    while max(size) >> (n + 1) >= target and n < 5:
+        n += 1
+    return n
+
+
+def _scaled_size(size: tuple[int, int], reduce: int) -> tuple[int, int]:
+    power = 1 << reduce
+    return (-(-size[0] // power), -(-size[1] // power))
 
 
 def _jpeg_draft(im: Image.Image, max_edge: int) -> None:
@@ -428,9 +603,9 @@ def _jpeg_draft(im: Image.Image, max_edge: int) -> None:
 
 def _pixels_message(size: tuple[int, int], limit: int, fmt: str) -> str:
     w, h = size
+    limit_text = f"; the limit for {fmt} images is {limit / 1e6:.0f} megapixels" if limit else ""
     return (
-        f"The attached image is too large to process ({w}x{h} = {w * h / 1e6:.0f} megapixels; "
-        f"the limit for {fmt} images is {limit / 1e6:.0f} megapixels). "
+        f"The attached image is too large to process ({w}x{h} = {w * h / 1e6:.0f} megapixels{limit_text}). "
         "Please export a smaller version and try again."
     )
 
@@ -486,15 +661,19 @@ def _icc_colour_space(icc: bytes) -> bytes:
 
 
 def _high_bit_depth_to_l(im: Image.Image) -> Image.Image:
-    """16-bit / 32-bit int / float greyscale -> 8-bit L, scaled by the image's
-    maximum (Pillow's plain convert clips everything above 255 to white)."""
-    if im.mode.startswith("I;16"):
+    """16-bit / 32-bit int / float greyscale -> 8-bit L by the format's nominal
+    range, so a dark exposure stays dark (Pillow's plain convert clips
+    everything above 255 to white): integers as 16-bit (v / 257), floats as
+    0..1. Only values beyond that range fall back to scaling by the maximum."""
+    if im.mode == "F":
+        hi = im.getextrema()[1]
+        scale = 255.0 if hi <= 1.0 else 255.0 / hi
+        return im.point(lambda v: v * scale).convert("L")  # convert clips to 0..255
+    if im.mode != "I":
         im = im.convert("I")
-    lo, hi = im.getextrema()
-    if im.mode == "F" or hi > 255 or lo < 0:
-        hi = hi if hi > 0 else 1
-        im = im.point(lambda v: v * (255.0 / hi))
-    return im.convert("L")
+    hi = im.getextrema()[1]
+    divisor = 257.0 if hi <= 65535 else hi / 255.0
+    return im.point(lambda v: v / divisor).convert("L")  # point() keeps I; convert clips
 
 
 def _cmyk_to_rgb(im: Image.Image, icc: bytes | None) -> Image.Image:
@@ -566,7 +745,7 @@ def _encode_within_budget(im: Image.Image, budget: int, max_edge: int) -> tuple[
     w, h = im.size
     long_edge = max(w, h)
     cap = min(1.0, max_edge / long_edge)
-    floor = min(cap, _FLOOR_EDGE_PX / long_edge)
+    floor = min(cap, _FLOOR_EDGE_PX / long_edge, math.sqrt(_FLOOR_PIXELS / (w * h)))
     # A fully opaque alpha channel carries no information: dropping it shrinks
     # the PNG. Done per candidate, after downscaling, so the full-size image is
     # never copied just to remove it.
@@ -599,19 +778,26 @@ def _encode_within_budget(im: Image.Image, budget: int, max_edge: int) -> tuple[
             break
         scale = max(floor, scale * math.sqrt(budget / len(out)) * _SCALE_SAFETY)
 
-    # Last resort: lossy at the floor size.
-    candidate = candidate_at(floor)
-    if candidate.mode == "RGBA":
-        flat = Image.new("RGB", candidate.size, (255, 255, 255))
-        flat.paste(candidate, mask=candidate.getchannel("A"))
-        flat.info = candidate.info
-        candidate = flat
-    icc = candidate.info.get("icc_profile")
-    for quality in _LOSSY_QUALITIES:
-        buf = io.BytesIO()
-        candidate.save(buf, "JPEG", quality=quality, **({"icc_profile": icc} if icc else {}))
-        if buf.tell() <= budget:
-            return buf.getvalue(), candidate.size, "lossy"
+    # Last resort: lossy at Claude's long edge, then smaller while even q50
+    # does not fit (only when many images share one request's budget).
+    scale = min(cap, _FLOOR_EDGE_PX / long_edge)
+    min_scale = min(scale, _MIN_LOSSY_EDGE_PX / long_edge)
+    while True:
+        candidate = candidate_at(scale)
+        if candidate.mode == "RGBA":
+            flat = Image.new("RGB", candidate.size, (255, 255, 255))
+            flat.paste(candidate, mask=candidate.getchannel("A"))
+            flat.info = candidate.info
+            candidate = flat
+        icc = candidate.info.get("icc_profile")
+        for quality in _LOSSY_QUALITIES:
+            buf = io.BytesIO()
+            candidate.save(buf, "JPEG", quality=quality, **({"icc_profile": icc} if icc else {}))
+            if buf.tell() <= budget:
+                return buf.getvalue(), candidate.size, "lossy"
+        if scale <= min_scale:
+            break
+        scale = max(min_scale, scale * 0.75)
     raise ImageTooLargeError(
         "The attached image could not be compressed enough for the model. "
         "Please export a smaller version and try again."

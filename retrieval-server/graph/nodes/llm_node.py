@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import os
@@ -13,8 +12,8 @@ from content_logging import LOG_USER_CONTENT, redact
 from encoding_library.observability import count, observe
 from graph.credentials import credentials_for, resolve_credentials
 from graph.llm_factory import THINKING_LEVELS, get_llm
-from graph.image_normalize import ImageNormalizationError
-from graph.s3_images import fetch_image_for_llm
+from graph.image_normalize import ImageLimits, ImageNormalizationError, limits_for_request
+from graph.s3_images import image_for_llm
 from graph.state import RetrievalState
 from graph.tools_runtime import specs_for
 
@@ -231,26 +230,48 @@ def _make_human(content, cache: bool) -> HumanMessage:
     return HumanMessage(content=blocks)
 
 
-async def _image_blocks(images: list, strict: bool, provider: str | None = None) -> list:
+def request_image_limits(state: dict, provider: str | None, with_history: bool) -> ImageLimits:
+    """Per-image limits for this request: every image sent — the current
+    turn's, replayed history's and tool results' (Claude-only, see
+    _tool_messages) — shares the vendor's request size limit, and Anthropic
+    caps edges at 2000 px once a request has more than 20 images."""
+    count = len(state.get("query_images") or [])
+    tool_results = list(state.get("query_tool_results") or [])
+    if with_history:
+        history = state.get("conversation_history") or []
+        for turn in history[:-1]:
+            if turn.get("role", "user") == "user":
+                count += len(turn.get("images") or [])
+                tool_results.extend(turn.get("tool_results") or [])
+    if (provider or "").lower() == "anthropic":
+        count += sum(
+            1 for r in tool_results for img in (r.get("images") or []) if not img.get("omitted")
+        )
+    return limits_for_request(provider, count)
+
+
+async def _image_blocks(images: list, strict: bool, limits: ImageLimits | None = None) -> list:
     """
     Resolve [{s3_key, media_type}, ...] into data-URL image blocks. The
     image_url form is normalized by langchain-anthropic/-openai/-google-genai
     into each provider's native image format, so one shape covers all vendors.
 
-    Uploads may be any image type/size: fetch_image_for_llm sniffs the real
-    format and converts/downscales for `provider` (see graph/image_normalize.py),
-    so the data URL carries the media type of the bytes actually sent — the
-    declared img["media_type"] is not trusted.
+    Uploads may be any image type/size: image_for_llm sniffs the real format
+    and converts/downscales within `limits` (request_image_limits; see
+    graph/image_normalize.py), so the data URL carries the media type of the
+    bytes actually sent — the declared img["media_type"] is not trusted.
 
     strict=True (current turn): a failure fails the request; an
     ImageNormalizationError message reaches the user verbatim (streaming.py).
     strict=False (history replay): failed images degrade to a text note.
     """
+    if limits is None:
+        limits = limits_for_request(None, len(images or []))
     blocks = []
     for img in images or []:
         s3_key = img.get("s3_key", "")
         try:
-            b64, media_type = await asyncio.to_thread(fetch_image_for_llm, s3_key, provider)
+            b64, media_type = await image_for_llm(s3_key, limits)
             blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{b64}"}})
         except Exception as e:
             log = logger.warning if isinstance(e, ImageNormalizationError) else logger.error
@@ -331,13 +352,15 @@ def _history_ai_message(content: str, tool_calls: list, cache: bool) -> AIMessag
     return AIMessage(content=content or "", tool_calls=normalized)
 
 
-async def _tool_messages(tool_results: list, provider: str) -> list:
+async def _tool_messages(tool_results: list, provider: str, limits: ImageLimits | None = None) -> list:
     """
     Build ToolMessages, resolving any attached images (e.g. computer-use
     screenshots) into content blocks. Images arrive as base64 data or an S3 key;
     `omitted` entries are historical screenshots stripped at persistence time.
     Image blocks are Anthropic-only — other providers get a text placeholder.
     """
+    if limits is None:
+        limits = request_image_limits({"query_tool_results": tool_results}, provider, with_history=False)
     out = []
     for r in tool_results or []:
         text = r.get("content", "")
@@ -358,7 +381,7 @@ async def _tool_messages(tool_results: list, provider: str) -> list:
             if not data and img.get("s3_key"):
                 try:
                     # Normalized like attachments; the media type is the sniffed one.
-                    data, media_type = await asyncio.to_thread(fetch_image_for_llm, img["s3_key"], provider)
+                    data, media_type = await image_for_llm(img["s3_key"], limits)
                 except Exception as e:
                     logger.error("Failed to fetch tool-result image %s: %s", img.get("s3_key"), e)
                     blocks.append({"type": "text", "text": "[image unavailable]"})
@@ -923,14 +946,15 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # Only the response generator sees images — retrieval/ranking/classification
         # nodes stay text-only (they don't need pixels, and it keeps them cheap).
         query_image_blocks: list = []
+        image_limits = request_image_limits(state, provider, with_history=include_history and is_response_node)
         if is_response_node:
-            query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True, provider=provider)
+            query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True, limits=image_limits)
         current_content = _user_content(rendered_input, query_image_blocks)
 
         # Tool results for the current turn — must directly follow the assistant
         # message whose tool_calls they answer (the last history turn).
         current_tool_messages = (
-            await _tool_messages(state.get("query_tool_results"), provider) if is_response_node else []
+            await _tool_messages(state.get("query_tool_results"), provider, image_limits) if is_response_node else []
         )
         # A tool-continuation request may carry no new prompt text; don't send an
         # empty user message in that case.
@@ -957,8 +981,8 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                     cache_this = cache_anthropic and is_last
                     if role == "user":
                         # Replayed tool results precede the turn's own text
-                        messages.extend(await _tool_messages(turn.get("tool_results"), provider))
-                        turn_blocks = await _image_blocks(turn.get("images", []), strict=False, provider=provider)
+                        messages.extend(await _tool_messages(turn.get("tool_results"), provider, image_limits))
+                        turn_blocks = await _image_blocks(turn.get("images", []), strict=False, limits=image_limits)
                         if content or turn_blocks:
                             messages.append(_make_human(_user_content(content, turn_blocks), cache_this))
                     else:
