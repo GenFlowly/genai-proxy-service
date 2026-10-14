@@ -104,6 +104,33 @@ def _psd_rgb(im: Image.Image) -> bytes:
     return header + sections + struct.pack(">H", 0) + planes
 
 
+def _multi_scan_baseline_jpeg(w: int, h: int) -> bytes:
+    """A sequential (SOF0) 4:2:0 JPEG whose three components are coded in
+    separate, non-interleaved scans (flat grey): libjpeg must buffer every DCT
+    coefficient, like for a progressive JPEG, though the file is tiny."""
+    def seg(marker: int, payload: bytes) -> bytes:
+        return b"\xff" + bytes([marker]) + struct.pack(">H", len(payload) + 2) + payload
+
+    sampling = [(2, 2), (1, 1), (1, 1)]
+    dqt = seg(0xDB, b"\x00" + bytes([1] * 64))
+    sof = seg(0xC0, struct.pack(">BHHB", 8, h, w, 3)
+              + b"".join(bytes([i + 1, (sh << 4) | sv, 0]) for i, (sh, sv) in enumerate(sampling)))
+    # DC: category 0 = "00"; AC: EOB = "1010" — every block is "001010".
+    dht = seg(0xC4, b"\x00" + bytes([0, 1, 5, 1, 1, 1, 1, 1, 1] + [0] * 7) + bytes(range(12))
+              + b"\x10" + bytes([0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0, 0, 1, 0x7D]) + bytes.fromhex(
+                  "01020300041105122131410613516107227114328191a1082342b1c11552d1f02433627282090a1617"
+                  "18191a25262728292a3435363738393a434445464748494a535455565758595a636465666768696a73"
+                  "7475767778797a838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9"
+                  "bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9fa"))
+    parts = [b"\xff\xd8", dqt, sof, dht]
+    for ci, (sh, sv) in enumerate(sampling):
+        blocks = -(-(-(-w * sh // 2)) // 8) * -(-(-(-h * sv // 2)) // 8)
+        bits = "001010" * blocks
+        bits += "1" * (-len(bits) % 8)
+        parts += [seg(0xDA, bytes([1, ci + 1, 0x00, 0, 63, 0])), int(bits, 2).to_bytes(len(bits) // 8, "big")]
+    return b"".join(parts) + b"\xff\xd9"
+
+
 def _exif_with_gps(orientation: int = 6) -> bytes:
     exif = Image.Exif()
     exif[0x0112] = orientation
@@ -659,6 +686,21 @@ class DecodeCostTests(unittest.TestCase):
                 self.assertEqual(image_normalize._av1c_layout(data), expected)
         self.assertIsNone(image_normalize._av1c_layout(b"not an avif"))
 
+    def test_multi_scan_baseline_jpegs_are_charged_like_progressive_ones(self):
+        data = _multi_scan_baseline_jpeg(2400, 1600)
+        im = Image.open(io.BytesIO(data))
+        im.load()  # it is a valid JPEG
+        self.assertEqual((im.size, im.info.get("progressive")), ((2400, 1600), None))
+        self.assertTrue(image_normalize._jpeg_buffers_coefficients(Image.open(io.BytesIO(data)), data))
+        plain = _encode(_photo_like(64, 48), "JPEG")
+        self.assertFalse(image_normalize._jpeg_buffers_coefficients(Image.open(io.BytesIO(plain)), plain))
+        # Draft decoding can't shrink its coefficient buffer: refused like a
+        # progressive JPEG of the same size, before any decode.
+        with patch.object(ImageFile.ImageFile, "load", side_effect=AssertionError("decoded")):
+            with self.assertRaises(ImageTooLargeError) as ctx:
+                normalize_image(data, "image/jpeg", max_edge=600, max_decode_bytes=_ONE_MP_OF_JPEG)
+        self.assertIn("multi-scan", str(ctx.exception))
+
     def test_progressive_jpeg_limit_follows_chroma_subsampling(self):
         for subsampling, expected in ((2, 4.0), (0, 7.0)):  # 4:2:0, 4:4:4
             data = _encode(_photo_like(64, 48), "JPEG", progressive=True, subsampling=subsampling)
@@ -738,6 +780,24 @@ class RequestLimitsTests(unittest.TestCase):
         self.assertEqual(plan.omitted, {"h0", "h0b", "h1", "h1b", "h2"})
         self.assertEqual(plan.limits, limits_for_request("groq", 5))
         self.assertEqual(llm_node_module.plan_request_images(state, "anthropic", with_history=True).omitted, frozenset())
+
+    def test_omission_moves_in_blocks_so_the_replayed_history_stays_stable(self):
+        # Anthropic: 48 images per request, omitted in blocks of 12. Turn after
+        # turn the same oldest images stay omitted, so the vendor's prompt
+        # cache over the history keeps hitting.
+        def plan(n_history):
+            history = [{"role": "user", "images": [{"s3_key": f"h{i}"}]} for i in range(n_history)]
+            state = {"query_images": [{"s3_key": "q"}], "conversation_history": history + [{"role": "user"}]}
+            return llm_node_module.plan_request_images(state, "anthropic", with_history=True)
+
+        self.assertEqual(plan(47).omitted, frozenset())
+        first = plan(48).omitted
+        self.assertEqual(first, {f"h{i}" for i in range(12)})
+        for n in range(49, 60):
+            self.assertEqual(plan(n).omitted, first, n)
+        self.assertEqual(plan(60).omitted, {f"h{i}" for i in range(24)})
+        # 1 current + 59 history - 12 omitted = 48 images sent: exactly the cap.
+        self.assertEqual(plan(59).limits, limits_for_request("anthropic", 48))
 
 
 class S3FetchTests(unittest.TestCase):

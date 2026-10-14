@@ -365,12 +365,13 @@ def normalize_image(
         jpeg_limit = max(_JPEG_MAX_HEADER_PIXELS, int(max_decode_bytes / _BYTES_PER_PIXEL["JPEG"]))
         if pixels > jpeg_limit:
             raise ImageTooLargeError(_pixels_message(im.size, jpeg_limit, fmt))
-        # Progressive JPEGs buffer every DCT coefficient regardless of draft scale.
-        progressive = bool(im.info.get("progressive") or im.info.get("progression"))
+        # Progressive and multi-scan JPEGs buffer every DCT coefficient
+        # regardless of draft scale.
+        progressive = _jpeg_buffers_coefficients(im, data)
         if progressive:
             progressive_limit = int(max_decode_bytes / _progressive_jpeg_bytes_per_pixel(im))
             if pixels > progressive_limit:
-                raise ImageTooLargeError(_pixels_message(im.size, progressive_limit, "progressive JPEG"))
+                raise ImageTooLargeError(_pixels_message(im.size, progressive_limit, "progressive/multi-scan JPEG"))
     else:
         if fmt == "JPEG2000":
             jp2_reduce = _jp2_reduce_factor(im.size, max_edge)
@@ -396,7 +397,7 @@ def normalize_image(
             if is_jpeg and progressive and pixels > _JPEG_SUSPECT_COEFFICIENT_PIXELS:
                 # Most likely libjpeg's JPEGMEM cap on the coefficient buffer,
                 # which surfaces as the same "broken data stream" error as
-                # corruption. (Baseline JPEGs never allocate that buffer.)
+                # corruption. (Single-scan baseline JPEGs never allocate it.)
                 raise ImageTooLargeError(_pixels_message(source_size, 0, fmt)) from e
             raise UnsupportedImageError(
                 f"The attached image could not be decoded{_paren(_join(fmt, _declared(declared)))}: "
@@ -596,8 +597,7 @@ def _passthrough_is_intact(data: bytes, im: Image.Image, fmt: str) -> bool:
             Image.open(io.BytesIO(data), formats=["PNG"]).verify()
         elif fmt == "JPEG":
             w, h = im.size
-            progressive = im.info.get("progressive") or im.info.get("progression")
-            if progressive and w * h > _VERIFY_PROGRESSIVE_MAX_PIXELS:
+            if w * h > _VERIFY_PROGRESSIVE_MAX_PIXELS and _jpeg_buffers_coefficients(im, data):
                 return True
             check = Image.open(io.BytesIO(data), formats=["JPEG"])
             check.draft(check.mode if check.mode in ("L", "RGB") else None, (max(1, w // 8), max(1, h // 8)))
@@ -643,8 +643,41 @@ def _av1c_layout(data: bytes) -> tuple[bool, int] | None:
     return high, chroma
 
 
+# Start-of-frame markers (C4 DHT, C8 JPG and CC DAC share the range).
+_JPEG_SOF_MARKERS = frozenset(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
+
+
+def _jpeg_buffers_coefficients(im: Image.Image, data: bytes) -> bool:
+    """Whether libjpeg must keep every DCT coefficient of the whole image (a
+    full-size buffer whatever the draft scale): progressive and other
+    non-baseline frames, and sequential frames whose first scan doesn't cover
+    every component (non-interleaved scans). Walks the marker segments up to
+    the first SOS — header bytes only."""
+    if im.info.get("progressive") or im.info.get("progression"):
+        return True
+    i, n, components = 2, len(data), None
+    for _ in range(4096):
+        if i + 4 > n or data[i] != 0xFF:
+            return False
+        marker = data[i + 1]
+        if marker == 0xFF:  # fill byte
+            i += 1
+            continue
+        if marker == 0x01 or 0xD0 <= marker <= 0xD8:  # standalone markers
+            i += 2
+            continue
+        if marker in _JPEG_SOF_MARKERS:
+            if marker not in (0xC0, 0xC1):  # progressive, lossless, arithmetic, hierarchical
+                return True
+            components = data[i + 9] if i + 9 < n else None
+        elif marker == 0xDA:  # SOS: how many components the first scan codes
+            return components is not None and i + 4 < n and data[i + 4] < components
+        i += 2 + int.from_bytes(data[i + 2:i + 4], "big")
+    return False
+
+
 def _progressive_jpeg_bytes_per_pixel(im: Image.Image) -> float:
-    """Progressive JPEGs keep every DCT coefficient regardless of draft scale:
+    """Progressive / multi-scan JPEGs keep every DCT coefficient regardless of draft scale:
     2 bytes per sample, i.e. 3 B/px at 4:2:0, 4 at 4:2:2, 6 at 4:4:4 — plus
     ~1 B/px for the (drafted) output."""
     layers = getattr(im, "layer", None) or []

@@ -247,7 +247,7 @@ def plan_request_images(state: dict, provider: str | None, with_history: bool) -
     results' (Claude-only, see _tool_messages) — shares the vendor's request
     size limit. If there are more than the vendor can take
     (max_images_for_request), the OLDEST history attachments are replaced by a
-    text note; current-turn and tool-result images are always sent."""
+    text note, in blocks; current-turn and tool-result images are always sent."""
     current = len(state.get("query_images") or [])
     tool_results = list(state.get("query_tool_results") or [])
     history_keys: list[str] = []
@@ -262,8 +262,15 @@ def plan_request_images(state: dict, provider: str | None, with_history: bool) -
         tool_images = sum(
             1 for r in tool_results for img in (r.get("images") or []) if not img.get("omitted")
         )
-    room = max(0, max_images_for_request(provider) - current - tool_images)
-    omitted = frozenset(history_keys[: max(0, len(history_keys) - room)])
+    cap = max_images_for_request(provider)
+    overflow = len(history_keys) - max(0, cap - current - tool_images)
+    omitted: frozenset = frozenset()
+    if overflow > 0:
+        # Leave out whole blocks of a quarter of the cap: the replayed history
+        # (and so the vendor's prompt cache over it) then only changes every
+        # few image turns instead of on each one.
+        step = max(1, cap // 4)
+        omitted = frozenset(history_keys[: min(len(history_keys), -(-overflow // step) * step)])
     count = current + tool_images + len(history_keys) - len(omitted)
     return RequestImagePlan(limits_for_request(provider, count), omitted)
 
