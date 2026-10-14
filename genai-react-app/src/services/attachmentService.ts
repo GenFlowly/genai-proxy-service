@@ -8,10 +8,27 @@ import {
 } from '../models/attachment.models'
 
 /**
+ * Media type declared for files the browser cannot type. Browsers report
+ * `file.type === ''` for formats they don't know (HEIC/HEIF from iPhones on
+ * Chrome/Firefox/Windows, JPEG XL, camera formats, ...).
+ */
+export const UNKNOWN_ATTACHMENT_MEDIA_TYPE = 'application/octet-stream'
+
+/**
  * Uploads an image for use as a message attachment:
- * 1. asks the proxy server for a presigned S3 PUT URL
- * 2. PUTs the raw file bytes straight to S3 (no proxy hop)
+ * 1. asks the proxy server for a presigned S3 PUT URL, declaring the file's
+ *    media type (or application/octet-stream when the browser reports none)
+ * 2. PUTs the raw, unmodified file bytes straight to S3 (no proxy hop)
  * Returns the AttachmentRef to include in the generate request.
+ *
+ * No image-type or size restriction is applied here or by the proxy: the
+ * proxy only normalizes the declared media type (blank, malformed, non-image
+ * or SVG values become application/octet-stream) and returns that *effective*
+ * type, which is bound
+ * into the presigned PUT signature, so the PUT must use it rather than
+ * `file.type`. The retrieval-server sniffs the real format from the bytes and
+ * converts/compresses losslessly for the LLM vendors; the original object in
+ * S3 is never modified.
  */
 export async function uploadAttachment(token: string, file: File): Promise<AttachmentRef> {
     const presignResponse = await fetchWithRetry(endpoints.attachments, {
@@ -22,7 +39,7 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
         },
         body: JSON.stringify({
             fileName: file.name || 'pasted-image',
-            mediaType: file.type,
+            mediaType: file.type || UNKNOWN_ATTACHMENT_MEDIA_TYPE,
             sizeBytes: file.size,
         }),
     })
@@ -37,7 +54,8 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
     const uploadResponse = await fetchWithRetry(presign.uploadUrl, {
         method: HttpMethod.PUT,
         headers: {
-            // Must match the content type bound into the presigned signature
+            // The server's effective (normalized) type — it is bound into the
+            // presigned signature and may differ from file.type
             'Content-Type': presign.mediaType,
         },
         body: file,
