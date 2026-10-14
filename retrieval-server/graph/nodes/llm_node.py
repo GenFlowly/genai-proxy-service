@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,7 +13,7 @@ from content_logging import LOG_USER_CONTENT, redact
 from encoding_library.observability import count, observe
 from graph.credentials import credentials_for, resolve_credentials
 from graph.llm_factory import THINKING_LEVELS, get_llm
-from graph.image_normalize import ImageLimits, ImageNormalizationError, limits_for_request
+from graph.image_normalize import ImageLimits, ImageNormalizationError, limits_for_request, max_images_for_request
 from graph.s3_images import image_for_llm
 from graph.state import RetrievalState
 from graph.tools_runtime import specs_for
@@ -230,27 +231,45 @@ def _make_human(content, cache: bool) -> HumanMessage:
     return HumanMessage(content=blocks)
 
 
-def request_image_limits(state: dict, provider: str | None, with_history: bool) -> ImageLimits:
-    """Per-image limits for this request: every image sent — the current
-    turn's, replayed history's and tool results' (Claude-only, see
-    _tool_messages) — shares the vendor's request size limit, and Anthropic
-    caps edges at 2000 px once a request has more than 20 images."""
-    count = len(state.get("query_images") or [])
+@dataclass(frozen=True)
+class RequestImagePlan:
+    """How this request's images are sent: per-image limits, and the oldest
+    history attachments left out because the request can't carry them all."""
+    limits: ImageLimits
+    omitted: frozenset = frozenset()
+
+
+_OMITTED_IMAGE_NOTE = "[earlier image omitted to fit the model's request size limit]"
+
+
+def plan_request_images(state: dict, provider: str | None, with_history: bool) -> RequestImagePlan:
+    """Every image sent — the current turn's, replayed history's and tool
+    results' (Claude-only, see _tool_messages) — shares the vendor's request
+    size limit. If there are more than the vendor can take
+    (max_images_for_request), the OLDEST history attachments are replaced by a
+    text note; current-turn and tool-result images are always sent."""
+    current = len(state.get("query_images") or [])
     tool_results = list(state.get("query_tool_results") or [])
+    history_keys: list[str] = []
     if with_history:
         history = state.get("conversation_history") or []
         for turn in history[:-1]:
             if turn.get("role", "user") == "user":
-                count += len(turn.get("images") or [])
+                history_keys.extend(img.get("s3_key", "") for img in (turn.get("images") or []))
                 tool_results.extend(turn.get("tool_results") or [])
+    tool_images = 0
     if (provider or "").lower() == "anthropic":
-        count += sum(
+        tool_images = sum(
             1 for r in tool_results for img in (r.get("images") or []) if not img.get("omitted")
         )
-    return limits_for_request(provider, count)
+    room = max(0, max_images_for_request(provider) - current - tool_images)
+    omitted = frozenset(history_keys[: max(0, len(history_keys) - room)])
+    count = current + tool_images + len(history_keys) - len(omitted)
+    return RequestImagePlan(limits_for_request(provider, count), omitted)
 
 
-async def _image_blocks(images: list, strict: bool, limits: ImageLimits | None = None) -> list:
+async def _image_blocks(images: list, strict: bool, limits: ImageLimits | None = None,
+                        omitted: frozenset = frozenset()) -> list:
     """
     Resolve [{s3_key, media_type}, ...] into data-URL image blocks. The
     image_url form is normalized by langchain-anthropic/-openai/-google-genai
@@ -270,6 +289,9 @@ async def _image_blocks(images: list, strict: bool, limits: ImageLimits | None =
     blocks = []
     for img in images or []:
         s3_key = img.get("s3_key", "")
+        if s3_key in omitted:
+            blocks.append({"type": "text", "text": _OMITTED_IMAGE_NOTE})
+            continue
         try:
             b64, media_type = await image_for_llm(s3_key, limits)
             blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{b64}"}})
@@ -360,7 +382,7 @@ async def _tool_messages(tool_results: list, provider: str, limits: ImageLimits 
     Image blocks are Anthropic-only — other providers get a text placeholder.
     """
     if limits is None:
-        limits = request_image_limits({"query_tool_results": tool_results}, provider, with_history=False)
+        limits = plan_request_images({"query_tool_results": tool_results}, provider, with_history=False).limits
     out = []
     for r in tool_results or []:
         text = r.get("content", "")
@@ -946,7 +968,8 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # Only the response generator sees images — retrieval/ranking/classification
         # nodes stay text-only (they don't need pixels, and it keeps them cheap).
         query_image_blocks: list = []
-        image_limits = request_image_limits(state, provider, with_history=include_history and is_response_node)
+        image_plan = plan_request_images(state, provider, with_history=include_history and is_response_node)
+        image_limits = image_plan.limits
         if is_response_node:
             query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True, limits=image_limits)
         current_content = _user_content(rendered_input, query_image_blocks)
@@ -982,7 +1005,9 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                     if role == "user":
                         # Replayed tool results precede the turn's own text
                         messages.extend(await _tool_messages(turn.get("tool_results"), provider, image_limits))
-                        turn_blocks = await _image_blocks(turn.get("images", []), strict=False, limits=image_limits)
+                        turn_blocks = await _image_blocks(
+                            turn.get("images", []), strict=False, limits=image_limits, omitted=image_plan.omitted,
+                        )
                         if content or turn_blocks:
                             messages.append(_make_human(_user_content(content, turn_blocks), cache_this))
                     else:

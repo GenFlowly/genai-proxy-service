@@ -19,7 +19,9 @@ JPEG and PNG are the only formats every vendor in the BYOK catalog accepts.
 Limits are per request, not just per image: every image in a request
 (current turn, replayed history, tool results) shares the vendor's request
 size limit, so limits_for_request() gives each one a tiered share of it and
-applies Anthropic's 2000 px rule for requests with more than 20 images.
+applies Anthropic's 2000 px rule (to every provider) to requests with more
+than 20 images. Beyond what a request can carry (max_images_for_request), the
+oldest history images are left out (graph/nodes/llm_node.py).
 
 Policy (never trusts the declared media type — the format is sniffed from the
 bytes; the declaration is only a hint for messages/logs):
@@ -59,17 +61,8 @@ import threading
 import time
 from dataclasses import dataclass
 
-# libjpeg-turbo's memory cap per (de)compress object. A JPEG whose scans don't
-# each cover every component (progressive, or sequential with non-interleaved
-# scans) needs a full-size coefficient buffer whatever draft() scale is asked
-# for; this turns a huge one into a decode error instead of an OOM. Read by
-# libjpeg when each decoder/encoder is created, so setting it here (before any
-# JPEG work) is enough. Process-wide and generous: a 48 MP 4:2:0 progressive
-# photo needs ~150 MB; our own encodes need a few MB.
-os.environ.setdefault("JPEGMEM", "256M")
-
-import pi_heif  # noqa: E402
-from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError  # noqa: E402
+import pi_heif
+from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError
 
 # HEIF/HEIC decoding (decode-only build of pillow-heif: BSD + LGPL libheif/
 # libde265, no GPL x265 encoder). Thumbnails/depth/aux images are never needed.
@@ -104,7 +97,17 @@ MAX_SOURCE_BYTES = _env_int("IMAGE_MAX_SOURCE_BYTES", 100 * 1024 * 1024)
 # JPEG 2000 decode at 2-3x the cost per pixel, so their pixel limits are lower.
 # Larger JPEGs (Samsung 108/200 MP) still work: they decode at 1/2–1/8 scale
 # via draft(). Sized for a ~200-350 MB server baseline on the 1 GB VM.
-MAX_DECODE_BYTES = _env_int("IMAGE_MAX_DECODE_BYTES", 360_000_000)
+MAX_DECODE_BYTES = _env_int("IMAGE_MAX_DECODE_BYTES", 370_000_000)
+
+# libjpeg-turbo's memory cap per (de)compress object, in its decimal "M". A
+# JPEG whose scans don't each cover every component (progressive, or
+# sequential with non-interleaved scans) needs a full-size coefficient buffer
+# whatever draft() scale is asked for; this turns a huge one into a decode
+# error instead of an OOM. libjpeg reads it whenever a decoder/encoder is
+# created, so setting it at import (before any JPEG work) is enough. Matched
+# to the decode budget, so it never refuses what the header guard admitted
+# (a 48 MP 4:4:4 progressive JPEG needs ~290 MB); our own encodes need a few MB.
+os.environ.setdefault("JPEGMEM", f"{max(64, MAX_DECODE_BYTES // 1_000_000)}M")
 
 # Header ceiling for baseline JPEGs decoded through draft(): Samsung 200 MP is
 # 16320x12240 = 199.7 MP. Huffman decoding still walks every coefficient, so a
@@ -145,26 +148,38 @@ _MAX_LOSSLESS_ATTEMPTS = 4
 
 # Peak RSS growth per decoded pixel for the whole decode -> resize -> encode
 # pipeline (8-bit, no alpha), measured on one core with 48 MP photo-like
-# inputs: PNG 5.2, HEIC 6.9, AVIF 8.6, WebP 15.4 (libwebp decodes through its
-# animation decoder), JPEG 2000 18.5 (OpenJPEG), drafted JPEG 5.6-7.2 — plus
-# a margin. Alpha and >8-bit samples roughly double it (measured x1.9).
+# inputs: PNG 5.2, WebP 15.4 (libwebp decodes through its animation decoder),
+# JPEG 2000 18.5 (OpenJPEG), drafted JPEG 5.6-7.2 — plus a margin. Alpha and
+# >8-bit samples roughly double it (measured x1.9). HEIF and AVIF depend on
+# bit depth and chroma subsampling: see _HEIF_COST / _AVIF_COST.
 _BYTES_PER_PIXEL = {
     "JPEG": 7.5, "PNG": 6.0, "TIFF": 6.0, "BMP": 6.0, "DIB": 6.0, "TGA": 6.0,
-    "PPM": 6.0, "QOI": 6.0, "GIF": 6.0, "AVIF": 9.5, "HEIF": 7.2, "WEBP": 17.0,
-    "JPEG2000": 20.0,
+    "PPM": 6.0, "QOI": 6.0, "GIF": 6.0, "PSD": 6.0, "AVIF": 13.5, "HEIF": 15.2,
+    "WEBP": 17.0, "JPEG2000": 20.0,
+}
+# (high bit depth, chroma) -> bytes per pixel, from 48.8 MP HEIC / 37.6 MP
+# AVIF measurements (HEIC 8-bit 4:2:0 6.9, 10-bit 4:2:0 7.4, 8-bit 4:4:4
+# 8.8, 10-bit 4:2:2 12.9 — what pro cameras write — 10-bit 4:4:4 14.5; AVIF
+# 8-bit 4:2:0 8.7, 10-bit 4:2:0 / 8-bit 4:4:4 10.1, 10/12-bit 4:4:4 13.1).
+# Unknown layouts are charged the worst case (_BYTES_PER_PIXEL).
+_HEIF_COST = {
+    (False, 420): 7.2, (False, 422): 8.5, (False, 444): 9.3,
+    (True, 420): 7.5, (True, 422): 13.5, (True, 444): 15.2,
+}
+_AVIF_COST = {
+    (False, 420): 9.0, (False, 422): 9.8, (False, 444): 10.5,
+    (True, 420): 10.5, (True, 422): 12.5, (True, 444): 13.5,
 }
 # Formats opened at all (Pillow format ids): what phones, cameras' JPEG/HEIF
 # output, screenshot tools, browsers and common editor exports produce.
-# Multi-frame JPEGs (MPO) open through "JPEG". Tried in this order: AVIF
-# before HEIF, because pi-heif also claims AVIF files with a generic "mif1"
-# brand but has no AV1 decoder. Pillow registers ~30 more —
-# ICO/ICNS decode inside open() before any guard can run, FITS/BLP decode in
-# pure-Python loops, EPS shells out to Ghostscript — and in a process shared
-# by every user those are refused with the usual "isn't a supported image".
+# Multi-frame JPEGs (MPO) open through "JPEG"; PSD opens its merged composite
+# (layers load lazily). Tried in this order: AVIF before HEIF, because pi-heif
+# also claims AVIF files with a generic "mif1" brand but has no AV1 decoder.
+# Pillow registers ~30 more — ICO/ICNS decode inside open() before any guard
+# can run, FITS/BLP decode in pure-Python loops, EPS shells out to
+# Ghostscript — and in a process shared by every user those are refused with
+# an "export it as PNG or JPEG" message.
 _OPEN_FORMATS = list(_BYTES_PER_PIXEL)
-# Progressive JPEGs keep every DCT coefficient (2 bytes x 1.5 samples per
-# pixel at 4:2:0) regardless of draft scale.
-_PROGRESSIVE_JPEG_BYTES_PER_PIXEL = 3.0
 
 # Formats each vendor documents as accepted (see module docstring). Anything
 # else — including unknown/LiteLLM-routed vendors — gets the universal set.
@@ -194,10 +209,14 @@ _DEFAULT_REQUEST_IMAGE_BUDGET = 15 * _MiB
 _BUDGET_TIERS = (5 * _MiB, 4 * _MiB, 3 * _MiB, 5 * _MiB // 2, 2 * _MiB, 3 * _MiB // 2,
                  _MiB, 3 * _MiB // 4, _MiB // 2)
 # Anthropic rejects every image over 2000 px in a request with > 20 images.
-_ANTHROPIC_MANY_IMAGES = 20
-_ANTHROPIC_MANY_IMAGES_EDGE = 2000
+# Applied to every provider: Claude is also reachable through routers
+# (OpenRouter, LiteLLM ids), and no vendor looks at more than ~2000 px anyway.
+_MANY_IMAGES = 20
+_MANY_IMAGES_EDGE = 2000
 # Groq: 33,177,600 px per image (= 5760 x 5760).
 _MAX_EDGE_BY_PROVIDER = {"groq": 5760}
+# Documented per-request image-count limits.
+_MAX_IMAGES_BY_PROVIDER = {"anthropic": 100, "groq": 5}
 # Camera RAW is out of scope (needs a demosaicing pipeline). TIFF-based RAWs
 # (DNG, CR2, NEF, ARW...) would otherwise "open" as their embedded thumbnail.
 _RAW_MEDIA_TYPES = frozenset({
@@ -275,9 +294,19 @@ def limits_for_request(provider: str | None, image_count: int) -> ImageLimits:
     # (dozens of images); the smallest tier still keeps each one legible.
     budget = next((t for t in tiers if t <= share), tiers[-1])
     max_edge = min(MAX_EDGE_PX, _MAX_EDGE_BY_PROVIDER.get(name, MAX_EDGE_PX))
-    if name == "anthropic" and count > _ANTHROPIC_MANY_IMAGES:
-        max_edge = min(max_edge, _ANTHROPIC_MANY_IMAGES_EDGE)
+    if count > _MANY_IMAGES:
+        max_edge = min(max_edge, _MANY_IMAGES_EDGE)
     return ImageLimits(passthrough_formats_for(name), budget, max_edge)
+
+
+def max_images_for_request(provider: str | None) -> int:
+    """How many images one request to `provider` may carry: the vendor's
+    documented count limit, and no more than fit its request budget at the
+    smallest per-image tier. Older history images beyond it are left out."""
+    name = (provider or "").lower()
+    smallest_tier = min(min(_BUDGET_TIERS), MAX_BASE64_BYTES)
+    by_budget = _REQUEST_IMAGE_BUDGET.get(name, _DEFAULT_REQUEST_IMAGE_BUDGET) // smallest_tier
+    return max(1, min(by_budget, _MAX_IMAGES_BY_PROVIDER.get(name, by_budget)))
 
 
 def base64_len(n: int) -> int:
@@ -320,8 +349,8 @@ def normalize_image(
     _reject_camera_raw(im, data, declared)
     pixels = im.size[0] * im.size[1]
 
-    if _can_pass_through(im, fmt, len(data), passthrough_formats, budget, max_edge):
-        _verify_passthrough(data, im, fmt, declared)
+    if (_can_pass_through(im, fmt, len(data), passthrough_formats, budget, max_edge)
+            and _passthrough_is_intact(data, im, fmt)):
         return NormalizedImage(
             data=data, media_type=_MEDIA_TYPES[fmt], strategy="passthrough",
             source_format=fmt, source_bytes=len(data), source_size=source_size,
@@ -331,36 +360,43 @@ def normalize_image(
     # Header-level guards, before anything is allocated for pixels.
     is_jpeg = fmt == "JPEG"
     jp2_reduce = 0
+    progressive = False
     if is_jpeg:
         jpeg_limit = max(_JPEG_MAX_HEADER_PIXELS, int(max_decode_bytes / _BYTES_PER_PIXEL["JPEG"]))
         if pixels > jpeg_limit:
             raise ImageTooLargeError(_pixels_message(im.size, jpeg_limit, fmt))
         # Progressive JPEGs buffer every DCT coefficient regardless of draft scale.
-        progressive_limit = int(max_decode_bytes / _PROGRESSIVE_JPEG_BYTES_PER_PIXEL)
-        if pixels > progressive_limit and (im.info.get("progressive") or im.info.get("progression")):
-            raise ImageTooLargeError(_pixels_message(im.size, progressive_limit, "progressive JPEG"))
+        progressive = bool(im.info.get("progressive") or im.info.get("progression"))
+        if progressive:
+            progressive_limit = int(max_decode_bytes / _progressive_jpeg_bytes_per_pixel(im))
+            if pixels > progressive_limit:
+                raise ImageTooLargeError(_pixels_message(im.size, progressive_limit, "progressive JPEG"))
     else:
         if fmt == "JPEG2000":
             jp2_reduce = _jp2_reduce_factor(im.size, max_edge)
         decoded = _scaled_size(im.size, jp2_reduce)
-        _check_decode_cost(im, fmt, decoded, source_size, max_decode_bytes)
+        _check_decode_cost(im, fmt, decoded, source_size, max_decode_bytes, data)
 
     wait_started = time.perf_counter()
     with _HEAVY_LOCK:
         lock_wait_ms = (time.perf_counter() - wait_started) * 1000
         if is_jpeg:
             _jpeg_draft(im, max_edge)
-            _check_decode_cost(im, fmt, im.size, source_size, max_decode_bytes)
-        elif jp2_reduce and hasattr(im, "_reduce"):
-            im._reduce = jp2_reduce  # OpenJPEG decodes at 1/2^n resolution (Pillow's reduce)
+            _check_decode_cost(im, fmt, im.size, source_size, max_decode_bytes, data)
         try:
-            im.load()
+            if jp2_reduce:
+                im = _load_jpeg2000(data, im, jp2_reduce, source_size, max_decode_bytes)
+            else:
+                im.load()
+        except ImageNormalizationError:
+            raise
         except MemoryError:
             raise ImageTooLargeError(_pixels_message(source_size, 0, fmt)) from None
         except Exception as e:  # truncated / corrupt / unsupported codec inside a known container
-            if is_jpeg and pixels > _JPEG_SUSPECT_COEFFICIENT_PIXELS:
-                # Most likely libjpeg's JPEGMEM cap on a multi-scan JPEG, which
-                # surfaces as the same "broken data stream" error as corruption.
+            if is_jpeg and progressive and pixels > _JPEG_SUSPECT_COEFFICIENT_PIXELS:
+                # Most likely libjpeg's JPEGMEM cap on the coefficient buffer,
+                # which surfaces as the same "broken data stream" error as
+                # corruption. (Baseline JPEGs never allocate that buffer.)
                 raise ImageTooLargeError(_pixels_message(source_size, 0, fmt)) from e
             raise UnsupportedImageError(
                 f"The attached image could not be decoded{_paren(_join(fmt, _declared(declared)))}: "
@@ -440,11 +476,28 @@ def _unsupported(data: bytes, declared: str) -> UnsupportedImageError:
     elif kind == "video":
         hint = " Videos aren't supported as image attachments."
     else:
-        hint = ""
+        hint = " Export it as PNG or JPEG and try again."
     detected = f"detected: {kind}" if kind else "format not recognized"
     return UnsupportedImageError(
         f"The attached file isn't a supported image ({_join(detected, _declared(declared), sep='; ')}).{hint}"
     )
+
+
+# Recognizable formats that are deliberately not opened (see _OPEN_FORMATS).
+_KNOWN_UNSUPPORTED_MAGIC = (
+    (b"\x00\x00\x01\x00", "ICO icon"),
+    (b"\x00\x00\x02\x00", "CUR cursor"),
+    (b"icns", "ICNS icon"),
+    (b"DDS ", "DDS texture"),
+    (b"SIMPLE  =", "FITS"),
+    (b"BLP1", "BLP texture"),
+    (b"BLP2", "BLP texture"),
+    (b"%!PS", "PostScript/EPS"),
+    (b"\xc5\xd0\xd3\xc6", "PostScript/EPS"),
+    (b"gimp xcf", "GIMP XCF"),
+    (b"\xff\x0a", "JPEG XL"),
+    (b"\x00\x00\x00\x0cJXL ", "JPEG XL"),
+)
 
 
 def _sniff_label(data: bytes) -> str | None:
@@ -464,6 +517,9 @@ def _sniff_label(data: bytes) -> str | None:
         return f"ISO-BMFF ({brand.decode('latin-1').strip()})"
     if head.startswith(b"FUJIFILMCCD-RAW"):
         return "camera RAW (RAF)"
+    for magic, label in _KNOWN_UNSUPPORTED_MAGIC:
+        if head.startswith(magic):
+            return label
     if head[:4] in (b"IIRO", b"IIU\x00"):
         return "camera RAW"
     if head.startswith(b"\xff\xd8\xff"):
@@ -527,11 +583,14 @@ def _orientation(im: Image.Image) -> int | None:
         return None
 
 
-def _verify_passthrough(data: bytes, im: Image.Image, fmt: str, declared: str) -> None:
+def _passthrough_is_intact(data: bytes, im: Image.Image, fmt: str) -> bool:
     """Passthrough is decided from the header, so a corrupt or truncated file
     would go to the vendor as-is — and, replayed with the history, fail every
     later turn. Cheap integrity checks: PNG chunk CRCs through IEND (no
-    inflate), JPEG entropy data decoded at 1/8 scale. GIF/WebP: header only."""
+    inflate), JPEG entropy data decoded at 1/8 scale, GIF trailer present.
+    A file that fails them is not refused here: it takes the conversion path,
+    whose full decode is more lenient (a bad ancillary-chunk CRC or a missing
+    IEND still converts) and reports real truncation readably."""
     try:
         if fmt == "PNG":
             Image.open(io.BytesIO(data), formats=["PNG"]).verify()
@@ -539,25 +598,31 @@ def _verify_passthrough(data: bytes, im: Image.Image, fmt: str, declared: str) -
             w, h = im.size
             progressive = im.info.get("progressive") or im.info.get("progression")
             if progressive and w * h > _VERIFY_PROGRESSIVE_MAX_PIXELS:
-                return
+                return True
             check = Image.open(io.BytesIO(data), formats=["JPEG"])
             check.draft(check.mode if check.mode in ("L", "RGB") else None, (max(1, w // 8), max(1, h // 8)))
             check.load()
-    except MemoryError:
-        raise ImageTooLargeError(_pixels_message(im.size, 0, fmt)) from None
-    except Exception as e:
-        raise UnsupportedImageError(
-            f"The attached image could not be decoded{_paren(_join(fmt, _declared(declared)))}: "
-            "the file appears to be corrupt or truncated."
-        ) from e
+        elif fmt == "GIF":
+            return data.rstrip(b"\x00")[-1:] == b"\x3b"  # GIF trailer
+    except Exception:
+        return False
+    return True
 
 
-def _decode_cost_per_pixel(im: Image.Image, fmt: str) -> float:
+def _decode_cost_per_pixel(im: Image.Image, fmt: str, data: bytes = b"") -> float:
     """Estimated peak bytes per decoded pixel (see _BYTES_PER_PIXEL). Resampling
     an image that has (or gains) an alpha channel makes a full-size
     premultiplied copy first, and >8-bit samples are converted through 32-bit
     intermediates: each roughly doubles the cost."""
     cost = _BYTES_PER_PIXEL.get(fmt, max(_BYTES_PER_PIXEL.values()))
+    if fmt == "HEIF":
+        depth, chroma = im.info.get("bit_depth"), im.info.get("chroma")
+        if isinstance(depth, int) and chroma in (400, 420, 422, 444):
+            cost = _HEIF_COST[(depth > 8, 420 if chroma == 400 else chroma)]
+    elif fmt == "AVIF":
+        layout = _av1c_layout(data)
+        if layout:
+            cost = _AVIF_COST[layout]
     if im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info:
         cost *= 2
     if im.mode.startswith("I") or im.mode == "F" or im.mode in ("RGB;16", "RGBA;16"):
@@ -565,9 +630,36 @@ def _decode_cost_per_pixel(im: Image.Image, fmt: str) -> float:
     return cost
 
 
+def _av1c_layout(data: bytes) -> tuple[bool, int] | None:
+    """(high bit depth, chroma 420/422/444) from an AVIF's av1C box (ISOBMFF
+    metadata near the start of the file), or None when not found."""
+    i = data.find(b"av1C", 0, 65536)
+    if i < 0 or len(data) < i + 7 or data[i + 4] != 0x81:
+        return None
+    flags = data[i + 6]  # tier | high_bitdepth | twelve_bit | mono | sub_x | sub_y | pos(2)
+    high = bool(flags & 0x40)
+    sub_x, sub_y, mono = bool(flags & 0x08), bool(flags & 0x04), bool(flags & 0x10)
+    chroma = 420 if (mono or (sub_x and sub_y)) else (422 if sub_x else 444)
+    return high, chroma
+
+
+def _progressive_jpeg_bytes_per_pixel(im: Image.Image) -> float:
+    """Progressive JPEGs keep every DCT coefficient regardless of draft scale:
+    2 bytes per sample, i.e. 3 B/px at 4:2:0, 4 at 4:2:2, 6 at 4:4:4 — plus
+    ~1 B/px for the (drafted) output."""
+    layers = getattr(im, "layer", None) or []
+    try:
+        h_max = max(layer[1] for layer in layers)
+        v_max = max(layer[2] for layer in layers)
+        samples = sum(layer[1] * layer[2] for layer in layers) / (h_max * v_max)
+    except (ValueError, TypeError, IndexError, ZeroDivisionError):
+        samples = 3.0  # unknown: assume 4:4:4
+    return 2.0 * samples + 1.0
+
+
 def _check_decode_cost(im: Image.Image, fmt: str, decoded: tuple[int, int],
-                       source_size: tuple[int, int], max_decode_bytes: int) -> None:
-    per_pixel = _decode_cost_per_pixel(im, fmt)
+                       source_size: tuple[int, int], max_decode_bytes: int, data: bytes = b"") -> None:
+    per_pixel = _decode_cost_per_pixel(im, fmt, data)
     if decoded[0] * decoded[1] * per_pixel > max_decode_bytes:
         has_alpha = im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info
         label = f"{fmt} (with transparency)" if has_alpha else fmt
@@ -583,6 +675,26 @@ def _jp2_reduce_factor(size: tuple[int, int], max_edge: int) -> int:
     while max(size) >> (n + 1) >= target and n < 5:
         n += 1
     return n
+
+
+def _load_jpeg2000(data: bytes, im: Image.Image, reduce: int,
+                   source_size: tuple[int, int], max_decode_bytes: int) -> Image.Image:
+    """Decode at 1/2^reduce. A codestream with fewer resolution levels than
+    that can't be reduced so far (OpenJPEG errors out), so step the reduction
+    down — as long as the larger decode still fits the budget."""
+    while True:
+        try:
+            im.reduce = reduce
+            im.load()
+            return im
+        except MemoryError:
+            raise
+        except Exception:
+            if reduce == 0:
+                raise
+            reduce -= 1
+            im = Image.open(io.BytesIO(data), formats=["JPEG2000"])
+            _check_decode_cost(im, "JPEG2000", _scaled_size(im.size, reduce), source_size, max_decode_bytes)
 
 
 def _scaled_size(size: tuple[int, int], reduce: int) -> tuple[int, int]:
@@ -661,10 +773,12 @@ def _icc_colour_space(icc: bytes) -> bytes:
 
 
 def _high_bit_depth_to_l(im: Image.Image) -> Image.Image:
-    """16-bit / 32-bit int / float greyscale -> 8-bit L by the format's nominal
-    range, so a dark exposure stays dark (Pillow's plain convert clips
-    everything above 255 to white): integers as 16-bit (v / 257), floats as
-    0..1. Only values beyond that range fall back to scaling by the maximum."""
+    """16-bit / 32-bit int / float greyscale -> 8-bit L (Pillow's plain
+    convert clips everything above 255 to white). Integers are mapped by the
+    smallest standard sample depth that holds their maximum — 8, 10, 12, 14
+    or 16 bits: camera, microscopy and medical data usually sit in a 16-bit
+    container with 10-14 significant bits, and mapping those by the 16-bit
+    range would hand the model a black image. Floats are nominally 0..1."""
     if im.mode == "F":
         hi = im.getextrema()[1]
         scale = 255.0 if hi <= 1.0 else 255.0 / hi
@@ -672,7 +786,8 @@ def _high_bit_depth_to_l(im: Image.Image) -> Image.Image:
     if im.mode != "I":
         im = im.convert("I")
     hi = im.getextrema()[1]
-    divisor = 257.0 if hi <= 65535 else hi / 255.0
+    full_scale = next((2**bits - 1 for bits in (8, 10, 12, 14, 16) if hi < 2**bits), hi)
+    divisor = full_scale / 255.0
     return im.point(lambda v: v / divisor).convert("L")  # point() keeps I; convert clips
 
 

@@ -86,6 +86,24 @@ def _heic_bytes(name: str = "iphone_like.heic") -> bytes:
         return f.read()
 
 
+def _png_text(key: str, value: str):
+    from PIL import PngImagePlugin
+
+    info = PngImagePlugin.PngInfo()
+    info.add_text(key, value)
+    return info
+
+
+def _psd_rgb(im: Image.Image) -> bytes:
+    """Minimal 8-bit RGB Photoshop file (raw image data, no layers) — Pillow
+    reads PSD but cannot write it."""
+    w, h = im.size
+    header = b"8BPS" + struct.pack(">H6xHIIHH", 1, 3, h, w, 8, 3)
+    sections = struct.pack(">III", 0, 0, 0)  # colour mode data, resources, layers
+    planes = b"".join(band.tobytes() for band in im.split())
+    return header + sections + struct.pack(">H", 0) + planes
+
+
 def _exif_with_gps(orientation: int = 6) -> bytes:
     exif = Image.Exif()
     exif[0x0112] = orientation
@@ -275,6 +293,19 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(values[3], 255)
         self.assertTrue(60 <= values[1] <= 68 and 124 <= values[2] <= 132, values)
 
+    def test_16_bit_containers_are_mapped_by_their_significant_bits(self):
+        # 12-bit camera/medical data and 8-bit data in a 16-bit container must
+        # not come out black.
+        for full, values in ((4095, [0, 2048, 4095]), (255, [0, 128, 255]), (1023, [0, 512, 1023])):
+            with self.subTest(full=full):
+                im = Image.new("I;16", (3, 1))
+                im.putdata(values)
+                result = _decode(normalize_image(_encode(im, "TIFF"), "image/tiff").data)
+                out = [result.getpixel((x, 0)) for x in range(3)]
+                self.assertEqual(out[0], 0)
+                self.assertTrue(126 <= out[1] <= 129, out)
+                self.assertEqual(out[2], 255)
+
     def test_high_bit_depth_keeps_its_brightness(self):
         # A dark 16-bit exposure stays dark (by the nominal 0..65535 range, not
         # stretched to its own maximum); a float image is nominally 0..1.
@@ -402,6 +433,25 @@ class RejectionTests(unittest.TestCase):
                     normalize_image(data, None)
                 self.assertIn("corrupt or truncated", str(ctx.exception))
 
+    def test_files_vendors_decode_leniently_are_converted_not_refused(self):
+        # A bad CRC on an ancillary chunk after the image data, or a missing
+        # IEND, fails the strict passthrough check, but the pixels are all
+        # there: convert instead of refusing.
+        png = _encode(_photo_like(80, 60), "PNG")
+        iend = png.rindex(b"IEND") - 4
+        bad_text = struct.pack(">I", 4) + b"tEXt" + b"a\x00hi" + b"\x00\x00\x00\x00"  # CRC 0: wrong
+        for name, data in (("bad ancillary CRC", png[:iend] + bad_text + png[iend:]), ("no IEND", png[:iend])):
+            with self.subTest(name=name):
+                out = normalize_image(data, None)
+                self.assertEqual(out.strategy, "lossless")
+                self.assertEqual(_pixels(_decode(out.data)), _pixels(_decode(png)))
+
+    def test_truncated_gifs_do_not_pass_through(self):
+        frame = _photo_like(120, 90).convert("P")
+        gif = _encode(frame, "GIF")
+        with self.assertRaises(UnsupportedImageError):
+            normalize_image(gif[: len(gif) // 2], "image/gif", passthrough_formats=_ANTHROPIC)
+
     def test_truncated_gifs_never_escape_as_internal_errors(self):
         frames = [_photo_like(60, 60).convert("P") for _ in range(3)]
         buf = io.BytesIO()
@@ -468,6 +518,22 @@ class RejectionTests(unittest.TestCase):
             with self.subTest(fmt=fmt):
                 data = _encode(Image.new("RGB", (32, 24), (1, 2, 3)), fmt)
                 self.assertEqual(normalize_image(data, None).strategy, "lossless")
+
+    def test_photoshop_files_are_converted(self):
+        im = _photo_like(48, 32)
+        out = normalize_image(_psd_rgb(im), "image/vnd.adobe.photoshop")
+        self.assertEqual((out.source_format, out.media_type, out.strategy), ("PSD", "image/png", "lossless"))
+        self.assertEqual(_pixels(_decode(out.data)), _pixels(im))
+
+    def test_refused_formats_are_named_with_a_remedy(self):
+        ico = _encode(Image.new("RGB", (32, 32), "red"), "ICO")
+        with self.assertRaises(UnsupportedImageError) as ctx:
+            normalize_image(ico, "image/x-icon")
+        self.assertIn("ICO icon", str(ctx.exception))
+        self.assertIn("Export it as PNG or JPEG", str(ctx.exception))
+        with self.assertRaises(UnsupportedImageError) as ctx:
+            normalize_image(os.urandom(256), None)
+        self.assertIn("Export it as PNG or JPEG", str(ctx.exception))
 
     def test_plugin_crashes_become_unsupported_not_provider_errors(self):
         with patch.object(Image, "open", side_effect=KeyError(b"NAXIS")):
@@ -561,6 +627,44 @@ class JpegDraftTests(unittest.TestCase):
                 normalize_image(png, "image/png", max_edge=600)
 
 
+class DecodeCostTests(unittest.TestCase):
+    def test_heif_cost_follows_bit_depth_and_chroma(self):
+        im = Image.new("RGB", (10, 10))
+        costs = {}
+        for depth, chroma in ((8, 420), (10, 420), (8, 444), (10, 422), (10, 444)):
+            im.info.update(bit_depth=depth, chroma=chroma)
+            costs[(depth, chroma)] = image_normalize._decode_cost_per_pixel(im, "HEIF")
+        # A pro camera's 10-bit 4:2:2 HEIF needs ~2x an iPhone's 8-bit 4:2:0.
+        self.assertGreater(costs[(10, 422)], 1.8 * costs[(8, 420)])
+        self.assertEqual(sorted(costs, key=costs.get)[0], (8, 420))
+        im.info.clear()  # unknown layout: charged the worst case
+        self.assertEqual(image_normalize._decode_cost_per_pixel(im, "HEIF"), max(costs.values()))
+
+    def test_iphone_48mp_heic_is_admitted_and_pro_camera_10_bit_422_refused(self):
+        for (depth, chroma), admitted in (((8, 420), True), ((10, 422), False)):
+            im = Image.new("RGB", (1, 1))
+            im.info.update(bit_depth=depth, chroma=chroma)
+            check = lambda: image_normalize._check_decode_cost(  # noqa: E731
+                im, "HEIF", (8064, 6048), (8064, 6048), image_normalize.MAX_DECODE_BYTES)
+            if admitted:
+                check()
+            else:
+                self.assertRaises(ImageTooLargeError, check)
+
+    def test_avif_layout_is_read_from_the_av1c_box(self):
+        im = _photo_like(64, 48)
+        for subsampling, expected in (("4:2:0", (False, 420)), ("4:4:4", (False, 444))):
+            with self.subTest(subsampling=subsampling):
+                data = _encode(im, "AVIF", quality=90, subsampling=subsampling)
+                self.assertEqual(image_normalize._av1c_layout(data), expected)
+        self.assertIsNone(image_normalize._av1c_layout(b"not an avif"))
+
+    def test_progressive_jpeg_limit_follows_chroma_subsampling(self):
+        for subsampling, expected in ((2, 4.0), (0, 7.0)):  # 4:2:0, 4:4:4
+            data = _encode(_photo_like(64, 48), "JPEG", progressive=True, subsampling=subsampling)
+            self.assertEqual(image_normalize._progressive_jpeg_bytes_per_pixel(Image.open(io.BytesIO(data))), expected)
+
+
 class Jpeg2000ReduceTests(unittest.TestCase):
     def test_jpeg2000_decodes_at_reduced_resolution(self):
         data = _encode(_photo_like(2400, 1600), "JPEG2000")
@@ -569,6 +673,14 @@ class Jpeg2000ReduceTests(unittest.TestCase):
         self.assertEqual((out.source_format, out.source_size, out.output_size), ("JPEG2000", (2400, 1600), (600, 400)))
         with self.assertRaises(ImageTooLargeError):
             normalize_image(data, "image/jp2", max_edge=2400, max_decode_bytes=10_000_000)
+
+    def test_single_resolution_codestreams_decode_at_full_size(self):
+        # OpenJPEG can't reduce below the codestream's resolution levels.
+        data = _encode(_photo_like(2400, 1600), "JPEG2000", num_resolutions=1)
+        out = normalize_image(data, "image/jp2", max_edge=600, max_decode_bytes=100_000_000)
+        self.assertEqual(out.output_size, (600, 400))
+        with self.assertRaises(ImageTooLargeError):
+            normalize_image(data, "image/jp2", max_edge=600, max_decode_bytes=10_000_000)
 
 
 class RequestLimitsTests(unittest.TestCase):
@@ -592,7 +704,9 @@ class RequestLimitsTests(unittest.TestCase):
     def test_vendor_edge_limits(self):
         self.assertEqual(limits_for_request("anthropic", 20).max_edge, 8000)
         self.assertEqual(limits_for_request("anthropic", 21).max_edge, 2000)
-        self.assertEqual(limits_for_request("openai", 50).max_edge, 8000)
+        self.assertEqual(limits_for_request("openai", 20).max_edge, 8000)
+        # Claude also sits behind routers: the many-image rule applies to all.
+        self.assertEqual(limits_for_request("openrouter", 21).max_edge, 2000)
         self.assertEqual(limits_for_request("groq", 1).max_edge, 5760)
 
     def test_request_counts_history_and_claude_tool_images(self):
@@ -607,17 +721,32 @@ class RequestLimitsTests(unittest.TestCase):
             ],
         }
         with patch.object(llm_node_module, "limits_for_request", wraps=limits_for_request) as spy:
-            llm_node_module.request_image_limits(state, "anthropic", with_history=True)
-            llm_node_module.request_image_limits(state, "openai", with_history=True)
-            llm_node_module.request_image_limits(state, "anthropic", with_history=False)
+            plan = llm_node_module.plan_request_images(state, "anthropic", with_history=True)
+            llm_node_module.plan_request_images(state, "openai", with_history=True)
+            llm_node_module.plan_request_images(state, "anthropic", with_history=False)
         # anthropic: 1 query + 2 history + 2 tool images (the omitted one excluded)
         self.assertEqual([c.args for c in spy.call_args_list], [("anthropic", 5), ("openai", 3), ("anthropic", 2)])
+        self.assertEqual(plan.omitted, frozenset())
+
+    def test_oldest_history_images_are_left_out_beyond_the_vendors_cap(self):
+        # Groq takes 5 images per request: the 2 current ones plus the 3 newest.
+        history = [
+            {"role": "user", "images": [{"s3_key": f"h{i}"}, {"s3_key": f"h{i}b"}]} for i in range(4)
+        ] + [{"role": "user", "content": "current"}]
+        state = {"query_images": [{"s3_key": "q1"}, {"s3_key": "q2"}], "conversation_history": history}
+        plan = llm_node_module.plan_request_images(state, "groq", with_history=True)
+        self.assertEqual(plan.omitted, {"h0", "h0b", "h1", "h1b", "h2"})
+        self.assertEqual(plan.limits, limits_for_request("groq", 5))
+        self.assertEqual(llm_node_module.plan_request_images(state, "anthropic", with_history=True).omitted, frozenset())
 
 
 class S3FetchTests(unittest.TestCase):
     def setUp(self):
         s3_images._CACHE.clear()
         self.addCleanup(s3_images._CACHE.clear)
+        disk = patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache("/nonexistent", 0))
+        disk.start()
+        self.addCleanup(disk.stop)
         env = patch.dict(os.environ, {"ATTACHMENTS_BUCKET": "bucket"})
         env.start()
         self.addCleanup(env.stop)
@@ -671,6 +800,48 @@ class S3FetchTests(unittest.TestCase):
         self.assertIn("PDF", str(ctx.exception))
         client.get_object.assert_called_once()
 
+    def test_remembered_failures_expire(self):
+        client, _ = self._client(b"%PDF-1.7\n")
+        limits = limits_for_request(None, 1)
+        clock = [1000.0]
+        with patch.object(s3_images, "_client", return_value=client), \
+                patch.object(s3_images.time, "monotonic", lambda: clock[0]):
+            for advance in (0, 60, s3_images._FAILURE_TTL_S):
+                clock[0] += advance
+                with self.assertRaises(UnsupportedImageError):
+                    s3_images.fetch_image_for_llm("cust/doc", limits)
+        self.assertEqual(client.get_object.call_count, 2)  # retried once the entry expired
+
+    def test_disk_tier_serves_results_evicted_from_memory(self):
+        import tempfile
+
+        heic = _heic_bytes()
+        client, _ = self._client(heic)
+        limits = limits_for_request("anthropic", 1)
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache(tmp, 10 * _MiB)), \
+                patch.object(s3_images, "_client", return_value=client):
+            first = s3_images.fetch_image_for_llm("cust/h", limits)
+            s3_images._CACHE.clear()  # e.g. pushed out by other conversations
+            second = s3_images.fetch_image_for_llm("cust/h", limits)
+            self.assertEqual(len(os.listdir(tmp)), 1)
+        self.assertEqual(first, second)
+        client.get_object.assert_called_once()
+
+    def test_disk_tier_evicts_least_recently_used(self):
+        import tempfile
+
+        limits = limits_for_request(None, 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            disk = s3_images._DiskCache(tmp, max_bytes=250)
+            disk.put(("a", limits), b"A" * 100, "image/png")
+            disk.put(("b", limits), b"B" * 100, "image/png")
+            os.utime(os.path.join(tmp, disk._name(("a", limits)) + ".png"), (1, 1))  # a: oldest
+            disk.put(("c", limits), b"C" * 100, "image/jpeg")
+            self.assertIsNone(disk.get(("a", limits)))
+            self.assertEqual(disk.get(("b", limits)), (b"B" * 100, "image/png"))
+            self.assertEqual(disk.get(("c", limits)), (b"C" * 100, "image/jpeg"))
+
     def test_each_vendors_limits_get_their_own_result(self):
         # Anthropic takes WebP as-is; xAI doesn't — a conversation switching
         # vendors must not be served the other vendor's cached result.
@@ -698,6 +869,9 @@ class ImageWorkerTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         s3_images._CACHE.clear()
         self.addCleanup(s3_images._CACHE.clear)
+        disk = patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache("/nonexistent", 0))
+        disk.start()
+        self.addCleanup(disk.stop)
 
     async def test_fetch_runs_on_the_dedicated_image_worker_and_hits_skip_it(self):
         import threading
@@ -706,13 +880,14 @@ class ImageWorkerTests(unittest.IsolatedAsyncioTestCase):
 
         def fake_fetch(s3_key, limits):
             threads.append(threading.current_thread().name)
-            return ("QUJD", "image/png")
+            return (b"ABC", "image/png")
 
         limits = limits_for_request("anthropic", 1)
         with patch.object(s3_images, "_fetch_normalized", side_effect=fake_fetch):
             first = await s3_images.image_for_llm("cust/k", limits)
             second = await s3_images.image_for_llm("cust/k", limits)
         self.assertEqual(first, second)
+        self.assertEqual(first, ("QUJD", "image/png"))
         self.assertEqual(len(threads), 1)
         self.assertTrue(threads[0].startswith("attachment-image"), threads)
 
@@ -736,6 +911,17 @@ class LlmWiringTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(blocks, [{"type": "image_url", "image_url": {"url": "data:image/png;base64,QUJD"}}])
         fetch.assert_awaited_once_with("cust/a.heic", limits)
+
+    async def test_omitted_history_images_become_a_note_without_a_fetch(self):
+        fetch = AsyncMock(return_value=("QUJD", "image/png"))
+        with patch.object(llm_node_module, "image_for_llm", fetch):
+            blocks = await llm_node_module._image_blocks(
+                [{"s3_key": "old"}, {"s3_key": "new"}], strict=False,
+                limits=limits_for_request("groq", 5), omitted=frozenset({"old"}),
+            )
+        self.assertEqual(blocks[0], {"type": "text", "text": llm_node_module._OMITTED_IMAGE_NOTE})
+        self.assertEqual(blocks[1]["type"], "image_url")
+        fetch.assert_awaited_once_with("new", limits_for_request("groq", 5))
 
     async def test_strict_failure_raises_and_history_degrades(self):
         fetch = AsyncMock(side_effect=UnsupportedImageError("The attached file isn't a supported image (detected: SVG)."))
