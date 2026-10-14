@@ -109,19 +109,26 @@ class CustomerCredentialsService(
         customerId: String,
         vendor: AIVendor,
         model: String,
-        priority: Int
+        priority: Int,
+        /** Default reasoning effort for the vendor; null/blank = vendor default. */
+        thinkingLevel: String? = null
     ) {
+        val normalizedThinking = thinkingLevel?.takeIf { it.isNotBlank() }
         customerCredentialsRepository.updateCustomerVendorConfig(
             customerId = customerId,
             aiVendor = vendor.name,
             selectedModel = model,
-            priority = priority
+            priority = priority,
+            thinkingLevel = normalizedThinking
         )
         val current = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }
             .getOrNull()?.preferredModels.orEmpty()
         val existing = current.firstOrNull { it.aiVendor == vendor }
         val updated = current.filterNot { it.aiVendor == vendor } +
-            com.genflowly.models.AIConfig(aiVendor = vendor, model = model, maxTokens = existing?.maxTokens)
+            com.genflowly.models.AIConfig(
+                aiVendor = vendor, model = model, maxTokens = existing?.maxTokens,
+                thinkingLevel = normalizedThinking
+            )
         customerProfileRepository.savePreferences(
             customerId = customerId,
             preferredModels = updated,

@@ -28,20 +28,26 @@ class RequestAgentMapAdminService(
 ) {
 
     /**
-     * The full effective picture per request type: what currently resolves
-     * (and from where), plus the raw DDB row when one exists.
+     * The full effective picture per request type: the published agent that
+     * currently resolves, or UNRESOLVED when the action is disabled/unmapped
+     * (there is no bundled runtime fallback), plus the raw DDB row when one
+     * exists.
      */
     suspend fun listMapEntries(): GetRequestAgentMapResponse {
         val ddbEntries = requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE)
             .associateBy { it.requestType }
         val entries = RequestType.entries.map { requestType ->
-            val effective = agentResolutionService.resolve(requestType)
+            val effective = try {
+                agentResolutionService.resolve(requestType)
+            } catch (e: RequestAgentUnresolvedException) {
+                null
+            }
             RequestAgentMapStatus(
                 requestType = requestType.name,
                 displayName = requestType.displayName,
                 templateVariables = requestType.templateVariables,
-                effectiveMapKey = effective.mapKey,
-                effectiveSource = effective.source.name,
+                effectiveMapKey = effective?.mapKey,
+                effectiveSource = if (effective != null) "DDB" else "UNRESOLVED",
                 ddbEntry = ddbEntries[requestType.name]
             )
         }
@@ -102,9 +108,20 @@ class RequestAgentMapAdminService(
         logger.info { "Admin $adminCustomerId mapped $requestType → ${request.graphId} ('${request.mapKey}')" }
     }
 
-    /** Removes a global map entry; resolution reverts to the bundled default. */
-    suspend fun deleteMapEntry(requestType: RequestType) {
-        requestAgentMapRepository.deleteMapEntry(SYSTEM_SCOPE, requestType.name)
+    /**
+     * DISABLES a global mapping (writes the row back with enabled=false)
+     * instead of deleting it: with no bundled runtime fallback, the row is
+     * the record of an admin's intent — removing it entirely would let the
+     * startup seeder resurrect the mapping on the next deploy. A disabled
+     * action resolves to nothing and fails loudly until re-enabled/remapped.
+     */
+    suspend fun disableMapEntry(requestType: RequestType, adminCustomerId: String) {
+        val existing = requestAgentMapRepository.getMapEntry(SYSTEM_SCOPE, requestType.name)
+            ?: throw IllegalArgumentException("no mapping exists for ${requestType.name}")
+        requestAgentMapRepository.putMapEntry(
+            existing.copy(enabled = false, updatedBy = adminCustomerId)
+        )
         agentResolutionService.invalidate(requestType)
+        logger.info { "Admin $adminCustomerId disabled the ${requestType.name} mapping" }
     }
 }

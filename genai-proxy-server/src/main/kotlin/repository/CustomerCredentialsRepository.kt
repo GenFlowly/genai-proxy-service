@@ -89,8 +89,22 @@ class CustomerCredentialsRepository(
         customerId: String,
         aiVendor: String,
         selectedModel: String,
-        priority: Int
+        priority: Int,
+        /** Default reasoning effort; null/blank clears back to the vendor default. */
+        thinkingLevel: String? = null
     ) = withContext(Dispatchers.IO) {
+        val clearThinking = thinkingLevel.isNullOrBlank()
+        val values = mutableMapOf(
+            ":m" to AttributeValue.builder().s(selectedModel).build(),
+            ":p" to AttributeValue.builder().n(priority.toString()).build(),
+            ":now" to AttributeValue.builder().s(java.time.Instant.now().toString()).build()
+        )
+        val update = if (clearThinking) {
+            "SET selectedModel = :m, #p = :p, updatedAt = :now REMOVE thinkingLevel"
+        } else {
+            values[":t"] = AttributeValue.builder().s(thinkingLevel).build()
+            "SET selectedModel = :m, #p = :p, thinkingLevel = :t, updatedAt = :now"
+        }
         dynamoDbClient.updateItem(
             UpdateItemRequest.builder()
                 .tableName(CUSTOMER_API_KEY_TABLE)
@@ -98,17 +112,13 @@ class CustomerCredentialsRepository(
                     CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
                     AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()
                 ))
-                .updateExpression("SET selectedModel = :m, #p = :p, updatedAt = :now")
+                .updateExpression(update)
                 .conditionExpression("attribute_exists($AI_VENDOR_KEY) AND attribute_exists(apiKey)")
                 .expressionAttributeNames(mapOf("#p" to "priority"))
-                .expressionAttributeValues(mapOf(
-                    ":m" to AttributeValue.builder().s(selectedModel).build(),
-                    ":p" to AttributeValue.builder().n(priority.toString()).build(),
-                    ":now" to AttributeValue.builder().s(java.time.Instant.now().toString()).build()
-                ))
+                .expressionAttributeValues(values)
                 .build()
         )
-        logger.info("Saved vendor config for $customerId/$aiVendor: model=$selectedModel priority=$priority")
+        logger.info("Saved vendor config for $customerId/$aiVendor: model=$selectedModel priority=$priority thinking=${thinkingLevel ?: "default"}")
     }
 
     /** Raw CustomerVendorApiKeys items for one customer (encrypted keys included). */
@@ -213,7 +223,8 @@ class CustomerCredentialsRepository(
                     isAPIKeyValid = isValid,
                     status = status,
                     selectedModel = item["selectedModel"]?.s(),
-                    priority = item["priority"]?.n()?.toIntOrNull()
+                    priority = item["priority"]?.n()?.toIntOrNull(),
+                    thinkingLevel = item["thinkingLevel"]?.s()
                 )
             }
         }

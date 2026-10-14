@@ -75,13 +75,18 @@ fun Route.registerRequestAgentMapRoutes(
             try {
                 val customerId = call.requireAdminCustomerId(customerProfileService, appConfig)
                 val requestType = call.parseRequestType() ?: return@delete
-                logger.info("Admin {} deleting request-agent map entry for {}", customerId, requestType)
-                requestAgentMapAdminService.deleteMapEntry(requestType)
+                logger.info("Admin {} disabling request-agent map entry for {}", customerId, requestType)
+                // DISABLE, not delete: the row records admin intent, and with no
+                // bundled runtime fallback a deleted row would be resurrected by
+                // the startup seeder on the next deploy.
+                requestAgentMapAdminService.disableMapEntry(requestType, customerId)
                 call.respond(HttpStatusCode.NoContent)
+            } catch (e: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse(error = e.message ?: "No mapping to disable"))
             } catch (e: IllegalStateException) {
                 // requireAdminCustomerId already responded (403)
             } catch (e: Exception) {
-                logger.error("Failed to delete request-agent map entry", e)
+                logger.error("Failed to disable request-agent map entry", e)
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse(error = "Internal server error"))
             }
         }

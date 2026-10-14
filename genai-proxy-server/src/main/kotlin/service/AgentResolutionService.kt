@@ -11,11 +11,11 @@ import com.genflowly.models.AIVendor
 import com.genflowly.models.AgentOutputFormat
 import com.genflowly.models.RequestType
 import com.genflowly.models.ResolvedAgent
-import com.genflowly.models.ResolvedAgentSource
+import com.genflowly.models.GenerationNodeConfig
+import com.genflowly.observability.Metrics
 import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.InstructionRepository
 import com.genflowly.repository.RequestAgentMapRepository
-import com.genflowly.models.GenerationNodeConfig
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
@@ -23,16 +23,30 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 /**
- * Resolves a [RequestType] to the agent serving it:
+ * Thrown when no enabled published agent serves a request type — the admin
+ * disabled the mapping, or a fresh environment's seeding failed. Internal
+ * actions fail loudly on this instead of silently running hidden defaults:
+ * the published agent in DynamoDB is the ONE source of truth.
+ */
+class RequestAgentUnresolvedException(requestType: RequestType) :
+    RuntimeException(
+        "No enabled agent is published for ${requestType.name} — " +
+                "publish or re-enable one in the admin panel (Request Agents)"
+    )
+
+/**
+ * Resolves a [RequestType] to the published agent serving it:
  *
- *   RequestAgentMap entry → agent graph → GENERATION entry node → instruction
- *   (system-prompt template) → [ResolvedAgent].
+ *   RequestAgentMap entry → agent graph → [ResolvedAgent] (always executed on
+ *   the retrieval server's LangGraph runtime).
  *
- * When DynamoDB has no usable mapping — no entry, entry disabled, or any part
- * of the referenced chain missing/malformed — resolution falls back to the
- * bundled defaults from [RequestAgentDefaultsLoader] (with a WARN for the
- * malformed cases), so a bad admin edit degrades to the defaults instead of
- * breaking persona/title generation.
+ * Resolution order: the customer's own override (written when they point an
+ * action at their agent in Settings) → the global SYSTEM mapping. There is NO
+ * code-shipped runtime fallback: when neither scope has a usable (enabled,
+ * well-formed) entry, resolution throws [RequestAgentUnresolvedException] and
+ * counts `request_agent_unresolved_total`. Fresh environments get their
+ * SYSTEM entries from [RequestAgentSeeder] at startup; afterwards the admin
+ * panel is the only authority.
  *
  * Resolutions are cached ~60s per (scope, requestType), including the negative
  * "no DDB entry" result. Admin writes call [invalidate] for immediate effect on
@@ -42,8 +56,7 @@ private val logger = KotlinLogging.logger {}
 class AgentResolutionService(
     private val requestAgentMapRepository: RequestAgentMapRepository,
     private val graphRepository: GraphRepository,
-    private val instructionRepository: InstructionRepository,
-    private val defaultsLoader: RequestAgentDefaultsLoader
+    private val instructionRepository: InstructionRepository
 ) {
 
     private data class CacheEntry(val agent: ResolvedAgent?, val fetchedAt: Long)
@@ -52,11 +65,15 @@ class AgentResolutionService(
 
     suspend fun resolve(requestType: RequestType, customerId: String? = null): ResolvedAgent {
         // Per-customer override first (written when a customer forks a System
-        // request agent), then the global SYSTEM mapping, then bundled defaults.
+        // request agent), then the global SYSTEM mapping.
         if (customerId != null) {
             resolveScoped(customerId, requestType)?.let { return it }
         }
-        return resolveScoped(SYSTEM_SCOPE, requestType) ?: fallback(requestType)
+        resolveScoped(SYSTEM_SCOPE, requestType)?.let { return it }
+
+        Metrics.count("request_agent_unresolved_total", 1.0, "requestType" to requestType.name)
+        logger.error { "Request type ${requestType.name} has no enabled published agent — action disabled" }
+        throw RequestAgentUnresolvedException(requestType)
     }
 
     /**
@@ -107,23 +124,24 @@ class AgentResolutionService(
         } catch (e: IllegalArgumentException) {
             logger.warn {
                 "Request-agent map entry '${entry.mapKey}' ($scope/$requestType → graph ${entry.graphId}) " +
-                        "is unusable: ${e.message} — using bundled default"
+                        "is unusable: ${e.message}"
             }
             null
         }
     }
 
     /**
-     * Builds a [ResolvedAgent] from a graph. Single-node GENERATION graphs
-     * resolve to the local single-call path after verifying the whole chain
-     * (entry node → valid config → existing instruction); anything else
-     * resolves to graph execution on the retrieval server's LangGraph runtime
-     * — so a request agent the user extended with more nodes runs exactly
-     * like a chat agent. Graph ownership is NOT checked here — the admin
-     * write path verifies it before a map entry is accepted. Throws
+     * Builds a [ResolvedAgent] from a graph. EVERY agent executes through the
+     * retrieval server's LangGraph runtime — one engine, one template dialect,
+     * one blank-output check, one durability story. A single-GENERATION-node
+     * graph additionally has its whole chain verified here (entry node → valid
+     * config → existing instruction) and its generation preferences
+     * (model_preference / max_tokens) surfaced so the executor can build
+     * provider candidates. Graph ownership is NOT checked here — the admin and
+     * customer write paths verify it before a map entry is accepted. Throws
      * [IllegalArgumentException] with the broken link as the message — also
-     * used by the admin endpoints to validate a graph before accepting a map
-     * entry.
+     * used by the mapping endpoints to validate a graph before accepting a
+     * map entry.
      */
     suspend fun buildAgentFromGraph(
         graphId: String,
@@ -140,16 +158,12 @@ class AgentResolutionService(
 
         val nodeCount = graphItem[DynamoDBConstants.GRAPH_NODE_IDS_KEY]?.l()?.size ?: 1
         if (nodeCount > 1 || nodeItem[NODE_TYPE_KEY]?.s() != GENERATION_NODE_TYPE) {
+            // Multi-node (or non-GENERATION-entry) agent: no single node to
+            // lift preferences from — candidates derive from the customer's
+            // configured providers / keyed vendors.
             return ResolvedAgent(
                 requestType = requestType,
-                source = ResolvedAgentSource.DDB,
                 mapKey = mapKey,
-                systemPromptTemplate = "",
-                userMessageTemplate = "",
-                outputFormat = AgentOutputFormat.TEXT,
-                modelPreference = null,
-                maxTokens = null,
-                executeAsGraph = true,
                 graphId = graphId,
             )
         }
@@ -179,10 +193,8 @@ class AgentResolutionService(
 
         return ResolvedAgent(
             requestType = requestType,
-            source = ResolvedAgentSource.DDB,
             mapKey = mapKey,
-            systemPromptTemplate = instruction.instructions,
-            userMessageTemplate = config.inputTemplate,
+            graphId = graphId,
             outputFormat = if (config.outputFormat.equals("json", ignoreCase = true)) {
                 AgentOutputFormat.JSON
             } else {
@@ -192,9 +204,6 @@ class AgentResolutionService(
             maxTokens = config.maxTokens
         )
     }
-
-    private fun fallback(requestType: RequestType): ResolvedAgent =
-        defaultsLoader.defaults.getValue(requestType)
 
     companion object {
         private const val CACHE_TTL_MS = 60_000L

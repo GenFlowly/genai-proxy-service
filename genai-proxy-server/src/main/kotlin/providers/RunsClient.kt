@@ -50,6 +50,8 @@ private data class RunStartPayload(
     val memory_enabled: Boolean = false,
     val request_source: String = "conversation",
     val graph_id: String? = null,
+    /** End user's per-request reasoning depth; overrides node-config thinking_level on the response generator. */
+    val thinking_level: String? = null,
     /** Optional idempotency/rediscovery key; server generates one when null. */
     val run_id: String? = null
 )
@@ -106,6 +108,7 @@ class RunsClient(
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
         graphId: String? = null,
+        thinkingLevel: String? = null,
         runId: String? = null
     ): String? {
         val payload = json.encodeToString(
@@ -127,6 +130,7 @@ class RunsClient(
                 memory_enabled = memoryEnabled,
                 request_source = requestSource,
                 graph_id = graphId,
+                thinking_level = thinkingLevel,
                 run_id = runId
             )
         )

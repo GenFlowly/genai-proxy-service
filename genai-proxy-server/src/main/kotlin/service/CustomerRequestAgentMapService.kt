@@ -107,7 +107,7 @@ class CustomerRequestAgentMapService(
         logger.info { "Customer $customerId mapped $requestType → ${request.graphId}" }
     }
 
-    /** Removes the override; resolution reverts to the SYSTEM mapping / bundled default. */
+    /** Removes the override; resolution reverts to the SYSTEM mapping. */
     suspend fun deleteEntry(customerId: String, requestType: RequestType) {
         requestAgentMapRepository.deleteMapEntry(customerId, requestType.name)
         agentResolutionService.invalidate(requestType)

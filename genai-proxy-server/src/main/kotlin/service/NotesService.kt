@@ -31,7 +31,7 @@ class NotesService(
 
     /**
      * Generates a short descriptive title for a note via the NOTE_TITLE agent
-     * (RequestAgentMap, or the bundled default), or null when no key is stored
+     * (the published RequestAgentMap graph), or null when no key is stored
      * / generation produced nothing usable.
      */
     private suspend fun createNoteTitle(customerId: String, noteContent: String): String? {
@@ -93,7 +93,7 @@ class NotesService(
         // Fire-and-forget: learn about the user from the finished note (the
         // encode flag already marks end-of-editing, so no extra debounce here)
         memoryExtractionService.maybeExtractFromNoteAsync(
-            customerId, request.data.note_key, request.data.title, request.data.note_value, token
+            customerId, request.data.note_key, request.data.title, request.data.note_value
         )
 
         // 2. Title generation via the retrieval server, only while the note

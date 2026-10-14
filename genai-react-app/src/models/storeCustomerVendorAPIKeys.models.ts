@@ -19,6 +19,8 @@ export interface AIVendorAPIKeyStatus {
     selectedModel?: string | null
     /** Failover priority for internal generations (1 = primary) */
     priority?: number | null
+    /** Stored default reasoning effort for this vendor (none|low|medium|high); null = vendor default */
+    thinkingLevel?: string | null
     /** Provider's own rejection message when validation fails */
     detail?: string | null
 }
@@ -31,4 +33,6 @@ export interface StoreCustomerVendorConfigRequest {
     aiVendor: string
     model: string
     priority: number
+    /** Default reasoning effort for the vendor ('' / undefined = vendor default) */
+    thinkingLevel?: string
 }
