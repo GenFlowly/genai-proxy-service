@@ -14,8 +14,11 @@ because the runtime dependency (pi-heif) is decode-only.
 """
 import base64
 import io
+import json
 import os
 import struct
+import subprocess
+import sys
 import unittest
 import zlib
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -79,6 +82,10 @@ def _png_header_only(w: int, h: int) -> bytes:
         return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
     ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(b"\x00" * 16)) + chunk(b"IEND", b"")
+
+
+def subprocess_run(cmd: list) -> str:
+    return subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=60).stdout
 
 
 def _heic_bytes(name: str = "iphone_like.heic") -> bytes:
@@ -491,17 +498,22 @@ class RejectionTests(unittest.TestCase):
                 except ImageNormalizationError:
                     pass  # readable; anything else would surface as a vendor error
 
-    def test_camera_raw_is_rejected_with_a_clear_message(self):
+    def test_tiff_marked_as_raw_but_unreadable_gets_a_raw_message(self):
+        # A DNG-tagged TIFF that LibRaw can't read must not be sent as its
+        # (thumbnail) first IFD: it's refused, naming the RAW format.
         dng_tags = TiffImagePlugin.ImageFileDirectory_v2()
         dng_tags[50706] = b"\x01\x04\x00\x00"  # DNGVersion
         dng_tags.tagtype[50706] = 1
         dng = _encode(Image.new("RGB", (64, 48)), "TIFF", tiffinfo=dng_tags)
         with self.assertRaises(UnsupportedImageError) as ctx:
             normalize_image(dng, "application/octet-stream")
-        self.assertIn("RAW", str(ctx.exception))
-        tiff = _encode(Image.new("RGB", (64, 48)), "TIFF")
-        with self.assertRaises(UnsupportedImageError):
-            normalize_image(tiff, "image/x-nikon-nef")
+        self.assertIn("camera RAW (DNG)", str(ctx.exception))
+        self.assertIn("Export it as JPEG", str(ctx.exception))
+
+    def test_tiff_only_declared_as_raw_is_converted_as_a_tiff(self):
+        tiff = _encode(_photo_like(64, 48), "TIFF")
+        out = normalize_image(tiff, "image/x-nikon-nef")
+        self.assertEqual((out.source_format, out.strategy), ("TIFF", "lossless"))
 
     def test_decompression_bomb_header_is_refused_before_decoding(self):
         def no_decode(self):
@@ -798,6 +810,181 @@ class RequestLimitsTests(unittest.TestCase):
         self.assertEqual(plan(60).omitted, {f"h{i}" for i in range(24)})
         # 1 current + 59 history - 12 omitted = 48 images sent: exactly the cap.
         self.assertEqual(plan(59).limits, limits_for_request("anthropic", 48))
+
+
+class CameraRawTests(unittest.TestCase):
+    """Camera RAW goes through graph/raw_decode.py in a child process."""
+
+    def test_dng_is_demosaiced_upright_in_the_child(self):
+        # Fixture: 160x96 Bayer mosaic, red left / blue right, Orientation 6.
+        with open(os.path.join(_FIXTURES, "camera_raw.dng"), "rb") as f:
+            dng = f.read()
+        out = normalize_image(dng, "image/x-adobe-dng")
+        self.assertEqual((out.source_format, out.media_type, out.strategy), ("RAW (demosaic)", "image/png", "lossless"))
+        self.assertEqual((out.source_size, out.output_size), ((160, 96), (96, 160)))
+        result = _decode(out.data).convert("RGB")
+        top, bottom = result.getpixel((48, 20)), result.getpixel((48, 140))
+        self.assertGreater(top[0], 2 * top[2])  # red on top after a clockwise turn
+        self.assertGreater(bottom[2], 2 * bottom[0])
+
+    def test_raw_signatures_and_declarations_reach_libraw(self):
+        junk = os.urandom(4096)
+        for name, data, declared, label in (
+            ("RAF", b"FUJIFILMCCD-RAW 0201FF383501" + junk, None, "camera RAW (RAF)"),
+            ("CR3", b"\x00\x00\x00\x18ftypcrx " + junk, None, "camera RAW (CR3)"),
+            ("ORF", b"IIRO\x08\x00\x00\x00" + junk, None, "camera RAW (ORF)"),
+            ("declared ARW", junk, "image/x-sony-arw", "camera RAW"),
+        ):
+            with self.subTest(name=name):
+                with self.assertRaises(UnsupportedImageError) as ctx:
+                    normalize_image(data, declared)  # real child: LibRaw can't read the junk
+                self.assertIn(label, str(ctx.exception))
+                self.assertIn("couldn't be read", str(ctx.exception))
+
+    def _proc(self, returncode=0, stdout=b"", stderr=b""):
+        return MagicMock(returncode=returncode, stdout=stdout, stderr=stderr)
+
+    def _raw_output(self, im, **header):
+        meta = json.dumps({"width": im.width, "height": im.height, "source": "preview", "sensor": [6000, 4000], **header}).encode()
+        return struct.pack(">I", len(meta)) + meta + im.tobytes()
+
+    def test_child_is_isolated_and_limited(self):
+        im = _photo_like(300, 200)
+        with patch.object(image_normalize.subprocess, "run", return_value=self._proc(stdout=self._raw_output(im))) as run:
+            out = normalize_image(b"FOVb" + os.urandom(64), None)
+        self.assertEqual((out.source_format, out.source_size, out.output_size), ("RAW (preview)", (6000, 4000), (300, 200)))
+        self.assertEqual(_pixels(_decode(out.data)), _pixels(im))  # lossless from the child's pixels
+        args, kwargs = run.call_args
+        cmd = args[0]
+        self.assertEqual(cmd[:3], [sys.executable, "-I", image_normalize._RAW_DECODER])
+        params = json.loads(cmd[3])
+        self.assertGreater(params["max_address_space"], params["max_decode_bytes"])
+        self.assertEqual(params["max_cpu_seconds"], image_normalize._RAW_CPU_SECONDS)
+        self.assertEqual(kwargs["timeout"], image_normalize._RAW_TIMEOUT_S)
+        self.assertEqual(kwargs["env"]["OMP_NUM_THREADS"], "1")
+        self.assertNotIn("ATTACHMENTS_BUCKET", kwargs["env"])  # no server secrets in the child
+
+    def test_child_failures_become_readable_errors(self):
+        raf = b"FUJIFILMCCD-RAW " + os.urandom(64)
+        too_large = json.dumps({"error": "too_large", "detail": "x"}).encode()
+        cases = (
+            ("oom-killed", self._proc(-9), ImageTooLargeError),
+            ("cpu cap", self._proc(-24), ImageTooLargeError),
+            ("too large", self._proc(2, stderr=too_large), ImageTooLargeError),
+            ("crash", self._proc(-11, stderr=b"Segmentation fault"), UnsupportedImageError),
+            ("malformed", self._proc(0, stdout=b"\x00\x00\x00\x02{}garbage"), UnsupportedImageError),
+        )
+        for name, proc, error in cases:
+            with self.subTest(name=name):
+                with patch.object(image_normalize.subprocess, "run", return_value=proc):
+                    with self.assertRaises(error):
+                        normalize_image(raf, None)
+        with patch.object(image_normalize.subprocess, "run",
+                          side_effect=image_normalize.subprocess.TimeoutExpired("raw", 90)):
+            with self.assertRaises(ImageTooLargeError):
+                normalize_image(raf, None)
+
+    def test_tiff_pillow_cannot_decode_falls_back_to_libraw(self):
+        # e.g. a PEF whose first IFD uses Pentax's own compression
+        tiff = _encode(_photo_like(64, 48), "TIFF")
+        rendered = _photo_like(120, 80)
+        real_load = ImageFile.ImageFile.load
+
+        def failing_tiff_load(im):
+            if im.format == "TIFF":
+                raise OSError("unknown compression")
+            return real_load(im)
+
+        with patch.object(ImageFile.ImageFile, "load", failing_tiff_load), \
+                patch.object(image_normalize, "_decode_camera_raw", return_value=(rendered, {"source": "demosaic", "sensor": [120, 80]})):
+            out = normalize_image(tiff, None, max_edge=100)
+        self.assertEqual(out.source_format, "RAW (demosaic)")
+
+    def test_child_caps_its_own_memory_cpu_and_oom_priority(self):
+        script = (
+            "import importlib.util, resource, sys; "
+            f"spec = importlib.util.spec_from_file_location('rd', {image_normalize._RAW_DECODER!r}); "
+            "rd = importlib.util.module_from_spec(spec); spec.loader.exec_module(rd); "
+            "rd._limit_self(900_000_000, 42); "
+            "print(open('/proc/self/oom_score_adj').read().strip(), "
+            "resource.getrlimit(resource.RLIMIT_AS)[0], resource.getrlimit(resource.RLIMIT_CPU)[0])"
+        )
+        out = subprocess_run([sys.executable, "-I", "-c", script])
+        self.assertEqual(out.split(), ["1000", "900000000", "42"])
+
+
+class RawRenderTests(unittest.TestCase):
+    """graph/raw_decode.py's choice of rendering, with a fake LibRaw handle."""
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("raw_decode", image_normalize._RAW_DECODER)
+        cls.rd = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.rd)
+
+    def _raw(self, thumb=None, flip=0, sensor=(4000, 3000), demosaic=None):
+        import rawpy
+
+        raw = MagicMock()
+        raw.sizes = MagicMock(flip=flip, raw_width=sensor[0], raw_height=sensor[1], width=sensor[0], height=sensor[1])
+        if thumb is None:
+            raw.extract_thumb.side_effect = rawpy.LibRawNoThumbnailError()
+        else:
+            raw.extract_thumb.return_value = thumb
+        if isinstance(demosaic, Exception):
+            raw.postprocess.side_effect = demosaic
+        else:
+            raw.postprocess.return_value = demosaic
+        return raw
+
+    def _jpeg_thumb(self, w, h, orientation=None):
+        import rawpy
+
+        im = Image.new("RGB", (w, h), (255, 0, 0))
+        im.paste((0, 0, 255), (w // 2, 0, w, h))  # red left, blue right
+        kw = {}
+        if orientation:
+            exif = Image.Exif()
+            exif[0x0112] = orientation
+            kw["exif"] = exif.tobytes()
+        return MagicMock(format=rawpy.ThumbFormat.JPEG, data=_encode(im, "JPEG", quality=95, **kw))
+
+    def test_preview_is_rotated_by_the_raw_flip_exactly_once(self):
+        for orientation in (None, 6):  # LibRaw's flip alone, or also in the preview's own EXIF
+            with self.subTest(preview_exif=orientation):
+                raw = self._raw(self._jpeg_thumb(2000, 1000, orientation), flip=6)
+                im = self.rd._preview(raw, 1568)
+                self.assertEqual(im.size, (1000, 2000))
+                top, bottom = im.getpixel((500, 100)), im.getpixel((500, 1900))
+                self.assertGreater(top[0], top[2])
+                self.assertGreater(bottom[2], bottom[0])
+
+    def test_large_preview_wins_small_preview_loses_to_demosaic(self):
+        import numpy as np
+
+        demosaiced = np.zeros((1500, 2000, 3), dtype=np.uint8)
+        big = self._raw(self._jpeg_thumb(2000, 1500), demosaic=demosaiced)
+        self.assertEqual(self.rd.render_opened(big, {"max_decode_bytes": 10**9})[1:], ("preview", [4000, 3000]))
+        small = self._raw(self._jpeg_thumb(640, 480), demosaic=demosaiced)
+        image, source, _ = self.rd.render_opened(small, {"max_decode_bytes": 10**9})
+        self.assertEqual((source, image.size), ("demosaic", (2000, 1500)))
+        small.postprocess.assert_called_once_with(half_size=True, use_camera_wb=True, output_bps=8)
+
+    def test_preview_is_the_fallback_when_demosaic_fails_or_does_not_fit(self):
+        import rawpy
+
+        for name, raw in (
+            ("libraw error", self._raw(self._jpeg_thumb(640, 480), demosaic=rawpy.LibRawDataError())),
+            ("over budget", self._raw(self._jpeg_thumb(640, 480), sensor=(12000, 9000))),
+        ):
+            with self.subTest(name=name):
+                image, source, _ = self.rd.render_opened(raw, {"max_decode_bytes": 100_000_000})
+                self.assertEqual((source, image.size), ("preview", (640, 480)))
+        with self.assertRaises(self.rd._Fail) as ctx:
+            self.rd.render_opened(self._raw(None, sensor=(12000, 9000)), {"max_decode_bytes": 100_000_000})
+        self.assertEqual(ctx.exception.kind, "too_large")
 
 
 class S3FetchTests(unittest.TestCase):

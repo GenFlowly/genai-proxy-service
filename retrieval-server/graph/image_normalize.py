@@ -42,6 +42,9 @@ bytes; the declaration is only a hint for messages/logs):
    edge, quality 90 stepping down, then smaller (last resort; alpha is
    flattened onto white). In practice this happens when many images share
    one request.
+Camera RAW (DNG, CR2/CR3, NEF, ARW, RAF, ...) is first rendered to RGB by
+graph/raw_decode.py — LibRaw, in an isolated, resource-capped child process —
+and then takes step 2/3 like any other converted image.
 
 Resource safety (the retrieval server is one process on 1 GB RAM / one shared
 CPU serving everyone): only common image formats are opened at all; the
@@ -55,14 +58,21 @@ replaced.
 from __future__ import annotations
 
 import io
+import json
+import logging
 import math
 import os
+import struct
+import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass
 
 import pi_heif
 from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError
+
+logger = logging.getLogger(__name__)
 
 # HEIF/HEIC decoding (decode-only build of pillow-heif: BSD + LGPL libheif/
 # libde265, no GPL x265 encoder). Thumbnails/depth/aux images are never needed.
@@ -217,17 +227,33 @@ _MANY_IMAGES_EDGE = 2000
 _MAX_EDGE_BY_PROVIDER = {"groq": 5760}
 # Documented per-request image-count limits.
 _MAX_IMAGES_BY_PROVIDER = {"anthropic": 100, "groq": 5}
-# Camera RAW is out of scope (needs a demosaicing pipeline). TIFF-based RAWs
-# (DNG, CR2, NEF, ARW...) would otherwise "open" as their embedded thumbnail.
+# Camera RAW (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, PEF, X3F, ... — what
+# LibRaw reads) is rendered by graph/raw_decode.py in an isolated child
+# process (see _decode_camera_raw). Declared types that mark an upload as RAW:
 _RAW_MEDIA_TYPES = frozenset({
     "image/dng", "image/x-adobe-dng", "image/x-canon-cr2", "image/x-canon-cr3",
-    "image/x-nikon-nef", "image/x-sony-arw", "image/x-panasonic-rw2",
-    "image/x-olympus-orf", "image/x-fuji-raf", "image/x-pentax-pef",
-    "image/x-samsung-srw", "image/x-raw",
+    "image/x-canon-crw", "image/x-nikon-nef", "image/x-nikon-nrw", "image/x-sony-arw",
+    "image/x-sony-srf", "image/x-sony-sr2", "image/x-panasonic-rw2", "image/x-panasonic-raw",
+    "image/x-olympus-orf", "image/x-fuji-raf", "image/x-pentax-pef", "image/x-samsung-srw",
+    "image/x-sigma-x3f", "image/x-hasselblad-3fr", "image/x-phaseone-iiq", "image/x-raw",
 })
+_RAW_DECODER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raw_decode.py")
+# "preview" (default): the camera's own embedded rendering when it is large
+# enough, else a LibRaw demosaic; "demosaic": always render the sensor data.
+RAW_RENDER = os.environ.get("IMAGE_RAW_RENDER", "preview").strip().lower()
+_RAW_TIMEOUT_S = _env_int("IMAGE_RAW_TIMEOUT_S", 90)
+_RAW_CPU_SECONDS = _env_int("IMAGE_RAW_CPU_SECONDS", 60)
+# The child's address-space cap on top of the decode budget: ~120 MB is the
+# interpreter + numpy + rawpy + Pillow before any work.
+_RAW_ADDRESS_SPACE_OVERHEAD = 512 * 1024 * 1024
+# Long edge the child hands back: enough to downscale from with margin (our
+# output is ~2000 px at most), small enough to keep the pipe and decode cheap.
+_RAW_OUTPUT_EDGE = 3200
 
 # Serializes decode/encode: one heavy image job at a time per process.
-_HEAVY_LOCK = threading.Lock()
+# Re-entrant: a TIFF that fails to decode falls back to the RAW path, which
+# encodes under the same lock.
+_HEAVY_LOCK = threading.RLock()
 
 
 class ImageNormalizationError(ValueError):
@@ -343,10 +369,40 @@ def normalize_image(
     if len(data) > max_source_bytes:
         raise ImageTooLargeError(source_too_large_message(len(data), max_source_bytes))
 
-    im = _open(data, declared)
+    def camera_raw(raw_kind: str | None) -> NormalizedImage:
+        return _normalize_camera_raw(
+            data, declared, raw_kind, budget=budget, max_edge=max_edge,
+            max_decode_bytes=max_decode_bytes, started=started,
+        )
+
+    try:
+        im = _open(data, declared)
+    except UnsupportedImageError as unsupported:
+        # Most camera RAW formats (CR3, RAF, ORF, RW2, X3F, ...) aren't
+        # anything Pillow knows; LibRaw gets a go at whatever isn't
+        # recognizably something else.
+        if not _may_be_camera_raw(data):
+            raise
+        try:
+            return camera_raw(_raw_kind(data, declared))
+        except _NotCameraRaw:
+            raise unsupported from None
     fmt = "JPEG" if im.format == "MPO" else (im.format or "UNKNOWN")
     source_size = im.size
-    _reject_camera_raw(im, data, declared)
+    if fmt == "TIFF":
+        raw_kind = _raw_tiff_kind(im, data)
+        if raw_kind:
+            # TIFF-structured RAWs (DNG, CR2, NEF, ARW, ...) would otherwise
+            # "open" as the small thumbnail in their first IFD.
+            try:
+                return camera_raw(raw_kind)
+            except _NotCameraRaw:
+                raise _raw_unreadable(raw_kind, declared) from None
+        if declared in _RAW_MEDIA_TYPES:
+            try:
+                return camera_raw(None)
+            except _NotCameraRaw:
+                pass  # declared RAW, but LibRaw disagrees: a plain TIFF after all
     pixels = im.size[0] * im.size[1]
 
     if (_can_pass_through(im, fmt, len(data), passthrough_formats, budget, max_edge)
@@ -399,6 +455,13 @@ def normalize_image(
                 # which surfaces as the same "broken data stream" error as
                 # corruption. (Single-scan baseline JPEGs never allocate it.)
                 raise ImageTooLargeError(_pixels_message(source_size, 0, fmt)) from e
+            if fmt == "TIFF":
+                # A TIFF Pillow can't decode is often a camera RAW whose first
+                # IFD uses a vendor compression (PEF, some NEF/ARW variants).
+                try:
+                    return camera_raw(None)
+                except _NotCameraRaw:
+                    pass  # not RAW either: a corrupt TIFF
             raise UnsupportedImageError(
                 f"The attached image could not be decoded{_paren(_join(fmt, _declared(declared)))}: "
                 "the file appears to be corrupt or truncated."
@@ -473,7 +536,7 @@ def _unsupported(data: bytes, declared: str) -> UnsupportedImageError:
     if kind in ("SVG", "PDF"):
         hint = " Vector graphics and PDFs aren't supported as image attachments — export it as PNG or JPEG."
     elif kind and "RAW" in kind:
-        hint = " Camera RAW files aren't supported — export it as JPEG, PNG or HEIC."
+        hint = " This camera RAW file couldn't be read — export it as JPEG, PNG or HEIC."
     elif kind == "video":
         hint = " Videos aren't supported as image attachments."
     else:
@@ -530,25 +593,147 @@ def _sniff_label(data: bytes) -> str | None:
     return None
 
 
-def _reject_camera_raw(im: Image.Image, data: bytes, declared: str) -> None:
-    """TIFF-structured RAWs (DNG, CR2, NEF, ARW...) open as TIFF and would be
-    sent as their embedded thumbnail; other RAWs don't open at all. The
-    declared type only counts for TIFF bytes — a real JPEG is a JPEG."""
-    if im.format != "TIFF":
-        return
+class _NotCameraRaw(Exception):
+    """LibRaw doesn't recognize the bytes as a camera RAW file."""
+
+
+# Magic numbers of RAW formats Pillow can't open (TIFF-based RAWs are found
+# from their TIFF tags instead, see _raw_tiff_kind).
+_RAW_MAGIC = (
+    (b"FUJIFILMCCD-RAW", "camera RAW (RAF)"),
+    (b"IIRO", "camera RAW (ORF)"),
+    (b"IIRS", "camera RAW (ORF)"),
+    (b"MMOR", "camera RAW (ORF)"),
+    (b"IIU\x00", "camera RAW (RW2)"),
+    (b"FOVb", "camera RAW (X3F)"),
+    (b"\x00MRM", "camera RAW (MRW)"),
+)
+
+
+def _raw_kind(data: bytes, declared: str) -> str | None:
+    """A label when the bytes or the declaration say camera RAW, else None."""
+    if data[4:12] == b"ftypcrx ":
+        return "camera RAW (CR3)"
+    for magic, label in _RAW_MAGIC:
+        if data.startswith(magic):
+            return label
+    return "camera RAW" if declared in _RAW_MEDIA_TYPES else None
+
+
+def _may_be_camera_raw(data: bytes) -> bool:
+    """Worth handing to LibRaw: not recognizably some other kind of file."""
+    kind = _sniff_label(data)
+    return kind is None or "RAW" in kind
+
+
+def _raw_tiff_kind(im: Image.Image, data: bytes) -> str | None:
+    """TIFF-structured RAWs (DNG, CR2, NEF, ARW, ...) by their tags."""
     tags = getattr(im, "tag_v2", {})
-    is_raw = (
-        declared in _RAW_MEDIA_TYPES
-        or 50706 in tags  # DNGVersion
-        or data[8:10] == b"CR"  # Canon CR2
-        # IFD0 is a reduced-resolution preview, the real image lives in SubIFDs
-        or (tags.get(254) == 1 and 330 in tags)
+    if 50706 in tags:  # DNGVersion
+        return "camera RAW (DNG)"
+    if data[8:10] == b"CR":  # Canon CR2
+        return "camera RAW (CR2)"
+    if tags.get(254) == 1 and 330 in tags:
+        # IFD0 is a reduced-resolution preview; the real image is in SubIFDs
+        return "camera RAW"
+    return None
+
+
+def _raw_unreadable(raw_kind: str | None, declared: str) -> UnsupportedImageError:
+    return UnsupportedImageError(
+        f"The attached {raw_kind or 'camera RAW'} file couldn't be read{_paren(_declared(declared))}. "
+        "Export it as JPEG, PNG or HEIC and try again."
     )
-    if is_raw:
-        raise UnsupportedImageError(
-            f"The attached file is a camera RAW image{_paren(_declared(declared))}, "
-            "which isn't supported. Export it as JPEG, PNG or HEIC and try again."
+
+
+def _normalize_camera_raw(data: bytes, declared: str, raw_kind: str | None, *, budget: int,
+                          max_edge: int, max_decode_bytes: int, started: float) -> NormalizedImage:
+    """Render a camera RAW (in the isolated child) and encode it like any
+    other converted image. Raises _NotCameraRaw when LibRaw doesn't recognize
+    the bytes and nothing else marked them as RAW (raw_kind is None)."""
+    wait_started = time.perf_counter()
+    with _HEAVY_LOCK:
+        lock_wait_ms = (time.perf_counter() - wait_started) * 1000
+        rendered, header = _decode_camera_raw(data, declared, raw_kind, max_decode_bytes, max_edge)
+        _check_decode_cost(rendered, "PNG", rendered.size, rendered.size, max_decode_bytes)
+        try:
+            out, out_size, strategy = _encode_within_budget(_normalize_mode(rendered), budget, max_edge)
+        except MemoryError:
+            raise ImageTooLargeError(_pixels_message(rendered.size, 0, "camera RAW")) from None
+        del rendered
+    sensor = header.get("sensor") or [0, 0]
+    return NormalizedImage(
+        data=out, media_type="image/jpeg" if strategy == "lossy" else "image/png",
+        strategy=strategy, source_format=f"RAW ({header.get('source', '?')})",
+        source_bytes=len(data), source_size=(int(sensor[0]), int(sensor[1])), output_size=out_size,
+        elapsed_ms=(time.perf_counter() - started) * 1000, lock_wait_ms=lock_wait_ms,
+    )
+
+
+def _decode_camera_raw(data: bytes, declared: str, raw_kind: str | None,
+                       max_decode_bytes: int, max_edge: int) -> tuple[Image.Image, dict]:
+    """Run graph/raw_decode.py on the bytes in a child process (LibRaw never
+    runs in the server process: see that module) and return the upright RGB
+    image it renders plus its header."""
+    params = {
+        "max_decode_bytes": max_decode_bytes,
+        "max_address_space": max_decode_bytes + _RAW_ADDRESS_SPACE_OVERHEAD,
+        "max_cpu_seconds": _RAW_CPU_SECONDS,
+        "min_edge": _FLOOR_EDGE_PX,
+        "max_edge": min(max_edge, _RAW_OUTPUT_EDGE),
+        "prefer": "demosaic" if RAW_RENDER == "demosaic" else "preview",
+    }
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "OMP_NUM_THREADS": "1",  # LibRaw's OpenMP: one shared CPU
+        "OPENBLAS_NUM_THREADS": "1",
+        "JPEGMEM": os.environ.get("JPEGMEM", ""),
+    }
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-I", _RAW_DECODER, json.dumps(params)],
+            input=data, capture_output=True, timeout=_RAW_TIMEOUT_S, env=env, check=False,
         )
+    except subprocess.TimeoutExpired:
+        logger.warning("Camera RAW decode timed out after %ss", _RAW_TIMEOUT_S)
+        raise ImageTooLargeError(
+            "The attached camera RAW file took too long to process. Export it as JPEG and try again."
+        ) from None
+    except OSError as e:
+        logger.error("Camera RAW decoder could not be started: %s", e)
+        raise _raw_unreadable(raw_kind, declared) from e
+
+    if proc.returncode == 0:
+        try:
+            (header_len,) = struct.unpack(">I", proc.stdout[:4])
+            header = json.loads(proc.stdout[4:4 + header_len])
+            width, height = int(header["width"]), int(header["height"])
+            pixels = proc.stdout[4 + header_len:]
+            if not (0 < width <= _RAW_OUTPUT_EDGE and 0 < height <= _RAW_OUTPUT_EDGE) \
+                    or len(pixels) != width * height * 3:
+                raise ValueError(f"bad image geometry {width}x{height} / {len(pixels)} bytes")
+            return Image.frombytes("RGB", (width, height), pixels), header
+        except (struct.error, ValueError, KeyError, TypeError) as e:
+            logger.error("Camera RAW decoder returned malformed output: %s", e)
+            raise _raw_unreadable(raw_kind, declared) from e
+
+    stderr = proc.stderr.decode("utf-8", "replace").strip()
+    failure = {}
+    if proc.returncode == 2 and stderr:
+        try:
+            failure = json.loads(stderr.splitlines()[-1])
+        except ValueError:
+            failure = {}
+    kind = failure.get("error")
+    if kind == "too_large" or proc.returncode in (-9, -24):  # SIGKILL (OOM), SIGXCPU (CPU cap)
+        logger.warning("Camera RAW too large to process (rc=%s): %s", proc.returncode, failure.get("detail", ""))
+        raise ImageTooLargeError(
+            "The attached camera RAW file is too large to process. Export it as JPEG and try again."
+        )
+    if kind == "unsupported" and raw_kind is None:
+        raise _NotCameraRaw()
+    logger.warning("Camera RAW not readable (rc=%s): %s", proc.returncode, (failure.get("detail") or stderr)[-300:])
+    raise _raw_unreadable(raw_kind, declared)
 
 
 def _can_pass_through(im, fmt, nbytes, passthrough_formats, budget, max_edge) -> bool:
