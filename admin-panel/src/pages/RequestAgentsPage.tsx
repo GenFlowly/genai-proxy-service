@@ -108,22 +108,24 @@ export default function RequestAgentsPage() {
         }
     }
 
-    const handleRemoveMapping = async (rt: string) => {
-        if (!window.confirm(`Remove the ${rt} mapping and revert to the bundled default?`)) return
+    const handleDisableMapping = async (rt: string) => {
+        if (!window.confirm(
+            `Disable the ${rt} mapping? The action stops running entirely until it is re-enabled or remapped — there is no fallback.`
+        )) return
         updateMapRow(rt, { busy: true, message: null, messageKind: null })
         try {
             const token = await getAccessTokenSilently()
             await deleteRequestAgentMapEntry(token, rt)
             updateMapRow(rt, {
                 busy: false,
-                message: 'Mapping removed — bundled default is back in effect',
+                message: 'Mapping disabled — the action is off until re-enabled',
                 messageKind: 'success',
             })
             await refresh()
         } catch (e) {
             updateMapRow(rt, {
                 busy: false,
-                message: e instanceof Error ? e.message : 'Failed to remove mapping',
+                message: e instanceof Error ? e.message : 'Failed to disable mapping',
                 messageKind: 'error',
             })
         }
@@ -142,19 +144,20 @@ export default function RequestAgentsPage() {
                     const rt = entry.requestType
                     const row = mapRows[rt] ?? emptyMapRow()
                     const mapped = entry.effectiveSource === 'DDB'
+                    const disabled = !mapped && entry.ddbEntry?.enabled === false
                     return (
                         <div className="vendor-card" key={rt}>
                             <div className="vendor-card-header">
                                 <h3>{entry.displayName ?? REQUEST_TYPE_LABELS[rt as RequestType] ?? rt}</h3>
                                 <div className="header-pills">
                                     <span className={`status-pill ${mapped ? 'ok' : 'unset'}`}>
-                                        {mapped ? 'Mapped (DDB)' : 'Bundled default'}
+                                        {mapped ? 'Mapped (DDB)' : disabled ? 'Disabled — action off' : 'Unresolved — action off'}
                                     </span>
                                 </div>
                             </div>
 
                             <div className="map-summary">
-                                <span className="map-key">{entry.effectiveMapKey}</span>
+                                <span className="map-key">{entry.effectiveMapKey ?? '—'}</span>
                                 {entry.ddbEntry && (
                                     <span className="map-details">
                                         → {entry.ddbEntry.graphId}
@@ -179,13 +182,13 @@ export default function RequestAgentsPage() {
                                 >
                                     {row.expanded ? 'Cancel' : mapped ? 'Remap…' : 'Map agent…'}
                                 </button>
-                                {entry.ddbEntry && (
+                                {entry.ddbEntry?.enabled && (
                                     <button
                                         className="danger"
                                         disabled={row.busy}
-                                        onClick={() => void handleRemoveMapping(rt)}
+                                        onClick={() => void handleDisableMapping(rt)}
                                     >
-                                        Remove mapping
+                                        Disable mapping
                                     </button>
                                 )}
                             </div>

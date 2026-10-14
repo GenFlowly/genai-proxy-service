@@ -85,6 +85,39 @@ class RequestAgentMapRepository(
         }
     }
 
+    /**
+     * Create the entry only if no row exists for (scope, requestType) — the
+     * seeder's write, so a concurrent seeder instance (or an admin racing the
+     * boot) can never be overwritten. Returns false when a row already exists.
+     */
+    suspend fun putMapEntryIfAbsent(entry: RequestAgentMapEntry): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val now = Instant.now().toString()
+            dynamoDbClient.putItem(
+                software.amazon.awssdk.services.dynamodb.model.PutItemRequest.builder()
+                    .tableName(REQUEST_AGENT_MAP_TABLE)
+                    .item(
+                        mapOf(
+                            REQUEST_AGENT_SCOPE_KEY to AttributeValue.builder().s(entry.scope).build(),
+                            REQUEST_AGENT_REQUEST_TYPE_KEY to AttributeValue.builder().s(entry.requestType).build(),
+                            REQUEST_AGENT_MAP_KEY to AttributeValue.builder().s(entry.mapKey).build(),
+                            REQUEST_AGENT_GRAPH_ID_KEY to AttributeValue.builder().s(entry.graphId).build(),
+                            REQUEST_AGENT_ENABLED_KEY to AttributeValue.builder().bool(entry.enabled).build(),
+                            REQUEST_AGENT_UPDATED_BY_KEY to AttributeValue.builder().s(entry.updatedBy ?: "").build(),
+                            "createdAt" to AttributeValue.builder().s(now).build(),
+                            "updatedAt" to AttributeValue.builder().s(now).build(),
+                        )
+                    )
+                    .conditionExpression("attribute_not_exists($REQUEST_AGENT_SCOPE_KEY)")
+                    .build()
+            )
+            logger.info("Created request-agent map entry ${entry.scope}/${entry.requestType} → ${entry.graphId}")
+            true
+        } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
+            false
+        }
+    }
+
     suspend fun deleteMapEntry(scope: String, requestType: String) = withContext(Dispatchers.IO) {
         dynamoDbClient.deleteItem(
             DeleteItemRequest.builder()

@@ -1,16 +1,20 @@
 package com.genflowly.service
 
 /**
- * Fire-and-forget work launched after a completed generation exchange,
- * shared by the batch and streaming generation routes: learn about the
- * user from the conversation (debounced inside MemoryExtractionService)
- * and index the exchange for semantic conversation search.
+ * Side-effect work launched after a completed generation exchange, shared by
+ * the batch and streaming generation routes: learn about the user from the
+ * conversation and index the exchange for semantic conversation search.
+ *
+ * Learning is DURABLE: [MemoryExtractionService.enqueueConversationExtraction]
+ * persists a pending-work row (one small DynamoDB put, suspend) before the
+ * background run starts, so a process restart re-dispatches the work via the
+ * reconciler instead of silently losing it. Indexing stays fire-and-forget.
  */
 class ExchangeSideEffects(
     private val memoryExtractionService: MemoryExtractionService,
     private val conversationIndexingService: ConversationIndexingService,
 ) {
-    fun launchAsync(
+    suspend fun launchAsync(
         customerId: String,
         conversationId: String,
         client: String,
@@ -20,8 +24,8 @@ class ExchangeSideEffects(
         learnFromConversation: Boolean,
     ) {
         if (learnFromConversation) {
-            memoryExtractionService.maybeExtractFromConversationAsync(
-                customerId, conversationId, bearerToken,
+            memoryExtractionService.enqueueConversationExtraction(
+                customerId, conversationId,
                 responseMessageId = responseMessageId
             )
         }

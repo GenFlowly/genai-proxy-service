@@ -18,8 +18,9 @@ export interface RequestAgentMapStatus {
     displayName?: string
     /** Template variables the server supplies to this action's prompts. */
     templateVariables?: string[]
-    effectiveMapKey: string
-    effectiveSource: 'DDB' | 'CONFIG'
+    /** Map key of the agent serving the action; null when unresolved (disabled/unmapped). */
+    effectiveMapKey?: string | null
+    effectiveSource: 'DDB' | 'UNRESOLVED'
     ddbEntry?: RequestAgentMapEntry | null
 }
 
@@ -46,6 +47,8 @@ export interface CreateAgentRequest {
     modelPreference?: ModelPreference | null
     inputTemplate: string
     maxTokens?: number | null
+    /** Reasoning effort pinned on the node (none|low|medium|high); omit for vendor default. */
+    thinkingLevel?: string | null
 }
 
 export interface AgentNodeResponse {
@@ -91,4 +94,5 @@ export interface GenerationNodeConfig {
     output_format?: string
     model_preference?: { vendor: string; model: string } | null
     max_tokens?: number | null
+    thinking_level?: string | null
 }

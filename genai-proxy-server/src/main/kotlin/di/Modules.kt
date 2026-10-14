@@ -16,7 +16,6 @@ import com.genflowly.repository.SystemApiKeyRepository
 import com.genflowly.service.AgentResolutionService
 import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.GenerationAgentExecutor
-import com.genflowly.service.RequestAgentDefaultsLoader
 import com.genflowly.service.RequestAgentMapAdminService
 import com.genflowly.service.ConversationService
 import kotlinx.serialization.json.Json
@@ -29,7 +28,6 @@ import com.genflowly.service.GenerationOrchestrator
 import com.genflowly.service.GenerationRequestValidator
 import com.genflowly.service.InstructionService
 import com.genflowly.service.SharedUsersResolver
-import com.genflowly.service.UtilityGenerationService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.AIModelsService
 import com.genflowly.observability.Metrics
@@ -196,13 +194,13 @@ fun appModule(): Module = module {
         )
     }
     single { com.genflowly.service.VendorAllowlistService(get()) }
-    single { UtilityGenerationService(get(), get()) }
     single { GraphService(get(), get(), get()) }
     single { com.genflowly.repository.NodePresetRepository(get(), get()) }
     single { com.genflowly.service.NodePresetService(get(), get()) }
-    single { RequestAgentDefaultsLoader() }
-    single { AgentResolutionService(get(), get(), get(), get()) }
-    single { GenerationAgentExecutor(get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.RequestAgentSeeds() }
+    single { com.genflowly.service.RequestAgentSeeder(get(), get(), get(), get(), get()) }
+    single { AgentResolutionService(get(), get(), get()) }
+    single { GenerationAgentExecutor(get(), get(), get(), get(), get()) }
     single { RequestAgentMapAdminService(get(), get(), get()) }
     single { com.genflowly.service.CustomerRequestAgentMapService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
@@ -214,7 +212,7 @@ fun appModule(): Module = module {
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
     single {
         com.genflowly.service.MemoryExtractionService(
-            get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            get(), get(), get(), get(), get(), get(), get(), get(),
             logContent = !get<AppConfig>().isProduction
         )
     }

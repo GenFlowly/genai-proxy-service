@@ -216,6 +216,7 @@ class GenerationOrchestrator(
                         aiVendor = aiConfig.aiVendor,
                         model = aiConfig.model,
                         maxTokens = aiConfig.maxTokens,
+                        thinkingLevel = aiConfig.thinkingLevel,
                         message = message,
                         agentic = agentic,
                         tools = tools,
@@ -238,6 +239,7 @@ class GenerationOrchestrator(
         aiVendor: AIVendor,
         model: String,
         maxTokens: Int? = null,
+        thinkingLevel: String? = null,
         message: Message,
         agentic: Boolean = true,
         tools: List<ToolDefinition> = emptyList(),
@@ -280,7 +282,8 @@ class GenerationOrchestrator(
             toolResults = toolResults.toPayloadToolResults(),
             responseSchema = responseSchema,
             memoryEnabled = memoryEnabled,
-            graphId = agentId
+            graphId = agentId,
+            thinkingLevel = thinkingLevel
         )
 
         val responseMessage = Message(
@@ -531,7 +534,8 @@ class GenerationOrchestrator(
                     toolResults = toolResults.toPayloadToolResults(),
                     responseSchema = responseSchema,
                     memoryEnabled = memoryEnabled,
-                    graphId = agentId
+                    graphId = agentId,
+                    thinkingLevel = config.thinkingLevel
                 )
                 // Durable /runs path (flagged): start a durable background run and
                 // reattach to its event stream. Credentials are NOT sent — the
@@ -557,7 +561,8 @@ class GenerationOrchestrator(
                             toolResults = toolResults.toPayloadToolResults(),
                             responseSchema = responseSchema,
                             memoryEnabled = memoryEnabled,
-                            graphId = agentId
+                            graphId = agentId,
+                            thinkingLevel = config.thinkingLevel
                         )
                         if (startedRunId != null) {
                             // Add this run to the conversation's pending set (one entry

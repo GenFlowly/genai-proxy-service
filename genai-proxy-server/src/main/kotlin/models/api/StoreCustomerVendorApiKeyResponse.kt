@@ -33,6 +33,8 @@ data class AIVendorAPIKeyStatus(
     // internal generations (titles, personas, memory). Null until configured.
     val selectedModel: String? = null,
     val priority: Int? = null,
+    // Stored default reasoning effort for this vendor; null = vendor default.
+    val thinkingLevel: String? = null,
     // Provider's own rejection message when validation fails (e.g. "account
     // suspended, insufficient balance") — a bad key and a suspended account
     // both fail the probe, and only this tells the customer which it was.
