@@ -88,6 +88,15 @@ class ExecuteAgentGraphRequest(BaseModel):
     # Governance decision from the proxy server: MEMORY nodes may inject
     # learned user memories (request consent AND account setting).
     memory_enabled: bool = False
+    # Run as a DBOS durable workflow when the durable runtime is up: LLM calls
+    # become exactly-once steps with transient retry, and credentials are
+    # resolved server-side from DynamoDB (llm_credentials is stripped before
+    # the workflow input is checkpointed). The caller must only ask for this
+    # when the credentials it would have sent ARE the customer's stored keys —
+    # the proxy sends durable=false for its admin-panel system-key fallback.
+    # With the runtime down/unconfigured, execution degrades to the plain
+    # in-process path (fail-safe, same convention as /runs).
+    durable: bool = False
 
 
 class RetrieveRequest(BaseModel):
@@ -129,6 +138,11 @@ class RetrieveRequest(BaseModel):
     # validates access (own-or-System) before sending; ownership is re-checked
     # here as defense in depth. None → default resolution.
     graph_id: Optional[str] = None
+    # End user's per-request reasoning depth ("none"|"low"|"medium"|"high",
+    # from the AI-config surfaces). On the response generator it overrides the
+    # node config's thinking_level; pipeline nodes ignore it. Invalid values
+    # are warned-and-ignored downstream (llm_node), never an error.
+    thinking_level: Optional[str] = None
 
 
 class RunRequest(BaseModel):
@@ -156,6 +170,8 @@ class RunRequest(BaseModel):
     response_schema: Optional[dict] = None
     memory_enabled: bool = False
     graph_id: Optional[str] = None
+    # Same semantics as RetrieveRequest.thinking_level.
+    thinking_level: Optional[str] = None
     # Optional client-supplied run id for idempotency / rediscovery. When set it
     # becomes the DBOS workflow id (a duplicate re-attaches to the same run
     # instead of starting a new one). Server-generated when omitted.

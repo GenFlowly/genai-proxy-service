@@ -172,10 +172,25 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
     elif kind == "MEMORY":
         block = output.get("memories_block") or ""
         memories = [line[2:] for line in block.splitlines() if line.startswith("- ")]
-        payload["detail"] = (
-            f"Applied {len(memories)} learned memori(es)" if memories else "No stored memories to apply"
-        )
-        payload["items"] = [m[:120] for m in memories[:_MAX_ITEMS]]
+        stats = (output.get("scratch") or {}).get("memory_stats")
+        if stats is not None:
+            core_count = stats.get("core", 0)
+            recalled_count = stats.get("recalled", 0)
+            parts = []
+            if core_count:
+                parts.append(f"Applied {core_count} core memori(es)")
+            if recalled_count:
+                parts.append(f"recalled {recalled_count} related to this message")
+            payload["detail"] = "; ".join(parts) if parts else "No stored memories to apply"
+            # The block renders core lines first, then recalled; recalled are
+            # the per-message news, so they lead the (capped) item list.
+            recalled_items = memories[core_count:]
+            payload["items"] = [m[:120] for m in (recalled_items + memories[:core_count])[:_MAX_ITEMS]]
+        else:
+            payload["detail"] = (
+                f"Applied {len(memories)} learned memori(es)" if memories else "No stored memories to apply"
+            )
+            payload["items"] = [m[:120] for m in memories[:_MAX_ITEMS]]
     else:
         # LLM-backed nodes: summarize the well-known output fields.
         intent = output.get("query_intent")

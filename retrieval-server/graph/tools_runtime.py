@@ -42,17 +42,29 @@ _ATTACHMENT_KEY_TEMPLATE = "customers/{customer_id}/attachments/{artifact_id}"
 # whose implicit arrival would change the behavior of existing graphs:
 # search_knowledge_base would make every pipeline graph with an unscoped
 # TOOL_EXECUTOR node retrieve twice (once via its RETRIEVAL node, once when
-# the model calls the tool); the agent-harness tools (todos, scratch FS,
-# subagent spawning) are opt-in capabilities an agent graph names, never a
-# behavior an untouched pipeline graph silently grows.
+# the model calls the tool); search_memories exposes learned user memories and
+# additionally requires memory consent (MEMORY_CONSENT_TOOLS below); the
+# agent-harness tools (todos, scratch FS, subagent spawning) are opt-in
+# capabilities an agent graph names, never a behavior an untouched pipeline
+# graph silently grows.
 _EXPLICIT_ONLY_TOOLS = {
     "search_knowledge_base",
+    "search_memories",
     "write_todos",
     "fs_write",
     "fs_read",
     "fs_list",
     "spawn_agent",
 }
+
+# Tools that expose the user's learned memories. Bound only when the request
+# carries memory consent: routes.retrieve._build_state drops them from
+# builtin_tools when memory_enabled is false (the proxy server's governance
+# decision — the same gate the MEMORY node honors), and the tool itself
+# re-checks context.runtime["memory_enabled"] so a spawned subagent (whose
+# state pins memory_enabled=False) can never reach memories even when a
+# profile lists the tool.
+MEMORY_CONSENT_TOOLS = frozenset({"search_memories"})
 
 
 def get_registry() -> ToolRegistry:
@@ -73,9 +85,11 @@ def get_registry() -> ToolRegistry:
         registry = default_registry()
         from graph.fs_tools import FsListTool, FsReadTool, FsWriteTool
         from graph.knowledge_tool import SearchKnowledgeBaseTool
+        from graph.memory_tool import SearchMemoriesTool
         from graph.spawn_tool import SpawnAgentTool
 
         registry.register(SearchKnowledgeBaseTool())
+        registry.register(SearchMemoriesTool())
         registry.register(FsWriteTool())
         registry.register(FsReadTool())
         registry.register(FsListTool())

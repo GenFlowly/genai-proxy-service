@@ -37,9 +37,9 @@ _MAX_RETRIES = 3
 
 # Claude models that accept thinking={"type": "adaptive"} (the 4.6+/5
 # families). Older models (haiku-4-5, sonnet-4-5, ...) only take the
-# deprecated budget_tokens form, so thinking stays off for them — which also
-# keeps the cheap internal request-agents (title, memory extraction on haiku)
-# thinking-free.
+# deprecated budget_tokens form, so thinking stays off for them. Internal
+# request agents (titles, personas, memory extraction, …) control reasoning
+# via their published node config's thinking_level, not via this allowlist.
 _ADAPTIVE_THINKING_MODELS = (
     "claude-sonnet-4-6",
     "claude-sonnet-5",
