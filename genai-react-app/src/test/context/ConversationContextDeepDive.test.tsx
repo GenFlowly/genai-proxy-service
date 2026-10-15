@@ -9,6 +9,7 @@ jest.mock('../../context/AuthContext', () => ({
     useAuth: () => ({
         customerId: 'user123',
         isAuthenticated: true,
+        isSessionAuthenticated: true,
         getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
     }),
 }));
