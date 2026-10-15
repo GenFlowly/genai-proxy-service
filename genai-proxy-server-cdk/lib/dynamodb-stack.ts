@@ -133,6 +133,14 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Retention indexes (genai-proxy-server development.md, "Retention").
+        // CloudFormation adds at most ONE GSI to an existing table per update,
+        // so they roll out in two deploys. cdk.json pins "messageGsiPhase": "1"
+        // (claimPendingIndex only, which the claim reconciler needs at once).
+        // Once both stages have deployed that, a commit removing the pin adds
+        // customerIdIndex (needed by account deletion only). Do not pass the
+        // phase with -c: the next CI deploy would undo it.
+        const messageGsiPhaseOne = String(this.node.tryGetContext('messageGsiPhase')) === '1';
         const messageTableProps: CreateTableProps = {
             tableName: 'Message',
             partitionKey: {
@@ -140,6 +148,40 @@ export class DynamoDBStack extends cdk.Stack {
                 type: dynamodb.AttributeType.STRING
             },
             sortKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
+            globalSecondaryIndexes: [
+                {
+                    // Sparse work queue of the kept-object claim reconciler: only
+                    // messages whose claim failed carry claimPending (Number 1),
+                    // read oldest first.
+                    indexName: 'claimPendingIndex',
+                    partitionKey: {
+                        name: 'claimPending',
+                        type: dynamodb.AttributeType.NUMBER,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+                },
+                ...(messageGsiPhaseOne ? [] : [
+                    {
+                        // Every message a customer wrote, in any conversation:
+                        // account deletion keeps their messages in other
+                        // people's conversations (and their files).
+                        indexName: 'customerIdIndex',
+                        partitionKey: {
+                            name: 'customerId',
+                            type: dynamodb.AttributeType.STRING,
+                        },
+                        sortKey: {
+                            name: 'createdAt',
+                            type: dynamodb.AttributeType.STRING,
+                        },
+                        projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+                    },
+                ]),
+            ],
         };
 
         const customerPreferencesTableProps: CreateTableProps = {
@@ -551,6 +593,33 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        // Customer-deletion work queue (plan 3.9): one row per account deletion
+        // ("ACCOUNT#{customerId}") and per conversation purge (the conversationId),
+        // holding state, attempts and leaseUntil. Sparse index, same pattern as
+        // CustomerMemory's pending-extraction-index: only unfinished jobs carry
+        // pendingShard, so the proxy's worker reads exactly the due work by dueAt.
+        const purgeJobsTableProps: CreateTableProps = {
+            tableName: 'PurgeJobs',
+            partitionKey: {
+                name: 'jobKey',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'pending-purge-index',
+                    partitionKey: {
+                        name: 'pendingShard',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'dueAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const systemVendorApiKeyTable = createDefaultDynamoDbTable(this, systemVendorApiKeyTableProps);
@@ -578,6 +647,7 @@ export class DynamoDBStack extends cdk.Stack {
         const customerMemoryTable = createDefaultDynamoDbTable(this, customerMemoryTableProps);
         const nodePresetsTable = createDefaultDynamoDbTable(this, nodePresetsTableProps);
         const customerProjectsTable = createDefaultDynamoDbTable(this, customerProjectsTableProps);
+        const purgeJobsTable = createDefaultDynamoDbTable(this, purgeJobsTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
@@ -587,7 +657,8 @@ export class DynamoDBStack extends cdk.Stack {
             customerToolCredentialsTable, customerToolsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
-            requestAgentMapTable, customerMemoryTable, nodePresetsTable, customerProjectsTable
+            requestAgentMapTable, customerMemoryTable, nodePresetsTable, customerProjectsTable,
+            purgeJobsTable
         );
     }
 }
