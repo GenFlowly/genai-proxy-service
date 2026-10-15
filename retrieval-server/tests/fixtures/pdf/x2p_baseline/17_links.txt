@@ -1,0 +1,6 @@
+Page 1 of 1
+Links
+An inline link to the documentation. An autolink https://example.com/auto and a bare URL
+https://example.com/bare. A reference link ref. A mailto email us. An anchor link to section two.
+Section two
+Text.

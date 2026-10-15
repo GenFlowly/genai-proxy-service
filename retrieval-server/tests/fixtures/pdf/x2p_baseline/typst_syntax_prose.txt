@@ -1,0 +1,9 @@
+Page 1 of 1
+Notes on typesetting syntax
+In Typst you write #set page(width: 1pt) to change the page, #read("data.csv") to load a file and #import
+"@preview/cetz:0.3.0" to load a package.
+= This line starts with an equals sign Labels look like and references like @intro. Dollar math looks like
+$x^2$ and costs $5. A backslash \ and a hash # and braces {} and brackets [] and #{ 1 + 1 } stay literal.
+Syntax Meaning
+#let x = 1 binding
+#emph[hi] emphasis

@@ -414,6 +414,59 @@ class RenderJobTests(unittest.TestCase):
         self.assertEqual(out, {"status": "error", "kind": "unsupported"})
 
 
+# --- 1.6 parity with the renderer before this plan --------------------------------
+
+_FIXTURES = os.path.join(_APP_DIR, "tests", "fixtures", "pdf")
+_BASELINES = os.path.join(_FIXTURES, "x2p_baseline")
+# Fixtures whose text changes on purpose: the status-emoji map (2.7), raw
+# HTML printed as text instead of interpreted (1.6), and lists/tables right
+# after a paragraph line parsed as lists/tables (D8, 1.6). The targeted tests
+# above assert those changes.
+_INTENDED_CHANGES = {
+    "09_emoji", "10_typography", "edge",
+    "19_misc_markdown", "typst_syntax_prose",
+    "22_llm_habits", "mixed",
+}
+
+
+def _pdfium_text(pdf: bytes) -> str:
+    import pypdfium2 as pdfium
+
+    doc = pdfium.PdfDocument(pdf)
+    try:
+        pages = []
+        for i in range(len(doc)):
+            textpage = doc[i].get_textpage()
+            pages.append(textpage.get_text_range())
+            textpage.close()
+        return "\f".join(pages).replace("\r\n", "\n")
+    finally:
+        doc.close()
+
+
+class ParityTests(unittest.TestCase):
+    """Every other fixture extracts exactly the text the unmodified renderer
+    produced (tests/fixtures/pdf/x2p_baseline/, recorded from the code at the
+    start of the PDF plan)."""
+
+    def test_fixtures_extract_as_before(self):
+        names = sorted(n[:-4] for n in os.listdir(_BASELINES) if n.endswith(".txt"))
+        self.assertGreaterEqual(len(names), 25)
+        checked = 0
+        for name in names:
+            if name in _INTENDED_CHANGES:
+                continue
+            with self.subTest(fixture=name):
+                with open(os.path.join(_FIXTURES, f"{name}.md"), encoding="utf-8") as f:
+                    markdown = f.read()
+                with open(os.path.join(_BASELINES, f"{name}.txt"), encoding="utf-8", newline="") as f:
+                    baseline = f.read().replace("\r\n", "\n")
+                pdf, _ = gp.render_markdown_pdf(markdown)
+                self.assertEqual(_pdfium_text(pdf), baseline)
+                checked += 1
+        self.assertGreaterEqual(checked, 20)
+
+
 # --- the tool ---------------------------------------------------------------------
 
 
