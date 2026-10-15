@@ -38,3 +38,4 @@ Applied with `git am --keep-cr` onto fb46096, the series gives a
 retrieval-server tree identical to the one tested: 994 tests, 0 failures
 (17 skipped), with xhtml2pdf, reportlab, Markdown, svglib, pyHanko and their
 helpers made unimportable during the run, so nothing still depends on them.
+It also applies cleanly onto a41b23c; run the suite again after applying it.
