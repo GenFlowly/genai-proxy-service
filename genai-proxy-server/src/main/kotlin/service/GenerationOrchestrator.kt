@@ -41,6 +41,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 
 /**
@@ -541,7 +542,10 @@ class GenerationOrchestrator(
         // starts so a purge cannot miss it; closed once persistence is done.
         lateinit var turnRegistration: AutoCloseable
         val generationJob = appScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
-            val emit: suspend (String) -> Unit = { chunkChannel.send(it) }
+            // A client that disconnects cancels the relay's channel (consumeAsFlow
+            // cancels it when its collector fails). Frames for a gone client are
+            // then dropped: a suspending send would throw and end the turn early.
+            val emit: (String) -> Unit = { chunkChannel.trySend(it) }
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
             var capturedErrorMessage: String? = null
@@ -704,9 +708,16 @@ class GenerationOrchestrator(
                 }
                 success = true
             } catch (e: kotlinx.coroutines.CancellationException) {
-                // Explicit user cancel (cancelGeneration) — keep the partial text.
-                cancelled = true
-                logger.info("Generation {} cancelled — persisting {} streamed char(s)", responseMessageId, sb.length)
+                if (isActive) {
+                    // This turn was not cancelled: something it called failed
+                    // with a CancellationException. A failure, not a cancel.
+                    logger.error("Error during streaming", e)
+                    runCatching { emit("\n\n[Error: ${e.message}]") }
+                } else {
+                    // Explicit cancel (cancelGeneration, an account purge, shutdown) — keep the partial text.
+                    cancelled = true
+                    logger.info("Generation {} cancelled — persisting {} streamed char(s)", responseMessageId, sb.length)
+                }
             } catch (e: Exception) {
                 logger.error("Error during streaming", e)
                 runCatching { emit("\n\n[Error: ${e.message}]") }

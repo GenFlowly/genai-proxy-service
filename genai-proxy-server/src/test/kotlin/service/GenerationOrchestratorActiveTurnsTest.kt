@@ -17,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -99,6 +100,32 @@ class GenerationOrchestratorActiveTurnsTest {
         assertEquals(0, turns.activeCount(cust))
         assertEquals(listOf("The first half"), persistedAssistantTexts())
         relay.join() // the relay ends once the turn is done
+    }
+
+    @Test
+    fun `a client that disconnects mid-stream does not stop the turn`() = runTest {
+        val clientGone = CompletableDeferred<Unit>()
+        every {
+            retrievalService.retrieveAndGenerateStream(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns flow {
+            emit(StreamChunk.Content("Part one. "))
+            clientGone.await()
+            emit(StreamChunk.Content("Part two. "))
+            emit(StreamChunk.Content("Part three."))
+        }
+
+        val result = orchestrator.processTextGenerateStreamRequest(
+            aiConfig, "", "", "write a long answer", null, null, "REACT_APP", cust
+        )
+        // The browser reads one frame, then the app is backgrounded and the stream dropped.
+        withContext(Dispatchers.Default) { result.flow.first() }
+        clientGone.complete(Unit)
+
+        eventually { turns.activeCount(cust) == 0 }
+        assertEquals(listOf("Part one. Part two. Part three."), persistedAssistantTexts())
     }
 
     @Test
