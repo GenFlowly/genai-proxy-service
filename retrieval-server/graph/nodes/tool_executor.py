@@ -375,7 +375,13 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     # path: DBOS memoizes steps by execution order, and concurrent children
     # make LLM-step order nondeterministic across a crash/resume — so durable
     # runs execute the calls sequentially (correctness over latency there).
-    if durable_workflow_id:
+    try:
+        from graph.nodes.llm_node import _dbos_active
+
+        durable = _dbos_active()
+    except Exception:
+        durable = False
+    if durable:
         outcomes = [await _run_one(c) for c in builtin_calls]
     else:
         outcomes = await asyncio.gather(*(_run_one(c) for c in builtin_calls))
