@@ -118,4 +118,13 @@ class AttachmentServiceTest {
         }
         coVerify(exactly = 0) { s3Provider.presignPut(any(), any(), any()) }
     }
+
+    @Test
+    fun `with PDF uploads switched off a PDF is refused and images still upload`() = runTest {
+        val gated = AttachmentService(s3Provider, pdfUploadsEnabled = false)
+
+        val e = assertFailsWith<IllegalArgumentException> { gated.createUploadUrl(customerId, "application/pdf", 1024) }
+        assertEquals(AttachmentService.PDF_UPLOADS_DISABLED_MESSAGE, e.message)
+        assertEquals("image/png", gated.createUploadUrl(customerId, "image/png", 1024).mediaType)
+    }
 }

@@ -12,6 +12,10 @@ primary_region = "iad"
   # Production logs problems only (logback: ${LOG_LEVEL:-INFO}); user content
   # is additionally gated off by APP_ENV — see development.md "Logging policy"
   LOG_LEVEL = "WARN"
+  # PDF attachments (plan 4.4) stay off until purge (3.9), the kept-object
+  # claim (1.16) and the pending-expiry rule (1.13) are live here; then
+  # "true", together with REACT_APP_PDF_ATTACHMENTS in the web app
+  PDF_UPLOADS_ENABLED = "false"
 
 [http_service]
   internal_port = 8080

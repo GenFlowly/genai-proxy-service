@@ -11,6 +11,8 @@ primary_region = "iad"
   APP_ENV = "development"
   # Dev logs the full INFO narrative (logback: ${LOG_LEVEL:-INFO})
   LOG_LEVEL = "INFO"
+  # PDF attachments (plan 4.4)
+  PDF_UPLOADS_ENABLED = "true"
 
 [http_service]
   internal_port = 8080

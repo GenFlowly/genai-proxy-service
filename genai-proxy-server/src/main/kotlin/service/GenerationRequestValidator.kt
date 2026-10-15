@@ -18,7 +18,9 @@ import com.genflowly.providers.S3Provider
  * Failures throw IllegalArgumentException with a client-facing message.
  */
 class GenerationRequestValidator(
-    private val s3Provider: S3Provider
+    private val s3Provider: S3Provider,
+    /** AppConfig.pdfUploadsEnabled: when false, a message with a PDF is refused (plan 4.4). */
+    private val pdfUploadsEnabled: Boolean = true
 ) {
 
     /**
@@ -39,6 +41,7 @@ class GenerationRequestValidator(
             "At most $MAX_ATTACHMENTS_PER_MESSAGE attachments are allowed per message"
         }
         val pdfCount = attachments.count { isPdfAttachmentMediaType(it.mediaType) }
+        require(pdfCount == 0 || pdfUploadsEnabled) { AttachmentService.PDF_UPLOADS_DISABLED_MESSAGE }
         require(pdfCount <= MAX_PDFS_PER_MESSAGE) {
             "At most $MAX_PDFS_PER_MESSAGE PDFs are allowed per message (this message has $pdfCount)"
         }

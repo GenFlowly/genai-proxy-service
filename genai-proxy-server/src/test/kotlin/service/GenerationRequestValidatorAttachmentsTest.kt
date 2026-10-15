@@ -11,6 +11,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
@@ -125,5 +126,19 @@ class GenerationRequestValidatorAttachmentsTest {
     fun `rejects an attachment that was never uploaded`() = runTest {
         coEvery { s3Provider.head(any()) } returns null
         rejects(listOf(ref("missing")), "has not been uploaded")
+    }
+
+    @Test
+    fun `with PDF uploads switched off a message with a PDF is refused, images pass`() = runTest {
+        val gated = GenerationRequestValidator(s3Provider, pdfUploadsEnabled = false)
+        stubUploaded(1024, "application/pdf")
+
+        val e = assertFailsWith<IllegalArgumentException> {
+            gated.validateAttachments(listOf(ref("doc-1", mediaType = "application/pdf")), customerId)
+        }
+        assertEquals(AttachmentService.PDF_UPLOADS_DISABLED_MESSAGE, e.message)
+
+        stubUploaded(1024, "image/png")
+        gated.validateAttachments(listOf(ref("img-1", mediaType = "image/png")), customerId)
     }
 }

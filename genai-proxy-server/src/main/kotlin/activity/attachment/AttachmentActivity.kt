@@ -42,14 +42,16 @@ fun Route.registerAttachmentRoutes(
                     "image format is detected from the bytes at generation time and " +
                     "converted/compressed to fit each AI vendor's limits (losslessly where possible); " +
                     "files that cannot be decoded as an image fail the generation with a clear error. " +
-                    "At most 5 PDFs per message. The original upload is kept unchanged."
+                    "At most 5 PDFs per message; a server with PDF attachments switched off " +
+                    "(PDF_UPLOADS_ENABLED) answers 400 for a PDF. The original upload is kept unchanged."
             request {
                 body<CreateAttachmentUploadRequest> { required = true }
             }
             response {
                 code(HttpStatusCode.OK) { body<CreateAttachmentUploadResponse>() }
                 code(HttpStatusCode.BadRequest) {
-                    description = "Malformed request body, sizeBytes below 1, or a PDF over 10 MB"
+                    description = "Malformed request body, sizeBytes below 1, a PDF over 10 MB, " +
+                        "or a PDF while PDF attachments are switched off"
                     body<ErrorResponse>()
                 }
                 code(HttpStatusCode.Forbidden) {

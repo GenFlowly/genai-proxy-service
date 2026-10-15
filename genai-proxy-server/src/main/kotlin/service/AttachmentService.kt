@@ -19,7 +19,9 @@ import org.slf4j.LoggerFactory
 class AttachmentService(
     private val s3Provider: S3Provider,
     /** Resolves downloads inside a conversation (1.11); null only in tests that never use them. */
-    private val conversationService: ConversationService? = null
+    private val conversationService: ConversationService? = null,
+    /** AppConfig.pdfUploadsEnabled: when false, PDF uploads are refused (plan 4.4 release gate). */
+    private val pdfUploadsEnabled: Boolean = true
 ) {
     private val logger = LoggerFactory.getLogger("AttachmentService")
 
@@ -51,6 +53,7 @@ class AttachmentService(
 
         val effectiveMediaType = normalizeAttachmentMediaType(mediaType)
         val isPdf = effectiveMediaType == PDF_MEDIA_TYPE
+        require(!isPdf || pdfUploadsEnabled) { PDF_UPLOADS_DISABLED_MESSAGE }
         require(!isPdf || sizeBytes <= MAX_PDF_SIZE_BYTES) {
             "PDF attachments are limited to ${formatAttachmentSize(MAX_PDF_SIZE_BYTES)}; " +
                 "this file is ${formatAttachmentSize(sizeBytes)}"
@@ -112,5 +115,7 @@ class AttachmentService(
     companion object {
         /** S3 header carrying an object's tags on PUT; signed into the presigned URL. */
         const val TAGGING_HEADER = "x-amz-tagging"
+
+        const val PDF_UPLOADS_DISABLED_MESSAGE = "PDF attachments are not enabled on this server yet"
     }
 }

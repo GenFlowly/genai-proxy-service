@@ -33,7 +33,14 @@ data class AppConfig(
      * the stateless /retrieve stream. Off by default; dark-shipped behind
      * DURABLE_RUNS_ENABLED until the durable path is proven end-to-end.
      */
-    val durableRunsEnabled: Boolean
+    val durableRunsEnabled: Boolean,
+    /**
+     * Accept PDF attachments (plan 4.4): presigned uploads and generate
+     * requests. PDF_UPLOADS_ENABLED; when unset, on everywhere but production,
+     * where it stays off until the release gate holds there (customer purge,
+     * the kept-object claim and the pending-expiry rule live).
+     */
+    val pdfUploadsEnabled: Boolean = true
 ) {
     val isProduction: Boolean get() = environment == "production"
 
@@ -72,7 +79,13 @@ data class AppConfig(
             environment = System.getenv("APP_ENV")?.trim()?.lowercase()
                 ?.takeIf { it.isNotEmpty() } ?: "development",
             durableRunsEnabled = System.getenv("DURABLE_RUNS_ENABLED")?.trim()?.lowercase() == "true"
-        )
+        ).let { config ->
+            config.copy(pdfUploadsEnabled = pdfUploadsEnabled(System.getenv("PDF_UPLOADS_ENABLED"), config.isProduction))
+        }
+
+        /** PDF_UPLOADS_ENABLED: "true"/"false"; unset or blank means on except in production. */
+        internal fun pdfUploadsEnabled(raw: String?, isProduction: Boolean): Boolean =
+            raw?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let { it == "true" } ?: !isProduction
 
         private fun envList(name: String): Set<String> =
             System.getenv(name)
