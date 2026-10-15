@@ -45,6 +45,7 @@ def _ref(key=_KEY, name="report.pdf", attachment_id="doc-0001"):
 class _DocTestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         attachments._BYTES.clear()
+        attachments._DOCS.clear()
         self.store = pdf_fixtures.MemoryStore()
         patcher = mock.patch.object(attachments, "_store", return_value=self.store)
         patcher.start()
@@ -189,9 +190,16 @@ class DifficultDocumentTests(_DocTestCase):
         async def must_not_parse(*args, **kwargs):
             raise AssertionError("the sidecar should have been used")
 
+        attachments._DOCS.clear()  # a fresh process: the sidecar answers
         with mock.patch.object(pdf_worker, "parse_pdf", must_not_parse):
             again = await attachments.load(_ref())
         self.assertEqual(again.texts, doc.texts)
+
+        # Later calls in the same process need neither the parser nor S3.
+        self.store.objects.pop(key)
+        with mock.patch.object(pdf_worker, "parse_pdf", must_not_parse):
+            third = await attachments.load({**_ref(), "filename": "renamed.pdf"})
+        self.assertEqual((third.texts, third.filename), (doc.texts, "renamed.pdf"))
 
     async def test_parsing_stops_the_idle_render_child(self):
         await pdf_worker.render_pdf({"renderer": "x2p_v1", "markdown": "hi", "title": None, "filename": "a.pdf"})

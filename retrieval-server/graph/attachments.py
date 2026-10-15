@@ -20,6 +20,7 @@ the LLM node needs, without the server process ever parsing it:
 Logs carry ids, sizes and page counts only.
 """
 import asyncio
+import dataclasses
 import json
 import logging
 import time
@@ -40,6 +41,10 @@ SIDECAR_NAME = "text-v1.json"
 SCANNED_CHARS_PER_PAGE = 50
 
 _BYTES = _ByteBoundedLRU(32 * 1024 * 1024)
+# Parsed documents by stored key (keys never change content): every LLM call
+# of a conversation (each turn, each tool round) replays its earlier
+# documents, which would otherwise re-read the sidecar from S3 each time.
+_DOCS = _ByteBoundedLRU(32 * 1024 * 1024)
 
 
 class DocumentError(Exception):
@@ -129,8 +134,11 @@ def _from_sidecar(ref: dict, raw: bytes) -> Document | None:
 async def load(ref: dict, store=None) -> Document:
     """Page count, encryption verdict and per-page text of an uploaded PDF,
     from its sidecar or parsed in the worker child (then cached)."""
-    store = store or _store()
     filename = ref.get("filename") or "document.pdf"
+    cached_doc = _DOCS.get(ref["s3_key"])
+    if cached_doc is not None:
+        return dataclasses.replace(cached_doc[0], attachment_id=ref["attachment_id"], filename=filename)
+    store = store or _store()
     doc = Document(attachment_id=ref["attachment_id"], s3_key=ref["s3_key"], filename=filename)
     try:
         raw = await asyncio.to_thread(store.get, sidecar_key(ref["s3_key"]))
@@ -143,6 +151,7 @@ async def load(ref: dict, store=None) -> Document:
         cached = _from_sidecar(ref, raw)
         if cached is not None:
             pdf_metrics.PDF_SIDECAR.labels(result="hit").inc()
+            _remember(cached)
             return cached
     pdf_metrics.PDF_SIDECAR.labels(result="miss").inc()
 
@@ -181,7 +190,15 @@ async def load(ref: dict, store=None) -> Document:
         ref["attachment_id"], doc.status, doc.pages, len(data),
     )
     await _write_sidecar(store, ref, doc)
+    _remember(doc)
     return doc
+
+
+def _remember(doc: Document) -> None:
+    """Cache a parsed document whose verdict is final (ok, encrypted,
+    unreadable); transient failures are retried on the next call."""
+    if doc.status in ("ok", "encrypted", "unreadable"):
+        _DOCS.put(doc.s3_key, doc, 1024 + sum(len(t) for t in doc.texts))
 
 
 async def _write_sidecar(store, ref: dict, doc: Document) -> None:
