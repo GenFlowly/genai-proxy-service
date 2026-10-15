@@ -1,0 +1,254 @@
+From ef4f6e4cba7d6b62c3956832671794cd3b6b1fac Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 15 Oct 2026 16:03:12 +0000
+Subject: [PATCH 4/4] docs(retrieval-server): describe the Typst-only PDF
+ renderer
+
+development.md now covers the state after the xhtml2pdf removal: local
+setup without the x2p constraints, one-shot render children and their env
+vars, and the renderer section (PDF_RENDERER only, the obsolete canary and
+script-route variables, x2p_v1-pinned runs rendering with Typst); the
+letterhead section no longer says x2p_v1 ignores it. The Dockerfile's
+comments, the graph_tools README's dependency column, the fonts README and
+the fonts_cover and fetch_fonts docstrings no longer describe xhtml2pdf or
+the script route.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01R4WFJ4gcPzabKrzbRdXcQF
+---
+ retrieval-server/Dockerfile                   | 12 +--
+ retrieval-server/development.md               | 83 +++++++++++--------
+ retrieval-server/graph_tools/README.md        |  2 +-
+ retrieval-server/graph_tools/fonts/README.md  |  7 +-
+ .../graph_tools/tools/pdf_typst.py            |  8 +-
+ retrieval-server/scripts/fetch_fonts.py       |  7 +-
+ 6 files changed, 67 insertions(+), 52 deletions(-)
+
+diff --git a/retrieval-server/Dockerfile b/retrieval-server/Dockerfile
+index 9192b51..5cc14a6 100644
+--- a/retrieval-server/Dockerfile
++++ b/retrieval-server/Dockerfile
+@@ -4,8 +4,8 @@ WORKDIR /build
+ RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+     && rm -rf /var/lib/apt/lists/*
+ COPY requirements.txt constraints.txt ./
+-# constraints.txt pins the PDF-only dependency closure; CI installs with the
+-# same command so tests and the image resolve the same renderer.
++# CI installs with the same command, so tests and the image resolve alike
++# (constraints.txt has no pins since the xhtml2pdf renderer was removed).
+ RUN pip install --no-cache-dir --prefix=/install -c constraints.txt -r requirements.txt
+ 
+ ## Stage 1b: the Typst renderer's fonts (plan 5.1): npm tarballs pinned by
+@@ -39,10 +39,10 @@ COPY --from=fonts /fonts/graph_tools/fonts/*.ttf ./graph_tools/fonts/
+ COPY voice/ ./voice/
+ 
+ # Smoke render (plan 1.1): the PDF worker child must start, lock itself down
+-# (rlimits, seccomp), render with every renderer this image ships (x2p_v1,
+-# and Typst with the bundled fonts and vendored mitex: a mixed-script page
+-# with no missing glyph) and parse a PDF with PDFium, or the build fails here
+-# instead of every generate_pdf call failing in production.
++# (rlimits, seccomp), render with Typst, the only renderer, using the bundled
++# fonts and the vendored mitex (a mixed-script page with no missing glyph),
++# and extract and rasterize a rendered PDF with PDFium, or the build fails
++# here instead of every generate_pdf call failing in production.
+ RUN python -E -s -m graph.pdf_render_child --selftest
+ 
+ EXPOSE 5001
+diff --git a/retrieval-server/development.md b/retrieval-server/development.md
+index d329353..186d16f 100644
+--- a/retrieval-server/development.md
++++ b/retrieval-server/development.md
+@@ -455,65 +455,79 @@ shown.
+ 
+ ### Local setup
+ 
+-Install with the same constraints as CI and the image, then fetch the
+-Typst renderer's fonts (pinned by hash; the binaries are not committed):
++Install with the same command as CI and the image, then fetch the Typst
++renderer's fonts (pinned by hash; the binaries are not committed):
+ 
+ ```bash
+ pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
+ python scripts/fetch_fonts.py --cache-dir ~/.cache/genflowly-fonts
+ ```
+ 
+-`constraints.txt` pins the packages that exist only for the x2p_v1 stack
+-(xhtml2pdf, reportlab, Markdown and their closure); shared packages stay
+-unpinned. Without the fonts, Typst is reported as unavailable (the renderer
+-flag falls back to x2p_v1 with a warning) and the Typst render tests skip.
++The PDF stack is Typst and markdown-it-py (exact pins in `requirements.txt`)
++plus pypdfium2 for uploaded PDFs; pypdf is test-only (`requirements-dev.txt`).
++`constraints.txt` holds no pins since xhtml2pdf was removed (plan 5.2), but CI
++and the Dockerfile still pass it. A venv created before the removal keeps
++xhtml2pdf, reportlab, Markdown and their closure installed until it is
++recreated; nothing imports them. Without the fonts Typst falls back to its
++few embedded fonts (most scripts then render as boxes, counted as
++`missing_glyph`), the image's smoke step fails and the font-dependent tests
++skip.
+ 
+ ### Where rendering and parsing run
+ 
+ Nothing PDF-related runs in the server process. `graph/pdf_worker.py` runs
+ `generate_pdf.render_job` (and PDFium parsing of uploaded PDFs) in a child
+-process (`graph/pdf_render_child.py`) with an address-space cap, a per-job
+-CPU cap, no core dumps, a seccomp filter (no sockets, exec or ptrace), a
+-scrubbed environment, stderr on /dev/null and, when the server is root, the
+-`nobody` user. x2p_v1 keeps one warm child (recycled after 25 renders,
+-300 MB RSS, any failure or 10 idle minutes); Typst renders and PDF parsing
+-get a one-shot child, and the idle warm child is stopped first. Every child
+-takes the process-wide heavy slot shared with image normalization
+-(`graph/heavy_slot.py`); a job that waits 30 s gets "busy" instead.
++process (`graph/pdf_render_child.py`) with an address-space cap, a CPU cap,
++no core dumps, a seccomp filter (no sockets, exec or ptrace), a scrubbed
++environment, stderr on /dev/null and, when the server is root, the `nobody`
++user. Every render and every parse gets a fresh one-shot child that is
++killed and reaped when its job ends; Typst imports in about 0.04 s, so there
++is no warm child to keep or recycle, and a child that never receives its job
++exits after 60 s. Every child takes the process-wide heavy slot shared with
++image normalization (`graph/heavy_slot.py`); a job that waits 30 s gets
++"busy" instead.
+ 
+ | Env var | Default | Meaning |
+ |---|---|---|
+ | `PDF_QUEUE_WAIT_SECONDS` | 30 | wait for the heavy slot before "busy" |
+ | `PDF_RENDER_TIMEOUT_SECONDS` | 120 | wall clock per render, then the child is killed |
+-| `PDF_RENDER_RLIMIT_MB` / `PDF_TYPST_RLIMIT_MB` / `PDF_PARSE_RLIMIT_MB` | 400 / 512 / 512 | address-space caps |
++| `PDF_TYPST_RLIMIT_MB` / `PDF_PARSE_RLIMIT_MB` | 512 / 512 | address-space caps |
+ | `PDF_RENDER_CPU_SECONDS` | 115 | CPU seconds per job |
+-| `PDF_WORKER_RECYCLE_RENDERS` / `PDF_WORKER_RECYCLE_RSS_MB` / `PDF_WORKER_IDLE_SECONDS` | 25 / 300 / 600 | warm-child recycling |
+ | `PDF_PARSE_TIMEOUT_SECONDS` | 60 | wall clock per uploaded-PDF parse |
+ 
++`PDF_RENDER_RLIMIT_MB` and `PDF_WORKER_RECYCLE_RENDERS` /
++`PDF_WORKER_RECYCLE_RSS_MB` / `PDF_WORKER_IDLE_SECONDS` configured the warm
++xhtml2pdf child, which is gone; they are ignored.
++
+ The image build runs `python -E -s -m graph.pdf_render_child --selftest`:
+-it renders with every renderer the image ships and parses the result with
+-PDFium, so a broken child, font set or library fails the build.
++it renders a mixed-script page with Typst, the bundled fonts and the
++vendored mitex, renders a document through `render_job`, and extracts and
++rasterizes that document with PDFium, so a broken child, font set or library
++fails the build.
+ 
+ ### Choosing the renderer (plan 2.1 / 5.2)
+ 
+-The renderer is resolved once per turn (the `/retrieve` handler, `POST
+-/runs` before enqueue) and pinned on the request, so a durable run recovered
+-after a change keeps the renderer it started with.
++Typst is the only renderer. xhtml2pdf (`x2p_v1`) was removed in plan 5.2,
++after the canary (dev default, internal tenants, script route for everyone,
++production default), together with the 1.14 "shows as boxes" note, the
++status-emoji map and the 50-row table chunking that only it needed. The
++renderer is still resolved once per turn (the `/retrieve` handler, `POST
++/runs` before enqueue) and pinned on the request, which is where a future
++renderer would plug in. A request or durable run pinned to `x2p_v1` (enqueued
++before the removal deploy and recovered after it) renders with Typst instead
++of failing.
+ 
+ | Env var | Values | Meaning |
+ |---|---|---|
+-| `PDF_RENDERER` | `x2p_v1` (default), `typst` | default renderer |
+-| `PDF_RENDERER_CANARY` + `PDF_RENDERER_CANARY_CUSTOMERS` | renderer, comma-separated customer ids | canary for listed customers |
+-| `PDF_RENDERER_SCRIPT_ROUTE` | `typst` or unset | documents with letters x2p_v1 cannot draw go to Typst (when the bundled fonts cover them) |
+-| `PDF_TYPST_MAX_CHARS` / `PDF_TYPST_MAX_TABLE_ROWS` | 150000 / 1000 | Typst input caps; raise after calibration (e.g. 300000 / 2500) |
+-
+-Changing any of these changes Fly env, which restarts the single machine
+-and triggers DBOS recovery: flip at a quiet hour and check the recovery
+-panel afterwards. The canary stages are: dev default, internal tenants
+-(canary list, at least 7 days), script route for everyone (at least 14
+-days), production default, then removal of xhtml2pdf. Compare the
+-`pdf_render_*` metrics by renderer at each stage. When xhtml2pdf is finally
+-removed from the image, runs pinned to `x2p_v1` render with Typst.
++| `PDF_RENDERER` | `typst` (default) | the renderer; any other value, `x2p_v1` included, is ignored with one warning per process |
++| `PDF_TYPST_MAX_CHARS` / `PDF_TYPST_MAX_TABLE_ROWS` | 150000 / 1000 | input caps; raise after calibration (e.g. 300000 / 2500) |
++
++`PDF_RENDERER_CANARY`, `PDF_RENDERER_CANARY_CUSTOMERS` and
++`PDF_RENDERER_SCRIPT_ROUTE` are obsolete: while still set they are ignored
++with one warning per process, so drop them from the Fly env with the next
++change there. Changing Fly env restarts the single machine and triggers DBOS
++recovery: change it at a quiet hour and check the recovery panel afterwards.
++The `pdf_render_*` metrics now carry `renderer="typst"` only.
+ 
+ ### Files on later turns
+ 
+@@ -529,8 +543,7 @@ rest.
+ 
+ ### Locale, page size and letterhead (plan 6.1 / 6.2)
+ 
+-Typst only (x2p_v1 ignores all of this). The proxy sends the browser's
+-`Accept-Language` as `raw_data.locale`: `en-US` and `en-CA` default to Letter,
++The proxy sends the browser's `Accept-Language` as `raw_data.locale`: `en-US` and `en-CA` default to Letter,
+ everything else to A4, and the footer's page label is translated. A
+ `TOOL_EXECUTOR` node can carry per-agent settings:
+ 
+diff --git a/retrieval-server/graph_tools/README.md b/retrieval-server/graph_tools/README.md
+index d718486..4316e32 100644
+--- a/retrieval-server/graph_tools/README.md
++++ b/retrieval-server/graph_tools/README.md
+@@ -42,7 +42,7 @@ Code we ship. Customer-independent behaviour; only their credentials differ.
+ 
+ | Tool | Description | Credential | Extra deps |
+ |---|---|---|---|
+-| `generate_pdf` | Render markdown into a styled PDF artifact | none | `markdown`, `xhtml2pdf` |
++| `generate_pdf` | Render markdown into a styled PDF artifact (Typst) | none | `typst`, `markdown-it-py`, `mdit-py-plugins`, `linkify-it-py` |
+ | `web_search` | Search the web via Tavily | `WEB_SEARCH` | `httpx` |
+ 
+ ## Providers: tools that are records, not code
+diff --git a/retrieval-server/graph_tools/fonts/README.md b/retrieval-server/graph_tools/fonts/README.md
+index 503ec29..66da98f 100644
+--- a/retrieval-server/graph_tools/fonts/README.md
++++ b/retrieval-server/graph_tools/fonts/README.md
+@@ -13,9 +13,10 @@ this README.
+ `coverage.json` is the merged list of code point ranges the bundled fonts map
+ to a glyph (read from each font's `cmap` table), written by `fetch_fonts.py`
+ and checked by `fetch_fonts.py --check`. `pdf_typst.fonts_cover(chars)` and
+-`pdf_typst.uncovered_characters(text)` read it, so the server can decide
+-whether every script in a document has a bundled font without importing typst
+-or loading a font file. Regenerate it whenever the lock changes.
++`pdf_typst.uncovered_characters(text)` read it, so any process can tell which
++characters of a document no bundled font draws (the renderer counts them as
++`missing_glyph`) without importing typst or loading a font file. Regenerate
++it whenever the lock changes.
+ 
+ ## Fetch
+ 
+diff --git a/retrieval-server/graph_tools/tools/pdf_typst.py b/retrieval-server/graph_tools/tools/pdf_typst.py
+index c15e5c3..44c7bd5 100644
+--- a/retrieval-server/graph_tools/tools/pdf_typst.py
++++ b/retrieval-server/graph_tools/tools/pdf_typst.py
+@@ -284,10 +284,10 @@ def uncovered_characters(text: str, font_dir: str | None = None) -> set[str]:
+ 
+ 
+ def fonts_cover(chars, font_dir: str | None = None) -> bool:
+-    """True when every character in `chars` (an iterable of characters, e.g.
+-    the letters x2p_v1 cannot draw) has a glyph in a bundled font. Intended
+-    for the 2.1 script route in the server process: no typst import and no
+-    font file is read when coverage.json is present."""
++    """True when every character in `chars` (an iterable of characters or
++    strings) has a glyph in a bundled font. Cheap enough for the server
++    process: no typst import, and no font file is read when coverage.json is
++    present."""
+     cov = _load_coverage(font_dir)
+     for ch in chars:
+         for c in ch:
+diff --git a/retrieval-server/scripts/fetch_fonts.py b/retrieval-server/scripts/fetch_fonts.py
+index c97533c..a61e145 100644
+--- a/retrieval-server/scripts/fetch_fonts.py
++++ b/retrieval-server/scripts/fetch_fonts.py
+@@ -27,9 +27,10 @@ result must match `output_sha256`. Noto Color Emoji uses this to drop its 20 MB
+ 
+ After fetching, the script (re)writes graph_tools/fonts/coverage.json: the
+ merged code point ranges that the bundled fonts map to a glyph (read from each
+-font's cmap table). The server reads it through pdf_typst.fonts_cover() to
+-decide whether every script in a document has a bundled font, without loading
+-any font or importing typst. The file is committed; `--check` verifies it.
++font's cmap table). pdf_typst reads it (uncovered_characters(),
++fonts_cover()) to tell which characters of a document no bundled font draws,
++without loading any font or importing typst. The file is committed; `--check`
++verifies it.
+ """
+ from __future__ import annotations
+ 
+-- 
+2.43.0
+
