@@ -79,6 +79,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
 
+      # Stack assertions (attachments lifecycle rules, the IAM split, the
+      # retention tables and indexes) before anything deploys
+      - name: Test CDK stacks
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: npm test -- --ci
+
       - name: Deploy KMS stack
         working-directory: ${{ env.CDK_APP_PATH }}
         run: cdk deploy gen-ai-proxy-service-KmsStack --require-approval never
@@ -106,9 +112,14 @@ jobs:
         run: |
           APP_NAME="genai-retrieval-server-${{ env.STAGE }}"
           
-          # Fetch AWS credentials from CDK outputs (now required since retrieval-server queries DynamoDB)
-          FLY_AWS_ACCESS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsAccessKeyId'].OutputValue" --output text)
-          FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsSecretAccessKey'].OutputValue" --output text)
+          # The retrieval server's own IAM user (FlyioIamStack outputs): DynamoDB,
+          # KMS, and attachments read/write/tag, but no S3 delete of any kind
+          FLY_AWS_ACCESS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='RetrievalAwsAccessKeyId'].OutputValue" --output text)
+          FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='RetrievalAwsSecretAccessKey'].OutputValue" --output text)
+          if [ -z "$FLY_AWS_ACCESS_KEY_ID" ] || [ "$FLY_AWS_ACCESS_KEY_ID" = "None" ] || [ -z "$FLY_AWS_SECRET_ACCESS_KEY" ] || [ "$FLY_AWS_SECRET_ACCESS_KEY" = "None" ]; then
+            echo "Failed to resolve the retrieval server's AWS credentials from gen-ai-proxy-service-FlyioIamStack outputs" >&2
+            exit 1
+          fi
           ATTACHMENTS_BUCKET=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-S3Stack --query "Stacks[0].Outputs[?OutputKey=='AttachmentsBucketName'].OutputValue" --output text)
 
           # Set secrets and deploy
@@ -164,13 +175,24 @@ jobs:
         working-directory: ${{ env.SERVICE_APP_PATH }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Auth0 Management API machine-to-machine app (admin account deletion).
+          # Optional: unset, a deletion keeps the Auth0 login and the vectors and
+          # records a warning on the job.
+          AUTH0_MGMT_DOMAIN: ${{ secrets.AUTH0_MGMT_DOMAIN }}
+          AUTH0_MGMT_CLIENT_ID: ${{ secrets.AUTH0_MGMT_CLIENT_ID }}
+          AUTH0_MGMT_CLIENT_SECRET: ${{ secrets.AUTH0_MGMT_CLIENT_SECRET }}
         run: |
           APP_NAME="genai-proxy-server-${{ env.STAGE }}"
           RETRIEVAL_APP="genai-retrieval-server-${{ env.STAGE }}"
-          
-          # Fetch AWS credentials and KMS key from CDK outputs using distinct variable names
-          FLY_AWS_ACCESS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsAccessKeyId'].OutputValue" --output text)
-          FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsSecretAccessKey'].OutputValue" --output text)
+
+          # The proxy server's IAM user (FlyioIamStack outputs; the user the two
+          # apps used to share) and the KMS key, from CDK outputs
+          FLY_AWS_ACCESS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='ProxyAwsAccessKeyId'].OutputValue" --output text)
+          FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='ProxyAwsSecretAccessKey'].OutputValue" --output text)
+          if [ -z "$FLY_AWS_ACCESS_KEY_ID" ] || [ "$FLY_AWS_ACCESS_KEY_ID" = "None" ] || [ -z "$FLY_AWS_SECRET_ACCESS_KEY" ] || [ "$FLY_AWS_SECRET_ACCESS_KEY" = "None" ]; then
+            echo "Failed to resolve the proxy server's AWS credentials from gen-ai-proxy-service-FlyioIamStack outputs" >&2
+            exit 1
+          fi
           KMS_KEY_ID=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-KmsStack --query "Stacks[0].Outputs[?OutputKey=='KmsKeyArnOutput'].OutputValue" --output text)
           # The API URL is a plain stack output (no CloudFormation export), so it
           # must come from describe-stacks — list-exports returned empty, which
@@ -184,5 +206,10 @@ jobs:
 
           # Set secrets and deploy
           flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_SPA_CLIENT_ID=${{ env.AUTH0_SPA_CLIENT_ID }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.flycast" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET ADMIN_EMAILS="${{ env.ADMIN_EMAILS }}" AUTH0_REACT_APP_CLIENT_IDS="${{ env.AUTH0_REACT_APP_CLIENT_IDS }}" AUTH0_ADMIN_PANEL_CLIENT_IDS="${{ env.AUTH0_ADMIN_PANEL_CLIENT_IDS }}"
+
+          # Staged so the deploy below picks them up
+          if [ -n "$AUTH0_MGMT_DOMAIN" ] && [ -n "$AUTH0_MGMT_CLIENT_ID" ] && [ -n "$AUTH0_MGMT_CLIENT_SECRET" ]; then
+            flyctl secrets set --app $APP_NAME --stage AUTH0_MGMT_DOMAIN="$AUTH0_MGMT_DOMAIN" AUTH0_MGMT_CLIENT_ID="$AUTH0_MGMT_CLIENT_ID" AUTH0_MGMT_CLIENT_SECRET="$AUTH0_MGMT_CLIENT_SECRET"
+          fi
 
           flyctl deploy --config fly.production.toml --app $APP_NAME --yes
