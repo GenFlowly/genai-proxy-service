@@ -1,0 +1,308 @@
+{
+  "schema": 1,
+  "registry": "https://registry.npmjs.org",
+  "packages": [
+    {
+      "name": "@expo-google-fonts/noto-sans",
+      "version": "0.4.2",
+      "integrity": "sha512-zYD8G2ijWLxqmquoQgghNh/x9p0yxWwArD0oxO1oXY1qx5vOd4t0Kbhnu/Cx8RTy08OgA8RtxuULZFaXwVPnPw==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSans_400Regular.ttf",
+          "sha256": "fe8c022f48d8dd29f17b744d16f9346f4357e16f7d4f7be58b000ae7c291b614"
+        },
+        {
+          "path": "package/700Bold/NotoSans_700Bold.ttf",
+          "sha256": "13a813c49624ae3ba3c5c6e72c5ebffc4b9e1e6ea32f421c04069b037c6ad431"
+        },
+        {
+          "path": "package/400Regular_Italic/NotoSans_400Regular_Italic.ttf",
+          "sha256": "feb3e57888ce3acb604f270c278cfb304c674306518771619ddbdefca42a066b"
+        },
+        {
+          "path": "package/700Bold_Italic/NotoSans_700Bold_Italic.ttf",
+          "sha256": "7e34616e092593c340449baf9a259075a054c6419511ccf21ff0d83a1c9dd0d0"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-mono",
+      "version": "0.4.2",
+      "integrity": "sha512-Am5TeZeLlqPiDbWH71OprS/LZTuWwvpZ0cEObA9I3/FO2uhZEHgbp+fm/3aDPbEiMNr7xN8YpUAnuyBGuEeHoQ==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansMono_400Regular.ttf",
+          "sha256": "11b5d661e57865bce89d3f103a654cfa4faf9347abebac252e30742be1e657b2"
+        },
+        {
+          "path": "package/700Bold/NotoSansMono_700Bold.ttf",
+          "sha256": "c13b63c28f97181761213a0ba8fdb5d887c6d3855098937907c76b3b6efc1566"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-symbols-2",
+      "version": "0.4.1",
+      "integrity": "sha512-jFymG5s4OLlXpy9E9FQvSXpSnf43BIYcJiPXEHSw6LFNvbahkjmUWb/cj4vsX/KdUksGLTPbjB9iRuu8L3yJ8A==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansSymbols2_400Regular.ttf",
+          "sha256": "f67f40c65f929f029827ab37cfdc4897dfd9ae3c28d9e98ba46e0d52e39eb97e"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-math",
+      "version": "0.4.2",
+      "integrity": "sha512-Kgj0kKibznTLYcbpR8Tk2ybr76uMOyrlyoP5F9G+0UiJzAMA4zG/XIlrgXKzfFGERhA0Rc3vbwDeeTxwXPlaYg==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansMath_400Regular.ttf",
+          "sha256": "b4a1dfdbfa13b4755e5eac20cb25c1d17ed5a745ceb89639595e8cf45a2b1e07"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-color-emoji",
+      "version": "0.4.6",
+      "integrity": "sha512-2pAakFka8eSDCHB5d6NNp/7WrOZAiVYcycOqAbccPd8P8zaWUVfQ0N3y84nNPmhCQT9qzM9bpDi6cgMu6fRKEg==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoColorEmoji_400Regular.ttf",
+          "sha256": "7fb39738ab18f10612d6f4595e2e8e47a0afdf34738460442d99cd0c344a4d90",
+          "drop_tables": [
+            "SVG "
+          ],
+          "dest": "NotoColorEmoji_400Regular-COLRv1.ttf",
+          "output_sha256": "3762e058da22cd39b1fd3dd0bfb34866639c6bb722c1cbf4060684e59ca185f0"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-arabic",
+      "version": "0.4.3",
+      "integrity": "sha512-YvtxyuegxPegu2g5urXJ+gQxRp8i798nQswTmEjwXOWR/fqy0Gvey6h5IoNRBrc43SxRxPezqCiR9ivpfPAXSg==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansArabic_400Regular.ttf",
+          "sha256": "252629ca0e87b6233851249b8cbf7b43445211a8caf199f1b306a19202251508"
+        },
+        {
+          "path": "package/700Bold/NotoSansArabic_700Bold.ttf",
+          "sha256": "a86a704ff8b315082f4859b04c2f8f746f4cefb14553ef10505f143e0d4829d3"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-hebrew",
+      "version": "0.4.1",
+      "integrity": "sha512-NR3vP6GT/hSINLrk4JHJBQnuzh/C1mlMrphNlI2dQaO53a3oTjSRoG4JyYb1B6bHadjsGh0wPZbT4kMJBKjT/w==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansHebrew_400Regular.ttf",
+          "sha256": "e0ee753f09733337b9236221018d4bf71fd6d06c87dd76bbc83120514bc55911"
+        },
+        {
+          "path": "package/700Bold/NotoSansHebrew_700Bold.ttf",
+          "sha256": "8010b087f33f152e25aef020e68cb5568d6f8deebb6dde8f60d655196e59ebde"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-devanagari",
+      "version": "0.4.1",
+      "integrity": "sha512-26boYPNKGP1r4R5MxsMAY/zCQOwiXLOJzX8sh1a2oEWyQurQsyniaCv4992c+9jjwshEEt2NNVv5GcnyzaL7QQ==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansDevanagari_400Regular.ttf",
+          "sha256": "084a94d89eb54aafb93a056e15425c34fd859f6342875165d304837b3bcfc2d2"
+        },
+        {
+          "path": "package/700Bold/NotoSansDevanagari_700Bold.ttf",
+          "sha256": "67f1ec9e2ac30b261090e32953b2df0adf6c942ab26ac47efb490fa7315bddab"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-bengali",
+      "version": "0.4.4",
+      "integrity": "sha512-Ya58tLTEdP4P5EF3ZXTM829/g57mbfW8OrD16MMZr2sC3nIKItl/3J9tZlk1nrtqfFGzIgxb+zt/hLjAaTAQgQ==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansBengali_400Regular.ttf",
+          "sha256": "6826d9667972f0f96e48c46f7a24e70afe97205032e6295cfb1f13fbbb8b90a3"
+        },
+        {
+          "path": "package/700Bold/NotoSansBengali_700Bold.ttf",
+          "sha256": "3a44a4cf2c4f79c3ead8f52dffd5b3a66f0b2483792d66bad81e1a51e888bfd6"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-gurmukhi",
+      "version": "0.4.1",
+      "integrity": "sha512-yAaWoUawvVD/50HnZWN1lABWOy9eNcbS3i9bRjoXwEueaoI7E2dTd7liA2BcJ/uTkFUgYWd5QOjIfoCXnTo44Q==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansGurmukhi_400Regular.ttf",
+          "sha256": "2b0fbe8d4cc2a18aa08c6f21d3924423c113fb7ec6d786a77c30cf1d3153c4c7"
+        },
+        {
+          "path": "package/700Bold/NotoSansGurmukhi_700Bold.ttf",
+          "sha256": "49b4d13ee80c9ba8ae008948b43dc53f200f619d8bc206cacaddb6b781c49625"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-gujarati",
+      "version": "0.4.2",
+      "integrity": "sha512-KtJySkho6C2Yf28dZx1SYwAs671hncIpBpIlTDzxLv7i7iOFJ2p74nzyP23aY04HUm28ELX7r86Dmui/qpLpMg==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansGujarati_400Regular.ttf",
+          "sha256": "7cc0f340be8ef8b63f92181fd5576a4b19631059fd6576c6fd5fcd40f1543610"
+        },
+        {
+          "path": "package/700Bold/NotoSansGujarati_700Bold.ttf",
+          "sha256": "d5aee2fbe1dec84e8e54ec72dfda1d138f1401ddf18f06bbd11ea8b64f8b45b2"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-oriya",
+      "version": "0.4.2",
+      "integrity": "sha512-sKGcpny4wTSs3ooReAN2Nrore5tkVtEdgBkDN2qsxubpY2UBmtrE+DOQSYLq0zqkiH5rtIuQJwr0GcLXH3DbaQ==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansOriya_400Regular.ttf",
+          "sha256": "ba383a603869b5874d88a51ccd9aa526aefd18130c497bae6ce25db09507dd6e"
+        },
+        {
+          "path": "package/700Bold/NotoSansOriya_700Bold.ttf",
+          "sha256": "19416e5e9f4bcf208960e43ba1e3c41564de632d06001c4a176bde0e8ac923dd"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-tamil",
+      "version": "0.4.3",
+      "integrity": "sha512-1TBkwJ8gJPnt1UIC+um987hYb/QmRDATGKbtwDW6dajISxr8b7+EVjwMESMJaQxfNS8VWE4IBT2jYmpBGw4D+w==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansTamil_400Regular.ttf",
+          "sha256": "f26d8b66bf6f38dd9af6326a52188fa1a8a0b9b2905c4bd7e07c865f65a85d79"
+        },
+        {
+          "path": "package/700Bold/NotoSansTamil_700Bold.ttf",
+          "sha256": "c4abfe6f1291568247afb568fe6a666584f9bf7c91f7e163fd628abb368af316"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-telugu",
+      "version": "0.4.2",
+      "integrity": "sha512-t5wZI1/2u69ugVr2v9P4Qqt9BHHwDQ/26+1p9MLrwf1lNSW64Mw16AIRzGWIOcRMd0drYWeZzZO1DqoFts3KiA==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansTelugu_400Regular.ttf",
+          "sha256": "7fcef235380f945d4a97fdfec030952afab6907004cfa37ed664fed8d4962eac"
+        },
+        {
+          "path": "package/700Bold/NotoSansTelugu_700Bold.ttf",
+          "sha256": "25f2402bfa537c74c5c555452ad2a3289caf5925efeabc116ac4b90469b42a6a"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-kannada",
+      "version": "0.4.3",
+      "integrity": "sha512-nFDeSKVlpCJpd4x4E+W5WwfJVJ5fGN5pa/szOvE9GotDEYTPuhd8SzKYsQ4F2PVbzXRT21jMXxJ70tKPvItuGA==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansKannada_400Regular.ttf",
+          "sha256": "40e8188c98e3913aae2241d570b179fdc29fd90ecb6b5dc4376298bcbe45c38b"
+        },
+        {
+          "path": "package/700Bold/NotoSansKannada_700Bold.ttf",
+          "sha256": "bba4d58d9d5a58834c4bca50cf3b00cc230b05341566cf08961e632ef5c6ab75"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-malayalam",
+      "version": "0.4.2",
+      "integrity": "sha512-TZfS4nKhsQftD4nJr5R4fOO7EKe0L5RAscmYehignHr5JJVzW49Nxom0w0rnmHDU2iV3zWIOeyx3rN3bkHGI0A==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansMalayalam_400Regular.ttf",
+          "sha256": "68cbfeac7177700d87671f2a3bdb3db70fa26016e41cdac24e20877bf3736485"
+        },
+        {
+          "path": "package/700Bold/NotoSansMalayalam_700Bold.ttf",
+          "sha256": "3b717223c3d06ed724acce05d87ac40bb63d4bec5fdba282cbecc5b1f57c05da"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-thai",
+      "version": "0.4.2",
+      "integrity": "sha512-PGBBBDGfJJ/5y2hNweLBZWD4YmVT4uOO4chsOPXyl0TktaBJamDKVKv/WbGiDTeBGdkegLiytsWo+lhnkHP5qA==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansThai_400Regular.ttf",
+          "sha256": "9acb585d8662ca4ed1b1cf5889dfa1393f8555103b3986e1ea1e3af4faef70bd"
+        },
+        {
+          "path": "package/700Bold/NotoSansThai_700Bold.ttf",
+          "sha256": "0be544f347b3ab6382bdc2b555a783727a4858a3dc140670406924670967d916"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-sc",
+      "version": "0.4.3",
+      "integrity": "sha512-9rAwdFTFHbO/u6Cs0gj2jZbW74TGIiaFNQnXYH2s5wA1bzVkwbaviL4t8YUV642eGYjg86eH6DkAEQmfNHDncQ==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansSC_400Regular.ttf",
+          "sha256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16"
+        },
+        {
+          "path": "package/700Bold/NotoSansSC_700Bold.ttf",
+          "sha256": "9a38ae0ab28cd5a256f9ea8e00dedc688aac17f7915fcb000572990afa956b96"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-jp",
+      "version": "0.4.3",
+      "integrity": "sha512-Fl+Z6vtD24HFAYsvzB0S9Nery1ly16B9PesdY0wBd+wEHAvkNglnkTUspU0HqGOubkmoa8zusJrKv6vDx1o70A==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansJP_400Regular.ttf",
+          "sha256": "d930d5d52d15231c283089760f84584272ad5e37e14607ba0d19c798e7a9caec"
+        },
+        {
+          "path": "package/700Bold/NotoSansJP_700Bold.ttf",
+          "sha256": "c5b7b9d6a6eb682b0d4e6bbb38509575fd2759a28f147daa74714d1359a7909e"
+        }
+      ]
+    },
+    {
+      "name": "@expo-google-fonts/noto-sans-kr",
+      "version": "0.4.3",
+      "integrity": "sha512-EVS/uJPcf1TgJtjmQmrFr0oGdcl7ml09CSu0E/AyGzR0UfzdR2pBbzWWPsnuzZiGUl643ODYwYiXK5+B+fLjhQ==",
+      "files": [
+        {
+          "path": "package/400Regular/NotoSansKR_400Regular.ttf",
+          "sha256": "8cbc9b353bb9ce848fd69bb6a507319dfacc659cf5fd643db5d88f3c4970e1dd"
+        },
+        {
+          "path": "package/700Bold/NotoSansKR_700Bold.ttf",
+          "sha256": "4ffa20c272ae6d689f7c8d34ff9c8039a326e9c334d9fc8852b2a7396227d077"
+        }
+      ]
+    }
+  ],
+  "note": "Fonts for graph_tools/tools/pdf_typst.py. Bump a package: set version and integrity (npm view <name>@<version> dist.integrity), then refresh each file's sha256 (and output_sha256 for rewritten files). See README.md."
+}

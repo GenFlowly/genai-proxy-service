@@ -1,0 +1,6 @@
+# Font binaries are fetched at build time by scripts/fetch_fonts.py (pinned in
+# fonts.lock.json); only the lock, the license text and the README are committed.
+*.ttf
+*.otf
+*.ttc
+.fetch-*
