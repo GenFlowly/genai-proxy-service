@@ -15,22 +15,38 @@ import {
 export const UNKNOWN_ATTACHMENT_MEDIA_TYPE = 'application/octet-stream'
 
 /**
- * Uploads an image for use as a message attachment:
+ * The presign response as the proxy sends it: the library's
+ * CreateAttachmentUploadResponse plus the headers the PUT was signed with
+ * (declared here until the installed component-library version has them).
+ */
+type PresignResponse = CreateAttachmentUploadResponse & {
+    requiredHeaders?: Record<string, string>
+}
+
+/**
+ * Uploads a file (an image, or a PDF where the composer accepts them) for
+ * use as a message attachment:
  * 1. asks the proxy server for a presigned S3 PUT URL, declaring the file's
- *    media type (or application/octet-stream when the browser reports none)
- * 2. PUTs the raw, unmodified file bytes straight to S3 (no proxy hop)
- * Returns the AttachmentRef to include in the generate request.
+ *    name, size and media type (application/octet-stream when the browser
+ *    reports none), and asking for the retention tag (`tagging`): an upload
+ *    that no message ends up linking expires instead of staying forever
+ * 2. PUTs the raw, unmodified file bytes straight to S3 (no proxy hop), with
+ *    every header the presigned PUT was signed with (`requiredHeaders`, e.g.
+ *    x-amz-tagging) — S3 rejects the signature without them
+ * Returns the AttachmentRef to include in the generate request, with the
+ * file's name and size for display.
  *
- * No image-type or size restriction is applied here or by the proxy: the
- * proxy only normalizes the declared media type (blank, malformed, non-image
- * or SVG values become application/octet-stream) and returns that *effective*
- * type, which is bound
- * into the presigned PUT signature, so the PUT must use it rather than
- * `file.type`. The retrieval-server sniffs the real format from the bytes and
- * converts/compresses losslessly for the LLM vendors; the original object in
- * S3 is never modified.
+ * No type allowlist or size cap applies to images here or in the proxy: the
+ * proxy only normalizes the declared media type (blank, malformed or
+ * scriptable values become application/octet-stream; images and PDFs are
+ * kept) and returns that *effective* type, which is bound into the presigned
+ * PUT signature, so the PUT must use it rather than `file.type`. PDFs are
+ * limited to 10 MB (checked by the composer and again at presign). The
+ * retrieval-server sniffs the real format from the bytes; the original
+ * object in S3 is never modified.
  */
 export async function uploadAttachment(token: string, file: File): Promise<AttachmentRef> {
+    const fileName = file.name || (file.type === 'application/pdf' ? 'document.pdf' : 'pasted-image')
     const presignResponse = await fetchWithRetry(endpoints.attachments, {
         method: HttpMethod.POST,
         headers: {
@@ -38,9 +54,10 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
             Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-            fileName: file.name || 'pasted-image',
+            fileName,
             mediaType: file.type || UNKNOWN_ATTACHMENT_MEDIA_TYPE,
             sizeBytes: file.size,
+            tagging: true,
         }),
     })
 
@@ -49,7 +66,7 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
         throw new Error(body?.error || `Attachment presign failed: ${presignResponse.status}`)
     }
 
-    const presign: CreateAttachmentUploadResponse = await presignResponse.json()
+    const presign: PresignResponse = await presignResponse.json()
 
     const uploadResponse = await fetchWithRetry(presign.uploadUrl, {
         method: HttpMethod.PUT,
@@ -57,6 +74,8 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
             // The server's effective (normalized) type — it is bound into the
             // presigned signature and may differ from file.type
             'Content-Type': presign.mediaType,
+            // Every other signed header (e.g. x-amz-tagging: retention=pending)
+            ...(presign.requiredHeaders ?? {}),
         },
         body: file,
     })
@@ -69,6 +88,8 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
         attachmentId: presign.attachmentId,
         s3Key: presign.s3Key,
         mediaType: presign.mediaType,
+        filename: fileName,
+        sizeBytes: file.size,
     }
 }
 

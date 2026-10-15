@@ -38,7 +38,7 @@ describe('attachmentService', () => {
                     'Content-Type': 'application/json',
                     Authorization: 'Bearer token-1',
                 },
-                body: JSON.stringify({ fileName: 'shot.png', mediaType: 'image/png', sizeBytes: 1234 }),
+                body: JSON.stringify({ fileName: 'shot.png', mediaType: 'image/png', sizeBytes: 1234, tagging: true }),
             })
             expect(mockFetchWithRetry).toHaveBeenNthCalledWith(2, presign.uploadUrl, {
                 method: 'PUT',
@@ -49,11 +49,13 @@ describe('attachmentService', () => {
                 attachmentId: 'att-1',
                 s3Key: 'customers/CU1/attachments/att-1',
                 mediaType: 'image/png',
+                filename: 'shot.png',
+                sizeBytes: 1234,
             })
         })
 
         // Presign + successful PUT; returns the parsed POST body and the PUT init
-        const uploadWithPresign = async (file: File, presign: Record<string, string>) => {
+        const uploadWithPresign = async (file: File, presign: Record<string, unknown>) => {
             mockFetchWithRetry
                 .mockResolvedValueOnce({ ok: true, json: async () => presign })
                 .mockResolvedValueOnce({ ok: true })
@@ -85,6 +87,7 @@ describe('attachmentService', () => {
                 fileName: 'IMG_0001.HEIC',
                 mediaType: 'application/octet-stream',
                 sizeBytes: 3 * 1024 * 1024,
+                tagging: true,
             })
             expect(putInit).toEqual({
                 method: 'PUT',
@@ -95,6 +98,8 @@ describe('attachmentService', () => {
                 attachmentId: 'att-2',
                 s3Key: 'customers/CU1/attachments/att-2',
                 mediaType: 'application/octet-stream',
+                filename: 'IMG_0001.HEIC',
+                sizeBytes: 3 * 1024 * 1024,
             })
         })
 
@@ -110,7 +115,7 @@ describe('attachmentService', () => {
 
             const { ref, presignBody, putInit } = await uploadWithPresign(file, presign)
 
-            expect(presignBody).toEqual({ fileName: 'IMG_0002.heic', mediaType: 'image/heic', sizeBytes: fortyMb })
+            expect(presignBody).toEqual({ fileName: 'IMG_0002.heic', mediaType: 'image/heic', sizeBytes: fortyMb, tagging: true })
             expect(putInit.headers).toEqual({ 'Content-Type': 'image/heic' })
             // The exact File object is uploaded — the bytes are never re-encoded client-side
             expect(putInit.body).toBe(file)
@@ -148,9 +153,87 @@ describe('attachmentService', () => {
                 uploadUrl: 'https://bucket.s3.amazonaws.com/signed-5',
             }
 
-            const { presignBody } = await uploadWithPresign(makeFile('', 'image/png', 10), presign)
+            const { presignBody, ref } = await uploadWithPresign(makeFile('', 'image/png', 10), presign)
 
             expect(presignBody.fileName).toBe('pasted-image')
+            expect(ref.filename).toBe('pasted-image')
+        })
+
+        test('asks for the retention tag and sends every signed header on the PUT', async () => {
+            const presign = {
+                attachmentId: 'att-6',
+                s3Key: 'customers/CU1/attachments/att-6',
+                mediaType: 'image/png',
+                uploadUrl: 'https://bucket.s3.amazonaws.com/signed-6',
+                requiredHeaders: {
+                    'x-amz-tagging': 'retention=pending',
+                    'x-amz-meta-origin': 'upload',
+                },
+            }
+
+            const { presignBody, putInit } = await uploadWithPresign(makeFile(), presign)
+
+            expect(presignBody.tagging).toBe(true)
+            expect(putInit.headers).toEqual({
+                'Content-Type': 'image/png',
+                'x-amz-tagging': 'retention=pending',
+                'x-amz-meta-origin': 'upload',
+            })
+        })
+
+        test('a signed Content-Type in requiredHeaders wins over the default one', async () => {
+            const presign = {
+                attachmentId: 'att-7',
+                s3Key: 'k',
+                mediaType: 'image/png',
+                uploadUrl: 'https://bucket.s3.amazonaws.com/signed-7',
+                requiredHeaders: { 'Content-Type': 'image/png; charset=binary' },
+            }
+            const { putInit } = await uploadWithPresign(makeFile(), presign)
+            expect(putInit.headers).toEqual({ 'Content-Type': 'image/png; charset=binary' })
+        })
+
+        test('uploads a PDF with its tag, name and size', async () => {
+            const presign = {
+                attachmentId: 'doc-1',
+                s3Key: 'customers/CU1/attachments/doc-1',
+                mediaType: 'application/pdf',
+                uploadUrl: 'https://bucket.s3.amazonaws.com/signed-doc',
+                requiredHeaders: { 'x-amz-tagging': 'retention=pending' },
+            }
+            const pdf = makeFile('contract.pdf', 'application/pdf', 2 * 1024 * 1024)
+
+            const { ref, presignBody, putInit } = await uploadWithPresign(pdf, presign)
+
+            expect(presignBody).toEqual({
+                fileName: 'contract.pdf',
+                mediaType: 'application/pdf',
+                sizeBytes: 2 * 1024 * 1024,
+                tagging: true,
+            })
+            expect(putInit.headers).toEqual({
+                'Content-Type': 'application/pdf',
+                'x-amz-tagging': 'retention=pending',
+            })
+            expect(ref).toEqual({
+                attachmentId: 'doc-1',
+                s3Key: 'customers/CU1/attachments/doc-1',
+                mediaType: 'application/pdf',
+                filename: 'contract.pdf',
+                sizeBytes: 2 * 1024 * 1024,
+            })
+        })
+
+        test('an unnamed (pasted) PDF is named document.pdf', async () => {
+            const presign = {
+                attachmentId: 'doc-2',
+                s3Key: 'k',
+                mediaType: 'application/pdf',
+                uploadUrl: 'https://bucket.s3.amazonaws.com/signed-doc-2',
+            }
+            const { presignBody, ref } = await uploadWithPresign(makeFile('', 'application/pdf', 100), presign)
+            expect(presignBody.fileName).toBe('document.pdf')
+            expect(ref.filename).toBe('document.pdf')
         })
 
         test('throws the server error when presign fails', async () => {
