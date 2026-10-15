@@ -532,8 +532,7 @@ class ConversationRepository(
             val createdAt = item["createdAt"]?.s()
             val updatedAt = item["updatedAt"]?.s()
 
-            val messages = getMessagesForConversation(convId)
-            val vendors = messages.flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+            val vendors = sidebarVendors(convId)
 
             ConversationSummary(
                 conversationId = convId,
@@ -599,8 +598,7 @@ class ConversationRepository(
             .mapNotNull { item ->
                 val convId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
 
-                val messages = getMessagesForConversation(convId)
-                val vendors = messages.flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+                val vendors = sidebarVendors(convId)
 
                 ConversationSummary(
                     conversationId = convId,
@@ -705,9 +703,25 @@ class ConversationRepository(
      */
     suspend fun getMessagesForConversation(
         conversationId: String
+    ): List<Message> = queryMessages(conversationId, maxPages = Int.MAX_VALUE)
+
+    /**
+     * Vendor badges for the conversation listings, from the first Query page
+     * only (up to 1 MB): the listings run this for every conversation on every
+     * page load, and a badge does not justify reading a long conversation in
+     * full.
+     */
+    private suspend fun sidebarVendors(conversationId: String): List<String>? =
+        queryMessages(conversationId, maxPages = 1)
+            .flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+
+    private suspend fun queryMessages(
+        conversationId: String,
+        maxPages: Int
     ): List<Message> = withContext(Dispatchers.IO) {
         val messages = mutableListOf<Message>()
         var startKey: Map<String, AttributeValue>? = null
+        var pages = 0
 
         do {
             val queryBuilder = QueryRequest.builder()
@@ -720,10 +734,11 @@ class ConversationRepository(
 
             val response = dynamoDbClient.query(queryBuilder.build())
             response.items().mapNotNullTo(messages) { itemToMessage(it) }
+            pages++
             startKey = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
                 response.lastEvaluatedKey()
             } else null
-        } while (startKey != null)
+        } while (startKey != null && pages < maxPages)
 
         messages
     }
