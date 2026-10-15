@@ -75,7 +75,7 @@ class RetrievalRequestPayloadTest {
          "raw_data":{"query_data":"what is this?",
                      "images":[{"s3_key":"customers/c1/attachments/img-1","media_type":"image/png"}]},
          "llm_credentials":{"anthropic_api_key":"sk-test"},
-         "llm_provider":"anthropic","llm_model":"claude-test","llm_max_tokens":4096,
+         "llm_provider":"anthropic","llm_model":"model-x","llm_max_tokens":4096,
          "conversation_history":[
            {"role":"user","content":"look","images":[{"s3_key":"customers/c1/attachments/img-1","media_type":"image/png"}]},
            {"role":"assistant","content":"A cat."}]}
@@ -91,7 +91,7 @@ class RetrievalRequestPayloadTest {
             query = "what is this?",
             llmCredentials = mapOf("anthropic_api_key" to "sk-test"),
             llmProvider = "anthropic",
-            llmModel = "claude-test",
+            llmModel = "model-x",
             conversationHistory = listOf(
                 turn("user", "look", listOf(photo)).toConversationMessage(),
                 turn("assistant", "A cat.", emptyList()).toConversationMessage()
@@ -113,7 +113,7 @@ class RetrievalRequestPayloadTest {
             query = "compare the two",
             llmCredentials = mapOf("anthropic_api_key" to "sk-test"),
             llmProvider = "anthropic",
-            llmModel = "claude-test",
+            llmModel = "model-x",
             conversationHistory = listOf(
                 turn("user", "write a report", emptyList()).toConversationMessage(),
                 turn("assistant", "Here it is.", listOf(report)).toConversationMessage()
@@ -142,12 +142,12 @@ class RetrievalRequestPayloadTest {
 
         runs.startRun(
             customerId = "cust-1", client = "web", query = "what is this?",
-            llmProvider = "anthropic", llmModel = "claude-test",
+            llmProvider = "anthropic", llmModel = "model-x",
             queryImages = listOf(photo).toImageRefs()
         )
         runs.startRun(
             customerId = "cust-1", client = "web", query = "what is this?",
-            llmProvider = "anthropic", llmModel = "claude-test",
+            llmProvider = "anthropic", llmModel = "model-x",
             queryImages = listOf(photo).toImageRefs(),
             queryFiles = listOf(brief).toFileRefs(FileOrigin.UPLOADED)
         )

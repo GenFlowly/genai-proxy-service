@@ -45,7 +45,7 @@ class RetrievalServerClientStreamTest {
         query = "hi",
         llmCredentials = mapOf("anthropic_api_key" to "sk-test"),
         llmProvider = "anthropic",
-        llmModel = "claude-test"
+        llmModel = "model-x"
     ).toList()
 
     @Test
