@@ -19,6 +19,11 @@ export interface Entitlements {
 export interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
+    // Auth0-level session state: true as soon as the SDK holds a valid session,
+    // before /onboard returns a customerId (while strict isAuthenticated is
+    // still false). Use this for "attach a token?" / "redirect to login?"
+    // decisions; keep strict isAuthenticated for feature gating.
+    isSessionAuthenticated: boolean;
     entitlements: Entitlements;
     isLoading: boolean;
     // True while the background /onboard sync is in flight for an

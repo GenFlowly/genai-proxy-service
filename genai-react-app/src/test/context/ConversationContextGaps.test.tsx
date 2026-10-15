@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 jest.mock('../../context/AuthContext', () => ({
     useAuth: () => ({
         isAuthenticated: true,
+        isSessionAuthenticated: true,
         customerId: 'user-1',
         getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
     }),

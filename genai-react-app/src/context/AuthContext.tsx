@@ -373,6 +373,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     const contextValue: AuthContextType = {
         user,
         isAuthenticated: isStrictlyAuthenticated,
+        // Auth0 session exists (token calls can succeed) even while /onboard is
+        // still in flight and strict isAuthenticated is false. Treating that
+        // window as "logged out" caused a redirect-to-login loop on deep links.
+        isSessionAuthenticated: isAuthenticated,
         entitlements,
         // Only Auth0 SDK init gates rendering (fast, localStorage-backed).
         // The /onboard sync runs in the background — consumers that care use
