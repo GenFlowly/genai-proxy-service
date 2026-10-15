@@ -16,7 +16,7 @@ from graph.llm_factory import THINKING_LEVELS, get_llm
 from graph.image_normalize import ImageLimits, ImageNormalizationError, limits_for_request, max_images_for_request
 from graph.s3_images import image_for_llm
 from graph.state import RetrievalState
-from graph.tools_runtime import specs_for
+from graph.tools_runtime import spec_context_for, specs_for
 from graph.pdf_metrics import record_truncated
 from graph.truncation import cut_off_reason
 
@@ -373,6 +373,30 @@ def _normalize_tool_choice(tool_choice: str | None) -> str | None:
     if tool_choice in ("required", "any"):
         return "any"  # LangChain normalizes "any" per provider ("required" on OpenAI)
     return tool_choice  # a specific tool name
+
+
+def _file_context(turn: dict) -> str:
+    """Notes naming a history turn's non-image files (plan 3.1), so the model
+    knows which files exist and can pass their ids to revise_pdf,
+    read_pdf_source or read_attachment: a generated file on an assistant turn,
+    an uploaded document on a user turn. "" when the turn has none."""
+    notes = []
+    for f in turn.get("files") or []:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("filename") or "file"
+        if f.get("origin") == "generated":
+            notes.append(f"[Generated file: {name}, id={f.get('attachment_id', '')}]")
+        else:
+            notes.append(f"[Attached file: {name}, id={f.get('attachment_id', '')}]")
+    return "\n".join(notes)
+
+
+def _with_file_context(content: str, turn: dict) -> str:
+    note = _file_context(turn)
+    if not note:
+        return content
+    return f"{content}\n\n{note}" if content else note
 
 
 def _history_ai_message(content: str, tool_calls: list, cache: bool) -> AIMessage:
@@ -915,7 +939,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             # Resolved from the names enabled for THIS request, not from a
             # process-global view of what exists. The customer id lets the
             # customer's own declarative tools resolve alongside the built-ins.
-            builtin_specs = specs_for(builtin_names, state.get("customer_id"))
+            builtin_specs = specs_for(
+                builtin_names, state.get("customer_id"),
+                spec_context_for(state, builtin_names),
+            )
             # A caller-defined tool shadowing a built-in name would make its
             # calls ambiguous (executed in-graph vs. by the caller) — built-in wins.
             reserved = {s["name"] for s in builtin_specs}
@@ -1009,7 +1036,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 last_idx = len(turns) - 1
                 for i, turn in enumerate(turns):
                     role = turn.get("role", "user")
-                    content = turn.get("content", "")
+                    content = _with_file_context(turn.get("content", ""), turn)
                     is_last = (i == last_idx)
                     cache_this = cache_anthropic and is_last
                     if role == "user":
@@ -1029,7 +1056,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 _append_current_turn()
             else:
                 # For extraction/classification, Anthropic expects context in XML tags
-                history_text = "\n".join(f"{t.get('role', 'user').capitalize()}: {t.get('content', '')}" for t in turns)
+                history_text = "\n".join(
+                    f"{t.get('role', 'user').capitalize()}: {_with_file_context(t.get('content', ''), t)}"
+                    for t in turns
+                )
                 combined = f"<conversation_context>\n{history_text}\n</conversation_context>\n\n{rendered_input}"
                 messages.append(HumanMessage(content=combined))
         else:

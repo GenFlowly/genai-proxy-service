@@ -11,11 +11,12 @@ from langgraph.graph import END, StateGraph
 import durable_runtime
 
 from content_logging import LOG_USER_CONTENT
+from graph import conversation_files, pdf_renderer
 from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.image_normalize import ImageNormalizationError
 from graph.instruction_loader import get_instruction_text
-from graph.tools_runtime import MEMORY_CONSENT_TOOLS, all_builtin_tool_names
+from graph.tools_runtime import MEMORY_CONSENT_TOOLS, all_builtin_tool_names, with_companions
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
 from graph.state import RetrievalState
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _enabled_builtin_tools(node_type_map: dict, node_configs: dict) -> list[str]:
+def _enabled_builtin_tools(node_type_map: dict, node_configs: dict, req=None) -> list[str]:
     """Tool names enabled by the graph's TOOL_EXECUTOR node(s): the node
     config's "tools" list, or every BUILT-IN tool when unspecified.
     No TOOL_EXECUTOR node → no tools bound.
@@ -37,16 +38,52 @@ def _enabled_builtin_tools(node_type_map: dict, node_configs: dict) -> list[str]
     preserves the behavior existing graphs rely on. A customer-defined tool
     must always be named explicitly, so adding one can never silently widen
     what an existing agent is allowed to call.
+
+    Either way the companions of an enabled tool come along (generate_pdf →
+    revise_pdf, read_pdf_source; plan 3.2), and when `req` carries uploaded
+    documents, read_attachment is enabled too (plan 4.3).
     """
     enabled: list[str] = []
+    has_executor = False
     for node_id, node_type in node_type_map.items():
         if node_type != "TOOL_EXECUTOR":
             continue
+        has_executor = True
         names = node_configs.get(node_id, {}).get("tools")
         if names is None:
             names = all_builtin_tool_names()
         enabled.extend(n for n in names if n not in enabled)
+    if not has_executor:
+        return enabled
+    enabled = with_companions(enabled)
+    if req is not None and _has_uploaded_files(req) and "read_attachment" not in enabled:
+        enabled.append("read_attachment")
     return enabled
+
+
+def _has_uploaded_files(req) -> bool:
+    raw = getattr(req, "raw_data", None)
+    if raw is not None and any(f.origin == "uploaded" for f in getattr(raw, "files", None) or []):
+        return True
+    return any(
+        f.origin == "uploaded"
+        for m in getattr(req, "conversation_history", None) or []
+        for f in getattr(m, "files", None) or []
+    )
+
+
+_FS_NAMESPACE_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+
+
+def _valid_fs_namespace(value: str | None) -> str | None:
+    """The proxy-minted scratch namespace, or None when absent or malformed
+    (the executor then mints its own). It becomes part of a storage key."""
+    if not value:
+        return None
+    if not _FS_NAMESPACE_RE.match(value):
+        logger.warning("Ignoring a malformed fs_namespace from the request")
+        return None
+    return value
 
 
 def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[str]) -> RetrievalState:
@@ -65,6 +102,13 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         model_name=req.model_name,
         original_query=req.raw_data.query_data,
         query_images=[img.model_dump() for img in req.raw_data.images],
+        query_files=[f.model_dump() for f in req.raw_data.files],
+        conversation_files=conversation_files.collect(req.conversation_history, req.raw_data.files),
+        locale=req.raw_data.locale,
+        # Pinned by the caller of this builder (the /retrieve handler, POST
+        # /runs); a run enqueued before pinning existed resolves at render time.
+        pdf_renderer=req.pdf_renderer,
+        pdf_script_route=req.pdf_script_route,
         tools=[t.model_dump() for t in req.tools],
         tool_choice=req.tool_choice,
         query_tool_results=[r.model_dump() for r in req.tool_results],
@@ -96,7 +140,10 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         memory_enabled=req.memory_enabled,
         memories_block=None,
         trace=[],
-        scratch={},
+        # A namespace the proxy minted (so it can record the turn's scratch
+        # objects, plan 1.16) is used from the first executor round on, which
+        # also gives first-round sub-agents the parent's namespace (3.4).
+        scratch={"fs_namespace": ns} if (ns := _valid_fs_namespace(req.raw_data.fs_namespace)) else {},
         generated_response=None,
         error=None,
         agent_depth=0,
@@ -263,7 +310,10 @@ async def retrieve(req: RetrieveRequest):
         graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _resolve_graph(req.customer_id, req.graph_id)
     else:
         graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations = _direct_graph()
-    builtin_tools = _enabled_builtin_tools(node_type_map, node_configs)
+    builtin_tools = _enabled_builtin_tools(node_type_map, node_configs, req)
+    # The PDF renderer is pinned here, once per turn (plan 2.1); a caller
+    # cannot choose it.
+    req = req.model_copy(update=pdf_renderer.pin(req.customer_id))
     state = _build_state(req, node_configs, builtin_tools)
     run_config = {"recursion_limit": max_iterations}
 

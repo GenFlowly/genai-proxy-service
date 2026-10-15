@@ -20,6 +20,7 @@ from graph.nodes.llm_node import (
     _make_system,
     _render_template,
     _user_content,
+    _with_file_context,
     plan_request_images,
 )
 from graph.state import RetrievalState
@@ -126,7 +127,7 @@ def make_reflection_node(node_type: str, node_id: str | None = None):
                 last_idx = len(turns) - 1
                 for i, turn in enumerate(turns):
                     role = turn.get("role", "user")
-                    content = turn.get("content", "")
+                    content = _with_file_context(turn.get("content", ""), turn)
                     is_last = (i == last_idx)
                     cache_this = cache_anthropic and is_last
                     if role == "user":

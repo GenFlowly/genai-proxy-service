@@ -74,7 +74,7 @@ def make_graph_tool_executor(init: dict):
             else:
                 graph, node_type_map, _, node_configs, _, max_iterations = _direct_graph()
 
-            builtin_tools = _enabled_builtin_tools(node_type_map, node_configs)
+            builtin_tools = _enabled_builtin_tools(node_type_map, node_configs, req)
             state = _build_state(req, node_configs, builtin_tools)
             result = await graph.ainvoke(state, config={"recursion_limit": max_iterations})
 

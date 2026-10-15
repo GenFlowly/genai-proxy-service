@@ -25,6 +25,7 @@ from graph_tools import (
     ArtifactStore,
     GraphTool,
     S3ArtifactStore,
+    SpecContext,
     ToolContext,
     ToolRegistry,
     default_registry,
@@ -68,6 +69,27 @@ _EXPLICIT_ONLY_TOOLS = {
     "fs_list",
     "spawn_agent",
 }
+
+# Built-ins enabled whenever their parent tool is, for implicit AND explicit
+# tool lists (plan 3.2): agent graphs copied from templates carry explicit
+# lists, so a new companion would otherwise reach only newly created graphs.
+COMPANION_TOOLS = {"generate_pdf": ("revise_pdf", "read_pdf_source")}
+
+# Built-ins enabled by what the REQUEST carries rather than by graph config:
+# read_attachment is bound when the conversation has uploaded documents (and
+# the graph can execute built-ins at all). Never implicitly enabled otherwise.
+REQUEST_SCOPED_TOOLS = frozenset({"read_attachment"})
+
+
+def with_companions(names: Iterable[str]) -> list[str]:
+    """`names` plus the companions of every enabled tool, order kept."""
+    out = [n for n in names or [] if n]
+    for name in list(out):
+        for companion in COMPANION_TOOLS.get(name, ()):
+            if companion not in out:
+                out.append(companion)
+    return out
+
 
 # Tools that expose the user's learned memories. Bound only when the request
 # carries memory consent: routes.retrieve._build_state drops them from
@@ -116,7 +138,10 @@ def all_builtin_tool_names() -> list[str]:
     BUILT-INS ONLY (a customer-defined tool is never implicitly enabled) and
     excludes _EXPLICIT_ONLY_TOOLS (see above), so neither a customer tool nor
     a behavior-changing built-in can silently widen an existing graph."""
-    return [n for n in get_registry().names() if n not in _EXPLICIT_ONLY_TOOLS]
+    return [
+        n for n in get_registry().names()
+        if n not in _EXPLICIT_ONLY_TOOLS and n not in REQUEST_SCOPED_TOOLS
+    ]
 
 
 def tools_for(names: Iterable[str], customer_id: str | None = None) -> list[GraphTool]:
@@ -164,9 +189,35 @@ def tools_for(names: Iterable[str], customer_id: str | None = None) -> list[Grap
     return resolved
 
 
-def specs_for(names: Iterable[str], customer_id: str | None = None) -> list[dict]:
-    """Model-facing specs for the request's enabled tools."""
-    return [t.spec for t in tools_for(names, customer_id)]
+def specs_for(
+    names: Iterable[str],
+    customer_id: str | None = None,
+    spec_context: SpecContext | None = None,
+) -> list[dict]:
+    """Model-facing specs for the request's enabled tools, built per request
+    when a SpecContext is given (GraphTool.spec_for: e.g. generate_pdf's
+    description depends on the pinned renderer and on whether fs_write and
+    revise_pdf are enabled, plan 2.7)."""
+    tools = tools_for(names, customer_id)
+    if spec_context is None:
+        return [t.spec for t in tools]
+    return [t.spec_for(spec_context) for t in tools]
+
+
+def spec_context_for(state: dict, names: Iterable[str]) -> SpecContext:
+    """The SpecContext of one request: its enabled tool names and the host
+    facts per-request descriptions depend on."""
+    from graph import pdf_renderer
+
+    pinned = pdf_renderer.pinned_or_resolved(state)
+    return SpecContext(
+        enabled=frozenset(n for n in names or () if n),
+        host={
+            "pdf_renderer": pinned["pdf_renderer"],
+            "pdf_script_route": pinned["pdf_script_route"],
+            "pdf_limits": pdf_renderer.limits(),
+        },
+    )
 
 
 def credential_refs_for(tools: Iterable[GraphTool]) -> set[str]:
@@ -212,6 +263,73 @@ class _LazyAttachmentStore:
 
     def list(self, prefix: str) -> list[dict]:
         return self._backing().list(prefix)
+
+
+def request_runtime(
+    state: dict,
+    config: dict | None,
+    *,
+    store,
+    fs_prefix: str | None,
+    enabled: Iterable[str] = (),
+) -> dict:
+    """Per-request facts and services the PDF and file tools read from
+    ToolContext.runtime. The tool executor merges this into every context it
+    builds; graph_tools never imports host code, so this is how they get:
+
+    - pdf_renderer / pdf_script_route: the renderer pinned when the turn
+      started (graph/pdf_renderer.py, plan 2.1), and pdf_fonts_cover for the
+      per-document script route;
+    - pdf_limits: input caps per renderer (1.5, raised for Typst in 5.2);
+    - render_pdf: renders a job in the capped worker child (1.5);
+    - conversation_files: {attachment_id: {s3_key, filename, media_type,
+      origin, size_bytes}}, the only way file tools resolve an id (3.1);
+    - locale and pdf_settings: page size, footer language and tenant branding
+      (6.1, 6.2; pdf_settings is the TOOL_EXECUTOR node's
+      tool_settings.generate_pdf);
+    - read_scratch / list_scratch: the turn's scratch files for
+      generate_pdf(source_paths=...) (3.6), through fs_tools.safe_path;
+    - enabled_tools: the names bound this request (descriptions and
+      refusal texts mention fs_write or revise_pdf only when enabled).
+    """
+    from graph import conversation_files, pdf_renderer, pdf_worker
+    from graph.fs_tools import safe_path
+
+    pinned = pdf_renderer.pinned_or_resolved(state)
+
+    def read_scratch(path: str) -> str:
+        # Unlike fs_write (which strips a leading '/'), a source path that
+        # looks absolute is refused: the model meant some other file.
+        safe = safe_path(path) if isinstance(path, str) and not path.strip().startswith("/") else None
+        if safe is None:
+            raise ValueError("invalid path")
+        if not fs_prefix:
+            raise KeyError(path)
+        return store.get(f"{fs_prefix}{safe}").decode("utf-8", errors="replace")
+
+    def list_scratch() -> list[str]:
+        if not fs_prefix:
+            return []
+        return [
+            o["key"][len(fs_prefix):]
+            for o in store.list(fs_prefix)
+            if o.get("key", "").startswith(fs_prefix)
+        ]
+
+    settings = ((config or {}).get("tool_settings") or {}).get("generate_pdf")
+    return {
+        "pdf_renderer": pinned["pdf_renderer"],
+        "pdf_script_route": pinned["pdf_script_route"],
+        "pdf_fonts_cover": pdf_renderer.fonts_cover,
+        "pdf_limits": pdf_renderer.limits(),
+        "render_pdf": pdf_worker.render_pdf,
+        "conversation_files": conversation_files.by_id(state.get("conversation_files") or []),
+        "locale": state.get("locale"),
+        "pdf_settings": dict(settings) if isinstance(settings, dict) else {},
+        "read_scratch": read_scratch,
+        "list_scratch": list_scratch,
+        "enabled_tools": frozenset(enabled or ()),
+    }
 
 
 def make_tool_context(

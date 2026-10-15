@@ -103,6 +103,20 @@ def _no_secrets(credential_ref: str) -> dict:
     return {}
 
 
+@dataclass(frozen=True)
+class SpecContext:
+    """What a request enables, for per-request tool specs (GraphTool.spec_for).
+
+    enabled      — every tool name bound for the request;
+    host         — host facts a tool's description may depend on, e.g.
+                   {"pdf_renderer": "x2p_v1", "pdf_script_route": None,
+                   "pdf_limits": {...}}. A plain dict, so this package needs no
+                   knowledge of the host's configuration."""
+
+    enabled: frozenset = frozenset()
+    host: dict = field(default_factory=dict)
+
+
 @dataclass
 class ToolContext:
     """Per-request execution context injected by the host application.
@@ -206,6 +220,12 @@ class GraphTool(ABC):
             "description": self.description,
             "parameters": self.parameters,
         }
+
+    def spec_for(self, ctx: "SpecContext | None" = None) -> dict:
+        """The spec for one request. Tools whose right description depends on
+        what else the request enables (or on host facts such as the active
+        renderer) override this; the default is the static `spec`."""
+        return self.spec
 
     @abstractmethod
     async def run(self, args: dict, context: ToolContext) -> ToolResult: ...

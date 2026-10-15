@@ -11,7 +11,7 @@ The host application:
   3. routes builtin tool calls to `registry.get(name).run(args, context)` from
      a tool-executor graph node.
 """
-from graph_tools.base import Artifact, GraphTool, ToolContext, ToolResult
+from graph_tools.base import Artifact, GraphTool, SpecContext, ToolContext, ToolResult
 from graph_tools.registry import ToolRegistry, default_registry
 from graph_tools.storage import ArtifactStore, LocalDiskArtifactStore, S3ArtifactStore
 
@@ -21,6 +21,7 @@ __all__ = [
     "GraphTool",
     "LocalDiskArtifactStore",
     "S3ArtifactStore",
+    "SpecContext",
     "ToolContext",
     "ToolRegistry",
     "ToolResult",

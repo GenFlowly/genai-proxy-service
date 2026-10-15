@@ -179,6 +179,16 @@ async def run_subagent(
         "llm_max_tokens": parent_state.get("llm_max_tokens"),
         "conversation_history": [],
         "query_images": [],
+        # The child sees no attachments directly, but keeps the parent's
+        # pinned PDF renderer and locale, and the parent's file references so
+        # read_attachment / revise_pdf can address the conversation's files
+        # (plan 4.3); the executor builds runtime['conversation_files'] from
+        # this list.
+        "query_files": [],
+        "conversation_files": list(parent_state.get("conversation_files") or []),
+        "locale": parent_state.get("locale"),
+        "pdf_renderer": parent_state.get("pdf_renderer"),
+        "pdf_script_route": parent_state.get("pdf_script_route"),
         "tools": [],
         "tool_choice": None,
         "query_tool_results": [],

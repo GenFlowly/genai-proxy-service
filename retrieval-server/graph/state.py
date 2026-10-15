@@ -67,6 +67,20 @@ class RetrievalState(TypedDict):
     # Only the response-generator node sends them to the LLM (retrieval/ranking
     # nodes stay text-only).
     query_images: list
+    # Non-image files attached to the current-turn query (uploaded documents):
+    # FileRef dicts {attachment_id, s3_key, media_type, filename, size_bytes,
+    # origin}. References only; bytes and extracted text never enter state.
+    query_files: list
+    # Every non-image file of the conversation (history turns and this turn),
+    # as FileRef dicts (graph/conversation_files.py). The tool executor exposes
+    # them to tools as runtime['conversation_files']; sub-agents inherit them.
+    conversation_files: list
+    # The user's locale (first Accept-Language tag, e.g. "de-DE"), or None.
+    locale: Optional[str]
+    # PDF renderer and script-route setting pinned when the turn started
+    # (graph/pdf_renderer.py); kept across durable-run recovery.
+    pdf_renderer: Optional[str]
+    pdf_script_route: Optional[str]
 
     # Caller-defined tools: [{name, description, parameters}, ...]. Bound only to
     # the response-generator node (text format); other nodes never see them.

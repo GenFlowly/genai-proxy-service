@@ -38,6 +38,23 @@ class ToolResult(BaseModel):
     images: list[ToolResultImage] = []
 
 
+class FileRef(BaseModel):
+    """A non-image file of the conversation (plan 3.1): a file a built-in tool
+    generated on an assistant turn (origin "generated", e.g. a PDF) or a
+    document the user attached (origin "uploaded"). Only references travel in
+    requests, state and durable-run inputs, never file bytes.
+
+    s3_key is the key the proxy stored, used exactly as given: in a shared
+    conversation the file can sit under another participant's prefix, so a key
+    is never rebuilt from attachment_id."""
+    attachment_id: str
+    s3_key: str
+    media_type: str
+    filename: Optional[str] = None
+    size_bytes: Optional[int] = None
+    origin: str = "uploaded"
+
+
 class RawData(BaseModel):
     query_data: str
     top_n: int = 3
@@ -45,6 +62,15 @@ class RawData(BaseModel):
     similarity_threshold: float = 0.6
     # Images attached to the current-turn query
     images: list[ImageRef] = []
+    # Non-image files attached to the current-turn query (uploaded documents)
+    files: list[FileRef] = []
+    # First language tag of the user's browser (Accept-Language), e.g. "en-US";
+    # drives a generated PDF's page size and footer language (plan 6.1).
+    locale: Optional[str] = None
+    # Scratch namespace the proxy minted for this request, under which the
+    # turn's agent-fs objects are written (so it can record them, plan 1.16);
+    # None lets the executor mint one.
+    fs_namespace: Optional[str] = None
 
 
 class ConversationMessage(BaseModel):
@@ -55,6 +81,9 @@ class ConversationMessage(BaseModel):
     tool_calls: Optional[list] = None
     # User turns: results for the preceding assistant turn's tool calls
     tool_results: Optional[list] = None
+    # Non-image files of the turn: generated files on assistant turns,
+    # uploaded documents on user turns (plan 3.1).
+    files: list[FileRef] = []
 
 
 class ExecuteAgentGraphRequest(BaseModel):
@@ -143,6 +172,12 @@ class RetrieveRequest(BaseModel):
     # node config's thinking_level; pipeline nodes ignore it. Invalid values
     # are warned-and-ignored downstream (llm_node), never an error.
     thinking_level: Optional[str] = None
+    # The PDF renderer and script-route setting pinned when the turn started
+    # (graph/pdf_renderer.py). Declared so a durable run rebuilt from its
+    # stored input keeps them; the /retrieve handler overwrites whatever a
+    # caller sends.
+    pdf_renderer: Optional[str] = None
+    pdf_script_route: Optional[str] = None
 
 
 class RunRequest(BaseModel):
@@ -172,6 +207,10 @@ class RunRequest(BaseModel):
     graph_id: Optional[str] = None
     # Same semantics as RetrieveRequest.thinking_level.
     thinking_level: Optional[str] = None
+    # Pinned by POST /runs before the run is enqueued (graph/pdf_renderer.py);
+    # values a caller sends are overwritten.
+    pdf_renderer: Optional[str] = None
+    pdf_script_route: Optional[str] = None
     # Optional client-supplied run id for idempotency / rediscovery. When set it
     # becomes the DBOS workflow id (a duplicate re-attaches to the same run
     # instead of starting a new one). Server-generated when omitted.
