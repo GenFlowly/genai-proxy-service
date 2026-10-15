@@ -270,14 +270,32 @@ async def _request_agent_run(run_id: str, run_input: dict) -> dict:
 
 
 # --- DBOS binding (only when durable runs are configured) --------------------
+# Recovery caps (plan 0.1). Every restart while a run is PENDING re-dispatches
+# it and costs one attempt; DBOS dead-letters it (status
+# MAX_RECOVERY_ATTEMPTS_EXCEEDED, without executing it again) on the dispatch
+# after K+1 executions. So a run that kills the process causes at most K+1
+# crashes — 101 with the DBOS default of 100.
+#   agent_run: 3 -> at most 4 executions. Not lower: deploys and innocent runs
+#     caught in someone else's crash use up attempts too, and a run waiting on
+#     human input can stay PENDING for hours.
+#   request_agent_run: 0 -> dead-lettered on the first restart, never re-run.
+#     Its HTTP caller is gone after a crash, so nobody would get the result.
+#     Safe only because production is ONE machine with executor id "local"
+#     (development.md, "Durable runs: deploy rules"): with a second machine a
+#     peer's restart would dead-letter a live request.
+# Changing either value changes the computed DBOS app version, which is why
+# production pins DBOS_APP_VERSION (durable_runtime.py).
+AGENT_RUN_MAX_RECOVERY_ATTEMPTS = 3
+REQUEST_AGENT_RUN_MAX_RECOVERY_ATTEMPTS = 0
+
 if durable_runtime.dbos_constructed():
     from dbos import DBOS
 
-    @DBOS.workflow(name="agent_run")
+    @DBOS.workflow(name="agent_run", max_recovery_attempts=AGENT_RUN_MAX_RECOVERY_ATTEMPTS)
     async def agent_run(run_id: str, run_input: dict) -> dict:
         return await _run_agent_graph(run_id, run_input)
 
-    @DBOS.workflow(name="request_agent_run")
+    @DBOS.workflow(name="request_agent_run", max_recovery_attempts=REQUEST_AGENT_RUN_MAX_RECOVERY_ATTEMPTS)
     async def request_agent_run(run_id: str, run_input: dict) -> dict:
         return await _request_agent_run(run_id, run_input)
 else:

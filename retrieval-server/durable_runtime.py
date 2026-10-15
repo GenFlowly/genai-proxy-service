@@ -25,6 +25,15 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 DBOS_SYSTEM_SCHEMA = os.getenv("DBOS_SYSTEM_SCHEMA", "dbos")
+# Explicit DBOS application version (plan 0.1). DBOS recovers and dequeues only
+# workflows of the CURRENT version. Left unset, it hashes the workflow wrappers'
+# source plus the installed dbos version, so editing a wrapper (or a dbos
+# release) strands every in-flight run, while a change that reorders the steps
+# a run takes (graph code: llm_node, tool_executor, subagent, ...) does NOT
+# change it — and replaying an old run on a new step order misaligns the step
+# memo. So production pins it and bumps it exactly when the step sequence can
+# change. Procedure: development.md, "Durable runs: deploy rules".
+DBOS_APP_VERSION = os.getenv("DBOS_APP_VERSION") or None
 _CHECKPOINTER_POOL_MAX = int(os.getenv("CHECKPOINTER_POOL_MAX", "5"))
 # Run-events TTL (P3): prune the reattach channel so it doesn't grow unbounded.
 RUN_EVENTS_TTL_SEC = int(os.getenv("RUN_EVENTS_TTL_SEC", str(7 * 24 * 3600)))
@@ -77,6 +86,9 @@ def _construct_dbos() -> None:
                 use_listen_notify=False,
                 dbos_system_schema=DBOS_SYSTEM_SCHEMA,
                 run_migrations=True,
+                # None keeps DBOS's own behaviour (DBOS__APPVERSION env, else
+                # the computed hash).
+                application_version=DBOS_APP_VERSION,
             )
         )
         _dbos_constructed = True

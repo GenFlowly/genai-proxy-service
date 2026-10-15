@@ -12,13 +12,20 @@ pymilvus>=2.4.0
 prometheus-client
 prometheus-fastapi-instrumentator
 
-langgraph>=1.2
 # Durable agentic runs (see DURABLE_AGENTS_DBOS_PLAN.md): DBOS durable workflows
-# + LangGraph Postgres checkpointer on Supabase. Versions verified in the P0
-# spike against the Supabase session pooler (dbos 3.0.0, checkpoint-postgres
-# 3.1.2, psycopg 3.3.6). DBOS runs with use_listen_notify=False over the pooler.
-dbos>=3.0.0,<4
-langgraph-checkpoint-postgres>=3.1.2
+# + LangGraph Postgres checkpointer on Supabase. DBOS runs with
+# use_listen_notify=False over the Supabase session pooler.
+# EXACT pins (plan 0.1): recovery of an in-flight run depends on these four.
+# An unpinned dbos changes the computed DBOS app version on any rebuild that
+# resolves a new release (stranding every in-flight run), and the replay
+# behaviour durable runs rely on (graph restarts from START, DBOS step memo
+# keyed by call order) was measured on exactly these versions. Upgrade them
+# deliberately: re-run the durable integration tests (tests/test_durable_*.py)
+# and bump DBOS_APP_VERSION (development.md, "Durable runs: deploy rules").
+langgraph==1.2.15
+langgraph-checkpoint==4.3.0
+dbos==3.2.0
+langgraph-checkpoint-postgres==3.2.0
 psycopg[binary,pool]>=3.3.6
 langchain-core
 langchain-openai

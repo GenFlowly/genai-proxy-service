@@ -268,3 +268,72 @@ enabled.
   CI (`dev`/`prod-proxy-server.yml`, "Deploy Retrieval Server" step) also sets it from an
   environment-scoped **`DATABASE_URL` GitHub Actions secret** if that secret exists — so add it per
   environment (dev/prod point at different Supabase projects) to keep deploys reproducible.
+
+## Durable runs: deploy rules
+
+Durable runs are ON in production: every streaming agentic chat turn is an `agent_run` DBOS
+workflow, and request agents (titles, personas, memory extraction) run as `request_agent_run`
+whenever `DATABASE_URL` is set. A process death interrupts every tenant's in-flight runs, and the
+next start recovers them. These rules keep that recovery safe.
+
+**One machine, executor `local`.** Production runs exactly one machine of the smallest Fly size
+(`shared-cpu-1x`, 1024 MB, `fly.production.toml`), and that stays so. Every machine's DBOS executor
+id is `local` (nothing sets `DBOS__VMID`), and a starting machine re-enqueues *every* PENDING run of
+executor `local`. So:
+
+- **Never add a second machine** (`fly scale count`, a second region, a standby) while executors
+  share `local`. A restarting machine would re-enqueue the other machine's live runs: two
+  executions would write the same run (`run_events` assumes one writer per run), re-run its tool
+  calls, and `request_agent_run` — capped at `max_recovery_attempts=0` (runs.py) because its HTTP
+  caller is gone after a crash — would dead-letter a peer's live request.
+- **Keep Fly's default rolling deploy**, which replaces the one machine in place. The deploy
+  workflows pass no `--strategy`; never use `bluegreen` or `canary` (both run two machines at once).
+
+**Recovery caps** (runs.py). `agent_run` has `max_recovery_attempts=3`: a run that kills the process
+is executed at most 4 times and dead-lettered (status `MAX_RECOVERY_ATTEMPTS_EXCEEDED`) on the 4th
+restart without executing again. Deploys and innocent runs caught in a crash also use attempts, so
+do not lower it. `request_agent_run` has 0: a crash dead-letters it on the next start.
+
+**Pinned versions.** `dbos`, `langgraph`, `langgraph-checkpoint` and
+`langgraph-checkpoint-postgres` are pinned exactly in requirements.txt. Upgrading one is a
+deliberate change: re-run the durable integration tests (`tests/test_durable_*.py`) and bump
+`DBOS_APP_VERSION`.
+
+### `DBOS_APP_VERSION`
+
+DBOS recovers and dequeues only workflows whose application version equals the running one. When
+`DBOS_APP_VERSION` is unset, DBOS computes the version as a hash of the workflow wrappers' source
+(`agent_run`, `request_agent_run`, decorator lines included), the step registrations and the
+installed dbos version. That hash is wrong in both directions: it changes on edits that are safe for
+in-flight runs (a decorator argument, a dbos rebuild) and stays the same on edits that are not. The
+order of DBOS steps a run takes is decided by graph code (`llm_node.py`, `reflection_node.py`,
+`tool_executor.py`, `subagent.py`, `runs.py`), and a replay on a different step order reads the
+wrong memo; all LLM steps share the name `llm_invoke`, so DBOS cannot notice. So production sets
+`DBOS_APP_VERSION` (read in durable_runtime.py) and bumps it by hand.
+
+**Rule: bump `DBOS_APP_VERSION` in the same change whenever the sequence of DBOS steps a run can
+take may change** — adding, removing or reordering a step call (`load_graph`, `llm_invoke`,
+`tool_invoke`, `recv`), changing which nodes or tools run in which order, or upgrading a pinned
+package above. Do not bump it for anything else: a bump strands every in-flight run (they are never
+recovered). Add the bump to the release checklist of any such change.
+
+**Setting it for the first time** (the deploy that ships the recovery caps — that edit changes
+the computed hash but not the step order, so pin the version production computes today and no
+in-flight run is stranded):
+
+1. Read production's current version, by any of:
+   - Supabase SQL editor (prod project):
+     `SELECT application_version, created_at FROM dbos.workflow_status ORDER BY created_at DESC LIMIT 1;`
+   - from a Python shell with production's `DATABASE_URL` and DBOS launched:
+     `(await DBOS.get_latest_application_version_async())["version_name"]`;
+   - the DBOS boot log line `Application version: <hash>` (`fly logs -a genai-retrieval-server-production`).
+2. Set it before the deploy, staged so the deploy picks it up:
+   `flyctl secrets set --app genai-retrieval-server-production --stage DBOS_APP_VERSION=<hash>`
+   (the same for `genai-retrieval-server-development`, with the dev database's value).
+3. After the deploy, `GET /runs?limit=5` (or the query above) shows new runs with that
+   `app_version`, and rebuilding the image with no workflow change keeps it.
+
+**Bumping it** (a change to the step sequence): set a new descriptive value in the same deploy,
+for example `flyctl secrets set --app genai-retrieval-server-production --stage
+DBOS_APP_VERSION=rs-2026-10-15-tool-steps`. Runs in flight at that deploy are stranded; nothing
+re-executes them on the new step order.

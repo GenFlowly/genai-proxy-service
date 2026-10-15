@@ -153,7 +153,9 @@ async def cancel_run(run_id: str):
     if st is None:
         raise HTTPException(status_code=404, detail="run not found")
     try:
-        DBOS.cancel_workflow(run_id)
+        # The async variant: the sync DBOS.cancel_workflow raises inside a
+        # running event loop on dbos 3.x, which made this route return 500.
+        await DBOS.cancel_workflow_async(run_id)
     except Exception as e:
         logger.exception("Failed to cancel run %s", run_id)
         raise HTTPException(status_code=500, detail=f"could not cancel run: {e}")
@@ -182,7 +184,10 @@ async def list_runs(status: str | None = None, limit: int = 50):
         logger.exception("list_runs failed")
         raise HTTPException(status_code=500, detail=f"could not list runs: {e}")
     return {"runs": [
-        {"run_id": w.workflow_id, "status": w.status, "created_at": w.created_at, "updated_at": w.updated_at}
+        {"run_id": w.workflow_id, "status": w.status, "created_at": w.created_at, "updated_at": w.updated_at,
+         # The DBOS application version the run belongs to — what
+         # DBOS_APP_VERSION must equal for it to be recovered (development.md).
+         "app_version": w.app_version, "recovery_attempts": w.recovery_attempts}
         for w in wfs
     ]}
 
