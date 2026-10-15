@@ -111,7 +111,7 @@ class AgentResolutionServiceTest {
     }
 
     @Test
-    fun `no mapping anywhere throws unresolved — there is no bundled fallback`() = runTest {
+    fun `no mapping anywhere throws unresolved - there is no bundled fallback`() = runTest {
         coEvery { mapRepo.getMapEntry(any(), any()) } returns null
 
         assertFailsWith<RequestAgentUnresolvedException> {

@@ -86,7 +86,7 @@ class RequestAgentSeederTest {
     }
 
     @Test
-    fun `a DISABLED existing row is respected — never re-seeded`() = runTest {
+    fun `a DISABLED existing row is respected - never re-seeded`() = runTest {
         coEvery { mapRepo.getMapEntry(SYSTEM_SCOPE, any()) } answers {
             if (secondArg<String>() == RequestType.NOTE_TITLE.name) existingEntry.copy(enabled = false)
             else existingEntry
