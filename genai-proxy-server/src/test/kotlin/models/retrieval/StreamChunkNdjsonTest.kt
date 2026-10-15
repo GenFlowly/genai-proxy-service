@@ -1,7 +1,12 @@
 package com.genflowly.models.retrieval
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /** Pins the StreamChunk → NDJSON wire protocol shared by the live and reattach streams. */
@@ -93,6 +98,59 @@ class StreamChunkNdjsonTest {
             "{\"t\":\"pg\",\"v\":{\"tool\":\"generate_pdf\",\"chars\":1234}}\n",
             StreamChunk.Progress("{\"tool\":\"generate_pdf\",\"chars\":1234}").toNdjsonFrame()
         )
+    }
+
+    // ── Keepalives during silences (1.7, contract C4) ───────────────────────
+
+    @Test
+    fun `a silence gets a whitespace-only line every interval`() = runTest {
+        val frames = flow {
+            emit("a\n")
+            delay(40_000)
+            emit("b\n")
+        }.withKeepalives(15_000).toList()
+
+        assertEquals(listOf("a\n", " \n", " \n", "b\n"), frames)
+    }
+
+    @Test
+    fun `the wait before the first frame is covered too`() = runTest {
+        val frames = flow {
+            delay(20_000)
+            emit("a\n")
+        }.withKeepalives(15_000).toList()
+
+        assertEquals(listOf(" \n", "a\n"), frames)
+    }
+
+    @Test
+    fun `frames closer together than the interval get no keepalive`() = runTest {
+        val frames = flow {
+            repeat(6) {
+                emit("f$it\n")
+                delay(10_000)
+            }
+        }.withKeepalives(15_000).toList()
+
+        assertEquals((0 until 6).map { "f$it\n" }, frames)
+    }
+
+    @Test
+    fun `a failing frame flow still fails`() = runTest {
+        val failure = runCatching {
+            flow<String> {
+                emit("a\n")
+                throw IllegalStateException("boom")
+            }.withKeepalives(15_000).toList()
+        }.exceptionOrNull()
+
+        assertEquals("boom", failure?.message)
+    }
+
+    @Test
+    fun `the keepalive line is blank once trimmed, which the web app skips`() {
+        assertEquals("", NDJSON_KEEPALIVE.trim())
+        assertTrue(NDJSON_KEEPALIVE.endsWith("\n"))
     }
 
     @Test

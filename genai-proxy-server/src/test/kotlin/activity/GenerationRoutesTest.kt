@@ -3,13 +3,18 @@ package com.genflowly.activity
 import com.genflowly.Routes
 import com.genflowly.activity.generation.registerGenerateTextRoutes
 import com.genflowly.activity.generation.registerGenerateTextStreamRoutes
+import com.genflowly.activity.generation.registerRunRoutes
 import com.genflowly.models.AIConfig
 import com.genflowly.models.AIVendor
 import com.genflowly.models.ApiKeyPrincipal
 import com.genflowly.models.Message
+import com.genflowly.models.retrieval.StreamChunk
+import com.genflowly.providers.RunsClient
+import com.genflowly.service.ConversationService
 import com.genflowly.service.ExchangeSideEffects
 import com.genflowly.service.GenerationOrchestrator
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -26,14 +31,19 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
- * The generate routes over HTTP: the browser's Accept-Language reaches the
- * orchestrator as the locale (6.1).
+ * The generate and reattach routes over HTTP: the browser's Accept-Language
+ * reaches the orchestrator as the locale (6.1), and silences on the live and
+ * reattach streams are filled with whitespace-only keepalive lines (1.7).
  */
 class GenerationRoutesTest {
 
@@ -65,12 +75,17 @@ class GenerationRoutesTest {
         )
     }
 
-    private fun ApplicationTestBuilder.setUpRoutes() {
-        install(ContentNegotiation) { json() }
+    /** Both providers the routes accept; an API-key principal carries the customerId directly. */
+    private fun ApplicationTestBuilder.installAuth() {
         install(Authentication) {
             bearer("auth0") { authenticate { null } }
             bearer("apiKey") { authenticate { ApiKeyPrincipal(customerId) } }
         }
+    }
+
+    private fun ApplicationTestBuilder.setUpRoutes() {
+        install(ContentNegotiation) { json() }
+        installAuth()
         routing {
             val exchangeSideEffects = mockk<ExchangeSideEffects>(relaxed = true)
             registerGenerateTextRoutes(orchestrator, mockk(relaxed = true), exchangeSideEffects)
@@ -111,6 +126,76 @@ class GenerationRoutesTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals(listOf<String?>("en-US"), batchLocales)
+    }
+
+    // ── Keepalives during silences (1.7) ────────────────────────────────────
+
+    private val first = "{\"t\":\"c\",\"v\":\"Working on it\"}\n"
+    private val last = "{\"t\":\"c\",\"v\":\" - done.\"}\n"
+
+    /** Splits a relayed body into its frames and its whitespace-only keepalive lines. */
+    private fun framesAndKeepalives(body: String): Pair<List<String>, Int> {
+        assertTrue(body.startsWith(" "), "the heartbeat byte comes first")
+        val lines = body.removePrefix(" ").split("\n").dropLast(1)
+        return lines.filter { it.isNotBlank() }.map { "$it\n" } to lines.count { it.isNotEmpty() && it.isBlank() }
+    }
+
+    @Test
+    fun `the stream route writes whitespace lines while the turn is silent`() = testApplication {
+        coEvery {
+            orchestrator.processTextGenerateStreamRequest(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns GenerationOrchestrator.StreamExecutionResult(
+            "conv-1", "msg-1",
+            flow {
+                emit(first)
+                delay(300) // a tool runs
+                emit(last)
+            },
+            "resp-1"
+        )
+        install(ContentNegotiation) { json() }
+        installAuth()
+        routing {
+            registerGenerateTextStreamRoutes(
+                orchestrator, mockk(relaxed = true), mockk<ExchangeSideEffects>(relaxed = true),
+                keepaliveIntervalMs = 50
+            )
+        }
+
+        val body = client.post(Routes.GENERATE_TEXT_STREAM) {
+            bearerAuth("gfy_test")
+            contentType(ContentType.Application.Json)
+            setBody(streamBody)
+        }.bodyAsText()
+
+        val (frames, keepalives) = framesAndKeepalives(body)
+        assertEquals(listOf(first, last), frames)
+        assertTrue(keepalives >= 2, "keepalives: $keepalives in ${body.replace("\n", "\\n")}")
+    }
+
+    @Test
+    fun `the reattach route writes whitespace lines while the run is silent`() = testApplication {
+        val runsClient = mockk<RunsClient>()
+        every { runsClient.streamRun("run_1", 0) } returns flow {
+            emit(StreamChunk.Content("Working on it"))
+            delay(300) // the run waits in the queue
+            emit(StreamChunk.Content(" - done."))
+        }
+        val conversationService = mockk<ConversationService>()
+        coEvery { conversationService.pendingRunIdsIfAccessible("conv-1", customerId) } returns setOf("run_1")
+        installAuth()
+        routing { registerRunRoutes(runsClient, mockk(relaxed = true), conversationService, keepaliveIntervalMs = 50) }
+
+        val body = client.get(Routes.REATTACH_RUN.replace("{runId}", "run_1") + "?conversationId=conv-1") {
+            bearerAuth("gfy_test")
+        }.bodyAsText()
+
+        val (frames, keepalives) = framesAndKeepalives(body)
+        assertEquals(listOf(first, last), frames)
+        assertTrue(keepalives >= 2, "keepalives: $keepalives in ${body.replace("\n", "\\n")}")
     }
 
     @Test
