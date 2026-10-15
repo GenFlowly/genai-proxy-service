@@ -34,6 +34,42 @@ fun List<AttachmentRef>.toImageRefs(): List<ImageRef> =
         .map { ImageRef(s3Key = it.s3Key, mediaType = normalizeAttachmentMediaType(it.mediaType)) }
 
 /**
+ * The complement of [toImageRefs]: every non-image attachment as a [FileRef]
+ * (contract C10) with the given [origin] — generated files on assistant turns,
+ * uploaded documents on user turns. The stored s3Key is passed exactly as
+ * persisted: in a shared conversation it can sit under another participant's
+ * prefix.
+ */
+fun List<AttachmentRef>.toFileRefs(origin: FileOrigin): List<FileRef> =
+    filterNot { isImageAttachmentMediaType(it.mediaType) }
+        .map {
+            FileRef(
+                attachmentId = it.attachmentId,
+                s3Key = it.s3Key,
+                mediaType = it.mediaType,
+                filename = it.filename,
+                sizeBytes = it.sizeBytes,
+                origin = origin
+            )
+        }
+
+/** A plausible BCP-47 tag: a primary subtag of 2-8 letters, then subtags of 1-8 letters or digits. */
+private val LANGUAGE_TAG = Regex("^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$")
+private const val MAX_LOCALE_LENGTH = 35
+
+/**
+ * The browser's locale for RawData.locale (contract C11): the first language
+ * tag of an Accept-Language header, e.g. "en-US" from "en-US,en;q=0.9,de;q=0.8".
+ * q-values are ignored (browsers already list tags by preference), and so are
+ * "*" and any entry that is not a plausible BCP-47 tag of at most 35
+ * characters. Null when the header is absent or names no usable tag.
+ */
+fun localeFromAcceptLanguage(header: String?): String? =
+    header?.splitToSequence(',')
+        ?.map { it.substringBefore(';').trim() }
+        ?.firstOrNull { it.length <= MAX_LOCALE_LENGTH && LANGUAGE_TAG.matches(it) }
+
+/**
  * Parse the retrieval-server's generated_artifacts JSON —
  * [{"artifact_id","key","media_type","filename","size_bytes","source_key",
  * "page_count"}] — into AttachmentRefs for persistence on the assistant
@@ -69,14 +105,35 @@ fun parseGeneratedArtifacts(json: String?): List<AttachmentRef> {
 private fun JsonObject.primitiveOrNull(key: String): JsonPrimitive? =
     (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }
 
+/**
+ * A persisted message as a history turn for the retrieval-server. Images
+ * replay as image blocks; every other attachment goes under `files`: an
+ * assistant's attachments are files its tools generated, a user's are
+ * documents they uploaded.
+ */
 fun Message.toConversationMessage(): ConversationMessage =
     ConversationMessage(
         role = role,
-        content = text,
+        content = historyText(),
         images = attachments.toImageRefs(),
         toolCalls = toolCallsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
-        toolResults = toolResultsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() }
+        toolResults = toolResultsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
+        files = attachments.toFileRefs(if (role == "assistant") FileOrigin.GENERATED else FileOrigin.UPLOADED)
     )
+
+/**
+ * The text a turn replays as history. A failed assistant turn is stored even
+ * when it streamed no text (contract C5); it replays a short note naming the
+ * failure instead of an empty message, which vendors reject (Anthropic needs
+ * non-empty content on every turn but the last) and which would hide from the
+ * model that its previous answer never arrived.
+ */
+private fun Message.historyText(): String =
+    if (role == "assistant" && text.isBlank() && toolCallsJson == null && !errorMessage.isNullOrBlank()) {
+        "[No response: $errorMessage]"
+    } else {
+        text
+    }
 
 fun List<ToolDefinition>.toPayloadTools(): List<PayloadToolDefinition> =
     map {

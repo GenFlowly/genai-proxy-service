@@ -76,7 +76,8 @@ sealed class StreamChunk {
      * user-facing description of the vendor error (quota exceeded, key
      * rejected, ...). errorType is its machine class (rate_limit, auth,
      * context_length, model_not_found, provider_error; for a failed durable
-     * run also run_lost, resume_timeout, runaway or error).
+     * run also run_lost, resume_timeout, runaway or error, and
+     * [RUN_STREAM_LOST_ERROR_TYPE] when the proxy lost the run's stream).
      */
     data class Error(val message: String, val errorType: String? = null) : StreamChunk()
 
@@ -98,6 +99,22 @@ sealed class StreamChunk {
 
 /** Shown when a run's terminal summary reports status "error" without any error text. */
 internal const val RUN_FAILED_FALLBACK_MESSAGE = "The response could not be completed."
+
+/**
+ * User-facing text of a turn whose stream was cut off before it ended: a
+ * durable run whose stream could not be re-attached before the deadline, a
+ * /retrieve stream that stopped before its [DONE], or a stream that failed
+ * after the turn generated a file.
+ */
+internal const val RESPONSE_INTERRUPTED_MESSAGE = "The response was interrupted before it finished. Please try again."
+
+/**
+ * errorType of the [StreamChunk.Error] that ends a stream the proxy lost
+ * before the server said it was complete: a durable run that never delivered
+ * its terminal event and could not be re-attached (contract C5; the run itself
+ * may still be going), or a /retrieve stream cut off before its [DONE].
+ */
+internal const val RUN_STREAM_LOST_ERROR_TYPE = "stream_lost"
 
 /**
  * Map one retrieval-server SSE event object (the parsed JSON of a `data: {...}`

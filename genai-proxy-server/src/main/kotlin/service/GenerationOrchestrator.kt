@@ -4,10 +4,14 @@ import com.genflowly.models.AIVendor
 import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
+import com.genflowly.models.retrieval.FileOrigin
+import com.genflowly.models.retrieval.RESPONSE_INTERRUPTED_MESSAGE
+import com.genflowly.models.retrieval.RUN_STREAM_LOST_ERROR_TYPE
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.toNdjsonFrame
 import com.genflowly.models.retrieval.parseGeneratedArtifacts
 import com.genflowly.models.retrieval.toConversationMessage
+import com.genflowly.models.retrieval.toFileRefs
 import com.genflowly.models.retrieval.toImageRefs
 import com.genflowly.models.retrieval.toPayloadToolResults
 import com.genflowly.models.retrieval.toPayloadTools
@@ -27,14 +31,18 @@ import com.genflowly.models.Message
 import com.genflowly.models.toCredentialKey
 import com.genflowly.models.toProviderString
 import org.slf4j.LoggerFactory
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 
 /**
  * Orchestrates the primary text-generation flows (batch + streaming): request
@@ -56,7 +64,9 @@ class GenerationOrchestrator(
     private val appScope: AppScope,
     private val runsClient: RunsClient,
     private val appConfig: AppConfig,
-    private val conversationManagementService: ConversationManagementService
+    private val conversationManagementService: ConversationManagementService,
+    /** In-flight turns by customer, for the account purge (the Koin singleton). */
+    private val activeTurns: ActiveTurns
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
@@ -96,6 +106,25 @@ class GenerationOrchestrator(
         messageId: String
     ): List<Message> {
         return conversationService.getMessageThread(conversationId, messageId)
+    }
+
+    /**
+     * Writes a streamed assistant message. When its DynamoDB item exceeds the
+     * 400 KB limit (thinking steps near their budget plus a long answer), it is
+     * written once more without its thinking steps: the answer and its files
+     * matter more than the trace.
+     */
+    private suspend fun addStreamedMessage(message: Message) {
+        try {
+            conversationService.addMessageInConversation(message)
+        } catch (e: Exception) {
+            if (message.thinkingStepsJson == null || !e.isItemSizeLimitError()) throw e
+            logger.warn(
+                "Assistant message {} exceeds the DynamoDB item size; storing it without its thinking steps",
+                message.messageId
+            )
+            conversationService.addMessageInConversation(message.copy(thinkingStepsJson = null))
+        }
     }
 
     /**
@@ -153,8 +182,9 @@ class GenerationOrchestrator(
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         useLearnedPreferences: Boolean = true,
         agentId: String? = null,
-        projectId: String? = null
-
+        projectId: String? = null,
+        /** First language tag of the browser's Accept-Language (e.g. "en-US"), or null. */
+        locale: String? = null
     ): List<Message> {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -210,24 +240,29 @@ class GenerationOrchestrator(
             instructionService.trackInstructionUsage(customerId, activeConversationId, effectiveInstructionId)
         }
         val responseMessageList = coroutineScope {
-            message.aiConfig.map { aiConfig ->
-                async {
-                    fetchResponseFromAIVendor(
-                        aiVendor = aiConfig.aiVendor,
-                        model = aiConfig.model,
-                        maxTokens = aiConfig.maxTokens,
-                        thinkingLevel = aiConfig.thinkingLevel,
-                        message = message,
-                        agentic = agentic,
-                        tools = tools,
-                        toolChoice = toolChoice,
-                        toolResults = toolResults,
-                        responseSchema = responseSchema,
-                        memoryEnabled = memoryEnabled,
-                        agentId = agentId
-                    )
-                }
-            }.awaitAll()
+            // Registered for the account purge, which may cancel the turn and
+            // waits for it; unregistered once every vendor's reply is stored.
+            activeTurns.register(customerId, activeConversationId, coroutineContext.job).use {
+                message.aiConfig.map { aiConfig ->
+                    async {
+                        fetchResponseFromAIVendor(
+                            aiVendor = aiConfig.aiVendor,
+                            model = aiConfig.model,
+                            maxTokens = aiConfig.maxTokens,
+                            thinkingLevel = aiConfig.thinkingLevel,
+                            message = message,
+                            agentic = agentic,
+                            tools = tools,
+                            toolChoice = toolChoice,
+                            toolResults = toolResults,
+                            responseSchema = responseSchema,
+                            memoryEnabled = memoryEnabled,
+                            agentId = agentId,
+                            locale = locale
+                        )
+                    }
+                }.awaitAll()
+            }
         }
 
         // Step 6 - Return message response list
@@ -247,7 +282,8 @@ class GenerationOrchestrator(
         toolResults: List<ToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         memoryEnabled: Boolean = false,
-        agentId: String? = null
+        agentId: String? = null,
+        locale: String? = null
     ): Message {
         val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, message.customerId)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
@@ -262,6 +298,8 @@ class GenerationOrchestrator(
         val resolvedMaxTokens = modelCatalogService.resolveMaxTokens(
             vendor = aiVendor, model = model, requested = maxTokens, streaming = false
         )
+        // Scratch namespace of this request and vendor, recorded on the reply.
+        val fsNamespace = newFsNamespace()
 
         val result = retrievalService.retrieveAndGenerate(
             customerId = message.customerId,
@@ -283,7 +321,10 @@ class GenerationOrchestrator(
             responseSchema = responseSchema,
             memoryEnabled = memoryEnabled,
             graphId = agentId,
-            thinkingLevel = thinkingLevel
+            thinkingLevel = thinkingLevel,
+            queryFiles = message.attachments.toFileRefs(FileOrigin.UPLOADED),
+            locale = locale,
+            fsNamespace = fsNamespace
         )
 
         val responseMessage = Message(
@@ -318,7 +359,8 @@ class GenerationOrchestrator(
             ),
             reasoningCostUsd = costCalculationService.computeReasoningCostUsd(
                 aiVendor, model, result.reasoningTokens
-            )
+            ),
+            fsNamespace = fsNamespace
         )
 
         conversationService.addMessageInConversation(responseMessage)
@@ -357,7 +399,9 @@ class GenerationOrchestrator(
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         useLearnedPreferences: Boolean = true,
         agentId: String? = null,
-        projectId: String? = null
+        projectId: String? = null,
+        /** First language tag of the browser's Accept-Language (e.g. "en-US"), or null. */
+        locale: String? = null
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -480,6 +524,8 @@ class GenerationOrchestrator(
             getThreadContext(activeConversationId, message.previousMessageId) + message
         }
         val conversationHistory = thread.map { it.toConversationMessage() }
+        // The current turn's non-image attachments (uploaded documents), sent as RawData.files.
+        val queryFiles = attachments.toFileRefs(FileOrigin.UPLOADED)
 
         // Pre-calculate the deterministic response ID to send as a response header immediately
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
@@ -492,8 +538,14 @@ class GenerationOrchestrator(
         // generation runs to completion and the response is persisted, so the
         // client can recover it by refetching the conversation.
         val chunkChannel = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
-        val generationJob = appScope.launch {
-            val emit: suspend (String) -> Unit = { chunkChannel.send(it) }
+        // The turn's entry in the account purge's registry, made before the job
+        // starts so a purge cannot miss it; closed once persistence is done.
+        lateinit var turnRegistration: AutoCloseable
+        val generationJob = appScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            // A client that disconnects cancels the relay's channel (consumeAsFlow
+            // cancels it when its collector fails). Frames for a gone client are
+            // then dropped: a suspending send would throw and end the turn early.
+            val emit: (String) -> Unit = { chunkChannel.trySend(it) }
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
             var capturedErrorMessage: String? = null
@@ -505,10 +557,21 @@ class GenerationOrchestrator(
             val capturedThinkingSteps = mutableListOf<String>()
             var success = false
             var cancelled = false
+            // The stream ended before the server said it was complete (a
+            // stream_lost error): for a durable run, without its terminal event
+            // and beyond re-attaching, so the run itself may still be going.
+            var streamLost = false
             // The durable run this generation added to the conversation's pending
             // set (one entry per vendor), captured so the finally removes exactly
             // this one — not the sibling vendors' still-in-flight runs.
             var pendingRunEntry: com.genflowly.repository.PendingRun? = null
+            // The durable run that generates this turn (null on the stateless
+            // path), recorded on the assistant message so a purge finds its data.
+            var durableRunId: String? = null
+            // Scratch namespace of this request and vendor: the turn's agent-fs
+            // objects live under customers/{cid}/agent-fs/{fsNamespace}/, so it
+            // is recorded on the assistant message for purge.
+            var fsNamespace = newFsNamespace()
             try {
                 val resolvedMaxTokens = modelCatalogService.resolveMaxTokens(
                     vendor = config.aiVendor,
@@ -536,7 +599,10 @@ class GenerationOrchestrator(
                     responseSchema = responseSchema,
                     memoryEnabled = memoryEnabled,
                     graphId = agentId,
-                    thinkingLevel = config.thinkingLevel
+                    thinkingLevel = config.thinkingLevel,
+                    queryFiles = queryFiles,
+                    locale = locale,
+                    fsNamespace = fsNamespace
                 )
                 // Durable /runs path (flagged): start a durable background run and
                 // reattach to its event stream. Credentials are NOT sent — the
@@ -563,9 +629,13 @@ class GenerationOrchestrator(
                             responseSchema = responseSchema,
                             memoryEnabled = memoryEnabled,
                             graphId = agentId,
-                            thinkingLevel = config.thinkingLevel
+                            thinkingLevel = config.thinkingLevel,
+                            queryFiles = queryFiles,
+                            locale = locale,
+                            fsNamespace = fsNamespace
                         )
                         if (startedRunId != null) {
+                            durableRunId = startedRunId
                             // Add this run to the conversation's pending set (one entry
                             // per vendor) for reload rediscovery ("assistant is mid-run");
                             // best-effort. Carries the deterministic responseMessageId +
@@ -578,6 +648,9 @@ class GenerationOrchestrator(
                             runsClient.streamRun(startedRunId)
                         } else {
                             logger.warn("Durable run start failed for conversation {} — falling back to stateless stream", activeConversationId)
+                            // A start whose response was lost may still have started
+                            // the run; the fallback never shares its namespace.
+                            fsNamespace = newFsNamespace()
                             statelessStream()
                         }
                     } else {
@@ -587,6 +660,7 @@ class GenerationOrchestrator(
                     // Capture for persistence; the client frame is produced by the
                     // shared StreamChunk.toNdjsonFrame() so the live and reattach
                     // streams emit an identical wire protocol.
+                    var relay = true
                     when (chunk) {
                         is StreamChunk.Content -> sb.append(chunk.text)
                         // The round that just streamed ended in in-graph tool
@@ -608,13 +682,21 @@ class GenerationOrchestrator(
                             capturedGeneratedArtifactsJson = mergeJsonArrays(capturedGeneratedArtifactsJson, chunk.json)
                         is StreamChunk.Usage -> capturedUsage = chunk
                         is StreamChunk.Error -> {
-                            // Vendor failure surfaced mid-stream — the concise reason is
-                            // relayed (below) and any partial text is kept and persisted.
-                            capturedErrorMessage = chunk.message
-                            logger.warn(
-                                "Generation {} failed mid-stream ({}): {}",
-                                responseMessageId, chunk.errorType ?: "provider_error", chunk.message
-                            )
+                            if (chunk.errorType == RUN_STREAM_LOST_ERROR_TYPE) streamLost = true
+                            if (capturedErrorMessage == null) {
+                                // Vendor or run failure surfaced mid-stream — the concise
+                                // reason is relayed (below) and stored with any partial text.
+                                capturedErrorMessage = chunk.message
+                                logger.warn(
+                                    "Generation {} failed mid-stream ({}): {}",
+                                    responseMessageId, chunk.errorType ?: "provider_error", chunk.message
+                                )
+                            } else {
+                                // The first error is the user-facing one: a failed run's
+                                // standalone error row precedes its terminal summary, which
+                                // repeats it (contract C5). Later ones are not relayed.
+                                relay = false
+                            }
                         }
                         is StreamChunk.AwaitingInput ->
                             logger.info("Generation {} awaiting input: {}", responseMessageId, chunk.json)
@@ -623,13 +705,20 @@ class GenerationOrchestrator(
                         // captured into thinking steps or persisted.
                         is StreamChunk.Progress -> {}
                     }
-                    chunk.toNdjsonFrame()?.let { emit(it) }
+                    if (relay) chunk.toNdjsonFrame()?.let { emit(it) }
                 }
                 success = true
             } catch (e: kotlinx.coroutines.CancellationException) {
-                // Explicit user cancel (cancelGeneration) — keep the partial text.
-                cancelled = true
-                logger.info("Generation {} cancelled — persisting {} streamed char(s)", responseMessageId, sb.length)
+                if (isActive) {
+                    // This turn was not cancelled: something it called failed
+                    // with a CancellationException. A failure, not a cancel.
+                    logger.error("Error during streaming", e)
+                    runCatching { emit("\n\n[Error: ${e.message}]") }
+                } else {
+                    // Explicit cancel (cancelGeneration, an account purge, shutdown) — keep the partial text.
+                    cancelled = true
+                    logger.info("Generation {} cancelled — persisting {} streamed char(s)", responseMessageId, sb.length)
+                }
             } catch (e: Exception) {
                 logger.error("Error during streaming", e)
                 runCatching { emit("\n\n[Error: ${e.message}]") }
@@ -640,21 +729,31 @@ class GenerationOrchestrator(
                     message.conversationId, responseText.length,
                     capturedUsage?.inputTokens, capturedUsage?.outputTokens, capturedUsage?.totalTokens
                 )
+                // Files a built-in tool generated are already in S3: whatever
+                // happened after them (an error frame, a socket timeout, a
+                // retrieval-server restart), the turn is persisted so the
+                // reloaded conversation still links them.
+                val generatedFiles = parseGeneratedArtifacts(capturedGeneratedArtifactsJson)
                 try {
                 // NonCancellable: after a user cancel this coroutine is dead —
                 // persistence of the partial text must still run.
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                if ((success || cancelled) && (responseText.isNotEmpty() || capturedToolCallsJson != null)) {
+                // A failed turn is stored with its error (contract C5), also
+                // when nothing was streamed, so a reload shows what happened.
+                if (generatedFiles.isNotEmpty() ||
+                    ((success || cancelled) &&
+                        (responseText.isNotEmpty() || capturedToolCallsJson != null || capturedErrorMessage != null))
+                ) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
                         conversationId = message.conversationId,
                         customerId = message.customerId,
                         client = message.client,
                         role = "assistant",
-                        text = responseText,
+                        text = responseText.ifEmpty { if (generatedFiles.isNotEmpty()) GENERATED_FILE_FALLBACK_TEXT else "" },
                         toolCallsJson = capturedToolCallsJson,
                         webSourcesJson = capturedWebSourcesJson,
-                        attachments = parseGeneratedArtifacts(capturedGeneratedArtifactsJson),
+                        attachments = generatedFiles,
                         previousMessageId = message.messageId,
                         aiConfig = listOf(config),
                         systemPrompt = message.systemPrompt,
@@ -682,31 +781,58 @@ class GenerationOrchestrator(
                         },
                         thinkingDurationMs = capturedThinkingDurationMs,
                         thinkingStepsJson = thinkingStepsToJson(capturedThinkingSteps),
-                        stopReason = capturedStopReason
+                        stopReason = capturedStopReason,
+                        fsNamespace = fsNamespace,
+                        runId = durableRunId,
+                        // The exception path stores a message only when it carries
+                        // generated files; it was cut off all the same.
+                        errorMessage = capturedErrorMessage
+                            ?: if (!success && !cancelled) RESPONSE_INTERRUPTED_MESSAGE else null
                     )
-                    conversationService.addMessageInConversation(responseMessage)
+                    addStreamedMessage(responseMessage)
                 }
-                // Durable run finished — remove just this run from the pending set
-                // (the other vendors' in-flight runs stay reattachable). No-op when
-                // no durable run was started (stateless path / start failure).
+                // Remove just this run from the pending set (the other vendors'
+                // in-flight runs stay reattachable), and only AFTER the message
+                // above is stored: a reattaching client reads it as soon as the
+                // run is no longer pending. Only once the run can publish nothing
+                // more: its stream delivered the terminal event, the turn was
+                // cancelled, or GET /runs/{id} reports a terminal status (or does
+                // not know the run). A run still going after the re-attach
+                // deadline stays pending, so a reload can reattach to it. No-op
+                // when no durable run was started (stateless path / start failure).
                 pendingRunEntry?.let { entry ->
-                    runCatching { conversationService.removePendingRun(customerId, activeConversationId, entry) }
+                    val runOver = (success && !streamLost) || cancelled ||
+                        runsClient.getRunStatus(entry.runId)?.isOver == true
+                    if (runOver) {
+                        runCatching { conversationService.removePendingRun(customerId, activeConversationId, entry) }
+                    } else {
+                        logger.warn(
+                            "Durable run {} has not finished; it stays pending on conversation {}",
+                            entry.runId, activeConversationId
+                        )
+                    }
                 }
                 }
                 } catch (e: Exception) {
                     logger.error("Failed to persist streamed response $responseMessageId", e)
                 } finally {
+                    // Persistence is over: an account purge waiting on this turn may go on.
+                    turnRegistration.close()
                     // Close AFTER persistence so a connected client's stream end
                     // implies the message is queryable (usage fetch follows it).
                     chunkChannel.close()
                 }
             }
         }
+        turnRegistration = activeTurns.register(customerId, activeConversationId, generationJob)
         activeGenerations[responseMessageId] = ActiveGeneration(customerId, generationJob)
         generationJob.invokeOnCompletion {
             activeGenerations.remove(responseMessageId)
             activeRunIds.remove(responseMessageId)
+            // A job cancelled before it started never ran the finally above.
+            chunkChannel.close()
         }
+        generationJob.start()
         val flow = chunkChannel.consumeAsFlow()
 
         return StreamExecutionResult(
@@ -722,33 +848,97 @@ class GenerationOrchestrator(
 }
 
 /**
- * Persisted form of a turn's thinking-step events ("ks" chunks, each already a
- * JSON object). Guards the DDB 400KB item limit: an oversized run (deep graph
- * cycles) keeps every step but drops the bulky prompt/response excerpts.
+ * A fresh agent-fs scratch namespace for one request and vendor: 32 lowercase
+ * hex characters, within the retrieval-server's ^[A-Za-z0-9-]{8,64}$ check.
+ * Sent as raw_data.fs_namespace and recorded on the assistant message, so the
+ * turn's scratch objects (customers/{cid}/agent-fs/{namespace}/) can be found.
  */
-private const val MAX_THINKING_STEPS_JSON_CHARS = 250_000
+internal fun newFsNamespace(): String = java.util.UUID.randomUUID().toString().replace("-", "")
 
-/** Concatenate two JSON arrays (either may be null); malformed input keeps the newer one. */
-private fun mergeJsonArrays(existing: String?, incoming: String): String {
-    if (existing.isNullOrBlank()) return incoming
-    return runCatching {
-        JsonArray(
-            Json.parseToJsonElement(existing).jsonArray + Json.parseToJsonElement(incoming).jsonArray
-        ).toString()
-    }.getOrElse { incoming }
-}
+/**
+ * Budget for a turn's persisted thinking steps, in UTF-8 bytes: DynamoDB's
+ * 400 KB item limit counts bytes, and a CJK character takes three.
+ */
+internal const val MAX_THINKING_STEPS_JSON_BYTES = 300_000
 
-private fun thinkingStepsToJson(steps: List<String>): String? {
+/** Step fields dropped when the steps are over budget: LLM excerpts, and a label that repeats tool arguments. */
+private val BULKY_STEP_FIELDS = setOf("prompt", "response", "detail")
+
+/** Step fields listing tool calls, whose entries lose their bulky parts when over budget. */
+private val CALL_LIST_FIELDS = setOf("tool_calls", "calls")
+
+/** Fields of a tool-call entry dropped when over budget: its arguments (a whole document for generate_pdf) and a sub-agent's trace. */
+private val BULKY_CALL_FIELDS = setOf("args", "details")
+
+/**
+ * Persisted form of a turn's thinking-step events ("ks" chunks, each already a
+ * JSON object), within [MAX_THINKING_STEPS_JSON_BYTES]. Over budget, every step
+ * is kept but its bulky parts are dropped: the prompt/response excerpts, the
+ * detail label, and the args (and sub-agent details) of each tool_calls/calls
+ * entry, which carry a whole document per generate_pdf call. Still over budget,
+ * the turn stores no thinking steps (null) rather than risk the message.
+ */
+internal fun thinkingStepsToJson(steps: List<String>): String? {
     if (steps.isEmpty()) return null
     val full = steps.joinToString(",", "[", "]")
-    if (full.length <= MAX_THINKING_STEPS_JSON_CHARS) return full
-    return runCatching {
-        val stripped = Json.parseToJsonElement(full).jsonArray.map { el ->
-            JsonObject(el.jsonObject.filterKeys { it != "prompt" && it != "response" })
-        }
-        JsonArray(stripped).toString()
-    }.getOrNull()
+    if (full.utf8Size() <= MAX_THINKING_STEPS_JSON_BYTES) return full
+    val stripped = runCatching {
+        JsonArray(Json.parseToJsonElement(full).jsonArray.map { it.withoutBulk() }).toString()
+    }.getOrNull() ?: return null
+    return stripped.takeIf { it.utf8Size() <= MAX_THINKING_STEPS_JSON_BYTES }
 }
+
+private fun String.utf8Size(): Int = toByteArray(Charsets.UTF_8).size
+
+private fun JsonElement.withoutBulk(): JsonElement {
+    val step = this as? JsonObject ?: return this
+    return JsonObject(
+        step.filterKeys { it !in BULKY_STEP_FIELDS }.mapValues { (field, value) ->
+            if (field in CALL_LIST_FIELDS && value is JsonArray) {
+                JsonArray(value.map { call ->
+                    (call as? JsonObject)?.let { JsonObject(it.filterKeys { key -> key !in BULKY_CALL_FIELDS }) } ?: call
+                })
+            } else {
+                value
+            }
+        }
+    )
+}
+
+/** Text stored for a turn whose only output is a generated file (its streamed text was empty). */
+internal const val GENERATED_FILE_FALLBACK_TEXT = "Your file is attached."
+
+/**
+ * Concatenate two generated-artifact JSON arrays ([existing] may be null),
+ * keeping one entry per artifact_id: the last one seen, at the position where
+ * that id first appeared. A durable run's terminal summary re-sends every
+ * artifact of the turn, which would otherwise store each file twice. Entries
+ * without an artifact_id are all kept. An [incoming] value that is not a JSON
+ * array is ignored, so files captured earlier are never dropped by it.
+ */
+internal fun mergeJsonArrays(existing: String?, incoming: String): String {
+    val newer = runCatching { Json.parseToJsonElement(incoming).jsonArray }.getOrNull()
+        ?: return existing ?: incoming
+    val earlier = existing?.let { runCatching { Json.parseToJsonElement(it).jsonArray }.getOrNull() }.orEmpty()
+    val byArtifactId = LinkedHashMap<Any, JsonElement>()
+    (earlier + newer).forEachIndexed { index, element ->
+        val artifactId = ((element as? JsonObject)?.get("artifact_id") as? JsonPrimitive)
+            ?.takeIf { it.isString }?.content
+        byArtifactId[artifactId ?: index] = element
+    }
+    return JsonArray(byArtifactId.values.toList()).toString()
+}
+
+/**
+ * True for DynamoDB's ValidationException for an item over the 400 KB limit
+ * ("Item size has exceeded the maximum allowed size"), anywhere in the cause
+ * chain.
+ */
+internal fun Throwable.isItemSizeLimitError(): Boolean =
+    generateSequence(this) { it.cause }.take(8).any { e ->
+        e is DynamoDbException && e.awsErrorDetails()?.errorCode() == "ValidationException" &&
+            (e.awsErrorDetails()?.errorMessage() ?: e.message.orEmpty()).contains("item size", ignoreCase = true)
+    }
 
 private fun String.toJsonStringValue(): String = buildString {
     append('"')

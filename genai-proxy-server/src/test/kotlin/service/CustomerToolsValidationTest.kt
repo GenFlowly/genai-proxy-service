@@ -1,6 +1,11 @@
 package com.genflowly.service
 
+import com.genflowly.di.provideJson
 import com.genflowly.models.api.UpsertCustomerToolRequest
+import com.genflowly.repository.CustomerToolsRepository
+import io.mockk.coVerify
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -124,6 +129,24 @@ class CustomerToolsValidationTest {
     fun `name may not collide with a built-in tool`() {
         rejects(request(name = "web_search"), "reserved")
         rejects(request(name = "generate_pdf"), "reserved")
+    }
+
+    @Test
+    fun `names of the built-in tools being rolled out are reserved too`() {
+        for (name in listOf("revise_pdf", "read_pdf_source", "read_attachment")) {
+            rejects(request(name = name), "reserved")
+        }
+    }
+
+    @Test
+    fun `creating a customer tool named revise_pdf is rejected before anything is stored`() = runTest {
+        val repository = mockk<CustomerToolsRepository>(relaxed = true)
+        val service = CustomerToolsService(repository, provideJson(), mockk(relaxed = true), "http://retrieval-server")
+
+        val e = assertFailsWith<IllegalArgumentException> { service.saveTool("cust-1", request(name = "revise_pdf")) }
+
+        assertTrue(e.message!!.contains("reserved", ignoreCase = true), e.message)
+        coVerify(exactly = 0) { repository.saveCustomerTool(any(), any()) }
     }
 
     // ── description ───────────────────────────────────────────────────────────

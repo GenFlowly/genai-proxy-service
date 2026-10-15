@@ -16,6 +16,9 @@ import io.ktor.server.routing.Route
 import io.github.smiley4.ktoropenapi.post
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GenerateTextStreamRequest
+import com.genflowly.models.retrieval.NDJSON_KEEPALIVE_INTERVAL_MS
+import com.genflowly.models.retrieval.localeFromAcceptLanguage
+import com.genflowly.models.retrieval.withKeepalives
 import org.slf4j.LoggerFactory
 import com.genflowly.service.ExchangeSideEffects
 import com.genflowly.service.GenerationOrchestrator
@@ -27,7 +30,9 @@ fun Route.registerGenerateTextStreamRoutes(
     customerProfileService: CustomerProfileService,
     exchangeSideEffects: ExchangeSideEffects,
     /** Log request payloads (user content) — off in production, see Routing.kt. */
-    logContent: Boolean = false
+    logContent: Boolean = false,
+    /** Silence after which a whitespace-only keepalive line is written. */
+    keepaliveIntervalMs: Long = NDJSON_KEEPALIVE_INTERVAL_MS
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.GENERATE_TEXT_STREAM, {
@@ -36,7 +41,9 @@ fun Route.registerGenerateTextStreamRoutes(
             description = "Streams the generated text incrementally as plain-text chunks " +
                     "(Transfer-Encoding: chunked). Conversation and message metadata is returned " +
                     "in response headers, not the body. The first byte is a heartbeat space " +
-                    "character sent before generation starts. Image input: upload images via " +
+                    "character sent before generation starts, and every 15 seconds without a " +
+                    "frame a whitespace-only line keeps the connection alive; skip blank lines. " +
+                    "Image input: upload images via " +
                     "POST /attachments first, then reference them in prompt.attachments — " +
                     "they are passed to vision-capable models alongside the prompt text. " +
                     "Tool use: pass tools and the model's tool calls arrive as a " +
@@ -98,6 +105,9 @@ fun Route.registerGenerateTextStreamRoutes(
                 call.response.header(HttpHeaders.Connection, "keep-alive")
                 call.response.header(ResponseHeaders.ACCEL_BUFFERING, "no")
 
+                // The browser's preferred locale (e.g. "en-US"), for locale-aware tools.
+                val locale = localeFromAcceptLanguage(call.request.headers[HttpHeaders.AcceptLanguage])
+
                 val streamResult = generationOrchestrator.processTextGenerateStreamRequest(
                     listOf(request.aiConfig),
                     request.prompt.instructionId,
@@ -115,7 +125,8 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.responseSchema,
                     request.useLearnedPreferences,
                     request.agentId,
-                    request.projectId
+                    request.projectId,
+                    locale = locale
                 )
 
                 call.response.header(ResponseHeaders.CONVERSATION_ID, streamResult.conversationId)
@@ -136,8 +147,11 @@ fun Route.registerGenerateTextStreamRoutes(
                         // to prevent client timeout (TTFB) while waiting for AI vendor
                         write(" ")
                         flush()
-                        
-                        streamResult.flow.collect { chunk ->
+
+                        // Whitespace-only lines during silences (a tool running, a
+                        // render queueing) keep proxies and the browser from cutting
+                        // a stream that is only quiet.
+                        streamResult.flow.withKeepalives(keepaliveIntervalMs).collect { chunk ->
                             write(chunk)
                             flush()
                         }

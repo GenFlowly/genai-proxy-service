@@ -2,7 +2,9 @@ package com.genflowly.activity.generation
 
 import com.genflowly.ResponseHeaders
 import com.genflowly.Routes
+import com.genflowly.models.retrieval.NDJSON_KEEPALIVE_INTERVAL_MS
 import com.genflowly.models.retrieval.toNdjsonFrame
+import com.genflowly.models.retrieval.withKeepalives
 import com.genflowly.providers.RunsClient
 import com.genflowly.service.ConversationAccessDeniedException
 import com.genflowly.service.ConversationService
@@ -19,6 +21,7 @@ import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.Route
+import kotlinx.coroutines.flow.mapNotNull
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("RunActivity")
@@ -37,6 +40,8 @@ fun Route.registerRunRoutes(
     runsClient: RunsClient,
     customerProfileService: CustomerProfileService,
     conversationService: ConversationService,
+    /** Silence after which a whitespace-only keepalive line is written. */
+    keepaliveIntervalMs: Long = NDJSON_KEEPALIVE_INTERVAL_MS,
 ) {
     authenticate("auth0", "apiKey") {
         get(Routes.REATTACH_RUN, {
@@ -75,9 +80,12 @@ fun Route.registerRunRoutes(
                 try {
                     write(" ")  // heartbeat so the client sees TTFB immediately
                     flush()
-                    runsClient.streamRun(runId, fromSeq).collect { chunk ->
-                        chunk.toNdjsonFrame()?.let { write(it); flush() }
-                    }
+                    // Whitespace-only lines while the run is quiet (a tool, a queue
+                    // wait, a recovery) keep the reattached stream from being cut.
+                    runsClient.streamRun(runId, fromSeq)
+                        .mapNotNull { it.toNdjsonFrame() }
+                        .withKeepalives(keepaliveIntervalMs)
+                        .collect { frame -> write(frame); flush() }
                 } catch (e: java.io.IOException) {
                     logger.warn("Reattach stream closed by client: {}", e.message)
                 } catch (e: Exception) {

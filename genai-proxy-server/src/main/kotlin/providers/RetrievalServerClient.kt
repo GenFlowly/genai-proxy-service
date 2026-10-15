@@ -11,6 +11,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
@@ -23,9 +25,14 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import com.genflowly.models.ModelCatalogEntry
 import com.genflowly.models.retrieval.ConversationMessage
+import com.genflowly.models.retrieval.FileRef
 import com.genflowly.models.retrieval.ImageRef
 import com.genflowly.models.retrieval.PayloadToolDefinition
 import com.genflowly.models.retrieval.PayloadToolResult
+import com.genflowly.models.retrieval.RESPONSE_INTERRUPTED_MESSAGE
+import com.genflowly.models.retrieval.RUN_FAILED_FALLBACK_MESSAGE
+import com.genflowly.models.retrieval.RUN_STREAM_LOST_ERROR_TYPE
+import com.genflowly.models.retrieval.RawData
 import com.genflowly.models.retrieval.RetrievalResult
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.VendorModelMetadata
@@ -39,7 +46,7 @@ private data class RetrievalAgentPayload(
     val customer_id: String,
     val client: String,
     val data_type: String,
-    val raw_data: AgentRawData,
+    val raw_data: RawData,
     val llm_credentials: Map<String, String>,
     val llm_provider: String,
     val llm_model: String,
@@ -67,14 +74,6 @@ private data class RetrievalAgentPayload(
      * overrides the response generator's node-config thinking_level.
      */
     val thinking_level: String? = null
-)
-
-@Serializable
-private data class AgentRawData(
-    val query_data: String,
-    val top_n: Int = 3,
-    /** Images attached to the current-turn query */
-    val images: List<ImageRef> = emptyList()
 )
 
 // --- /execute-agent-graph wire types ---
@@ -295,13 +294,22 @@ class RetrievalServerClient(
         memoryEnabled: Boolean,
         requestSource: String,
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        queryFiles: List<FileRef> = emptyList(),
+        locale: String? = null,
+        fsNamespace: String? = null
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
             client = client,
             data_type = "text",
-            raw_data = AgentRawData(query_data = query, images = queryImages),
+            raw_data = RawData(
+                queryData = query,
+                images = queryImages,
+                files = queryFiles,
+                locale = locale,
+                fsNamespace = fsNamespace
+            ),
             llm_credentials = llmCredentials,
             llm_provider = llmProvider,
             llm_model = llmModel,
@@ -340,10 +348,16 @@ class RetrievalServerClient(
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        /** Non-image files attached to the current turn (RawData.files). */
+        queryFiles: List<FileRef> = emptyList(),
+        /** First language tag of the browser's Accept-Language (RawData.locale). */
+        locale: String? = null,
+        /** Scratch namespace minted for this request and vendor (RawData.fs_namespace). */
+        fsNamespace: String? = null
     ): RetrievalResult {
-        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel)
+        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, files=${queryFiles.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, queryFiles = queryFiles, locale = locale, fsNamespace = fsNamespace)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -478,10 +492,20 @@ class RetrievalServerClient(
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        /** Non-image files attached to the current turn (RawData.files). */
+        queryFiles: List<FileRef> = emptyList(),
+        /** First language tag of the browser's Accept-Language (RawData.locale). */
+        locale: String? = null,
+        /** Scratch namespace minted for this request and vendor (RawData.fs_namespace). */
+        fsNamespace: String? = null
     ): Flow<StreamChunk> = channelFlow {
-        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel)
+        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, files=${queryFiles.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, queryFiles = queryFiles, locale = locale, fsNamespace = fsNamespace)
+        // The server ends every stream with [DONE], also after an error event.
+        // A stream that stops without it was cut off (a retrieval-server restart,
+        // a network reset, a timeout) and must not read as a complete answer.
+        var ended = false
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -496,7 +520,16 @@ class RetrievalServerClient(
                 }
             }.execute { response ->
                 if (!response.status.isSuccess()) {
+                    val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
                     logger.error { "Retrieval server error ${response.status}" }
+                    // A rejected request (e.g. an attachment it cannot use) fails
+                    // the turn with the server's readable reason when it has one.
+                    val attachmentError = attachmentErrorMessage(errorBody)
+                    send(
+                        if (attachmentError != null) StreamChunk.Error(attachmentError, "attachment_error")
+                        else StreamChunk.Error(RUN_FAILED_FALLBACK_MESSAGE, "error")
+                    )
+                    ended = true
                     return@execute
                 }
                 val channel = response.bodyAsChannel()
@@ -504,17 +537,22 @@ class RetrievalServerClient(
                     val line = channel.readUTF8Line() ?: break
                     if (!line.startsWith("data: ")) continue
                     val data = line.removePrefix("data: ")
-                    if (data == "[DONE]") break
-                    try {
-                        val jsonObj = json.parseToJsonElement(data).jsonObject
-                        parseRetrievalEvent(jsonObj)?.let { send(it) }
-                    } catch (_: Exception) {
-                        // skip malformed SSE chunk
+                    if (data == "[DONE]") {
+                        ended = true
+                        break
                     }
+                    // A malformed SSE chunk is skipped.
+                    runCatching { parseRetrievalEvent(json.parseToJsonElement(data).jsonObject) }
+                        .getOrNull()?.let { send(it) }
                 }
             }
         } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
             logger.error(e) { "Streaming from retrieval server failed" }
+        }
+        if (!ended) {
+            logger.warn { "Retrieval stream for customer $customerId ended without [DONE]" }
+            send(StreamChunk.Error(RESPONSE_INTERRUPTED_MESSAGE, RUN_STREAM_LOST_ERROR_TYPE))
         }
     }.flowOn(Dispatchers.IO)
 
