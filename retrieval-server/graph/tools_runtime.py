@@ -37,6 +37,18 @@ _registry: ToolRegistry | None = None
 # Must match attachmentS3Key() in the proxy server's Attachment.kt.
 _ATTACHMENT_KEY_TEMPLATE = "customers/{customer_id}/attachments/{artifact_id}"
 
+# Object tags on everything a tool stores as an artifact (and its source
+# sidecar). 'pending' objects are unclaimed: the proxy retags an object
+# 'kept' when it persists the message that links it, and a bucket lifecycle
+# rule expires whatever stays pending (an artifact of a turn that was never
+# persisted). See genai-proxy-server-cdk/lib/s3-stack.ts.
+ARTIFACT_TAGS = {"retention": "pending"}
+# Agent scratch (fs_write, oversized tool-output spills): request-scoped,
+# expired by the bucket's lifecycle rule after a few days.
+SCRATCH_TAGS = {"retention": "scratch"}
+# Re-derivable sidecars (e.g. text extracted from an uploaded PDF).
+DERIVED_TAGS = {"retention": "derived"}
+
 # Built-ins a TOOL_EXECUTOR node must name EXPLICITLY in its config's "tools"
 # list — excluded from the all-built-ins enablement default. These are tools
 # whose implicit arrival would change the behavior of existing graphs:
@@ -184,8 +196,16 @@ class _LazyAttachmentStore:
             self._store = S3ArtifactStore(bucket)
         return self._store
 
-    def put(self, key: str, data: bytes, content_type: str) -> None:
-        self._backing().put(key, data, content_type)
+    def put(
+        self,
+        key: str,
+        data: bytes,
+        content_type: str,
+        *,
+        tags: dict | None = None,
+        filename: str | None = None,
+    ) -> None:
+        self._backing().put(key, data, content_type, tags=tags, filename=filename)
 
     def get(self, key: str) -> bytes:
         return self._backing().get(key)
@@ -208,6 +228,7 @@ def make_tool_context(
         customer_id=customer_id,
         store=_LazyAttachmentStore(),
         key_template=_ATTACHMENT_KEY_TEMPLATE,
+        artifact_tags=dict(ARTIFACT_TAGS),
     )
     if secrets is not None:
         context.secrets = secrets

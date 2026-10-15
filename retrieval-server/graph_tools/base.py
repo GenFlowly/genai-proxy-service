@@ -16,15 +16,29 @@ class Artifact:
     media_type: str
     filename: str
     size_bytes: int
+    # Storage key of the source the artifact was rendered from (e.g. a PDF's
+    # Markdown, stored at '<key>.source.md'), so it can be revised later and
+    # purged with the artifact. None when no source was stored.
+    source_key: str | None = None
+    # Page count for paged documents (PDFs), when the renderer reported it.
+    page_count: int | None = None
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "artifact_id": self.artifact_id,
             "key": self.key,
             "media_type": self.media_type,
             "filename": self.filename,
             "size_bytes": self.size_bytes,
         }
+        # Optional fields are omitted rather than sent as null: the host reads
+        # them as optional, and an explicit null must not become the string
+        # "null" in a lenient JSON reader.
+        if self.source_key:
+            d["source_key"] = self.source_key
+        if self.page_count is not None:
+            d["page_count"] = self.page_count
+        return d
 
 
 @dataclass
@@ -117,19 +131,53 @@ class ToolContext:
     # host's agent machinery; tools that need an entry must degrade gracefully
     # when the host did not provide it.
     runtime: dict = field(default_factory=dict)
+    # Object tags the host wants on every artifact this context stores (e.g.
+    # {"retention": "pending"} until the host's persistence layer claims it).
+    # None stores untagged. Tag semantics are the host's policy.
+    artifact_tags: dict | None = None
 
-    def save_artifact(self, data: bytes, media_type: str, filename: str) -> Artifact:
+    def save_artifact(
+        self,
+        data: bytes,
+        media_type: str,
+        filename: str,
+        *,
+        source: str | None = None,
+        page_count: int | None = None,
+    ) -> Artifact:
+        """Persist an artifact (and, when given, the text it was rendered
+        from) and describe it for the host.
+
+        `source` is stored at '<key>.source.md' with the same tags, so a later
+        turn can revise the document from its exact source and a purge can
+        find the sidecar from the artifact's key. The sidecar is not an
+        artifact of its own: it is never listed for download."""
         artifact_id = str(uuid.uuid4())
         key = self.key_template.format(
             customer_id=self.customer_id, artifact_id=artifact_id
         )
-        self.store.put(key, data, media_type)
+        self.store.put(
+            key, data, media_type, tags=self.artifact_tags, filename=filename
+        )
+        source_key = None
+        if source is not None:
+            source_key = f"{key}.source.md"
+            stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+            self.store.put(
+                source_key,
+                source.encode("utf-8"),
+                "text/markdown; charset=utf-8",
+                tags=self.artifact_tags,
+                filename=f"{stem}.md",
+            )
         return Artifact(
             artifact_id=artifact_id,
             key=key,
             media_type=media_type,
             filename=filename,
             size_bytes=len(data),
+            source_key=source_key,
+            page_count=page_count,
         )
 
 

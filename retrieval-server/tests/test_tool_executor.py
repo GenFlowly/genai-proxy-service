@@ -389,7 +389,7 @@ class SpillTests(unittest.IsolatedAsyncioTestCase):
             self.fail = fail
             self.writes: dict[str, bytes] = {}
 
-        def put(self, key, data, content_type):
+        def put(self, key, data, content_type, *, tags=None, filename=None):
             if self.fail:
                 raise RuntimeError("s3 down")
             self.writes[key] = data

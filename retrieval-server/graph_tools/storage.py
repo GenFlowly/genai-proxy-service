@@ -6,14 +6,29 @@ directory in tests or open-source deployments.
 """
 import logging
 import os
+import unicodedata
 from typing import Protocol
+from urllib.parse import quote, urlencode
 
 logger = logging.getLogger(__name__)
 
 
 class ArtifactStore(Protocol):
-    def put(self, key: str, data: bytes, content_type: str) -> None:
-        """Persist `data` under `key`. Raises on failure."""
+    def put(
+        self,
+        key: str,
+        data: bytes,
+        content_type: str,
+        *,
+        tags: dict | None = None,
+        filename: str | None = None,
+    ) -> None:
+        """Persist `data` under `key`. Raises on failure.
+
+        `tags` are object tags (key -> value) stored with the object, e.g. a
+        retention class a lifecycle rule expires on. `filename` is the name a
+        browser should save the object as (S3: Content-Disposition). Backends
+        that cannot store either ignore them."""
         ...
 
     def get(self, key: str) -> bytes:
@@ -35,7 +50,15 @@ class LocalDiskArtifactStore:
     def _path(self, key: str) -> str:
         return os.path.join(self._base_dir, *key.split("/"))
 
-    def put(self, key: str, data: bytes, content_type: str) -> None:
+    def put(
+        self,
+        key: str,
+        data: bytes,
+        content_type: str,
+        *,
+        tags: dict | None = None,
+        filename: str | None = None,
+    ) -> None:
         path = self._path(key)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
@@ -79,10 +102,24 @@ class S3ArtifactStore:
             self._client = boto3.client("s3")
         return self._client
 
-    def put(self, key: str, data: bytes, content_type: str) -> None:
-        self._s3().put_object(
-            Bucket=self._bucket, Key=key, Body=data, ContentType=content_type
-        )
+    def put(
+        self,
+        key: str,
+        data: bytes,
+        content_type: str,
+        *,
+        tags: dict | None = None,
+        filename: str | None = None,
+    ) -> None:
+        kwargs: dict = {
+            "Bucket": self._bucket, "Key": key, "Body": data, "ContentType": content_type,
+        }
+        if tags:
+            # S3 takes tags on PutObject as a URL-encoded query string.
+            kwargs["Tagging"] = urlencode({str(k): str(v) for k, v in tags.items()})
+        if filename:
+            kwargs["ContentDisposition"] = content_disposition(filename)
+        self._s3().put_object(**kwargs)
         logger.info(
             "Stored artifact %s (%d bytes) in s3://%s", key, len(data), self._bucket
         )
@@ -106,3 +143,21 @@ class S3ArtifactStore:
             for obj in page.get("Contents", []):
                 out.append({"key": obj["Key"], "size": obj["Size"]})
         return out
+
+
+def content_disposition(filename: str) -> str:
+    """An `inline` Content-Disposition carrying `filename` safely.
+
+    RFC 6266/5987: an ASCII-only `filename=` fallback (quotes, backslashes and
+    control characters removed) plus `filename*=UTF-8''<percent-encoded>` for
+    the real name, so browsers save "résumé.pdf" instead of the object's UUID
+    key while no header injection is possible."""
+    folded = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode("ascii")
+    ascii_name = " ".join(
+        "".join(ch for ch in folded if ch.isprintable() and ch not in '"\\').split()
+    )
+    stem, dot, ext = ascii_name.rpartition(".")
+    if not ascii_name or (dot and not stem.strip()):
+        # Nothing ASCII survived (e.g. a Chinese name): keep the extension.
+        ascii_name = f"download.{ext}" if dot and ext else "download"
+    return f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}"

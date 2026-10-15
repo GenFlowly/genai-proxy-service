@@ -26,6 +26,14 @@ import re
 
 from graph_tools.base import GraphTool, ToolContext, ToolResult
 
+
+def _scratch_tags() -> dict:
+    """Tags for scratch objects: the bucket's lifecycle rule expires
+    retention=scratch after a few days (tools_runtime.SCRATCH_TAGS)."""
+    from graph.tools_runtime import SCRATCH_TAGS
+
+    return dict(SCRATCH_TAGS)
+
 logger = logging.getLogger(__name__)
 
 _MAX_FILE_BYTES = 2_000_000
@@ -110,7 +118,9 @@ class FsWriteTool(GraphTool):
                 )
             )
         try:
-            context.store.put(f"{prefix}{path}", data, "text/plain; charset=utf-8")
+            context.store.put(
+                f"{prefix}{path}", data, "text/plain; charset=utf-8", tags=_scratch_tags()
+            )
         except Exception as e:
             logger.error("fs_write: FAILED for %s — %s", path, e, exc_info=True)
             return ToolResult(

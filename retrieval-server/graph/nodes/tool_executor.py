@@ -73,7 +73,11 @@ def _spill_oversized(
     path = f"results/{tool_name}_{seq}.txt"
     data = content.encode("utf-8")
     try:
-        store.put(f"{fs_prefix}{path}", data, "text/plain; charset=utf-8")
+        from graph.tools_runtime import SCRATCH_TAGS
+
+        store.put(
+            f"{fs_prefix}{path}", data, "text/plain; charset=utf-8", tags=dict(SCRATCH_TAGS)
+        )
     except Exception as e:
         logger.error("Spill of %s result failed — %s", tool_name, e, exc_info=True)
         return (
