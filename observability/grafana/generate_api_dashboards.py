@@ -6,7 +6,7 @@ retrieval-server — every API gets a pair of charts (requests by status,
 p50/p90/p95/p99 latency) side by side on its own row, grouped into collapsed
 rows by subresource. Writes proxy-apis-{env}.json and retrieval-apis-{env}.json,
 the generated rows of fly-backend-{env}.json ('Agent runs', 'PDF generation'),
-the alert rules in alerts/retrieval-alerts-{env}.json, and re-applies the
+the alert rules in alerts/{retrieval,proxy}-alerts-{env}.json, and re-applies the
 global status color scheme.
 See genai-proxy-server/development.md "API metrics & dashboards".
 
@@ -532,18 +532,19 @@ def upsert_backend_rows(env):
 DS_PROM_UID = "${DS_PROM_UID}"
 
 
-def _alert(env, key, title, expr, op, threshold, for_, severity, summary, window_s=900):
+def _alert(env, key, title, expr, op, threshold, for_, severity, summary, window_s=900,
+           service="retrieval-server", group="retrieval-durable-runs", uid_prefix="rs"):
     return {
-        "uid": f"rs-{key}-{env}"[:40],
+        "uid": f"{uid_prefix}-{key}-{env}"[:40],
         "orgID": 1,
         "folderUID": f"genflowly-{env}",
-        "ruleGroup": "retrieval-durable-runs",
+        "ruleGroup": group,
         "title": title,
         "condition": "C",
         "for": for_,
         "noDataState": "OK",
         "execErrState": "Error",
-        "labels": {"service": "retrieval-server", "severity": severity, "env": env},
+        "labels": {"service": service, "severity": severity, "env": env},
         "annotations": {"summary": summary},
         "data": [
             {"refId": "A", "relativeTimeRange": {"from": window_s, "to": 0},
@@ -594,13 +595,34 @@ def build_alert_rules(env):
     ]
 
 
+def build_proxy_alert_rules(env):
+    """Retention and customer deletion (PDF plan 1.16, 3.9): the proxy's
+    claim reconciler and purge worker count what needs a person."""
+    sel = f'app="genai-proxy-server-{env}"'
+    kw = {"service": "genai-proxy-server", "group": "proxy-retention", "uid_prefix": "px"}
+    return [
+        _alert(env, "claim-overdue", "Kept-object claim overdue",
+               f"sum(increase(retention_claim_overdue_total{{{sel}}}[1h]))", "gt", 0, "0s", "critical",
+               "A message's files are still unclaimed after 3 days; once the pending-expiry rule is "
+               "on it deletes them at 7 days. The ERROR log of ClaimReconciler names the message; "
+               "see genai-proxy-server/development.md, 'The kept-object claim'.",
+               window_s=3600, **kw),
+        _alert(env, "purge-stuck", "Customer deletion or conversation purge stuck",
+               f'sum(increase(purge_jobs_total{{{sel}, status="stuck"}}[1h]))', "gt", 0, "0s", "critical",
+               "A purge job failed 10 times. GET /api/v1/admin/customers/deletion?customerId= shows "
+               "its stage and last error; see genai-proxy-server/development.md, 'Retention'.",
+               window_s=3600, **kw),
+    ]
+
+
 def write_alert_rules():
     out = HERE / "alerts"
     out.mkdir(exist_ok=True)
     for env in ("development", "production"):
-        fname = out / f"retrieval-alerts-{env}.json"
-        fname.write_text(json.dumps(build_alert_rules(env), indent=2) + "\n")
-        print(f"alerts/{fname.name}: written")
+        for prefix, build in (("retrieval", build_alert_rules), ("proxy", build_proxy_alert_rules)):
+            fname = out / f"{prefix}-alerts-{env}.json"
+            fname.write_text(json.dumps(build(env), indent=2) + "\n")
+            print(f"alerts/{fname.name}: written")
 
 
 def remove_backend_row(env, title):

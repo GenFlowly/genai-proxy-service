@@ -1,0 +1,140 @@
+[
+  {
+    "uid": "px-claim-overdue-production",
+    "orgID": 1,
+    "folderUID": "genflowly-production",
+    "ruleGroup": "proxy-retention",
+    "title": "Kept-object claim overdue",
+    "condition": "C",
+    "for": "0s",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "labels": {
+      "service": "genai-proxy-server",
+      "severity": "critical",
+      "env": "production"
+    },
+    "annotations": {
+      "summary": "A message's files are still unclaimed after 3 days; once the pending-expiry rule is on it deletes them at 7 days. The ERROR log of ClaimReconciler names the message; see genai-proxy-server/development.md, 'The kept-object claim'."
+    },
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 3600,
+          "to": 0
+        },
+        "datasourceUid": "${DS_PROM_UID}",
+        "model": {
+          "refId": "A",
+          "expr": "sum(increase(retention_claim_overdue_total{app=\"genai-proxy-server-production\"}[1h]))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200
+        }
+      },
+      {
+        "refId": "B",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "replaceNN",
+            "replaceWithValue": 0
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [
+                  0
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "uid": "px-purge-stuck-production",
+    "orgID": 1,
+    "folderUID": "genflowly-production",
+    "ruleGroup": "proxy-retention",
+    "title": "Customer deletion or conversation purge stuck",
+    "condition": "C",
+    "for": "0s",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "labels": {
+      "service": "genai-proxy-server",
+      "severity": "critical",
+      "env": "production"
+    },
+    "annotations": {
+      "summary": "A purge job failed 10 times. GET /api/v1/admin/customers/deletion?customerId= shows its stage and last error; see genai-proxy-server/development.md, 'Retention'."
+    },
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 3600,
+          "to": 0
+        },
+        "datasourceUid": "${DS_PROM_UID}",
+        "model": {
+          "refId": "A",
+          "expr": "sum(increase(purge_jobs_total{app=\"genai-proxy-server-production\", status=\"stuck\"}[1h]))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200
+        }
+      },
+      {
+        "refId": "B",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "replaceNN",
+            "replaceWithValue": 0
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [
+                  0
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+]
