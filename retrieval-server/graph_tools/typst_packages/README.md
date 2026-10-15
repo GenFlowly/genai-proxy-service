@@ -18,12 +18,16 @@ LaTeX math to Typst math, used for `\( \)` and `\[ \]` in generated PDFs.
 - `mitex.wasm` runs inside Typst's WebAssembly plugin sandbox (no file system,
   no network). The package evaluates the converted math with `eval`
   (`mitex.typ:27` and `:34`; `\raisebox`, `\hspace` and `\vspace` in
-  `specs/latex/standard.typ` evaluate their argument). The renderer keeps those
-  paths harmless: it sends an equation to mitex only after a filter (no bare
-  `#`, a length-only argument for those three commands, a size cap), checks each
-  distinct equation in a small separate compile and prints the raw TeX on
-  failure, and the per-render root holds nothing but the document's own images.
-  `tests/test_pdf_typst.py` has the escaping test.
+  `specs/latex/standard.typ` evaluate their argument as Typst code). Measured
+  on 0.2.7: the converter escapes `#`, quotes and brackets in `\text`,
+  `\mathrm`, `\operatorname` and plain math, and a `read()` reached through an
+  evaluated argument resolves inside this package directory, not the render
+  root. The renderer still keeps those paths closed: `\raisebox`, `\hspace` and
+  `\vspace` are passed to mitex only with a plain TeX length, `\includegraphics`
+  never, equations are capped in size, each distinct equation is checked in a
+  small separate compile (raw TeX is printed on failure), and the per-render
+  root holds nothing but the document's own images. `tests/test_pdf_typst.py`
+  has the escaping test.
 
 | File | sha256 |
 |---|---|
