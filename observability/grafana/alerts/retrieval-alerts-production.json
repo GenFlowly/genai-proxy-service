@@ -1,0 +1,347 @@
+[
+  {
+    "uid": "rs-restart-production",
+    "orgID": 1,
+    "folderUID": "genflowly-production",
+    "ruleGroup": "retrieval-durable-runs",
+    "title": "Retrieval server restarted",
+    "condition": "C",
+    "for": "0s",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "labels": {
+      "service": "retrieval-server",
+      "severity": "warning",
+      "env": "production"
+    },
+    "annotations": {
+      "summary": "The retrieval server process restarted: a deploy, a crash or an OOM kill. Every in-flight durable run is recovered. If no deploy was running, check `fly logs -a genai-retrieval-server-production` for 'Out of memory' and the Agent runs row of Backend Services."
+    },
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "${DS_PROM_UID}",
+        "model": {
+          "refId": "A",
+          "expr": "sum(changes(process_start_time_seconds{app=\"genai-retrieval-server-production\"}[10m]))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200
+        }
+      },
+      {
+        "refId": "B",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "replaceNN",
+            "replaceWithValue": 0
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [
+                  0
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "uid": "rs-memory-production",
+    "orgID": 1,
+    "folderUID": "genflowly-production",
+    "ruleGroup": "retrieval-durable-runs",
+    "title": "Retrieval server memory above 90%",
+    "condition": "C",
+    "for": "2m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "labels": {
+      "service": "retrieval-server",
+      "severity": "warning",
+      "env": "production"
+    },
+    "annotations": {
+      "summary": "The single retrieval machine is close to an OOM kill, which interrupts every tenant's runs."
+    },
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "${DS_PROM_UID}",
+        "model": {
+          "refId": "A",
+          "expr": "max(100 * (1 - fly_instance_memory_mem_available{app=\"genai-retrieval-server-production\"} / fly_instance_memory_mem_total{app=\"genai-retrieval-server-production\"}))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200
+        }
+      },
+      {
+        "refId": "B",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "replaceNN",
+            "replaceWithValue": 0
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [
+                  90
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "uid": "rs-agent-dead-letter-production",
+    "orgID": 1,
+    "folderUID": "genflowly-production",
+    "ruleGroup": "retrieval-durable-runs",
+    "title": "Durable agent run dead-lettered",
+    "condition": "C",
+    "for": "0s",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "labels": {
+      "service": "retrieval-server",
+      "severity": "critical",
+      "env": "production"
+    },
+    "annotations": {
+      "summary": "An agent_run crashed the process on every recovery and was dead-lettered (the user saw an error). Its id is in the WARNING log of the run sweep; manual replay: retrieval-server/development.md. request_agent_run dead letters are only counted."
+    },
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 900,
+          "to": 0
+        },
+        "datasourceUid": "${DS_PROM_UID}",
+        "model": {
+          "refId": "A",
+          "expr": "sum(increase(durable_run_dead_lettered_total{app=\"genai-retrieval-server-production\", workflow=\"agent_run\"}[15m]))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200
+        }
+      },
+      {
+        "refId": "B",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "replaceNN",
+            "replaceWithValue": 0
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [
+                  0
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "uid": "rs-recoveries-production",
+    "orgID": 1,
+    "folderUID": "genflowly-production",
+    "ruleGroup": "retrieval-durable-runs",
+    "title": "More than 3 durable run recoveries in an hour",
+    "condition": "C",
+    "for": "0s",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "labels": {
+      "service": "retrieval-server",
+      "severity": "warning",
+      "env": "production"
+    },
+    "annotations": {
+      "summary": "Runs are being re-executed after restarts more than usual: look for a crash loop."
+    },
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 3600,
+          "to": 0
+        },
+        "datasourceUid": "${DS_PROM_UID}",
+        "model": {
+          "refId": "A",
+          "expr": "sum(increase(durable_run_recovered_total{app=\"genai-retrieval-server-production\"}[1h]))",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200
+        }
+      },
+      {
+        "refId": "B",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "replaceNN",
+            "replaceWithValue": 0
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [
+                  3
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "uid": "rs-agent-error-rate-production",
+    "orgID": 1,
+    "folderUID": "genflowly-production",
+    "ruleGroup": "retrieval-durable-runs",
+    "title": "Agent run error rate above 10%",
+    "condition": "C",
+    "for": "10m",
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "labels": {
+      "service": "retrieval-server",
+      "severity": "warning",
+      "env": "production"
+    },
+    "annotations": {
+      "summary": "More than 10% of durable agent runs in the last hour ended with an error (at least 5 runs). Starting threshold: calibrate it against the normal rate."
+    },
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {
+          "from": 3600,
+          "to": 0
+        },
+        "datasourceUid": "${DS_PROM_UID}",
+        "model": {
+          "refId": "A",
+          "expr": "(sum(increase(agent_run_total{app=\"genai-retrieval-server-production\", status=\"error\"}[1h])) / sum(increase(agent_run_total{app=\"genai-retrieval-server-production\"}[1h]))) and on() (sum(increase(agent_run_total{app=\"genai-retrieval-server-production\"}[1h])) >= 5)",
+          "instant": true,
+          "intervalMs": 60000,
+          "maxDataPoints": 43200
+        }
+      },
+      {
+        "refId": "B",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "B",
+          "type": "reduce",
+          "expression": "A",
+          "reducer": "last",
+          "settings": {
+            "mode": "replaceNN",
+            "replaceWithValue": 0
+          }
+        }
+      },
+      {
+        "refId": "C",
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            {
+              "evaluator": {
+                "type": "gt",
+                "params": [
+                  0.1
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

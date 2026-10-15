@@ -158,6 +158,7 @@ async def startup() -> None:
         # import at module load.
         import runs
         await runs.register_run_queue()
+        await log_recovered_workflows()
 
         import asyncio
         global _cleanup_task, _sweep_task
@@ -192,6 +193,46 @@ async def _run_events_ttl_loop() -> None:
             break
         except Exception:
             logger.exception("run_events / tool ledger TTL prune failed")
+
+
+_MAX_LOGGED_IDS = 50
+
+
+async def log_recovered_workflows(dbos=None) -> list[str]:
+    """One WARNING at startup naming the runs this start recovers (plan 0.5):
+    launch() re-enqueues every PENDING workflow of this executor and app
+    version — they were executing when the previous process died. Logged
+    right after launch, so a run may already be dequeued again (PENDING) by
+    the time it is listed; a run waiting in the queue that never started
+    (no attempt yet) is not a recovery and is not listed. A second WARNING
+    names PENDING/ENQUEUED runs of other app versions, which are never
+    recovered (the sweep ends them). Ids only — never inputs. Never raises."""
+    try:
+        if dbos is None:
+            from dbos import DBOS as dbos
+        current = dbos.application_version
+        rows = await dbos.list_workflows_async(
+            status=["PENDING", "ENQUEUED"], load_input=False, load_output=False,
+        )
+        recovered = [w.workflow_id for w in rows
+                     if w.app_version == current and (w.recovery_attempts or 0) >= 1]
+        stranded = [w.workflow_id for w in rows
+                    if w.app_version is not None and w.app_version != current]
+        if recovered:
+            logger.warning(
+                "Durable runtime: recovering %d workflow(s) interrupted by the last shutdown: %s",
+                len(recovered), recovered[:_MAX_LOGGED_IDS],
+            )
+        if stranded:
+            logger.warning(
+                "Durable runtime: %d workflow(s) of another app version will not be recovered "
+                "(current %s; the sweep ends them): %s",
+                len(stranded), current, stranded[:_MAX_LOGGED_IDS],
+            )
+        return recovered
+    except Exception:
+        logger.exception("Durable runtime: could not list recovered workflows")
+        return []
 
 
 class SweepState:

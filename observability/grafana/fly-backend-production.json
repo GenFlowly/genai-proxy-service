@@ -900,10 +900,1416 @@
     },
     {
       "type": "row",
-      "title": "Vector retrieval & embeddings",
+      "title": "Agent runs",
+      "collapsed": false,
       "gridPos": {
         "x": 0,
         "y": 29,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent runs by status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (status) (increase(agent_run_total{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "{{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "Durable agent_run workflows finished per interval, by status. 'error' counts turns that ended with an error and workflows that raised."
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent runs in flight",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 30,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(agent_run_started_total{app=\"genai-retrieval-server-production\"}) - sum(agent_run_total{app=\"genai-retrieval-server-production\"})",
+          "legendFormat": "in flight",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "Executions started minus executions finished since the process started (both counters reset on a restart): runs in progress, including ones waiting for human input."
+    },
+    {
+      "type": "timeseries",
+      "title": "Recoveries and restarts",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(durable_run_recovered_total{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "recovered runs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        },
+        {
+          "expr": "sum(changes(process_start_time_seconds{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "process restarts",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "B"
+        }
+      ],
+      "description": "Runs re-executed after a restart (durable_run_recovered_total) and retrieval server process restarts (deploys, crashes, OOM kills)."
+    },
+    {
+      "type": "timeseries",
+      "title": "Dead-lettered runs",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 38,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (workflow) (increase(durable_run_dead_lettered_total{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "{{workflow}} dead letters",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "Runs DBOS stopped recovering (MAX_RECOVERY_ATTEMPTS_EXCEEDED), counted once by the run sweep. agent_run: the user saw an error. request_agent_run: capped at 0 attempts, every restart that interrupts one dead-letters it."
+    },
+    {
+      "type": "timeseries",
+      "title": "Interrupted tool calls",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (tool) (increase(tool_call_interrupted_total{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "{{tool}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "Tool calls a restart interrupted and a re-execution refused to run again (the model got an error result instead), by tool."
+    },
+    {
+      "type": "timeseries",
+      "title": "Request agent runs by status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 46,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (status) (increase(request_agent_run_total{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "{{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "Durable request agents (titles, personas, memory extraction) finished per interval, by status."
+    },
+    {
+      "type": "row",
+      "title": "PDF generation",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "PDF render time p50/p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 55,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le, renderer) (rate(pdf_render_seconds_bucket{app=\"genai-retrieval-server-production\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{renderer}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, renderer) (rate(pdf_render_seconds_bucket{app=\"genai-retrieval-server-production\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{renderer}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "B"
+        }
+      ],
+      "description": "Wall time of one generate_pdf call (queue + render + store), by renderer."
+    },
+    {
+      "type": "timeseries",
+      "title": "PDF renders by status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 55,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (renderer, status) (increase(pdf_render_seconds_count{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "{{renderer}} {{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "generate_pdf calls per interval by renderer and status (ok, error, oom, timeout, busy, rejected)."
+    },
+    {
+      "type": "timeseries",
+      "title": "PDF child peak RSS p50/p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 63,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le, renderer) (rate(pdf_child_peak_rss_bytes_bucket{app=\"genai-retrieval-server-production\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{renderer}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, renderer) (rate(pdf_child_peak_rss_bytes_bucket{app=\"genai-retrieval-server-production\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{renderer}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "B"
+        }
+      ],
+      "description": "Peak RSS of the render worker child after a render, by renderer."
+    },
+    {
+      "type": "timeseries",
+      "title": "PDF queue wait p50/p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 63,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(pdf_queue_wait_seconds_bucket{app=\"genai-retrieval-server-production\"}[$__rate_interval])))",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(pdf_queue_wait_seconds_bucket{app=\"genai-retrieval-server-production\"}[$__rate_interval])))",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "B"
+        }
+      ],
+      "description": "Time a render waited for the machine-wide heavy-job slot."
+    },
+    {
+      "type": "timeseries",
+      "title": "PDF render warnings by kind",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 71,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (renderer, kind) (increase(pdf_render_warnings_total{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "{{renderer}} {{kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "Renderer warnings per interval, by renderer and kind (counts only, never text)."
+    },
+    {
+      "type": "timeseries",
+      "title": "PDF rejections by reason",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 71,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (reason) (increase(pdf_rejected_total{app=\"genai-retrieval-server-production\"}[$__rate_interval]))",
+          "legendFormat": "{{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "generate_pdf calls refused before rendering (caps), by reason."
+    },
+    {
+      "type": "timeseries",
+      "title": "PDF render CPU p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 79,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, renderer) (rate(pdf_render_cpu_seconds_bucket{app=\"genai-retrieval-server-production\"}[$__rate_interval])))",
+          "legendFormat": "render p95 {{renderer}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, renderer) (rate(pdf_worker_spawn_cpu_seconds_bucket{app=\"genai-retrieval-server-production\"}[$__rate_interval])))",
+          "legendFormat": "spawn p95 {{renderer}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "B"
+        }
+      ],
+      "description": "CPU seconds of the render itself, and of worker spawns (renderer import), by renderer."
+    },
+    {
+      "type": "timeseries",
+      "title": "PDF tool calls by status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 79,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (tool, status) (increase(tool_execution_total{app=\"genai-retrieval-server-production\", tool=~\"generate_pdf|revise_pdf\"}[$__rate_interval]))",
+          "legendFormat": "{{tool}} {{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "refId": "A"
+        }
+      ],
+      "description": "generate_pdf / revise_pdf tool executions per interval, by status."
+    },
+    {
+      "type": "row",
+      "title": "Vector retrieval & embeddings",
+      "gridPos": {
+        "x": 0,
+        "y": 87,
         "w": 24,
         "h": 1
       },
@@ -923,7 +2329,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 88,
         "w": 8,
         "h": 7
       },
@@ -1017,7 +2423,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 30,
+        "y": 88,
         "w": 8,
         "h": 7
       },
@@ -1111,7 +2517,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 30,
+        "y": 88,
         "w": 4,
         "h": 7
       },
@@ -1164,7 +2570,7 @@
       },
       "gridPos": {
         "x": 20,
-        "y": 30,
+        "y": 88,
         "w": 4,
         "h": 7
       },
@@ -1213,7 +2619,7 @@
       "title": "Web search, tools, streaming, voice",
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 95,
         "w": 24,
         "h": 1
       },
@@ -1233,7 +2639,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 96,
         "w": 8,
         "h": 7
       },
@@ -1328,7 +2734,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 38,
+        "y": 96,
         "w": 8,
         "h": 7
       },
@@ -1431,7 +2837,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 38,
+        "y": 96,
         "w": 8,
         "h": 7
       },
@@ -1525,7 +2931,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 45,
+        "y": 103,
         "w": 12,
         "h": 7
       },
@@ -1642,7 +3048,7 @@
       "title": "Memory extraction",
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 110,
         "w": 24,
         "h": 1
       },
@@ -1660,7 +3066,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 53,
+        "y": 111,
         "w": 8,
         "h": 7
       },
@@ -1754,7 +3160,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 53,
+        "y": 111,
         "w": 8,
         "h": 7
       },
@@ -1848,7 +3254,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 53,
+        "y": 111,
         "w": 8,
         "h": 7
       },
@@ -1951,7 +3357,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 60,
+        "y": 118,
         "w": 8,
         "h": 7
       },
@@ -2045,7 +3451,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 60,
+        "y": 118,
         "w": 4,
         "h": 7
       },
@@ -2098,7 +3504,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 60,
+        "y": 118,
         "w": 4,
         "h": 7
       },
