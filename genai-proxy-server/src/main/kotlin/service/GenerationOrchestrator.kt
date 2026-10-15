@@ -267,6 +267,8 @@ class GenerationOrchestrator(
         val resolvedMaxTokens = modelCatalogService.resolveMaxTokens(
             vendor = aiVendor, model = model, requested = maxTokens, streaming = false
         )
+        // Scratch namespace of this request and vendor, recorded on the reply.
+        val fsNamespace = newFsNamespace()
 
         val result = retrievalService.retrieveAndGenerate(
             customerId = message.customerId,
@@ -290,7 +292,8 @@ class GenerationOrchestrator(
             graphId = agentId,
             thinkingLevel = thinkingLevel,
             queryFiles = message.attachments.toFileRefs(FileOrigin.UPLOADED),
-            locale = locale
+            locale = locale,
+            fsNamespace = fsNamespace
         )
 
         val responseMessage = Message(
@@ -325,7 +328,8 @@ class GenerationOrchestrator(
             ),
             reasoningCostUsd = costCalculationService.computeReasoningCostUsd(
                 aiVendor, model, result.reasoningTokens
-            )
+            ),
+            fsNamespace = fsNamespace
         )
 
         conversationService.addMessageInConversation(responseMessage)
@@ -520,6 +524,13 @@ class GenerationOrchestrator(
             // set (one entry per vendor), captured so the finally removes exactly
             // this one — not the sibling vendors' still-in-flight runs.
             var pendingRunEntry: com.genflowly.repository.PendingRun? = null
+            // The durable run that generates this turn (null on the stateless
+            // path), recorded on the assistant message so a purge finds its data.
+            var durableRunId: String? = null
+            // Scratch namespace of this request and vendor: the turn's agent-fs
+            // objects live under customers/{cid}/agent-fs/{fsNamespace}/, so it
+            // is recorded on the assistant message for purge.
+            var fsNamespace = newFsNamespace()
             try {
                 val resolvedMaxTokens = modelCatalogService.resolveMaxTokens(
                     vendor = config.aiVendor,
@@ -549,7 +560,8 @@ class GenerationOrchestrator(
                     graphId = agentId,
                     thinkingLevel = config.thinkingLevel,
                     queryFiles = queryFiles,
-                    locale = locale
+                    locale = locale,
+                    fsNamespace = fsNamespace
                 )
                 // Durable /runs path (flagged): start a durable background run and
                 // reattach to its event stream. Credentials are NOT sent — the
@@ -578,9 +590,11 @@ class GenerationOrchestrator(
                             graphId = agentId,
                             thinkingLevel = config.thinkingLevel,
                             queryFiles = queryFiles,
-                            locale = locale
+                            locale = locale,
+                            fsNamespace = fsNamespace
                         )
                         if (startedRunId != null) {
+                            durableRunId = startedRunId
                             // Add this run to the conversation's pending set (one entry
                             // per vendor) for reload rediscovery ("assistant is mid-run");
                             // best-effort. Carries the deterministic responseMessageId +
@@ -593,6 +607,9 @@ class GenerationOrchestrator(
                             runsClient.streamRun(startedRunId)
                         } else {
                             logger.warn("Durable run start failed for conversation {} — falling back to stateless stream", activeConversationId)
+                            // A start whose response was lost may still have started
+                            // the run; the fallback never shares its namespace.
+                            fsNamespace = newFsNamespace()
                             statelessStream()
                         }
                     } else {
@@ -697,7 +714,9 @@ class GenerationOrchestrator(
                         },
                         thinkingDurationMs = capturedThinkingDurationMs,
                         thinkingStepsJson = thinkingStepsToJson(capturedThinkingSteps),
-                        stopReason = capturedStopReason
+                        stopReason = capturedStopReason,
+                        fsNamespace = fsNamespace,
+                        runId = durableRunId
                     )
                     conversationService.addMessageInConversation(responseMessage)
                 }
@@ -735,6 +754,14 @@ class GenerationOrchestrator(
     }
 
 }
+
+/**
+ * A fresh agent-fs scratch namespace for one request and vendor: 32 lowercase
+ * hex characters, within the retrieval-server's ^[A-Za-z0-9-]{8,64}$ check.
+ * Sent as raw_data.fs_namespace and recorded on the assistant message, so the
+ * turn's scratch objects (customers/{cid}/agent-fs/{namespace}/) can be found.
+ */
+internal fun newFsNamespace(): String = java.util.UUID.randomUUID().toString().replace("-", "")
 
 /**
  * Persisted form of a turn's thinking-step events ("ks" chunks, each already a
