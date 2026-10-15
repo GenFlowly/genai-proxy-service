@@ -1,6 +1,7 @@
 package com.genflowly.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /*
  * Attachment uploads are deliberately permissive: any media type, no size cap.
@@ -60,8 +61,9 @@ fun isImageAttachmentMediaType(mediaType: String?): Boolean {
 }
 
 /**
- * Reference to an image stored in the attachments S3 bucket. Only the reference
- * is persisted on messages; the bytes live in S3 under
+ * Reference to a file stored in the attachments S3 bucket: an uploaded image or
+ * a file a built-in tool generated (e.g. a PDF). Only the reference is persisted
+ * on messages; the bytes live in S3 under
  * customers/{customerId}/attachments/{attachmentId}.
  */
 @Serializable
@@ -71,7 +73,23 @@ data class AttachmentRef(
     val mediaType: String,
     /** Display name for downloads. Set for generated artifacts (e.g. PDFs from
      * the generate_pdf tool); null for uploaded images (pre-feature records). */
-    val filename: String? = null
+    val filename: String? = null,
+    /** Object size in bytes, shown on the attachment card. Generated artifacts
+     * carry the retrieval-server's size_bytes. Null for records predating it. */
+    val sizeBytes: Long? = null,
+    /**
+     * S3 key of a generated artifact's stored Markdown source
+     * (`<s3Key>.source.md`), so purge and the kept-object claim can find it.
+     * Server-side only: @Transient keeps it out of every JSON body, so it is
+     * never sent to the browser and never accepted from a client. It is
+     * persisted and read through ConversationRepository's DynamoDB mapping.
+     * Null for uploads and for records predating it (those fall back to
+     * `s3Key + ".source.md"` where a source may exist).
+     */
+    @Transient
+    val sourceKey: String? = null,
+    /** Page count of a PDF when known; null otherwise. */
+    val pageCount: Int? = null
 )
 
 fun attachmentS3Key(customerId: String, attachmentId: String): String =

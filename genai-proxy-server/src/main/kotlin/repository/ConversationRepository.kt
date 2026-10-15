@@ -810,6 +810,20 @@ class ConversationRepository(
                     message.stopReason?.let {
                         map["stopReason"] = AttributeValue.builder().s(it).build()
                     }
+                    message.fsNamespace?.takeIf { it.isNotBlank() }?.let {
+                        map["fsNamespace"] = AttributeValue.builder().s(it).build()
+                    }
+                    message.runId?.takeIf { it.isNotBlank() }?.let {
+                        map["runId"] = AttributeValue.builder().s(it).build()
+                    }
+                    // Written only while true, as a Number rather than a BOOL so
+                    // the attribute can also key a sparse GSI (BOOL cannot).
+                    if (message.claimPending) {
+                        map["claimPending"] = AttributeValue.builder().n("1").build()
+                    }
+                    message.errorMessage?.takeIf { it.isNotBlank() }?.let {
+                        map["errorMessage"] = AttributeValue.builder().s(it).build()
+                    }
                 }
             )
 
@@ -881,25 +895,46 @@ class ConversationRepository(
             thinkingDurationMs = item["thinkingDurationMs"]?.n()?.toLongOrNull(),
             thinkingStepsJson = item["thinkingStepsJson"]?.s()?.takeIf { it.isNotBlank() },
             stopReason = item["stopReason"]?.s()?.takeIf { it.isNotBlank() },
+            fsNamespace = item["fsNamespace"]?.s()?.takeIf { it.isNotBlank() },
+            runId = item["runId"]?.s()?.takeIf { it.isNotBlank() },
+            claimPending = isFlagSet(item["claimPending"]),
+            errorMessage = item["errorMessage"]?.s()?.takeIf { it.isNotBlank() },
             createdAt = item["createdAt"]?.s()
         )
     }
 
+    /** A flag attribute counts as set when it is a non-zero Number or a BOOL true. */
+    private fun isFlagSet(attr: AttributeValue?): Boolean =
+        attr?.n()?.toBigDecimalOrNull()?.let { it.signum() != 0 } ?: (attr?.bool() == true)
+
+    /**
+     * AttachmentRefs as a DynamoDB list of maps. The optional fields are written
+     * only when set, so rows stay readable by code predating them.
+     */
     private fun attachmentsToAttributeValue(
         attachments: List<com.genflowly.models.AttachmentRef>
     ): AttributeValue =
         AttributeValue.builder()
             .l(
                 attachments.map { attachment ->
-                    AttributeValue.builder()
-                        .m(
-                            mapOf(
-                                "attachmentId" to AttributeValue.builder().s(attachment.attachmentId).build(),
-                                "s3Key" to AttributeValue.builder().s(attachment.s3Key).build(),
-                                "mediaType" to AttributeValue.builder().s(attachment.mediaType).build()
-                            )
-                        )
-                        .build()
+                    val fields = mutableMapOf(
+                        "attachmentId" to AttributeValue.builder().s(attachment.attachmentId).build(),
+                        "s3Key" to AttributeValue.builder().s(attachment.s3Key).build(),
+                        "mediaType" to AttributeValue.builder().s(attachment.mediaType).build()
+                    )
+                    attachment.filename?.takeIf { it.isNotBlank() }?.let {
+                        fields["filename"] = AttributeValue.builder().s(it).build()
+                    }
+                    attachment.sizeBytes?.let {
+                        fields["sizeBytes"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    attachment.sourceKey?.takeIf { it.isNotBlank() }?.let {
+                        fields["sourceKey"] = AttributeValue.builder().s(it).build()
+                    }
+                    attachment.pageCount?.let {
+                        fields["pageCount"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    AttributeValue.builder().m(fields).build()
                 }
             )
             .build()
@@ -912,6 +947,14 @@ class ConversationRepository(
             val attachmentId = map["attachmentId"]?.s() ?: return@mapNotNull null
             val s3Key = map["s3Key"]?.s() ?: return@mapNotNull null
             val mediaType = map["mediaType"]?.s() ?: return@mapNotNull null
-            com.genflowly.models.AttachmentRef(attachmentId = attachmentId, s3Key = s3Key, mediaType = mediaType)
+            com.genflowly.models.AttachmentRef(
+                attachmentId = attachmentId,
+                s3Key = s3Key,
+                mediaType = mediaType,
+                filename = map["filename"]?.s()?.takeIf { it.isNotBlank() },
+                sizeBytes = map["sizeBytes"]?.n()?.toLongOrNull(),
+                sourceKey = map["sourceKey"]?.s()?.takeIf { it.isNotBlank() },
+                pageCount = map["pageCount"]?.n()?.toIntOrNull()
+            )
         } ?: emptyList()
 }

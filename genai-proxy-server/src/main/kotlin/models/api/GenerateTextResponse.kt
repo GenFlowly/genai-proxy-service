@@ -51,6 +51,13 @@ data class GenerateTextResponse(
      */
     val stopReason: String? = null,
     /**
+     * User-facing error text when this turn failed (for example a durable run
+     * that never reached a terminal event); clients render a failed response
+     * card from it. `text` then holds whatever was streamed before the failure
+     * and may be empty. Null for turns that completed.
+     */
+    val error: String? = null,
+    /**
      * The agent graph's thinking-step events for this turn, as streamed ("ks"
      * chunks): [{"node","name","kind","status",...}]. Raw running+done events —
      * clients fold them into the per-node step list. Null for records
