@@ -179,6 +179,10 @@ object Routes {
     const val ADMIN_NODE_PRESETS = "$API_V1/admin/node-presets"
     const val ADMIN_NODE_PRESET = "$API_V1/admin/node-presets/{presetId}"
 
+    // PDF letterhead logos of System agents (plan 6.2), admin-only
+    const val ADMIN_LETTERHEAD_LOGO = "$API_V1/admin/letterhead-logo"
+    const val ADMIN_LETTERHEAD_LOGO_URL = "$API_V1/admin/letterhead-logo/url"
+
     const val VOICE_SESSION = "$API_V1/voice/session"
     const val GET_VOICE_MODELS = "$API_V1/voice/models"
     const val VOICE_CLIENT_SECRET = "$API_V1/voice/client-secret"

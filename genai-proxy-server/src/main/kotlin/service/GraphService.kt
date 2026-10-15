@@ -52,6 +52,8 @@ class GraphService(
     private val graphRepository: GraphRepository,
     private val instructionRepository: InstructionRepository,
     private val requestAgentMapRepository: RequestAgentMapRepository,
+    /** Checks letterhead logo ids on save (plan 6.2); null skips the check. */
+    private val letterheadLogos: LetterheadLogoService? = null,
 ) {
 
     private val nodeConfigJson = kotlinx.serialization.json.Json {
@@ -520,6 +522,7 @@ class GraphService(
         configById.forEach { (nodeId, config) ->
             validateInstructionRef(nodeId, config, nodeTypeById[nodeId])
         }
+        validateLetterheadLogos(ownerId, configById)
 
         req.nodes.forEach { node ->
             graphRepository.createCustomerGraphNode(
@@ -709,6 +712,7 @@ class GraphService(
         nodePatchConfigs.forEach { (nodeId, config) ->
             validateInstructionRef(nodeId, config, nodeTypeById[nodeId])
         }
+        validateLetterheadLogos(ownerId, nodePatchConfigs)
 
         // ── Apply: create added nodes, patch nodes, remove nodes, patch graph ─
         addNodes.forEach { n ->
@@ -780,6 +784,32 @@ class GraphService(
         var result = json
         idMap.forEach { (from, to) -> result = result.replace("\"$from\"", "\"$to\"") }
         return result
+    }
+
+    /**
+     * A letterhead logo id (rule 12) must name a file generate_pdf can read:
+     * one under the graph owner's attachments, or one of System's
+     * admin-uploaded letterhead logos. Anything else, another customer's file
+     * included, is refused here rather than silently rendering without a logo.
+     */
+    private suspend fun validateLetterheadLogos(ownerId: String, configs: Map<String, String>) {
+        val logos = letterheadLogos ?: return
+        configs.forEach { (nodeId, config) ->
+            val logoId = letterheadLogoId(config) ?: return@forEach
+            require(logos.exists(ownerId, logoId)) {
+                "Node '$nodeId': the letterhead logo was not found among this agent's files. Upload it again."
+            }
+        }
+    }
+
+    private fun letterheadLogoId(config: String): String? = try {
+        val settings = nodeConfigJson.parseToJsonElement(config) as? kotlinx.serialization.json.JsonObject
+        val pdf = (settings?.get("tool_settings") as? kotlinx.serialization.json.JsonObject)
+            ?.get("generate_pdf") as? kotlinx.serialization.json.JsonObject
+        (pdf?.get("logo_attachment_id") as? kotlinx.serialization.json.JsonPrimitive)
+            ?.takeIf { it.isString }?.content
+    } catch (e: Exception) {
+        null // rule 9 already rejected invalid JSON
     }
 
     /**

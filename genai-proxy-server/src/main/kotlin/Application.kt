@@ -15,6 +15,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import com.genflowly.activity.admin.registerLetterheadLogoRoutes
 import io.micrometer.prometheusmetrics.PrometheusConfig
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry
 import java.util.UUID
@@ -460,4 +461,11 @@ fun Application.module() {
     val connectorsService = get<com.genflowly.service.ConnectorsService>()
     val projectService = get<com.genflowly.service.ProjectService>()
     configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, projectService, appConfig)
+
+    // PDF letterhead logos of System agents (plan 6.2), admin-only
+    routing {
+        registerLetterheadLogoRoutes(
+            get<com.genflowly.service.LetterheadLogoService>(), customerProfileService, appConfig
+        )
+    }
 }

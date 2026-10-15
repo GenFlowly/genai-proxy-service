@@ -194,7 +194,8 @@ fun appModule(): Module = module {
         )
     }
     single { com.genflowly.service.VendorAllowlistService(get()) }
-    single { GraphService(get(), get(), get()) }
+    single { com.genflowly.service.LetterheadLogoService(get()) }
+    single { GraphService(get(), get(), get(), get()) }
     single { com.genflowly.repository.NodePresetRepository(get(), get()) }
     single { com.genflowly.service.NodePresetService(get(), get()) }
     single { com.genflowly.service.RequestAgentSeeds() }
