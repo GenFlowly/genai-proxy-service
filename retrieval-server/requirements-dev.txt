@@ -2,6 +2,8 @@
 # requirements.txt, with the same constraints file:
 #   pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
 -c constraints.txt
-# PDF text/structure checks in tests/test_generate_pdf.py and the Typst tests
-# (pypdfium2, also used by the tests, is a production dependency since 4.1).
+# PDF text and metadata checks in the PDF tests, and the password-protected
+# fixture in tests/pdf_fixtures.py (pypdfium2, which the tests also use, is a
+# production dependency since 4.1). Pinned only here: since the xhtml2pdf
+# renderer was removed (plan 5.2), nothing in the image depends on pypdf.
 pypdf==6.20.1

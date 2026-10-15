@@ -62,10 +62,6 @@ pi-heif>=1.1
 # so a LibRaw upgrade should be a deliberate change that re-measures them.
 rawpy~=0.27.1
 
-# Built-in graph tools (graph_tools/): markdown -> PDF rendering
-markdown
-xhtml2pdf
-
 # Model catalog for /models listing (capability metadata per model)
 litellm
 

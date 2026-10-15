@@ -1,34 +1,15 @@
-# Exact pins for packages that exist ONLY for the PDF stack (markdown ->
-# xhtml2pdf). CI and the Docker image install with
-#   pip install -c constraints.txt -r requirements.txt
-# so both resolve the same renderer. xhtml2pdf shipped six releases in five
-# weeks (0.2.18-0.2.24) and its glyph fallback, resource policy and log format
-# change between them; the golden render tests (tests/test_generate_pdf.py)
-# are recorded against these versions.
+# Constraints for the one install command CI and the Docker image both run:
+#   pip install -c constraints.txt -r requirements.txt [-r requirements-dev.txt]
+# Keep this file even when it holds no pins: both pass it.
 #
-# Deliberately NOT pinned here: packages the rest of the service shares
-# (aiohttp, cryptography, pillow, six, cffi, certifi, idna, attrs, ...).
-# Pinning them would couple unrelated upgrades; the golden tests catch any
-# rendering drift they cause. tests/test_generate_pdf.py asserts that.
+# It holds no pins at the moment. Until plan 5.2 it pinned the closure of the
+# xhtml2pdf PDF renderer (xhtml2pdf, reportlab, svglib, pyHanko, Markdown,
+# lxml, pypdf and their dependencies). That renderer has been removed: the PDF
+# stack left is Typst + markdown-it-py (pinned exactly in requirements.txt)
+# and pypdfium2 (pinned in requirements.txt); pypdf is a test-only pin in
+# requirements-dev.txt.
 #
-# Regenerate the list with a dry-run resolve of requirements.txt with and
-# without `markdown`/`xhtml2pdf`: every package only the PDF run pulls in
-# belongs here.
-arabic-reshaper==3.0.1
-asn1crypto==1.5.1
-cssselect2==0.10.1
-html5lib==1.1
-lxml==6.1.3
-Markdown==3.11.1
-oscrypto==1.3.0
-pyHanko==0.37.0
-pyhanko-certvalidator==0.32.1
-pypdf==6.20.1
-python-bidi==0.6.11
-reportlab==5.0.1
-svglib==2.3.0
-tinycss2==1.5.1
-tzlocal==5.4.4
-uritools==6.1.3
-webencodings==0.6.1
-xhtml2pdf==0.2.23
+# Pin a package here only when it is a transitive dependency that must not
+# drift and is not worth a direct requirement. Leave packages the rest of the
+# service shares (aiohttp, cryptography, pillow, six, ...) unpinned: pinning
+# them would hold back unrelated upgrades.

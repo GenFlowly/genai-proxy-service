@@ -117,6 +117,17 @@ def _requirement_names(filename: str) -> dict:
 
 
 class DependencyTests(unittest.TestCase):
+    def test_the_image_installs_nothing_of_the_removed_renderer(self):
+        required = _requirement_names("requirements.txt")
+        constraints = _requirement_names("constraints.txt")
+        for name in REMOVED_PACKAGES:
+            with self.subTest(package=name):
+                self.assertNotIn(name, required)
+                self.assertNotIn(name, constraints)
+
+    def test_pypdf_is_a_test_only_pin(self):
+        self.assertEqual(_requirement_names("requirements-dev.txt"), {"pypdf": "6.20.1"})
+
     def test_constraints_stay_a_file_without_shared_pins(self):
         # CI and the Dockerfile pass -c constraints.txt. Packages shared with
         # the rest of the server (aiohttp: LangChain, cryptography:
