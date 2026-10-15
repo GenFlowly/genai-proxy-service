@@ -1,0 +1,6 @@
+# Eight-column realistic table
+
+| Product | SKU | Unit Price | Units Sold | Revenue | Margin | Return Rate | Status |
+|---|---|---:|---:|---:|---:|---:|---|
+| Wireless Headphones | WH-1000XM5-BLK | $349.99 | 12,450 | $4,357,375.50 | 38.2% | 2.1% | Active |
+| Smart Watch Series 9 | SW-S9-45MM-GPS | $429.00 | 8,932 | $3,831,828.00 | 41.7% | 1.8% | Discontinued |

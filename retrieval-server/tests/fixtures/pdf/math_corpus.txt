@@ -1,0 +1,30 @@
+E = mc^2
+\frac{a}{b} + \sqrt[3]{x}
+\sum_{i=1}^{n} i^2 = \frac{n(n+1)(2n+1)}{6}
+\int_0^\infty e^{-x}\,dx = 1
+\lim_{x \to 0} \frac{\sin x}{x} = 1
+\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}
+\begin{bmatrix} a & b \\ c & d \end{bmatrix}
+f(x) = \begin{cases} x^2 & x \geq 0 \\ -x & x < 0 \end{cases}
+\begin{aligned} a &= b + c \\ d &= e - f \end{aligned}
+\mathbb{R}^n \times \mathcal{O}(n \log n)
+\text{profit} = \text{revenue} - \text{cost}
+\operatorname{argmax}_{\theta} L(\theta)
+\left( \frac{1}{2} \right)^{n}
+\hat{y} = \beta_0 + \beta_1 x + \varepsilon
+\vec{F} = m\vec{a}
+\nabla \cdot \mathbf{E} = \frac{\rho}{\varepsilon_0}
+\frac{\partial f}{\partial x}
+\binom{n}{k} = \frac{n!}{k!(n-k)!}
+\overline{x} = \frac{1}{n}\sum x_i
+\underbrace{a + b}_{\text{sum}}
+x \xrightarrow{f} y
+\boxed{x = 42}
+P(A \mid B) = \frac{P(B \mid A)P(A)}{P(B)}
+\sigma = \sqrt{\frac{1}{N}\sum_{i=1}^{N}(x_i - \mu)^2}
+\color{red}{x} + y
+a \equiv b \pmod{n}
+\begin{align} x &= 1 \\ y &= 2 \end{align}
+\$100 \text{ per unit}
+\mathrm{NPV} = \sum_{t=0}^{T} \frac{C_t}{(1+r)^t}
+\foo{x} + 1
