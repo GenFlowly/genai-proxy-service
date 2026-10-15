@@ -27,9 +27,12 @@ import time
 import uuid
 
 from encoding_library.observability import count, observe
+from graph import pdf_metrics
+from graph.display_args import display_args
 from graph.state import RetrievalState
 from graph.tool_credentials import resolve_tool_credentials, secrets_accessor
-from graph.tools_runtime import credential_refs_for, make_tool_context, tools_for
+from graph.tools_runtime import credential_refs_for, make_tool_context, request_runtime, tools_for
+from graph.truncation import refusal_text
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +133,39 @@ def _render_sources(preamble: str, sources: list, base_index: int) -> str:
     return "\n".join(lines).strip()
 
 
+# Plan 3.5: after a round, string arguments longer than this in the recorded
+# assistant turn (a whole document passed to generate_pdf, revise_pdf or
+# fs_write) are replaced with a short stub, so later rounds stop replaying the
+# document uncached.
+_STUB_ARGS_OVER_CHARS = 2_000
+# Built-ins that report PDF render stats in ToolResult.details["pdf"].
+_PDF_TOOLS = frozenset({"generate_pdf", "revise_pdf"})
+
+
+def _stub_document_args(call: dict, result) -> dict:
+    """The call's arguments as recorded for replay: long document arguments
+    become '<N chars; saved as NAME (artifact ID)>' or '<N chars; written to
+    scratch:PATH>'."""
+    args = dict(call.get("args") or {})
+    name = call.get("name", "")
+    artifact = result.artifacts[0] if result is not None and result.artifacts else None
+    saved = f"saved as {artifact.filename} (artifact {artifact.artifact_id})" if artifact else "not saved"
+    if name == "generate_pdf":
+        text = args.get("content_markdown")
+        if isinstance(text, str) and len(text) > _STUB_ARGS_OVER_CHARS:
+            args["content_markdown"] = f"<{len(text):,} chars; {saved}>"
+    elif name == "revise_pdf":
+        edits = args.get("edits")
+        size = len(str(edits)) if edits is not None else 0
+        if size > _STUB_ARGS_OVER_CHARS:
+            args["edits"] = f"<{size:,} chars of edits; {saved}>"
+    elif name == "fs_write":
+        text = args.get("content")
+        if isinstance(text, str) and len(text) > _STUB_ARGS_OVER_CHARS:
+            args["content"] = f"<{len(text):,} chars; written to scratch:{args.get('path', '')}>"
+    return args
+
+
 def _summarize(name: str, result, content: str) -> str:
     """One-line trace summary for a tool call — source titles when the tool
     cited any, otherwise a (generously truncated) slice of its text."""
@@ -214,7 +250,11 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         # module, so a module-level import would be a cycle.
         from graph.subagent import run_subagent
 
-        return await run_subagent(state, profile, prompt, agent_depth + 1)
+        # The child gets THIS round's namespace: one minted in this first
+        # round is not in state yet, and a child minting its own would make
+        # its files invisible to the parent (plan 3.4).
+        parent_state = {**state, "scratch": {**(state.get("scratch") or {}), "fs_namespace": fs_namespace}}
+        return await run_subagent(parent_state, profile, prompt, agent_depth + 1)
 
     context.runtime.update({
         "fs_namespace": fs_namespace,
@@ -228,6 +268,13 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         # memory_enabled=False).
         "memory_enabled": bool(state.get("memory_enabled")),
     })
+    # The PDF and file tools' per-request facts and services: pinned renderer,
+    # caps, the render worker, conversation files, locale, branding settings,
+    # the scratch reader (graph/tools_runtime.request_runtime).
+    context.runtime.update(request_runtime(
+        state, config, store=context.store, fs_prefix=fs_prefix,
+        enabled=state.get("builtin_tools") or [],
+    ))
 
     # The assistant turn that made the calls, replayed to the model next
     # iteration together with the results below.
@@ -282,10 +329,17 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         durable = _dbos_active()
     except Exception:
         durable = False
+    async def _run_or_refuse(call: dict):
+        # A call cut off at the output limit (or malformed) is answered with
+        # a NOT-executed result and never run (plan 1.8, see llm_node).
+        if call.get("truncated"):
+            return None, None
+        return await _run_one(call)
+
     if durable:
-        outcomes = [await _run_one(c) for c in builtin_calls]
+        outcomes = [await _run_or_refuse(c) for c in builtin_calls]
     else:
-        outcomes = await asyncio.gather(*(_run_one(c) for c in builtin_calls))
+        outcomes = await asyncio.gather(*(_run_or_refuse(c) for c in builtin_calls))
 
     # Accumulated across the round, merged into the update once at the end.
     round_scratch: dict = {}
@@ -297,7 +351,10 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         name = call.get("name", "")
         args = call.get("args") or {}
         call_sources_start = len(new_sources)
-        if error is not None:
+        if call.get("truncated"):
+            content = refusal_text(call.get("truncation_reason"), "fs_write" in by_name)
+            error = "not executed: " + str(call.get("truncation_reason") or "cut off")
+        elif error is not None:
             content = f"Error executing {name}: {error}"
         else:
             content = result.content
@@ -320,6 +377,8 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
                     round_scratch[key] = value
             if result.usage:
                 round_usage = _add_usage(round_usage, result.usage)
+            if name in _PDF_TOOLS and isinstance((result.details or {}).get("pdf"), dict):
+                pdf_metrics.record(result.details["pdf"])
             # Oversized results spill to the scratch FS: the model gets a
             # structure-preserving excerpt plus the path to the full output.
             if len(content) > max_result_chars:
@@ -335,9 +394,13 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             "content": content,
         })
         summaries.append(_summarize(name, result, content))
+        # Replayed next round with long document arguments stubbed (3.5).
+        call["args"] = _stub_document_args(call, result)
         call_entry = {
             "name": name,
-            "args": args,
+            # Long arguments shortened: the trace is persisted with the
+            # message's thinking steps (plan 1.9).
+            "args": display_args(args),
             # This call's own slice of new_sources — reuses the already-numbered
             # entries above rather than re-deriving titles/urls from result.sources.
             "sources": new_sources[call_sources_start:],
