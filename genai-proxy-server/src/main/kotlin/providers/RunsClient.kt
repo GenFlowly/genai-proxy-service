@@ -1,9 +1,11 @@
 package com.genflowly.providers
 
 import com.genflowly.models.retrieval.ConversationMessage
+import com.genflowly.models.retrieval.FileRef
 import com.genflowly.models.retrieval.ImageRef
 import com.genflowly.models.retrieval.PayloadToolDefinition
 import com.genflowly.models.retrieval.PayloadToolResult
+import com.genflowly.models.retrieval.RawData
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.parseRetrievalEvent
 import io.ktor.client.*
@@ -36,7 +38,7 @@ private data class RunStartPayload(
     val customer_id: String,
     val client: String,
     val data_type: String,
-    val raw_data: RunRawData,
+    val raw_data: RawData,
     val llm_provider: String,
     val llm_model: String,
     val llm_max_tokens: Int,
@@ -54,13 +56,6 @@ private data class RunStartPayload(
     val thinking_level: String? = null,
     /** Optional idempotency/rediscovery key; server generates one when null. */
     val run_id: String? = null
-)
-
-@Serializable
-private data class RunRawData(
-    val query_data: String,
-    val top_n: Int = 3,
-    val images: List<ImageRef> = emptyList()
 )
 
 /** Status snapshot of a durable run (GET /runs/{id}). */
@@ -109,14 +104,26 @@ class RunsClient(
         requestSource: String = "conversation",
         graphId: String? = null,
         thinkingLevel: String? = null,
-        runId: String? = null
+        runId: String? = null,
+        /** Non-image files attached to the current turn (RawData.files). */
+        queryFiles: List<FileRef> = emptyList(),
+        /** First language tag of the browser's Accept-Language (RawData.locale). */
+        locale: String? = null,
+        /** Scratch namespace minted for this request and vendor (RawData.fs_namespace). */
+        fsNamespace: String? = null
     ): String? {
         val payload = json.encodeToString(
             RunStartPayload(
                 customer_id = customerId,
                 client = client,
                 data_type = "text",
-                raw_data = RunRawData(query_data = query, images = queryImages),
+                raw_data = RawData(
+                    queryData = query,
+                    images = queryImages,
+                    files = queryFiles,
+                    locale = locale,
+                    fsNamespace = fsNamespace
+                ),
                 llm_provider = llmProvider,
                 llm_model = llmModel,
                 llm_max_tokens = llmMaxTokens,

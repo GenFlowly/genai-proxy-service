@@ -34,6 +34,26 @@ fun List<AttachmentRef>.toImageRefs(): List<ImageRef> =
         .map { ImageRef(s3Key = it.s3Key, mediaType = normalizeAttachmentMediaType(it.mediaType)) }
 
 /**
+ * The complement of [toImageRefs]: every non-image attachment as a [FileRef]
+ * (contract C10) with the given [origin] — generated files on assistant turns,
+ * uploaded documents on user turns. The stored s3Key is passed exactly as
+ * persisted: in a shared conversation it can sit under another participant's
+ * prefix.
+ */
+fun List<AttachmentRef>.toFileRefs(origin: FileOrigin): List<FileRef> =
+    filterNot { isImageAttachmentMediaType(it.mediaType) }
+        .map {
+            FileRef(
+                attachmentId = it.attachmentId,
+                s3Key = it.s3Key,
+                mediaType = it.mediaType,
+                filename = it.filename,
+                sizeBytes = it.sizeBytes,
+                origin = origin
+            )
+        }
+
+/**
  * Parse the retrieval-server's generated_artifacts JSON —
  * [{"artifact_id","key","media_type","filename","size_bytes","source_key",
  * "page_count"}] — into AttachmentRefs for persistence on the assistant
@@ -69,13 +89,20 @@ fun parseGeneratedArtifacts(json: String?): List<AttachmentRef> {
 private fun JsonObject.primitiveOrNull(key: String): JsonPrimitive? =
     (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }
 
+/**
+ * A persisted message as a history turn for the retrieval-server. Images
+ * replay as image blocks; every other attachment goes under `files`: an
+ * assistant's attachments are files its tools generated, a user's are
+ * documents they uploaded.
+ */
 fun Message.toConversationMessage(): ConversationMessage =
     ConversationMessage(
         role = role,
         content = text,
         images = attachments.toImageRefs(),
         toolCalls = toolCallsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
-        toolResults = toolResultsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() }
+        toolResults = toolResultsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
+        files = attachments.toFileRefs(if (role == "assistant") FileOrigin.GENERATED else FileOrigin.UPLOADED)
     )
 
 fun List<ToolDefinition>.toPayloadTools(): List<PayloadToolDefinition> =

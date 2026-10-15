@@ -61,14 +61,14 @@ class GenerationOrchestratorSystemPromptTest {
         coEvery { credentialsService.getCustomerApiKeyForVendor(any(), cust) } returns "api-key"
         coEvery {
             retrievalService.retrieveAndGenerate(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
             )
         } returns RetrievalResult("ok", 1, 2, 3, null)
         every {
             retrievalService.retrieveAndGenerateStream(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
             )
         } returns flowOf()
     }
@@ -85,7 +85,8 @@ class GenerationOrchestratorSystemPromptTest {
                 llmProvider = any(), llmModel = any(), llmMaxTokens = any(),
                 conversationHistory = any(), systemPrompt = decorated, agentic = any(),
                 queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
-                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any()
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                thinkingLevel = any(), queryFiles = any(), locale = any(), fsNamespace = any()
             )
         }
 
@@ -109,7 +110,8 @@ class GenerationOrchestratorSystemPromptTest {
                 llmProvider = any(), llmModel = any(), llmMaxTokens = any(),
                 conversationHistory = any(), systemPrompt = decorated, agentic = any(),
                 queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
-                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any()
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                thinkingLevel = any(), queryFiles = any(), locale = any(), fsNamespace = any()
             )
         }
     }
@@ -126,7 +128,8 @@ class GenerationOrchestratorSystemPromptTest {
                 llmProvider = any(), llmModel = any(), llmMaxTokens = any(),
                 conversationHistory = any(), systemPrompt = instruction, agentic = any(),
                 queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
-                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any()
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                thinkingLevel = any(), queryFiles = any(), locale = any(), fsNamespace = any()
             )
         }
     }

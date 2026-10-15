@@ -23,9 +23,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import com.genflowly.models.ModelCatalogEntry
 import com.genflowly.models.retrieval.ConversationMessage
+import com.genflowly.models.retrieval.FileRef
 import com.genflowly.models.retrieval.ImageRef
 import com.genflowly.models.retrieval.PayloadToolDefinition
 import com.genflowly.models.retrieval.PayloadToolResult
+import com.genflowly.models.retrieval.RawData
 import com.genflowly.models.retrieval.RetrievalResult
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.VendorModelMetadata
@@ -39,7 +41,7 @@ private data class RetrievalAgentPayload(
     val customer_id: String,
     val client: String,
     val data_type: String,
-    val raw_data: AgentRawData,
+    val raw_data: RawData,
     val llm_credentials: Map<String, String>,
     val llm_provider: String,
     val llm_model: String,
@@ -67,14 +69,6 @@ private data class RetrievalAgentPayload(
      * overrides the response generator's node-config thinking_level.
      */
     val thinking_level: String? = null
-)
-
-@Serializable
-private data class AgentRawData(
-    val query_data: String,
-    val top_n: Int = 3,
-    /** Images attached to the current-turn query */
-    val images: List<ImageRef> = emptyList()
 )
 
 // --- /execute-agent-graph wire types ---
@@ -295,13 +289,22 @@ class RetrievalServerClient(
         memoryEnabled: Boolean,
         requestSource: String,
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        queryFiles: List<FileRef> = emptyList(),
+        locale: String? = null,
+        fsNamespace: String? = null
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
             client = client,
             data_type = "text",
-            raw_data = AgentRawData(query_data = query, images = queryImages),
+            raw_data = RawData(
+                queryData = query,
+                images = queryImages,
+                files = queryFiles,
+                locale = locale,
+                fsNamespace = fsNamespace
+            ),
             llm_credentials = llmCredentials,
             llm_provider = llmProvider,
             llm_model = llmModel,
@@ -340,10 +343,16 @@ class RetrievalServerClient(
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        /** Non-image files attached to the current turn (RawData.files). */
+        queryFiles: List<FileRef> = emptyList(),
+        /** First language tag of the browser's Accept-Language (RawData.locale). */
+        locale: String? = null,
+        /** Scratch namespace minted for this request and vendor (RawData.fs_namespace). */
+        fsNamespace: String? = null
     ): RetrievalResult {
-        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel)
+        logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, files=${queryFiles.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, queryFiles = queryFiles, locale = locale, fsNamespace = fsNamespace)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -478,10 +487,16 @@ class RetrievalServerClient(
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        /** Non-image files attached to the current turn (RawData.files). */
+        queryFiles: List<FileRef> = emptyList(),
+        /** First language tag of the browser's Accept-Language (RawData.locale). */
+        locale: String? = null,
+        /** Scratch namespace minted for this request and vendor (RawData.fs_namespace). */
+        fsNamespace: String? = null
     ): Flow<StreamChunk> = channelFlow {
-        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel)
+        logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, files=${queryFiles.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, queryFiles = queryFiles, locale = locale, fsNamespace = fsNamespace)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)

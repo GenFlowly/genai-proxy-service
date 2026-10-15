@@ -4,10 +4,12 @@ import com.genflowly.models.AIVendor
 import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
+import com.genflowly.models.retrieval.FileOrigin
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.toNdjsonFrame
 import com.genflowly.models.retrieval.parseGeneratedArtifacts
 import com.genflowly.models.retrieval.toConversationMessage
+import com.genflowly.models.retrieval.toFileRefs
 import com.genflowly.models.retrieval.toImageRefs
 import com.genflowly.models.retrieval.toPayloadToolResults
 import com.genflowly.models.retrieval.toPayloadTools
@@ -283,7 +285,8 @@ class GenerationOrchestrator(
             responseSchema = responseSchema,
             memoryEnabled = memoryEnabled,
             graphId = agentId,
-            thinkingLevel = thinkingLevel
+            thinkingLevel = thinkingLevel,
+            queryFiles = message.attachments.toFileRefs(FileOrigin.UPLOADED)
         )
 
         val responseMessage = Message(
@@ -480,6 +483,8 @@ class GenerationOrchestrator(
             getThreadContext(activeConversationId, message.previousMessageId) + message
         }
         val conversationHistory = thread.map { it.toConversationMessage() }
+        // The current turn's non-image attachments (uploaded documents), sent as RawData.files.
+        val queryFiles = attachments.toFileRefs(FileOrigin.UPLOADED)
 
         // Pre-calculate the deterministic response ID to send as a response header immediately
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
@@ -536,7 +541,8 @@ class GenerationOrchestrator(
                     responseSchema = responseSchema,
                     memoryEnabled = memoryEnabled,
                     graphId = agentId,
-                    thinkingLevel = config.thinkingLevel
+                    thinkingLevel = config.thinkingLevel,
+                    queryFiles = queryFiles
                 )
                 // Durable /runs path (flagged): start a durable background run and
                 // reattach to its event stream. Credentials are NOT sent — the
@@ -563,7 +569,8 @@ class GenerationOrchestrator(
                             responseSchema = responseSchema,
                             memoryEnabled = memoryEnabled,
                             graphId = agentId,
-                            thinkingLevel = config.thinkingLevel
+                            thinkingLevel = config.thinkingLevel,
+                            queryFiles = queryFiles
                         )
                         if (startedRunId != null) {
                             // Add this run to the conversation's pending set (one entry

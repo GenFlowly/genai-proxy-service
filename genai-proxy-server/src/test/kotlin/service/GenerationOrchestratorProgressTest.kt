@@ -61,8 +61,8 @@ class GenerationOrchestratorProgressTest {
         coEvery { credentialsService.getCustomerApiKeyForVendor(any(), cust) } returns "api-key"
         every {
             retrievalService.retrieveAndGenerateStream(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
             )
         } returns flowOf(
             StreamChunk.ThinkingStep(stepRunning),
