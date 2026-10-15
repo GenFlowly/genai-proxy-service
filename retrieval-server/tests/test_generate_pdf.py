@@ -536,6 +536,17 @@ class RenderOptionsTests(unittest.TestCase):
         self._go(context)
         self.assertIn("logo_b64", jobs[0]["options"]["branding"])
 
+    def test_a_fork_of_a_system_agent_keeps_the_system_logo(self):
+        # A customer's edit forks a System agent; the copied config still
+        # names the admin-uploaded logo, which lives under System's prefix.
+        context, store, jobs, _, _ = self._render({
+            "pdf_settings": {"logo_attachment_id": "logo-0001"},
+            "pdf_settings_owner": "cust-1",
+        })
+        store.put("customers/System/attachments/logo-0001", self.PNG, "image/png")
+        self._go(context)
+        self.assertIn("logo_b64", jobs[0]["options"]["branding"])
+
     def test_another_customers_logo_is_refused_and_counted(self):
         # The id exists, but under a different customer: the PDF renders
         # without it and the warning is counted.

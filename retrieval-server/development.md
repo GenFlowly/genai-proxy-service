@@ -546,13 +546,15 @@ everything else to A4, and the footer's page label is translated. A
 
 The admin panel edits these for System agents (agent editor, "PDF
 letterhead"). The model's explicit `page_size` beats `default_page_size`.
-The logo is read only from the graph owner's prefix,
+The logo is read from the graph owner's prefix,
 `customers/<graph owner>/attachments/<id>` (the owner is the graph record's
 `customerId`, `System` for published agents, which the loaders stamp on the
-node config as `_graph_owner`, replacing any stored value). An id of another
-customer's file is not found: the PDF renders without a logo and
-`pdf_render_warnings_total{kind="branding_logo_unavailable"}` counts it. The
-renderer accepts PNG or JPEG up to 2 MB.
+node config as `_graph_owner`, replacing any stored value), then from
+`customers/System/attachments/<id>`, which holds only the logos admins upload
+(so a customer's fork of a System agent keeps its letterhead). No other
+customer's prefix is ever read: such an id is not found, the PDF renders
+without a logo and `pdf_render_warnings_total{kind="branding_logo_unavailable"}`
+counts it. The renderer accepts PNG or JPEG up to 2 MB.
 
 ### Object tags
 

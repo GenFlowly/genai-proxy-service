@@ -869,14 +869,22 @@ async def _render_options(context: ToolContext, renderer: str) -> dict:
     return options
 
 
+# Owner of agents published from the admin panel; its prefix holds only the
+# letterhead logos admins upload (POST /admin/letterhead-logo on the proxy).
+SYSTEM_OWNER = "System"
+
+
 async def _load_logo(context: ToolContext, logo_id: str) -> bytes | None:
-    """The letterhead logo, only ever from the graph owner's attachment
-    prefix: the owner is the graph record's customerId, which the host stamps
-    on the node config ("System" for agents published from the admin panel,
-    else the customer whose own agent this is), with the requesting customer
-    as the fallback. The key comes from the host's template, never from model
-    input, so an id belonging to another customer is not found and the PDF
-    renders without it. At most 2 MB; the renderer validates the image."""
+    """The letterhead logo, read from the graph owner's attachment prefix,
+    then from System's: the owner is the graph record's customerId, which the
+    host stamps on the node config ("System" for agents published from the
+    admin panel, else the customer whose own agent this is), with the
+    requesting customer as the fallback. System's prefix holds only
+    admin-uploaded letterhead logos, so a customer's fork of a System agent
+    keeps its letterhead. The key comes from the host's template, never from
+    model input, and no other customer's prefix is ever read: an id belonging
+    to another customer is not found and the PDF renders without it. At most
+    2 MB; the renderer validates the image."""
     if not re.fullmatch(r"[A-Za-z0-9-]{8,64}", logo_id):
         logger.warning("generate_pdf: letterhead logo id refused (malformed)")
         return None
@@ -884,13 +892,15 @@ async def _load_logo(context: ToolContext, logo_id: str) -> bytes | None:
     if not isinstance(owner, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", owner):
         logger.warning("generate_pdf: letterhead logo refused (no valid graph owner)")
         return None
-    key = context.key_template.format(customer_id=owner, artifact_id=logo_id)
-    try:
-        data = await asyncio.to_thread(context.store.get, key)
-    except Exception:
-        logger.warning("generate_pdf: letterhead logo not found under the graph owner's files")
-        return None
-    return data if len(data) <= 2 * 1024 * 1024 else None
+    for prefix_owner in dict.fromkeys((owner, SYSTEM_OWNER)):
+        key = context.key_template.format(customer_id=prefix_owner, artifact_id=logo_id)
+        try:
+            data = await asyncio.to_thread(context.store.get, key)
+        except Exception:
+            continue
+        return data if len(data) <= 2 * 1024 * 1024 else None
+    logger.warning("generate_pdf: letterhead logo not found under the graph owner's or System's files")
+    return None
 
 
 class GeneratePdfTool(GraphTool):
