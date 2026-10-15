@@ -11,7 +11,6 @@ import com.genflowly.providers.S3Provider
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.CustomerDataPurgeRepository
 import com.genflowly.repository.CustomerProfileRepository
-import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.MessageFileRefs
 import com.genflowly.repository.PurgeJob
 import com.genflowly.repository.PurgeJobRepository
@@ -20,9 +19,13 @@ import com.genflowly.repository.PurgeJobType
 import com.genflowly.repository.RetentionTables
 import java.time.Duration
 import java.time.Instant
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import org.slf4j.LoggerFactory
 
 class CustomerNotFoundException(message: String) : Exception(message)
@@ -60,7 +63,6 @@ class AccountDeletionService(
     private val customerProfileRepository: CustomerProfileRepository,
     private val conversationRepository: ConversationRepository,
     private val purgeRepository: CustomerDataPurgeRepository,
-    private val graphRepository: GraphRepository,
     private val s3Provider: S3Provider,
     private val runDataClient: RunDataClient,
     private val encodingPurgeClient: EncodingPurgeClient,
@@ -332,16 +334,20 @@ class AccountDeletionService(
     }
 
     /**
-     * Instruction ids the System-owned agents' GENERATION nodes use. Mapping
-     * an admin's agent as a System default transfers the graph and nodes to
-     * System but leaves the instruction with the admin, so deleting it would
-     * break that default.
+     * Instruction ids the System-owned agents' nodes reference. Mapping an
+     * admin's agent as a System default transfers the graph and nodes to
+     * System but leaves the instructions with the admin, so deleting them
+     * would break that default. A node config whose JSON does not parse is
+     * skipped: the retrieval server cannot run that node either.
      */
     private suspend fun instructionsUsedBySystemAgents(): Set<String> =
-        graphRepository.listCustomerGraphNodes(DynamoDBConstants.SYSTEM_GRAPH_OWNER).mapNotNull { node ->
-            val config = node[DynamoDBConstants.NODE_CONFIG_KEY]?.s() ?: return@mapNotNull null
-            runCatching { json.parseToJsonElement(config).jsonObject["instructionId"]?.jsonPrimitive?.content }
-                .getOrNull()?.takeIf { it.isNotBlank() }
+        purgeRepository.nodeConfigs(DynamoDBConstants.SYSTEM_GRAPH_OWNER).flatMap { config ->
+            try {
+                instructionRefs(json.parseToJsonElement(config))
+            } catch (e: SerializationException) {
+                logger.warn("Skipping a System node config that is not valid JSON")
+                emptyList()
+            }
         }.toSet()
 
     private suspend fun warn(job: PurgeJob, warning: String) {
@@ -360,5 +366,30 @@ class AccountDeletionService(
         val IN_FLIGHT_TIMEOUT: Duration = Duration.ofMinutes(2)
         private val CUSTOMER_ID = Regex("^[A-Za-z0-9-]{1,64}$")
         private val RESERVED_IDS = setOf("system", "public")
+
+        /**
+         * Node-config keys that hold an instruction id, in snake_case as the
+         * retrieval server reads them: `instruction_id` (any node's persona,
+         * routes/retrieve.py _build_node_configs, and each TOOL_EXECUTOR
+         * subagent profile, graph/subagent.py) and `harness_instruction_id`
+         * (agent harness scaffolding).
+         */
+        private val INSTRUCTION_REF_KEYS = setOf("instruction_id", "harness_instruction_id")
+
+        /**
+         * Every non-blank instruction reference in a node config, at any depth
+         * (subagent profiles nest inside the TOOL_EXECUTOR config and inside
+         * each other).
+         */
+        internal fun instructionRefs(element: JsonElement): List<String> = when (element) {
+            is JsonObject -> element.entries.flatMap { (key, value) ->
+                val ref = if (key in INSTRUCTION_REF_KEYS) {
+                    (value as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+                } else null
+                listOfNotNull(ref) + instructionRefs(value)
+            }
+            is JsonArray -> element.flatMap { instructionRefs(it) }
+            else -> emptyList()
+        }
     }
 }

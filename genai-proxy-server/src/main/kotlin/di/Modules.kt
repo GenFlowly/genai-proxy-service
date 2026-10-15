@@ -238,7 +238,7 @@ fun appModule(): Module = module {
     single<com.genflowly.service.OrphanedConversationPurge> { get<com.genflowly.service.ConversationPurgeService>() }
     single {
         com.genflowly.service.AccountDeletionService(
-            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()
         )
     }
     // Background loop started with the application (eager singleton): runs the

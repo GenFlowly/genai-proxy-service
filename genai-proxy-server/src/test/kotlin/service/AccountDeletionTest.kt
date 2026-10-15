@@ -13,7 +13,6 @@ import com.genflowly.providers.RunDataClient
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.CustomerDataPurgeRepository
 import com.genflowly.repository.CustomerProfileRepository
-import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.MessageFileRefs
 import com.genflowly.repository.MessageKey
 import com.genflowly.repository.PurgeJobState
@@ -29,7 +28,6 @@ import io.mockk.coVerifyOrder
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import mu.KLogger
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -65,7 +63,6 @@ class AccountDeletionTest {
     private val s3 = FakeTaggedS3()
     private val conversations = mockk<ConversationRepository>()
     private val purge = mockk<CustomerDataPurgeRepository>(relaxed = true)
-    private val graphs = mockk<GraphRepository>()
     private val runData = mockk<RunDataClient>(relaxed = true)
     private val encoding = mockk<EncodingPurgeClient>(relaxed = true)
     private val documents = mockk<CustomerDocumentsPurger>(relaxed = true)
@@ -79,7 +76,7 @@ class AccountDeletionTest {
     }
     private val orphans = mockk<OrphanedConversationPurge>(relaxed = true)
     private val service = AccountDeletionService(
-        jobs.repository, profileService, profileRepository, conversations, purge, graphs, s3.provider,
+        jobs.repository, profileService, profileRepository, conversations, purge, s3.provider,
         runData, encoding, documents, auth0, turns, orphans
     )
 
@@ -118,8 +115,9 @@ class AccountDeletionTest {
         coEvery { purge.ownedGraphIds(deleted) } returns setOf("GRPD1")
         coEvery { purge.ownedNodeIds(deleted) } returns setOf("NODD1")
         coEvery { purge.deleteDeveloperApiKeys(deleted) } returns 2
-        coEvery { graphs.listCustomerGraphNodes("System") } returns listOf(
-            mapOf("config" to AttributeValue.builder().s("""{"instructionId":"INSSYS"}""").build())
+        // Node configs reference instructions in snake_case, as the retrieval server reads them
+        coEvery { purge.nodeConfigs("System") } returns listOf(
+            """{"instruction_id":"INSSYS","input_template":"{input}","output_format":"text"}"""
         )
 
         coEvery { conversations.getOwnedConversationIds(deleted) } returns
@@ -248,6 +246,52 @@ class AccountDeletionTest {
         }
         coVerify { documents.purgeCustomer(deleted) }
         assertTrue(jobs.jobs["ACCOUNT#$deleted"]!!.warnings.any { it.startsWith("instructions_kept") })
+    }
+
+    @Test
+    fun `instructions a System agent references are kept, as persona, harness or subagent instruction`() = runTest {
+        coEvery { purge.instructionIdsByCreator(deleted) } returns setOf("I1", "H1", "S1", "INSD1", "INSD2")
+        coEvery { purge.nodeConfigs("System") } returns listOf(
+            """{"instruction_id":"I1","harness_instruction_id":"H1"}""",
+            // a TOOL_EXECUTOR config: subagent profiles carry their own instruction
+            """{"subagents":[{"name":"researcher","instruction_id":"S1","instruction_version":2}]}""",
+            // blank or null references protect nothing, and a broken config is skipped
+            """{"instruction_id":"","harness_instruction_id":null}""",
+            "not json"
+        )
+
+        deleteAndRunOnce()
+
+        for (id in listOf("I1", "H1", "S1")) {
+            coVerify(exactly = 0) { purge.deleteAllVersions(CustomerDataPurgeRepository.INSTRUCTION_VERSIONS, id) }
+        }
+        for (id in listOf("INSD1", "INSD2")) {
+            coVerify { purge.deleteAllVersions(CustomerDataPurgeRepository.INSTRUCTION_VERSIONS, id) }
+        }
+        // Shares of the kept instructions stay too; the agents' graph goes
+        coVerify { purge.deleteEntityShares(setOf("INSD1", "INSD2", "GRPD1")) }
+        assertTrue("instructions_kept: 3 instruction(s) are used by System agents" in jobs.jobs["ACCOUNT#$deleted"]!!.warnings)
+    }
+
+    @Test
+    fun `no instruction is deleted when the System agents cannot be read`() = runTest {
+        coEvery { purge.nodeConfigs("System") } throws IllegalStateException("throttled")
+
+        assertFailsWith<IllegalStateException> { deleteAndRunOnce() }
+
+        coVerify(exactly = 0) { purge.deleteAllVersions(CustomerDataPurgeRepository.INSTRUCTION_VERSIONS, any()) }
+        coVerify(exactly = 0) { purge.deleteEntityShares(any()) }
+        // The job stays at the last completed stage, so the worker's retry redoes this one
+        assertEquals(AccountDeletionService.STAGE_SWEPT, jobs.jobs["ACCOUNT#$deleted"]!!.stage)
+    }
+
+    @Test
+    fun `instruction references are found at any depth of a node config`() {
+        val config = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"instruction_id":"A","tools":[{"subagents":[{"harness_instruction_id":"B","subagents":[{"instruction_id":"C"}]}]}],
+               "instruction_version":3,"other":{"instruction_id":7},"instructionId":"camel-is-not-read"}"""
+        )
+        assertEquals(setOf("A", "B", "C", "7"), AccountDeletionService.instructionRefs(config).toSet())
     }
 
     @Test

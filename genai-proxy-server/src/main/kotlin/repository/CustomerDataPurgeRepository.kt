@@ -205,6 +205,33 @@ class CustomerDataPurgeRepository(
             DynamoDBConstants.CUSTOMER_ID_KEY, customerId, listOf(DynamoDBConstants.NODE_ID_KEY)
         ).mapNotNull { it[DynamoDBConstants.NODE_ID_KEY]?.s() }.toSet()
 
+    /**
+     * The config JSON of every current graph node [customerId] owns
+     * (soft-deleted ones included). Reads every page and lets a failed read
+     * throw: the purge decides from it what it must not delete.
+     */
+    suspend fun nodeConfigs(customerId: String): List<String> = withContext(Dispatchers.IO) {
+        val configs = mutableListOf<String>()
+        var startKey: Map<String, AttributeValue>? = null
+        do {
+            val builder = QueryRequest.builder()
+                .tableName(DynamoDBConstants.CUSTOMER_GRAPH_NODES_TABLE)
+                .indexName(DynamoDBConstants.CUSTOMER_GRAPH_NODES_GSI_KEY)
+                .keyConditionExpression("#pk = :pk")
+                .projectionExpression("#cfg")
+                .expressionAttributeNames(mapOf(
+                    "#pk" to DynamoDBConstants.CUSTOMER_ID_KEY,
+                    "#cfg" to DynamoDBConstants.NODE_CONFIG_KEY
+                ))
+                .expressionAttributeValues(mapOf(":pk" to s(customerId)))
+            startKey?.let { builder.exclusiveStartKey(it) }
+            val response = dynamoDbClient.query(builder.build())
+            response.items().mapNotNullTo(configs) { it[DynamoDBConstants.NODE_CONFIG_KEY]?.s() }
+            startKey = response.lastEvaluatedKey().takeIf { response.hasLastEvaluatedKey() && it.isNotEmpty() }
+        } while (startKey != null)
+        configs
+    }
+
     /** Every version of an instruction, graph or graph node (the history rows carry no owner). */
     suspend fun deleteAllVersions(table: CustomerPartitionTable, id: String): Int = deletePartition(table, id)
 

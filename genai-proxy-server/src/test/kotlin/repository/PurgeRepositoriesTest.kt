@@ -135,6 +135,31 @@ class PurgeRepositoriesTest {
     }
 
     @Test
+    fun `the System node configs are read from every page, and a failed read throws`() = runTest {
+        val queries = mutableListOf<QueryRequest>()
+        every { client.query(capture(queries)) } answers {
+            if (firstArg<QueryRequest>().exclusiveStartKey().isNullOrEmpty()) {
+                QueryResponse.builder()
+                    .items(listOf(mapOf("config" to s("""{"instruction_id":"I1"}""")), mapOf("nodeId" to s("no-config"))))
+                    .lastEvaluatedKey(mapOf("nodeId" to s("N1"), "version" to AttributeValue.builder().n("0").build()))
+                    .build()
+            } else {
+                QueryResponse.builder().items(listOf(mapOf("config" to s("""{"harness_instruction_id":"H1"}""")))).build()
+            }
+        }
+
+        assertEquals(
+            listOf("""{"instruction_id":"I1"}""", """{"harness_instruction_id":"H1"}"""),
+            purge.nodeConfigs("System")
+        )
+        assertEquals(2, queries.size)
+        assertTrue(queries.all { it.indexName() == "customerIdIndex" && it.expressionAttributeValues()[":pk"]?.s() == "System" })
+
+        every { client.query(any<QueryRequest>()) } throws IllegalStateException("throttled")
+        assertFailsWith<IllegalStateException> { purge.nodeConfigs("System") }
+    }
+
+    @Test
     fun `rows that survive the batch delete fail the purge step`() = runTest {
         val table = CustomerPartitionTable("CustomerNotes", "customerId", "noteKey")
         every { client.query(any<QueryRequest>()) } returns QueryResponse.builder()
