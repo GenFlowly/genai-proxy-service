@@ -507,9 +507,12 @@ after a change keeps the renderer it started with.
 | `PDF_RENDERER_SCRIPT_ROUTE` | `typst` or unset | documents with letters x2p_v1 cannot draw go to Typst (when the bundled fonts cover them) |
 | `PDF_TYPST_MAX_CHARS` / `PDF_TYPST_MAX_TABLE_ROWS` | 150000 / 1000 | Typst input caps; raise after calibration (e.g. 300000 / 2500) |
 
-Changing any of these changes Fly env, which restarts the single machine
-and triggers DBOS recovery: flip at a quiet hour and check the recovery
-panel afterwards. The canary stages are: dev default, internal tenants
+They are plain settings, not secrets: set them in the app's `[env]` in
+`fly.toml` (development, which already sets `PDF_RENDERER = "typst"`) or
+`fly.production.toml`, so the change is reviewed and ships with the next
+deploy. Changing any of these changes Fly env, which restarts the single
+machine and triggers DBOS recovery: flip at a quiet hour and check the
+recovery panel afterwards. The canary stages are: dev default, internal tenants
 (canary list, at least 7 days), script route for everyone (at least 14
 days), production default, then removal of xhtml2pdf. Compare the
 `pdf_render_*` metrics by renderer at each stage. When xhtml2pdf is finally

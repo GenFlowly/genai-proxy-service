@@ -10,6 +10,10 @@ primary_region = "iad"
   # Dev logs everything: INFO level + user content (prompts, responses,
   # memories) — see app.py and content_logging.py
   APP_ENV = "development"
+  # PDF renderer (plan 5.2 canary, stage 1): development renders every PDF
+  # with Typst. Production keeps the x2p_v1 default until the later stages
+  # (development.md, "Choosing the renderer"). Not a secret, so it lives here.
+  PDF_RENDERER = "typst"
 
 # Dev only (prod uses fly.production.toml): traffic arrives via Flycast
 # (http://<app-name>.flycast, port 80) so fly-proxy can auto stop/start the
