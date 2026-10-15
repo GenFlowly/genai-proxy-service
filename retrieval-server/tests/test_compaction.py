@@ -113,3 +113,37 @@ class CompactionTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _document_round(n: int, doc_chars: int) -> list[dict]:
+    return [
+        {"role": "assistant", "content": "",
+         "tool_calls": [{"id": f"pdf-{n}", "name": "generate_pdf",
+                         "args": {"content_markdown": "d" * doc_chars, "filename": f"r{n}.pdf"}}]},
+        {"role": "tool", "tool_call_id": f"pdf-{n}", "content": "PDF created."},
+    ]
+
+
+class ArgumentHeavyRoundTests(unittest.IsolatedAsyncioTestCase):
+    """Plan 3.5: a round whose weight is in its tool-call ARGUMENTS (a whole
+    document) counts toward compaction, and the serialized fold clips them."""
+
+    def test_estimate_grows_with_argument_size(self):
+        from graph.nodes.llm_node import _estimate_tokens
+
+        small = _estimate_tokens(_document_round(1, 100))
+        large = _estimate_tokens(_document_round(1, 50_000))
+        self.assertGreater(large - small, 12_000)
+
+    async def test_argument_heavy_rounds_trigger_compaction(self):
+        msgs = _document_round(1, 60_000) + _document_round(2, 60_000) + _document_round(3, 100)
+        summarize = AsyncMock(return_value=("two PDFs made", {"total_tokens": 5}))
+        with patch.object(llm_node_module, "_summarize_for_compaction", summarize):
+            replay, scratch, _ = await _compact_loop_messages(
+                _state(), {"compaction_threshold_tokens": 20_000}, msgs, False
+            )
+        summarize.assert_awaited_once()
+        self.assertEqual(scratch["compaction"]["upto"], 4)
+        serialized = summarize.await_args.args[2]
+        self.assertLess(len(serialized), 6_000)
+        self.assertIn("(60,", serialized)

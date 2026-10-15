@@ -566,9 +566,31 @@ _COMPACTION_SYSTEM = (
 _SUMMARY_PREFIX = "[Summary of my earlier tool activity this turn]\n"
 
 
+# Tool-call arguments are clipped to this many characters when rounds are
+# serialized for the compaction summary (plan 3.5): a generate_pdf call
+# carries a whole document.
+_SERIALIZED_ARGS_CHARS = 2_000
+
+
+def _args_json(call: dict) -> str:
+    return json.dumps(call.get("args") or {}, default=str)
+
+
 def _estimate_tokens(messages: list[dict], extra: str = "") -> int:
-    chars = sum(len(m.get("content") or "") + 40 for m in messages) + len(extra)
+    """Rough token count of replayed loop messages, tool-call arguments
+    included: an argument-heavy round (a long document passed to
+    generate_pdf or fs_write) must count toward compaction too (plan 3.5)."""
+    chars = sum(
+        len(m.get("content") or "") + 40 + sum(len(_args_json(c)) for c in m.get("tool_calls") or [])
+        for m in messages
+    ) + len(extra)
     return chars // _CHARS_PER_TOKEN
+
+
+def _clip_args(text: str) -> str:
+    if len(text) <= _SERIALIZED_ARGS_CHARS:
+        return text
+    return f"{text[:_SERIALIZED_ARGS_CHARS]}... ({len(text):,} chars)"
 
 
 def _serialize_rounds(prior_summary: str, messages: list[dict]) -> str:
@@ -578,7 +600,7 @@ def _serialize_rounds(prior_summary: str, messages: list[dict]) -> str:
     for m in messages:
         if m.get("role") == "assistant":
             calls = ", ".join(
-                f"{c.get('name')}({json.dumps(c.get('args') or {}, default=str)})"
+                f"{c.get('name')}({_clip_args(_args_json(c))})"
                 for c in m.get("tool_calls") or []
             )
             parts.append(f"ASSISTANT: {m.get('content') or ''}\nCALLED: {calls}")

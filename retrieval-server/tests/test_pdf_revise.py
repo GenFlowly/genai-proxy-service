@@ -328,3 +328,33 @@ class LongDocumentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReservedNameScanTests(unittest.TestCase):
+    def test_scan_finds_http_and_mcp_conflicts(self):
+        import importlib.util
+        import os
+
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "scripts", "scan_reserved_tool_names.py")
+        spec = importlib.util.spec_from_file_location("scan_reserved_tool_names", path)
+        scan_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(scan_module)
+
+        class _Table:
+            def __init__(self):
+                self.calls = 0
+
+            def scan(self, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    return {"Items": [
+                        {"customerId": "c1", "name": "revise_pdf", "provider": "http", "status": "active"},
+                        {"customerId": "c2", "name": "crm", "provider": "http", "status": "active"},
+                    ], "LastEvaluatedKey": {"k": 1}}
+                return {"Items": [{"customerId": "c3", "name": "docs", "provider": "mcp",
+                                   "status": "active", "discoveredTools": [{"name": "search"}]}]}
+
+        report = scan_module.scan(_Table(), {"revise_pdf"})
+        self.assertEqual(report["scanned"], 3)
+        self.assertEqual([c["customerId"] for c in report["conflicts"]], ["c1"])

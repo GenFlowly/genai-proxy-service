@@ -118,6 +118,45 @@ class PdfWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.worker._warm)
 
 
+class LogIsolationTests(unittest.IsolatedAsyncioTestCase):
+    """Plan 1.4: document text never reaches the server's logs or stderr."""
+
+    async def test_rendered_text_never_reaches_the_parents_logs(self):
+        import io
+        import logging
+
+        records = []
+
+        class _Capture(logging.Handler):
+            def emit(self, record):
+                records.append(record)
+
+        root = logging.getLogger()
+        capture = _Capture(logging.DEBUG)
+        level = root.level
+        root.addHandler(capture)
+        root.setLevel(logging.DEBUG)
+        stderr = io.StringIO()
+        worker = pdf_worker.PdfWorker()
+        try:
+            with mock.patch("sys.stderr", stderr):
+                ok = await worker.render({**_JOB, "markdown": "Łukasz Wójcik 你好 -> ✓ secret-payload-123"})
+                failed = await worker.render({**_JOB, "markdown": "secret-payload-123", "title": 123})
+        finally:
+            await worker.close()
+            root.removeHandler(capture)
+            root.setLevel(level)
+        self.assertEqual(ok["status"], "ok")
+        self.assertEqual(failed["status"], "error")
+        for record in records:
+            message = record.getMessage()
+            self.assertNotIn("secret-payload-123", message)
+            self.assertNotIn("<p>", message)
+            self.assertFalse(record.name.startswith("xhtml2pdf"))
+        self.assertTrue(any("pdf render failed: status=error kind=error" in r.getMessage() for r in records))
+        self.assertNotIn("secret-payload-123", stderr.getvalue())
+
+
 class HeavySlotTests(unittest.IsolatedAsyncioTestCase):
     async def test_acquire_times_out_and_does_not_leak_the_lock(self):
         lock = heavy_slot.threading.Lock()
