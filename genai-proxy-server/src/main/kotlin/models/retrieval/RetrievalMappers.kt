@@ -8,9 +8,13 @@ import com.genflowly.models.isImageAttachmentMediaType
 import com.genflowly.models.normalizeAttachmentMediaType
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /**
  * Mappers from the domain models onto the retrieval-server exchange types.
@@ -31,27 +35,39 @@ fun List<AttachmentRef>.toImageRefs(): List<ImageRef> =
 
 /**
  * Parse the retrieval-server's generated_artifacts JSON —
- * [{"artifact_id","key","media_type","filename","size_bytes"}] — into
- * AttachmentRefs for persistence on the assistant message. The artifact id/key
- * follow the attachmentS3Key convention, so the existing attachment-download
- * endpoint serves them unchanged. Malformed input degrades to an empty list.
+ * [{"artifact_id","key","media_type","filename","size_bytes","source_key",
+ * "page_count"}] — into AttachmentRefs for persistence on the assistant
+ * message. The artifact id/key follow the attachmentS3Key convention, so the
+ * existing attachment-download endpoint serves them unchanged. Optional fields
+ * that are missing, null or of the wrong type stay null. Malformed input
+ * degrades to an empty list.
  */
 fun parseGeneratedArtifacts(json: String?): List<AttachmentRef> {
     if (json.isNullOrBlank()) return emptyList()
     return runCatching {
         jsonParser.parseToJsonElement(json).jsonArray.mapNotNull { el ->
             val obj = el.jsonObject
-            val id = obj["artifact_id"]?.jsonPrimitive?.content ?: return@mapNotNull null
-            val key = obj["key"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            val id = obj.primitiveOrNull("artifact_id")?.content ?: return@mapNotNull null
+            val key = obj.primitiveOrNull("key")?.content ?: return@mapNotNull null
             AttachmentRef(
                 attachmentId = id,
                 s3Key = key,
-                mediaType = obj["media_type"]?.jsonPrimitive?.content ?: "application/octet-stream",
-                filename = obj["filename"]?.jsonPrimitive?.content
+                mediaType = obj.primitiveOrNull("media_type")?.content ?: "application/octet-stream",
+                filename = obj.primitiveOrNull("filename")?.content,
+                sizeBytes = obj.primitiveOrNull("size_bytes")?.longOrNull,
+                sourceKey = obj.primitiveOrNull("source_key")?.content?.takeIf { it.isNotBlank() },
+                pageCount = obj.primitiveOrNull("page_count")?.intOrNull
             )
         }
     }.getOrElse { emptyList() }
 }
+
+/**
+ * The value at [key] when it is a JSON primitive other than null. A JSON null
+ * reads as absent rather than as the string "null".
+ */
+private fun JsonObject.primitiveOrNull(key: String): JsonPrimitive? =
+    (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }
 
 fun Message.toConversationMessage(): ConversationMessage =
     ConversationMessage(

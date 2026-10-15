@@ -6,15 +6,16 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Exchange types for the Python retrieval-server: streaming chunks, generation
- * results and the tool/image payload shapes shared between
- * RetrievalServerClient and its callers. Wire-format payloads that never leave
- * the client remain private to providers/RetrievalServerClient.kt.
+ * results and the tool/image/file payload shapes shared between
+ * RetrievalServerClient, RunsClient and their callers. Wire-format payloads
+ * that never leave a client remain private to that client.
  */
 
 sealed class StreamChunk {
@@ -49,8 +50,8 @@ sealed class StreamChunk {
     /**
      * Raw JSON array of files built-in tools produced during the turn (e.g.
      * generated PDFs), already stored in the attachments bucket:
-     * [{"artifact_id","key","media_type","filename","size_bytes"}]. Emitted
-     * when the graph's TOOL_EXECUTOR node completes.
+     * [{"artifact_id","key","media_type","filename","size_bytes","source_key",
+     * "page_count"}]. Emitted when the graph's TOOL_EXECUTOR node completes.
      */
     data class GeneratedArtifacts(val json: String) : StreamChunk()
     /**
@@ -74,7 +75,8 @@ sealed class StreamChunk {
      * Generation failed mid-stream: the retrieval server's concise,
      * user-facing description of the vendor error (quota exceeded, key
      * rejected, ...). errorType is its machine class (rate_limit, auth,
-     * context_length, model_not_found, provider_error).
+     * context_length, model_not_found, provider_error; for a failed durable
+     * run also run_lost, resume_timeout, runaway or error).
      */
     data class Error(val message: String, val errorType: String? = null) : StreamChunk()
 
@@ -85,7 +87,17 @@ sealed class StreamChunk {
      * client's resume(). Only emitted on the durable /runs reattach stream.
      */
     data class AwaitingInput(val json: String) : StreamChunk()
+
+    /**
+     * Transient progress while a tool's arguments are being written, raw JSON
+     * of the event's object: {"tool": "generate_pdf", "chars": 1234}. Relayed
+     * to the client only: never captured into thinking steps, never persisted.
+     */
+    data class Progress(val json: String) : StreamChunk()
 }
+
+/** Shown when a run's terminal summary reports status "error" without any error text. */
+internal const val RUN_FAILED_FALLBACK_MESSAGE = "The response could not be completed."
 
 /**
  * Map one retrieval-server SSE event object (the parsed JSON of a `data: {...}`
@@ -95,11 +107,17 @@ sealed class StreamChunk {
  * Shared by the streaming `/retrieve` reader and the durable `/runs` reattach
  * stream: both transports emit the identical event vocabulary
  * (content / thinking_step / thinking / thinking_duration_ms / web_sources /
- * generated_artifacts / tool_calls / awaiting_input / error / usage). Key
- * precedence and the null/empty guards mirror the original inline reader exactly.
- * (`awaiting_input` is durable-runs-only — the /retrieve stream never emits it.)
+ * generated_artifacts / tool_calls / awaiting_input / progress / error /
+ * usage). (`awaiting_input` is durable-runs-only — the /retrieve stream never
+ * emits it.) Unknown keys, such as the `{"keepalive": true}` lines sent during
+ * silences, map to null.
+ *
+ * A failure is checked first, before every content key: a failed run's
+ * terminal summary ({"status": "error", "error": ..., "generated_artifacts":
+ * [...], ...}) carries other recognized keys too, and must still read as the
+ * error. Otherwise the first recognized key wins, in the order below.
  */
-fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
+fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = failureOf(jsonObj) ?: when {
     jsonObj.containsKey("content") -> {
         val content = jsonObj["content"]?.jsonPrimitive?.content
         if (!content.isNullOrEmpty()) StreamChunk.Content(content) else null
@@ -135,13 +153,7 @@ fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
         val payload = jsonObj["awaiting_input"]
         if (payload != null && payload !is JsonNull) StreamChunk.AwaitingInput(payload.toString()) else null
     }
-    jsonObj.containsKey("error") -> {
-        val message = jsonObj["error"]?.jsonPrimitive?.content
-        if (!message.isNullOrBlank()) StreamChunk.Error(
-            message = message,
-            errorType = jsonObj["error_type"]?.jsonPrimitive?.content
-        ) else null
-    }
+    jsonObj.containsKey("progress") -> (jsonObj["progress"] as? JsonObject)?.let { StreamChunk.Progress(it.toString()) }
     jsonObj.containsKey("usage") -> {
         val usageObj = jsonObj["usage"]!!.jsonObject
         StreamChunk.Usage(
@@ -155,6 +167,26 @@ fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
     }
     else -> null
 }
+
+/**
+ * The Error an event reports, or null: an `error` that is a non-blank string
+ * (a mid-stream vendor failure, a standalone run-failure row, or a failed
+ * run's terminal summary), or a terminal summary whose `status` is "error"
+ * even without error text. A null or blank `error`, as on a successful
+ * summary, is not a failure.
+ */
+private fun failureOf(jsonObj: JsonObject): StreamChunk.Error? {
+    val message = jsonObj.stringOrNull("error")?.takeIf { it.isNotBlank() }
+    if (message == null && jsonObj.stringOrNull("status") != "error") return null
+    return StreamChunk.Error(
+        message = message ?: RUN_FAILED_FALLBACK_MESSAGE,
+        errorType = jsonObj.stringOrNull("error_type")?.takeIf { it.isNotBlank() }
+    )
+}
+
+/** The value at [key] when it is a JSON string; null for a JSON null, a number, an object or an array. */
+private fun JsonObject.stringOrNull(key: String): String? =
+    (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
 data class RetrievalResult(
     val text: String?,
@@ -185,6 +217,56 @@ data class ImageRef(
     @SerialName("media_type") val mediaType: String
 )
 
+/** Where a [FileRef]'s file came from. */
+@Serializable
+enum class FileOrigin {
+    /** Produced by a built-in tool on an assistant turn (e.g. a generated PDF). */
+    @SerialName("generated") GENERATED,
+    /** Attached by the user to their message. */
+    @SerialName("uploaded") UPLOADED
+}
+
+/**
+ * A non-image file of the conversation, passed to the retrieval-server so the
+ * model knows which files exist and tools can address them. Tools read the
+ * file by the stored [s3Key] exactly as given: in a shared conversation it can
+ * sit under another participant's prefix, so it is never rebuilt from
+ * [attachmentId].
+ */
+@Serializable
+data class FileRef(
+    @SerialName("attachment_id") val attachmentId: String,
+    @SerialName("s3_key") val s3Key: String,
+    @SerialName("media_type") val mediaType: String,
+    val filename: String? = null,
+    @SerialName("size_bytes") val sizeBytes: Long? = null,
+    val origin: FileOrigin
+)
+
+/**
+ * The current turn's `raw_data` in /retrieve and POST /runs requests. Fields
+ * left at their empty or null defaults are omitted by the proxy's Json
+ * (encodeDefaults off), so a retrieval-server that predates them never sees
+ * them.
+ */
+@Serializable
+data class RawData(
+    @SerialName("query_data") val queryData: String,
+    @SerialName("top_n") val topN: Int = 3,
+    /** Images attached to the current-turn query */
+    val images: List<ImageRef> = emptyList(),
+    /** Non-image files attached to the current-turn query */
+    val files: List<FileRef> = emptyList(),
+    /** First language tag of the browser's Accept-Language (e.g. "en-US"); null when unknown */
+    val locale: String? = null,
+    /**
+     * Scratch namespace the proxy minted for this request and vendor, under
+     * which the turn's agent-fs objects are written; null lets the
+     * retrieval-server mint its own.
+     */
+    @SerialName("fs_namespace") val fsNamespace: String? = null
+)
+
 @Serializable
 data class ConversationMessage(
     val role: String,
@@ -193,7 +275,12 @@ data class ConversationMessage(
     /** Assistant turns: [{"id","name","args"}] tool calls the model made */
     @SerialName("tool_calls") val toolCalls: kotlinx.serialization.json.JsonElement? = null,
     /** User turns: [{"tool_call_id","content"}] results the caller executed */
-    @SerialName("tool_results") val toolResults: kotlinx.serialization.json.JsonElement? = null
+    @SerialName("tool_results") val toolResults: kotlinx.serialization.json.JsonElement? = null,
+    /**
+     * Non-image files of this turn: generated files on assistant turns
+     * (origin generated), uploaded documents on user turns (origin uploaded).
+     */
+    val files: List<FileRef> = emptyList()
 )
 
 @Serializable

@@ -85,6 +85,31 @@ data class Message(
      */
     val stopReason: String? = null,
     /**
+     * Assistant messages: the agent-fs scratch namespace the turn's tools wrote
+     * under (customers/{customerId}/agent-fs/{fsNamespace}/), recorded so a
+     * purge can find those objects. Null for user messages and records
+     * predating the feature.
+     */
+    val fsNamespace: String? = null,
+    /**
+     * Assistant messages: the durable run that generated this turn, recorded so
+     * a purge can delete its run data. Null on the stateless path and for
+     * records predating the feature.
+     */
+    val runId: String? = null,
+    /**
+     * True when tagging this message's S3 objects as kept failed at write time
+     * and a reconciler still has to retry it. Persisted only while true.
+     */
+    val claimPending: Boolean = false,
+    /**
+     * Assistant messages: user-facing error text of a turn that failed (for
+     * example a durable run that never reached a terminal event). [text] then
+     * holds whatever was streamed before the failure and may be empty. Null for
+     * turns that completed.
+     */
+    val errorMessage: String? = null,
+    /**
      * ISO-8601 instant stamped by the repository's withTimestamps on write.
      * Read-only: populated when loading from DDB, ignored on create (the
      * provider always stamps its own value).

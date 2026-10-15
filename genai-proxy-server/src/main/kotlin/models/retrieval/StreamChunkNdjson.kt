@@ -13,6 +13,9 @@ import kotlinx.serialization.json.JsonPrimitive
  *   ga = generated files    ai = awaiting input       err = error
  *   cr = content reset (discard accumulated content — a new round follows)
  *   sr = stop reason (vendor's raw finish reason for the terminated turn)
+ *   pg = progress while a tool's arguments are written, e.g.
+ *        {"tool":"generate_pdf","chars":1234} (transient: shown until the
+ *        next content/ga/err frame or the stream end, never persisted)
  *
  * `json`-backed chunks are already valid JSON (object/array) and are embedded
  * as-is; text values are JSON-escaped via JsonPrimitive.
@@ -28,6 +31,7 @@ fun StreamChunk.toNdjsonFrame(): String? = when (this) {
     is StreamChunk.WebSources -> "{\"t\":\"ws\",\"v\":$json}\n"
     is StreamChunk.GeneratedArtifacts -> "{\"t\":\"ga\",\"v\":$json}\n"
     is StreamChunk.AwaitingInput -> "{\"t\":\"ai\",\"v\":$json}\n"
+    is StreamChunk.Progress -> "{\"t\":\"pg\",\"v\":$json}\n"
     is StreamChunk.Error -> "{\"t\":\"err\",\"v\":${JsonPrimitive(message)}}\n"
     is StreamChunk.Usage -> null
 }

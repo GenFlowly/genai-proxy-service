@@ -139,4 +139,84 @@ class ParseRetrievalEventTest {
         assertNull(parse("""{"heartbeat":true}"""))
         assertNull(parse("""{}"""))
     }
+
+    // ── Failures win over every other key (durable-run terminal summaries) ──
+
+    @Test
+    fun `a terminal summary carrying generated_artifacts and an error yields the error`() {
+        val chunk = parse(
+            """{"status":"error","run_id":"run_1","customer_id":"c1","generated_response":null,
+                "tool_calls":null,"generated_artifacts":[{"artifact_id":"a1","key":"k"}],
+                "usage":{"input_tokens":1},"error":"timed out waiting for input","error_type":"resume_timeout"}"""
+        )
+
+        assertEquals(StreamChunk.Error("timed out waiting for input", "resume_timeout"), chunk)
+    }
+
+    @Test
+    fun `a successful terminal summary still yields its generated_artifacts`() {
+        val chunk = parse(
+            """{"status":"completed","run_id":"run_1","generated_response":"ok","tool_calls":null,
+                "generated_artifacts":[{"artifact_id":"a1","key":"k"}],"usage":{},"error":null,"error_type":null}"""
+        )
+
+        assertTrue(chunk is StreamChunk.GeneratedArtifacts)
+        assertTrue("a1" in (chunk as StreamChunk.GeneratedArtifacts).json)
+    }
+
+    @Test
+    fun `a terminal error status without error text still yields an error`() {
+        val chunk = parse("""{"status":"error","generated_artifacts":[],"error":null,"error_type":null}""")
+
+        assertEquals(StreamChunk.Error(RUN_FAILED_FALLBACK_MESSAGE, null), chunk)
+    }
+
+    @Test
+    fun `a standalone run-failure row maps to Error`() {
+        assertEquals(
+            StreamChunk.Error("The response was interrupted.", "run_lost"),
+            parse("""{"error":"The response was interrupted.","error_type":"run_lost"}""")
+        )
+    }
+
+    @Test
+    fun `an error wins over content keys in the same event`() {
+        assertEquals(StreamChunk.Error("boom", null), parse("""{"content":"partial","error":"boom"}"""))
+        assertEquals(StreamChunk.Error("boom", null), parse("""{"tool_calls":[{"id":"t1"}],"error":"boom"}"""))
+    }
+
+    @Test
+    fun `a JSON null error_type reads as no type`() {
+        assertEquals(StreamChunk.Error("boom", null), parse("""{"error":"boom","error_type":null}"""))
+    }
+
+    @Test
+    fun `a null error does not hide the event's other keys`() {
+        assertEquals(StreamChunk.Usage(10, 0, 0, 0, 0, 0), parse("""{"error":null,"usage":{"input_tokens":10}}"""))
+        assertNull(parse("""{"error":null}"""))
+    }
+
+    // ── Progress and keepalives ─────────────────────────────────────────────
+
+    @Test
+    fun `progress keeps the raw object json`() {
+        val chunk = parse("""{"progress":{"tool":"generate_pdf","chars":1234}}""")
+
+        assertTrue(chunk is StreamChunk.Progress)
+        val progress = json.parseToJsonElement((chunk as StreamChunk.Progress).json).jsonObject
+        assertEquals("generate_pdf", progress["tool"]!!.toString().trim('"'))
+        assertEquals("1234", progress["chars"]!!.toString())
+    }
+
+    @Test
+    fun `progress that is not an object is skipped`() {
+        assertNull(parse("""{"progress":null}"""))
+        assertNull(parse("""{"progress":42}"""))
+        assertNull(parse("""{"progress":[1]}"""))
+    }
+
+    @Test
+    fun `keepalive maps to null`() {
+        assertNull(parse("""{"keepalive":true}"""))
+    }
 }

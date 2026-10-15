@@ -131,6 +131,7 @@ class ConversationService(
                                 reasoningCostUsd = nextMsg.reasoningCostUsd,
                                 thinkingDurationMs = nextMsg.thinkingDurationMs,
                                 stopReason = nextMsg.stopReason,
+                                error = nextMsg.errorMessage,
                                 thinkingSteps = nextMsg.thinkingStepsJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
                                 },

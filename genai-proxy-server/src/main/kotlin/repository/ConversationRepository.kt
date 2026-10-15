@@ -532,8 +532,7 @@ class ConversationRepository(
             val createdAt = item["createdAt"]?.s()
             val updatedAt = item["updatedAt"]?.s()
 
-            val messages = getMessagesForConversation(convId)
-            val vendors = messages.flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+            val vendors = sidebarVendors(convId)
 
             ConversationSummary(
                 conversationId = convId,
@@ -599,8 +598,7 @@ class ConversationRepository(
             .mapNotNull { item ->
                 val convId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
 
-                val messages = getMessagesForConversation(convId)
-                val vendors = messages.flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+                val vendors = sidebarVendors(convId)
 
                 ConversationSummary(
                     conversationId = convId,
@@ -698,19 +696,51 @@ class ConversationRepository(
         return@withContext itemToMessage(item)
     }
 
+    /**
+     * Every message of the conversation. One Query page stops at 1 MB, which
+     * can be only 2-3 messages when thinking steps are large, so this follows
+     * LastEvaluatedKey until the partition is exhausted.
+     */
     suspend fun getMessagesForConversation(
         conversationId: String
-    ): List<Message> = withContext(Dispatchers.IO) {
-        val request = QueryRequest.builder()
-            .tableName(MESSAGE_TABLE)
-            .keyConditionExpression("conversationId = :cid")
-            .expressionAttributeValues(mapOf(
-                ":cid" to AttributeValue.builder().s(conversationId).build()
-            ))
-            .build()
+    ): List<Message> = queryMessages(conversationId, maxPages = Int.MAX_VALUE)
 
-        val response = dynamoDbClient.query(request)
-        response.items().mapNotNull { itemToMessage(it) }
+    /**
+     * Vendor badges for the conversation listings, from the first Query page
+     * only (up to 1 MB): the listings run this for every conversation on every
+     * page load, and a badge does not justify reading a long conversation in
+     * full.
+     */
+    private suspend fun sidebarVendors(conversationId: String): List<String>? =
+        queryMessages(conversationId, maxPages = 1)
+            .flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+
+    private suspend fun queryMessages(
+        conversationId: String,
+        maxPages: Int
+    ): List<Message> = withContext(Dispatchers.IO) {
+        val messages = mutableListOf<Message>()
+        var startKey: Map<String, AttributeValue>? = null
+        var pages = 0
+
+        do {
+            val queryBuilder = QueryRequest.builder()
+                .tableName(MESSAGE_TABLE)
+                .keyConditionExpression("conversationId = :cid")
+                .expressionAttributeValues(mapOf(
+                    ":cid" to AttributeValue.builder().s(conversationId).build()
+                ))
+            startKey?.let { queryBuilder.exclusiveStartKey(it) }
+
+            val response = dynamoDbClient.query(queryBuilder.build())
+            response.items().mapNotNullTo(messages) { itemToMessage(it) }
+            pages++
+            startKey = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
+                response.lastEvaluatedKey()
+            } else null
+        } while (startKey != null && pages < maxPages)
+
+        messages
     }
 
     suspend fun createMessage(
@@ -810,6 +840,20 @@ class ConversationRepository(
                     message.stopReason?.let {
                         map["stopReason"] = AttributeValue.builder().s(it).build()
                     }
+                    message.fsNamespace?.takeIf { it.isNotBlank() }?.let {
+                        map["fsNamespace"] = AttributeValue.builder().s(it).build()
+                    }
+                    message.runId?.takeIf { it.isNotBlank() }?.let {
+                        map["runId"] = AttributeValue.builder().s(it).build()
+                    }
+                    // Written only while true, as a Number rather than a BOOL so
+                    // the attribute can also key a sparse GSI (BOOL cannot).
+                    if (message.claimPending) {
+                        map["claimPending"] = AttributeValue.builder().n("1").build()
+                    }
+                    message.errorMessage?.takeIf { it.isNotBlank() }?.let {
+                        map["errorMessage"] = AttributeValue.builder().s(it).build()
+                    }
                 }
             )
 
@@ -881,25 +925,46 @@ class ConversationRepository(
             thinkingDurationMs = item["thinkingDurationMs"]?.n()?.toLongOrNull(),
             thinkingStepsJson = item["thinkingStepsJson"]?.s()?.takeIf { it.isNotBlank() },
             stopReason = item["stopReason"]?.s()?.takeIf { it.isNotBlank() },
+            fsNamespace = item["fsNamespace"]?.s()?.takeIf { it.isNotBlank() },
+            runId = item["runId"]?.s()?.takeIf { it.isNotBlank() },
+            claimPending = isFlagSet(item["claimPending"]),
+            errorMessage = item["errorMessage"]?.s()?.takeIf { it.isNotBlank() },
             createdAt = item["createdAt"]?.s()
         )
     }
 
+    /** A flag attribute counts as set when it is a non-zero Number or a BOOL true. */
+    private fun isFlagSet(attr: AttributeValue?): Boolean =
+        attr?.n()?.toBigDecimalOrNull()?.let { it.signum() != 0 } ?: (attr?.bool() == true)
+
+    /**
+     * AttachmentRefs as a DynamoDB list of maps. The optional fields are written
+     * only when set, so rows stay readable by code predating them.
+     */
     private fun attachmentsToAttributeValue(
         attachments: List<com.genflowly.models.AttachmentRef>
     ): AttributeValue =
         AttributeValue.builder()
             .l(
                 attachments.map { attachment ->
-                    AttributeValue.builder()
-                        .m(
-                            mapOf(
-                                "attachmentId" to AttributeValue.builder().s(attachment.attachmentId).build(),
-                                "s3Key" to AttributeValue.builder().s(attachment.s3Key).build(),
-                                "mediaType" to AttributeValue.builder().s(attachment.mediaType).build()
-                            )
-                        )
-                        .build()
+                    val fields = mutableMapOf(
+                        "attachmentId" to AttributeValue.builder().s(attachment.attachmentId).build(),
+                        "s3Key" to AttributeValue.builder().s(attachment.s3Key).build(),
+                        "mediaType" to AttributeValue.builder().s(attachment.mediaType).build()
+                    )
+                    attachment.filename?.takeIf { it.isNotBlank() }?.let {
+                        fields["filename"] = AttributeValue.builder().s(it).build()
+                    }
+                    attachment.sizeBytes?.let {
+                        fields["sizeBytes"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    attachment.sourceKey?.takeIf { it.isNotBlank() }?.let {
+                        fields["sourceKey"] = AttributeValue.builder().s(it).build()
+                    }
+                    attachment.pageCount?.let {
+                        fields["pageCount"] = AttributeValue.builder().n(it.toString()).build()
+                    }
+                    AttributeValue.builder().m(fields).build()
                 }
             )
             .build()
@@ -912,6 +977,14 @@ class ConversationRepository(
             val attachmentId = map["attachmentId"]?.s() ?: return@mapNotNull null
             val s3Key = map["s3Key"]?.s() ?: return@mapNotNull null
             val mediaType = map["mediaType"]?.s() ?: return@mapNotNull null
-            com.genflowly.models.AttachmentRef(attachmentId = attachmentId, s3Key = s3Key, mediaType = mediaType)
+            com.genflowly.models.AttachmentRef(
+                attachmentId = attachmentId,
+                s3Key = s3Key,
+                mediaType = mediaType,
+                filename = map["filename"]?.s()?.takeIf { it.isNotBlank() },
+                sizeBytes = map["sizeBytes"]?.n()?.toLongOrNull(),
+                sourceKey = map["sourceKey"]?.s()?.takeIf { it.isNotBlank() },
+                pageCount = map["pageCount"]?.n()?.toIntOrNull()
+            )
         } ?: emptyList()
 }

@@ -619,6 +619,9 @@ class GenerationOrchestrator(
                         is StreamChunk.AwaitingInput ->
                             logger.info("Generation {} awaiting input: {}", responseMessageId, chunk.json)
                         is StreamChunk.Thinking -> {}
+                        // Transient tool-argument progress: relayed below, never
+                        // captured into thinking steps or persisted.
+                        is StreamChunk.Progress -> {}
                     }
                     chunk.toNdjsonFrame()?.let { emit(it) }
                 }
