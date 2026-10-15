@@ -16,7 +16,12 @@ from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.image_normalize import ImageNormalizationError
 from graph.instruction_loader import get_instruction_text
-from graph.tools_runtime import MEMORY_CONSENT_TOOLS, all_builtin_tool_names, with_companions
+from graph.tools_runtime import (
+    GRAPH_OWNER_KEY,
+    MEMORY_CONSENT_TOOLS,
+    all_builtin_tool_names,
+    with_companions,
+)
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
 from graph.state import RetrievalState
@@ -194,13 +199,19 @@ def _direct_graph() -> tuple:
     return graph, node_type_map, node_name_map, node_configs, streaming_nodes, _DEFAULT_MAX_ITERATIONS
 
 
-def _build_node_configs(nodes: list[dict]) -> tuple[dict, dict, set[str]]:
+def _build_node_configs(nodes: list[dict], owner: str | None = None) -> tuple[dict, dict, set[str]]:
     """
     Per-request node config dicts keyed by nodeId (plus a nodeType-keyed alias
     for the first node of each type), with centralized system prompts
     resolved: an instruction reference beats the node's inline system_prompt,
     which beats the hardcoded defaults in the node implementations.
     Unresolvable refs degrade gracefully.
+
+    `owner` is the graph record's customerId ("System" for published agents).
+    It is stamped on every config under GRAPH_OWNER_KEY, replacing whatever
+    the stored config holds there, so host code can scope owner-provided
+    files (the generate_pdf letterhead logo, plan 6.2) to the graph owner's
+    prefix; a config can never point it at another customer.
     Returns (node_type_map, node_configs, streaming_node_ids).
     """
     node_type_map = {n["nodeId"]: n["nodeType"] for n in nodes}
@@ -208,6 +219,9 @@ def _build_node_configs(nodes: list[dict]) -> tuple[dict, dict, set[str]]:
     streaming_nodes: set[str] = set()
     for n in nodes:
         config = json.loads(n.get("config") or "{}")
+        config.pop(GRAPH_OWNER_KEY, None)
+        if owner:
+            config[GRAPH_OWNER_KEY] = owner
         instruction_id = config.get("instruction_id")
         if instruction_id:
             version = config.get("instruction_version")
@@ -269,7 +283,9 @@ def _resolve_graph(customer_id: str, graph_id: str | None = None) -> tuple:
     # agents between requests doesn't thrash the per-customer entry.
     cache_key = f"graph#{graph_id}" if graph_id else customer_id
     graph, max_iterations = get_or_build_graph(cache_key, graph_record, nodes)
-    node_type_map, node_configs, streaming_nodes = _build_node_configs(nodes)
+    node_type_map, node_configs, streaming_nodes = _build_node_configs(
+        nodes, graph_record.get("customerId")
+    )
     node_name_map = {n["nodeId"]: n.get("name") or n["nodeType"] for n in nodes}
 
     return graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations
@@ -397,7 +413,9 @@ def _render_agent_variables(node_configs: dict, variables: dict) -> None:
             config[key] = template
 
 
-def _prepare_agent_node_configs(nodes: list[dict], variables: dict) -> tuple[dict, str | None]:
+def _prepare_agent_node_configs(
+    nodes: list[dict], variables: dict, owner: str | None = None
+) -> tuple[dict, str | None]:
     """
     Shared by the plain and durable request-agent paths: build node configs
     (instruction refs resolved), adapt GENERATION nodes to the llm_node
@@ -406,7 +424,7 @@ def _prepare_agent_node_configs(nodes: list[dict], variables: dict) -> tuple[dic
     prompts are ignored there by design of the chat path).
     Returns (node_configs, response_prompt).
     """
-    _, node_configs, _ = _build_node_configs(nodes)
+    _, node_configs, _ = _build_node_configs(nodes, owner)
 
     # GENERATION nodes store executor-style config keys; adapt each one to the
     # llm_node contract. Their output is the graph's result by convention.
@@ -536,7 +554,9 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
 
     graph_record, nodes = graph_data
     graph, max_iterations = get_or_build_graph(f"graph#{req.graph_id}", graph_record, nodes)
-    node_configs, response_prompt = _prepare_agent_node_configs(nodes, req.variables)
+    node_configs, response_prompt = _prepare_agent_node_configs(
+        nodes, req.variables, graph_record.get("customerId")
+    )
     state = _build_agent_graph_state(req, node_configs, response_prompt)
 
     logger.info(

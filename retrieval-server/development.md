@@ -527,6 +527,33 @@ native file on the turn it was attached (when the model reads PDFs), the
 extracted text otherwise or on later turns, and `read_attachment` for the
 rest.
 
+### Locale, page size and letterhead (plan 6.1 / 6.2)
+
+Typst only (x2p_v1 ignores all of this). The proxy sends the browser's
+`Accept-Language` as `raw_data.locale`: `en-US` and `en-CA` default to Letter,
+everything else to A4, and the footer's page label is translated. A
+`TOOL_EXECUTOR` node can carry per-agent settings:
+
+```json
+{"tools": ["generate_pdf"],
+ "tool_settings": {"generate_pdf": {
+   "default_page_size": "Letter",
+   "company_name": "Acme GmbH",
+   "footer_text": "Confidential",
+   "accent_color": "#1F4E79",
+   "logo_attachment_id": "<attachment id>"}}}
+```
+
+The admin panel edits these for System agents (agent editor, "PDF
+letterhead"). The model's explicit `page_size` beats `default_page_size`.
+The logo is read only from the graph owner's prefix,
+`customers/<graph owner>/attachments/<id>` (the owner is the graph record's
+`customerId`, `System` for published agents, which the loaders stamp on the
+node config as `_graph_owner`, replacing any stored value). An id of another
+customer's file is not found: the PDF renders without a logo and
+`pdf_render_warnings_total{kind="branding_logo_unavailable"}` counts it. The
+renderer accepts PNG or JPEG up to 2 MB.
+
 ### Object tags
 
 Everything a tool stores carries a `retention` tag at write time:

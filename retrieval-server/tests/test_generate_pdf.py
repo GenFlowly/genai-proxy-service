@@ -470,6 +470,126 @@ class ParityTests(unittest.TestCase):
 # --- the tool ---------------------------------------------------------------------
 
 
+class RenderOptionsTests(unittest.TestCase):
+    """6.1 locale and 6.2 letterhead settings reach the render job; the logo
+    comes only from the graph owner's prefix."""
+
+    PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+    def _render(self, runtime: dict, args: dict | None = None):
+        jobs = []
+
+        async def render(job):
+            jobs.append(job)
+            return {"status": "ok", "pdf": b"%PDF-1.7\n%%EOF", "pages": 1, "warnings": {}}
+
+        seen = []
+        context, store = _context({"pdf_renderer": "typst", "render_pdf": render,
+                                   "record_pdf_stats": seen.append, **runtime})
+        return context, store, jobs, seen, render
+
+    def _go(self, context, args=None):
+        return _run(gp.GeneratePdfTool().run(
+            {"content_markdown": "# Report\n\nText.", "filename": "r.pdf", **(args or {})}, context,
+        ))
+
+    def test_locale_page_size_and_branding_reach_the_job(self):
+        context, _, jobs, seen, _ = self._render({
+            "locale": "de-DE",
+            "pdf_settings": {"default_page_size": "Letter", "company_name": "Acme GmbH",
+                             "footer_text": "Vertraulich", "accent_color": "#1A2b3C"},
+        })
+        self._go(context)
+        options = jobs[0]["options"]
+        self.assertEqual(options["locale"], "de-DE")
+        self.assertEqual(options["page_size"], "Letter")
+        self.assertEqual(options["branding"], {"company_name": "Acme GmbH",
+                                               "footer_text": "Vertraulich",
+                                               "accent_color": "#1A2b3C"})
+        # The model's explicit page size beats the configured default.
+        context, _, jobs, _, _ = self._render({"pdf_settings": {"default_page_size": "Letter"}})
+        self._go(context, {"page_size": "A4"})
+        self.assertEqual(jobs[0]["options"]["page_size"], "A4")
+
+    def test_malformed_settings_are_dropped(self):
+        context, _, jobs, _, _ = self._render({
+            "locale": "de-DE; rm",
+            "pdf_settings": {"default_page_size": "Tabloid", "accent_color": "red; x"},
+        })
+        self._go(context)
+        self.assertEqual(jobs[0]["options"], {})
+
+    def test_logo_is_read_from_the_graph_owners_prefix(self):
+        context, store, jobs, seen, _ = self._render({
+            "pdf_settings": {"logo_attachment_id": "logo-0001"},
+            "pdf_settings_owner": "System",
+        })
+        store.put("customers/System/attachments/logo-0001", self.PNG, "image/png")
+        self._go(context)
+        branding = jobs[0]["options"]["branding"]
+        self.assertEqual(gp.base64.b64decode(branding["logo_b64"]), self.PNG)
+        self.assertNotIn("branding_logo_unavailable", seen[0].get("warnings") or {})
+
+    def test_without_an_owner_the_requesting_customer_owns_the_logo(self):
+        context, store, jobs, _, _ = self._render({"pdf_settings": {"logo_attachment_id": "logo-0001"}})
+        store.put("customers/cust-1/attachments/logo-0001", self.PNG, "image/png")
+        self._go(context)
+        self.assertIn("logo_b64", jobs[0]["options"]["branding"])
+
+    def test_another_customers_logo_is_refused_and_counted(self):
+        # The id exists, but under a different customer: the PDF renders
+        # without it and the warning is counted.
+        context, store, jobs, seen, _ = self._render({
+            "pdf_settings": {"logo_attachment_id": "logo-0001", "company_name": "Acme"},
+            "pdf_settings_owner": "cust-1",
+        })
+        store.put("customers/cust-2/attachments/logo-0001", self.PNG, "image/png")
+        result = self._go(context)
+        self.assertEqual(len(result.artifacts), 1)
+        self.assertNotIn("logo_b64", jobs[0]["options"]["branding"])
+        self.assertEqual(seen[0]["warnings"]["branding_logo_unavailable"], 1)
+
+    def test_a_malformed_owner_or_id_is_refused(self):
+        for runtime in ({"pdf_settings": {"logo_attachment_id": "logo-0001"}, "pdf_settings_owner": "../cust-2"},
+                        {"pdf_settings": {"logo_attachment_id": "../../x/logo"}}):
+            context, store, jobs, seen, _ = self._render(runtime)
+            store.put("customers/cust-2/attachments/logo-0001", self.PNG, "image/png")
+            self._go(context)
+            self.assertNotIn("branding", jobs[0]["options"])
+            self.assertEqual(seen[0]["warnings"]["branding_logo_unavailable"], 1)
+
+    def test_typst_draws_the_owners_logo_on_page_one(self):
+        from graph import pdf_renderer
+        from PIL import Image
+
+        if not pdf_renderer.typst_available():
+            self.skipTest("typst renderer not installed")
+        buf = io.BytesIO()
+        Image.new("RGB", (240, 80), (20, 90, 160)).save(buf, "PNG")
+        context, store = _context({"pdf_renderer": "typst",
+                                   "pdf_settings": {"logo_attachment_id": "logo-0001",
+                                                    "company_name": "Acme"},
+                                   "pdf_settings_owner": "System"})
+        store.put("customers/System/attachments/logo-0001", buf.getvalue(), "image/png")
+        result = _run(gp.GeneratePdfTool().run(
+            {"content_markdown": "# Report\n\nText.", "filename": "r.pdf"}, context,
+        ))
+        self.assertEqual(result.details["pdf"]["status"], "ok", result.content)
+        from pypdf import PdfReader
+
+        page = PdfReader(io.BytesIO(store.objects[result.artifacts[0].key]["data"])).pages[0]
+        xobjects = page["/Resources"].get("/XObject") or {}
+        self.assertTrue(any(x.get_object().get("/Subtype") == "/Image" for x in xobjects.values()))
+
+    def test_x2p_ignores_the_settings(self):
+        context, store, jobs, _, _ = self._render({
+            "pdf_renderer": "x2p_v1", "locale": "en-US",
+            "pdf_settings": {"logo_attachment_id": "logo-0001", "company_name": "Acme"},
+        })
+        self._go(context)
+        self.assertEqual(jobs[0]["options"], {})
+
+
 class GeneratePdfToolTests(unittest.TestCase):
     def test_saves_the_pdf_and_its_source_with_tags(self):
         context, store = _context()

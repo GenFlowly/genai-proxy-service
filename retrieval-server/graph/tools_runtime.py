@@ -38,6 +38,12 @@ _registry: ToolRegistry | None = None
 # Must match attachmentS3Key() in the proxy server's Attachment.kt.
 _ATTACHMENT_KEY_TEMPLATE = "customers/{customer_id}/attachments/{artifact_id}"
 
+# Node-config key the graph loaders (routes/retrieve._build_node_configs) set
+# to the graph record's customerId, overwriting any stored value. Files a
+# graph's own settings name (the generate_pdf letterhead logo, plan 6.2) are
+# read from this owner's prefix only.
+GRAPH_OWNER_KEY = "_graph_owner"
+
 # Object tags on everything a tool stores as an artifact (and its source
 # sidecar). 'pending' objects are unclaimed: the proxy retags an object
 # 'kept' when it persists the message that links it, and a bucket lifecycle
@@ -288,7 +294,8 @@ def request_runtime(
       origin, size_bytes}}, the only way file tools resolve an id (3.1);
     - locale and pdf_settings: page size, footer language and tenant branding
       (6.1, 6.2; pdf_settings is the TOOL_EXECUTOR node's
-      tool_settings.generate_pdf);
+      tool_settings.generate_pdf), and pdf_settings_owner, the graph owner
+      whose prefix the settings' logo id is read from;
     - read_scratch / list_scratch: the turn's scratch files for
       generate_pdf(source_paths=...) (3.6), through fs_tools.safe_path;
     - enabled_tools: the names bound this request (descriptions and
@@ -332,6 +339,7 @@ def request_runtime(
         "conversation_files": conversation_files.by_id(state.get("conversation_files") or []),
         "locale": state.get("locale"),
         "pdf_settings": dict(settings) if isinstance(settings, dict) else {},
+        "pdf_settings_owner": (config or {}).get(GRAPH_OWNER_KEY),
         "read_scratch": read_scratch,
         "list_scratch": list_scratch,
         "enabled_tools": frozenset(enabled or ()),

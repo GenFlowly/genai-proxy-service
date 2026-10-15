@@ -87,11 +87,24 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runtime["pdf_renderer"], "x2p_v1")
         self.assertEqual(runtime["locale"], "de-DE")
         self.assertEqual(runtime["pdf_settings"], {"company_name": "Acme", "default_page_size": "Letter"})
+        self.assertIsNone(runtime["pdf_settings_owner"])
         self.assertEqual(runtime["conversation_files"]["a1"]["s3_key"], "customers/other/attachments/a1")
         self.assertTrue(callable(runtime["render_pdf"]))
         self.assertTrue(callable(runtime["read_scratch"]))
         self.assertIn("generate_pdf", runtime["enabled_tools"])
         self.assertEqual(runtime["pdf_limits"]["x2p_v1"]["max_chars"], 150_000)
+
+    async def test_the_graph_owner_scopes_the_letterhead_settings(self):
+        from graph.tools_runtime import GRAPH_OWNER_KEY
+
+        tool = _Tool("generate_pdf")
+        await _run(
+            _state([{"id": "1", "name": "generate_pdf", "args": {}}], ["generate_pdf"]),
+            [tool],
+            config={GRAPH_OWNER_KEY: "System",
+                    "tool_settings": {"generate_pdf": {"logo_attachment_id": "logo-0001"}}},
+        )
+        self.assertEqual(tool.context.runtime["pdf_settings_owner"], "System")
 
     async def test_pdf_tools_record_their_own_stats(self):
         # Recorded inside the tool run (the durable tool_invoke step), so a

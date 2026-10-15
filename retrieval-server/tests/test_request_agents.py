@@ -123,6 +123,18 @@ class PrepareAgentNodeConfigsTests(unittest.TestCase):
         self.assertEqual(config["input_template"], "User: hi")
         self.assertEqual(response_prompt, "You extract memories from conversation.")
 
+    def test_graph_owner_is_stamped_and_never_taken_from_the_stored_config(self):
+        # Plan 6.2: the letterhead logo is read from the graph owner's prefix,
+        # so the owner must come from the graph record, not the editable config.
+        from graph.tools_runtime import GRAPH_OWNER_KEY
+
+        nodes = [_generation_node(config={"system_prompt": "p", GRAPH_OWNER_KEY: "someone-else"})]
+        node_configs, _ = _prepare_agent_node_configs(nodes, {}, "System")
+        self.assertEqual(node_configs["NOD1"][GRAPH_OWNER_KEY], "System")
+
+        node_configs, _ = _prepare_agent_node_configs(nodes, {})
+        self.assertNotIn(GRAPH_OWNER_KEY, node_configs["NOD1"])
+
     def test_state_strips_nothing_but_marks_no_request_thinking(self):
         nodes = [_generation_node(config={"system_prompt": "p"})]
         node_configs, response_prompt = _prepare_agent_node_configs(nodes, {})

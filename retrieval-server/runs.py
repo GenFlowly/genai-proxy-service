@@ -134,7 +134,9 @@ def _load_graph_data(customer_id: str, graph_id):
     if graph_data is None:
         return None
     graph_record, nodes = graph_data
-    node_type_map, node_configs, streaming_nodes = _build_node_configs(nodes)
+    node_type_map, node_configs, streaming_nodes = _build_node_configs(
+        nodes, graph_record.get("customerId")
+    )
     return graph_record, nodes, node_type_map, node_configs, streaming_nodes
 
 
@@ -373,7 +375,9 @@ async def _request_agent_run(run_id: str, run_input: dict) -> dict:
     graph, max_iterations = get_or_build_durable_graph(
         f"graph#{req.graph_id}", graph_record, nodes, checkpointer
     )
-    node_configs, response_prompt = _prepare_agent_node_configs(nodes, req.variables)
+    node_configs, response_prompt = _prepare_agent_node_configs(
+        nodes, req.variables, graph_record.get("customerId")
+    )
     state = _build_agent_graph_state(req, node_configs, response_prompt)
 
     logger.info(

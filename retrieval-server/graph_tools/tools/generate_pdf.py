@@ -764,6 +764,7 @@ async def render_document(
         )
 
     options = await _render_options(context, renderer)
+    logo_unavailable = options.pop("logo_unavailable", False)
     if renderer == "typst":
         if page_size in PAGE_SIZES:
             options["page_size"] = page_size
@@ -786,6 +787,8 @@ async def render_document(
     stats.setdefault("renderer", renderer)
     stats["input_chars"] = len(content)
     stats["render_seconds"] = round(time.perf_counter() - started, 3)
+    if logo_unavailable:
+        stats["warnings"] = {**(stats.get("warnings") or {}), "branding_logo_unavailable": 1}
     if renderer == "x2p_v1":
         warnings = dict(stats.get("warnings") or {})
         if undrawable.scripts:
@@ -857,23 +860,35 @@ async def _render_options(context: ToolContext, renderer: str) -> dict:
         logo = await _load_logo(context, str(logo_id))
         if logo:
             branding["logo_b64"] = base64.b64encode(logo).decode("ascii")
+        else:
+            # Counted with the render's warnings (render_document), so a
+            # misconfigured or foreign logo id shows on the dashboard.
+            options["logo_unavailable"] = True
     if branding:
         options["branding"] = branding
     return options
 
 
 async def _load_logo(context: ToolContext, logo_id: str) -> bytes | None:
-    """The tenant logo, only ever from the tenant's own attachment prefix
-    (the key comes from the host's template and the request's customer id,
-    never from model input), so an id belonging to another customer is not
-    found. At most 2 MB; the renderer validates the image itself."""
+    """The letterhead logo, only ever from the graph owner's attachment
+    prefix: the owner is the graph record's customerId, which the host stamps
+    on the node config ("System" for agents published from the admin panel,
+    else the customer whose own agent this is), with the requesting customer
+    as the fallback. The key comes from the host's template, never from model
+    input, so an id belonging to another customer is not found and the PDF
+    renders without it. At most 2 MB; the renderer validates the image."""
     if not re.fullmatch(r"[A-Za-z0-9-]{8,64}", logo_id):
+        logger.warning("generate_pdf: letterhead logo id refused (malformed)")
         return None
-    key = context.key_template.format(customer_id=context.customer_id, artifact_id=logo_id)
+    owner = context.runtime.get("pdf_settings_owner") or context.customer_id
+    if not isinstance(owner, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", owner):
+        logger.warning("generate_pdf: letterhead logo refused (no valid graph owner)")
+        return None
+    key = context.key_template.format(customer_id=owner, artifact_id=logo_id)
     try:
         data = await asyncio.to_thread(context.store.get, key)
     except Exception:
-        logger.warning("generate_pdf: tenant logo could not be loaded")
+        logger.warning("generate_pdf: letterhead logo not found under the graph owner's files")
         return None
     return data if len(data) <= 2 * 1024 * 1024 else None
 
