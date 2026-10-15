@@ -50,7 +50,7 @@ class ClaimReconcilerTest {
         val result = reconciler.sweep()
 
         assertEquals(1, result.stillPending)
-        coVerify { repo.updateMessageRetention("conv-1", "m1", null, null, false) }
+        coVerify { repo.updateMessageRetention("conv-1", "m1", null, null, null) }
     }
 
     @Test
@@ -63,7 +63,7 @@ class ClaimReconcilerTest {
         reconciler.sweep()
 
         coVerify {
-            repo.updateMessageRetention("conv-1", "m1", match { it!!.single().s3Key != key("a") }, null, true)
+            repo.updateMessageRetention("conv-1", "m1", match { it!!.single().s3Key != key("a") }, null, false)
         }
     }
 

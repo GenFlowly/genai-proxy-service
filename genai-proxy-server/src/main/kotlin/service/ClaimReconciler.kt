@@ -84,7 +84,8 @@ class ClaimReconciler(
                     messageId = key.messageId,
                     attachments = outcome.attachments.takeIf { attachmentsChanged },
                     toolResultsJson = outcome.toolResultsJson.takeIf { toolResultsChanged },
-                    clearClaimPending = outcome.complete
+                    // Cleared once complete; otherwise left set for the next sweep
+                    claimPending = if (outcome.complete) false else null
                 )
                 when {
                     // The row was deleted meanwhile (e.g. purged): nothing links what we just claimed

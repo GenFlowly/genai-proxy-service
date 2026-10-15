@@ -1177,15 +1177,16 @@ class ConversationRepository(
     /**
      * Writes the outcome of a deferred kept-object claim onto an existing
      * message: rewritten [attachments] / [toolResultsJson] (null leaves the
-     * attribute as is) and, when [clearClaimPending], removes claimPending.
-     * Returns false when the row no longer exists (it is never re-created).
+     * attribute as is) and [claimPending] (true sets the flag, false removes
+     * it, null leaves it). Returns false when the row no longer exists (it is
+     * never re-created).
      */
     suspend fun updateMessageRetention(
         conversationId: String,
         messageId: String,
         attachments: List<com.genflowly.models.AttachmentRef>?,
         toolResultsJson: String?,
-        clearClaimPending: Boolean
+        claimPending: Boolean?
     ): Boolean = withContext(Dispatchers.IO) {
         val sets = mutableListOf<String>()
         val names = mutableMapOf("#mid" to MESSAGE_ID_SORT_KEY)
@@ -1200,9 +1201,15 @@ class ConversationRepository(
             names["#trj"] = "toolResultsJson"
             values[":trj"] = AttributeValue.builder().s(toolResultsJson).build()
         }
+        if (claimPending == true) {
+            // A Number so the row lands in the sparse claimPending GSI
+            sets += "#cp = :one"
+            names["#cp"] = RetentionTables.CLAIM_PENDING_KEY
+            values[":one"] = AttributeValue.builder().n("1").build()
+        }
         val expression = buildString {
             if (sets.isNotEmpty()) append("SET ").append(sets.joinToString(", "))
-            if (clearClaimPending) {
+            if (claimPending == false) {
                 if (isNotEmpty()) append(' ')
                 append("REMOVE #cp")
                 names["#cp"] = RetentionTables.CLAIM_PENDING_KEY

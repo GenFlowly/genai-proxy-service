@@ -102,7 +102,7 @@ class MessageWriteClaimTest {
 
         assertEquals(1, result.claimed)
         assertEquals(kept, s3.tags(key("img")))
-        coVerify { repo.updateMessageRetention(conv, "m1", null, null, true) }
+        coVerify { repo.updateMessageRetention(conv, "m1", null, null, false) }
     }
 
     @Test

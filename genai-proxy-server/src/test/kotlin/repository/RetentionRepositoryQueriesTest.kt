@@ -103,7 +103,7 @@ class RetentionRepositoryQueriesTest {
             "conv-1", "m1",
             attachments = listOf(AttachmentRef("a", "customers/c/attachments/b", "image/png")),
             toolResultsJson = null,
-            clearClaimPending = true
+            claimPending = false
         ))
 
         val update = updates.single()
@@ -117,7 +117,18 @@ class RetentionRepositoryQueriesTest {
 
         every { client.updateItem(any<UpdateItemRequest>()) } throws
             ConditionalCheckFailedException.builder().message("gone").build()
-        assertFalse(repository.updateMessageRetention("conv-1", "gone", null, null, true))
+        assertFalse(repository.updateMessageRetention("conv-1", "gone", null, null, false))
+    }
+
+    @Test
+    fun `an incomplete backfill claim sets the flag as a Number`() = runTest {
+        val updates = mutableListOf<UpdateItemRequest>()
+        every { client.updateItem(capture(updates)) } returns UpdateItemResponse.builder().build()
+
+        repository.updateMessageRetention("conv-1", "m1", null, null, claimPending = true)
+
+        assertEquals("SET #cp = :one", updates.single().updateExpression())
+        assertEquals("1", updates.single().expressionAttributeValues()[":one"]!!.n())
     }
 
     @Test

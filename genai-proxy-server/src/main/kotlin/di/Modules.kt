@@ -212,6 +212,7 @@ fun appModule(): Module = module {
     single(createdAtStart = true) {
         com.genflowly.service.ClaimReconciler(get(), get(), get()).also { it.start() }
     }
+    single { com.genflowly.service.ClaimBackfillService(get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.ProjectService(get(), get()) }
     single { GenerationRequestValidator(get()) }
