@@ -72,9 +72,20 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
     }
 }
 
-/** Presigned GET URL for rendering an attachment owned by the authenticated customer. */
-export async function getAttachmentViewUrl(token: string, attachmentId: string): Promise<string> {
-    const response = await fetchWithRetry(endpoints.attachmentUrl(attachmentId), {
+/**
+ * Presigned GET URL for viewing/downloading an attachment. With a
+ * conversationId (any file shown inside a loaded conversation) the proxy
+ * checks the caller's access to that conversation — owner, or a share role
+ * including PUBLIC — and that the file belongs to it, so participants of a
+ * shared conversation can open files another participant uploaded or
+ * generated. Without one, only the caller's own attachments resolve.
+ */
+export async function getAttachmentViewUrl(
+    token: string,
+    attachmentId: string,
+    conversationId?: string
+): Promise<string> {
+    const response = await fetchWithRetry(endpoints.attachmentUrl(attachmentId, conversationId || undefined), {
         method: HttpMethod.GET,
         headers: {
             Authorization: `Bearer ${token}`,

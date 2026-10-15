@@ -68,7 +68,11 @@ export const endpoints = {
     developerApiKeys: `${BASE}${API_PREFIX}/developer/api-keys`,
     developerApiKey: (keyId: string) => `${BASE}${API_PREFIX}/developer/api-keys/${keyId}`,
     attachments: `${BASE}${API_PREFIX}/attachments`,
-    attachmentUrl: (attachmentId: string) => `${BASE}${API_PREFIX}/attachments/url?attachmentId=${encodeURIComponent(attachmentId)}`,
+    // With a conversationId the proxy checks access to that conversation
+    // instead of the caller's own prefix (files of other participants)
+    attachmentUrl: (attachmentId: string, conversationId?: string) =>
+        `${BASE}${API_PREFIX}/attachments/url?attachmentId=${encodeURIComponent(attachmentId)}` +
+        (conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''),
     getLearnedFacts: (conversationId: string, messageId: string) => `${BASE}${API_PREFIX}/conversation/learned-facts?conversationId=${encodeURIComponent(conversationId)}&messageId=${encodeURIComponent(messageId)}`,
     deleteMemoryFact: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${memoryId}`,
 };

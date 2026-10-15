@@ -204,6 +204,37 @@ describe('attachmentService', () => {
             expect(url).toBe('https://s3/view')
         })
 
+        test('scopes the URL to the conversation when one is given', async () => {
+            mockFetchWithRetry.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ attachmentId: 'att-1', url: 'https://s3/view' }),
+            })
+
+            await getAttachmentViewUrl('token-1', 'att-1', 'conv-9')
+
+            const [url] = mockFetchWithRetry.mock.calls[0]
+            expect(url).toBe(endpoints.attachmentUrl('att-1', 'conv-9'))
+            expect(url).toMatch(/\/attachments\/url\?attachmentId=att-1&conversationId=conv-9$/)
+        })
+
+        test('leaves the conversation out when there is none yet', async () => {
+            mockFetchWithRetry.mockResolvedValue({
+                ok: true,
+                json: async () => ({ attachmentId: 'att-1', url: 'https://s3/view' }),
+            })
+
+            await getAttachmentViewUrl('token-1', 'att-1', '')
+            await getAttachmentViewUrl('token-1', 'att-1')
+
+            for (const [url] of mockFetchWithRetry.mock.calls) {
+                expect(url).toMatch(/\/attachments\/url\?attachmentId=att-1$/)
+            }
+        })
+
+        test('encodes ids in the query string', () => {
+            expect(endpoints.attachmentUrl('a b', 'c&d')).toMatch(/attachmentId=a%20b&conversationId=c%26d$/)
+        })
+
         test('throws on non-ok response', async () => {
             mockFetchWithRetry.mockResolvedValueOnce({ ok: false, status: 404 })
 
