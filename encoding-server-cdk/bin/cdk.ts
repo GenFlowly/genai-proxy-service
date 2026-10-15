@@ -41,6 +41,7 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     customerNotesTableName: process.env.CUSTOMER_NOTES_TABLE_NAME || 'CustomerNotes',
     instructionsTableName: process.env.INSTRUCTIONS_TABLE_NAME || 'Instructions',
     voyageApiKey: process.env.VOYAGE_API_KEY,
+    purgeAllowedClientIds: process.env.PURGE_ALLOWED_CLIENT_IDS,
 });
 
 const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsV2Stack`, {
@@ -59,5 +60,6 @@ const apiGatewayStack = new ApiGatewayStack(app, `${RESOURCE_NAMES.ENCODING_SERV
     ingestEmailLambda: lambdaStack.ingestEmailLambda,
     ingestNotesLambda: lambdaStack.ingestNotesLambda,
     createCollectionsLambda: lambdaStack.createCollectionsLambda,
+    purgeVectorsLambda: lambdaStack.purgeVectorsLambda,
     auth0Domain: process.env.AUTH0_SPA_DOMAIN || 'dummy.auth0.com',
 });
