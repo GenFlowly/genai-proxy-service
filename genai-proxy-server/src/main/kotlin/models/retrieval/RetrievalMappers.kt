@@ -114,12 +114,26 @@ private fun JsonObject.primitiveOrNull(key: String): JsonPrimitive? =
 fun Message.toConversationMessage(): ConversationMessage =
     ConversationMessage(
         role = role,
-        content = text,
+        content = historyText(),
         images = attachments.toImageRefs(),
         toolCalls = toolCallsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
         toolResults = toolResultsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
         files = attachments.toFileRefs(if (role == "assistant") FileOrigin.GENERATED else FileOrigin.UPLOADED)
     )
+
+/**
+ * The text a turn replays as history. A failed assistant turn is stored even
+ * when it streamed no text (contract C5); it replays a short note naming the
+ * failure instead of an empty message, which vendors reject (Anthropic needs
+ * non-empty content on every turn but the last) and which would hide from the
+ * model that its previous answer never arrived.
+ */
+private fun Message.historyText(): String =
+    if (role == "assistant" && text.isBlank() && toolCallsJson == null && !errorMessage.isNullOrBlank()) {
+        "[No response: $errorMessage]"
+    } else {
+        text
+    }
 
 fun List<ToolDefinition>.toPayloadTools(): List<PayloadToolDefinition> =
     map {

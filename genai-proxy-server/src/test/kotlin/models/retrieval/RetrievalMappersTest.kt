@@ -165,6 +165,32 @@ class RetrievalMappersTest {
         assertEquals(FileOrigin.UPLOADED, files.single().origin)
     }
 
+    // ── Failed turns in history (0.3) ───────────────────────────────────────
+
+    @Test
+    fun `a failed assistant turn without text replays a note instead of an empty message`() {
+        val failed = message("assistant", emptyList()).copy(
+            text = "", errorMessage = "The response was interrupted before it finished. Please try again."
+        )
+
+        assertEquals(
+            "[No response: The response was interrupted before it finished. Please try again.]",
+            failed.toConversationMessage().content
+        )
+    }
+
+    @Test
+    fun `partial text, tool calls and successful turns replay unchanged`() {
+        val partial = message("assistant", emptyList()).copy(text = "The capital is", errorMessage = "cut off")
+        val toolCalls = message("assistant", emptyList()).copy(text = "", toolCallsJson = "[]", errorMessage = "x")
+        val userTurn = message("user", emptyList()).copy(text = "", errorMessage = "x")
+
+        assertEquals("The capital is", partial.toConversationMessage().content)
+        assertEquals("", toolCalls.toConversationMessage().content)
+        assertEquals("", userTurn.toConversationMessage().content)
+        assertEquals("Here is the report.", message("assistant", emptyList()).toConversationMessage().content)
+    }
+
     // ── Locale from Accept-Language (6.1, contract C11) ─────────────────────
 
     @Test

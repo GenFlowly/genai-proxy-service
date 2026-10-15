@@ -5,6 +5,8 @@ import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import com.genflowly.models.retrieval.FileOrigin
+import com.genflowly.models.retrieval.RESPONSE_INTERRUPTED_MESSAGE
+import com.genflowly.models.retrieval.RUN_STREAM_LOST_ERROR_TYPE
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.toNdjsonFrame
 import com.genflowly.models.retrieval.parseGeneratedArtifacts
@@ -541,6 +543,9 @@ class GenerationOrchestrator(
             val capturedThinkingSteps = mutableListOf<String>()
             var success = false
             var cancelled = false
+            // The durable run's stream ended without its terminal event and
+            // could not be re-attached (RunsClient's stream_lost error).
+            var streamLost = false
             // The durable run this generation added to the conversation's pending
             // set (one entry per vendor), captured so the finally removes exactly
             // this one — not the sibling vendors' still-in-flight runs.
@@ -640,6 +645,7 @@ class GenerationOrchestrator(
                     // Capture for persistence; the client frame is produced by the
                     // shared StreamChunk.toNdjsonFrame() so the live and reattach
                     // streams emit an identical wire protocol.
+                    var relay = true
                     when (chunk) {
                         is StreamChunk.Content -> sb.append(chunk.text)
                         // The round that just streamed ended in in-graph tool
@@ -661,13 +667,21 @@ class GenerationOrchestrator(
                             capturedGeneratedArtifactsJson = mergeJsonArrays(capturedGeneratedArtifactsJson, chunk.json)
                         is StreamChunk.Usage -> capturedUsage = chunk
                         is StreamChunk.Error -> {
-                            // Vendor failure surfaced mid-stream — the concise reason is
-                            // relayed (below) and any partial text is kept and persisted.
-                            capturedErrorMessage = chunk.message
-                            logger.warn(
-                                "Generation {} failed mid-stream ({}): {}",
-                                responseMessageId, chunk.errorType ?: "provider_error", chunk.message
-                            )
+                            if (chunk.errorType == RUN_STREAM_LOST_ERROR_TYPE) streamLost = true
+                            if (capturedErrorMessage == null) {
+                                // Vendor or run failure surfaced mid-stream — the concise
+                                // reason is relayed (below) and stored with any partial text.
+                                capturedErrorMessage = chunk.message
+                                logger.warn(
+                                    "Generation {} failed mid-stream ({}): {}",
+                                    responseMessageId, chunk.errorType ?: "provider_error", chunk.message
+                                )
+                            } else {
+                                // The first error is the user-facing one: a failed run's
+                                // standalone error row precedes its terminal summary, which
+                                // repeats it (contract C5). Later ones are not relayed.
+                                relay = false
+                            }
                         }
                         is StreamChunk.AwaitingInput ->
                             logger.info("Generation {} awaiting input: {}", responseMessageId, chunk.json)
@@ -676,7 +690,7 @@ class GenerationOrchestrator(
                         // captured into thinking steps or persisted.
                         is StreamChunk.Progress -> {}
                     }
-                    chunk.toNdjsonFrame()?.let { emit(it) }
+                    if (relay) chunk.toNdjsonFrame()?.let { emit(it) }
                 }
                 success = true
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -702,8 +716,11 @@ class GenerationOrchestrator(
                 // NonCancellable: after a user cancel this coroutine is dead —
                 // persistence of the partial text must still run.
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                // A failed turn is stored with its error (contract C5), also
+                // when nothing was streamed, so a reload shows what happened.
                 if (generatedFiles.isNotEmpty() ||
-                    ((success || cancelled) && (responseText.isNotEmpty() || capturedToolCallsJson != null))
+                    ((success || cancelled) &&
+                        (responseText.isNotEmpty() || capturedToolCallsJson != null || capturedErrorMessage != null))
                 ) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
@@ -744,15 +761,34 @@ class GenerationOrchestrator(
                         thinkingStepsJson = thinkingStepsToJson(capturedThinkingSteps),
                         stopReason = capturedStopReason,
                         fsNamespace = fsNamespace,
-                        runId = durableRunId
+                        runId = durableRunId,
+                        // The exception path stores a message only when it carries
+                        // generated files; it was cut off all the same.
+                        errorMessage = capturedErrorMessage
+                            ?: if (!success && !cancelled) RESPONSE_INTERRUPTED_MESSAGE else null
                     )
                     addStreamedMessage(responseMessage)
                 }
-                // Durable run finished — remove just this run from the pending set
-                // (the other vendors' in-flight runs stay reattachable). No-op when
-                // no durable run was started (stateless path / start failure).
+                // Remove just this run from the pending set (the other vendors'
+                // in-flight runs stay reattachable), and only AFTER the message
+                // above is stored: a reattaching client reads it as soon as the
+                // run is no longer pending. Only once the run can publish nothing
+                // more: its stream delivered the terminal event, the turn was
+                // cancelled, or GET /runs/{id} reports a terminal status (or does
+                // not know the run). A run still going after the re-attach
+                // deadline stays pending, so a reload can reattach to it. No-op
+                // when no durable run was started (stateless path / start failure).
                 pendingRunEntry?.let { entry ->
-                    runCatching { conversationService.removePendingRun(customerId, activeConversationId, entry) }
+                    val runOver = (success && !streamLost) || cancelled ||
+                        runsClient.getRunStatus(entry.runId)?.isOver == true
+                    if (runOver) {
+                        runCatching { conversationService.removePendingRun(customerId, activeConversationId, entry) }
+                    } else {
+                        logger.warn(
+                            "Durable run {} has not finished; it stays pending on conversation {}",
+                            entry.runId, activeConversationId
+                        )
+                    }
                 }
                 }
                 } catch (e: Exception) {
