@@ -70,7 +70,7 @@ const ConversationUIProvider = ({ children }: { children: ReactNode }) => {
 }
 
 const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
-    const { customerId, getAccessTokenSilently, isAuthenticated, logout, loginWithRedirect } = useAuth()
+    const { customerId, getAccessTokenSilently, isAuthenticated, isSessionAuthenticated, logout, loginWithRedirect } = useAuth()
     const { showToast } = useToast()
 
     const {
@@ -347,7 +347,11 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     const loadConversation = useCallback(async (id: string) => {
         try {
             let token = ''
-            if (isAuthenticated) {
+            // Auth0-level check, NOT strict isAuthenticated: right after the
+            // login redirect /onboard hasn't returned a customerId yet, and
+            // fetching anonymously here 403s and bounces straight back to
+            // login — an infinite loop on deep-linked logins.
+            if (isSessionAuthenticated) {
                 try {
                     token = await getAccessTokenSilently()
                 } catch (e) {
@@ -495,9 +499,11 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (err: any) {
             if (err?.status === 403) {
-                if (!isAuthenticated) {
+                if (!isSessionAuthenticated) {
                     loginWithRedirect({ appState: { returnTo: window.location.pathname } })
                 } else {
+                    // 403 with a live Auth0 session is "no access", not
+                    // "logged out" — redirecting to login here would loop.
                     showToast(i18n.t('toasts.conversation.noAccess'))
                     navigate('/chat')
                 }
@@ -505,7 +511,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 console.error("Failed to load conversation", err)
             }
         }
-    }, [isAuthenticated, getAccessTokenSilently, showToast, navigate, setSelectedInstructionId, loginWithRedirect])
+    }, [isSessionAuthenticated, getAccessTokenSilently, showToast, navigate, setSelectedInstructionId, loginWithRedirect])
 
     // Deliver a human/client reply to the durable run generating [messageId]. The
     // run resumes from its checkpoint; the still-open stream delivers what follows.
