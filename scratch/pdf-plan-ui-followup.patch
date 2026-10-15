@@ -1,0 +1,1169 @@
+diff --git a/admin-panel/src/components/PdfLetterheadPanel.tsx b/admin-panel/src/components/PdfLetterheadPanel.tsx
+deleted file mode 100644
+index dc96616..0000000
+--- a/admin-panel/src/components/PdfLetterheadPanel.tsx
++++ /dev/null
+@@ -1,247 +0,0 @@
+-import { useEffect, useMemo, useRef, useState } from 'react'
+-import { DefaultGraphResponse } from '../models/defaultGraph.models'
+-import {
+-    COMPANY_NAME_MAX,
+-    FOOTER_TEXT_MAX,
+-    LOGO_MEDIA_TYPES,
+-    PAGE_SIZES,
+-    PageSize,
+-    PdfLetterhead,
+-    letterheadProblem,
+-    logoFileProblem,
+-    readLetterhead,
+-    writeLetterhead,
+-} from '../lib/letterhead'
+-import { getLetterheadLogoUrl, uploadLetterheadLogo } from '../services/letterheadService'
+-
+-interface Props {
+-    graph: DefaultGraphResponse
+-    getToken: () => Promise<string>
+-    /** Saves one node's whole config (the page reloads the graph afterwards). */
+-    onSaveNodeConfig: (nodeId: string, config: string) => Promise<void>
+-}
+-
+-function enablesGeneratePdf(config: string): boolean {
+-    try {
+-        const tools = JSON.parse(config || '{}').tools
+-        return !Array.isArray(tools) || tools.includes('generate_pdf')
+-    } catch {
+-        return true
+-    }
+-}
+-
+-/**
+- * The letterhead generate_pdf puts on the PDFs this agent writes (plan 6.2):
+- * company name, footer text, accent colour, default page size and a logo on
+- * page 1. Stored on the agent's tool executor node as
+- * config.tool_settings.generate_pdf. Typst renderer only.
+- */
+-export default function PdfLetterheadPanel({ graph, getToken, onSaveNodeConfig }: Props) {
+-    const toolNodes = useMemo(
+-        () => graph.nodes.filter((node) => node.nodeType === 'TOOL_EXECUTOR'),
+-        [graph.nodes]
+-    )
+-    const [nodeId, setNodeId] = useState('')
+-    const node = toolNodes.find((n) => n.nodeId === nodeId) ?? toolNodes[0]
+-
+-    // A ref, so a caller passing a fresh function each render cannot
+-    // re-trigger the preview fetch.
+-    const getTokenRef = useRef(getToken)
+-    getTokenRef.current = getToken
+-
+-    const [form, setForm] = useState<PdfLetterhead>({})
+-    const [logoUrl, setLogoUrl] = useState<string | null>(null)
+-    const [busy, setBusy] = useState(false)
+-    const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+-
+-    // Re-read whenever another node is picked or the saved config changes.
+-    useEffect(() => {
+-        setForm(node ? readLetterhead(node.config) : {})
+-    }, [node?.nodeId, node?.config])
+-
+-    const logoId = form.logo_attachment_id
+-    useEffect(() => {
+-        let cancelled = false
+-        setLogoUrl(null)
+-        if (!logoId) return
+-        ;(async () => {
+-            try {
+-                const url = await getLetterheadLogoUrl(await getTokenRef.current(), logoId)
+-                if (!cancelled) setLogoUrl(url)
+-            } catch {
+-                // The preview is optional; the id is still saved and used.
+-            }
+-        })()
+-        return () => {
+-            cancelled = true
+-        }
+-    }, [logoId])
+-
+-    if (!graph.isSystem || !node) return null
+-
+-    const update = (patch: PdfLetterhead) => {
+-        setMessage(null)
+-        setForm((current) => ({ ...current, ...patch }))
+-    }
+-
+-    const handleLogo = async (file: File | undefined) => {
+-        if (!file) return
+-        const problem = logoFileProblem(file)
+-        if (problem) {
+-            setMessage({ kind: 'error', text: problem })
+-            return
+-        }
+-        setBusy(true)
+-        setMessage(null)
+-        try {
+-            const attachmentId = await uploadLetterheadLogo(await getToken(), file)
+-            update({ logo_attachment_id: attachmentId })
+-            setMessage({ kind: 'success', text: 'Logo uploaded. Save the letterhead to use it.' })
+-        } catch (e) {
+-            setMessage({ kind: 'error', text: e instanceof Error ? e.message : 'Uploading the logo failed' })
+-        } finally {
+-            setBusy(false)
+-        }
+-    }
+-
+-    const handleSave = async () => {
+-        const problem = letterheadProblem(form)
+-        if (problem) {
+-            setMessage({ kind: 'error', text: problem })
+-            return
+-        }
+-        setBusy(true)
+-        setMessage(null)
+-        try {
+-            await onSaveNodeConfig(node.nodeId, writeLetterhead(node.config, form))
+-            setMessage({ kind: 'success', text: 'Letterhead saved.' })
+-        } catch (e) {
+-            setMessage({ kind: 'error', text: e instanceof Error ? e.message : 'Saving the letterhead failed' })
+-        } finally {
+-            setBusy(false)
+-        }
+-    }
+-
+-    return (
+-        <section className="form-card letterhead-panel" data-testid="pdf-letterhead">
+-            <div>
+-                <h3>PDF letterhead</h3>
+-                <p className="page-description">
+-                    Shown on every PDF this agent generates (Typst renderer). Saving reloads the
+-                    graph editor, so save graph edits first.
+-                </p>
+-            </div>
+-            {toolNodes.length > 1 && (
+-                <label className="config-field">
+-                    Tool executor node
+-                    <select value={node.nodeId} disabled={busy} onChange={(e) => setNodeId(e.target.value)}>
+-                        {toolNodes.map((n) => (
+-                            <option key={n.nodeId} value={n.nodeId}>
+-                                {n.name} ({n.nodeId})
+-                            </option>
+-                        ))}
+-                    </select>
+-                </label>
+-            )}
+-            {!enablesGeneratePdf(node.config) && (
+-                <div className="row-message error">
+-                    This node does not enable generate_pdf, so the letterhead has no effect yet.
+-                </div>
+-            )}
+-            <div className="config-row">
+-                <label className="config-field grow">
+-                    Company name
+-                    <input
+-                        type="text"
+-                        maxLength={COMPANY_NAME_MAX}
+-                        placeholder="e.g. Acme GmbH"
+-                        value={form.company_name ?? ''}
+-                        disabled={busy}
+-                        onChange={(e) => update({ company_name: e.target.value })}
+-                    />
+-                </label>
+-                <label className="config-field grow">
+-                    Footer text
+-                    <input
+-                        type="text"
+-                        maxLength={FOOTER_TEXT_MAX}
+-                        placeholder="e.g. Confidential"
+-                        value={form.footer_text ?? ''}
+-                        disabled={busy}
+-                        onChange={(e) => update({ footer_text: e.target.value })}
+-                    />
+-                </label>
+-            </div>
+-            <div className="config-row">
+-                <label className="config-field">
+-                    Accent colour
+-                    <span className="letterhead-color">
+-                        <input
+-                            type="color"
+-                            aria-label="Pick accent colour"
+-                            value={form.accent_color && /^#[0-9A-Fa-f]{6}$/.test(form.accent_color)
+-                                ? form.accent_color.toLowerCase()
+-                                : '#1f4e79'}
+-                            disabled={busy}
+-                            onChange={(e) => update({ accent_color: e.target.value.toUpperCase() })}
+-                        />
+-                        <input
+-                            type="text"
+-                            placeholder="none"
+-                            value={form.accent_color ?? ''}
+-                            disabled={busy}
+-                            onChange={(e) => update({ accent_color: e.target.value.trim() })}
+-                        />
+-                    </span>
+-                </label>
+-                <label className="config-field">
+-                    Default page size
+-                    <select
+-                        value={form.default_page_size ?? ''}
+-                        disabled={busy}
+-                        onChange={(e) =>
+-                            update({ default_page_size: (e.target.value || undefined) as PageSize | undefined })
+-                        }
+-                    >
+-                        <option value="">Automatic (Letter in the US and Canada, A4 elsewhere)</option>
+-                        {PAGE_SIZES.map((size) => (
+-                            <option key={size} value={size}>
+-                                {size}
+-                            </option>
+-                        ))}
+-                    </select>
+-                </label>
+-            </div>
+-            <div className="config-row letterhead-logo">
+-                <div className="config-field grow">
+-                    Logo (page 1; PNG or JPEG, at most 2 MB)
+-                    {logoId ? (
+-                        <span className="letterhead-logo-current">
+-                            {logoUrl ? <img src={logoUrl} alt="Current letterhead logo" /> : <code>{logoId}</code>}
+-                            <button type="button" disabled={busy} onClick={() => update({ logo_attachment_id: undefined })}>
+-                                Remove
+-                            </button>
+-                        </span>
+-                    ) : (
+-                        <span className="optional">No logo</span>
+-                    )}
+-                    <input
+-                        type="file"
+-                        accept={LOGO_MEDIA_TYPES.join(',')}
+-                        disabled={busy}
+-                        onChange={(e) => {
+-                            void handleLogo(e.target.files?.[0])
+-                            e.target.value = ''
+-                        }}
+-                    />
+-                </div>
+-            </div>
+-            <div className="form-actions">
+-                <button type="button" className="primary" disabled={busy} onClick={() => void handleSave()}>
+-                    {busy ? 'Working…' : 'Save letterhead'}
+-                </button>
+-            </div>
+-            {message && <div className={`row-message ${message.kind}`}>{message.text}</div>}
+-        </section>
+-    )
+-}
+diff --git a/admin-panel/src/index.css b/admin-panel/src/index.css
+index e82db35..2d52687 100644
+--- a/admin-panel/src/index.css
++++ b/admin-panel/src/index.css
+@@ -779,35 +779,3 @@ button.danger {
+ .mappings-page {
+     padding-bottom: 3rem;
+ }
+-
+-/* ─── PDF letterhead panel (agent editors) ───────────────────────────── */
+-
+-.letterhead-panel h3 {
+-    margin: 0 0 0.25rem;
+-}
+-
+-.letterhead-color {
+-    display: flex;
+-    gap: 0.4rem;
+-    align-items: center;
+-}
+-
+-.letterhead-color input[type='color'] {
+-    width: 2.5rem;
+-    height: 2.1rem;
+-    padding: 0.1rem;
+-}
+-
+-.letterhead-logo-current {
+-    display: flex;
+-    gap: 0.75rem;
+-    align-items: center;
+-}
+-
+-.letterhead-logo-current img {
+-    max-height: 48px;
+-    max-width: 200px;
+-    border: 1px solid var(--border);
+-    border-radius: 6px;
+-    background: #fff;
+-}
+diff --git a/admin-panel/src/lib/agentGraph.ts b/admin-panel/src/lib/agentGraph.ts
+index 00c2751..4e02dcf 100644
+--- a/admin-panel/src/lib/agentGraph.ts
++++ b/admin-panel/src/lib/agentGraph.ts
+@@ -15,6 +15,7 @@ import { InstructionResponse } from '../models/instructions.models'
+ import { NodePresetResponse } from '../models/nodePresets.models'
+ import { AIVendor } from '../constants/vendors'
+ import { getSystemVendorModels } from '../services/systemApiKeysService'
++import { uploadLetterheadLogo } from '../services/letterheadService'
+ 
+ /** Ids the editor assigns to nodes created in the current session. */
+ export const TEMP_NODE_ID_PREFIX = 'new-'
+@@ -46,6 +47,17 @@ export function makeGetModelsForVendor(getToken: () => Promise<string>) {
+     }
+ }
+ 
++/**
++ * Logo uploader for the editor's PDF-branding settings on TOOL_EXECUTOR
++ * nodes. The admin panel edits System agents, whose logo generate_pdf reads
++ * from the System owner's attachments only, so the upload goes through the
++ * admin letterhead-logo endpoint (untagged: the node row keeps it) rather
++ * than the signed-in admin's own chat uploads. Errors surface in the panel.
++ */
++export function makeUploadImage(getToken: () => Promise<string>) {
++    return async (file: File): Promise<string> => uploadLetterheadLogo(await getToken(), file)
++}
++
+ /**
+  * Maps the server's pre-made node presets to the palette entries the visual
+  * editor consumes. hasPrompt comes from the library's metadata for the
+diff --git a/admin-panel/src/lib/letterhead.ts b/admin-panel/src/lib/letterhead.ts
+deleted file mode 100644
+index 1efc4e8..0000000
+--- a/admin-panel/src/lib/letterhead.ts
++++ /dev/null
+@@ -1,109 +0,0 @@
+-// The PDF letterhead a TOOL_EXECUTOR node gives generate_pdf (plan 6.1/6.2):
+-// config.tool_settings.generate_pdf, in the snake_case wire shape the
+-// retrieval-server reads. The proxy validates the same rules on save
+-// (GraphValidationService rule 12).
+-
+-export const PAGE_SIZES = ['A4', 'Letter', 'Legal'] as const
+-export type PageSize = (typeof PAGE_SIZES)[number]
+-
+-export interface PdfLetterhead {
+-    default_page_size?: PageSize
+-    company_name?: string
+-    footer_text?: string
+-    accent_color?: string
+-    logo_attachment_id?: string
+-}
+-
+-export const COMPANY_NAME_MAX = 120
+-export const FOOTER_TEXT_MAX = 200
+-export const LOGO_MAX_BYTES = 2 * 1024 * 1024
+-export const LOGO_MEDIA_TYPES = ['image/png', 'image/jpeg']
+-
+-const ACCENT_COLOR = /^#[0-9A-Fa-f]{6}$/
+-const LOGO_ID = /^[A-Za-z0-9-]{8,64}$/
+-
+-type JsonObject = Record<string, unknown>
+-
+-function isObject(value: unknown): value is JsonObject {
+-    return typeof value === 'object' && value !== null && !Array.isArray(value)
+-}
+-
+-function parseConfig(config: string): JsonObject {
+-    try {
+-        const parsed: unknown = JSON.parse(config || '{}')
+-        return isObject(parsed) ? parsed : {}
+-    } catch {
+-        return {}
+-    }
+-}
+-
+-/** The node's letterhead settings; unknown or malformed values are dropped. */
+-export function readLetterhead(config: string): PdfLetterhead {
+-    const toolSettings = parseConfig(config).tool_settings
+-    const pdf = isObject(toolSettings) ? toolSettings.generate_pdf : undefined
+-    if (!isObject(pdf)) return {}
+-    const settings: PdfLetterhead = {}
+-    const pageSize = pdf.default_page_size
+-    if (typeof pageSize === 'string' && (PAGE_SIZES as readonly string[]).includes(pageSize)) {
+-        settings.default_page_size = pageSize as PageSize
+-    }
+-    for (const key of ['company_name', 'footer_text', 'accent_color', 'logo_attachment_id'] as const) {
+-        const value = pdf[key]
+-        if (typeof value === 'string' && value !== '') settings[key] = value
+-    }
+-    return settings
+-}
+-
+-/**
+- * The config with its letterhead replaced by `settings`. Every other key of
+- * the config (and of tool_settings) is kept; empty values are removed, and so
+- * are tool_settings.generate_pdf and tool_settings once they are empty.
+- */
+-export function writeLetterhead(config: string, settings: PdfLetterhead): string {
+-    const parsed = parseConfig(config)
+-    const pdf: JsonObject = {}
+-    for (const [key, value] of Object.entries(settings)) {
+-        const text = typeof value === 'string' ? value.trim() : value
+-        if (text) pdf[key] = text
+-    }
+-    const toolSettings: JsonObject = isObject(parsed.tool_settings) ? { ...parsed.tool_settings } : {}
+-    if (Object.keys(pdf).length > 0) {
+-        toolSettings.generate_pdf = pdf
+-    } else {
+-        delete toolSettings.generate_pdf
+-    }
+-    const next: JsonObject = { ...parsed }
+-    if (Object.keys(toolSettings).length > 0) {
+-        next.tool_settings = toolSettings
+-    } else {
+-        delete next.tool_settings
+-    }
+-    return JSON.stringify(next)
+-}
+-
+-/** The first problem with `settings`, or null (same rules as the proxy). */
+-export function letterheadProblem(settings: PdfLetterhead): string | null {
+-    const company = settings.company_name?.trim() ?? ''
+-    if (company.length > COMPANY_NAME_MAX) {
+-        return `Company name must be at most ${COMPANY_NAME_MAX} characters.`
+-    }
+-    const footer = settings.footer_text?.trim() ?? ''
+-    if (footer.length > FOOTER_TEXT_MAX) {
+-        return `Footer text must be at most ${FOOTER_TEXT_MAX} characters.`
+-    }
+-    if (settings.accent_color && !ACCENT_COLOR.test(settings.accent_color)) {
+-        return 'Accent colour must look like #1F4E79.'
+-    }
+-    if (settings.logo_attachment_id && !LOGO_ID.test(settings.logo_attachment_id)) {
+-        return 'The logo id is not valid; upload the logo again.'
+-    }
+-    return null
+-}
+-
+-/** Why a chosen logo file cannot be used, or null. */
+-export function logoFileProblem(file: { type: string; size: number }): string | null {
+-    if (!LOGO_MEDIA_TYPES.includes(file.type)) return 'The logo must be a PNG or JPEG image.'
+-    if (file.size > LOGO_MAX_BYTES) return 'The logo must be at most 2 MB.'
+-    if (file.size < 1) return 'The logo file is empty.'
+-    return null
+-}
+diff --git a/admin-panel/src/pages/AgentGraphEditorPage.tsx b/admin-panel/src/pages/AgentGraphEditorPage.tsx
+index e08d066..97eb806 100644
+--- a/admin-panel/src/pages/AgentGraphEditorPage.tsx
++++ b/admin-panel/src/pages/AgentGraphEditorPage.tsx
+@@ -12,10 +12,10 @@ import {
+     toInstructionOptions,
+     makeGraphVendors,
+     makeGetModelsForVendor,
++    makeUploadImage,
+ } from '../lib/agentGraph'
+ import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
+ import { useVendorDisplayNames } from '../lib/vendorNames'
+-import PdfLetterheadPanel from '../components/PdfLetterheadPanel'
+ 
+ /** Visual editor for one admin-owned agent graph (request agents etc.). */
+ export default function AgentGraphEditorPage() {
+@@ -33,6 +33,10 @@ export default function AgentGraphEditorPage() {
+         () => makeGetModelsForVendor(getAccessTokenSilently),
+         [getAccessTokenSilently]
+     )
++    const uploadLogo = useMemo(
++        () => makeUploadImage(getAccessTokenSilently),
++        [getAccessTokenSilently]
++    )
+     const vendorDisplayName = useVendorDisplayNames()
+     const graphVendors = useMemo(() => makeGraphVendors(vendorDisplayName), [vendorDisplayName])
+ 
+@@ -116,18 +120,9 @@ export default function AgentGraphEditorPage() {
+                     errorMessage={saveError}
+                     onSave={(edited) => void handleSave(edited)}
+                     onSaveAsPreset={(node) => void saveNodeAsPreset(node)}
++                    onUploadImage={uploadLogo}
+                 />
+             </div>
+-            {graph && graphId && (
+-                <PdfLetterheadPanel
+-                    graph={graph}
+-                    getToken={getAccessTokenSilently}
+-                    onSaveNodeConfig={async (nodeId, config) => {
+-                        const token = await getAccessTokenSilently()
+-                        setGraph(await updateAgentGraph(token, graphId, { nodes: [{ nodeId, config }] }))
+-                    }}
+-                />
+-            )}
+         </>
+     )
+ }
+diff --git a/admin-panel/src/pages/DefaultGraphPage.tsx b/admin-panel/src/pages/DefaultGraphPage.tsx
+index 68b158f..5ce7465 100644
+--- a/admin-panel/src/pages/DefaultGraphPage.tsx
++++ b/admin-panel/src/pages/DefaultGraphPage.tsx
+@@ -15,10 +15,10 @@ import {
+     toInstructionOptions,
+     makeGraphVendors,
+     makeGetModelsForVendor,
++    makeUploadImage,
+ } from '../lib/agentGraph'
+ import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
+ import { useVendorDisplayNames } from '../lib/vendorNames'
+-import PdfLetterheadPanel from '../components/PdfLetterheadPanel'
+ 
+ /**
+  * The System default graph on the visual editor. Unpublished: a blank canvas
+@@ -39,6 +39,10 @@ export default function DefaultGraphPage() {
+         () => makeGetModelsForVendor(getAccessTokenSilently),
+         [getAccessTokenSilently]
+     )
++    const uploadLogo = useMemo(
++        () => makeUploadImage(getAccessTokenSilently),
++        [getAccessTokenSilently]
++    )
+     const vendorDisplayName = useVendorDisplayNames()
+     const graphVendors = useMemo(() => makeGraphVendors(vendorDisplayName), [vendorDisplayName])
+ 
+@@ -134,18 +138,9 @@ export default function DefaultGraphPage() {
+                     errorMessage={saveError}
+                     onSave={(edited) => void handleSave(edited)}
+                     onSaveAsPreset={(node) => void saveNodeAsPreset(node)}
++                    onUploadImage={uploadLogo}
+                 />
+             </div>
+-            {graph && (
+-                <PdfLetterheadPanel
+-                    graph={graph}
+-                    getToken={getAccessTokenSilently}
+-                    onSaveNodeConfig={async (nodeId, config) => {
+-                        const token = await getAccessTokenSilently()
+-                        setGraph(await updateDefaultGraph(token, { nodes: [{ nodeId, config }] }))
+-                    }}
+-                />
+-            )}
+         </>
+     )
+ }
+diff --git a/genai-react-app/.env.development b/genai-react-app/.env.development
+index d8de5c7..d7f57ac 100644
+--- a/genai-react-app/.env.development
++++ b/genai-react-app/.env.development
+@@ -5,4 +5,7 @@ REACT_APP_AUTH0_AUDIENCE=https://api-development.genflowly.com
+ # forwards /api/* to the local backend on 127.0.0.1:8080.
+ REACT_APP_BACKEND_URL=
+ REACT_APP_ENCODE_API_URL=https://api-encode-development.genflowly.com
++# PDF attachments in the composer (plan 4.5); production turns it on after
++# plan 4.4's release gate
++REACT_APP_PDF_ATTACHMENTS=true
+ 
+diff --git a/genai-react-app/src/components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget.tsx b/genai-react-app/src/components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget.tsx
+index ab6ca78..62bf7ad 100644
+--- a/genai-react-app/src/components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget.tsx
++++ b/genai-react-app/src/components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget.tsx
+@@ -11,6 +11,8 @@ import { useToast } from '../../../../context/ToastContext'
+ import { uploadAttachment, getAttachmentViewUrl } from '../../../../services/attachmentService'
+ import { getLearnedFacts, deleteMemoryFact } from '../../../../services/learnedFactsService'
+ import { useVendorDisplayNames } from '../../../../hooks/useVendorDisplayNames'
++import { useModelsWithoutPdfInput } from '../../../../hooks/useModelsWithoutPdfInput'
++import { config } from '../../../../config/env'
+ import { RunHitlBanner } from './RunHitlBanner'
+ 
+ /**
+@@ -34,6 +36,8 @@ export default function ConversationListWidget() {
+     const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
+     const { showToast } = useToast()
+     const getVendorDisplayName = useVendorDisplayNames()
++    // The composer's "can't read PDFs directly" hint names these
++    const modelsWithoutPdfInput = useModelsWithoutPdfInput()
+ 
+     const value = useMemo<ConversationWidgetContextValue>(() => ({
+         conversation,
+@@ -55,6 +59,10 @@ export default function ConversationListWidget() {
+             getVendorDisplayName
+         },
+         layout: { isLeftSidebarExpanded, isRightSidebarExpanded },
++        capabilities: {
++            pdfAttachments: config.features.pdfAttachments,
++            modelsWithoutPdfInput
++        },
+         showToast
+     }), [
+         conversation,
+@@ -69,6 +77,7 @@ export default function ConversationListWidget() {
+         getVendorDisplayName,
+         isLeftSidebarExpanded,
+         isRightSidebarExpanded,
++        modelsWithoutPdfInput,
+         showToast
+     ])
+ 
+diff --git a/genai-react-app/src/config/env.ts b/genai-react-app/src/config/env.ts
+index 6e763a1..2487a63 100644
+--- a/genai-react-app/src/config/env.ts
++++ b/genai-react-app/src/config/env.ts
+@@ -7,4 +7,12 @@ export const config = {
+     backend: {
+         baseUrl: process.env.REACT_APP_BACKEND_URL ?? 'https://api-development.genflowly.com',
+     },
++    features: {
++        /**
++         * PDF attachments in the composer (picker, paste, drag-and-drop). Turn
++         * on once the backend reads PDFs for the model (plan 4.4's release
++         * gate); off by default.
++         */
++        pdfAttachments: process.env.REACT_APP_PDF_ATTACHMENTS === 'true',
++    },
+ };
+diff --git a/genai-react-app/src/context/ConversationContext.tsx b/genai-react-app/src/context/ConversationContext.tsx
+index 8104072..3c7d1be 100644
+--- a/genai-react-app/src/context/ConversationContext.tsx
++++ b/genai-react-app/src/context/ConversationContext.tsx
+@@ -7,7 +7,7 @@ import { AIConfig, useAI } from './AIContext'
+ import { useLayout } from './LayoutContext'
+ import { useToast } from './ToastContext'
+ import { generateText } from '../services/generateTextService'
+-import { generateTextStream, StreamMetadata, AwaitingInput, STREAM_GENERATION_ERROR } from '../services/generateTextStreamService'
++import { generateTextStream, StreamMetadata, AwaitingInput, STREAM_GENERATION_ERROR, StreamToolProgress } from '../services/generateTextStreamService'
+ import { reattachRun, ReattachOutcome } from '../services/reattachRunService'
+ import { resumeRun as resumeRunApi } from '../services/resumeRunService'
+ import { getAIUsageActivity } from '../services/getAIUsageService'
+@@ -325,7 +325,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
+         onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
+         onAwaitingInput?: (payload: AwaitingInput) => void,
+         onContentReset?: () => void,
+-        onStopReason?: (reason: string) => void
++        onStopReason?: (reason: string) => void,
++        onProgress?: (progress: StreamToolProgress | null) => void
+     ): Promise<void> => {
+         await generateTextStream(token, {
+             aiConfig: aiConfig,
+@@ -341,7 +342,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
+             agentId: selectedAgentId,
+             // Starting fresh inside a project: the new conversation is born in it
+             projectId: (idOverride || conversationIdRef.current) ? undefined : pendingProjectIdRef.current,
+-        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
++        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason, onProgress)
+     }
+ 
+     const loadConversation = useCallback(async (id: string) => {
+@@ -455,6 +456,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
+                                 return { ...m, generatedAttachments: [...existing, ...ga.filter(a => !existing.some(e => e.attachmentId === a.attachmentId))] }
+                             }),
+                             onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: runId } })),
++                            // "Writing PDF... N characters" while a long tool argument streams
++                            onProgress: (progress) => patch(m => ({ ...m, progress })),
+                         }).then(o => { outcome = o })
+                             .catch(e => {
+                                 if (e?.name === STREAM_GENERATION_ERROR) {
+@@ -860,6 +863,20 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
+                     }))
+                 }
+ 
++                // "Writing PDF... N characters" while the model writes a long
++                // tool argument; null clears it (next content/"ga"/"err" frame
++                // or the end of the stream — readNdjsonStream decides)
++                const handleProgress = (progress: StreamToolProgress | null) => {
++                    setConversationBlockList(prev => prev.map(block => {
++                        if (block.conversationBlockId !== id) return block
++                        const msgs = block.responseMessages.map(m => {
++                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
++                            return { ...m, progress }
++                        })
++                        return { ...block, responseMessages: msgs }
++                    }))
++                }
++
+                 // The vendor's raw finish reason for the turn — recorded on the
+                 // message so the card can always show why generation ended.
+                 const handleStopReason = (reason: string) => {
+@@ -988,7 +1005,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
+                         handleGeneratedAttachments,
+                         handleAwaitingInput,
+                         handleContentReset,
+-                        handleStopReason
++                        handleStopReason,
++                        handleProgress
+                     )
+                 } catch (err: any) {
+                     // Session problems affect every vendor — let the outer
+diff --git a/genai-react-app/src/i18n/locales/en/translation.json b/genai-react-app/src/i18n/locales/en/translation.json
+index e31ebfa..c4e5631 100644
+--- a/genai-react-app/src/i18n/locales/en/translation.json
++++ b/genai-react-app/src/i18n/locales/en/translation.json
+@@ -230,6 +230,12 @@
+         },
+         "vendorModelSelect": {
+             "noModelsAvailable": "No models available"
++        },
++        "attachmentCard": {
++            "download": "Download {{filename}}",
++            "error": "Download failed — click to retry",
++            "pages_one": "{{count}} page",
++            "pages_other": "{{count}} pages"
+         }
+     },
+     "conversation": {
+@@ -291,14 +297,24 @@
+         "request": {
+             "generate": "Generate",
+             "noApiKeysSet": "No API keys set",
+-            "attachmentLimitReached": "You can attach at most {{max}} images per message",
+-            "attachmentUploadFailed": "Image upload failed. Please try again",
+-            "attachmentsUploading": "Images are still uploading",
++            "attachmentLimitReached": "You can attach at most {{max}} files per message",
++            "attachmentUploadFailed": "Upload failed. Please try again",
++            "attachmentsUploading": "Attachments are still uploading",
+             "attachmentFormatUnsupported": "{{name}} isn't a supported image format. Supported formats: {{formats}}",
+             "attachmentFormatsUnsupported": "{{count}} files aren't in a supported image format ({{names}}). Supported formats: {{formats}}",
+             "pastedFile": "The pasted file",
+-            "removeAttachment": "Remove image",
+-            "addImageAttachment": "Add image attachment"
++            "removeAttachment": "Remove attachment",
++            "addImageAttachment": "Add image attachment",
++            "attachmentFormatUnsupportedWithPdf": "{{name}} can't be attached. You can attach {{documents}} files and images in these formats: {{formats}}",
++            "attachmentFormatsUnsupportedWithPdf": "{{count}} files can't be attached ({{names}}). You can attach {{documents}} files and images in these formats: {{formats}}",
++            "attachmentPdfTooLarge": "{{name}} is too large ({{size}}). A PDF can be at most {{max}}.",
++            "attachmentPdfsTooLarge": "{{count}} PDFs are too large ({{names}}). A PDF can be at most {{max}}.",
++            "attachmentPdfLimitReached": "You can attach at most {{max}} PDFs per message",
++            "attachFiles": "Attach images or PDFs",
++            "dropImages": "Drop images to attach them",
++            "dropFiles": "Drop images or PDFs to attach them",
++            "pdfInputUnsupported_one": "{{models}} can't read PDFs directly. It only gets the text extracted from them, so images, charts and scanned pages may be missed.",
++            "pdfInputUnsupported_other": "{{models}} can't read PDFs directly. They only get the text extracted from them, so images, charts and scanned pages may be missed."
+         },
+         "response": {
+             "deleteFact": "Delete fact from memory: {{fact}}",
+@@ -325,7 +341,13 @@
+             "conversationCostUsd": "Total {{vendor}} cost for this conversation so far (USD)",
+             "totalInputTokens": "Input tokens in this conversation so far (this vendor)",
+             "totalOutputTokens": "Output tokens in this conversation so far (this vendor)",
+-            "totalTokens": "Total tokens in this conversation so far (this vendor)"
++            "totalTokens": "Total tokens in this conversation so far (this vendor)",
++            "writingPdf_one": "Writing PDF... {{chars}} character",
++            "writingPdf_other": "Writing PDF... {{chars}} characters",
++            "writingFile_one": "Writing file... {{chars}} character",
++            "writingFile_other": "Writing file... {{chars}} characters",
++            "writingOther_one": "Writing... {{chars}} character",
++            "writingOther_other": "Writing... {{chars}} characters"
+         }
+     },
+     "dbSettings": {
+diff --git a/genai-react-app/src/pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage.tsx b/genai-react-app/src/pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage.tsx
+index 265e7c9..cfd2053 100644
+--- a/genai-react-app/src/pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage.tsx
++++ b/genai-react-app/src/pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage.tsx
+@@ -13,6 +13,7 @@ import { createGraphAgent, getAgent, updateAgent } from '../../../services/agent
+ import { getCustomerInstructions } from '../../../services/instructionService'
+ import { getNodePresets } from '../../../services/nodePresetsService'
+ import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
++import { uploadAttachment } from '../../../services/attachmentService'
+ import { AIVendor } from '../../../constants/vendors'
+ import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
+ import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
+@@ -230,6 +231,17 @@ export default function GraphAgentEditorPage() {
+         [aiVendorAPIKeyStatusList, vendorDisplayName]
+     )
+ 
++    // Logo of a TOOL_EXECUTOR node's PDF branding: uploaded under the
++    // customer's own prefix (the tool only loads the graph owner's files),
++    // untagged because the node row, not a message, keeps it
++    const uploadImage = useCallback(
++        async (file: File): Promise<string> => {
++            const token = await getAccessTokenSilently()
++            return (await uploadAttachment(token, file, { keep: true })).attachmentId
++        },
++        [getAccessTokenSilently]
++    )
++
+     const getModelsForVendor = useCallback(
+         async (vendor: string): Promise<string[]> => {
+             if (!customerId) return []
+@@ -397,6 +409,7 @@ export default function GraphAgentEditorPage() {
+                         onSave={handleSave}
+                         onDirtyChange={handleDirtyChange}
+                         onRequestCreateInstruction={handleRequestCreateInstruction}
++                        onUploadImage={uploadImage}
+                     />
+                 </div>
+             )}
+diff --git a/genai-react-app/src/services/attachmentService.test.ts b/genai-react-app/src/services/attachmentService.test.ts
+index 8e1108d..5cff692 100644
+--- a/genai-react-app/src/services/attachmentService.test.ts
++++ b/genai-react-app/src/services/attachmentService.test.ts
+@@ -181,6 +181,26 @@ describe('attachmentService', () => {
+             })
+         })
+ 
++        test('a kept file (a letterhead logo) is uploaded without the retention tag', async () => {
++            mockFetchWithRetry
++                .mockResolvedValueOnce({
++                    ok: true,
++                    json: async () => ({
++                        attachmentId: 'logo-1',
++                        s3Key: 'customers/CU1/attachments/logo-1',
++                        mediaType: 'image/png',
++                        uploadUrl: 'https://bucket.s3.amazonaws.com/signed-logo',
++                    }),
++                })
++                .mockResolvedValueOnce({ ok: true })
++
++            const ref = await uploadAttachment('token-1', makeFile('logo.png'), { keep: true })
++
++            expect(JSON.parse(mockFetchWithRetry.mock.calls[0][1].body).tagging).toBe(false)
++            expect(mockFetchWithRetry.mock.calls[1][1].headers).toEqual({ 'Content-Type': 'image/png' })
++            expect(ref.attachmentId).toBe('logo-1')
++        })
++
+         test('a signed Content-Type in requiredHeaders wins over the default one', async () => {
+             const presign = {
+                 attachmentId: 'att-7',
+diff --git a/genai-react-app/src/services/attachmentService.ts b/genai-react-app/src/services/attachmentService.ts
+index 69490bb..9bcb02f 100644
+--- a/genai-react-app/src/services/attachmentService.ts
++++ b/genai-react-app/src/services/attachmentService.ts
+@@ -14,15 +14,6 @@ import {
+  */
+ export const UNKNOWN_ATTACHMENT_MEDIA_TYPE = 'application/octet-stream'
+ 
+-/**
+- * The presign response as the proxy sends it: the library's
+- * CreateAttachmentUploadResponse plus the headers the PUT was signed with
+- * (declared here until the installed component-library version has them).
+- */
+-type PresignResponse = CreateAttachmentUploadResponse & {
+-    requiredHeaders?: Record<string, string>
+-}
+-
+ /**
+  * Uploads a file (an image, or a PDF where the composer accepts them) for
+  * use as a message attachment:
+@@ -36,6 +27,10 @@ type PresignResponse = CreateAttachmentUploadResponse & {
+  * Returns the AttachmentRef to include in the generate request, with the
+  * file's name and size for display.
+  *
++ * `keep` uploads without the retention tag, for a file a saved setting links
++ * instead of a message (a TOOL_EXECUTOR node's PDF letterhead logo): it is
++ * kept until its owner's account is deleted. The proxy tags PDFs regardless.
++ *
+  * No type allowlist or size cap applies to images here or in the proxy: the
+  * proxy only normalizes the declared media type (blank, malformed or
+  * scriptable values become application/octet-stream; images and PDFs are
+@@ -45,7 +40,11 @@ type PresignResponse = CreateAttachmentUploadResponse & {
+  * retrieval-server sniffs the real format from the bytes; the original
+  * object in S3 is never modified.
+  */
+-export async function uploadAttachment(token: string, file: File): Promise<AttachmentRef> {
++export async function uploadAttachment(
++    token: string,
++    file: File,
++    options: { keep?: boolean } = {}
++): Promise<AttachmentRef> {
+     const fileName = file.name || (file.type === 'application/pdf' ? 'document.pdf' : 'pasted-image')
+     const presignResponse = await fetchWithRetry(endpoints.attachments, {
+         method: HttpMethod.POST,
+@@ -57,7 +56,7 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
+             fileName,
+             mediaType: file.type || UNKNOWN_ATTACHMENT_MEDIA_TYPE,
+             sizeBytes: file.size,
+-            tagging: true,
++            tagging: !options.keep,
+         }),
+     })
+ 
+@@ -66,7 +65,7 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
+         throw new Error(body?.error || `Attachment presign failed: ${presignResponse.status}`)
+     }
+ 
+-    const presign: PresignResponse = await presignResponse.json()
++    const presign: CreateAttachmentUploadResponse = await presignResponse.json()
+ 
+     const uploadResponse = await fetchWithRetry(presign.uploadUrl, {
+         method: HttpMethod.PUT,
+diff --git a/genai-react-app/src/services/generateTextStreamService.ts b/genai-react-app/src/services/generateTextStreamService.ts
+index 685d5ce..6f7eae2 100644
+--- a/genai-react-app/src/services/generateTextStreamService.ts
++++ b/genai-react-app/src/services/generateTextStreamService.ts
+@@ -163,10 +163,15 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
+                         .filter((a: any) => a && typeof a === "object")
+                         .map((a: any) => ({
+                             attachmentId: a.artifact_id ?? a.attachmentId ?? "",
++                            // The proxy no longer relays the storage key (the UI
++                            // never needs it): empty then
+                             s3Key: a.key ?? a.s3Key ?? "",
+                             mediaType: a.media_type ?? a.mediaType ?? "application/octet-stream",
+                             filename: a.filename ?? undefined,
+                             sizeBytes: typeof a.size_bytes === "number" ? a.size_bytes : undefined,
++                            pageCount: typeof a.page_count === "number"
++                                ? a.page_count
++                                : typeof a.pageCount === "number" ? a.pageCount : undefined,
+                         }))
+                         .filter((r: AttachmentRef) => r.attachmentId);
+                     if (refs.length > 0) cb.onGeneratedAttachments?.(refs);
+diff --git a/genai-react-app/src/test/components/widgets/CenterWidgets/ConversationListWidget.test.tsx b/genai-react-app/src/test/components/widgets/CenterWidgets/ConversationListWidget.test.tsx
+new file mode 100644
+index 0000000..c7673a5
+--- /dev/null
++++ b/genai-react-app/src/test/components/widgets/CenterWidgets/ConversationListWidget.test.tsx
+@@ -0,0 +1,64 @@
++import React from 'react'
++import { render } from '@testing-library/react'
++import ConversationListWidget from '../../../../components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget'
++import { config } from '../../../../config/env'
++
++let mockProviderValue: any = null
++jest.mock('@genflowly/component-library', () => ({
++    ConversationWidgetProvider: ({ value, children }: any) => {
++        mockProviderValue = value
++        return <div data-testid="provider">{children}</div>
++    },
++    ConversationWidget: () => <div data-testid="conversation-widget" />,
++}))
++jest.mock('../../../../components/widgets/CenterWidgets/ConversationListWidget/RunHitlBanner', () => ({
++    RunHitlBanner: () => null,
++}))
++jest.mock('../../../../context/ConversationContext', () => ({
++    useConversation: () => ({ conversationBlockList: [] }),
++    useConversationUI: () => ({}),
++}))
++jest.mock('../../../../context/AuthContext', () => ({
++    useAuth: () => ({
++        isAuthenticated: true,
++        customerId: 'c1',
++        aiVendorAPIKeyStatusList: [],
++        getAccessTokenSilently: jest.fn(),
++    }),
++}))
++jest.mock('../../../../context/LayoutContext', () => ({
++    useLayout: () => ({ isLeftSidebarExpanded: false, isRightSidebarExpanded: false }),
++}))
++jest.mock('../../../../context/ToastContext', () => ({ useToast: () => ({ showToast: jest.fn() }) }))
++jest.mock('../../../../hooks/useVendorDisplayNames', () => ({
++    useVendorDisplayNames: () => (id: string) => id,
++}))
++jest.mock('../../../../hooks/useModelsWithoutPdfInput', () => ({
++    useModelsWithoutPdfInput: () => ['deepseek-chat'],
++}))
++
++describe('ConversationListWidget', () => {
++    const original = config.features.pdfAttachments
++
++    afterEach(() => {
++        config.features.pdfAttachments = original
++    })
++
++    test('hands the widget the PDF capabilities: the feature flag and the models without PDF input', () => {
++        config.features.pdfAttachments = true
++        render(<ConversationListWidget />)
++        expect(mockProviderValue.capabilities).toEqual({
++            pdfAttachments: true,
++            modelsWithoutPdfInput: ['deepseek-chat'],
++        })
++        // The services the composer and cards use stay wired
++        expect(typeof mockProviderValue.services.uploadAttachment).toBe('function')
++        expect(typeof mockProviderValue.services.getAttachmentViewUrl).toBe('function')
++    })
++
++    test('PDF attachments stay off unless the flag is set', () => {
++        config.features.pdfAttachments = false
++        render(<ConversationListWidget />)
++        expect(mockProviderValue.capabilities.pdfAttachments).toBe(false)
++    })
++})
+diff --git a/genai-react-app/src/test/context/ConversationContextProgress.test.tsx b/genai-react-app/src/test/context/ConversationContextProgress.test.tsx
+new file mode 100644
+index 0000000..5379705
+--- /dev/null
++++ b/genai-react-app/src/test/context/ConversationContextProgress.test.tsx
+@@ -0,0 +1,126 @@
++import React from 'react';
++import { render, act, waitFor } from '@testing-library/react';
++import { MemoryRouter } from 'react-router-dom';
++import { ConversationProvider, useConversation } from '../../context/ConversationContext';
++
++jest.mock('../../context/AuthContext', () => ({
++    useAuth: () => ({
++        customerId: 'user123',
++        isAuthenticated: true,
++        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
++    }),
++}));
++
++jest.mock('../../context/AIContext', () => ({
++    useAI: () => ({
++        config: [{ aiVendor: 'OPENAI', model: 'gpt-4' }],
++        setSupplementalText: jest.fn(),
++        customerInstructions: [],
++        systemPrompt: '',
++        setSystemPrompt: jest.fn(),
++        selectedInstructionId: null,
++        setSelectedInstructionId: jest.fn(),
++        selectedAgentId: null,
++    }),
++}));
++
++jest.mock('../../context/LayoutContext', () => ({
++    useLayout: () => ({
++        setLeftSidebarExpanded: jest.fn(),
++        setRightSidebarExpanded: jest.fn(),
++        setLeftSidebarMinimized: jest.fn(),
++        setHistoryWidgetExpanded: jest.fn(),
++    }),
++}));
++
++jest.mock('../../context/ToastContext', () => ({ useToast: () => ({ showToast: jest.fn() }) }));
++
++jest.mock('../../services/generateTextStreamService');
++jest.mock('../../services/reattachRunService');
++jest.mock('../../services/resumeRunService');
++jest.mock('../../services/conversationService');
++jest.mock('../../services/cancelGenerationService');
++jest.mock('../../services/generateTextService');
++jest.mock('../../services/getAIUsageService');
++jest.mock('../../services/createConversationTitleService');
++
++const Probe = () => {
++    const c = useConversation();
++    const m = c.conversationBlockList[0]?.responseMessages[0];
++    const progress = m?.progress;
++    return (
++        <div>
++            <div data-testid="progress">{progress ? `${progress.tool}:${progress.chars}` : ''}</div>
++            <button data-testid="stream" onClick={() => c.generateResponsesStream('conv-default')}>stream</button>
++            <button data-testid="load" onClick={() => c.loadConversation('c1')}>load</button>
++        </div>
++    );
++};
++
++const renderProbe = () =>
++    render(<MemoryRouter><ConversationProvider><Probe /></ConversationProvider></MemoryRouter>);
++
++describe('ConversationContext writing progress', () => {
++    beforeEach(() => jest.clearAllMocks());
++
++    test('the live stream sets the message progress and clears it', async () => {
++        let onProgress: (p: unknown) => void = () => undefined;
++        let finish: () => void = () => undefined;
++        const { generateTextStream } = require('../../services/generateTextStreamService');
++        generateTextStream.mockImplementation((...args: any[]) => {
++            args[3]?.({ conversationId: 'c1', responseMessageId: 'rm1' });
++            onProgress = args[13];
++            return new Promise<void>(resolve => { finish = resolve; });
++        });
++        const { getAIUsageActivity } = require('../../services/getAIUsageService');
++        getAIUsageActivity.mockResolvedValue(null);
++
++        const { getByTestId } = renderProbe();
++        await act(async () => { getByTestId('stream').click(); });
++        await waitFor(() => expect(typeof onProgress).toBe('function'));
++
++        await act(async () => { onProgress({ tool: 'generate_pdf', chars: 12345 }); });
++        expect(getByTestId('progress')).toHaveTextContent('generate_pdf:12345');
++
++        await act(async () => { onProgress(null); });
++        expect(getByTestId('progress')).toHaveTextContent('');
++
++        await act(async () => { finish(); });
++    });
++
++    test('the reattach stream feeds the same progress', async () => {
++        const { getConversation } = require('../../services/conversationService');
++        getConversation.mockResolvedValue({
++            conversationId: 'c1',
++            blocks: [{
++                conversationBlockId: 'b1',
++                prompt: 'Write the report',
++                responseMessages: [{ messageId: 'real-rm', aiVendor: 'OPENAI', text: '', isLoading: true }],
++                isLoading: true,
++                status: 'resolved',
++            }],
++            role: 'OWNER', title: null, instructionId: null,
++            pendingRuns: [{ messageId: 'real-rm', runId: 'run-9' }],
++        });
++        let callbacks: any = null;
++        let finish: (outcome: string) => void = () => undefined;
++        const { reattachRun } = require('../../services/reattachRunService');
++        reattachRun.mockImplementation((_t: any, _r: any, _c: any, cb: any) => {
++            callbacks = cb;
++            return new Promise(resolve => { finish = resolve; });
++        });
++        const { getAIUsageActivity } = require('../../services/getAIUsageService');
++        getAIUsageActivity.mockResolvedValue(null);
++
++        const { getByTestId } = renderProbe();
++        await act(async () => { getByTestId('load').click(); });
++        await waitFor(() => expect(callbacks).not.toBeNull());
++
++        await act(async () => { callbacks.onProgress({ tool: 'fs_write', chars: 512 }); });
++        expect(getByTestId('progress')).toHaveTextContent('fs_write:512');
++        await act(async () => { callbacks.onProgress(null); });
++        expect(getByTestId('progress')).toHaveTextContent('');
++
++        await act(async () => { callbacks.onDelta('Done.'); finish('streamed'); });
++    });
++});
+diff --git a/genai-react-app/src/test/pages/AgentsPage/GraphAgentEditorPage.test.tsx b/genai-react-app/src/test/pages/AgentsPage/GraphAgentEditorPage.test.tsx
+index 8651c7c..da5db7c 100644
+--- a/genai-react-app/src/test/pages/AgentsPage/GraphAgentEditorPage.test.tsx
++++ b/genai-react-app/src/test/pages/AgentsPage/GraphAgentEditorPage.test.tsx
+@@ -75,6 +75,10 @@ jest.mock('../../../services/nodePresetsService', () => ({
+     getNodePresets: jest.fn(),
+ }));
+ 
++jest.mock('../../../services/attachmentService', () => ({
++    uploadAttachment: jest.fn(),
++}));
++
+ // ── Fixtures ──────────────────────────────────────────────────────────────────
+ 
+ const mockToken = 'mock-token';
+@@ -259,6 +263,20 @@ describe('GraphAgentEditorPage', () => {
+         expect(typeof mockGraphEditorProps.getModelsForVendor).toBe('function');
+     });
+ 
++    test('uploads a PDF-branding logo through the attachment service and hands back its id', async () => {
++        const { uploadAttachment } = require('../../../services/attachmentService');
++        uploadAttachment.mockResolvedValue({
++            attachmentId: 'att-logo',
++            s3Key: 'customers/c/attachments/att-logo',
++            mediaType: 'image/png',
++        });
++        await renderLoadedEditor();
++
++        const logo = new File(['png'], 'logo.png', { type: 'image/png' });
++        await expect(mockGraphEditorProps.onUploadImage(logo)).resolves.toBe('att-logo');
++        expect(uploadAttachment).toHaveBeenCalledWith(mockToken, logo, { keep: true });
++    });
++
+     test('passes the fetched node presets as the catalog and the condition options to the editor', async () => {
+         await renderLoadedEditor();
+ 
+diff --git a/genai-react-app/src/test/services/generateTextStreamService.test.ts b/genai-react-app/src/test/services/generateTextStreamService.test.ts
+index c2742af..97c5d71 100644
+--- a/genai-react-app/src/test/services/generateTextStreamService.test.ts
++++ b/genai-react-app/src/test/services/generateTextStreamService.test.ts
+@@ -437,6 +437,39 @@ describe('generateTextStreamService', () => {
+         expect(text).toBe('The answer is 9.');
+     });
+ 
++    test('generateTextStream carries a generated PDF\'s page count (no storage key relayed)', async () => {
++        const encoder = new TextEncoder();
++        const frame = {
++            t: 'ga',
++            v: [{ artifact_id: 'art-1', media_type: 'application/pdf', filename: 'report.pdf', size_bytes: 13312, page_count: 7 }],
++        };
++        const mockReader = {
++            read: jest.fn()
++                .mockResolvedValueOnce({ done: false, value: encoder.encode(`${JSON.stringify(frame)}\n`) })
++                .mockResolvedValueOnce({ done: true }),
++            releaseLock: jest.fn(),
++        };
++        mockFetchWithRetry.mockResolvedValue({ ok: true, headers: new Map(), body: { getReader: () => mockReader } });
++
++        const onGeneratedAttachments = jest.fn();
++        await generateTextStream(
++            mockToken,
++            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
++            jest.fn(),
++            undefined, undefined, undefined, undefined, undefined, undefined,
++            onGeneratedAttachments
++        );
++
++        expect(onGeneratedAttachments).toHaveBeenCalledWith([{
++            attachmentId: 'art-1',
++            s3Key: '',
++            mediaType: 'application/pdf',
++            filename: 'report.pdf',
++            sizeBytes: 13312,
++            pageCount: 7,
++        }]);
++    });
++
+     describe('"pg" progress frames', () => {
+         const streamOf = (...lines: string[]) => {
+             const encoder = new TextEncoder();
