@@ -27,6 +27,7 @@ import asyncio
 import base64
 import copy
 import html as html_escape
+import importlib
 import io
 import logging
 import re
@@ -479,7 +480,7 @@ def render_job(job: dict) -> dict:
     try:
         if renderer == "typst":
             try:
-                from graph_tools.tools import pdf_typst
+                pdf_typst = importlib.import_module("graph_tools.tools.pdf_typst")
             except ImportError:
                 return {"status": "error", "kind": "unsupported"}
             options = dict(job.get("options") or {})

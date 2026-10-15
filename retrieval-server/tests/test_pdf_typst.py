@@ -1090,7 +1090,9 @@ md = sys.stdin.read()
 t0 = time.process_time()
 r = pdf_typst.render_markdown_typst(md)
 cpu = time.process_time() - t0
-peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+# VmHWM, not ru_maxrss: Linux carries ru_maxrss across fork+exec, so this
+# child would report the (large) test runner's size.
+peak = next(int(line.split()[1]) for line in open("/proc/self/status") if line.startswith("VmHWM:")) / 1024
 print(json.dumps({"cpu": cpu, "peak_mb": peak, "pages": r.pages, "ok": r.pdf.startswith(b"%PDF-")}))
 """
 

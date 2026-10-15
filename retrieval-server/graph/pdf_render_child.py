@@ -188,6 +188,16 @@ def _rss_bytes() -> int:
 
 
 def _peak_rss_bytes() -> int:
+    """This process's own peak RSS. VmHWM, not ru_maxrss: Linux carries
+    ru_maxrss across fork+exec, so a child spawned by a large server would
+    report the server's size."""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmHWM:"):
+                    return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
     # ru_maxrss is KiB on Linux.
     return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * 1024
 
