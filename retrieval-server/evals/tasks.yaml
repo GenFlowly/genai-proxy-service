@@ -17,6 +17,9 @@
 #   expect_todos:         true — a thinking_step carried a todos checklist
 #   min_tool_rounds / max_tool_rounds: bounds on TOOL_EXECUTOR rounds
 #   expect_no_error:      true — no error event in the stream (default true)
+#   setup_turns:          [queries] — earlier turns run first; the task's query
+#                         is then asked with them (and their generated files)
+#                         as conversation history
 
 - name: kb-multi-hop
   description: Multi-part question over the customer's own data — the agent
@@ -78,3 +81,27 @@
     max_turn_tokens: 1500
   expect_no_error: true
   min_answer_chars: 100
+
+- name: pdf-revise
+  description: A change to a PDF made on an earlier turn must go through
+    revise_pdf (exact edits on the stored source), not a rewrite from memory
+    that silently rewords the rest (plan 3.3).
+  setup_turns:
+    - "Create a one-page PDF offer letter for Jane Doe: role Data Analyst,
+      start date 1 March 2026, salary [Amount], signed by [Your Name]."
+  query: "In the PDF you just made, change the start date to 15 April 2026.
+    Keep everything else exactly as it is."
+  must_call_tools: [revise_pdf]
+  must_not_call_tools: [generate_pdf]
+
+- name: pdf-long
+  description: A document longer than one output budget is written in
+    sections with fs_write (mode append) and rendered with
+    generate_pdf(source_paths=...). Needs a graph with the scratch tools
+    enabled (the agent-loop template has them) (plan 3.6).
+  query: "Write a complete employee handbook with 12 detailed sections (at
+    least 700 words each: values, hiring, onboarding, working hours, leave,
+    benefits, expenses, security, conduct, performance, offboarding, FAQ)
+    and give it to me as ONE PDF. Write it section by section."
+  must_call_tools: [fs_write, generate_pdf]
+  min_tool_rounds: 3

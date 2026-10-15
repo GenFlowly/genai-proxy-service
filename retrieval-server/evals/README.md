@@ -19,6 +19,12 @@ implementation.
    `EVAL_GRAPH_ID_BUDGET_EXHAUSTION` with their graphIds. (Per-request config
    overrides are not a server feature — variants keep the server honest.)
 
+4. For `pdf-revise` and `pdf-long`: the graph's TOOL_EXECUTOR must bind
+   `generate_pdf` (which brings `revise_pdf` and `read_pdf_source`), and for
+   `pdf-long` also `fs_write`/`fs_read` (the agent-loop template has them).
+   `pdf-revise` runs its `setup_turns` first and replays the generated PDF
+   as a file reference on the assistant turn, as the proxy does.
+
 ## Running
 
 ```bash

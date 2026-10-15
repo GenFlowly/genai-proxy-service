@@ -64,14 +64,42 @@ def _request_body(task: dict) -> dict:
     return body
 
 
+def _file_refs(artifacts: list) -> list[dict]:
+    """A turn's generated artifacts as the FileRefs the proxy would replay on
+    the assistant history message (plan 3.1)."""
+    return [
+        {"attachment_id": a.get("artifact_id"), "s3_key": a.get("key"),
+         "media_type": a.get("media_type"), "filename": a.get("filename"),
+         "size_bytes": a.get("size_bytes"), "origin": "generated"}
+        for a in artifacts if a.get("artifact_id") and a.get("key")
+    ]
+
+
 def _run_task(task: dict, base_url: str) -> dict:
-    """Stream one /retrieve call; fold the SSE events into an observation."""
+    """Run the task's setup turns (if any), then stream its /retrieve call and
+    fold the SSE events into an observation. Setup turns build the
+    conversation history, with each turn's generated files on its assistant
+    message, exactly as the proxy replays them."""
+    history: list[dict] = []
+    for query in task.get("setup_turns") or []:
+        turn = _stream_one(task, base_url, query, history)
+        if turn["errors"]:
+            raise RuntimeError(f"setup turn failed: {turn['errors'][:1]}")
+        history += [
+            {"role": "user", "content": query},
+            {"role": "assistant", "content": turn["answer"], "files": _file_refs(turn["artifacts"])},
+        ]
+    return _stream_one(task, base_url, task["query"], history)
+
+
+def _stream_one(task: dict, base_url: str, query: str, history: list[dict]) -> dict:
     observed = {
         "answer": "", "tools_called": [], "tool_rounds": 0, "todos_seen": False,
-        "web_sources": 0, "errors": [], "usage": {}, "duration_s": 0.0,
+        "web_sources": 0, "errors": [], "usage": {}, "duration_s": 0.0, "artifacts": [],
     }
     started = time.monotonic()
-    body = _request_body(task)
+    body = _request_body({**task, "query": query})
+    body["conversation_history"] = [*history, {"role": "user", "content": query}]
     # Per-task harness knob overrides ride a dedicated header the server does
     # not have — so instead they are applied by publishing a variant graph.
     # v1 keeps it simpler: overrides are advisory documentation unless
@@ -105,6 +133,8 @@ def _run_task(task: dict, base_url: str) -> dict:
                         observed["todos_seen"] = True
                 elif "web_sources" in event:
                     observed["web_sources"] = len(event["web_sources"])
+                elif "generated_artifacts" in event:
+                    observed["artifacts"].extend(event["generated_artifacts"] or [])
                 elif "error" in event:
                     observed["errors"].append(event["error"])
                 elif "usage" in event:
