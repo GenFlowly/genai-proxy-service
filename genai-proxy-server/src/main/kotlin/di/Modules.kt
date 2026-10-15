@@ -205,7 +205,13 @@ fun appModule(): Module = module {
     single { com.genflowly.service.CustomerRequestAgentMapService(get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { ConversationService(get(), get(), get(), get()) }
+    single { com.genflowly.service.ObjectClaimService(get()) }
+    single { ConversationService(get(), get(), get(), get(), get()) }
+    // Background loop started with the application (eager singleton): finishes
+    // kept-object claims that failed at message-write time (plan 1.16).
+    single(createdAtStart = true) {
+        com.genflowly.service.ClaimReconciler(get(), get(), get()).also { it.start() }
+    }
     single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.ProjectService(get(), get()) }
     single { GenerationRequestValidator(get()) }
