@@ -359,7 +359,12 @@ def _warm_imports(renderer: str) -> float:
         from PIL import Image  # noqa: F401
     elif renderer == "typst":
         try:
-            import graph_tools.tools.pdf_typst  # noqa: F401
+            from graph_tools.tools import pdf_typst
+
+            # Caps glibc's per-thread malloc arenas in this process only
+            # (the parent also sets MALLOC_ARENA_MAX for the child).
+            pdf_typst.prepare_render_process()
+            import typst  # noqa: F401
         except ImportError:
             pass
     return round(time.process_time() - start, 3)

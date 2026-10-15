@@ -87,6 +87,9 @@ def _child_env(tmpdir: str) -> dict:
         "HOME": tmpdir,
         "OMP_NUM_THREADS": "1",
         "RAYON_NUM_THREADS": "1",
+        # glibc reserves a 64 MB arena per thread: Typst's worker threads
+        # would push a 2,000-row table past the address-space cap.
+        "MALLOC_ARENA_MAX": "2",
     })
     for key, value in os.environ.items():
         if key.startswith("PDF_"):
@@ -228,7 +231,9 @@ class PdfWorker:
             # SIGXCPU (its CPU allowance), or garbage on the pipe.
             await self._discard(child)
             code = child.proc.returncode
-            kind = "oom" if code == -signal.SIGKILL else (
+            # SIGKILL: the kernel OOM killer; SIGABRT: Typst aborts when an
+            # allocation fails under the address-space cap.
+            kind = "oom" if code in (-signal.SIGKILL, -signal.SIGABRT) else (
                 "timeout" if code == -signal.SIGXCPU else "error")
             logger.warning("pdf render child failed (rc=%s, %s) -> %s", code, type(e).__name__, kind)
             return {"status": "error", "kind": kind}

@@ -423,11 +423,26 @@ def render_markdown_pdf(content_markdown: str, title: str | None = None,
     starts_with_h1 = getattr(md, "starts_with_h1", False)
     shown_title = map_emoji_v1(title) if title else None
     # 2.7: never print the title twice: when the content already starts with
-    # an h1 matching it, the content's own h1 is the title.
+    # an h1 matching it, the content's own h1 is the title. The comparison
+    # uses the h1 python-markdown actually rendered ('#Title' is an h1 here
+    # and a paragraph in CommonMark).
     if shown_title and starts_with_h1 and \
             _normalize_heading(rendered_h1) == _normalize_heading(shown_title):
         shown_title = None
-    pdf_title = title or rendered_h1 or (filename.rsplit(".", 1)[0] if filename else None) or "Document"
+    warnings: dict[str, int] = {}
+    # /Title: the title argument, else the first h1 of the CommonMark token
+    # tree (2.2, the tree Typst renders), else the filename stem. A tree
+    # failure falls back to python-markdown's h1 and is counted, never fatal.
+    tree_h1 = None
+    if not title:
+        try:
+            from graph_tools.tools.pdf_markdown import first_h1_text, parse
+
+            tree_h1 = first_h1_text(parse(content_markdown))
+        except Exception:
+            warnings["title_parse_error"] = 1
+            tree_h1 = rendered_h1
+    pdf_title = title or tree_h1 or (filename.rsplit(".", 1)[0] if filename else None) or "Document"
     title_html = f"<h1>{html_escape.escape(shown_title)}</h1>" if shown_title else ""
     document = (
         "<html><head>"
@@ -464,7 +479,7 @@ def render_markdown_pdf(content_markdown: str, title: str | None = None,
     if result.err:
         raise RenderError("error")
     pdf = buffer.getvalue()
-    return pdf, {"pages": _count_pages(pdf), "warnings": dict(handler.counts)}
+    return pdf, {"pages": _count_pages(pdf), "warnings": {**handler.counts, **warnings}}
 
 
 def render_job(job: dict) -> dict:
@@ -593,7 +608,8 @@ def _description(renderer: str, script_route: str | None, limits: _Limits,
     markdown = (
         "Supported Markdown: headings, paragraphs, bold/italic, ordered/unordered and "
         "nested lists, tables, fenced code blocks, blockquotes and horizontal rules"
-        + (", plus strikethrough, task lists (- [x]) and footnotes." if typst else ".")
+        + (", plus strikethrough, task lists (- [x]), footnotes and definition lists; "
+           "links may be http, https or mailto." if typst else ".")
     )
     page = (
         "Set page_size (A4, Letter or Legal) or orientation (portrait or landscape) only "

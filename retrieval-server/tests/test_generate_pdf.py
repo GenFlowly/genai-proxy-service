@@ -299,6 +299,7 @@ class RenderTests(unittest.TestCase):
         pdf, stats = gp.render_markdown_pdf("# Title\n\nSome text.", None, "a.pdf")
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertEqual(stats["pages"], 1)
+        # No warnings at all on plain text, border-collapse included (1.4).
         self.assertEqual(stats["warnings"], {})
 
     def test_placeholders_and_inline_tags_reach_the_pdf(self):
@@ -338,6 +339,22 @@ class RenderTests(unittest.TestCase):
     def test_title_is_not_printed_twice(self):
         pdf, _ = gp.render_markdown_pdf("# Quarterly Report\n\nBody text.", title="Quarterly  report")
         self.assertEqual(len(re.findall(r"Quarterly\s+Report", _pdf_text(pdf), re.I)), 1)
+
+    def test_pdf_title_comes_from_the_first_h1_without_a_title(self):
+        from pypdf import PdfReader
+
+        pdf, _ = gp.render_markdown_pdf("Intro line.\n\n# Annual Review\n\nText.", None, "x.pdf")
+        self.assertEqual(PdfReader(io.BytesIO(pdf)).metadata.title, "Annual Review")
+        pdf, _ = gp.render_markdown_pdf("No headings here.", None, "my-notes.pdf")
+        self.assertEqual(PdfReader(io.BytesIO(pdf)).metadata.title, "my-notes")
+        pdf, _ = gp.render_markdown_pdf("# Body H1", "Given Title", "x.pdf")
+        self.assertEqual(PdfReader(io.BytesIO(pdf)).metadata.title, "Given Title")
+
+    def test_a_token_tree_failure_falls_back_and_is_counted(self):
+        with mock.patch("graph_tools.tools.pdf_markdown.parse", side_effect=RuntimeError("boom")):
+            pdf, stats = gp.render_markdown_pdf("# Heading\n\nText.", None, "x.pdf")
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertEqual(stats["warnings"].get("title_parse_error"), 1)
 
     def test_title_is_added_when_the_content_has_none(self):
         pdf, _ = gp.render_markdown_pdf("Body text.", title="Offer Letter")
