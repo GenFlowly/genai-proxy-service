@@ -248,6 +248,25 @@ describe('ToolsSettings', () => {
         expect(mockSave).not.toHaveBeenCalled()
     })
 
+    test.each(['revise_pdf', 'read_pdf_source', 'read_attachment'])(
+        'rejects the new built-in tool name %s',
+        async name => {
+            render(<ToolsSettings />)
+            await waitFor(() => expect(screen.getByTestId('add-tool')).toBeInTheDocument())
+
+            await userEvent.click(screen.getByTestId('add-tool'))
+            await userEvent.type(screen.getByPlaceholderText('e.g. create_issue'), name)
+            await userEvent.click(screen.getByTestId('save-tool'))
+
+            await waitFor(() => {
+                expect(screen.getByTestId('tool-name-error')).toHaveTextContent(
+                    `“${name}” is already the name of a built-in tool`
+                )
+            })
+            expect(mockSave).not.toHaveBeenCalled()
+        }
+    )
+
     test('masks the secret value in the dry-run panel', async () => {
         mockList.mockResolvedValue({ tools: [CREATE_ISSUE] })
         mockSave.mockResolvedValue(CREATE_ISSUE)

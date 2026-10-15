@@ -162,8 +162,20 @@ export const MANUAL_ORIGIN = 'manual'
 /** Server-side name rule, mirrored so the form can fail fast. */
 export const TOOL_NAME_PATTERN = /^[a-z][a-z0-9_]{2,63}$/
 
-/** Names the platform already owns — a save using one is rejected. */
-export const RESERVED_TOOL_NAMES = ['web_search', 'generate_pdf']
+/**
+ * Names the platform already owns — a save using one is rejected. Built-in
+ * tools resolve before customer tools, so a customer tool with one of these
+ * names would be silently shadowed. Mirrors the proxy's BUILTIN_TOOL_NAMES
+ * (CustomerToolsService.kt); revise_pdf and read_pdf_source come with
+ * generate_pdf, read_attachment with uploaded documents.
+ */
+export const RESERVED_TOOL_NAMES = [
+    'web_search',
+    'generate_pdf',
+    'revise_pdf',
+    'read_pdf_source',
+    'read_attachment',
+]
 
 export const MIN_DESCRIPTION_LENGTH = 10
 export const MAX_DESCRIPTION_LENGTH = 1024
