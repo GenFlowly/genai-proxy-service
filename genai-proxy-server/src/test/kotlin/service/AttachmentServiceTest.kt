@@ -1,6 +1,7 @@
 package com.genflowly.service
 
 import com.genflowly.models.DEFAULT_ATTACHMENT_MEDIA_TYPE
+import com.genflowly.models.MAX_PDF_SIZE_BYTES
 import com.genflowly.providers.S3Provider
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -12,9 +13,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * POST /attachments accepts any media type and any size >= 1 byte. The
- * effective (normalized) type is what gets bound into the presigned PUT and
- * returned to the client, which must upload with exactly that Content-Type.
+ * POST /attachments accepts any image type and any size >= 1 byte, and PDFs
+ * up to 10 MiB. The effective (normalized) type is what gets bound into the
+ * presigned PUT and returned to the client, which must upload with exactly
+ * that Content-Type and every returned required header.
  */
 class AttachmentServiceTest {
 
@@ -62,6 +64,48 @@ class AttachmentServiceTest {
         val a = service.createUploadUrl(customerId, "image/jpeg", 10)
         val b = service.createUploadUrl(customerId, "image/jpeg", 10)
         assertTrue(a.attachmentId != b.attachmentId)
+    }
+
+    @Test
+    fun `an untagged image upload signs no tagging and needs no extra header`() = runTest {
+        val upload = service.createUploadUrl(customerId, "image/png", 10)
+
+        assertEquals(emptyMap(), upload.requiredHeaders)
+        coVerify(exactly = 1) { s3Provider.presignPut(upload.s3Key, "image/png", null) }
+    }
+
+    @Test
+    fun `a tagged upload signs retention=pending and requires the header`() = runTest {
+        val upload = service.createUploadUrl(customerId, "image/heic", 10, fileName = "IMG_1.HEIC", tagging = true)
+
+        assertEquals(mapOf("x-amz-tagging" to "retention=pending"), upload.requiredHeaders)
+        coVerify(exactly = 1) { s3Provider.presignPut(upload.s3Key, "image/heic", "retention=pending") }
+    }
+
+    @Test
+    fun `a PDF is kept as application pdf and always tagged pending`() = runTest {
+        val upload = service.createUploadUrl(customerId, "application/pdf", 1234, fileName = "spec.pdf", tagging = false)
+
+        assertEquals("application/pdf", upload.mediaType)
+        assertEquals(mapOf("x-amz-tagging" to "retention=pending"), upload.requiredHeaders)
+        coVerify(exactly = 1) { s3Provider.presignPut(upload.s3Key, "application/pdf", "retention=pending") }
+    }
+
+    @Test
+    fun `a PDF of exactly 10 MiB is accepted and an 11 MB one is rejected before presigning`() = runTest {
+        service.createUploadUrl(customerId, "application/pdf", MAX_PDF_SIZE_BYTES)
+
+        val e = assertFailsWith<IllegalArgumentException> {
+            service.createUploadUrl(customerId, "application/pdf", 11L * 1024 * 1024)
+        }
+        assertEquals("PDF attachments are limited to 10.0 MB; this file is 11.0 MB", e.message)
+        coVerify(exactly = 1) { s3Provider.presignPut(any(), any(), any()) }
+    }
+
+    @Test
+    fun `the file name comes back sanitized for the client to persist`() = runTest {
+        assertEquals("report.pdf", service.createUploadUrl(customerId, "application/pdf", 1, fileName = " report.pdf\n").fileName)
+        assertEquals(null, service.createUploadUrl(customerId, "image/png", 1).fileName)
     }
 
     @Test

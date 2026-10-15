@@ -34,12 +34,33 @@ class AttachmentMediaTypeTest {
         // A presigned GET serves the object with its stored type: an uploaded
         // page or SVG must not render (and run script) under the bucket's host
         for (type in listOf(
-            "application/pdf", "text/html", "application/xhtml+xml", "text/xml",
+            "text/html", "application/xhtml+xml", "text/xml", "application/x-pdf",
             "application/javascript", "image/svg+xml", "IMAGE/SVG+XML; charset=utf-8",
             "image/svg", "image/foo+xml", "application/octet-stream"
         )) {
             assertEquals(octet, normalizeAttachmentMediaType(type), "for '$type'")
         }
+    }
+
+    @Test
+    fun `application pdf is the one non-image type kept`() {
+        for (type in listOf("application/pdf", "Application/PDF", " application/pdf; name=x.pdf ")) {
+            assertEquals(PDF_MEDIA_TYPE, normalizeAttachmentMediaType(type), "for '$type'")
+            assertEquals(true, isPdfAttachmentMediaType(type), "for '$type'")
+        }
+        assertEquals(false, isPdfAttachmentMediaType("image/png"))
+        assertEquals(false, isPdfAttachmentMediaType(null))
+        assertEquals(10L * 1024 * 1024, MAX_PDF_SIZE_BYTES)
+    }
+
+    @Test
+    fun `upload file names are trimmed, stripped of control characters and bounded`() {
+        assertEquals("report.pdf", sanitizeAttachmentFileName("  report.pdf \n"))
+        assertEquals("ab.pdf", sanitizeAttachmentFileName("a\u0000b\r\n.pdf"))
+        assertEquals("Ünïcode 報告.pdf", sanitizeAttachmentFileName("Ünïcode 報告.pdf"))
+        assertEquals(MAX_ATTACHMENT_FILE_NAME_LENGTH, sanitizeAttachmentFileName("x".repeat(1000))!!.length)
+        assertEquals(null, sanitizeAttachmentFileName("  \t "))
+        assertEquals(null, sanitizeAttachmentFileName(null))
     }
 
     @Test

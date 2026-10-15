@@ -118,6 +118,48 @@ class AttachmentRoutesTest {
     }
 
     @Test
+    fun `a tagged upload returns the header the PUT must carry and the file name`() = testApplication {
+        setUpRoutes()
+        val response = createUpload("""{"fileName":"IMG_7.HEIC","mediaType":"image/heic","sizeBytes":10,"tagging":true}""")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val upload = parse(response.bodyAsText())
+        assertEquals(mapOf("x-amz-tagging" to "retention=pending"), upload.requiredHeaders)
+        assertEquals("IMG_7.HEIC", upload.fileName)
+        coVerify(exactly = 1) { s3Provider.presignPut(upload.s3Key, "image/heic", "retention=pending") }
+    }
+
+    @Test
+    fun `old clients that send no tagging flag get no required headers`() = testApplication {
+        setUpRoutes()
+        val upload = parse(createUpload("""{"fileName":"a.png","mediaType":"image/png","sizeBytes":10}""").bodyAsText())
+        assertEquals(emptyMap(), upload.requiredHeaders)
+    }
+
+    @Test
+    fun `a PDF is accepted, kept as application pdf and tagged`() = testApplication {
+        setUpRoutes()
+        val response = createUpload("""{"fileName":"spec.pdf","mediaType":"application/pdf","sizeBytes":1048576}""")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val upload = parse(response.bodyAsText())
+        assertEquals("application/pdf", upload.mediaType)
+        assertEquals(mapOf("x-amz-tagging" to "retention=pending"), upload.requiredHeaders)
+    }
+
+    @Test
+    fun `an 11 MB PDF is rejected with a clear 400`() = testApplication {
+        setUpRoutes()
+        val response = createUpload("""{"fileName":"big.pdf","mediaType":"application/pdf","sizeBytes":11534336,"tagging":true}""")
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertEquals(
+            """{"error":"PDF attachments are limited to 10.0 MB; this file is 11.0 MB"}""",
+            response.bodyAsText()
+        )
+    }
+
+    @Test
     fun `a zero size is rejected with 400`() = testApplication {
         setUpRoutes()
         val response = createUpload("""{"fileName":"empty.png","mediaType":"image/png","sizeBytes":0}""")

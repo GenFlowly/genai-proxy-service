@@ -3,8 +3,12 @@ package com.genflowly.service
 import com.genflowly.providers.S3Provider
 import java.util.UUID
 import com.genflowly.models.AttachmentUpload
+import com.genflowly.models.MAX_PDF_SIZE_BYTES
+import com.genflowly.models.PDF_MEDIA_TYPE
 import com.genflowly.models.attachmentS3Key
+import com.genflowly.models.formatAttachmentSize
 import com.genflowly.models.normalizeAttachmentMediaType
+import com.genflowly.models.sanitizeAttachmentFileName
 import org.slf4j.LoggerFactory
 
 /**
@@ -20,34 +24,57 @@ class AttachmentService(
     private val logger = LoggerFactory.getLogger("AttachmentService")
 
     /**
-     * Mints an attachment id and presigns the upload. Any media type and size
-     * are accepted: the declared type is normalized (blank or malformed values
-     * become application/octet-stream, never rejected) and the retrieval-server
-     * later converts/compresses the image for each LLM vendor. The returned
-     * [AttachmentUpload.mediaType] is the effective type bound into the
-     * presigned PUT — the client must upload with exactly that Content-Type.
-     * Throws IllegalArgumentException with a client-facing message only for a
-     * non-positive size.
+     * Mints an attachment id and presigns the upload. Images of any type and
+     * size are accepted: the declared type is normalized (blank or malformed
+     * values become application/octet-stream, never rejected) and the
+     * retrieval-server later converts/compresses the image for each LLM
+     * vendor. application/pdf is kept, up to [MAX_PDF_SIZE_BYTES]. The
+     * returned [AttachmentUpload.mediaType] is the effective type bound into
+     * the presigned PUT — the client must upload with exactly that
+     * Content-Type.
+     *
+     * When [tagging] is set, and always for a PDF, the PUT is signed with
+     * `x-amz-tagging: retention=pending` (returned in
+     * [AttachmentUpload.requiredHeaders], which the client must send): the
+     * object then expires unless a message links it (the 1.16 claim re-tags
+     * it kept). Throws IllegalArgumentException with a client-facing message
+     * for a non-positive size or an oversized PDF.
      */
-    suspend fun createUploadUrl(customerId: String, mediaType: String?, sizeBytes: Long): AttachmentUpload {
+    suspend fun createUploadUrl(
+        customerId: String,
+        mediaType: String?,
+        sizeBytes: Long,
+        fileName: String? = null,
+        tagging: Boolean = false
+    ): AttachmentUpload {
         require(sizeBytes >= 1) { "Attachment size must be at least 1 byte" }
 
         val effectiveMediaType = normalizeAttachmentMediaType(mediaType)
+        val isPdf = effectiveMediaType == PDF_MEDIA_TYPE
+        require(!isPdf || sizeBytes <= MAX_PDF_SIZE_BYTES) {
+            "PDF attachments are limited to ${formatAttachmentSize(MAX_PDF_SIZE_BYTES)}; " +
+                "this file is ${formatAttachmentSize(sizeBytes)}"
+        }
         val attachmentId = UUID.randomUUID().toString()
         val s3Key = attachmentS3Key(customerId, attachmentId)
-        val uploadUrl = s3Provider.presignPut(s3Key, effectiveMediaType)
+        val signTagging = tagging || isPdf
+        val uploadUrl = s3Provider.presignPut(
+            s3Key, effectiveMediaType, tagging = if (signTagging) RetentionKeys.PENDING_TAGGING else null
+        )
 
         // The declared type is raw client input of any length: log a bounded prefix only
         logger.info(
-            "Presigned attachment upload for customer {}: id={} declaredMediaType={} mediaType={} sizeBytes={}",
-            customerId, attachmentId, mediaType?.take(100), effectiveMediaType, sizeBytes
+            "Presigned attachment upload for customer {}: id={} declaredMediaType={} mediaType={} sizeBytes={} tagged={}",
+            customerId, attachmentId, mediaType?.take(100), effectiveMediaType, sizeBytes, signTagging
         )
 
         return AttachmentUpload(
             attachmentId = attachmentId,
             s3Key = s3Key,
             mediaType = effectiveMediaType,
-            uploadUrl = uploadUrl
+            uploadUrl = uploadUrl,
+            fileName = sanitizeAttachmentFileName(fileName),
+            requiredHeaders = if (signTagging) mapOf(TAGGING_HEADER to RetentionKeys.PENDING_TAGGING) else emptyMap()
         )
     }
 
@@ -80,5 +107,10 @@ class AttachmentService(
             ?: return null
         if (s3Provider.head(s3Key) == null) return null
         return s3Provider.presignGet(s3Key)
+    }
+
+    companion object {
+        /** S3 header carrying an object's tags on PUT; signed into the presigned URL. */
+        const val TAGGING_HEADER = "x-amz-tagging"
     }
 }

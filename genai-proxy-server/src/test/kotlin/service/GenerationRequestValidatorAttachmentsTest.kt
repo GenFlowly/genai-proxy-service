@@ -3,6 +3,8 @@ package com.genflowly.service
 import com.genflowly.models.AttachmentObjectInfo
 import com.genflowly.models.AttachmentRef
 import com.genflowly.models.MAX_ATTACHMENTS_PER_MESSAGE
+import com.genflowly.models.MAX_PDFS_PER_MESSAGE
+import com.genflowly.models.MAX_PDF_SIZE_BYTES
 import com.genflowly.providers.S3Provider
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -13,9 +15,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Current-turn attachment checks: count, ownership, image-ness and existence.
- * There is no size or image-type check — the retrieval-server
- * converts/compresses images for each vendor.
+ * Current-turn attachment checks: count, ownership, image-or-PDF-ness and
+ * existence. Images have no size or image-type check — the retrieval-server
+ * converts/compresses them for each vendor. PDFs are capped at 5 per message
+ * and 10 MiB each, checked on the stored object.
  */
 class GenerationRequestValidatorAttachmentsTest {
 
@@ -57,9 +60,45 @@ class GenerationRequestValidatorAttachmentsTest {
     }
 
     @Test
-    fun `rejects attachments declared as a non-image type instead of dropping them`() = runTest {
+    fun `rejects attachments declared as neither an image nor a PDF instead of dropping them`() = runTest {
         stubUploaded(sizeBytes = 10)
-        rejects(listOf(ref("a"), ref("pdf", mediaType = "application/pdf")), "not an image")
+        rejects(listOf(ref("a"), ref("txt", mediaType = "text/plain")), "not an image or a PDF")
+    }
+
+    private fun pdf(id: String) = ref(id, mediaType = "application/pdf")
+
+    @Test
+    fun `accepts five PDFs of exactly 10 MiB next to images`() = runTest {
+        coEvery { s3Provider.head(match { "pdf" in it }) } returns
+            AttachmentObjectInfo(MAX_PDF_SIZE_BYTES, "application/pdf")
+        coEvery { s3Provider.head(match { "img" in it }) } returns
+            AttachmentObjectInfo(300L * 1024 * 1024, "image/heic")
+        validator.validateAttachments(
+            (1..MAX_PDFS_PER_MESSAGE).map { pdf("pdf$it") } + listOf(ref("img1"), ref("img2")),
+            customerId
+        )
+    }
+
+    @Test
+    fun `rejects a sixth PDF in one message with a clear message, before any lookup`() = runTest {
+        stubUploaded(sizeBytes = 1, contentType = "application/pdf")
+        rejects(
+            (1..MAX_PDFS_PER_MESSAGE + 1).map { pdf("pdf$it") },
+            "At most $MAX_PDFS_PER_MESSAGE PDFs are allowed per message"
+        )
+        coVerify(exactly = 0) { s3Provider.head(any()) }
+    }
+
+    @Test
+    fun `rejects an 11 MB PDF, measured on the stored object`() = runTest {
+        stubUploaded(sizeBytes = 11L * 1024 * 1024, contentType = "application/pdf")
+        rejects(listOf(pdf("big")), "is 11.0 MB; PDFs are limited to 10.0 MB")
+    }
+
+    @Test
+    fun `rejects a PDF whose stored object is not a PDF`() = runTest {
+        stubUploaded(sizeBytes = 100, contentType = "image/png")
+        rejects(listOf(pdf("fake")), "was not uploaded as a PDF")
     }
 
     @Test

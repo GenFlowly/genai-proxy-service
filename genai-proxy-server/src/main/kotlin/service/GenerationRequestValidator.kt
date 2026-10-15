@@ -3,9 +3,13 @@ package com.genflowly.service
 import com.genflowly.models.AIVendor
 import com.genflowly.models.AttachmentRef
 import com.genflowly.models.MAX_ATTACHMENTS_PER_MESSAGE
+import com.genflowly.models.MAX_PDFS_PER_MESSAGE
+import com.genflowly.models.MAX_PDF_SIZE_BYTES
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
+import com.genflowly.models.formatAttachmentSize
 import com.genflowly.models.isImageAttachmentMediaType
+import com.genflowly.models.isPdfAttachmentMediaType
 import com.genflowly.providers.S3Provider
 
 /**
@@ -18,11 +22,13 @@ class GenerationRequestValidator(
 ) {
 
     /**
-     * Rejects more than [MAX_ATTACHMENTS_PER_MESSAGE] attachments, attachments
-     * the caller doesn't own (key must sit under the authenticated customer's
-     * prefix), ones declared as a non-image type (they would otherwise be
-     * silently left out of the model's input) and ones that were never
-     * actually uploaded. There is no size or image-type check: the
+     * Rejects more than [MAX_ATTACHMENTS_PER_MESSAGE] attachments or
+     * [MAX_PDFS_PER_MESSAGE] PDFs, attachments the caller doesn't own (key
+     * must sit under the authenticated customer's prefix), ones declared as
+     * neither an image nor a PDF (they would otherwise be silently left out of
+     * the model's input) and ones that were never actually uploaded. Each PDF
+     * is checked against the stored object: at most [MAX_PDF_SIZE_BYTES] and
+     * stored as application/pdf. Images have no size or image-type check: the
      * retrieval-server converts/compresses each image to fit the target
      * vendor. Runs only for the current turn's attachments — history
      * attachments were validated when their message was created.
@@ -32,17 +38,32 @@ class GenerationRequestValidator(
         require(attachments.size <= MAX_ATTACHMENTS_PER_MESSAGE) {
             "At most $MAX_ATTACHMENTS_PER_MESSAGE attachments are allowed per message"
         }
+        val pdfCount = attachments.count { isPdfAttachmentMediaType(it.mediaType) }
+        require(pdfCount <= MAX_PDFS_PER_MESSAGE) {
+            "At most $MAX_PDFS_PER_MESSAGE PDFs are allowed per message (this message has $pdfCount)"
+        }
         val ownedPrefix = "customers/$customerId/"
         for (attachment in attachments) {
             require(attachment.s3Key.startsWith(ownedPrefix)) {
                 "Attachment ${attachment.attachmentId} does not belong to the authenticated customer"
             }
-            require(isImageAttachmentMediaType(attachment.mediaType)) {
-                "Attachment ${attachment.attachmentId} is not an image (mediaType " +
-                    "'${attachment.mediaType.take(100)}'); only images can be attached"
+            val isPdf = isPdfAttachmentMediaType(attachment.mediaType)
+            require(isPdf || isImageAttachmentMediaType(attachment.mediaType)) {
+                "Attachment ${attachment.attachmentId} is not an image or a PDF (mediaType " +
+                    "'${attachment.mediaType.take(100)}'); only images and PDFs can be attached"
             }
-            s3Provider.head(attachment.s3Key)
+            val stored = s3Provider.head(attachment.s3Key)
                 ?: throw IllegalArgumentException("Attachment ${attachment.attachmentId} has not been uploaded")
+            if (isPdf) {
+                // Ids only: the route logs this message, and a file name is user content
+                require(stored.sizeBytes <= MAX_PDF_SIZE_BYTES) {
+                    "PDF attachment ${attachment.attachmentId} is ${formatAttachmentSize(stored.sizeBytes)}; " +
+                        "PDFs are limited to ${formatAttachmentSize(MAX_PDF_SIZE_BYTES)}"
+                }
+                require(isPdfAttachmentMediaType(stored.contentType)) {
+                    "Attachment ${attachment.attachmentId} was not uploaded as a PDF"
+                }
+            }
         }
     }
 
