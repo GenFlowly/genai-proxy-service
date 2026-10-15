@@ -48,6 +48,12 @@ boto3
 # x86_64 — no build deps needed in the python:3.11-slim image.
 Pillow>=11.3
 pi-heif>=1.1
+# Camera RAW (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, PEF, X3F, ...): rawpy
+# bundles LibRaw (LGPL-2.1/CDDL; the wheels carry no GPL demosaic packs) in a
+# manylinux wheel. Used only by graph/raw_decode.py, in a child process. Pinned
+# to a patch range: its memory-per-pixel constants are measured on LibRaw 0.22,
+# so a LibRaw upgrade should be a deliberate change that re-measures them.
+rawpy~=0.27.1
 
 # Built-in graph tools (graph_tools/): markdown -> PDF rendering
 markdown
