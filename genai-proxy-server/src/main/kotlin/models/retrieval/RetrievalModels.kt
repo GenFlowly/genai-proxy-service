@@ -6,6 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -49,8 +50,8 @@ sealed class StreamChunk {
     /**
      * Raw JSON array of files built-in tools produced during the turn (e.g.
      * generated PDFs), already stored in the attachments bucket:
-     * [{"artifact_id","key","media_type","filename","size_bytes"}]. Emitted
-     * when the graph's TOOL_EXECUTOR node completes.
+     * [{"artifact_id","key","media_type","filename","size_bytes","source_key",
+     * "page_count"}]. Emitted when the graph's TOOL_EXECUTOR node completes.
      */
     data class GeneratedArtifacts(val json: String) : StreamChunk()
     /**
@@ -74,7 +75,8 @@ sealed class StreamChunk {
      * Generation failed mid-stream: the retrieval server's concise,
      * user-facing description of the vendor error (quota exceeded, key
      * rejected, ...). errorType is its machine class (rate_limit, auth,
-     * context_length, model_not_found, provider_error).
+     * context_length, model_not_found, provider_error; for a failed durable
+     * run also run_lost, resume_timeout, runaway or error).
      */
     data class Error(val message: String, val errorType: String? = null) : StreamChunk()
 
@@ -85,7 +87,17 @@ sealed class StreamChunk {
      * client's resume(). Only emitted on the durable /runs reattach stream.
      */
     data class AwaitingInput(val json: String) : StreamChunk()
+
+    /**
+     * Transient progress while a tool's arguments are being written, raw JSON
+     * of the event's object: {"tool": "generate_pdf", "chars": 1234}. Relayed
+     * to the client only: never captured into thinking steps, never persisted.
+     */
+    data class Progress(val json: String) : StreamChunk()
 }
+
+/** Shown when a run's terminal summary reports status "error" without any error text. */
+internal const val RUN_FAILED_FALLBACK_MESSAGE = "The response could not be completed."
 
 /**
  * Map one retrieval-server SSE event object (the parsed JSON of a `data: {...}`
@@ -95,11 +107,17 @@ sealed class StreamChunk {
  * Shared by the streaming `/retrieve` reader and the durable `/runs` reattach
  * stream: both transports emit the identical event vocabulary
  * (content / thinking_step / thinking / thinking_duration_ms / web_sources /
- * generated_artifacts / tool_calls / awaiting_input / error / usage). Key
- * precedence and the null/empty guards mirror the original inline reader exactly.
- * (`awaiting_input` is durable-runs-only — the /retrieve stream never emits it.)
+ * generated_artifacts / tool_calls / awaiting_input / progress / error /
+ * usage). (`awaiting_input` is durable-runs-only — the /retrieve stream never
+ * emits it.) Unknown keys, such as the `{"keepalive": true}` lines sent during
+ * silences, map to null.
+ *
+ * A failure is checked first, before every content key: a failed run's
+ * terminal summary ({"status": "error", "error": ..., "generated_artifacts":
+ * [...], ...}) carries other recognized keys too, and must still read as the
+ * error. Otherwise the first recognized key wins, in the order below.
  */
-fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
+fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = failureOf(jsonObj) ?: when {
     jsonObj.containsKey("content") -> {
         val content = jsonObj["content"]?.jsonPrimitive?.content
         if (!content.isNullOrEmpty()) StreamChunk.Content(content) else null
@@ -135,13 +153,7 @@ fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
         val payload = jsonObj["awaiting_input"]
         if (payload != null && payload !is JsonNull) StreamChunk.AwaitingInput(payload.toString()) else null
     }
-    jsonObj.containsKey("error") -> {
-        val message = jsonObj["error"]?.jsonPrimitive?.content
-        if (!message.isNullOrBlank()) StreamChunk.Error(
-            message = message,
-            errorType = jsonObj["error_type"]?.jsonPrimitive?.content
-        ) else null
-    }
+    jsonObj.containsKey("progress") -> (jsonObj["progress"] as? JsonObject)?.let { StreamChunk.Progress(it.toString()) }
     jsonObj.containsKey("usage") -> {
         val usageObj = jsonObj["usage"]!!.jsonObject
         StreamChunk.Usage(
@@ -155,6 +167,26 @@ fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
     }
     else -> null
 }
+
+/**
+ * The Error an event reports, or null: an `error` that is a non-blank string
+ * (a mid-stream vendor failure, a standalone run-failure row, or a failed
+ * run's terminal summary), or a terminal summary whose `status` is "error"
+ * even without error text. A null or blank `error`, as on a successful
+ * summary, is not a failure.
+ */
+private fun failureOf(jsonObj: JsonObject): StreamChunk.Error? {
+    val message = jsonObj.stringOrNull("error")?.takeIf { it.isNotBlank() }
+    if (message == null && jsonObj.stringOrNull("status") != "error") return null
+    return StreamChunk.Error(
+        message = message ?: RUN_FAILED_FALLBACK_MESSAGE,
+        errorType = jsonObj.stringOrNull("error_type")?.takeIf { it.isNotBlank() }
+    )
+}
+
+/** The value at [key] when it is a JSON string; null for a JSON null, a number, an object or an array. */
+private fun JsonObject.stringOrNull(key: String): String? =
+    (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
 data class RetrievalResult(
     val text: String?,

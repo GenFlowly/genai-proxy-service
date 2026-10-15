@@ -54,4 +54,22 @@ class StreamChunkNdjsonTest {
     fun `usage produces no client frame`() {
         assertNull(StreamChunk.Usage(1, 2, 3, 0, 0).toNdjsonFrame())
     }
+
+    @Test
+    fun `progress frame embeds the raw object`() {
+        assertEquals(
+            "{\"t\":\"pg\",\"v\":{\"tool\":\"generate_pdf\",\"chars\":1234}}\n",
+            StreamChunk.Progress("{\"tool\":\"generate_pdf\",\"chars\":1234}").toNdjsonFrame()
+        )
+    }
+
+    @Test
+    fun `a parsed progress event round-trips into a pg frame`() {
+        val chunk = parseRetrievalEvent(
+            kotlinx.serialization.json.Json.parseToJsonElement("""{"progress":{"tool":"fs_write","chars":7}}""")
+                as kotlinx.serialization.json.JsonObject
+        )
+
+        assertEquals("{\"t\":\"pg\",\"v\":{\"tool\":\"fs_write\",\"chars\":7}}\n", chunk?.toNdjsonFrame())
+    }
 }
