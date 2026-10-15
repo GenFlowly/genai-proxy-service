@@ -82,6 +82,24 @@ class PurgeClientsTest {
         assertFailsWith<IllegalStateException> { client.deleteRunData("run_3") }
     }
 
+    @Test
+    fun `a customer's run data is swept on the retrieval-server, and active runs mean retry`() = runTest {
+        val client = RunDataClient(logger, http { request ->
+            when (request.url.encodedPath) {
+                "/customers/CU1/run-data" -> json("""{"deleted":4,"active":0,"ledger_rows":2}""")
+                "/customers/CU2/run-data" -> json("""{"deleted":1,"active":2,"ledger_rows":0}""", HttpStatusCode.Conflict)
+                else -> json("{}", HttpStatusCode.InternalServerError)
+            }
+        }, "http://retrieval:5001")
+
+        assertEquals(4, client.deleteCustomerRunData("CU1"))
+        val busy = assertFailsWith<IllegalStateException> { client.deleteCustomerRunData("CU2") }
+        assertTrue(busy.message!!.contains("2 run(s)"))
+        assertFailsWith<IllegalStateException> { client.deleteCustomerRunData("CU3") }
+        assertFailsWith<IllegalArgumentException> { client.deleteCustomerRunData("../CU1") }
+        assertTrue(requests.all { it.method == HttpMethod.Delete })
+    }
+
     // ── Auth0 ────────────────────────────────────────────────────────────────
 
     private val configured = PurgeConfig("tenant.auth0.com", "m2m-id", "m2m-secret", "https://api.genflowly.com", "bucket")

@@ -17,11 +17,12 @@ the proxy's existing SSE→client mapping is unchanged.
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 import durable_runtime
 import run_events
@@ -249,6 +250,36 @@ async def delete_run_data(run_id: str):
         raise HTTPException(status_code=500, detail=f"could not delete run data: {e}")
     logger.info("Purged durable run %s", run_id)
     return Response(status_code=204)
+
+
+_PURGE_CUSTOMER_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
+
+
+@router.delete("/customers/{customer_id}/run-data")
+async def delete_customer_run_data(customer_id: str):
+    """Purge every durable run of a deleted customer (plan 3.9 step 7): the
+    agent_run and request_agent_run workflows whose input names the customer,
+    including runs no message row records, and the customer's tool-ledger
+    rows. 200 with counts when done. A run that may still execute is cancelled
+    and the answer is 409 with the counts: retry once it has ended.
+
+    Authorization as DELETE /runs/{id}/data: the proxy calls it only from its
+    customer-deletion job."""
+    _require_ready()
+    if not _PURGE_CUSTOMER_ID.match(customer_id) or customer_id.lower() in ("system", "public"):
+        raise HTTPException(status_code=400, detail="invalid customer id")
+    try:
+        result = await runs_module.delete_customer_run_data(customer_id)
+    except Exception as e:
+        logger.exception("Failed to purge the runs of customer %s", customer_id)
+        raise HTTPException(status_code=500, detail=f"could not delete run data: {type(e).__name__}")
+    logger.info(
+        "Purged the runs of customer %s: %d deleted, %d still active, %d ledger rows",
+        customer_id, result["deleted"], result["active"], result["ledger_rows"],
+    )
+    if result["active"]:
+        return JSONResponse(status_code=409, content=result)
+    return result
 
 
 @router.get("/runs")

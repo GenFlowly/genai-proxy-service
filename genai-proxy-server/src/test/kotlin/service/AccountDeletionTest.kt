@@ -229,6 +229,8 @@ class AccountDeletionTest {
 
         coVerify { runData.deleteRunData("run_s2") }
         coVerify { runData.deleteRunData("run_o1") }
+        // ...and every other run of the customer the retrieval-server finds by its input
+        coVerify(exactly = 1) { runData.deleteCustomerRunData(deleted) }
         coVerify { purge.deleteConversationShare(deleted, "conv-other") }
         coVerify { orphans.enqueueIfOrphaned("conv-other", otherOwner) }
         coVerify { purge.deleteEntityShares(setOf("INSD1", "GRPD1")) }

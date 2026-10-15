@@ -453,6 +453,62 @@ async def delete_run_data(run_id: str) -> None:
     await tool_ledger.delete_workflow(run_id)
 
 
+# The workflows whose input carries a customer's request (plan 3.9).
+CUSTOMER_RUN_WORKFLOWS = ("agent_run", "request_agent_run")
+_CUSTOMER_RUN_PAGE = 200
+_ACTIVE_RUN_STATES = ("PENDING", "ENQUEUED", "DELAYED")
+
+
+def _run_input_customer_id(status) -> str | None:
+    """customer_id of a run's input: both workflows take (run_id, run_input)."""
+    inputs = getattr(status, "input", None) or {}
+    args = list(inputs.get("args") or ())
+    kwargs = inputs.get("kwargs") or {}
+    run_input = kwargs.get("run_input", args[1] if len(args) > 1 else None)
+    return run_input.get("customer_id") if isinstance(run_input, dict) else None
+
+
+async def customer_runs(customer_id: str) -> list[tuple[str, str]]:
+    """(run_id, status) of every durable run whose input is the customer's,
+    including runs no message row records (those written before the proxy
+    stored run ids, and request agents the run sweep has not reached yet).
+    Collected in full before anything is deleted, so deleting cannot shift
+    the pages."""
+    from dbos import DBOS
+
+    found: list[tuple[str, str]] = []
+    offset = 0
+    while True:
+        page = await DBOS.list_workflows_async(
+            name=list(CUSTOMER_RUN_WORKFLOWS), limit=_CUSTOMER_RUN_PAGE, offset=offset,
+            load_input=True, load_output=False,
+        )
+        found += [(w.workflow_id, w.status) for w in page if _run_input_customer_id(w) == customer_id]
+        if len(page) < _CUSTOMER_RUN_PAGE:
+            return found
+        offset += _CUSTOMER_RUN_PAGE
+
+
+async def delete_customer_run_data(customer_id: str) -> dict:
+    """Purge every durable run of a deleted customer (plan 3.9 step 7) and
+    their tool-ledger rows. A run that may still execute is cancelled and
+    counted as `active` instead (it could write rows after the purge): the
+    caller retries once it has ended. Idempotent."""
+    import tool_ledger
+    from dbos import DBOS
+
+    deleted = active = 0
+    for run_id, status in await customer_runs(customer_id):
+        if status in _ACTIVE_RUN_STATES:
+            await DBOS.cancel_workflow_async(run_id)
+            active += 1
+            continue
+        await delete_run_data(run_id)
+        deleted += 1
+    ledger_rows = await tool_ledger.delete_customer(customer_id)
+    return {"deleted": deleted, "active": active, "ledger_rows": ledger_rows}
+
+
 async def delete_request_run(workflow_id: str, thread_id: str | None = None) -> None:
     """Delete a request agent's DBOS rows and checkpoints (plan 3.9): its input
     holds conversation text and nothing reads them once its caller has the

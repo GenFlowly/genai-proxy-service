@@ -123,3 +123,80 @@ class DurableRequestAgentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeleteCustomerRunDataTest(unittest.IsolatedAsyncioTestCase):
+    """DELETE /customers/{id}/run-data (plan 3.9 step 7): every run whose
+    input is the customer's, found by listing workflows, not message rows."""
+
+    @staticmethod
+    def _wf(run_id, status, customer, name="agent_run", as_kwargs=False):
+        run_input = {"customer_id": customer, "raw_data": {"query_data": "hi"}}
+        inputs = {"args": (run_id,), "kwargs": {"run_input": run_input}} if as_kwargs \
+            else {"args": (run_id, run_input), "kwargs": {}}
+        return SimpleNamespace(workflow_id=run_id, status=status, name=name, input=inputs)
+
+    async def _purge(self, workflows, page_size=200):
+        import tool_ledger
+        from dbos import DBOS
+
+        listed = []
+
+        async def list_workflows(**kwargs):
+            listed.append(kwargs)
+            offset, limit = kwargs["offset"], kwargs["limit"]
+            return workflows[offset:offset + limit]
+
+        purge = AsyncMock()
+        cancel = AsyncMock()
+        with patch.object(runs, "_CUSTOMER_RUN_PAGE", page_size), \
+                patch.object(DBOS, "list_workflows_async", list_workflows), \
+                patch.object(DBOS, "cancel_workflow_async", cancel), \
+                patch.object(runs, "delete_run_data", purge), \
+                patch.object(tool_ledger, "delete_customer", AsyncMock(return_value=3)) as ledger:
+            result = await runs.delete_customer_run_data("CU1")
+        return result, purge, cancel, ledger, listed
+
+    async def test_only_the_customers_finished_runs_are_purged_across_pages(self):
+        workflows = [
+            self._wf("run_a", "SUCCESS", "CU1"),
+            self._wf("run_b", "SUCCESS", "CU2"),
+            self._wf("ra-c", "ERROR", "CU1", name="request_agent_run"),
+            self._wf("run_d", "CANCELLED", "CU1", as_kwargs=True),
+            self._wf("run_e", "SUCCESS", "CU10"),
+        ]
+        result, purge, cancel, ledger, listed = await self._purge(workflows, page_size=2)
+
+        self.assertEqual(sorted(c.args[0] for c in purge.await_args_list), ["ra-c", "run_a", "run_d"])
+        cancel.assert_not_awaited()
+        ledger.assert_awaited_once_with("CU1")
+        self.assertEqual(result, {"deleted": 3, "active": 0, "ledger_rows": 3})
+        self.assertEqual([c["offset"] for c in listed], [0, 2, 4])
+        self.assertTrue(all(c["load_input"] and not c["load_output"] for c in listed))
+        self.assertEqual(listed[0]["name"], ["agent_run", "request_agent_run"])
+
+    async def test_a_run_that_may_still_execute_is_cancelled_not_purged(self):
+        result, purge, cancel, _, _ = await self._purge([
+            self._wf("run_a", "PENDING", "CU1"), self._wf("run_b", "SUCCESS", "CU1"),
+        ])
+        cancel.assert_awaited_once_with("run_a")
+        purge.assert_awaited_once_with("run_b")
+        self.assertEqual((result["deleted"], result["active"]), (1, 1))
+
+    async def test_the_route_answers_409_while_runs_are_active_and_refuses_bad_ids(self):
+        with patch.object(durable_runtime, "is_ready", lambda: True), \
+                patch.object(runs, "delete_customer_run_data",
+                             AsyncMock(return_value={"deleted": 1, "active": 1, "ledger_rows": 0})):
+            response = await runs_routes.delete_customer_run_data("CU1")
+        self.assertEqual(response.status_code, 409)
+
+        with patch.object(durable_runtime, "is_ready", lambda: True), \
+                patch.object(runs, "delete_customer_run_data",
+                             AsyncMock(return_value={"deleted": 2, "active": 0, "ledger_rows": 1})):
+            self.assertEqual((await runs_routes.delete_customer_run_data("CU1"))["deleted"], 2)
+
+        for bad in ("System", "../CU1", "CU 1", ""):
+            with patch.object(durable_runtime, "is_ready", lambda: True):
+                with self.assertRaises(HTTPException) as caught:
+                    await runs_routes.delete_customer_run_data(bad)
+            self.assertEqual(caught.exception.status_code, 400, bad)

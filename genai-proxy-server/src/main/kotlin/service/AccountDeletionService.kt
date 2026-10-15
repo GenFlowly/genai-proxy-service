@@ -288,6 +288,11 @@ class AccountDeletionService(
                 logger.warn("Skipping a malformed run id of customer {}", customerId)
             }
         }
+        // Every other run whose input is the customer's (rows written before
+        // runId was stored, request agents the run sweep has not removed yet)
+        // and the customer's tool-ledger rows, found on the retrieval-server
+        val swept = runDataClient.deleteCustomerRunData(customerId)
+        if (swept > 0) logger.info("Deleted {} more durable run(s) of customer {}", swept, customerId)
 
         // Shares of other people's conversations; a deleted owner's conversation left
         // without any share is purged (nobody can open it any more)

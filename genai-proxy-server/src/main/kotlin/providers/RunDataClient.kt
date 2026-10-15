@@ -55,6 +55,30 @@ class RunDataClient(
         throw IllegalStateException("Run data deletion failed with ${response.status.value}")
     }
 
+    /**
+     * DELETE /customers/{id}/run-data: every durable run whose input is the
+     * customer's, found on the retrieval-server by listing its workflows (so
+     * runs no message row records are included), plus the customer's tool
+     * ledger rows. Returns how many runs it deleted. Throws when a run may
+     * still execute (409: the server cancelled it, retry once it ended) or on
+     * any other failure, so the account job retries.
+     */
+    suspend fun deleteCustomerRunData(customerId: String): Int {
+        require(CUSTOMER_ID.matches(customerId)) { "Refusing a malformed customer id" }
+        val response = httpClient.delete("$retrievalServerUrl/customers/$customerId/run-data")
+        val body = response.bodyAsText()
+        val counts = runCatching { Json.parseToJsonElement(body).jsonObject }.getOrNull()
+        if (response.status == HttpStatusCode.Conflict) {
+            val active = counts?.get("active")?.jsonPrimitive?.content ?: "some"
+            throw IllegalStateException("$active run(s) of the customer were still active and are cancelled; retry")
+        }
+        if (!response.status.isSuccess()) {
+            logger.warn { "DELETE /customers/{id}/run-data returned ${response.status.value}" }
+            throw IllegalStateException("Customer run data deletion failed with ${response.status.value}")
+        }
+        return counts?.get("deleted")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+    }
+
     private fun requireRunId(runId: String) =
         require(RUN_ID.matches(runId)) { "Refusing a malformed run id" }
 
@@ -64,5 +88,6 @@ class RunDataClient(
             "SUCCESS", "ERROR", "CANCELLED", "RETRIES_EXCEEDED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"
         )
         private val RUN_ID = Regex("^[A-Za-z0-9_-]{1,128}$")
+        private val CUSTOMER_ID = Regex("^[A-Za-z0-9-]{1,64}$")
     }
 }
