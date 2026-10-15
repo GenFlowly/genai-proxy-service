@@ -294,6 +294,9 @@
             "attachmentLimitReached": "You can attach at most {{max}} images per message",
             "attachmentUploadFailed": "Image upload failed. Please try again",
             "attachmentsUploading": "Images are still uploading",
+            "attachmentFormatUnsupported": "{{name}} isn't a supported image format. Supported formats: {{formats}}",
+            "attachmentFormatsUnsupported": "{{count}} files aren't in a supported image format ({{names}}). Supported formats: {{formats}}",
+            "pastedFile": "The pasted file",
             "removeAttachment": "Remove image",
             "addImageAttachment": "Add image attachment"
         },
