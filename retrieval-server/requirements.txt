@@ -85,3 +85,7 @@ markdown-it-py==4.2.0
 mdit-py-plugins==0.6.1
 mdurl==0.1.2
 linkify-it-py==2.2.0
+# graph_tools/tools/pdf_typst.py renders that tree with Typst (bundled fonts from
+# scripts/fetch_fonts.py, vendored mitex in graph_tools/typst_packages). The wheel
+# has no dependencies; images are validated with the Pillow pinned above.
+typst==0.15.0

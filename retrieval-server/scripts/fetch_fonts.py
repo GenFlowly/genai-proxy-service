@@ -24,6 +24,12 @@ those sfnt tables (a plain table-directory rewrite, no glyph changes) and the
 result must match `output_sha256`. Noto Color Emoji uses this to drop its 20 MB
 'SVG ' table: Typst 0.15 draws the COLRv1 table, so the SVG copy is dead weight
 (and slow if Typst ever fell back to it).
+
+After fetching, the script (re)writes graph_tools/fonts/coverage.json: the
+merged code point ranges that the bundled fonts map to a glyph (read from each
+font's cmap table). The server reads it through pdf_typst.fonts_cover() to
+decide whether every script in a document has a bundled font, without loading
+any font or importing typst. The file is committed; `--check` verifies it.
 """
 from __future__ import annotations
 
@@ -132,6 +138,144 @@ def drop_sfnt_tables(data: bytes, drop: set[str]) -> bytes:
         adjustment = (0xB1B0AFBA - _calc_checksum(bytes(font))) & 0xFFFFFFFF
         font[head_offset + 8:head_offset + 12] = struct.pack(">I", adjustment)
     return bytes(font)
+
+
+# --- coverage.json (keep in step with graph_tools/tools/pdf_typst._cmap_ranges;
+# tests/test_pdf_typst.py checks that both readers agree) -----------------------
+
+COVERAGE_FILENAME = "coverage.json"
+
+
+def cmap_ranges(path: str) -> list[tuple[int, int]]:
+    """Code point ranges a font maps to a real glyph (reads only the cmap table)."""
+    with open(path, "rb") as f:
+        header = f.read(12)
+        if len(header) < 12:
+            return []
+        num_tables = struct.unpack(">H", header[4:6])[0]
+        directory = f.read(16 * num_tables)
+        cmap = None
+        for i in range(num_tables):
+            tag, _cs, off, length = struct.unpack(">4sIII", directory[16 * i:16 * i + 16])
+            if tag == b"cmap":
+                cmap = (off, length)
+                break
+        if cmap is None:
+            return []
+        f.seek(cmap[0])
+        data = f.read(cmap[1])
+    num_sub = struct.unpack(">H", data[2:4])[0]
+    subtables: dict[tuple[int, int], int] = {}
+    for i in range(num_sub):
+        pid, eid, off = struct.unpack(">HHI", data[4 + 8 * i:12 + 8 * i])
+        subtables.setdefault((pid, eid), off)
+
+    def fmt(off: int) -> int:
+        return struct.unpack(">H", data[off:off + 2])[0]
+
+    for key in ((3, 10), (0, 6), (0, 4)):
+        off = subtables.get(key)
+        if off is not None and fmt(off) == 12:
+            return _format12(data, off)
+    for key in ((3, 1), (0, 3), (0, 2), (0, 1), (0, 0)):
+        off = subtables.get(key)
+        if off is not None:
+            if fmt(off) == 4:
+                return _format4(data, off)
+            if fmt(off) == 12:
+                return _format12(data, off)
+    return []
+
+
+def _format12(data: bytes, off: int) -> list[tuple[int, int]]:
+    n_groups = struct.unpack(">I", data[off + 12:off + 16])[0]
+    out = []
+    for start, end, glyph in struct.iter_unpack(">III", data[off + 16:off + 16 + 12 * n_groups]):
+        if glyph == 0:
+            start += 1
+        if start <= end:
+            out.append((start, end))
+    return out
+
+
+def _format4(data: bytes, off: int) -> list[tuple[int, int]]:
+    seg_x2 = struct.unpack(">H", data[off + 6:off + 8])[0]
+    seg = seg_x2 // 2
+    ends = struct.unpack(f">{seg}H", data[off + 14:off + 14 + seg_x2])
+    starts = struct.unpack(f">{seg}H", data[off + 16 + seg_x2:off + 16 + 2 * seg_x2])
+    deltas = struct.unpack(f">{seg}H", data[off + 16 + 2 * seg_x2:off + 16 + 3 * seg_x2])
+    ro_base = off + 16 + 3 * seg_x2
+    offsets = struct.unpack(f">{seg}H", data[ro_base:ro_base + seg_x2])
+    out: list[tuple[int, int]] = []
+    for i in range(seg):
+        start, end = starts[i], ends[i]
+        if start == 0xFFFF or start > end:
+            continue
+        if offsets[i] == 0:
+            notdef = (-deltas[i]) & 0xFFFF
+            if start <= notdef <= end:
+                if start < notdef:
+                    out.append((start, notdef - 1))
+                if notdef < end:
+                    out.append((notdef + 1, end))
+            else:
+                out.append((start, end))
+        else:
+            for cp in range(start, end + 1):
+                addr = ro_base + 2 * i + offsets[i] + 2 * (cp - start)
+                glyph = struct.unpack(">H", data[addr:addr + 2])[0] if addr + 2 <= len(data) else 0
+                if glyph and (glyph + deltas[i]) & 0xFFFF:
+                    out.append((cp, cp))
+    return out
+
+
+def _merge(ranges) -> list[list[int]]:
+    out: list[list[int]] = []
+    for lo, hi in sorted(ranges):
+        if out and lo <= out[-1][1] + 1:
+            out[-1][1] = max(out[-1][1], hi)
+        else:
+            out.append([lo, hi])
+    return out
+
+
+def coverage_table(lock: dict, dest: str) -> dict:
+    """The coverage.json content for the pinned fonts in `dest`."""
+    fonts = {}
+    ranges: list[tuple[int, int]] = []
+    for pkg in lock["packages"]:
+        for entry in pkg["files"]:
+            name = _dest_name(entry)
+            fonts[name] = _expected_hash(entry)
+            ranges.extend(cmap_ranges(os.path.join(dest, name)))
+    return {
+        "schema": 1,
+        "generated_by": "scripts/fetch_fonts.py",
+        "fonts": dict(sorted(fonts.items())),
+        "ranges": _merge(ranges),
+    }
+
+
+def _coverage_json(table: dict) -> str:
+    # One range per line keeps diffs readable when a font is bumped.
+    head = {k: v for k, v in table.items() if k != "ranges"}
+    text = json.dumps(head, indent=2)[:-2]
+    lines = ",\n".join(f"    [{lo}, {hi}]" for lo, hi in table["ranges"])
+    return f'{text},\n  "ranges": [\n{lines}\n  ]\n}}\n'
+
+
+def write_coverage(lock: dict, dest: str) -> bool:
+    """(Re)write coverage.json when it differs. Returns True if written."""
+    text = _coverage_json(coverage_table(lock, dest))
+    path = os.path.join(dest, COVERAGE_FILENAME)
+    try:
+        with open(path, encoding="utf-8") as f:
+            if f.read() == text:
+                return False
+    except OSError:
+        pass
+    _write_atomic(path, text.encode("utf-8"))
+    return True
 
 
 def _dest_name(entry: dict) -> str:
@@ -249,10 +393,22 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.check:
             bad = check(lock, args.dest)
-            print(f"fetch_fonts: {'OK' if not bad else f'{len(bad)} font(s) missing or modified'}")
+            if not bad:
+                expected = _coverage_json(coverage_table(lock, args.dest))
+                try:
+                    with open(os.path.join(args.dest, COVERAGE_FILENAME), encoding="utf-8") as f:
+                        stale = f.read() != expected
+                except OSError:
+                    stale = True
+                if stale:
+                    bad.append(COVERAGE_FILENAME)
+                    print(f"stale or missing: {COVERAGE_FILENAME} (run scripts/fetch_fonts.py)")
+            print(f"fetch_fonts: {'OK' if not bad else f'{len(bad)} file(s) missing or modified'}")
             return 1 if bad else 0
         written = fetch(lock, args.dest, args.cache_dir)
         bad = check(lock, args.dest)
+        if not bad and write_coverage(lock, args.dest):
+            print(f"fetch_fonts: wrote {COVERAGE_FILENAME}")
     except FetchError as exc:
         print(f"fetch_fonts: {exc}", file=sys.stderr)
         return 1

@@ -7,7 +7,15 @@ output does not depend on what the host or image happens to have installed.
 The font binaries are **not committed** (see `.gitignore`). They are fetched,
 verified and extracted by `scripts/fetch_fonts.py` from the npm tarballs pinned
 in `fonts.lock.json`. Committed here: the lock file, `OFL.txt` (the SIL Open
-Font License 1.1 with every family's copyright notice) and this README.
+Font License 1.1 with every family's copyright notice), `coverage.json` and
+this README.
+
+`coverage.json` is the merged list of code point ranges the bundled fonts map
+to a glyph (read from each font's `cmap` table), written by `fetch_fonts.py`
+and checked by `fetch_fonts.py --check`. `pdf_typst.fonts_cover(chars)` and
+`pdf_typst.uncovered_characters(text)` read it, so the server can decide
+whether every script in a document has a bundled font without importing typst
+or loading a font file. Regenerate it whenever the lock changes.
 
 ## Fetch
 
