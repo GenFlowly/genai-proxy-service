@@ -75,3 +75,13 @@ websockets
 # and it pins mcp<2.0.0 while the SDK is on 2.x (where the streamable-http
 # entry point was renamed).
 mcp>=2.0.0
+
+# --- PDF renderer (Typst; plan 2.2 / 5.1): exact pins, keep this block together ---
+# graph_tools/tools/pdf_markdown.py builds the CommonMark/GFM token tree:
+# markdown-it-py's own table/strikethrough rules, mdit-py-plugins (tasklists,
+# texmath, footnote, deflist) and linkify-it-py for bare URLs. linkify-it-py
+# 2.2.0 no longer depends on uc-micro-py.
+markdown-it-py==4.2.0
+mdit-py-plugins==0.6.1
+mdurl==0.1.2
+linkify-it-py==2.2.0
