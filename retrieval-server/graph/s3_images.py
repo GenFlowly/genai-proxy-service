@@ -55,11 +55,9 @@ class AttachmentFetchError(ImageTemporarilyUnavailableError):
 
 
 class _ByteBoundedLRU:
-    """LRU keyed by (s3_key, ImageLimits) — or (s3_key, None) for failures
-    that depend only on the file — holding (base64, media_type) results or
-    remembered failures, bounded by total base64 size rather than entry
-    count. S3 keys are immutable (fresh UUID per upload), so results never go
-    stale; failures expire (see _FAILURE_TTL_S)."""
+    """LRU keyed by (s3_key, ImageLimits) holding (base64, media_type)
+    results, bounded by total base64 size rather than entry count. S3 keys
+    are immutable (fresh UUID per upload), so results never go stale."""
 
     def __init__(self, max_bytes: int):
         self._max_bytes = max_bytes
@@ -103,6 +101,41 @@ _FAILURE_TTL_S = 600
 # are remembered per S3 key, whatever the request's limits, for longer: a
 # camera RAW may be a 400 MiB download.
 _FILE_FAILURE_TTL_S = 6 * 3600
+
+
+class _FailureMemory:
+    """Remembered failures — (exception type, message, expiry) by
+    (s3_key, ImageLimits), or by (s3_key, None) for file-only ones — kept
+    apart from the result LRU, where image-heavy conversations would push
+    these few hundred bytes out. Bounded by count, oldest dropped first."""
+
+    def __init__(self, max_entries: int = 4096):
+        self._max_entries = max_entries
+        self._entries: OrderedDict = OrderedDict()
+        self._lock = threading.Lock()
+
+    def remember(self, key, e: ImageNormalizationError, ttl_s: float) -> None:
+        with self._lock:
+            self._entries.pop(key, None)
+            self._entries[key] = (type(e), str(e), time.monotonic() + ttl_s)
+            while len(self._entries) > self._max_entries:
+                self._entries.popitem(last=False)
+
+    def raise_if_remembered(self, key) -> None:
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is not None and time.monotonic() >= entry[2]:
+                del self._entries[key]  # retry: the failure may have been transient
+                entry = None
+        if entry is not None:
+            raise entry[0](entry[1])  # a fresh instance: re-raising one would grow its traceback
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
+
+_FAILURES = _FailureMemory()
 
 
 class _DiskCache:
@@ -203,17 +236,12 @@ def _client():
     return _s3_client
 
 
-def _from_cache(key):
-    entry = _CACHE.get(key)
-    if entry is None:
-        return None
-    value = entry[0]
-    if isinstance(value, tuple) and len(value) == 3 and isinstance(value[0], type):
-        error_type, message, expires = value
-        if time.monotonic() >= expires:
-            return None  # retry: the failure may have been transient
-        raise error_type(message)  # a fresh instance: re-raising one would grow its traceback
-    return value
+def _from_cache(s3_key: str, limits: ImageLimits):
+    """A cached result, None on a miss; raises a remembered failure."""
+    _FAILURES.raise_if_remembered((s3_key, None))
+    _FAILURES.raise_if_remembered((s3_key, limits))
+    entry = _CACHE.get((s3_key, limits))
+    return None if entry is None else entry[0]
 
 
 async def image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
@@ -223,7 +251,7 @@ async def image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
     Raises ImageNormalizationError (user-readable) when the file can't be used,
     RuntimeError on missing bucket configuration.
     """
-    cached = _from_cache((s3_key, limits)) or _from_cache((s3_key, None))
+    cached = _from_cache(s3_key, limits)
     if cached is not None:
         return cached
     loop = asyncio.get_running_loop()
@@ -235,7 +263,7 @@ def fetch_image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
     type is that of the bytes actually returned (sniffed/converted), never the
     uploader's declaration."""
     key = (s3_key, limits)
-    cached = _from_cache(key) or _from_cache((s3_key, None))
+    cached = _from_cache(s3_key, limits)
     if cached is not None:
         return cached
     on_disk = _DISK_CACHE.get(key)
@@ -252,9 +280,9 @@ def fetch_image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
         # object and the limits: remember it for a while instead of
         # re-downloading it every turn.
         if getattr(e, "file_only", False):
-            _CACHE.put((s3_key, None), (type(e), str(e), time.monotonic() + _FILE_FAILURE_TTL_S), cost=len(str(e)) + 256)
+            _FAILURES.remember((s3_key, None), e, _FILE_FAILURE_TTL_S)
         else:
-            _CACHE.put(key, (type(e), str(e), time.monotonic() + _FAILURE_TTL_S), cost=len(str(e)) + 256)
+            _FAILURES.remember(key, e, _FAILURE_TTL_S)
         raise
     _DISK_CACHE.put(key, data, media_type)
     result = base64.b64encode(data).decode("ascii"), media_type
@@ -299,7 +327,7 @@ def _fetch_normalized(s3_key: str, limits: ImageLimits) -> tuple[bytes, str]:
 # Enough of an object's start to recognize a camera RAW: magic numbers and,
 # in most TIFF-based RAWs, the first IFD (right after the header).
 _RAW_HEAD_BYTES = 256 * 1024
-# A first IFD of up to 1024 entries, read separately when it lies past the head.
+# A first IFD of up to 1024 entries, read separately when it doesn't fit in the head.
 _IFD_BYTES = 2 + 12 * 1024 + 4
 
 
@@ -342,11 +370,12 @@ def _normalize_large_camera_raw(bucket: str, s3_key: str, obj: dict, size: int,
 
 
 def _raw_kind_of_late_ifd0(bucket: str, s3_key: str, head: bytes, size: int) -> str | None:
-    """camera_raw_kind() for a TIFF whose first IFD lies past `head` (writers
-    such as dnglab put it at the end), from a ranged read of just that IFD."""
+    """camera_raw_kind() for a TIFF whose first IFD doesn't fit in `head`
+    (writers such as dnglab put it at the end), from a ranged read of just
+    that IFD."""
     offset = image_normalize.tiff_ifd0_offset(head)
-    if offset is None or not len(head) <= offset < size:
-        return None
+    if offset is None or offset >= size or offset + _IFD_BYTES <= len(head):
+        return None  # not a TIFF, or its first IFD was already judged from the head
     ifd = _client().get_object(Bucket=bucket, Key=s3_key, Range=f"bytes={offset}-{offset + _IFD_BYTES - 1}")
     try:
         return image_normalize.camera_raw_kind_with_ifd0(head, ifd["Body"].read())

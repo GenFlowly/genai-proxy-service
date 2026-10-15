@@ -1282,6 +1282,42 @@ class RawRenderTests(unittest.TestCase):
         bitmap = MagicMock(format=rawpy.ThumbFormat.BITMAP, data=np.zeros((1126, 750, 3), dtype=np.uint8))
         self.assertEqual(self.rd._preview(bitmap, 5, 0, sensor=(4516, 3012)).size, (750, 1126))
 
+    def test_dng_previews_follow_the_flip_whatever_their_shape(self):
+        # A DNG's previews stay in the sensor's orientation and may be cropped
+        # by an editor: a vertical shot cropped to landscape has a portrait
+        # preview that still needs the turn.
+        for size in ((1600, 2000), (1334, 2000)):
+            with self.subTest(preview=size):
+                raw = self._raw(self._jpeg_thumb(*size), flip=6, sensor=(3000, 2000))
+                image, source, _ = self._render(raw, 10**9, dng=True)
+                self.assertEqual((source, image.size), ("preview", (size[1], size[0])))
+
+    def test_bitmap_previews_of_uncertain_orientation_lose_to_the_sensor_data(self):
+        # LibRaw turns some bitmap previews itself and rawpy can't say which:
+        # a half turn, a near-square shape or a (possibly cropped) DNG preview
+        # leaves it open, and the sensor data is oriented by LibRaw.
+        import numpy as np
+        import rawpy
+
+        demosaiced = np.zeros((1500, 2000, 3), dtype=np.uint8)
+        for name, shape, flip, dng in (
+            ("half turn", (1500, 2000, 3), 3, False),
+            ("near-square", (1600, 1600, 3), 6, False),
+            ("DNG", (2000, 1500, 3), 6, True),
+        ):
+            with self.subTest(name=name):
+                bitmap = MagicMock(format=rawpy.ThumbFormat.BITMAP, data=np.zeros(shape, dtype=np.uint8))
+                raw = self._raw(bitmap, flip=flip, demosaic=demosaiced)
+                self.assertEqual(self._render(raw, 10**9, dng=dng)[1], "demosaic")
+                # Still better than nothing when the sensor data can't be rendered.
+                raw = self._raw(bitmap, flip=flip, sensor=(12000, 9000))
+                self.assertEqual(self._render(raw, dng=dng)[1], "preview")
+        # Unturned, or a quarter turn whose shape tells: the preview is used.
+        for flip, shape in ((0, (1500, 2000, 3)), (6, (1500, 2000, 3)), (6, (2000, 1500, 3))):
+            bitmap = MagicMock(format=rawpy.ThumbFormat.BITMAP, data=np.zeros(shape, dtype=np.uint8))
+            image, source, _ = self._render(self._raw(bitmap, flip=flip, sensor=(4000, 3000)), 10**9)
+            self.assertEqual((source, max(image.size) == 2000), ("preview", True), (flip, shape))
+
     def test_large_preview_wins_small_preview_loses_to_demosaic(self):
         import numpy as np
 
@@ -1397,7 +1433,9 @@ class RawRenderTests(unittest.TestCase):
 class S3FetchTests(unittest.TestCase):
     def setUp(self):
         s3_images._CACHE.clear()
+        s3_images._FAILURES.clear()
         self.addCleanup(s3_images._CACHE.clear)
+        self.addCleanup(s3_images._FAILURES.clear)
         disk = patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache("/nonexistent", 0))
         disk.start()
         self.addCleanup(disk.stop)
@@ -1480,7 +1518,7 @@ class S3FetchTests(unittest.TestCase):
         limits = limits_for_request(None, 1)
         for size in (len(dng), 150 * _MiB):  # held in memory, or streamed
             with self.subTest(size=size):
-                s3_images._CACHE.clear()
+                s3_images._FAILURES.clear()
                 client, body = self._client(dng)
                 body.read.side_effect = lambda n=None: dng[:n]
                 client.get_object.return_value["ContentLength"] = size
@@ -1504,7 +1542,7 @@ class S3FetchTests(unittest.TestCase):
             ("connection reset mid-stream", [dng[:1000], ResponseStreamingError(error="reset")]),
         ):
             with self.subTest(name=name):
-                s3_images._CACHE.clear()
+                s3_images._FAILURES.clear()
                 client, body = self._client(dng)
                 body.read.side_effect = side_effect
                 client.get_object.return_value["ContentLength"] = 150 * _MiB
@@ -1516,24 +1554,28 @@ class S3FetchTests(unittest.TestCase):
                 body.close.assert_called_once()
 
     def test_large_raw_whose_first_ifd_is_at_the_end_is_recognized_from_a_ranged_read(self):
-        # dnglab writes the first IFD after the image data.
+        # dnglab writes the first IFD after the image data; it may also start
+        # inside the peek and end past it.
         dng_ifd = _ifd_entries([(50706, 1, b"\x01\x04\x00\x00"), (262, 3, 32803)])
-        offset = s3_images._RAW_HEAD_BYTES + 4096
-        data = b"II*\x00" + struct.pack("<I", offset) + os.urandom(offset - 8) + dng_ifd
-        client, body = self._client(data)
-        body.read.side_effect = io.BytesIO(data).read
-        ifd_body = MagicMock()
-        ifd_body.read.return_value = dng_ifd
-        whole = client.get_object.return_value
-        whole["ContentLength"] = 150 * _MiB
-        client.get_object.side_effect = lambda **kw: {"Body": ifd_body} if "Range" in kw else whole
-        with patch.object(s3_images, "_client", return_value=client):
-            with self.assertRaises(UnsupportedImageError) as ctx:  # recognized; LibRaw then can't read the junk
-                s3_images.fetch_image_for_llm("cust/late-ifd.dng", limits_for_request(None, 1))
-        self.assertIn("camera RAW (DNG)", str(ctx.exception))
-        ranged = [c for c in client.get_object.call_args_list if "Range" in c.kwargs]
-        self.assertEqual(ranged[0].kwargs["Range"], f"bytes={offset}-{offset + s3_images._IFD_BYTES - 1}")
-        ifd_body.close.assert_called_once()
+        for name, offset in (("past the peek", s3_images._RAW_HEAD_BYTES + 4096),
+                             ("across the end of the peek", s3_images._RAW_HEAD_BYTES - 10)):
+            with self.subTest(name=name):
+                s3_images._FAILURES.clear()
+                data = b"II*\x00" + struct.pack("<I", offset) + os.urandom(offset - 8) + dng_ifd
+                client, body = self._client(data)
+                body.read.side_effect = io.BytesIO(data).read
+                ifd_body = MagicMock()
+                ifd_body.read.return_value = dng_ifd
+                whole = client.get_object.return_value
+                whole["ContentLength"] = 150 * _MiB
+                client.get_object.side_effect = lambda whole=whole, ifd_body=ifd_body, **kw: {"Body": ifd_body} if "Range" in kw else whole
+                with patch.object(s3_images, "_client", return_value=client):
+                    with self.assertRaises(UnsupportedImageError) as ctx:  # recognized; LibRaw then can't read the junk
+                        s3_images.fetch_image_for_llm("cust/late-ifd.dng", limits_for_request(None, 1))
+                self.assertIn("camera RAW (DNG)", str(ctx.exception))
+                ranged = [c for c in client.get_object.call_args_list if "Range" in c.kwargs]
+                self.assertEqual(ranged[0].kwargs["Range"], f"bytes={offset}-{offset + s3_images._IFD_BYTES - 1}")
+                ifd_body.close.assert_called_once()
 
     def test_the_raw_decoders_verdict_on_a_file_is_remembered_for_every_limit(self):
         # A camera RAW may be a 400 MiB download: don't fetch it again for
@@ -1543,6 +1585,7 @@ class S3FetchTests(unittest.TestCase):
             for limits in (limits_for_request("anthropic", 1), limits_for_request("anthropic", 30), limits_for_request("xai", 1)):
                 with self.assertRaises(UnsupportedImageError):
                     s3_images.fetch_image_for_llm("cust/bad.raf", limits)
+                s3_images._CACHE.clear()  # results pushed out by other conversations don't take it along
         client.get_object.assert_called_once()
 
     def test_disk_cache_directory_is_private(self):
@@ -1646,7 +1689,9 @@ class S3FetchTests(unittest.TestCase):
 class ImageWorkerTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         s3_images._CACHE.clear()
+        s3_images._FAILURES.clear()
         self.addCleanup(s3_images._CACHE.clear)
+        self.addCleanup(s3_images._FAILURES.clear)
         disk = patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache("/nonexistent", 0))
         disk.start()
         self.addCleanup(disk.stop)

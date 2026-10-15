@@ -827,6 +827,7 @@ def _decode_camera_raw(path: str, declared: str, raw_kind: str,
         "min_edge": _FLOOR_EDGE_PX,
         "max_edge": min(max_edge, _RAW_OUTPUT_EDGE),
         "prefer": "demosaic" if RAW_RENDER == "demosaic" else "preview",
+        "dng": raw_kind == "camera RAW (DNG)",
     }
     env = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),

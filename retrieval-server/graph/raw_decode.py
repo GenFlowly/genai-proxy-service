@@ -240,24 +240,30 @@ def _rgb(array):
     return im if im.mode == "RGB" else im.convert("RGB")
 
 
-def _pre_rotated(size, flip: int, sensor) -> bool:
-    """Whether a preview was already turned upright: under a quarter-turn
-    flip, its long side doesn't match the unrotated sensor's (camera
-    software such as Nikon Transfer rotates the preview's pixels and records
-    the rotation only for the sensor data). Near-square shapes say nothing."""
+def _shape_decides(size, flip: int, sensor) -> bool:
+    """Whether a preview's shape tells if it was turned: a quarter-turn flip,
+    and neither the preview nor the sensor near-square."""
     if flip not in (5, 6) or not sensor:
         return False
     (pw, ph), (sw, sh) = size, sensor
-    if min(pw, ph, sw, sh) <= 0:
-        return False
-    return (pw > ph) != (sw > sh) and max(pw, ph) >= 1.1 * min(pw, ph) and max(sw, sh) >= 1.1 * min(sw, sh)
+    return min(pw, ph, sw, sh) > 0 and max(pw, ph) >= 1.1 * min(pw, ph) and max(sw, sh) >= 1.1 * min(sw, sh)
 
 
-def _preview(thumb, flip: int, min_edge: int, draft_edge: int = 0, sensor=None):
+def _pre_rotated(size, flip: int, sensor) -> bool:
+    """Whether a preview was already turned upright: under a quarter-turn
+    flip, its long side isn't the unrotated sensor's."""
+    (pw, ph), (sw, sh) = size, sensor or (0, 0)
+    return _shape_decides(size, flip, sensor) and (pw > ph) != (sw > sh)
+
+
+def _preview(thumb, flip: int, min_edge: int, draft_edge: int = 0, sensor=None, *,
+             preferred: bool = False, dng: bool = False):
     """The embedded preview as an upright PIL image, or None when there is
     none, it is smaller than min_edge or it can't be decoded. Big JPEG
     previews decode at 1/2-1/8 scale (DCT-domain, nearly free) while keeping
-    a long edge of at least draft_edge. `sensor`: the unrotated sensor size."""
+    a long edge of at least draft_edge. `sensor`: the unrotated sensor size.
+    `preferred`: chosen over the sensor data, so refused when its
+    orientation is a guess. `dng`: from a DNG."""
     import rawpy
     from PIL import Image, ImageOps
 
@@ -275,14 +281,28 @@ def _preview(thumb, flip: int, min_edge: int, draft_edge: int = 0, sensor=None):
             im.load()
             exif_orientation = im.getexif().get(0x0112)
             im = im.convert("RGB")
+            # LibRaw never turns a JPEG preview's pixels; camera software
+            # sometimes does (Nikon Transfer), recording the turn only for the
+            # sensor data. A DNG's previews stay in the sensor's orientation by
+            # spec, possibly cropped by an editor, so their shape says nothing.
+            if not dng and _pre_rotated(im.size, flip, sensor):
+                return im  # already upright: neither LibRaw's flip nor the EXIF it derives from it apply
         elif thumb.format == rawpy.ThumbFormat.BITMAP:
             if max(thumb.data.shape[:2]) < min_edge:
                 return None
             im = _rgb(thumb.data)
+            # LibRaw turns some bitmap previews itself (those its Kodak loader
+            # reads: more than 8 bits per sample, or Kodak's compression) and
+            # not others, and rawpy can't say which. Only a quarter turn's
+            # shape tells — not a half turn, a near-square shape, or a DNG
+            # preview that may be cropped. Where it can't tell, render the
+            # sensor data instead, which LibRaw orients itself.
+            if preferred and flip != 0 and (dng or not _shape_decides(im.size, flip, sensor)):
+                return None
+            if _pre_rotated(im.size, flip, sensor):
+                return im
         else:
             return None
-        if _pre_rotated(im.size, flip, sensor):
-            return im  # already upright: neither LibRaw's flip nor the EXIF it derives from it apply
         if exif_orientation and exif_orientation != 1:
             # The preview's own orientation (Canon writes one; LibRaw adds one
             # derived from its flip to JPEG previews without EXIF). Applying
@@ -354,10 +374,11 @@ def render_opened(raw, params: dict):
     sizes = raw.sizes  # a snapshot: a failed unpack resets the handle
     sensor = [sizes.raw_width, sizes.raw_height]
     unrotated = (sizes.width, sizes.height)
+    dng = bool(params.get("dng"))
     thumb = _thumbnail(raw)
     image, source, failure = None, "", None
     if prefer_preview:
-        image, source = _preview(thumb, sizes.flip, min_edge, draft_edge, unrotated), "preview"
+        image, source = _preview(thumb, sizes.flip, min_edge, draft_edge, unrotated, preferred=True, dng=dng), "preview"
     if image is None:
         try:
             # None: over the memory budget
@@ -367,7 +388,7 @@ def render_opened(raw, params: dict):
             # data, or more memory than the budget allows: try any preview
             image, failure = None, e
     if image is None:
-        image, source = _preview(thumb, sizes.flip, _MIN_FALLBACK_EDGE, draft_edge, unrotated), "preview"
+        image, source = _preview(thumb, sizes.flip, _MIN_FALLBACK_EDGE, draft_edge, unrotated, dng=dng), "preview"
     if image is None:
         if failure is None or _out_of_memory(failure):
             raise _Fail("too_large", f"{sizes.raw_width}x{sizes.raw_height} sensor without a usable preview")
