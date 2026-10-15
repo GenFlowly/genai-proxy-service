@@ -90,6 +90,12 @@ export const AGENT_LOOP_TEMPLATE: PublishDefaultGraphRequest = {
             // All harness tools are explicit-only in the retrieval server
             // (never part of the implicit all-built-ins default), so each MUST
             // be named here or the agent silently loses that capability.
+            // Keep fs_write and fs_read next to generate_pdf: long documents
+            // are written to scratch files (fs_write append) and rendered
+            // with generate_pdf's source_paths, which the tool only offers
+            // when fs_write is enabled (plan 3.6). revise_pdf and
+            // read_pdf_source come with generate_pdf, and read_attachment with
+            // uploaded documents, so they need no entry here.
             // subagents: [] means only the built-in 'general' profile; add
             // {name, description, prompt|instruction_id, tools} entries to
             // define specialists.
