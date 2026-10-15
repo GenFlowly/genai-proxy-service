@@ -11,9 +11,10 @@ import java.util.concurrent.ConcurrentHashMap
  * turns and waits until each has stored what it stores before it builds the
  * set of objects to keep: a turn writes its assistant message only when its
  * stream ends. Production runs one proxy machine, so tracking turns in memory
- * sees every one of them. Bound as a Koin singleton.
+ * sees every one of them. Bound as a Koin singleton, and as the
+ * [InFlightTurns] the account deletion uses.
  */
-class ActiveTurns {
+class ActiveTurns : InFlightTurns {
 
     private class Turn(val customerId: String, val conversationId: String, val job: Job)
 
@@ -42,7 +43,7 @@ class ActiveTurns {
      * cancelled. A turn still running when the wait times out stays
      * registered, so activeCount(customerId) > 0 afterwards means it did.
      */
-    suspend fun cancelAndAwait(customerId: String, timeoutMs: Long): Int {
+    override suspend fun cancelAndAwait(customerId: String, timeoutMs: Long): Int {
         val cancelled = turns.filter { it.customerId == customerId }
         cancelled.forEach { it.job.cancel(CancellationException("The customer's account is being deleted")) }
         withTimeoutOrNull(timeoutMs) { cancelled.forEach { it.job.join() } }

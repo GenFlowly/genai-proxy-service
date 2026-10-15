@@ -52,6 +52,8 @@ import com.genflowly.activity.admin.registerSystemAgentsRoutes
 import com.genflowly.activity.admin.registerRequestAgentMapRoutes
 import com.genflowly.activity.admin.registerVendorAllowlistRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
+import com.genflowly.activity.admin.registerRetentionAdminRoutes
+import org.koin.ktor.ext.get
 import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.memory.registerMemoryRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
@@ -175,6 +177,13 @@ object Routes {
     const val ADMIN_DEFAULT_GRAPH = "$API_V1/admin/default-graph"
     const val ADMIN_SYSTEM_AGENTS = "$API_V1/admin/system-agents"
 
+    // Retention (plan 1.13): one-time kept-object claim backfill, admin-only
+    const val ADMIN_RETENTION_CLAIM_BACKFILL = "$API_V1/admin/retention/claim-backfill"
+    // Customer deletion (plan 3.9), admin-only: DELETE answers 202 with the job's
+    // status; the status route takes ?customerId=
+    const val ADMIN_DELETE_CUSTOMER = "$API_V1/admin/customers/{customerId}"
+    const val ADMIN_CUSTOMER_DELETION_STATUS = "$API_V1/admin/customers/deletion"
+
     const val NODE_PRESETS = "$API_V1/node-presets"
     const val ADMIN_NODE_PRESETS = "$API_V1/admin/node-presets"
     const val ADMIN_NODE_PRESET = "$API_V1/admin/node-presets/{presetId}"
@@ -229,6 +238,10 @@ fun Application.configureRouting(
     connectorsService: com.genflowly.service.ConnectorsService,
     projectService: com.genflowly.service.ProjectService,
     appConfig: AppConfig,
+    // Retention and purge services (plans 1.13/3.9), resolved from Koin so the
+    // call site in Application.module() stays unchanged
+    claimBackfillService: com.genflowly.service.ClaimBackfillService = get(),
+    accountDeletionService: com.genflowly.service.AccountDeletionService = get(),
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -320,6 +333,7 @@ fun Application.configureRouting(
         registerDefaultGraphRoutes(graphService, customerProfileService, appConfig)
         registerSystemAgentsRoutes(graphService, customerProfileService, appConfig)
         registerNodePresetRoutes(nodePresetService, customerProfileService, appConfig)
+        registerRetentionAdminRoutes(claimBackfillService, accountDeletionService, customerProfileService, appConfig)
         registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
         registerVoiceClientSecretRoutes(customerProfileService, voiceSessionService)

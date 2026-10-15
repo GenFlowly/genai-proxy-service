@@ -32,7 +32,9 @@ class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val shareRepository: ShareRepository,
     private val customerProfileRepository: CustomerProfileRepository,
-    private val projectRepository: ProjectRepository
+    private val projectRepository: ProjectRepository,
+    /** Tags linked S3 objects kept on every message write (1.16); null skips the claim (tests). */
+    private val objectClaimService: ObjectClaimService? = null
 ) {
     private val logger = LoggerFactory.getLogger("ConversationService")
 
@@ -79,6 +81,33 @@ class ConversationService(
         if (directShareRole != null) return directShareRole
 
         return shareRepository.getConversationShare(conversationId, "PUBLIC")
+    }
+
+    /**
+     * The stored S3 key of [attachmentId] in [conversationId], for a download
+     * by a conversation participant (1.11): [callerCustomerId] must be the
+     * owner or hold a share role on it (PUBLIC included), and the id must
+     * appear in one of its messages - a user upload, a file generated on an
+     * assistant message, or a tool-result image (named by the last segment of
+     * its customers/{id}/attachments/{attachmentId} key). The key is the one
+     * the row stores, which may sit under another participant's prefix. Null
+     * when the caller has no access or the id is not in the conversation.
+     */
+    suspend fun findAttachmentKeyInConversation(
+        conversationId: String,
+        callerCustomerId: String,
+        attachmentId: String
+    ): String? {
+        getConversationRole(conversationId, callerCustomerId) ?: return null
+        for (message in conversationRepository.getMessageFileRefs(conversationId)) {
+            message.attachments.firstOrNull { it.attachmentId == attachmentId }?.let { ref ->
+                return ref.s3Key.takeIf { RetentionKeys.isRetentionKey(it) }
+            }
+            RetentionKeys.toolResultImageKeys(message.toolResultsJson)
+                .firstOrNull { RetentionKeys.attachmentIdOfKey(it) == attachmentId }
+                ?.let { return it }
+        }
+        return null
     }
 
     suspend fun getConversationHistory(conversationId: String, customerId: String): GetConversationResponse {
@@ -333,14 +362,111 @@ class ConversationService(
         return messages.reversed()
     }
 
+    /**
+     * The single choke point for message writes.
+     *
+     * 1. Write guard (3.9): the Conversation row is re-read and the write is
+     *    refused when the row is gone or its purge has started - a late
+     *    write (a voice transcript, a stream or a recipient's durable run
+     *    ending after the purge began) must not resurrect purged content.
+     *    The turn's objects then stay tagged pending and expire.
+     * 2. Kept-object claim (1.16): before the PutItem every object the
+     *    message links to is tagged kept for this conversation (copied when
+     *    another conversation keeps it, rewriting the ref). When the claim
+     *    still fails after its retries, the message is stored anyway with
+     *    claimPending and the reconciler finishes the claim later.
+     * 3. A retried turn replaces its row (createMessage is an unconditional
+     *    PutItem with a deterministic id), so keys the replaced row linked
+     *    and the new one does not are re-tagged pending - after the write
+     *    succeeded, and only when no other message of the conversation
+     *    still links them.
+     * 4. When the PutItem throws, the keys this claim moved to kept are
+     *    re-tagged pending (best effort) and the error propagates.
+     */
     suspend fun addMessageInConversation(
         message: Message
     ): String {
+        val writeState = conversationRepository.getConversationWriteState(message.customerId, message.conversationId)
+        if (writeState == null || writeState.purgeStartedAt != null) {
+            logger.warn(
+                "Refusing message {} for conversation {}: {}",
+                message.messageId, message.conversationId,
+                if (writeState == null) "the conversation does not exist" else "its purge has started"
+            )
+            throw ConversationAccessDeniedException("Conversation not found or being deleted")
+        }
+
         val updateSequenceMessage =
             updateSequenceOfMessageInConversation(message)
-        conversationRepository.createMessage(updateSequenceMessage)
+
+        val claimService = objectClaimService
+        val replaced = if (claimService != null) {
+            conversationRepository.getMessageFileRefs(message.conversationId, message.messageId)
+        } else null
+        val claim = claimService?.claim(
+            conversationId = message.conversationId,
+            messageId = message.messageId,
+            role = message.role,
+            attachments = message.attachments,
+            toolResultsJson = message.toolResultsJson
+        )
+        val toPersist = if (claim == null) updateSequenceMessage else updateSequenceMessage.copy(
+            attachments = claim.attachments,
+            toolResultsJson = claim.toolResultsJson,
+            claimPending = updateSequenceMessage.claimPending || !claim.complete
+        )
+        if (claim != null && !claim.complete) {
+            logger.warn(
+                "Kept-object claim incomplete for message {} in conversation {}; stored with claimPending",
+                message.messageId, message.conversationId
+            )
+        }
+
+        try {
+            conversationRepository.createMessage(toPersist)
+        } catch (e: Exception) {
+            if (claim != null && claim.newlyClaimed.isNotEmpty()) {
+                runCatching { claimService.releaseToPending(claim.newlyClaimed) }
+            }
+            throw e
+        }
+        if (claimService != null && replaced != null) {
+            releaseDroppedKeys(claimService, replaced, toPersist)
+        }
         touchConversationForMessage(message)
         return updateSequenceMessage.messageId
+    }
+
+    /**
+     * Re-tags pending the keys [replaced] linked that [stored] no longer
+     * does, skipping any key another message of the conversation still
+     * links. Best effort: a failure only means the object stays kept.
+     */
+    private suspend fun releaseDroppedKeys(
+        claimService: ObjectClaimService,
+        replaced: com.genflowly.repository.MessageFileRefs,
+        stored: Message
+    ) {
+        try {
+            val before = RetentionKeys.messageKeys(replaced.role, replaced.attachments, replaced.toolResultsJson).all
+            val after = RetentionKeys.messageKeys(stored.role, stored.attachments, stored.toolResultsJson).all
+            val dropped = before - after
+            if (dropped.isEmpty()) return
+            val stillLinked = conversationRepository.getMessageFileRefs(stored.conversationId)
+                .filter { it.messageId != stored.messageId }
+                .flatMap { RetentionKeys.messageKeys(it.role, it.attachments, it.toolResultsJson).all }
+                .toSet()
+            val release = dropped - stillLinked
+            if (release.isNotEmpty()) {
+                logger.info(
+                    "Message {} was replaced; releasing {} object(s) it no longer links",
+                    stored.messageId, release.size
+                )
+                claimService.releaseToPending(release)
+            }
+        } catch (e: Exception) {
+            logger.warn("Could not release objects of replaced message {}: {}", stored.messageId, e.javaClass.simpleName)
+        }
     }
 
     /**

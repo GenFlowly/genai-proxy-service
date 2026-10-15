@@ -1010,4 +1010,287 @@ class ConversationRepository(
                 pageCount = map["pageCount"]?.n()?.toIntOrNull()
             )
         } ?: emptyList()
+
+    // ─── Retention (kept-object claim, reconciler, backfill, purge) ───────────
+
+    /**
+     * The file references of every message in the conversation, read with a
+     * projection (no text or thinking steps) and following LastEvaluatedKey to
+     * the end of the partition.
+     */
+    suspend fun getMessageFileRefs(conversationId: String): List<MessageFileRefs> = withContext(Dispatchers.IO) {
+        val refs = mutableListOf<MessageFileRefs>()
+        var startKey: Map<String, AttributeValue>? = null
+        do {
+            val builder = QueryRequest.builder()
+                .tableName(MESSAGE_TABLE)
+                .keyConditionExpression("conversationId = :cid")
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(conversationId).build()))
+                .projectionExpression(FILE_REFS_PROJECTION)
+                .expressionAttributeNames(FILE_REFS_NAMES)
+            startKey?.let { builder.exclusiveStartKey(it) }
+            val response = dynamoDbClient.query(builder.build())
+            response.items().mapNotNullTo(refs) { itemToFileRefs(it) }
+            startKey = response.lastEvaluatedKey().takeIf { response.hasLastEvaluatedKey() && it.isNotEmpty() }
+        } while (startKey != null)
+        refs
+    }
+
+    /** One message's file references (strongly consistent), or null when the row does not exist. */
+    suspend fun getMessageFileRefs(conversationId: String, messageId: String): MessageFileRefs? =
+        withContext(Dispatchers.IO) {
+            val response = dynamoDbClient.getItem(
+                GetItemRequest.builder()
+                    .tableName(MESSAGE_TABLE)
+                    .key(messageKey(conversationId, messageId))
+                    .projectionExpression(FILE_REFS_PROJECTION)
+                    .expressionAttributeNames(FILE_REFS_NAMES)
+                    .consistentRead(true)
+                    .build()
+            )
+            response.item()?.takeIf { it.isNotEmpty() }?.let { itemToFileRefs(it) }
+        }
+
+    /**
+     * The Conversation row as the message-write guard needs it, read
+     * strongly consistent so a conversation created a moment ago is found.
+     * [customerId] is the writer: the owner's row is read directly, and a
+     * share recipient's write falls back to the conversationId index to find
+     * the owner. Null when no row exists.
+     */
+    suspend fun getConversationWriteState(
+        customerId: String,
+        conversationId: String
+    ): ConversationWriteState? = withContext(Dispatchers.IO) {
+        fun read(ownerId: String): Map<String, AttributeValue>? =
+            dynamoDbClient.getItem(
+                GetItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(ownerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .projectionExpression("#cust, #conv, #aa, #ps")
+                    .expressionAttributeNames(mapOf(
+                        "#cust" to CUSTOMER_ID_KEY,
+                        "#conv" to CONVERSATION_ID_KEY,
+                        "#aa" to ARCHIVED_AT_KEY,
+                        "#ps" to RetentionTables.PURGE_STARTED_AT_KEY
+                    ))
+                    .consistentRead(true)
+                    .build()
+            ).item()?.takeIf { it.isNotEmpty() }
+
+        val item = read(customerId) ?: run {
+            val ownerId = dynamoDbClient.query(
+                QueryRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .indexName(CONVERSATION_ID_GSI_KEY)
+                    .keyConditionExpression("$CONVERSATION_ID_KEY = :cid")
+                    .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(conversationId).build()))
+                    .limit(1)
+                    .build()
+            ).items().firstOrNull()?.get(CUSTOMER_ID_KEY)?.s()
+            ownerId?.takeIf { it != customerId }?.let { read(it) }
+        } ?: return@withContext null
+        ConversationWriteState(
+            ownerCustomerId = item[CUSTOMER_ID_KEY]?.s() ?: return@withContext null,
+            conversationId = conversationId,
+            archived = item.containsKey(ARCHIVED_AT_KEY),
+            purgeStartedAt = item[RetentionTables.PURGE_STARTED_AT_KEY]?.s()
+        )
+    }
+
+    /** Ids of every conversation the customer owns, archived ones included. */
+    suspend fun getOwnedConversationIds(customerId: String): List<String> = withContext(Dispatchers.IO) {
+        val ids = mutableListOf<String>()
+        var startKey: Map<String, AttributeValue>? = null
+        do {
+            val builder = QueryRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .keyConditionExpression("#cid = :cid")
+                .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY, "#conv" to CONVERSATION_ID_KEY))
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                .projectionExpression("#conv")
+            startKey?.let { builder.exclusiveStartKey(it) }
+            val response = dynamoDbClient.query(builder.build())
+            response.items().mapNotNullTo(ids) { it[CONVERSATION_ID_KEY]?.s() }
+            startKey = response.lastEvaluatedKey().takeIf { response.hasLastEvaluatedKey() && it.isNotEmpty() }
+        } while (startKey != null)
+        ids
+    }
+
+    /**
+     * Keys of every message [customerId] wrote, in any conversation, through
+     * the KEYS_ONLY [RetentionTables.MESSAGE_CUSTOMER_GSI] (read each row with
+     * [getMessageFileRefs] for its content).
+     */
+    suspend fun getMessageKeysByCustomer(customerId: String): List<MessageKey> = withContext(Dispatchers.IO) {
+        val keys = mutableListOf<MessageKey>()
+        var startKey: Map<String, AttributeValue>? = null
+        do {
+            val builder = QueryRequest.builder()
+                .tableName(MESSAGE_TABLE)
+                .indexName(RetentionTables.MESSAGE_CUSTOMER_GSI)
+                .keyConditionExpression("#cid = :cid")
+                .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+            startKey?.let { builder.exclusiveStartKey(it) }
+            val response = dynamoDbClient.query(builder.build())
+            response.items().mapNotNullTo(keys) { item ->
+                MessageKey(
+                    conversationId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNullTo null,
+                    messageId = item[MESSAGE_ID_SORT_KEY]?.s() ?: return@mapNotNullTo null
+                )
+            }
+            startKey = response.lastEvaluatedKey().takeIf { response.hasLastEvaluatedKey() && it.isNotEmpty() }
+        } while (startKey != null)
+        keys
+    }
+
+    /**
+     * Up to [limit] messages whose kept-object claim is still pending, oldest
+     * first, through the sparse [RetentionTables.MESSAGE_CLAIM_PENDING_GSI].
+     * Each pair carries the row's createdAt (may be null on odd rows).
+     */
+    suspend fun getClaimPendingMessageKeys(limit: Int): List<Pair<MessageKey, String?>> = withContext(Dispatchers.IO) {
+        val response = dynamoDbClient.query(
+            QueryRequest.builder()
+                .tableName(MESSAGE_TABLE)
+                .indexName(RetentionTables.MESSAGE_CLAIM_PENDING_GSI)
+                .keyConditionExpression("#cp = :one")
+                .expressionAttributeNames(mapOf("#cp" to RetentionTables.CLAIM_PENDING_KEY))
+                .expressionAttributeValues(mapOf(":one" to AttributeValue.builder().n("1").build()))
+                .scanIndexForward(true)
+                .limit(limit)
+                .build()
+        )
+        response.items().mapNotNull { item ->
+            val key = MessageKey(
+                conversationId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null,
+                messageId = item[MESSAGE_ID_SORT_KEY]?.s() ?: return@mapNotNull null
+            )
+            key to item["createdAt"]?.s()
+        }
+    }
+
+    /**
+     * One page of a full Message table scan with the file-refs projection
+     * (the one-time claim backfill). [pageToken] comes from the previous
+     * page's [RetentionPage.nextPageToken]; null starts at the beginning.
+     * Throws IllegalArgumentException for a token that is not one.
+     */
+    suspend fun scanMessageFileRefs(pageToken: String?, limit: Int): RetentionPage<MessageFileRefs> =
+        withContext(Dispatchers.IO) {
+            val builder = software.amazon.awssdk.services.dynamodb.model.ScanRequest.builder()
+                .tableName(MESSAGE_TABLE)
+                .projectionExpression(FILE_REFS_PROJECTION)
+                .expressionAttributeNames(FILE_REFS_NAMES)
+                .limit(limit)
+            PageTokens.decode(pageToken)?.let { builder.exclusiveStartKey(it) }
+            val response = dynamoDbClient.scan(builder.build())
+            RetentionPage(
+                items = response.items().mapNotNull { itemToFileRefs(it) },
+                nextPageToken = PageTokens.encode(
+                    response.lastEvaluatedKey().takeIf { response.hasLastEvaluatedKey() }
+                )
+            )
+        }
+
+    /**
+     * Writes the outcome of a deferred kept-object claim onto an existing
+     * message: rewritten [attachments] / [toolResultsJson] (null leaves the
+     * attribute as is) and [claimPending] (true sets the flag, false removes
+     * it, null leaves it). Returns false when the row no longer exists (it is
+     * never re-created).
+     */
+    suspend fun updateMessageRetention(
+        conversationId: String,
+        messageId: String,
+        attachments: List<com.genflowly.models.AttachmentRef>?,
+        toolResultsJson: String?,
+        claimPending: Boolean?
+    ): Boolean = withContext(Dispatchers.IO) {
+        val sets = mutableListOf<String>()
+        val names = mutableMapOf("#mid" to MESSAGE_ID_SORT_KEY)
+        val values = mutableMapOf<String, AttributeValue>()
+        if (attachments != null) {
+            sets += "#att = :att"
+            names["#att"] = "attachments"
+            values[":att"] = attachmentsToAttributeValue(attachments)
+        }
+        if (toolResultsJson != null) {
+            sets += "#trj = :trj"
+            names["#trj"] = "toolResultsJson"
+            values[":trj"] = AttributeValue.builder().s(toolResultsJson).build()
+        }
+        if (claimPending == true) {
+            // A Number so the row lands in the sparse claimPending GSI
+            sets += "#cp = :one"
+            names["#cp"] = RetentionTables.CLAIM_PENDING_KEY
+            values[":one"] = AttributeValue.builder().n("1").build()
+        }
+        val expression = buildString {
+            if (sets.isNotEmpty()) append("SET ").append(sets.joinToString(", "))
+            if (claimPending == false) {
+                if (isNotEmpty()) append(' ')
+                append("REMOVE #cp")
+                names["#cp"] = RetentionTables.CLAIM_PENDING_KEY
+            }
+        }
+        if (expression.isEmpty()) return@withContext true
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(MESSAGE_TABLE)
+                    .key(messageKey(conversationId, messageId))
+                    .updateExpression(expression)
+                    .conditionExpression("attribute_exists(#mid)")
+                    .expressionAttributeNames(names)
+                    .apply { if (values.isNotEmpty()) expressionAttributeValues(values) }
+                    .build()
+            )
+            true
+        } catch (e: ConditionalCheckFailedException) {
+            false
+        }
+    }
+
+    private fun messageKey(conversationId: String, messageId: String) = mapOf(
+        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build(),
+        MESSAGE_ID_SORT_KEY to AttributeValue.builder().s(messageId).build()
+    )
+
+    private fun itemToFileRefs(item: Map<String, AttributeValue>): MessageFileRefs? {
+        return MessageFileRefs(
+            conversationId = item[CONVERSATION_ID_KEY]?.s() ?: return null,
+            messageId = item[MESSAGE_ID_SORT_KEY]?.s() ?: return null,
+            customerId = item[CUSTOMER_ID_KEY]?.s(),
+            role = item["role"]?.s(),
+            attachments = attributeValueToAttachments(item["attachments"]),
+            toolResultsJson = item["toolResultsJson"]?.s()?.takeIf { it.isNotBlank() },
+            fsNamespace = item["fsNamespace"]?.s()?.takeIf { it.isNotBlank() },
+            runId = item["runId"]?.s()?.takeIf { it.isNotBlank() },
+            claimPending = isFlagSet(item[RetentionTables.CLAIM_PENDING_KEY]),
+            createdAt = item["createdAt"]?.s()
+        )
+    }
+
+    private companion object {
+        /** "role" is a DynamoDB reserved word, so every name goes through an alias. */
+        const val FILE_REFS_PROJECTION =
+            "#conv, #mid, #cust, #role, #att, #trj, #fsn, #run, #cp, #ca"
+        val FILE_REFS_NAMES = mapOf(
+            "#conv" to CONVERSATION_ID_KEY,
+            "#mid" to MESSAGE_ID_SORT_KEY,
+            "#cust" to CUSTOMER_ID_KEY,
+            "#role" to "role",
+            "#att" to "attachments",
+            "#trj" to "toolResultsJson",
+            "#fsn" to "fsNamespace",
+            "#run" to "runId",
+            "#cp" to RetentionTables.CLAIM_PENDING_KEY,
+            "#ca" to "createdAt"
+        )
+    }
 }

@@ -30,23 +30,26 @@ fun Route.registerAttachmentRoutes(
             tags("Attachments")
             summary = "Request a presigned URL to upload an attachment"
             description = "Returns a short-lived presigned S3 PUT URL for an image of any type and " +
-                    "size (e.g. HEIC photos straight from an iPhone). The declared media type is " +
-                    "normalized — parameters are dropped, and blank, malformed, non-image or " +
-                    "scriptable (SVG) values become application/octet-stream — and returned as " +
-                    "mediaType. Upload the raw bytes to uploadUrl with Content-Type set to exactly " +
-                    "that returned mediaType (it is part of the signature), then reference the " +
-                    "returned attachmentId/s3Key/mediaType in a generate-text request. The real " +
-                    "format is detected from the bytes at generation time and converted/compressed " +
-                    "to fit each AI vendor's limits (losslessly where possible); files that cannot " +
-                    "be decoded as an image fail the generation with a clear error. The original " +
-                    "upload is kept unchanged."
+                    "size (e.g. HEIC photos straight from an iPhone) or a PDF of at most 10 MB. " +
+                    "The declared media type is normalized — parameters are dropped, and blank, " +
+                    "malformed, scriptable (SVG) or other non-image values except application/pdf " +
+                    "become application/octet-stream — and returned as mediaType. Upload the raw " +
+                    "bytes to uploadUrl with Content-Type set to exactly that returned mediaType and " +
+                    "with every requiredHeaders entry (e.g. x-amz-tagging; they are part of the " +
+                    "signature), then reference the returned attachmentId/s3Key/mediaType and " +
+                    "fileName (as filename) in a generate-text request. Send tagging=true: the upload " +
+                    "is then tagged to expire unless a message links it (PDFs always are). The real " +
+                    "image format is detected from the bytes at generation time and " +
+                    "converted/compressed to fit each AI vendor's limits (losslessly where possible); " +
+                    "files that cannot be decoded as an image fail the generation with a clear error. " +
+                    "At most 5 PDFs per message. The original upload is kept unchanged."
             request {
                 body<CreateAttachmentUploadRequest> { required = true }
             }
             response {
                 code(HttpStatusCode.OK) { body<CreateAttachmentUploadResponse>() }
                 code(HttpStatusCode.BadRequest) {
-                    description = "Malformed request body or sizeBytes below 1"
+                    description = "Malformed request body, sizeBytes below 1, or a PDF over 10 MB"
                     body<ErrorResponse>()
                 }
                 code(HttpStatusCode.Forbidden) {
@@ -60,7 +63,10 @@ fun Route.registerAttachmentRoutes(
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 
                 val upload = try {
-                    attachmentService.createUploadUrl(customerId, request.mediaType, request.sizeBytes)
+                    attachmentService.createUploadUrl(
+                        customerId, request.mediaType, request.sizeBytes,
+                        fileName = request.fileName, tagging = request.tagging
+                    )
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid attachment")))
                     return@post
@@ -72,7 +78,10 @@ fun Route.registerAttachmentRoutes(
                         s3Key = upload.s3Key,
                         // Normalized type bound into the presigned PUT — the client must upload with it
                         mediaType = upload.mediaType,
-                        uploadUrl = upload.uploadUrl
+                        uploadUrl = upload.uploadUrl,
+                        fileName = upload.fileName,
+                        // Also signed into the PUT — the client must send each one
+                        requiredHeaders = upload.requiredHeaders
                     )
                 )
             } catch (e: SerializationException) {
@@ -91,18 +100,32 @@ fun Route.registerAttachmentRoutes(
         get(Routes.GET_ATTACHMENT_URL, {
             tags("Attachments")
             summary = "Get a presigned URL to view an attachment"
-            description = "Returns a presigned S3 GET URL for an attachment owned by the " +
-                    "authenticated customer, for rendering images when displaying a conversation."
+            description = "Returns a presigned S3 GET URL for an attachment, for rendering images " +
+                    "and opening files when displaying a conversation. With conversationId, any " +
+                    "participant of that conversation (owner, share recipient or public viewer) " +
+                    "gets the file stored on its messages, whoever uploaded or generated it. " +
+                    "Without it, only the authenticated customer's own attachments resolve."
             request {
                 queryParameter<String>("attachmentId") {
-                    description = "Attachment ID returned at upload time"
+                    description = "Attachment ID returned at upload time, or a generated file's ID"
                     required = true
+                }
+                queryParameter<String>("conversationId") {
+                    description = "Conversation the attachment is shown in. The caller must be its " +
+                            "owner or have it shared with them (public shares included), and the " +
+                            "attachment must appear in one of its messages."
+                    required = false
                 }
             }
             response {
                 code(HttpStatusCode.OK) { body<GetAttachmentUrlResponse>() }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Missing attachmentId"
+                    body<ErrorResponse>()
+                }
                 code(HttpStatusCode.NotFound) {
-                    description = "No attachment with this ID exists for the authenticated customer"
+                    description = "No such attachment for the caller: not their own (without " +
+                            "conversationId), or not in a conversation they can read (with it)"
                     body<ErrorResponse>()
                 }
                 code(HttpStatusCode.Forbidden) {
@@ -118,8 +141,13 @@ fun Route.registerAttachmentRoutes(
                     return@get
                 }
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                val conversationId = call.request.queryParameters["conversationId"]?.takeIf { it.isNotBlank() }
 
-                val url = attachmentService.getViewUrl(customerId, attachmentId)
+                val url = if (conversationId != null) {
+                    attachmentService.getViewUrlInConversation(customerId, attachmentId, conversationId)
+                } else {
+                    attachmentService.getViewUrl(customerId, attachmentId)
+                }
                 if (url == null) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Attachment not found"))
                     return@get

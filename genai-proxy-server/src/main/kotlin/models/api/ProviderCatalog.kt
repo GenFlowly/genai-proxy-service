@@ -5,12 +5,19 @@ import kotlinx.serialization.Serializable
 /**
  * BYOK vendor catalog, passed through from the retrieval server's /providers:
  * every provider the platform can call (native langchain tier + the LiteLLM
- * long tail), with chat models and per-model tool-calling support.
+ * long tail), with chat models and per-model tool-calling and PDF-input
+ * support.
  */
 @Serializable
 data class ProviderModelInfo(
     val name: String,
     val supportsTools: Boolean,
+    /**
+     * Whether the model reads attached PDFs natively. The UI shows a hint on
+     * PDF attachments when false. False when the retrieval-server does not
+     * send it.
+     */
+    val supportsPdfInput: Boolean = false,
     // Token limits + pricing (USD per 1M tokens) from the LiteLLM price map;
     // feeds pricing-only AIModelCatalog rows for long-tail BYOK vendors.
     val maxInputTokens: Int? = null,
