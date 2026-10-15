@@ -232,11 +232,11 @@ class RevisePdfTests(unittest.TestCase):
         conv = _Conversation(source=long_source)
         first = _run(ReadPdfSourceTool().run({"artifact_id": "a1b2c3d4-0000-0000-0000-000000000001"},
                                              conv.context()))
-        self.assertIn("continue with offset=8000", first.content)
-        self.assertLessEqual(len(first.content), 8000 + 200)
+        self.assertIn("continue with offset=7600", first.content)
+        self.assertLessEqual(len(first.content), 8000)
         second = _run(ReadPdfSourceTool().run(
-            {"artifact_id": "a1b2c3d4-0000-0000-0000-000000000001", "offset": 8000}, conv.context()))
-        self.assertTrue(second.content.endswith("x" * 1000))
+            {"artifact_id": "a1b2c3d4-0000-0000-0000-000000000001", "offset": 7600}, conv.context()))
+        self.assertTrue(second.content.endswith("x" * 1400))
         self.assertNotIn("more remains", second.content)
 
     def test_a_separate_title_is_kept_in_the_stored_source(self):

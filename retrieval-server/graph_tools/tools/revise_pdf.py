@@ -22,7 +22,9 @@ from graph_tools.tools.generate_pdf import render_document
 
 logger = logging.getLogger(__name__)
 
-READ_CHUNK_CHARS = 8_000
+# Header plus chunk stay under the executor's 8,000-character spill
+# threshold, so a page of source is never spilled to scratch.
+READ_CHUNK_CHARS = 7_600
 MAX_EDITS = 50
 _VERSION_RE = re.compile(r"^(?P<stem>.*?) \(v(?P<n>\d{1,4})\)$")
 

@@ -6,6 +6,7 @@ import time
 from typing import Any, AsyncIterator, Optional
 
 from encoding_library.observability import count
+from graph.attachments import DocumentError
 from graph.image_normalize import ImageNormalizationError
 from graph.state import RetrievalState
 
@@ -66,9 +67,10 @@ def user_facing_llm_error(e: Exception, provider: str) -> tuple[str, str]:
     Vendor-agnostic by design: works off exception type/message markers, not
     per-vendor exception classes, so new BYOK providers are covered for free.
     """
-    if isinstance(e, ImageNormalizationError):
+    if isinstance(e, (ImageNormalizationError, DocumentError)):
         # Our own attachment check, not a vendor failure: the message is already
-        # a user-facing sentence (unsupported format, too large, unreadable).
+        # a user-facing sentence (unsupported format, too large, unreadable,
+        # a password-protected PDF).
         return "attachment_error", str(e)
     raw = f"{type(e).__name__}: {e}"
     low = raw.lower()

@@ -27,14 +27,22 @@ or a crash costs this child, never the shared server process:
   starts the child with stderr on /dev/null.
 
 Protocol (both directions): 4-byte big-endian length + UTF-8 JSON header,
-then, for responses with "pdf_len", that many raw PDF bytes.
+then, when the header carries "data_len" (requests), "pdf_len" or
+"payload_len" (responses), that many raw bytes.
   request  {"op": "render", "job": {...generate_pdf.render_job job...}}
   response {"status": "ok"|"error", "kind"?, "pages"?, "warnings"?,
             "render_cpu_seconds"?, "spawn_cpu_seconds"?, "peak_rss_bytes",
             "rss_after_bytes", "pdf_len"?}
+  request  {"op": "inspect_extract"|"render_pages", "params": {...},
+            "data_len": N} + the uploaded PDF's bytes (plan 4.1)
+  response inspect_extract: {"status", "pages", "page_chars", "payload_len"}
+           + a JSON list of each page's text; render_pages: {"status",
+           "pages", "image_lens", "payload_len"} + the JPEGs back to back;
+           errors carry "kind": encrypted | unreadable | oom | error.
 Warm mode (default) serves jobs until stdin closes or `idle_seconds` pass
-without one; --oneshot serves exactly one job (Typst renders); --selftest
-renders a small document and exits 0/1 (the Docker build's smoke step).
+without one; --oneshot serves exactly one job (Typst renders, PDF parsing);
+--selftest renders a small document and exits 0/1 (the Docker build's smoke
+step).
 """
 import errno
 import json
@@ -184,8 +192,11 @@ def _peak_rss_bytes() -> int:
     return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * 1024
 
 
-def _read_frame(stream, idle_seconds: float | None) -> dict | None:
-    """One request frame, or None on EOF / idle timeout."""
+_MAX_REQUEST_DATA = 64 * 1024 * 1024
+
+
+def _read_frame(stream, idle_seconds: float | None) -> tuple[dict, bytes] | None:
+    """One request frame (header, data), or None on EOF / idle timeout."""
     fd = stream.fileno()
     if idle_seconds:
         ready, _, _ = select.select([fd], [], [], idle_seconds)
@@ -200,7 +211,14 @@ def _read_frame(stream, idle_seconds: float | None) -> dict | None:
     body = _read_exact(stream, length)
     if body is None:
         return None
-    return json.loads(body.decode("utf-8"))
+    request = json.loads(body.decode("utf-8"))
+    data_len = int(request.get("data_len") or 0)
+    if data_len > _MAX_REQUEST_DATA:
+        return None
+    data = _read_exact(stream, data_len) if data_len else b""
+    if data is None:
+        return None
+    return request, data
 
 
 def _read_exact(stream, n: int) -> bytes | None:
@@ -213,21 +231,97 @@ def _read_exact(stream, n: int) -> bytes | None:
     return bytes(buf)
 
 
-def _write_response(stream, header: dict, payload: bytes = b"") -> None:
+def _write_response(stream, header: dict, payload: bytes = b"", length_key: str = "pdf_len") -> None:
     if payload:
-        header = dict(header, pdf_len=len(payload))
+        header = dict(header, **{length_key: len(payload)})
     body = json.dumps(header, separators=(",", ":")).encode("utf-8")
     stream.write(struct.pack(">I", len(body)) + body + payload)
     stream.flush()
 
 
-def _handle(request: dict, params: dict) -> tuple[dict, bytes]:
+# Uploaded-PDF parsing (plan 4.1). PDFium is not thread-safe and the input is
+# untrusted, so it only ever runs here, under the same caps as rendering.
+_MAX_EXTRACT_PAGES = 2_000
+_MAX_TEXT_CHARS = 8_000_000
+_MAX_RENDER_PAGES = 20
+
+
+def _parse(op: str, data: bytes, params: dict) -> tuple[dict, bytes]:
+    import io
+
+    import pypdfium2 as pdfium
+
+    try:
+        pdf = pdfium.PdfDocument(data)
+    except pdfium.PdfiumError as e:
+        kind = "encrypted" if "password" in str(e).lower() else "unreadable"
+        return {"status": "error", "kind": kind}, b""
+    try:
+        pages = len(pdf)
+        if op == "inspect_extract":
+            texts: list[str] = []
+            total = 0
+            for i in range(min(pages, _MAX_EXTRACT_PAGES)):
+                page = pdf[i]
+                textpage = page.get_textpage()
+                try:
+                    text = textpage.get_text_range()
+                finally:
+                    textpage.close()
+                    page.close()
+                text = text.replace("\r\n", "\n").replace("\r", "\n")
+                total += len(text)
+                if total > _MAX_TEXT_CHARS:
+                    text = ""
+                texts.append(text)
+            payload = json.dumps(texts, ensure_ascii=False).encode("utf-8")
+            return {"status": "ok", "pages": pages,
+                    "page_chars": [len(t.strip()) for t in texts]}, payload
+        if op == "render_pages":
+            from PIL import Image
+
+            wanted = [int(p) for p in (params.get("pages") or []) if 0 <= int(p) < pages]
+            max_edge = max(256, min(int(params.get("max_edge") or 1568), 4096))
+            images: list[bytes] = []
+            for i in wanted[:_MAX_RENDER_PAGES]:
+                page = pdf[i]
+                try:
+                    width, height = page.get_size()
+                    scale = min(max_edge / max(width, height, 1.0), 4.0)
+                    bitmap = page.render(scale=scale)
+                    image = bitmap.to_pil().convert("RGB")
+                finally:
+                    page.close()
+                if max(image.size) > max_edge:
+                    image.thumbnail((max_edge, max_edge), Image.LANCZOS)
+                buf = io.BytesIO()
+                image.save(buf, "JPEG", quality=80, optimize=True)
+                images.append(buf.getvalue())
+            return {"status": "ok", "pages": pages,
+                    "image_lens": [len(b) for b in images]}, b"".join(images)
+        return {"status": "error", "kind": "error"}, b""
+    finally:
+        pdf.close()
+
+
+def _handle(request: dict, params: dict, data: bytes = b"") -> tuple[dict, bytes, str]:
+    op = request.get("op")
+    _arm_cpu_cap(int(params.get("max_cpu_seconds") or 115))
+    if op in ("inspect_extract", "render_pages"):
+        try:
+            header, payload = _parse(op, data, request.get("params") or {})
+        except MemoryError:
+            header, payload = {"status": "error", "kind": "oom"}, b""
+        except Exception:
+            header, payload = {"status": "error", "kind": "error"}, b""
+        header["peak_rss_bytes"] = _peak_rss_bytes()
+        header["rss_after_bytes"] = _rss_bytes()
+        return header, payload, "payload_len"
+    if op != "render":
+        return {"status": "error", "kind": "error"}, b"", "pdf_len"
+
     from graph_tools.tools.generate_pdf import render_job
 
-    op = request.get("op")
-    if op != "render":
-        return {"status": "error", "kind": "error"}, b""
-    _arm_cpu_cap(int(params.get("max_cpu_seconds") or 115))
     try:
         result = render_job(request.get("job") or {})
     except MemoryError:
@@ -236,7 +330,7 @@ def _handle(request: dict, params: dict) -> tuple[dict, bytes]:
     header = {k: v for k, v in result.items() if k != "pdf"}
     header["peak_rss_bytes"] = _peak_rss_bytes()
     header["rss_after_bytes"] = _rss_bytes()
-    return header, pdf
+    return header, pdf, "pdf_len"
 
 
 def _warm_imports(renderer: str) -> float:
@@ -244,11 +338,15 @@ def _warm_imports(renderer: str) -> float:
     child (xhtml2pdf: 0.5-0.8 CPU-s, often more than a render). Returns the
     CPU seconds the imports took."""
     start = time.process_time()
-    import graph_tools.tools.generate_pdf  # noqa: F401
+    if renderer != "parse":
+        import graph_tools.tools.generate_pdf  # noqa: F401
 
     if renderer == "x2p_v1":
         import markdown  # noqa: F401
         from xhtml2pdf import pisa  # noqa: F401
+    elif renderer == "parse":
+        import pypdfium2  # noqa: F401
+        from PIL import Image  # noqa: F401
     elif renderer == "typst":
         try:
             import graph_tools.tools.pdf_typst  # noqa: F401
@@ -295,14 +393,15 @@ def main(argv: list[str]) -> int:
     idle = float(params.get("idle_seconds") or 600)
     first = True
     while True:
-        request = _read_frame(stdin, idle)
-        if request is None:
+        frame = _read_frame(stdin, idle)
+        if frame is None:
             return 0
-        header, pdf = _handle(request, params)
+        request, data = frame
+        header, payload, length_key = _handle(request, params, data)
         if first:
             header["spawn_cpu_seconds"] = spawn_cpu
             first = False
-        _write_response(stdout, header, pdf)
+        _write_response(stdout, header, payload, length_key)
         if "--oneshot" in flags:
             return 0
 

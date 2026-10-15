@@ -328,13 +328,16 @@ def passthrough_formats_for(provider: str | None) -> frozenset[str]:
     return _VENDOR_FORMATS.get((provider or "").lower(), _UNIVERSAL_FORMATS)
 
 
-def limits_for_request(provider: str | None, image_count: int) -> ImageLimits:
+def limits_for_request(provider: str | None, image_count: int, reserved_bytes: int = 0) -> ImageLimits:
     """Per-image limits when `image_count` images go to `provider` in one
     request: an even, tiered share of the vendor's request budget (capped at
-    the per-image MAX_BASE64_BYTES), and the vendor's edge limit."""
+    the per-image MAX_BASE64_BYTES), and the vendor's edge limit.
+    `reserved_bytes` (base64) is already taken by other attachments of the
+    request, e.g. a native PDF (graph/documents.py)."""
     name = (provider or "").lower()
     count = max(1, image_count)
-    share = _REQUEST_IMAGE_BUDGET.get(name, _DEFAULT_REQUEST_IMAGE_BUDGET) // count
+    total = _REQUEST_IMAGE_BUDGET.get(name, _DEFAULT_REQUEST_IMAGE_BUDGET)
+    share = max(0, total - max(0, reserved_bytes)) // count
     tiers = [t for t in _BUDGET_TIERS if t <= MAX_BASE64_BYTES] or [MAX_BASE64_BYTES]
     # Below the smallest tier the request may exceed the vendor's limit anyway
     # (dozens of images); the smallest tier still keeps each one legible.
@@ -345,13 +348,15 @@ def limits_for_request(provider: str | None, image_count: int) -> ImageLimits:
     return ImageLimits(passthrough_formats_for(name), budget, max_edge)
 
 
-def max_images_for_request(provider: str | None) -> int:
+def max_images_for_request(provider: str | None, reserved_bytes: int = 0) -> int:
     """How many images one request to `provider` may carry: the vendor's
-    documented count limit, and no more than fit its request budget at the
-    smallest per-image tier. Older history images beyond it are left out."""
+    documented count limit, and no more than fit its request budget (less
+    `reserved_bytes` taken by other attachments) at the smallest per-image
+    tier. Older history images beyond it are left out."""
     name = (provider or "").lower()
     smallest_tier = min(min(_BUDGET_TIERS), MAX_BASE64_BYTES)
-    by_budget = _REQUEST_IMAGE_BUDGET.get(name, _DEFAULT_REQUEST_IMAGE_BUDGET) // smallest_tier
+    total = _REQUEST_IMAGE_BUDGET.get(name, _DEFAULT_REQUEST_IMAGE_BUDGET) - max(0, reserved_bytes)
+    by_budget = max(0, total) // smallest_tier
     return max(1, min(by_budget, _MAX_IMAGES_BY_PROVIDER.get(name, by_budget)))
 
 

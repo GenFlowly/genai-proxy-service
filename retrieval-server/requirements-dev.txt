@@ -2,6 +2,6 @@
 # requirements.txt, with the same constraints file:
 #   pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
 -c constraints.txt
-# PDF text/structure checks in tests/test_generate_pdf.py and the Typst tests.
+# PDF text/structure checks in tests/test_generate_pdf.py and the Typst tests
+# (pypdfium2, also used by the tests, is a production dependency since 4.1).
 pypdf==6.20.1
-pypdfium2==5.14.0

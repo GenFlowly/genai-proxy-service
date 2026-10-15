@@ -117,6 +117,7 @@ def get_registry() -> ToolRegistry:
     global _registry
     if _registry is None:
         registry = default_registry()
+        from graph.attachment_tools import ReadAttachmentTool
         from graph.fs_tools import FsListTool, FsReadTool, FsWriteTool
         from graph.knowledge_tool import SearchKnowledgeBaseTool
         from graph.memory_tool import SearchMemoriesTool
@@ -128,6 +129,7 @@ def get_registry() -> ToolRegistry:
         registry.register(FsReadTool())
         registry.register(FsListTool())
         registry.register(SpawnAgentTool())
+        registry.register(ReadAttachmentTool())
         _registry = registry
     return _registry
 

@@ -75,3 +75,7 @@ websockets
 # and it pins mcp<2.0.0 while the SDK is on 2.x (where the streamable-http
 # entry point was renamed).
 mcp>=2.0.0
+# Uploaded-PDF parsing (plan 4.1): text extraction and page images run in the
+# sandboxed worker child (graph/pdf_render_child.py); the server process never
+# imports it. BSD/Apache-licensed PDFium (PyMuPDF is AGPL and not used).
+pypdfium2==5.14.0

@@ -17,6 +17,7 @@ from graph.image_normalize import ImageLimits, ImageNormalizationError, limits_f
 from graph.s3_images import image_for_llm
 from graph.state import RetrievalState
 from graph.tools_runtime import spec_context_for, specs_for
+from graph import documents
 from graph.pdf_metrics import record_truncated
 from graph.truncation import cut_off_reason
 
@@ -245,7 +246,8 @@ class RequestImagePlan:
 _OMITTED_IMAGE_NOTE = "[earlier image omitted to fit the model's request size limit]"
 
 
-def plan_request_images(state: dict, provider: str | None, with_history: bool) -> RequestImagePlan:
+def plan_request_images(state: dict, provider: str | None, with_history: bool,
+                        reserved_bytes: int = 0) -> RequestImagePlan:
     """Every image sent — the current turn's, replayed history's and tool
     results' (Claude-only, see _tool_messages) — shares the vendor's request
     size limit. If there are more than the vendor can take
@@ -265,7 +267,7 @@ def plan_request_images(state: dict, provider: str | None, with_history: bool) -
         tool_images = sum(
             1 for r in tool_results for img in (r.get("images") or []) if not img.get("omitted")
         )
-    cap = max_images_for_request(provider)
+    cap = max_images_for_request(provider, reserved_bytes) if reserved_bytes else max_images_for_request(provider)
     overflow = len(history_keys) - max(0, cap - current - tool_images)
     omitted: frozenset = frozenset()
     if overflow > 0:
@@ -275,6 +277,8 @@ def plan_request_images(state: dict, provider: str | None, with_history: bool) -
         step = max(1, cap // 4)
         omitted = frozenset(history_keys[: min(len(history_keys), -(-overflow // step) * step)])
     count = current + tool_images + len(history_keys) - len(omitted)
+    if reserved_bytes:
+        return RequestImagePlan(limits_for_request(provider, count, reserved_bytes), omitted)
     return RequestImagePlan(limits_for_request(provider, count), omitted)
 
 
@@ -375,14 +379,19 @@ def _normalize_tool_choice(tool_choice: str | None) -> str | None:
     return tool_choice  # a specific tool name
 
 
-def _file_context(turn: dict) -> str:
+def _file_context(turn: dict, omit_documents: bool = False) -> str:
     """Notes naming a history turn's non-image files (plan 3.1), so the model
     knows which files exist and can pass their ids to revise_pdf,
     read_pdf_source or read_attachment: a generated file on an assistant turn,
-    an uploaded document on a user turn. "" when the turn has none."""
+    an uploaded document on a user turn. "" when the turn has none.
+    omit_documents: uploaded PDFs are left out because the caller sends them
+    as document blocks (graph/documents.py)."""
     notes = []
     for f in turn.get("files") or []:
         if not isinstance(f, dict):
+            continue
+        if omit_documents and f.get("origin") != "generated" and \
+                (f.get("media_type") or "").startswith("application/pdf"):
             continue
         name = f.get("filename") or "file"
         if f.get("origin") == "generated":
@@ -392,8 +401,8 @@ def _file_context(turn: dict) -> str:
     return "\n".join(notes)
 
 
-def _with_file_context(content: str, turn: dict) -> str:
-    note = _file_context(turn)
+def _with_file_context(content: str, turn: dict, omit_documents: bool = False) -> str:
+    note = _file_context(turn, omit_documents)
     if not note:
         return content
     return f"{content}\n\n{note}" if content else note
@@ -449,7 +458,8 @@ async def _tool_messages(tool_results: list, provider: str, limits: ImageLimits 
 
 
 def _content_summary(content) -> str:
-    """Log-safe rendering: image blocks become placeholders, never base64."""
+    """Log-safe rendering: image and document blocks become placeholders,
+    never base64."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -457,6 +467,8 @@ def _content_summary(content) -> str:
         for b in content:
             if isinstance(b, dict) and b.get("type") == "image_url":
                 parts.append("<image>")
+            elif isinstance(b, dict) and b.get("type") == "file":
+                parts.append(f"<pdf {b.get('filename') or ''}>".replace(" >", ">"))
             elif isinstance(b, dict):
                 parts.append(str(b.get("text", b)))
             else:
@@ -1002,14 +1014,35 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
 
         rendered_input = _render_template(input_template, state)
 
+        # Uploaded documents first (plans 4.1/4.2): a native PDF takes its
+        # bytes out of the request's attachment budget, so the images get
+        # what is left. Response generators only, like images.
+        doc_budget = documents.budget_for(provider, len(state.get("query_images") or []))
+        current_doc_blocks: list = []
+        if is_response_node and documents.pdf_refs(state.get("query_files")):
+            current_doc_blocks = await documents.current_turn_blocks(
+                state.get("query_files"), provider, effective_model, doc_budget,
+            )
+            if cache_anthropic and current_doc_blocks:
+                documents.mark_cache_breakpoint(current_doc_blocks)
+
         # Only the response generator sees images — retrieval/ranking/classification
         # nodes stay text-only (they don't need pixels, and it keeps them cheap).
         query_image_blocks: list = []
-        image_plan = plan_request_images(state, provider, with_history=include_history and is_response_node)
+        image_plan = plan_request_images(
+            state, provider, with_history=include_history and is_response_node,
+            reserved_bytes=doc_budget.reserved_b64,
+        )
         image_limits = image_plan.limits
         if is_response_node:
             query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True, limits=image_limits)
         current_content = _user_content(rendered_input, query_image_blocks)
+        if current_doc_blocks:
+            # Documents before the question (long-document guidance of every
+            # vendor); the cache breakpoint on the last one then covers them.
+            text_and_images = current_content if isinstance(current_content, list) else \
+                [{"type": "text", "text": current_content}]
+            current_content = [*current_doc_blocks, *text_and_images]
 
         # Tool results for the current turn — must directly follow the assistant
         # message whose tool_calls they answer (the last history turn).
@@ -1036,7 +1069,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                 last_idx = len(turns) - 1
                 for i, turn in enumerate(turns):
                     role = turn.get("role", "user")
-                    content = _with_file_context(turn.get("content", ""), turn)
+                    content = _with_file_context(turn.get("content", ""), turn, omit_documents=(role == "user"))
                     is_last = (i == last_idx)
                     cache_this = cache_anthropic and is_last
                     if role == "user":
@@ -1044,6 +1077,11 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                         messages.extend(await _tool_messages(turn.get("tool_results"), provider, image_limits))
                         turn_blocks = await _image_blocks(
                             turn.get("images", []), strict=False, limits=image_limits, omitted=image_plan.omitted,
+                        )
+                        # Earlier turns' documents: their text or a stub,
+                        # never the native file again (plan 4.2).
+                        turn_blocks += await documents.history_turn_blocks(
+                            turn.get("files"), provider, doc_budget,
                         )
                         if content or turn_blocks:
                             messages.append(_make_human(_user_content(content, turn_blocks), cache_this))

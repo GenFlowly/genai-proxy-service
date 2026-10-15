@@ -67,6 +67,9 @@ _EXCLUDED_PROVIDERS = {
 class ProviderModel(BaseModel):
     name: str
     supportsTools: bool
+    # Whether an uploaded PDF reaches the model natively (graph/capabilities.py);
+    # otherwise it gets the extracted text. The UI shows a hint when false.
+    supportsPdfInput: bool = False
     # Token limits + pricing (USD per 1M tokens) from the LiteLLM price map —
     # lets the proxy's AIModelCatalog price long-tail vendors without needing
     # a vendor API key. Null when the map has no figure.
@@ -115,6 +118,7 @@ def _per_mtok(info: dict, key: str) -> float | None:
 
 def _build_catalog() -> ListProvidersResponse:
     import litellm
+    from graph.capabilities import supports_pdf_input
     from graph.llm_factory import NATIVE_PROVIDERS
 
     native_ids = set(NATIVE_PROVIDERS) | {"openai", "anthropic", "gemini"}
@@ -144,6 +148,7 @@ def _build_catalog() -> ListProvidersResponse:
                 ProviderModel(
                     name=stripped,
                     supportsTools=tools,
+                    supportsPdfInput=supports_pdf_input(provider, stripped),
                     maxInputTokens=_as_int(info.get("max_input_tokens")),
                     maxOutputTokens=_as_int(info.get("max_output_tokens")),
                     inputCostPerMTok=_per_mtok(info, "input_cost_per_token"),
