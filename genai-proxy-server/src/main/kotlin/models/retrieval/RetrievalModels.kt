@@ -12,9 +12,9 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Exchange types for the Python retrieval-server: streaming chunks, generation
- * results and the tool/image payload shapes shared between
- * RetrievalServerClient and its callers. Wire-format payloads that never leave
- * the client remain private to providers/RetrievalServerClient.kt.
+ * results and the tool/image/file payload shapes shared between
+ * RetrievalServerClient, RunsClient and their callers. Wire-format payloads
+ * that never leave a client remain private to that client.
  */
 
 sealed class StreamChunk {
@@ -185,6 +185,56 @@ data class ImageRef(
     @SerialName("media_type") val mediaType: String
 )
 
+/** Where a [FileRef]'s file came from. */
+@Serializable
+enum class FileOrigin {
+    /** Produced by a built-in tool on an assistant turn (e.g. a generated PDF). */
+    @SerialName("generated") GENERATED,
+    /** Attached by the user to their message. */
+    @SerialName("uploaded") UPLOADED
+}
+
+/**
+ * A non-image file of the conversation, passed to the retrieval-server so the
+ * model knows which files exist and tools can address them. Tools read the
+ * file by the stored [s3Key] exactly as given: in a shared conversation it can
+ * sit under another participant's prefix, so it is never rebuilt from
+ * [attachmentId].
+ */
+@Serializable
+data class FileRef(
+    @SerialName("attachment_id") val attachmentId: String,
+    @SerialName("s3_key") val s3Key: String,
+    @SerialName("media_type") val mediaType: String,
+    val filename: String? = null,
+    @SerialName("size_bytes") val sizeBytes: Long? = null,
+    val origin: FileOrigin
+)
+
+/**
+ * The current turn's `raw_data` in /retrieve and POST /runs requests. Fields
+ * left at their empty or null defaults are omitted by the proxy's Json
+ * (encodeDefaults off), so a retrieval-server that predates them never sees
+ * them.
+ */
+@Serializable
+data class RawData(
+    @SerialName("query_data") val queryData: String,
+    @SerialName("top_n") val topN: Int = 3,
+    /** Images attached to the current-turn query */
+    val images: List<ImageRef> = emptyList(),
+    /** Non-image files attached to the current-turn query */
+    val files: List<FileRef> = emptyList(),
+    /** First language tag of the browser's Accept-Language (e.g. "en-US"); null when unknown */
+    val locale: String? = null,
+    /**
+     * Scratch namespace the proxy minted for this request and vendor, under
+     * which the turn's agent-fs objects are written; null lets the
+     * retrieval-server mint its own.
+     */
+    @SerialName("fs_namespace") val fsNamespace: String? = null
+)
+
 @Serializable
 data class ConversationMessage(
     val role: String,
@@ -193,7 +243,12 @@ data class ConversationMessage(
     /** Assistant turns: [{"id","name","args"}] tool calls the model made */
     @SerialName("tool_calls") val toolCalls: kotlinx.serialization.json.JsonElement? = null,
     /** User turns: [{"tool_call_id","content"}] results the caller executed */
-    @SerialName("tool_results") val toolResults: kotlinx.serialization.json.JsonElement? = null
+    @SerialName("tool_results") val toolResults: kotlinx.serialization.json.JsonElement? = null,
+    /**
+     * Non-image files of this turn: generated files on assistant turns
+     * (origin generated), uploaded documents on user turns (origin uploaded).
+     */
+    val files: List<FileRef> = emptyList()
 )
 
 @Serializable
