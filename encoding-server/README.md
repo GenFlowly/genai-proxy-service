@@ -125,6 +125,31 @@ Creates the customer's collections for the given model (skips existing ones).
 Omitting the model falls back to the registry default (MiniLM, 384-dim) — 
 always pass it explicitly.
 
+### POST /purge-vectors
+
+Deletes a customer's vectors when genai-proxy-server purges the customer or
+one of their conversations (PDF plan 3.9). Service-to-service only: the proxy
+sends an Auth0 client-credentials (machine-to-machine) token, which the API
+Gateway JWT authorizer validates like any other; the handler then requires
+`gty = client-credentials` and the token's client id (`azp`) in
+`PURGE_ALLOWED_CLIENT_IDS`. User tokens get 403, and so does every call while
+`PURGE_ALLOWED_CLIENT_IDS` is unset.
+
+```json
+{ "customerId": "CU20EA760EBA18", "conversationId": "<conversation id>" }
+```
+deletes every vector with `conversation_key == "<conversation id>"` from the
+customer's `{customerId}_conversation_*` collections, and
+
+```json
+{ "customerId": "CU20EA760EBA18", "dropCollections": true }
+```
+drops every `{customerId}_*` collection. Both are idempotent (a missing
+collection or vector is not an error). Ids are validated first: customer ids
+are `[A-Za-z0-9-]` only (so the `{customerId}_` prefix never matches another
+customer), conversation ids too (so they cannot break out of the filter), and
+`System`/`PUBLIC` are refused.
+
 ### POST /encode-notes and POST /encode-email
 
 Accept a single envelope or an array of envelopes. snake_case key variants are
@@ -164,6 +189,7 @@ handlers/
   ingest_notes_lambda.py           # /encode-notes → SQS
   ingest_email_lambda.py           # /encode-email → SQS
   create_collections_lambda.py     # /create-collections
+  purge_vectors_lambda.py          # /purge-vectors (customer / conversation purge)
   trigger_lambda.py                # SQS → starts Step Function
   parse_and_chunk_lambda.py        # chunking step
   create_embeddings_lambda.py      # realtime embedding step
@@ -173,7 +199,7 @@ handlers/
   voyage_batch_store.py            # shared: map batch results → store logic
 services/
   authorization_service.py         # JWT sub → customerId
-impl/                              # tests
+tests/                             # unittest suite (see Local development)
 Dockerfile.*                       # one image per pipeline step (see below)
 ```
 
@@ -216,6 +242,14 @@ print(handler(event, None))
 Requires AWS credentials (DynamoDB for auth) and `QUEUE_URL` pointing at a
 queue you can write to.
 
+Tests need no AWS access or network (the vector store is faked). From this
+directory, with a venv that has the requirements and `encoding-library`
+installed (the retrieval-server venv works too):
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
 ## Build and deploy
 
 Each pipeline step is a Docker image (separate ECR repos, built from the
@@ -228,7 +262,7 @@ matching `Dockerfile.*`):
 | parse-and-chunk | `Dockerfile.parse_and_chunk` | parse_and_chunk, trigger lambda |
 | create-embeddings | `Dockerfile.create_embeddings` | realtime embed step |
 | store-embeddings | `Dockerfile.store_embeddings` | store step + batch accumulator + poller |
-| create-collections | `Dockerfile.create_collections` | /create-collections |
+| create-collections | `Dockerfile.create_collections` | /create-collections, /purge-vectors (CMD override) |
 
 Infrastructure (lambdas, SQS, Step Function, API Gateway, EventBridge
 schedules, `VoyageBatchJobs` table) is defined in `../encoding-server-cdk`:
@@ -259,3 +293,4 @@ schedules (30-min accumulate, 10-min poll) are EventBridge rules in
 | `DOCUMENTS_BUCKET` / `STAGING_PREFIX` | accumulator, poller | batch payload staging + per-note documents |
 | `VOYAGE_API_KEY` / `OPENAI_API_KEY` | embed lambdas | hosted embedding providers |
 | `MAX_NOTES_PER_RUN` | accumulator | notes per sweep (default 2000) |
+| `PURGE_ALLOWED_CLIENT_IDS` | purge-vectors | comma-separated Auth0 client ids allowed to purge (unset = refuse all) |
