@@ -41,8 +41,30 @@ _TERMINAL_STATES = {
     "SUCCESS", "ERROR", "CANCELLED",
     "RETRIES_EXCEEDED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED",
 }
+# Terminal statuses of a run that FAILED without writing its own terminal row
+# (a dead letter writes none; ERROR means the workflow raised first), mapped to
+# the error_type the tail reports. The run sweep persists the same rows within
+# a minute; the tail writes them at once so a live viewer doesn't wait.
+# CANCELLED is deliberately absent — the user asked for it.
+_FAILED_STATES = {"MAX_RECOVERY_ATTEMPTS_EXCEEDED": "run_lost", "ERROR": "error"}
+
+
+def _event_frame(row: dict) -> str:
+    return f"id: {row['seq']}\ndata: {json.dumps(row['event'])}\n\n"
+
+
+def _failure_frames(run_id: str, status: str) -> list[str]:
+    """The error frames (contract C5, no SSE id: they are not rows) for a run
+    that ended in `status`; none unless it failed."""
+    error_type = _FAILED_STATES.get(status)
+    if error_type is None:
+        return []
+    message = run_events.RUN_LOST_MESSAGE if error_type == "run_lost" else run_events.RUN_FAILED_MESSAGE
+    return [f"data: {json.dumps(ev)}\n\n" for ev in run_events.failure_events(run_id, message, error_type)]
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
+# Indirection so tests can drive the tail on a fake clock.
+_sleep = asyncio.sleep
 
 
 def _require_ready() -> None:
@@ -99,7 +121,7 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
                 waited = 0.0
                 for row in rows:
                     last = row["seq"]
-                    yield f"id: {row['seq']}\ndata: {json.dumps(row['event'])}\n\n"
+                    yield _event_frame(row)
                     if row["terminal"]:
                         yield "data: [DONE]\n\n"
                         return
@@ -111,15 +133,25 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
                 # One last drain in case events landed between read and status.
                 for row in await run_events.read_since(run_id, last):
                     last = row["seq"]
-                    yield f"id: {row['seq']}\ndata: {json.dumps(row['event'])}\n\n"
+                    yield _event_frame(row)
+                    if row["terminal"]:
+                        yield "data: [DONE]\n\n"
+                        return
+                # No terminal row: a failed or dead-lettered run ends with an
+                # error the user sees, not a bare [DONE].
+                for frame in _failure_frames(run_id, st.status):
+                    yield frame
                 yield "data: [DONE]\n\n"
                 return
             waited += _POLL_INTERVAL_SEC
             if waited >= _STREAM_MAX_SEC:
+                # Only a PENDING/ENQUEUED run gets here (e.g. waiting on human
+                # input, up to RUN_RESUME_TIMEOUT_SEC): no error frame — the
+                # run may still finish, and the proxy re-attaches.
                 logger.warning("Stream %s: max duration reached, closing", run_id)
                 yield "data: [DONE]\n\n"
                 return
-            await asyncio.sleep(_POLL_INTERVAL_SEC)
+            await _sleep(_POLL_INTERVAL_SEC)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 

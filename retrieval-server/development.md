@@ -336,4 +336,39 @@ in-flight run is stranded):
 **Bumping it** (a change to the step sequence): set a new descriptive value in the same deploy,
 for example `flyctl secrets set --app genai-retrieval-server-production --stage
 DBOS_APP_VERSION=rs-2026-10-15-tool-steps`. Runs in flight at that deploy are stranded; nothing
-re-executes them on the new step order.
+re-executes them on the new step order, and the run sweep ends them with an error (below).
+
+### Failed, dead-lettered and stranded runs end with an error
+
+A run that ends without finishing must still end its event stream with an error the user sees
+(contract C5: a standalone `{"error", "error_type"}` row, then the terminal
+`{"status": "error", ...}` row; `run_events.failure_events`). Three places do that:
+
+- **The run itself** (runs.py) publishes its own failures — `resume_timeout`, `runaway` — as a
+  standalone error row before its terminal summary.
+- **The tail** (`GET /runs/{id}/stream`) writes the same two frames, then `[DONE]`, when the run's
+  DBOS status is `ERROR` (`error_type: "error"`) or `MAX_RECOVERY_ATTEMPTS_EXCEEDED` (`run_lost`)
+  and no terminal row exists, so a live viewer does not wait for the sweep. It writes none for
+  `CANCELLED` (the user asked for it) and none at its 30-minute idle cap (the run is still
+  PENDING, e.g. waiting for human input; the proxy re-attaches).
+- **The run sweep** (`durable_runtime._sweep_loop`, first pass ~10 s after startup, then every
+  60 s) persists the rows through `run_events.publish_terminal_once`, which writes them only if
+  the run has no terminal row yet, so passes and restarts never duplicate them. Each pass:
+  - ends `agent_run`s that are `MAX_RECOVERY_ATTEMPTS_EXCEEDED` (`run_lost`) or `ERROR`
+    (`error`), created within `RUN_EVENTS_TTL_SEC`;
+  - cancels `agent_run`s still PENDING/ENQUEUED under another app version after 10 minutes
+    (`DURABLE_STRANDED_AFTER_SEC`) and ends them (`run_lost`);
+  - logs and counts `request_agent_run` dead letters once each (their caller is gone, there is
+    no stream to end).
+
+DBOS statuses are left as they are, for ops. Logs carry only the workflow id, name, status,
+`recovery_attempts`, executor and app version — a workflow's input is the user's request and is
+never logged. Dead letters count `durable_run_dead_lettered_total{workflow}`.
+
+**Manual replay** of a dead-lettered `agent_run` (ops only): from a Python shell with the
+production `DATABASE_URL` and DBOS launched,
+`await DBOS.resume_workflow_async("<run id>", queue_name="agent_runs")`. It resets the attempt
+count to 0 and works only while the run's app version is the current one. Pass `queue_name`, or the
+run lands on DBOS's internal queue and skips the `agent_runs` concurrency cap. If the sweep has
+already ended the run, its stream is over: the user saw the error, and the replayed output is not
+shown.

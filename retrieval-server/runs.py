@@ -55,6 +55,9 @@ _RESUME_TOPIC = "resume"
 _RESUME_TIMEOUT_SEC = int(os.getenv("RUN_RESUME_TIMEOUT_SEC", "3600"))
 # Safety cap on interrupt→resume cycles per run (runaway guard).
 _MAX_RESUME_CYCLES = int(os.getenv("RUN_MAX_RESUME_CYCLES", "50"))
+# User-facing text of the run's own failures (shown by the proxy, contract C5).
+_RESUME_TIMEOUT_MESSAGE = "This response stopped because it waited too long for your input."
+_RUNAWAY_MESSAGE = "This response stopped because it asked for input too many times."
 
 
 async def _pending_interrupts(graph, cfg) -> list:
@@ -126,6 +129,17 @@ def _resolve_durable_graph(customer_id: str, graph_id, checkpointer):
 async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     """The workflow body (kept plain so it can be unit-tested without DBOS).
     Streams graph events into run_events and returns a summary."""
+    try:
+        return await _agent_run_body(run_id, run_input)
+    except Exception:
+        # The workflow ends ERROR without a terminal row; the run sweep (and a
+        # live tail) end its stream with an error. Counted here so the
+        # agent_run error rate sees workflow failures, not just failed turns.
+        count("agent_run_total", status="error", source=run_input.get("request_source") or "conversation")
+        raise
+
+
+async def _agent_run_body(run_id: str, run_input: dict) -> dict:
     checkpointer = durable_runtime.get_checkpointer()
     if checkpointer is None:
         raise RuntimeError("durable runs not ready — no checkpointer")
@@ -145,6 +159,8 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
 
     usage: dict = {}
     error: dict = {}
+    # True once the error above went out as its own row (stream errors do).
+    error_published = False
     cfg = {"configurable": {"thread_id": run_id}}
     graph_input = state  # dict on a fresh run; Command(resume=...) after an interrupt
     resume_cycles = 0
@@ -165,6 +181,7 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
                 usage = payload["usage"]
             if "error" in payload:
                 error = payload
+                error_published = True
 
         if error:
             break
@@ -176,7 +193,7 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
             break
         resume_cycles += 1
         if resume_cycles > _MAX_RESUME_CYCLES:
-            error = {"error": "run exceeded the resume-cycle limit", "error_type": "runaway"}
+            error = {"error": _RUNAWAY_MESSAGE, "error_type": "runaway"}
             break
         _ai = pending[0]
         _ai_payload = {**_ai, "run_id": run_id} if isinstance(_ai, dict) else {"value": _ai, "run_id": run_id}
@@ -187,7 +204,7 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
 
         value = await DBOS.recv_async(topic=_RESUME_TOPIC, timeout_seconds=_RESUME_TIMEOUT_SEC)
         if value is None:
-            error = {"error": "timed out waiting for input", "error_type": "resume_timeout"}
+            error = {"error": _RESUME_TIMEOUT_MESSAGE, "error_type": "resume_timeout"}
             break
         graph_input = Command(resume=value)
 
@@ -210,6 +227,11 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
         "error_type": error.get("error_type"),
     }
     status = "error" if summary["error"] else "completed"
+    if error and not error_published:
+        # The run's own failure (resume timeout, runaway guard) goes out as a
+        # standalone error row before the summary (contract C5): inside the
+        # summary the proxy's parser can take another key first.
+        await run_events.publish(run_id, {"error": error["error"], "error_type": error["error_type"]})
     await run_events.publish(run_id, {"status": status, **summary}, terminal=True)
     count("agent_run_total", status=status, source=req.request_source or "conversation")
     observe("agent_run_duration_seconds", time.perf_counter() - run_start)

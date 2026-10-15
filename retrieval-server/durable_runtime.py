@@ -11,8 +11,13 @@ Lifecycle:
   import time   -> _construct_dbos(): create the DBOS singleton so @DBOS.workflow
                    decorators (routes/runs.py) can register. Does NOT touch Postgres.
   startup()     -> open the checkpointer connection pool, run checkpointer + DBOS
-                   migrations, DBOS.launch() (also recovers interrupted workflows).
+                   migrations, DBOS.launch() (also recovers interrupted workflows),
+                   then start the run_events TTL pruner and the run sweep.
   shutdown()    -> DBOS.destroy() + close the pool.
+
+The run sweep (plan 0.2) ends runs nothing else will end — dead-lettered,
+failed or stranded by an app-version bump — with an error the user sees, and
+counts request-agent dead letters.
 
 P0-verified config for the Supabase session pooler: use_listen_notify=False
 (the pooler has no working LISTEN/NOTIFY, so DBOS polls) and dbos_system_schema
@@ -20,6 +25,8 @@ P0-verified config for the Supabase session pooler: use_listen_notify=False
 """
 import logging
 import os
+import time
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +45,21 @@ _CHECKPOINTER_POOL_MAX = int(os.getenv("CHECKPOINTER_POOL_MAX", "5"))
 # Run-events TTL (P3): prune the reattach channel so it doesn't grow unbounded.
 RUN_EVENTS_TTL_SEC = int(os.getenv("RUN_EVENTS_TTL_SEC", str(7 * 24 * 3600)))
 RUN_EVENTS_CLEANUP_INTERVAL_SEC = int(os.getenv("RUN_EVENTS_CLEANUP_INTERVAL_SEC", "3600"))
+# Run sweep (plan 0.2). A loop, not a startup pass: DBOS dead-letters a
+# recovered run in its queue worker AFTER launch() returns.
+SWEEP_FIRST_DELAY_SEC = float(os.getenv("DURABLE_SWEEP_FIRST_DELAY_SEC", "10"))
+SWEEP_INTERVAL_SEC = float(os.getenv("DURABLE_SWEEP_INTERVAL_SEC", "60"))
+# A PENDING/ENQUEUED run of another app version is never recovered nor
+# dequeued; past this age the sweep cancels it and ends it with an error.
+STRANDED_AFTER_SEC = int(os.getenv("DURABLE_STRANDED_AFTER_SEC", "600"))
+_SWEEP_BATCH = 200
 
 _dbos_constructed = False  # DBOS() instance exists -> workflows may register/decorate
 _ready = False             # checkpointer setup + DBOS.launch() succeeded -> runs usable
 _checkpointer = None
 _pool = None
 _cleanup_task = None       # background run_events TTL pruner
+_sweep_task = None         # background run sweep (plan 0.2)
 
 
 def config_present() -> bool:
@@ -141,8 +157,9 @@ async def startup() -> None:
         await runs.register_run_queue()
 
         import asyncio
-        global _cleanup_task
+        global _cleanup_task, _sweep_task
         _cleanup_task = asyncio.create_task(_run_events_ttl_loop())
+        _sweep_task = asyncio.create_task(_sweep_loop())
 
         _ready = True
         logger.info("Durable runs ENABLED (checkpointer ready, DBOS launched)")
@@ -169,11 +186,157 @@ async def _run_events_ttl_loop() -> None:
             logger.exception("run_events TTL prune failed")
 
 
+class SweepState:
+    """What one process's sweep remembers between passes."""
+
+    def __init__(self, started_ms: int | None = None):
+        started_ms = int(time.time() * 1000) if started_ms is None else started_ms
+        # request_agent_run dead letters are counted once: only rows whose
+        # updated_at (set by DBOS when it dead-letters) is newer than anything
+        # counted so far. Starts a little before this process started, which
+        # covers the dead letters this process's own launch() produces.
+        self.dead_letter_watermark_ms = started_ms - 120_000
+        self.counted_dead_letters: set[str] = set()
+        # agent_runs this process already ended (or found already ended), so
+        # each pass does not re-check them.
+        self.ended_runs: set[str] = set()
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat()
+
+
+def _log_workflow(message: str, w) -> None:
+    """Ids, name, attempts, executor and version only — a workflow's input is
+    the user's request and is never logged."""
+    logger.warning(
+        "%s: workflow_id=%s name=%s status=%s recovery_attempts=%s executor=%s app_version=%s",
+        message, w.workflow_id, w.name, w.status, w.recovery_attempts, w.executor_id, w.app_version,
+    )
+
+
+async def sweep_once(state: SweepState, dbos=None) -> None:
+    """One pass of the run sweep (plan 0.2). Each part is isolated: a failure
+    is logged and the other parts still run."""
+    if dbos is None:
+        from dbos import DBOS as dbos
+    now = datetime.now(timezone.utc)
+    for part in (_end_failed_agent_runs, _end_stranded_agent_runs, _count_request_dead_letters):
+        try:
+            await part(dbos, now, state)
+        except Exception:
+            logger.exception("durable run sweep: %s failed", part.__name__)
+
+
+async def _end_failed_agent_runs(dbos, now: datetime, state: SweepState) -> None:
+    """agent_runs DBOS dead-lettered (MAX_RECOVERY_ATTEMPTS_EXCEEDED: no output,
+    no error row) or that failed outright (ERROR: the workflow raised before
+    its terminal row) end with the two error rows, once."""
+    import durable_metrics
+    import run_events
+
+    rows = await dbos.list_workflows_async(
+        name="agent_run",
+        status=["MAX_RECOVERY_ATTEMPTS_EXCEEDED", "ERROR"],
+        start_time=_iso(now - timedelta(seconds=RUN_EVENTS_TTL_SEC)),
+        sort_desc=True,
+        limit=_SWEEP_BATCH,
+        load_input=False,
+        load_output=False,
+    )
+    for w in rows:
+        if w.workflow_id in state.ended_runs:
+            continue
+        dead_lettered = w.status == "MAX_RECOVERY_ATTEMPTS_EXCEEDED"
+        if dead_lettered:
+            message, error_type = run_events.RUN_LOST_MESSAGE, "run_lost"
+        else:
+            message, error_type = run_events.RUN_FAILED_MESSAGE, "error"
+        events = run_events.failure_events(w.workflow_id, message, error_type)
+        if await run_events.publish_terminal_once(w.workflow_id, events):
+            if dead_lettered:
+                durable_metrics.run_dead_lettered("agent_run")
+                _log_workflow("durable run dead-lettered after repeated crashes; ended it with an error", w)
+            else:
+                _log_workflow("durable run failed without a terminal event; ended it with an error", w)
+        state.ended_runs.add(w.workflow_id)
+
+
+async def _end_stranded_agent_runs(dbos, now: datetime, state: SweepState) -> None:
+    """agent_runs left PENDING/ENQUEUED under another app version (a deploy
+    bumped DBOS_APP_VERSION while they ran) are never recovered or dequeued:
+    cancel them, then end them with the error rows."""
+    import run_events
+
+    current = dbos.application_version
+    rows = await dbos.list_workflows_async(
+        name="agent_run",
+        status=["PENDING", "ENQUEUED"],
+        end_time=_iso(now - timedelta(seconds=STRANDED_AFTER_SEC)),
+        limit=_SWEEP_BATCH,
+        load_input=False,
+        load_output=False,
+    )
+    for w in rows:
+        # An unset version is dequeued by the latest version: not stranded.
+        if w.app_version is None or w.app_version == current:
+            continue
+        await dbos.cancel_workflow_async(w.workflow_id)
+        events = run_events.failure_events(w.workflow_id, run_events.RUN_LOST_MESSAGE, "run_lost")
+        await run_events.publish_terminal_once(w.workflow_id, events)
+        state.ended_runs.add(w.workflow_id)
+        _log_workflow(f"durable run stranded by an app version change (current {current}); cancelled it", w)
+
+
+async def _count_request_dead_letters(dbos, now: datetime, state: SweepState) -> None:
+    """request_agent_run is capped at 0 recovery attempts, so every restart
+    that interrupts one dead-letters it. Its caller is gone; log and count each
+    once — only rows dead-lettered (updated_at) after the previous pass."""
+    import durable_metrics
+
+    rows = await dbos.list_workflows_async(
+        name="request_agent_run",
+        status="MAX_RECOVERY_ATTEMPTS_EXCEEDED",
+        completed_after=_iso(datetime.fromtimestamp(state.dead_letter_watermark_ms / 1000, timezone.utc)),
+        limit=_SWEEP_BATCH,
+        load_input=False,
+        load_output=False,
+    )
+    newest = state.dead_letter_watermark_ms
+    for w in rows:
+        updated = w.updated_at or 0
+        if updated <= state.dead_letter_watermark_ms or w.workflow_id in state.counted_dead_letters:
+            continue
+        state.counted_dead_letters.add(w.workflow_id)
+        newest = max(newest, updated)
+        durable_metrics.run_dead_lettered("request_agent_run")
+        _log_workflow("request agent run dead-lettered after a restart", w)
+    state.dead_letter_watermark_ms = newest
+
+
+async def _sweep_loop() -> None:
+    """First pass ~10 s after startup (after this boot's recovery has had time
+    to re-dispatch, and dead-letter, interrupted runs), then every 60 s."""
+    import asyncio
+
+    state = SweepState()
+    try:
+        await asyncio.sleep(SWEEP_FIRST_DELAY_SEC)
+        while True:
+            await sweep_once(state)
+            await asyncio.sleep(SWEEP_INTERVAL_SEC)
+    except asyncio.CancelledError:
+        pass
+
+
 async def shutdown() -> None:
-    global _pool, _cleanup_task
+    global _pool, _cleanup_task, _sweep_task
     if _cleanup_task is not None:
         _cleanup_task.cancel()
         _cleanup_task = None
+    if _sweep_task is not None:
+        _sweep_task.cancel()
+        _sweep_task = None
     try:
         if _dbos_constructed:
             from dbos import DBOS
