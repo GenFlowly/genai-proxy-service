@@ -47,6 +47,11 @@ interface BackendResponse {
     generatedAttachments?: AttachmentRef[] | null;
     /** Facts memory extraction learned from this exchange; null = unknown/pending */
     learnedFacts?: LearnedFact[] | null;
+    /**
+     * User-facing error of a failed turn (e.g. a durable run that failed or
+     * was lost). The text may be partial or empty; the card renders as failed.
+     */
+    error?: string | null;
 }
 
 interface BackendPromptAndResponse {
@@ -126,10 +131,11 @@ export async function getConversation(
             : [];
 
         responsesToProcess.forEach((resp, respIndex) => {
-            // Map responses with text, plus an in-flight placeholder (empty text)
-            // for a durable run still generating — the latter must survive so the
-            // client can render the loading card and reattach to its stream.
-            if (resp && (resp.text || resp.inFlight)) {
+            // Map responses with text, an in-flight placeholder (empty text) for
+            // a durable run still generating — it must survive so the client can
+            // render the loading card and reattach to its stream — and failed
+            // turns, which may have no text but must still show their error.
+            if (resp && (resp.text || resp.inFlight || resp.error)) {
                 // Map backend vendor string to frontend Enum if possible, default to something safe or keep string
                 const vendor = (resp.aiVendor as AIVendor) || AIVendor.OPENAI;
 
@@ -162,6 +168,8 @@ export async function getConversation(
                     // Always set for historical messages (null = extraction
                     // outcome unknown) so the UI knows not to poll for them
                     learnedFacts: resp.learnedFacts ?? null,
+                    // A failed turn stays failed after a reload
+                    ...(resp.error ? { error: resp.error } : {}),
                 });
                 // An in-flight placeholder carries the run to reattach to; collect
                 // it so every vendor's run is resumed on reload (not just one).

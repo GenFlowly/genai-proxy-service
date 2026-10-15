@@ -5,8 +5,21 @@ import { ThinkingStep, WebSource } from "../models/conversation.models";
 import { AttachmentRef } from "../models/attachment.models";
 import { fetchWithRetry } from "../utils/apiUtils";
 
-/** Vendor failure relayed mid-stream by the proxy ({"t":"err"} chunk). */
-export class StreamGenerationError extends Error {}
+/** Error.name of StreamGenerationError. */
+export const STREAM_GENERATION_ERROR = "StreamGenerationError";
+
+/**
+ * Failure the proxy reported for the turn ({"t":"err"} chunk): a vendor error
+ * mid-stream, or a durable run that failed or was lost. Final — the turn is
+ * stored with this error, so there is nothing to recover. Recognise it by
+ * name (STREAM_GENERATION_ERROR); instanceof breaks across module mocks.
+ */
+export class StreamGenerationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = STREAM_GENERATION_ERROR;
+    }
+}
 
 export interface StreamMetadata {
     conversationId: string | null;
