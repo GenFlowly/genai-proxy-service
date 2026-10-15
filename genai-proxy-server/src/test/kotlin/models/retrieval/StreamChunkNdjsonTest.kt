@@ -51,6 +51,38 @@ class StreamChunkNdjsonTest {
     }
 
     @Test
+    fun `generated files frame keeps the display fields and drops both S3 keys`() {
+        val artifacts = """[{"artifact_id":"a1","key":"customers/c1/attachments/a1","media_type":"application/pdf",
+            "filename":"Report.pdf","size_bytes":13312,"source_key":"customers/c1/attachments/a1.source.md",
+            "page_count":7}]"""
+
+        assertEquals(
+            "{\"t\":\"ga\",\"v\":[{\"artifact_id\":\"a1\",\"media_type\":\"application/pdf\"," +
+                "\"filename\":\"Report.pdf\",\"size_bytes\":13312,\"page_count\":7}]}\n",
+            StreamChunk.GeneratedArtifacts(artifacts).toNdjsonFrame()
+        )
+    }
+
+    @Test
+    fun `generated files frame passes only the known display fields of every artifact`() {
+        val artifacts = """[{"artifact_id":"a1","key":"k1","media_type":"application/pdf","internal":"x"},
+            {"artifact_id":"a2","key":"k2","filename":"b.pdf","page_count":null}, 42]"""
+
+        assertEquals(
+            "{\"t\":\"ga\",\"v\":[{\"artifact_id\":\"a1\",\"media_type\":\"application/pdf\"}," +
+                "{\"artifact_id\":\"a2\",\"filename\":\"b.pdf\",\"page_count\":null}]}\n",
+            StreamChunk.GeneratedArtifacts(artifacts).toNdjsonFrame()
+        )
+    }
+
+    @Test
+    fun `an unreadable generated files payload relays an empty list`() {
+        listOf("""{"artifact_id":"a1","key":"k"}""", "not json", """[{"key":"k"""").forEach {
+            assertEquals("{\"t\":\"ga\",\"v\":[]}\n", StreamChunk.GeneratedArtifacts(it).toNdjsonFrame(), it)
+        }
+    }
+
+    @Test
     fun `usage produces no client frame`() {
         assertNull(StreamChunk.Usage(1, 2, 3, 0, 0).toNdjsonFrame())
     }
