@@ -15,6 +15,7 @@ import {
 } from '../lib/agentGraph'
 import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
 import { useVendorDisplayNames } from '../lib/vendorNames'
+import PdfLetterheadPanel from '../components/PdfLetterheadPanel'
 
 /** Visual editor for one admin-owned agent graph (request agents etc.). */
 export default function AgentGraphEditorPage() {
@@ -117,6 +118,16 @@ export default function AgentGraphEditorPage() {
                     onSaveAsPreset={(node) => void saveNodeAsPreset(node)}
                 />
             </div>
+            {graph && graphId && (
+                <PdfLetterheadPanel
+                    graph={graph}
+                    getToken={getAccessTokenSilently}
+                    onSaveNodeConfig={async (nodeId, config) => {
+                        const token = await getAccessTokenSilently()
+                        setGraph(await updateAgentGraph(token, graphId, { nodes: [{ nodeId, config }] }))
+                    }}
+                />
+            )}
         </>
     )
 }

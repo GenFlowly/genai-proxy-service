@@ -18,6 +18,7 @@ import {
 } from '../lib/agentGraph'
 import { useNodePresetCatalog } from '../lib/useNodePresetCatalog'
 import { useVendorDisplayNames } from '../lib/vendorNames'
+import PdfLetterheadPanel from '../components/PdfLetterheadPanel'
 
 /**
  * The System default graph on the visual editor. Unpublished: a blank canvas
@@ -135,6 +136,16 @@ export default function DefaultGraphPage() {
                     onSaveAsPreset={(node) => void saveNodeAsPreset(node)}
                 />
             </div>
+            {graph && (
+                <PdfLetterheadPanel
+                    graph={graph}
+                    getToken={getAccessTokenSilently}
+                    onSaveNodeConfig={async (nodeId, config) => {
+                        const token = await getAccessTokenSilently()
+                        setGraph(await updateDefaultGraph(token, { nodes: [{ nodeId, config }] }))
+                    }}
+                />
+            )}
         </>
     )
 }

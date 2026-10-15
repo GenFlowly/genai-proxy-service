@@ -21,6 +21,9 @@ export const endpoints = {
     adminNodePreset: (presetId: string) => `${BASE}${API_PREFIX}/admin/node-presets/${presetId}`,
     defaultGraph: `${BASE}${API_PREFIX}/admin/default-graph`,
     systemAgents: `${BASE}${API_PREFIX}/admin/system-agents`,
+    letterheadLogo: `${BASE}${API_PREFIX}/admin/letterhead-logo`,
+    letterheadLogoUrl: (attachmentId: string) =>
+        `${BASE}${API_PREFIX}/admin/letterhead-logo/url?attachmentId=${encodeURIComponent(attachmentId)}`,
     requestAgentMapEntry: (requestType: string) =>
         `${BASE}${API_PREFIX}/admin/request-agent-map/${requestType}`,
 }
