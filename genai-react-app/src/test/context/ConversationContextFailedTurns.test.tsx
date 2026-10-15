@@ -61,6 +61,7 @@ const Probe = () => {
             <div data-testid="text">{m?.text ?? ''}</div>
             <div data-testid="error">{m?.error ?? ''}</div>
             <div data-testid="loading">{String(!!m?.isLoading)}</div>
+            <div data-testid="files">{String(m?.generatedAttachments?.length ?? 0)}</div>
             <button data-testid="stream" onClick={() => c.generateResponsesStream('conv-default')}>stream</button>
             <button data-testid="load" onClick={() => c.loadConversation('c1')}>load</button>
         </div>
@@ -165,6 +166,28 @@ describe('ConversationContext failed turns', () => {
         await waitFor(() => expect(getByTestId('loading')).toHaveTextContent('false'));
         // Only the initial load: the stream already said how the run ended
         expect(getConversation).toHaveBeenCalledTimes(1);
+    });
+
+    test('reattach: files a recovered run sends again are listed once', async () => {
+        const { getConversation } = require('../../services/conversationService');
+        getConversation.mockResolvedValue(pendingConversation);
+        const { reattachRun } = require('../../services/reattachRunService');
+        const pdf = { attachmentId: 'a1', mediaType: 'application/pdf', filename: 'report.pdf' };
+        reattachRun.mockImplementation((_t: any, _r: any, _c: any, cb: any) => {
+            // The live "ga" frame, then the durable run's summary re-sends it.
+            cb.onGeneratedAttachments([pdf]);
+            cb.onDelta('Here is the report.');
+            cb.onGeneratedAttachments([pdf]);
+            return Promise.resolve('streamed');
+        });
+        const { getAIUsageActivity } = require('../../services/getAIUsageService');
+        getAIUsageActivity.mockResolvedValue(null);
+
+        const { getByTestId } = renderProbe();
+        await act(async () => { getByTestId('load').click(); });
+
+        await waitFor(() => expect(getByTestId('text')).toHaveTextContent('Here is the report.'));
+        expect(getByTestId('files')).toHaveTextContent('1');
     });
 
     test('reattach to a run that already finished (404) shows the stored error right away', async () => {

@@ -444,7 +444,12 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             onThinkingStep: (s) => { gotContent = true; patch(m => ({ ...m, thinkingStepList: applyThinkingStep(m.thinkingStepList ?? [], s) })) },
                             onThinkingDuration: (ms) => patch(m => ({ ...m, thinkingDurationMs: ms })),
                             onWebSources: (ws) => patch(m => ({ ...m, webSources: ws })),
-                            onGeneratedAttachments: (ga) => patch(m => ({ ...m, generatedAttachments: [...(m.generatedAttachments ?? []), ...ga] })),
+                            // Merged by id like the live stream: a recovered durable run
+                            // re-sends its files in the terminal summary (plan 1.10).
+                            onGeneratedAttachments: (ga) => patch(m => {
+                                const existing: AttachmentRef[] = m.generatedAttachments ?? []
+                                return { ...m, generatedAttachments: [...existing, ...ga.filter(a => !existing.some(e => e.attachmentId === a.attachmentId))] }
+                            }),
                             onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: runId } })),
                         }).then(o => { outcome = o })
                             .catch(e => {
