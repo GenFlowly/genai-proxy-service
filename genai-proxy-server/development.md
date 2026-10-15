@@ -303,7 +303,7 @@ Deletion is admin-only (`ADMIN_EMAILS`). There is no self-service route, and an 
 3. **Classify** the owned conversations, archived ones included. A conversation with any SharedConversations row (PUBLIC included) is kept, and shows the owner as "Deleted User". Every other one gets a conversation purge job.
 4. **Sweep.** The keep set is every key linked from the kept conversations and from the customer's messages in other people's conversations (Message `customerIdIndex`). Every other object under `customers/{customerId}/` is deleted: unsent uploads, scratch and orphans.
 5. **Delete the rest**:
-   - the run data of the kept messages (retrieval-server `DELETE /runs/{run_id}/data`);
+   - the run data of the kept messages (retrieval-server `DELETE /runs/{run_id}/data`), then every other durable run whose input is the customer's, found on the retrieval-server by listing its workflows (`DELETE /customers/{customerId}/run-data`: rows written before `runId` was stored, request agents the run sweep has not reached), with the customer's tool-ledger rows. A run that may still execute is cancelled and the answer is 409, so the job retries;
    - the customer's recipient share rows. A deleted owner's conversation left without any share is purged;
    - instructions, except those a System agent's node references through `instruction_id` or `harness_instruction_id`, at any depth of the node config (warning `instructions_kept`);
    - agent graphs and nodes (every version) and the shares of all of these;
@@ -333,6 +333,18 @@ Archive and unarchive purge nothing. Archiving or unsharing a conversation enque
 | `CUSTOMER_DOCUMENTS_BUCKET` | the encoding-server's documents bucket | `genflowly-{APP_ENV}-customer-documents` |
 
 The deploy workflows copy the three `AUTH0_MGMT_*` GitHub environment secrets, when all are set, into the proxy's Fly secrets. The encoding-server accepts `POST /purge-vectors` only from a client-credentials token whose `azp` is listed in its `PURGE_ALLOWED_CLIENT_IDS` (set it to the M2M client id). Unset, every purge call gets a 403, and the jobs retry until they are stuck.
+
+### PDF uploads switch (plan 4.4)
+
+`PDF_UPLOADS_ENABLED` gates PDF attachments: off, `POST /attachments` for a PDF and a generate request carrying one get a 400 (images are unaffected). Unset, it is on everywhere but production; `fly.toml` sets it on for development and `fly.production.toml` off. Turn it on in production only when this section is live there: customer deletion (with the Message `customerIdIndex`), the claim, the backfill finished and the pending rule enabled. Turn on `REACT_APP_PDF_ATTACHMENTS` in the web app at the same time.
+
+### Letterhead logos of System agents (plan 6.2)
+
+A TOOL_EXECUTOR node's `tool_settings.generate_pdf` sets the PDF letterhead (`default_page_size`, `company_name`, `footer_text`, `accent_color`, `logo_attachment_id`); `GraphValidationService` rule 12 checks the values, and saving an agent refuses a logo id that is not a file under the graph owner's attachments or System's. Admins upload System agents' logos with `POST /api/v1/admin/letterhead-logo` (PNG or JPEG, at most 2 MB, presigned under `customers/System/attachments/`, untagged because the node row keeps it; System is never purged) and preview one with `GET /api/v1/admin/letterhead-logo/url?attachmentId=`. The retrieval-server reads a logo from the graph owner's prefix, then System's (retrieval-server/development.md, "Locale, page size and letterhead").
+
+### Phantom Conversation rows
+
+Before pending-run writes required the conversation's row, removing a share recipient's durable run created a key-only Conversation row under the recipient. The proxy now ignores rows without a `client` (`getConversationById`, the pending-run condition). `scripts/find_phantom_conversation_rows.py --region us-east-1` lists them per stage (read-only); `--delete` removes them, each under the condition that it still has no `client`.
 
 ### What deletion does not reach: backup windows
 
