@@ -9,6 +9,7 @@ on:
     branches: [development]
     paths:
       - 'observability/grafana/*-development.json'
+      - 'observability/grafana/alerts/*-development.json'
       - '.github/workflows/dev-grafana-dashboards.yml'
   workflow_dispatch:
 
@@ -51,4 +52,39 @@ jobs:
               echo "Deploy failed ($code):"; cat /tmp/resp.json; exit 1
             fi
             jq -r '"  -> \(.status) uid=\(.uid) \(.url)"' /tmp/resp.json
+          done
+
+      # Alert rules (generated into observability/grafana/alerts/ by
+      # generate_api_dashboards.py), upserted through Grafana's alert-rule
+      # provisioning API. Needs the Prometheus datasource uid in the
+      # GRAFANA_PROM_DS_UID secret; skipped with a notice until it is set.
+      - name: Deploy alert rules to Grafana
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_SA_TOKEN: ${{ secrets.GRAFANA_SA_TOKEN }}
+          DS_PROM_UID: ${{ secrets.GRAFANA_PROM_DS_UID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DS_PROM_UID:-}" ]]; then
+            echo "::notice::GRAFANA_PROM_DS_UID is not set; alert rules not deployed"
+            exit 0
+          fi
+          auth=(-H "Authorization: Bearer $GRAFANA_SA_TOKEN" -H "Content-Type: application/json" -H "X-Disable-Provenance: true")
+          for f in observability/grafana/alerts/*-"$STAGE".json; do
+            echo "Deploying $f"
+            jq -c --arg ds "$DS_PROM_UID" \
+              '.[] | (.data[] |= (if .datasourceUid == "${DS_PROM_UID}" then .datasourceUid = $ds else . end))' "$f" |
+            while read -r rule; do
+              uid=$(jq -r .uid <<<"$rule")
+              code=$(curl -s -o /tmp/rule.json -w '%{http_code}' -X PUT \
+                "$GRAFANA_URL/api/v1/provisioning/alert-rules/$uid" "${auth[@]}" -d "$rule")
+              if [[ "$code" == "404" ]]; then
+                code=$(curl -s -o /tmp/rule.json -w '%{http_code}' -X POST \
+                  "$GRAFANA_URL/api/v1/provisioning/alert-rules" "${auth[@]}" -d "$rule")
+              fi
+              if [[ "$code" != "200" && "$code" != "201" ]]; then
+                echo "Alert rule $uid failed ($code):"; cat /tmp/rule.json; exit 1
+              fi
+              echo "  -> $uid ($code)"
+            done
           done
