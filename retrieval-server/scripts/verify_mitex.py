@@ -2,8 +2,9 @@
 """Check the vendored mitex Typst package against its pins and, when reachable,
 against the published tarball on packages.typst.org (stdlib only).
 
-graph_tools/typst_packages/preview/mitex/0.2.7 is a verbatim copy of
-https://packages.typst.org/preview/mitex-0.2.7.tar.gz. The Typst renderer
+graph_tools/typst_packages/preview/mitex/0.2.7 holds a verbatim copy of the
+code files of https://packages.typst.org/preview/mitex-0.2.7.tar.gz (the
+tarball's documentation, NOT_VENDORED below, is left out). The Typst renderer
 loads it through package_path, with an empty read-only package cache, so
 nothing is ever downloaded at render time.
 
@@ -43,6 +44,11 @@ PINNED = {
     "specs/prelude.typ": "3a6de0070bf294167d43d09b4c633029512d9cfdb4eaf7a729ce5fe75e58515d",
     "typst.toml": "8c30fad1454efbfe72aaf241f5ced8c8103fec7e2790f9b1ebef0e01e335503c",
 }
+
+# Upstream files deliberately not vendored: documentation the renderer never
+# reads, and the license, whose text is kept next to the package as
+# graph_tools/typst_packages/LICENSE-mitex-Apache-2.0.txt.
+NOT_VENDORED = frozenset({"CHANGELOG.md", "LICENSE", "README.md", "specs/README.md"})
 
 
 def _sha256(data: bytes) -> str:
@@ -91,7 +97,8 @@ def compare_upstream(tarball: bytes, package_dir: str = PACKAGE_DIR) -> list[str
                 continue
             rel = member.name[2:] if member.name.startswith("./") else member.name
             upstream[rel] = _sha256(tf.extractfile(member).read())
-    problems = [f"not vendored: {rel}" for rel in sorted(upstream) if rel not in have]
+    problems = [f"not vendored: {rel}" for rel in sorted(upstream)
+                if rel not in have and rel not in NOT_VENDORED]
     problems += [f"differs from upstream: {rel}" for rel in sorted(upstream)
                  if rel in have and have[rel] != upstream[rel]]
     problems += [f"not in upstream: {rel}" for rel in sorted(have) if rel not in upstream]
@@ -122,7 +129,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"verify_mitex: {p}")
     if problems:
         return 1
-    print("verify_mitex: vendored files are identical to mitex-0.2.7.tar.gz on packages.typst.org")
+    print("verify_mitex: vendored files are identical to mitex-0.2.7.tar.gz on packages.typst.org "
+          f"(its documentation is not vendored: {', '.join(sorted(NOT_VENDORED))})")
     return 0
 
 

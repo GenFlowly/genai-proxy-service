@@ -11,10 +11,13 @@ LaTeX math to Typst math, used for `\( \)` and `\[ \]` in generated PDFs.
 
 - Source: `https://packages.typst.org/preview/mitex-0.2.7.tar.gz` (the Typst
   Universe registry; upstream repository https://github.com/mitex-rs/mitex).
-  Downloaded on 2026-10-14 and copied byte-for-byte into
-  `preview/mitex/0.2.7/`; nothing was added to or removed from that directory.
-- License: Apache-2.0 (`typst.toml`). The registry tarball carries no license
-  file, so the license text is kept next to it as `LICENSE-mitex-Apache-2.0.txt`.
+  Downloaded on 2026-10-14; its code files are copied byte-for-byte into
+  `preview/mitex/0.2.7/`. The tarball's documentation (`README.md`,
+  `CHANGELOG.md`, `specs/README.md`) and `LICENSE` are not vendored
+  (`NOT_VENDORED` in `scripts/verify_mitex.py`, which checks the rest against
+  the tarball in CI).
+- License: Apache-2.0 (`typst.toml`). The license text is kept next to the
+  package as `LICENSE-mitex-Apache-2.0.txt`.
 - `mitex.wasm` runs inside Typst's WebAssembly plugin sandbox (no file system,
   no network). The package evaluates the converted math with `eval`
   (`mitex.typ:27` and `:34`; `\raisebox`, `\hspace` and `\vspace` in

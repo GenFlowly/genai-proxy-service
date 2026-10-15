@@ -1071,6 +1071,24 @@ class VerifyMitexScriptTests(unittest.TestCase):
                 tf.addfile(info, io.BytesIO(data))
         self.assertEqual(self.vm.compare_upstream(buf.getvalue()), ["differs from upstream: mitex.typ"])
 
+    def test_upstream_documentation_need_not_be_vendored(self):
+        # The registry tarball also carries README, CHANGELOG and LICENSE files
+        # the renderer never reads; any other file missing here still fails.
+        def tarball(extra):
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+                for rel in sorted(self.vm.PINNED):
+                    tf.add(os.path.join(self.vm.PACKAGE_DIR, rel), arcname=rel)
+                for rel in extra:
+                    info = tarfile.TarInfo(rel)
+                    info.size = 4
+                    tf.addfile(info, io.BytesIO(b"docs"))
+            return buf.getvalue()
+
+        self.assertEqual(self.vm.compare_upstream(tarball(sorted(self.vm.NOT_VENDORED))), [])
+        self.assertEqual(self.vm.compare_upstream(tarball(["specs/latex/extra.typ"])),
+                         ["not vendored: specs/latex/extra.typ"])
+
     def test_unreachable_upstream_is_skipped(self):
         import contextlib
 
