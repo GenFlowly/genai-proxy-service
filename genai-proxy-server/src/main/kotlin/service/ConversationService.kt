@@ -81,6 +81,33 @@ class ConversationService(
         return shareRepository.getConversationShare(conversationId, "PUBLIC")
     }
 
+    /**
+     * The stored S3 key of [attachmentId] in [conversationId], for a download
+     * by a conversation participant (1.11): [callerCustomerId] must be the
+     * owner or hold a share role on it (PUBLIC included), and the id must
+     * appear in one of its messages - a user upload, a file generated on an
+     * assistant message, or a tool-result image (named by the last segment of
+     * its customers/{id}/attachments/{attachmentId} key). The key is the one
+     * the row stores, which may sit under another participant's prefix. Null
+     * when the caller has no access or the id is not in the conversation.
+     */
+    suspend fun findAttachmentKeyInConversation(
+        conversationId: String,
+        callerCustomerId: String,
+        attachmentId: String
+    ): String? {
+        getConversationRole(conversationId, callerCustomerId) ?: return null
+        for (message in conversationRepository.getMessageFileRefs(conversationId)) {
+            message.attachments.firstOrNull { it.attachmentId == attachmentId }?.let { ref ->
+                return ref.s3Key.takeIf { RetentionKeys.isRetentionKey(it) }
+            }
+            RetentionKeys.toolResultImageKeys(message.toolResultsJson)
+                .firstOrNull { RetentionKeys.attachmentIdOfKey(it) == attachmentId }
+                ?.let { return it }
+        }
+        return null
+    }
+
     suspend fun getConversationHistory(conversationId: String, customerId: String): GetConversationResponse {
         val role = getConversationRole(conversationId, customerId)
             ?: throw ConversationAccessDeniedException("Conversation not found or access denied")

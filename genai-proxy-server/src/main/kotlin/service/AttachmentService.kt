@@ -13,7 +13,9 @@ import org.slf4j.LoggerFactory
  * thin presigning client underneath.
  */
 class AttachmentService(
-    private val s3Provider: S3Provider
+    private val s3Provider: S3Provider,
+    /** Resolves downloads inside a conversation (1.11); null only in tests that never use them. */
+    private val conversationService: ConversationService? = null
 ) {
     private val logger = LoggerFactory.getLogger("AttachmentService")
 
@@ -56,6 +58,26 @@ class AttachmentService(
      */
     suspend fun getViewUrl(customerId: String, attachmentId: String): String? {
         val s3Key = attachmentS3Key(customerId, attachmentId)
+        if (s3Provider.head(s3Key) == null) return null
+        return s3Provider.presignGet(s3Key)
+    }
+
+    /**
+     * Presigned GET URL for an attachment shown inside [conversationId], for
+     * any participant (owner, a share recipient or a PUBLIC viewer): the key
+     * is the one stored on the conversation's message, so a file generated or
+     * uploaded in another participant's turn resolves too. Null when the
+     * caller cannot read the conversation, the attachment is not in it, or
+     * the object no longer exists.
+     */
+    suspend fun getViewUrlInConversation(
+        customerId: String,
+        attachmentId: String,
+        conversationId: String
+    ): String? {
+        val service = checkNotNull(conversationService) { "AttachmentService has no ConversationService" }
+        val s3Key = service.findAttachmentKeyInConversation(conversationId, customerId, attachmentId)
+            ?: return null
         if (s3Provider.head(s3Key) == null) return null
         return s3Provider.presignGet(s3Key)
     }
