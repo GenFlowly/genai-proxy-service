@@ -128,6 +128,35 @@ class GenerationRoutesTest {
         assertEquals(listOf<String?>("en-US"), batchLocales)
     }
 
+    // ── Request validation (4.4) ────────────────────────────────────────────
+
+    @Test
+    fun `a request the validator refuses is a 400 with its message, other failures stay 500`() = testApplication {
+        setUpRoutes()
+        coEvery {
+            orchestrator.processTextGenerateStreamRequest(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), anyNullable()
+            )
+        } throws com.genflowly.service.RequestValidationException(
+            "At most 5 PDFs are allowed per message (this message has 6)"
+        )
+
+        val refused = post(Routes.GENERATE_TEXT_STREAM, streamBody, null)
+
+        assertEquals(HttpStatusCode.BadRequest, refused.status)
+        assertTrue(refused.bodyAsText().contains("At most 5 PDFs are allowed per message"))
+
+        coEvery {
+            orchestrator.processTextGenerateRequest(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), anyNullable()
+            )
+        } throws IllegalStateException("boom")
+
+        assertEquals(HttpStatusCode.InternalServerError, post(Routes.GENERATE_TEXT, batchBody, null).status)
+    }
+
     // ── Keepalives during silences (1.7) ────────────────────────────────────
 
     private val first = "{\"t\":\"c\",\"v\":\"Working on it\"}\n"

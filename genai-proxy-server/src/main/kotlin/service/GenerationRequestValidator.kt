@@ -13,9 +13,15 @@ import com.genflowly.models.isPdfAttachmentMediaType
 import com.genflowly.providers.S3Provider
 
 /**
+ * A generation request the caller must fix: the routes answer 400 with its
+ * message (GenerationRouteSupport). Messages carry ids, never file names.
+ */
+class RequestValidationException(message: String) : IllegalArgumentException(message)
+
+/**
  * Validates the caller-supplied parts of a generation request — attachments
  * and tool definitions/results — before any orchestration work starts.
- * Failures throw IllegalArgumentException with a client-facing message.
+ * Failures throw [RequestValidationException] with a client-facing message.
  */
 class GenerationRequestValidator(
     private val s3Provider: S3Provider,
@@ -35,7 +41,10 @@ class GenerationRequestValidator(
      * vendor. Runs only for the current turn's attachments — history
      * attachments were validated when their message was created.
      */
-    suspend fun validateAttachments(attachments: List<AttachmentRef>, customerId: String) {
+    suspend fun validateAttachments(attachments: List<AttachmentRef>, customerId: String) =
+        asValidation { checkAttachments(attachments, customerId) }
+
+    private suspend fun checkAttachments(attachments: List<AttachmentRef>, customerId: String) {
         if (attachments.isEmpty()) return
         require(attachments.size <= MAX_ATTACHMENTS_PER_MESSAGE) {
             "At most $MAX_ATTACHMENTS_PER_MESSAGE attachments are allowed per message"
@@ -79,6 +88,13 @@ class GenerationRequestValidator(
         toolResults: List<ToolResult>,
         vendors: List<AIVendor>,
         customerId: String
+    ) = asValidation { checkTools(tools, toolResults, vendors, customerId) }
+
+    private fun checkTools(
+        tools: List<ToolDefinition>,
+        toolResults: List<ToolResult>,
+        vendors: List<AIVendor>,
+        customerId: String
     ) {
         val nativeTypes = tools.mapNotNull { it.type }.filter { it != "function" }
         if (nativeTypes.isNotEmpty()) {
@@ -99,5 +115,14 @@ class GenerationRequestValidator(
                 }
             }
         }
+    }
+
+    /** The checks' require() failures as [RequestValidationException]s. */
+    private inline fun <T> asValidation(block: () -> T): T = try {
+        block()
+    } catch (e: RequestValidationException) {
+        throw e
+    } catch (e: IllegalArgumentException) {
+        throw RequestValidationException(e.message ?: "Invalid request")
     }
 }
