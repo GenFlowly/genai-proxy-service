@@ -4,8 +4,10 @@
 Run this after adding/renaming an API in genai-proxy-server or
 retrieval-server — every API gets a pair of charts (requests by status,
 p50/p90/p95/p99 latency) side by side on its own row, grouped into collapsed
-rows by subresource. Writes proxy-apis-{env}.json and retrieval-apis-{env}.json
-and re-applies the global status color scheme.
+rows by subresource. Writes proxy-apis-{env}.json and retrieval-apis-{env}.json,
+the generated rows of fly-backend-{env}.json ('Agent runs', 'PDF generation'),
+the alert rules in alerts/retrieval-alerts-{env}.json, and re-applies the
+global status color scheme.
 See genai-proxy-server/development.md "API metrics & dashboards".
 
 Routes are discovered from source:
@@ -389,6 +391,218 @@ def build_llm_dashboard(env):
     }
 
 
+RETRIEVAL_APP = "genai-retrieval-server-{env}"
+
+
+def _quantile_targets(metric, by, quantiles=(("p50", 0.5), ("p95", 0.95)), sel=""):
+    """histogram_quantile targets for a Prometheus histogram, one per quantile."""
+    group = f"le, {by}" if by else "le"
+    legend = f" {{{{{by}}}}}" if by else ""
+    return [{
+        "expr": f"histogram_quantile({q}, sum by ({group}) (rate({metric}_bucket{{{sel}}}[$__rate_interval])))",
+        "legendFormat": f"{name}{legend}",
+    } for name, q in quantiles]
+
+
+def agent_runs_panels(env, y):
+    """'Agent runs' row (plan 0.5): durable agent_run outcomes, runs in flight,
+    recoveries and restarts, dead letters and interrupted tool calls."""
+    sel = f'app="{RETRIEVAL_APP.format(env=env)}"'
+    H = PANEL_H
+    return [
+        ts_panel("Agent runs by status",
+                 "Durable agent_run workflows finished per interval, by status. 'error' counts "
+                 "turns that ended with an error and workflows that raised.",
+                 [{"expr": f"sum by (status) (increase(agent_run_total{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "{{status}}"}], 0, y, points=True),
+        ts_panel("Agent runs in flight",
+                 "Executions started minus executions finished since the process started (both "
+                 "counters reset on a restart): runs in progress, including ones waiting for "
+                 "human input.",
+                 [{"expr": f"sum(agent_run_started_total{{{sel}}}) - sum(agent_run_total{{{sel}}})",
+                   "legendFormat": "in flight"}], PANEL_W, y),
+        ts_panel("Recoveries and restarts",
+                 "Runs re-executed after a restart (durable_run_recovered_total) and retrieval "
+                 "server process restarts (deploys, crashes, OOM kills).",
+                 [{"expr": f"sum(increase(durable_run_recovered_total{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "recovered runs"},
+                  {"expr": f"sum(changes(process_start_time_seconds{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "process restarts"}], 0, y + H, points=True),
+        ts_panel("Dead-lettered runs",
+                 "Runs DBOS stopped recovering (MAX_RECOVERY_ATTEMPTS_EXCEEDED), counted once by "
+                 "the run sweep. agent_run: the user saw an error. request_agent_run: capped at 0 "
+                 "attempts, every restart that interrupts one dead-letters it.",
+                 [{"expr": f"sum by (workflow) (increase(durable_run_dead_lettered_total{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "{{workflow}} dead letters"}], PANEL_W, y + H, points=True),
+        ts_panel("Interrupted tool calls",
+                 "Tool calls a restart interrupted and a re-execution refused to run again "
+                 "(the model got an error result instead), by tool.",
+                 [{"expr": f"sum by (tool) (increase(tool_call_interrupted_total{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "{{tool}}"}], 0, y + 2 * H, points=True),
+        ts_panel("Request agent runs by status",
+                 "Durable request agents (titles, personas, memory extraction) finished per "
+                 "interval, by status.",
+                 [{"expr": f"sum by (status) (increase(request_agent_run_total{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "{{status}}"}], PANEL_W, y + 2 * H, points=True),
+    ]
+
+
+def pdf_generation_panels(env, y):
+    """'PDF generation' row: the histograms and counters graph/pdf_metrics.py
+    registers (plan 1.3)."""
+    sel = f'app="{RETRIEVAL_APP.format(env=env)}"'
+    H = PANEL_H
+    return [
+        ts_panel("PDF render time p50/p95",
+                 "Wall time of one generate_pdf call (queue + render + store), by renderer.",
+                 _quantile_targets("pdf_render_seconds", "renderer", sel=sel), 0, y, unit="s"),
+        ts_panel("PDF renders by status",
+                 "generate_pdf calls per interval by renderer and status "
+                 "(ok, error, oom, timeout, busy, rejected).",
+                 [{"expr": f"sum by (renderer, status) (increase(pdf_render_seconds_count{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "{{renderer}} {{status}}"}], PANEL_W, y, points=True),
+        ts_panel("PDF child peak RSS p50/p95",
+                 "Peak RSS of the render worker child after a render, by renderer.",
+                 _quantile_targets("pdf_child_peak_rss_bytes", "renderer", sel=sel), 0, y + H, unit="bytes"),
+        ts_panel("PDF queue wait p50/p95",
+                 "Time a render waited for the machine-wide heavy-job slot.",
+                 _quantile_targets("pdf_queue_wait_seconds", "", sel=sel), PANEL_W, y + H, unit="s"),
+        ts_panel("PDF render warnings by kind",
+                 "Renderer warnings per interval, by renderer and kind (counts only, never text).",
+                 [{"expr": f"sum by (renderer, kind) (increase(pdf_render_warnings_total{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "{{renderer}} {{kind}}"}], 0, y + 2 * H, points=True),
+        ts_panel("PDF rejections by reason",
+                 "generate_pdf calls refused before rendering (caps), by reason.",
+                 [{"expr": f"sum by (reason) (increase(pdf_rejected_total{{{sel}}}[$__rate_interval]))",
+                   "legendFormat": "{{reason}}"}], PANEL_W, y + 2 * H, points=True),
+        ts_panel("PDF render CPU p95",
+                 "CPU seconds of the render itself, and of worker spawns (renderer import), by renderer.",
+                 _quantile_targets("pdf_render_cpu_seconds", "renderer", (("render p95", 0.95),), sel=sel)
+                 + _quantile_targets("pdf_worker_spawn_cpu_seconds", "renderer", (("spawn p95", 0.95),), sel=sel),
+                 0, y + 3 * H, unit="s"),
+        ts_panel("PDF tool calls by status",
+                 "generate_pdf / revise_pdf tool executions per interval, by status.",
+                 [{"expr": f'sum by (tool, status) (increase(tool_execution_total{{{sel}, tool=~"generate_pdf|revise_pdf"}}[$__rate_interval]))',
+                   "legendFormat": "{{tool}} {{status}}"}], PANEL_W, y + 3 * H, points=True),
+    ]
+
+
+# Rows the generator owns on the Backend Services dashboard, inserted in this
+# order right after the 'Service health' row group (whose last panels are the
+# memory/CPU charts, 'Retrieval memory used (%)' among them).
+BACKEND_ROWS = [("Agent runs", agent_runs_panels), ("PDF generation", pdf_generation_panels)]
+BACKEND_ROWS_BEFORE = "Vector retrieval & embeddings"
+
+
+def upsert_backend_rows(env):
+    """(Re)insert the generated rows on fly-backend-{env}.json. Idempotent:
+    previous copies are removed first, later panels shift down."""
+    for title, _ in BACKEND_ROWS:
+        remove_backend_row(env, title)
+    fname = HERE / f"fly-backend-{env}.json"
+    d = json.loads(fname.read_text())
+    panels = d["panels"]
+    idx = next((i for i, p in enumerate(panels)
+                if p["type"] == "row" and p["title"] == BACKEND_ROWS_BEFORE), len(panels))
+    if idx < len(panels):
+        y0 = panels[idx]["gridPos"]["y"]
+    else:
+        y0 = max((p["gridPos"]["y"] + p["gridPos"]["h"] for p in panels), default=0)
+    inserted, y = [], y0
+    for title, build in BACKEND_ROWS:
+        inserted.append({"type": "row", "title": title, "collapsed": False,
+                         "gridPos": {"x": 0, "y": y, "w": 24, "h": 1}, "panels": []})
+        body = build(env, y + 1)
+        inserted += body
+        y = max(p["gridPos"]["y"] + p["gridPos"]["h"] for p in body)
+    for p in panels[idx:]:
+        p["gridPos"]["y"] += y - y0
+    d["panels"] = panels[:idx] + inserted + panels[idx:]
+    fname.write_text(json.dumps(d, indent=2) + "\n")
+    print(f"{fname.name}: rows {[t for t, _ in BACKEND_ROWS]} written")
+
+
+# --- alert rules -------------------------------------------------------------
+# Grafana-managed alert rules in the provisioning API's format (POST/PUT
+# /api/v1/provisioning/alert-rules), one file per environment under alerts/ —
+# not *-{env}.json at this level, which the dashboard deploy posts as
+# dashboards. DS_PROM_UID is substituted with the Prometheus datasource uid at
+# deploy time (README.md, "Alert rules").
+
+DS_PROM_UID = "${DS_PROM_UID}"
+
+
+def _alert(env, key, title, expr, op, threshold, for_, severity, summary, window_s=900):
+    return {
+        "uid": f"rs-{key}-{env}"[:40],
+        "orgID": 1,
+        "folderUID": f"genflowly-{env}",
+        "ruleGroup": "retrieval-durable-runs",
+        "title": title,
+        "condition": "C",
+        "for": for_,
+        "noDataState": "OK",
+        "execErrState": "Error",
+        "labels": {"service": "retrieval-server", "severity": severity, "env": env},
+        "annotations": {"summary": summary},
+        "data": [
+            {"refId": "A", "relativeTimeRange": {"from": window_s, "to": 0},
+             "datasourceUid": DS_PROM_UID,
+             "model": {"refId": "A", "expr": expr, "instant": True, "intervalMs": 60000,
+                       "maxDataPoints": 43200}},
+            {"refId": "B", "datasourceUid": "__expr__",
+             "model": {"refId": "B", "type": "reduce", "expression": "A", "reducer": "last",
+                       "settings": {"mode": "replaceNN", "replaceWithValue": 0}}},
+            {"refId": "C", "datasourceUid": "__expr__",
+             "model": {"refId": "C", "type": "threshold", "expression": "B",
+                       "conditions": [{"evaluator": {"type": op, "params": [threshold]}}]}},
+        ],
+    }
+
+
+def build_alert_rules(env):
+    app = RETRIEVAL_APP.format(env=env)
+    sel = f'app="{app}"'
+    return [
+        _alert(env, "restart", "Retrieval server restarted",
+               f"sum(changes(process_start_time_seconds{{{sel}}}[10m]))", "gt", 0, "0s", "warning",
+               "The retrieval server process restarted: a deploy, a crash or an OOM kill. Every "
+               "in-flight durable run is recovered. If no deploy was running, check `fly logs "
+               f"-a {app}` for 'Out of memory' and the Agent runs row of Backend Services."),
+        _alert(env, "memory", "Retrieval server memory above 90%",
+               f"max(100 * (1 - fly_instance_memory_mem_available{{{sel}}} / fly_instance_memory_mem_total{{{sel}}}))",
+               "gt", 90, "2m", "warning",
+               "The single retrieval machine is close to an OOM kill, which interrupts every tenant's runs."),
+        _alert(env, "agent-dead-letter", "Durable agent run dead-lettered",
+               f'sum(increase(durable_run_dead_lettered_total{{{sel}, workflow="agent_run"}}[15m]))',
+               "gt", 0, "0s", "critical",
+               "An agent_run crashed the process on every recovery and was dead-lettered (the user "
+               "saw an error). Its id is in the WARNING log of the run sweep; manual replay: "
+               "retrieval-server/development.md. request_agent_run dead letters are only counted."),
+        _alert(env, "recoveries", "More than 3 durable run recoveries in an hour",
+               f"sum(increase(durable_run_recovered_total{{{sel}}}[1h]))", "gt", 3, "0s", "warning",
+               "Runs are being re-executed after restarts more than usual: look for a crash loop.",
+               window_s=3600),
+        _alert(env, "agent-error-rate", "Agent run error rate above 10%",
+               f'(sum(increase(agent_run_total{{{sel}, status="error"}}[1h])) '
+               f"/ sum(increase(agent_run_total{{{sel}}}[1h]))) "
+               f"and on() (sum(increase(agent_run_total{{{sel}}}[1h])) >= 5)",
+               "gt", 0.10, "10m", "warning",
+               "More than 10% of durable agent runs in the last hour ended with an error (at least "
+               "5 runs). Starting threshold: calibrate it against the normal rate.",
+               window_s=3600),
+    ]
+
+
+def write_alert_rules():
+    out = HERE / "alerts"
+    out.mkdir(exist_ok=True)
+    for env in ("development", "production"):
+        fname = out / f"retrieval-alerts-{env}.json"
+        fname.write_text(json.dumps(build_alert_rules(env), indent=2) + "\n")
+        print(f"alerts/{fname.name}: written")
+
+
 def remove_backend_row(env, title):
     """Drop a legacy row (and its sibling panels up to the next row) from the
     Backend Services dashboard."""
@@ -435,6 +649,8 @@ def main():
             d["templating"]["list"] = kept
             fly.write_text(json.dumps(d, indent=2) + "\n")
             print(f"{fly.name}: removed unused vendor/model variables")
+        upsert_backend_rows(env)
+    write_alert_rules()
     apply_color_scheme.main()
 
 

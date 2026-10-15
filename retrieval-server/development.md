@@ -268,3 +268,185 @@ enabled.
   CI (`dev`/`prod-proxy-server.yml`, "Deploy Retrieval Server" step) also sets it from an
   environment-scoped **`DATABASE_URL` GitHub Actions secret** if that secret exists — so add it per
   environment (dev/prod point at different Supabase projects) to keep deploys reproducible.
+
+## Durable runs: deploy rules
+
+Durable runs are ON in production: every streaming agentic chat turn is an `agent_run` DBOS
+workflow, and request agents (titles, personas, memory extraction) run as `request_agent_run`
+whenever `DATABASE_URL` is set. A process death interrupts every tenant's in-flight runs, and the
+next start recovers them. These rules keep that recovery safe.
+
+**One machine, executor `local`.** Production runs exactly one machine of the smallest Fly size
+(`shared-cpu-1x`, 1024 MB, `fly.production.toml`), and that stays so. Every machine's DBOS executor
+id is `local` (nothing sets `DBOS__VMID`), and a starting machine re-enqueues *every* PENDING run of
+executor `local`. So:
+
+- **Never add a second machine** (`fly scale count`, a second region, a standby) while executors
+  share `local`. A restarting machine would re-enqueue the other machine's live runs: two
+  executions would write the same run (`run_events` assumes one writer per run), re-run its tool
+  calls, and `request_agent_run` — capped at `max_recovery_attempts=0` (runs.py) because its HTTP
+  caller is gone after a crash — would dead-letter a peer's live request.
+- **Keep Fly's default rolling deploy**, which replaces the one machine in place. The deploy
+  workflows pass no `--strategy`; never use `bluegreen` or `canary` (both run two machines at once).
+
+**Recovery caps** (runs.py). `agent_run` has `max_recovery_attempts=3`: a run that kills the process
+is executed at most 4 times and dead-lettered (status `MAX_RECOVERY_ATTEMPTS_EXCEEDED`) on the 4th
+restart without executing again. Deploys and innocent runs caught in a crash also use attempts, so
+do not lower it. `request_agent_run` has 0: a crash dead-letters it on the next start.
+
+**Pinned versions.** `dbos`, `langgraph`, `langgraph-checkpoint` and
+`langgraph-checkpoint-postgres` are pinned exactly in requirements.txt. Upgrading one is a
+deliberate change: re-run the durable integration tests (`tests/test_durable_*.py`) and bump
+`DBOS_APP_VERSION`.
+
+### `DBOS_APP_VERSION`
+
+DBOS recovers and dequeues only workflows whose application version equals the running one. When
+`DBOS_APP_VERSION` is unset, DBOS computes the version as a hash of the workflow wrappers' source
+(`agent_run`, `request_agent_run`, decorator lines included), the step registrations and the
+installed dbos version. That hash is wrong in both directions: it changes on edits that are safe for
+in-flight runs (a decorator argument, a dbos rebuild) and stays the same on edits that are not. The
+order of DBOS steps a run takes is decided by graph code (`llm_node.py`, `reflection_node.py`,
+`tool_executor.py`, `subagent.py`, `runs.py`), and a replay on a different step order reads the
+wrong memo; all LLM steps share the name `llm_invoke`, so DBOS cannot notice. So production sets
+`DBOS_APP_VERSION` (read in durable_runtime.py) and bumps it by hand.
+
+**Rule: bump `DBOS_APP_VERSION` in the same change whenever the sequence of DBOS steps a run can
+take may change** — adding, removing or reordering a step call (`load_graph`, `llm_invoke`,
+`tool_invoke`, `recv`), changing which nodes or tools run in which order, or upgrading a pinned
+package above. Do not bump it for anything else: a bump strands every in-flight run (they are never
+recovered). Add the bump to the release checklist of any such change.
+
+**Setting it for the first time** (the deploy that ships the recovery caps — that edit changes
+the computed hash but not the step order, so pin the version production computes today and no
+in-flight run is stranded):
+
+1. Read production's current version, by any of:
+   - Supabase SQL editor (prod project):
+     `SELECT application_version, created_at FROM dbos.workflow_status ORDER BY created_at DESC LIMIT 1;`
+   - from a Python shell with production's `DATABASE_URL` and DBOS launched:
+     `(await DBOS.get_latest_application_version_async())["version_name"]`;
+   - the DBOS boot log line `Application version: <hash>` (`fly logs -a genai-retrieval-server-production`).
+2. Set it before the deploy, staged so the deploy picks it up:
+   `flyctl secrets set --app genai-retrieval-server-production --stage DBOS_APP_VERSION=<hash>`
+   (the same for `genai-retrieval-server-development`, with the dev database's value).
+3. After the deploy, `GET /runs?limit=5` (or the query above) shows new runs with that
+   `app_version`, and rebuilding the image with no workflow change keeps it.
+
+**Bumping it** (a change to the step sequence): set a new descriptive value in the same deploy,
+for example `flyctl secrets set --app genai-retrieval-server-production --stage
+DBOS_APP_VERSION=rs-2026-10-15-tool-steps`. Runs in flight at that deploy are stranded; nothing
+re-executes them on the new step order, and the run sweep ends them with an error (below).
+
+### How a recovered run replays
+
+DBOS does not resume a run where it stopped: it re-executes the workflow from the top, and
+LangGraph restarts the graph from START. `runs.py` makes that re-execution a deterministic replay:
+
+- **Clean replay.** Before streaming (once per execution, never inside the human-input loop), a
+  thread that already has checkpoint values marks a re-execution: the run deletes the thread's
+  checkpoints, counts `durable_run_recovered_total` and publishes `{"content_reset": true}`, then
+  runs the graph from START on the initial state.
+- **Every completed step replays from the DBOS memo, in call order**: `load_graph` (the graph and
+  node configs as recorded — a customer's edits since do not apply), `llm_invoke` (no vendor call,
+  identical tool-call ids), `tool_invoke` (the tool does not run again) and `DBOS.recv` (the
+  human input it received). The LLM call in flight at the crash is sent again.
+- **The tool call in flight at the crash is not run again.** `tool_invoke` records each attempt
+  in `tool_call_attempts` (tool_ledger.py) before running the tool; a re-execution that finds an
+  earlier attempt of the same step returns the error result *"This tool call was interrupted when
+  the server restarted and was not run again."* to the model and counts
+  `tool_call_interrupted_total{tool}`. A tool that kills the process therefore does so once. The
+  ledger holds ids, tool names and statuses — never arguments or results — and is pruned with
+  `run_events` after `RUN_EVENTS_TTL_SEC`.
+- **A different call at a recorded step** (`ReplayDivergence`), or a step recorded under another
+  name (`DBOSUnexpectedStepError`), fails the run: the tool executor re-raises them instead of
+  turning them into tool errors. That is what a missed `DBOS_APP_VERSION` bump looks like.
+- `spawn_agent` is not a step (a step inside a step runs as a plain function and would lose the
+  child's memos); the child's own LLM and tool calls are steps of the parent's workflow.
+- Artifacts get deterministic ids on the durable path (`uuid5` of customer, run, step and call),
+  and the scratch-FS namespace derives from the run id, so a replayed call addresses the same keys.
+- Usage is published from the checkpointed state (replayed LLM calls fire no model events), and an
+  answer that replayed from the memo is published from the final state.
+
+The deploy that ships this replay (the `tool_invoke` and `load_graph` steps) changes the step
+sequence, so it **must bump `DBOS_APP_VERSION`**: a pre-change run replayed on the new code would
+find `llm_invoke` recorded where `load_graph` now runs. `tests/test_durable_replay.py` pins the
+recorded step sequence of a two-round run and fails when it changes.
+
+### Failed, dead-lettered and stranded runs end with an error
+
+A run that ends without finishing must still end its event stream with an error the user sees
+(contract C5: a standalone `{"error", "error_type"}` row, then the terminal
+`{"status": "error", ...}` row; `run_events.failure_events`). Three places do that:
+
+- **The run itself** (runs.py) publishes its own failures — `resume_timeout`, `runaway` — as a
+  standalone error row before its terminal summary.
+- **The tail** (`GET /runs/{id}/stream`) writes the same two frames, then `[DONE]`, when the run's
+  DBOS status is `ERROR` (`error_type: "error"`) or `MAX_RECOVERY_ATTEMPTS_EXCEEDED` (`run_lost`)
+  and no terminal row exists, so a live viewer does not wait for the sweep. It writes none for
+  `CANCELLED` (the user asked for it) and none at its 30-minute idle cap (the run is still
+  PENDING, e.g. waiting for human input; the proxy re-attaches).
+- **The run sweep** (`durable_runtime._sweep_loop`, first pass ~10 s after startup, then every
+  60 s) persists the rows through `run_events.publish_terminal_once`, which writes them only if
+  the run has no terminal row yet, so passes and restarts never duplicate them. Each pass:
+  - ends `agent_run`s that are `MAX_RECOVERY_ATTEMPTS_EXCEEDED` (`run_lost`) or `ERROR`
+    (`error`), created within `RUN_EVENTS_TTL_SEC`;
+  - cancels `agent_run`s still PENDING/ENQUEUED under another app version after 10 minutes
+    (`DURABLE_STRANDED_AFTER_SEC`) and ends them (`run_lost`);
+  - logs and counts `request_agent_run` dead letters once each (their caller is gone, there is
+    no stream to end).
+
+DBOS statuses are left as they are, for ops. Logs carry only the workflow id, name, status,
+`recovery_attempts`, executor and app version — a workflow's input is the user's request and is
+never logged. Dead letters count `durable_run_dead_lettered_total{workflow}`.
+
+### Seeing restarts, recoveries and dead letters
+
+- **Startup log.** Right after `DBOS.launch()` the server logs one WARNING with the number and ids
+  of the runs it recovers (and one naming PENDING/ENQUEUED runs of another app version, which it
+  will not recover). Ids only.
+- **Metrics** (`durable_metrics.py`, prometheus_client default registry, served at `/metrics`):
+  `durable_run_recovered_total`, `durable_run_dead_lettered_total{workflow}`,
+  `tool_call_interrupted_total{tool}`, next to the existing `agent_run_total{status,source}`,
+  `agent_run_started_total` and `request_agent_run_total`.
+- **Dashboard.** Backend Services has an "Agent runs" row (and a "PDF generation" row), generated by
+  `observability/grafana/generate_api_dashboards.py`.
+- **Alerts.** `observability/grafana/alerts/retrieval-alerts-{env}.json`: process restarts, memory
+  above 90%, any `agent_run` dead letter, more than 3 recoveries in an hour, and the `agent_run`
+  error rate (see that directory's README for deployment).
+- **`/ready`** returns 503 when durable runs are configured (`DATABASE_URL` set) but did not start,
+  200 otherwise; `[checks.ready]` in both Fly configs polls it, and the production deploy gate
+  requires every machine check to pass. Readiness is decided once at startup and never cleared, so
+  it reports a failed startup, not a later database outage. `/health` stays constant, so a database
+  outage never turns into a restart loop.
+
+### Purging run data (customer deletion)
+
+Postgres holds user content for every durable run: the DBOS workflow input (the whole request),
+step outputs (memoized LLM responses and tool results), LangGraph checkpoints, `run_events` rows
+and `tool_call_attempts` rows.
+
+- **`DELETE /runs/{run_id}/data`** purges all of it for one run: `DBOS.delete_workflows_async([run_id],
+  delete_children=True)` (status, input, output, step outputs; messages and events cascade),
+  `checkpointer.adelete_thread(run_id)` (every namespace), `DELETE FROM run_events WHERE run_id`
+  and `tool_ledger.delete_workflow`. It is idempotent (204 again on a repeat, also for an unknown
+  run) and answers 409 while the run may still execute (PENDING/ENQUEUED): cancel it, wait until
+  `GET /runs/{id}` is terminal, retry. `tool_ledger.delete_customer(customer_id)` purges a
+  customer's ledger rows in one statement.
+- **Authorization.** Like every retrieval-server route, this one has no app-level authentication;
+  only the app's private Flycast address keeps it off the internet. **The proxy is the
+  authorization point**: it calls it only from the customer-deletion purge job, with run ids read
+  from its own rows, never with an id a client sent.
+- **Request agents** (`request_agent_run`: titles, personas, memory extraction) keep nothing:
+  `execute_agent_graph` runs the workflow under workflow id = run id (`ra-…`, also the checkpoint
+  thread) and deletes its DBOS rows and checkpoints in a `finally` once it has the result. Rows a
+  crash leaves behind (the run is dead-lettered on the next start) are deleted by the run sweep
+  once older than an hour (`DURABLE_REQUEST_RUN_RETENTION_SEC`).
+
+**Manual replay** of a dead-lettered `agent_run` (ops only): from a Python shell with the
+production `DATABASE_URL` and DBOS launched,
+`await DBOS.resume_workflow_async("<run id>", queue_name="agent_runs")`. It resets the attempt
+count to 0 and works only while the run's app version is the current one. Pass `queue_name`, or the
+run lands on DBOS's internal queue and skips the `agent_runs` concurrency cap. If the sweep has
+already ended the run, its stream is over: the user saw the error, and the replayed output is not
+shown.

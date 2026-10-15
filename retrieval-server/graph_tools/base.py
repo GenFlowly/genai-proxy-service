@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 
 from graph_tools.storage import ArtifactStore
 
+# Namespace of the deterministic artifact ids (ToolContext.artifact_seed).
+_ARTIFACT_ID_NAMESPACE = uuid.UUID("5c3f6a52-0b6e-4d0e-9a51-7b8e2f4c1d93")
+
 
 @dataclass
 class Artifact:
@@ -138,6 +141,13 @@ class ToolContext:
     store: ArtifactStore
     key_template: str = "{artifact_id}"
     secrets: Callable[[str], dict] = _no_secrets
+    # Deterministic artifact ids (durable runs): when the host sets a seed —
+    # one per tool call, through dataclasses.replace, which also resets the
+    # counter — the n-th artifact of the call gets uuid5(seed:n) instead of a
+    # random uuid4, so a re-executed call writes the same key, not a new one.
+    artifact_seed: str | None = None
+    _artifact_count: int = field(default=0, init=False, repr=False, compare=False)
+
     # Host-injected runtime services/facts beyond credentials: the scratch-FS
     # key prefix for this run ("fs_prefix"), the agent-nesting depth ("depth"),
     # the configured subagent profiles ("subagents"), a spawn callable
@@ -167,6 +177,11 @@ class ToolContext:
         find the sidecar from the artifact's key. The sidecar is not an
         artifact of its own: it is never listed for download."""
         artifact_id = str(uuid.uuid4())
+        if self.artifact_seed:
+            self._artifact_count += 1
+            artifact_id = str(uuid.uuid5(
+                _ARTIFACT_ID_NAMESPACE, f"{self.artifact_seed}:{self._artifact_count}"
+            ))
         key = self.key_template.format(
             customer_id=self.customer_id, artifact_id=artifact_id
         )

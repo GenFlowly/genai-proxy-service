@@ -7,6 +7,7 @@ Durable agent-run API (see DURABLE_AGENTS_DBOS_PLAN §5.7). Separate from
   POST /runs/{id}/resume     deliver client-tool results / human input (P2)
   POST /runs/{id}/cancel     cancel the workflow + drop its event channel
   GET  /runs/{id}            status / result (polling / rediscovery)
+  DELETE /runs/{id}/data     purge everything stored for a finished run (3.9)
 
 The stream tails run_events by polling (the Supabase pooler has no NOTIFY, P0),
 so a reconnecting client passes ?from_seq=<last seq it saw> and we replay from
@@ -16,9 +17,10 @@ the proxy's existing SSE→client mapping is unchanged.
 import asyncio
 import json
 import logging
+import time
 import uuid
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 import durable_runtime
@@ -41,8 +43,39 @@ _TERMINAL_STATES = {
     "SUCCESS", "ERROR", "CANCELLED",
     "RETRIES_EXCEEDED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED",
 }
+# Terminal statuses of a run that FAILED without writing its own terminal row
+# (a dead letter writes none; ERROR means the workflow raised first), mapped to
+# the error_type the tail reports. The run sweep persists the same rows within
+# a minute; the tail writes them at once so a live viewer doesn't wait.
+# CANCELLED is deliberately absent — the user asked for it.
+_FAILED_STATES = {"MAX_RECOVERY_ATTEMPTS_EXCEEDED": "run_lost", "ERROR": "error"}
+
+
+def _event_frame(row: dict) -> str:
+    return f"id: {row['seq']}\ndata: {json.dumps(row['event'])}\n\n"
+
+
+def _failure_frames(run_id: str, status: str) -> list[str]:
+    """The error frames (contract C5, no SSE id: they are not rows) for a run
+    that ended in `status`; none unless it failed."""
+    error_type = _FAILED_STATES.get(status)
+    if error_type is None:
+        return []
+    message = run_events.RUN_LOST_MESSAGE if error_type == "run_lost" else run_events.RUN_FAILED_MESSAGE
+    return [f"data: {json.dumps(ev)}\n\n" for ev in run_events.failure_events(run_id, message, error_type)]
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
+# After this long without writing anything, the tail writes an SSE comment
+# line (plan 1.7, contract C4): a run waiting in the queue, being recovered
+# after a restart or waiting for human input emits no rows, and the proxy cuts
+# a stream that stays silent for 300 s. A comment is skipped by SSE parsers
+# (RunsClient reads only data lines) but resets their socket timers, and it is
+# never written to run_events.
+_KEEPALIVE_SEC = 15.0
+_KEEPALIVE_FRAME = ": keepalive\n\n"
+# Indirections so tests can drive the tail on a fake clock.
+_sleep = asyncio.sleep
+_clock = time.monotonic
 
 
 def _require_ready() -> None:
@@ -90,6 +123,7 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
     async def gen():
         last = start_seq
         waited = 0.0
+        last_write = _clock()
         while True:
             if await request.is_disconnected():
                 logger.info("Stream %s: client disconnected at seq=%s", run_id, last)
@@ -99,10 +133,11 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
                 waited = 0.0
                 for row in rows:
                     last = row["seq"]
-                    yield f"id: {row['seq']}\ndata: {json.dumps(row['event'])}\n\n"
+                    yield _event_frame(row)
                     if row["terminal"]:
                         yield "data: [DONE]\n\n"
                         return
+                last_write = _clock()
                 continue
             # No new events: stop if the workflow is finished (covers a crash
             # that never wrote a terminal row) or if we've tailed too long.
@@ -111,15 +146,28 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
                 # One last drain in case events landed between read and status.
                 for row in await run_events.read_since(run_id, last):
                     last = row["seq"]
-                    yield f"id: {row['seq']}\ndata: {json.dumps(row['event'])}\n\n"
+                    yield _event_frame(row)
+                    if row["terminal"]:
+                        yield "data: [DONE]\n\n"
+                        return
+                # No terminal row: a failed or dead-lettered run ends with an
+                # error the user sees, not a bare [DONE].
+                for frame in _failure_frames(run_id, st.status):
+                    yield frame
                 yield "data: [DONE]\n\n"
                 return
             waited += _POLL_INTERVAL_SEC
             if waited >= _STREAM_MAX_SEC:
+                # Only a PENDING/ENQUEUED run gets here (e.g. waiting on human
+                # input, up to RUN_RESUME_TIMEOUT_SEC): no error frame — the
+                # run may still finish, and the proxy re-attaches.
                 logger.warning("Stream %s: max duration reached, closing", run_id)
                 yield "data: [DONE]\n\n"
                 return
-            await asyncio.sleep(_POLL_INTERVAL_SEC)
+            if _clock() - last_write >= _KEEPALIVE_SEC:
+                yield _KEEPALIVE_FRAME
+                last_write = _clock()
+            await _sleep(_POLL_INTERVAL_SEC)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
@@ -153,13 +201,49 @@ async def cancel_run(run_id: str):
     if st is None:
         raise HTTPException(status_code=404, detail="run not found")
     try:
-        DBOS.cancel_workflow(run_id)
+        # The async variant: the sync DBOS.cancel_workflow raises inside a
+        # running event loop on dbos 3.x, which made this route return 500.
+        await DBOS.cancel_workflow_async(run_id)
     except Exception as e:
         logger.exception("Failed to cancel run %s", run_id)
         raise HTTPException(status_code=500, detail=f"could not cancel run: {e}")
     await run_events.delete_run(run_id)
     logger.info("Cancelled durable run %s", run_id)
     return {"run_id": run_id, "status": "cancelled"}
+
+
+# DBOS statuses of a run that may still execute and write.
+_ACTIVE_STATES = {"PENDING", "ENQUEUED", "DELAYED"}
+
+
+@router.delete("/runs/{run_id}/data", status_code=204)
+async def delete_run_data(run_id: str):
+    """Purge everything this service stores for one run (plan 3.9): its DBOS
+    rows (the request it was started with, step outputs with the memoized LLM
+    responses and tool results, messages, child workflows), its LangGraph
+    checkpoints, its run_events rows and its tool-ledger rows. Idempotent: an
+    unknown or already purged run is 204 too.
+
+    A run that may still execute (PENDING/ENQUEUED) is refused with 409, since
+    it could write rows after the purge: cancel it (POST /runs/{id}/cancel),
+    wait until GET /runs/{id} reports a terminal status, then retry.
+
+    Authorization: like every retrieval-server route, this has no app-level
+    authentication; only the app's private Flycast address (no public IP)
+    keeps it off the internet. The proxy is the authorization point: it calls
+    this only from its customer-deletion purge job, with run ids read from its
+    own rows, never with an id a client sent."""
+    _require_ready()
+    st = await _status(run_id)
+    if st is not None and st.status in _ACTIVE_STATES:
+        raise HTTPException(status_code=409, detail="run is still active: cancel it, then retry")
+    try:
+        await runs_module.delete_run_data(run_id)
+    except Exception as e:
+        logger.exception("Failed to purge run %s", run_id)
+        raise HTTPException(status_code=500, detail=f"could not delete run data: {e}")
+    logger.info("Purged durable run %s", run_id)
+    return Response(status_code=204)
 
 
 @router.get("/runs")
@@ -182,7 +266,10 @@ async def list_runs(status: str | None = None, limit: int = 50):
         logger.exception("list_runs failed")
         raise HTTPException(status_code=500, detail=f"could not list runs: {e}")
     return {"runs": [
-        {"run_id": w.workflow_id, "status": w.status, "created_at": w.created_at, "updated_at": w.updated_at}
+        {"run_id": w.workflow_id, "status": w.status, "created_at": w.created_at, "updated_at": w.updated_at,
+         # The DBOS application version the run belongs to — what
+         # DBOS_APP_VERSION must equal for it to be recovered (development.md).
+         "app_version": w.app_version, "recovery_attempts": w.recovery_attempts}
         for w in wfs
     ]}
 

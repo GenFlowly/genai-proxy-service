@@ -22,10 +22,14 @@ no dangling tool-call ids reach the vendors; the model re-issues caller tools
 on the next iteration if it still needs them.
 """
 import asyncio
+import dataclasses
 import logging
 import time
 import uuid
 
+import durable_metrics
+import durable_runtime
+import tool_ledger
 from encoding_library.observability import count, observe
 from graph import pdf_metrics
 from graph.display_args import display_args
@@ -175,6 +179,89 @@ def _summarize(name: str, result, content: str) -> str:
     return f"{name}: {content[:_TRACE_TOOL_LIMIT]}"
 
 
+# --- Durable runs: tool calls as memoized DBOS steps (plan 0.4) --------------
+# A re-executed run (DBOS recovery after a crash) replays from START. Each call
+# that completed before the crash returns its recorded result from the step
+# memo and is not run again; the call that was in flight has no memo, and the
+# attempt ledger (tool_ledger.py) refuses to run it a second time.
+# Composite tools are not wrapped: spawn_agent runs a whole child loop whose
+# LLM and tool calls are steps of their own, and a step called inside a step
+# runs as a plain function — the child's memos would be lost.
+_COMPOSITE_TOOLS = frozenset({"spawn_agent"})
+# Namespace of the scratch-FS namespace derived from a durable run's id.
+_FS_NAMESPACE_UUID = uuid.UUID("8d4b1f0e-6c2a-4f7e-b3d5-2a9c0e7f1b64")
+
+
+async def _invoke_with_ledger(tool, call: dict, context, workflow_id: str, function_id: int):
+    """The tool_invoke step body, plain so it can be tested without DBOS.
+    Returns (result | None, error | None) like _run_one; raises only
+    tool_ledger.ReplayDivergence. Ledger rows carry ids, never arguments."""
+    name = call.get("name", "")
+    call_id = call.get("id") or ""
+    attempt = await tool_ledger.begin(workflow_id, function_id, call_id, name, context.customer_id)
+    if not attempt.run:
+        durable_metrics.tool_call_interrupted(name)
+        logger.warning(
+            "Node tool_executor: not re-running a tool call a restart interrupted — "
+            "workflow=%s step=%s tool=%s attempt=%d",
+            workflow_id, function_id, name, attempt.attempt,
+        )
+        return None, tool_ledger.INTERRUPTED_MESSAGE
+    # Per-call artifact seed: a re-executed call would write the same object
+    # keys (uuid5), never a second, unlinked copy.
+    call_context = dataclasses.replace(
+        context, artifact_seed=f"{context.customer_id}:{workflow_id}:{function_id}:{call_id}",
+    )
+    try:
+        result = await tool.run(call.get("args") or {}, call_context)
+    except Exception as e:
+        await _finish_attempt(workflow_id, function_id, attempt.attempt, tool_ledger.FAILED, type(e).__name__)
+        logger.error("Node tool_executor: %s failed — %s", name, e, exc_info=True)
+        return None, str(e)
+    await _finish_attempt(workflow_id, function_id, attempt.attempt, tool_ledger.FINISHED)
+    return result, None
+
+
+async def _finish_attempt(workflow_id, function_id, attempt, status, error_class=None) -> None:
+    try:
+        await tool_ledger.finish(workflow_id, function_id, attempt, status, error_class)
+    except Exception:
+        # Not fatal: the step memo records the outcome, and on a re-execution
+        # any earlier attempt — finished or not — refuses the call anyway.
+        logger.warning(
+            "Node tool_executor: could not record attempt %d of workflow=%s step=%s as %s",
+            attempt, workflow_id, function_id, status, exc_info=True,
+        )
+
+
+if durable_runtime.dbos_constructed():
+    from dbos import DBOS
+    from dbos import error as dbos_errors
+
+    # Raised when a replay does not follow the recorded step order. Never
+    # turned into a tool error: the run must fail, not continue on a
+    # misaligned memo.
+    _REPLAY_ERRORS = (
+        tool_ledger.ReplayDivergence,
+        dbos_errors.DBOSUnexpectedStepError,
+        dbos_errors.DBOSStepNondeterminismError,
+    )
+
+    @DBOS.step(name="tool_invoke")
+    async def _durable_tool_invoke(tool, call: dict, context):
+        return await _invoke_with_ledger(tool, call, context, DBOS.workflow_id, DBOS.step_id)
+else:
+    _REPLAY_ERRORS = (tool_ledger.ReplayDivergence,)
+    _durable_tool_invoke = None
+
+
+def _durable_workflow_id() -> str | None:
+    """The DBOS workflow id while executing inside a durable run, else None."""
+    if _durable_tool_invoke is None:
+        return None
+    return DBOS.workflow_id
+
+
 def tool_executor(node_id: str | None = None):
     async def node(state: RetrievalState) -> dict:
         return await _execute(state, node_id)
@@ -215,9 +302,15 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
 
     # One scratch-FS namespace per request, minted on the first executor round
     # and pinned in scratch so every later round — and every spawned subagent —
-    # addresses the same space. Survives durable resume via the checkpoint.
+    # addresses the same space. A durable run derives it from its workflow id:
+    # a re-execution replays from a fresh checkpoint, and must address the
+    # space its memoized fs_write calls wrote to.
+    durable_workflow_id = _durable_workflow_id()
     scratch_state = state.get("scratch") or {}
-    fs_namespace = scratch_state.get("fs_namespace") or uuid.uuid4().hex
+    fs_namespace = scratch_state.get("fs_namespace") or (
+        uuid.uuid5(_FS_NAMESPACE_UUID, durable_workflow_id).hex
+        if durable_workflow_id else uuid.uuid4().hex
+    )
     fs_prefix = _FS_PREFIX_TEMPLATE.format(customer_id=customer_id, namespace=fs_namespace)
     agent_depth = int(state.get("agent_depth") or 0)
 
@@ -302,13 +395,23 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     async def _run_one(call: dict):
         """Execute one call with per-call error isolation. Returns
         (result | None, error | None) — never raises, so one failing tool can
-        neither stop the others nor abort the turn."""
+        neither stop the others nor abort the turn. The exception: on the
+        durable path (a memoized tool_invoke step, plan 0.4) a replay that
+        does not follow the recorded step order must fail the run."""
         name = call.get("name", "")
         start = time.perf_counter()
         try:
-            result = await by_name[name].run(call.get("args") or {}, context)
+            if durable_workflow_id and name not in _COMPOSITE_TOOLS:
+                result, error = await _durable_tool_invoke(by_name[name], call, context)
+                if error is not None:
+                    count("tool_execution_total", status="error", tool=name)
+                    return None, error
+            else:
+                result = await by_name[name].run(call.get("args") or {}, context)
             count("tool_execution_total", status="ok", tool=name)
             return result, None
+        except _REPLAY_ERRORS:
+            raise
         except Exception as e:
             count("tool_execution_total", status="error", tool=name)
             logger.error("Node tool_executor: %s failed — %s", name, e, exc_info=True)

@@ -23,6 +23,7 @@ if os.path.exists(_env_local):
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from encoding_library.observability import configure_observability, set_request_id, setup_logging
@@ -109,7 +110,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Per-endpoint request count / latency / status-code metrics + GET /metrics
-Instrumentator(excluded_handlers=["/health", "/metrics"]).instrument(app).expose(app)
+Instrumentator(excluded_handlers=["/health", "/ready", "/metrics"]).instrument(app).expose(app)
 
 
 @app.middleware("http")
@@ -141,6 +142,25 @@ app.include_router(call_control_router)
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness (plan 0.5): 503 only when durable runs are configured
+    (DATABASE_URL set) but did not come up at startup, 200 otherwise —
+    including when DATABASE_URL is unset, a supported mode. Fly's
+    [checks.ready] polls it and the production deploy gate requires every
+    machine check to pass, so a deploy whose durable runtime cannot start goes
+    red. Readiness is decided once at startup and never cleared, so this
+    reports a failed startup, not a later database outage. /health stays
+    constant: liveness must not depend on the database."""
+    if durable_runtime is not None:
+        configured, up = durable_runtime.config_present(), durable_runtime.is_ready()
+    else:  # its import failed: configured or not, it is down
+        configured, up = bool(os.getenv("DATABASE_URL")), False
+    if configured and not up:
+        return JSONResponse({"status": "not_ready", "durable_runs": "unavailable"}, status_code=503)
+    return {"status": "ready", "durable_runs": "ready" if configured else "not_configured"}
 
 
 if __name__ == "__main__":

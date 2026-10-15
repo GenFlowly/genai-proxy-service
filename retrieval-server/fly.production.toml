@@ -37,6 +37,17 @@ primary_region = "iad"
     interval = "15s"
     timeout = "5s"
     grace_period = "30s"
+  # Readiness: 503 while durable runs are configured (DATABASE_URL) but failed
+  # to start (app.py /ready). The deploy gate (prod-proxy-server.yml) requires
+  # every check to pass, so such a deploy goes red instead of shipping with
+  # durable runs silently off. /health stays the constant liveness check.
+  [checks.ready]
+    type = "http"
+    port = 5001
+    path = "/ready"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
 
 # Fly's org-level Prometheus scrapes /metrics over the private network —
 # the app stays internal-only. Dashboards: fly-metrics.net / Grafana Cloud.
