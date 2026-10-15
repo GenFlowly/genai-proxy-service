@@ -31,7 +31,9 @@ import com.genflowly.models.toProviderString
 import org.slf4j.LoggerFactory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.coroutines.async
@@ -672,21 +674,28 @@ class GenerationOrchestrator(
                     message.conversationId, responseText.length,
                     capturedUsage?.inputTokens, capturedUsage?.outputTokens, capturedUsage?.totalTokens
                 )
+                // Files a built-in tool generated are already in S3: whatever
+                // happened after them (an error frame, a socket timeout, a
+                // retrieval-server restart), the turn is persisted so the
+                // reloaded conversation still links them.
+                val generatedFiles = parseGeneratedArtifacts(capturedGeneratedArtifactsJson)
                 try {
                 // NonCancellable: after a user cancel this coroutine is dead —
                 // persistence of the partial text must still run.
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                if ((success || cancelled) && (responseText.isNotEmpty() || capturedToolCallsJson != null)) {
+                if (generatedFiles.isNotEmpty() ||
+                    ((success || cancelled) && (responseText.isNotEmpty() || capturedToolCallsJson != null))
+                ) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
                         conversationId = message.conversationId,
                         customerId = message.customerId,
                         client = message.client,
                         role = "assistant",
-                        text = responseText,
+                        text = responseText.ifEmpty { if (generatedFiles.isNotEmpty()) GENERATED_FILE_FALLBACK_TEXT else "" },
                         toolCallsJson = capturedToolCallsJson,
                         webSourcesJson = capturedWebSourcesJson,
-                        attachments = parseGeneratedArtifacts(capturedGeneratedArtifactsJson),
+                        attachments = generatedFiles,
                         previousMessageId = message.messageId,
                         aiConfig = listOf(config),
                         systemPrompt = message.systemPrompt,
@@ -770,14 +779,28 @@ internal fun newFsNamespace(): String = java.util.UUID.randomUUID().toString().r
  */
 private const val MAX_THINKING_STEPS_JSON_CHARS = 250_000
 
-/** Concatenate two JSON arrays (either may be null); malformed input keeps the newer one. */
-private fun mergeJsonArrays(existing: String?, incoming: String): String {
-    if (existing.isNullOrBlank()) return incoming
-    return runCatching {
-        JsonArray(
-            Json.parseToJsonElement(existing).jsonArray + Json.parseToJsonElement(incoming).jsonArray
-        ).toString()
-    }.getOrElse { incoming }
+/** Text stored for a turn whose only output is a generated file (its streamed text was empty). */
+internal const val GENERATED_FILE_FALLBACK_TEXT = "Your file is attached."
+
+/**
+ * Concatenate two generated-artifact JSON arrays ([existing] may be null),
+ * keeping one entry per artifact_id: the last one seen, at the position where
+ * that id first appeared. A durable run's terminal summary re-sends every
+ * artifact of the turn, which would otherwise store each file twice. Entries
+ * without an artifact_id are all kept. An [incoming] value that is not a JSON
+ * array is ignored, so files captured earlier are never dropped by it.
+ */
+internal fun mergeJsonArrays(existing: String?, incoming: String): String {
+    val newer = runCatching { Json.parseToJsonElement(incoming).jsonArray }.getOrNull()
+        ?: return existing ?: incoming
+    val earlier = existing?.let { runCatching { Json.parseToJsonElement(it).jsonArray }.getOrNull() }.orEmpty()
+    val byArtifactId = LinkedHashMap<Any, JsonElement>()
+    (earlier + newer).forEachIndexed { index, element ->
+        val artifactId = ((element as? JsonObject)?.get("artifact_id") as? JsonPrimitive)
+            ?.takeIf { it.isString }?.content
+        byArtifactId[artifactId ?: index] = element
+    }
+    return JsonArray(byArtifactId.values.toList()).toString()
 }
 
 private fun thinkingStepsToJson(steps: List<String>): String? {

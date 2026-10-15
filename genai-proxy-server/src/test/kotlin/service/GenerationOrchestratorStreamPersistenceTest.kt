@@ -13,9 +13,11 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import java.net.SocketTimeoutException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -107,5 +109,95 @@ class GenerationOrchestratorStreamPersistenceTest {
         assertFalse("source_key" in ga, ga)
         assertTrue("\"page_count\":7" in ga && "\"size_bytes\":13312" in ga, ga)
         assertEquals(listOf(ref("art-1")), persistedAssistantMessages().single().attachments)
+    }
+
+    // ── 1.10: a generated file is never lost on the way to the reloaded conversation ──
+
+    @Test
+    fun `a file, then content_reset, then an error frame persists the file with the fallback text`() = runTest {
+        streamYields(
+            flowOf(
+                StreamChunk.Content("Let me write that up."),
+                StreamChunk.GeneratedArtifacts("[${artifact("art-1")}]"),
+                StreamChunk.ContentReset,
+                StreamChunk.Error("The model provider is overloaded.", "provider_error")
+            )
+        )
+
+        runTurn()
+
+        val assistant = persistedAssistantMessages().single()
+        assertEquals("Your file is attached.", assistant.text)
+        assertEquals(listOf(ref("art-1")), assistant.attachments)
+    }
+
+    @Test
+    fun `a file, then a socket timeout, persists the file with the fallback text`() = runTest {
+        streamYields(flow {
+            emit(StreamChunk.GeneratedArtifacts("[${artifact("art-1")}]"))
+            throw SocketTimeoutException("Socket timeout has expired")
+        })
+
+        runTurn()
+
+        val assistant = persistedAssistantMessages().single()
+        assertEquals("Your file is attached.", assistant.text)
+        assertEquals(listOf(ref("art-1")), assistant.attachments)
+    }
+
+    @Test
+    fun `a file and partial text, then a failure, persists the partial text with the file`() = runTest {
+        streamYields(flow {
+            emit(StreamChunk.GeneratedArtifacts("[${artifact("art-1")}]"))
+            emit(StreamChunk.Content("Your report covers"))
+            throw SocketTimeoutException("Socket timeout has expired")
+        })
+
+        runTurn()
+
+        val assistant = persistedAssistantMessages().single()
+        assertEquals("Your report covers", assistant.text)
+        assertEquals(listOf(ref("art-1")), assistant.attachments)
+    }
+
+    @Test
+    fun `a failure without any generated file still persists nothing`() = runTest {
+        streamYields(flow {
+            emit(StreamChunk.Content("partial"))
+            throw SocketTimeoutException("Socket timeout has expired")
+        })
+
+        runTurn()
+
+        assertEquals(emptyList(), persistedAssistantMessages())
+    }
+
+    @Test
+    fun `an empty generated_artifacts list is not a file`() = runTest {
+        // A durable run's terminal summary always carries generated_artifacts, often [].
+        streamYields(flowOf(StreamChunk.GeneratedArtifacts("[]")))
+
+        runTurn()
+
+        assertEquals(emptyList(), persistedAssistantMessages())
+    }
+
+    @Test
+    fun `artifacts the terminal summary re-sends are stored once`() = runTest {
+        streamYields(
+            flowOf(
+                StreamChunk.GeneratedArtifacts("[${artifact("art-1")}]"),
+                StreamChunk.GeneratedArtifacts("[${artifact("art-2", "Appendix.pdf")}]"),
+                StreamChunk.Content("Both files are attached."),
+                // the run's terminal summary: every artifact of the turn again
+                StreamChunk.GeneratedArtifacts("[${artifact("art-1")},${artifact("art-2", "Appendix.pdf")}]")
+            )
+        )
+
+        runTurn()
+
+        val assistant = persistedAssistantMessages().single()
+        assertEquals("Both files are attached.", assistant.text)
+        assertEquals(listOf(ref("art-1"), ref("art-2", "Appendix.pdf")), assistant.attachments)
     }
 }
