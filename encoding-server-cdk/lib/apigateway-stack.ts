@@ -13,6 +13,7 @@ export interface ApiGatewayStackProps extends cdk.StackProps {
     ingestEmailLambda: lambda.IFunction;
     ingestNotesLambda: lambda.IFunction;
     createCollectionsLambda: lambda.IFunction;
+    purgeVectorsLambda: lambda.IFunction;
     auth0Domain: string;
 }
 
@@ -138,6 +139,15 @@ export class ApiGatewayStack extends cdk.Stack {
             path: '/create-collections',
             methods: [apigatewayv2.HttpMethod.POST],
             integration: createCollectionsIntegration,
+            authorizer: authorizer,
+        });
+
+        // Customer and conversation vector purges (PDF plan 3.9): the same JWT
+        // authorizer, then the handler admits only the proxy's M2M client
+        this.api.addRoutes({
+            path: '/purge-vectors',
+            methods: [apigatewayv2.HttpMethod.POST],
+            integration: new HttpLambdaIntegration('PurgeVectorsIntegration', props.purgeVectorsLambda),
             authorizer: authorizer,
         });
 

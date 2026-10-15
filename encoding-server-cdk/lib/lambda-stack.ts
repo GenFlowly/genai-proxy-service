@@ -37,6 +37,8 @@ export interface LambdaStackProps extends cdk.StackProps {
     customerNotesTableName: string;
     instructionsTableName: string;
     voyageApiKey?: string;
+    /** Auth0 client ids allowed to call POST /purge-vectors (comma-separated; empty refuses all). */
+    purgeAllowedClientIds?: string;
 }
 
 export class LambdaStack extends cdk.Stack {
@@ -46,6 +48,7 @@ export class LambdaStack extends cdk.Stack {
     public readonly parseAndChunkLambda: DockerImageFunction;
     public readonly createAndStoreLambda: DockerImageFunction;
     public readonly createCollectionsLambda: DockerImageFunction;
+    public readonly purgeVectorsLambda: DockerImageFunction;
     public readonly pollVoyageBatchesLambda: DockerImageFunction;
     public readonly accumulateVoyageNotesLambda: DockerImageFunction;
     public readonly voyageBatchJobsTable: dynamodb.Table;
@@ -327,6 +330,41 @@ export class LambdaStack extends cdk.Stack {
         this.createCollectionsLambda.addToRolePolicy(new iam.PolicyStatement({
             actions: ['kms:Decrypt'],
             resources: ['*'], 
+        }));
+
+        /**
+         * Purge Vectors Lambda (PDF plan 3.9)
+         * Deletes a customer's conversation vectors, or drops all their
+         * collections, when genai-proxy-server purges a conversation or a
+         * customer. Same image as create-collections with its own handler;
+         * service-only: the handler accepts just the Auth0 client-credentials
+         * tokens of the clients in PURGE_ALLOWED_CLIENT_IDS.
+         */
+        this.purgeVectorsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-purge-vectors-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-purge-vectors-lambda`,
+            code: DockerImageCode.fromEcr(props.createCollectionsRepo, {
+                tagOrDigest: props.createCollectionsImageTag || 'create-collections-latest',
+                cmd: ['handlers.purge_vectors_lambda.handler'],
+            }),
+            memorySize: 512,
+            // API Gateway answers after 30 s anyway; the purge is idempotent and re-run by the proxy
+            timeout: cdk.Duration.seconds(60),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ...appEnv,
+                ZILLIZ_ENDPOINT: props.zillizEndpoint,
+                ZILLIZ_TOKEN: props.zillizToken,
+                CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
+                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
+                PURGE_ALLOWED_CLIENT_IDS: props.purgeAllowedClientIds || '',
+            },
+        });
+
+        customerProfileTable.grantReadData(this.purgeVectorsLambda);
+        customerVectorDBConfigTable.grantReadData(this.purgeVectorsLambda);
+        this.purgeVectorsLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'],
         }));
     }
 }
