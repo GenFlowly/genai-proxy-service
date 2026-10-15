@@ -82,7 +82,9 @@ class FsWriteTool(GraphTool):
         "Write (or overwrite) a text file in your private scratch space for "
         "this task. Use it to keep notes, drafts, and intermediate results out "
         "of the conversation, especially anything large you may want to "
-        "re-read later. Paths are relative, e.g. 'notes/findings.md'."
+        "re-read later. Paths are relative, e.g. 'notes/findings.md'. With "
+        "mode 'append' the content is added to the end of the file (created "
+        "if missing), so a long document can be written section by section."
     )
     parameters = {
         "type": "object",
@@ -91,7 +93,12 @@ class FsWriteTool(GraphTool):
                 "type": "string",
                 "description": "Relative file path, e.g. 'notes/plan.md'.",
             },
-            "content": {"type": "string", "description": "The full file content."},
+            "content": {"type": "string", "description": "The file content (or the part to append)."},
+            "mode": {
+                "type": "string",
+                "enum": ["overwrite", "append"],
+                "description": "'overwrite' (default) replaces the file; 'append' adds to its end.",
+            },
         },
         "required": ["path", "content"],
     }
@@ -109,25 +116,43 @@ class FsWriteTool(GraphTool):
                     "'/', no hidden files."
                 )
             )
+        mode = str(args.get("mode") or "overwrite").strip().lower()
+        if mode not in ("overwrite", "append"):
+            return ToolResult(content="Error: mode must be 'overwrite' or 'append'.")
         data = str(args.get("content") or "").encode("utf-8")
+        key = f"{prefix}{path}"
+        if mode == "append":
+            # S3 has no append: read, concatenate, write back. Calls of one
+            # round run concurrently, but this method has no await between
+            # the read and the write, so appends to one file in one round
+            # still land in the order the model made them.
+            try:
+                data = context.store.get(key) + data
+            except KeyError:
+                pass
+            except Exception as e:
+                logger.error("fs_write: append read FAILED for %s — %s", path, e, exc_info=True)
+                return ToolResult(
+                    content=f"Error: could not append to '{path}'. Continue without it."
+                )
         if len(data) > _MAX_FILE_BYTES:
             return ToolResult(
                 content=(
-                    f"Error: content is {len(data)} bytes; the limit is "
-                    f"{_MAX_FILE_BYTES}. Split it across smaller files."
+                    f"Error: {'the file would be' if mode == 'append' else 'content is'} "
+                    f"{len(data)} bytes; the limit is {_MAX_FILE_BYTES}. Split it "
+                    "across smaller files."
                 )
             )
         try:
-            context.store.put(
-                f"{prefix}{path}", data, "text/plain; charset=utf-8", tags=_scratch_tags()
-            )
+            context.store.put(key, data, "text/plain; charset=utf-8", tags=_scratch_tags())
         except Exception as e:
             logger.error("fs_write: FAILED for %s — %s", path, e, exc_info=True)
             return ToolResult(
                 content=f"Error: could not write '{path}'. Continue without it."
             )
+        verb = "Appended to" if mode == "append" else "Wrote"
         return ToolResult(
-            content=f"Wrote {len(data)} bytes to {path}.",
+            content=f"{verb} {path} ({len(data)} bytes now).",
             state_patch={"fs_files": {path: len(data)}},
         )
 
