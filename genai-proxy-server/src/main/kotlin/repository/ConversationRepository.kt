@@ -698,19 +698,34 @@ class ConversationRepository(
         return@withContext itemToMessage(item)
     }
 
+    /**
+     * Every message of the conversation. One Query page stops at 1 MB, which
+     * can be only 2-3 messages when thinking steps are large, so this follows
+     * LastEvaluatedKey until the partition is exhausted.
+     */
     suspend fun getMessagesForConversation(
         conversationId: String
     ): List<Message> = withContext(Dispatchers.IO) {
-        val request = QueryRequest.builder()
-            .tableName(MESSAGE_TABLE)
-            .keyConditionExpression("conversationId = :cid")
-            .expressionAttributeValues(mapOf(
-                ":cid" to AttributeValue.builder().s(conversationId).build()
-            ))
-            .build()
+        val messages = mutableListOf<Message>()
+        var startKey: Map<String, AttributeValue>? = null
 
-        val response = dynamoDbClient.query(request)
-        response.items().mapNotNull { itemToMessage(it) }
+        do {
+            val queryBuilder = QueryRequest.builder()
+                .tableName(MESSAGE_TABLE)
+                .keyConditionExpression("conversationId = :cid")
+                .expressionAttributeValues(mapOf(
+                    ":cid" to AttributeValue.builder().s(conversationId).build()
+                ))
+            startKey?.let { queryBuilder.exclusiveStartKey(it) }
+
+            val response = dynamoDbClient.query(queryBuilder.build())
+            response.items().mapNotNullTo(messages) { itemToMessage(it) }
+            startKey = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
+                response.lastEvaluatedKey()
+            } else null
+        } while (startKey != null)
+
+        messages
     }
 
     suspend fun createMessage(
