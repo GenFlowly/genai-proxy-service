@@ -208,6 +208,139 @@ An **action** is an internal generation flow the server runs on the user's behal
 4. Template syntax caveat: the local single-call path renders `{{var}}` (`PromptTemplateRenderer`); the LangGraph path substitutes single-brace `{var}` in node prompts (`retrieval-server/routes/retrieve.py`). Agents built in the UI should use single-brace placeholders in their input templates.
 5. Emit the standard metrics for the new flow (see Observability below) and never log prompt content in production.
 
+## Retention: tagged objects, the kept-object claim and customer deletion
+
+Customer files live in the private attachments bucket `gen-ai-proxy-service-{stage}-attachments`, under `customers/{customerId}/`. The rule every writer follows: an object is either **linked** from a DynamoDB row (and deleted by the purge when its customer is deleted, unless a kept shared conversation still links it) or **tagged to expire**. Nothing may be both unlinked and permanent.
+
+### Keys and tags
+
+| Object | Written by | Tag at write |
+|---|---|---|
+| `customers/{cid}/attachments/{id}`: browser uploads | the browser, PUT to the URL from `POST /api/v1/attachments` | `retention=pending` when the request sends `tagging: true` or the file is a PDF. The tag is signed into the URL, so the client must send the response's `requiredHeaders` (`x-amz-tagging`) with the PUT |
+| `customers/{cid}/attachments/{id}` + `{key}.source.md`: generated artifacts (PDFs) | retrieval-server `save_artifact` | `retention=pending` |
+| `{key}.derived/...`: regenerable sidecars | retrieval-server | `retention=derived` |
+| `customers/{cid}/agent-fs/{namespace}/...`: agent scratch, oversized tool output | retrieval-server `fs_write`, tool executor spill | `retention=scratch` |
+
+When a message row links an object, the claim (below) retags it `retention=kept` + `conv={conversationId}`. Uploads from old clients that send no `tagging` are untagged: no rule expires them, and an account deletion's sweep removes them.
+
+### Lifecycle rules (genai-proxy-server-cdk `lib/s3-stack.ts`)
+
+| Rule | Matches | Action |
+|---|---|---|
+| `expire-scratch` | tag `retention=scratch` | expire 7 days after creation |
+| `expire-derived` | tag `retention=derived` | expire 30 days after creation |
+| `expire-pending` | tag `retention=pending` | expire 7 days after creation. **Created disabled**, see the rollout order |
+| `abort-incomplete-multipart-uploads` | every key | abort after 1 day |
+
+No rule matches `retention=kept` or an untagged object (a CDK test asserts it). Expiry counts from the object's creation, not from when it was tagged, so enabling the pending rule deletes at once every pending object older than 7 days.
+
+The bucket is deliberately **unversioned**: a purge delete must remove the bytes, not add a delete marker. The CDK sets `versioned: false` and a test asserts it, but the live state of both stages must be checked (not yet recorded):
+
+```
+aws s3api get-bucket-versioning --bucket gen-ai-proxy-service-development-attachments
+aws s3api get-bucket-versioning --bucket gen-ai-proxy-service-production-attachments
+```
+
+Empty output means the bucket was never versioned, which is what the purge needs. `"Status": "Enabled"` or `"Suspended"` means deleted objects survive as noncurrent versions: fix that before relying on the purge.
+
+### The kept-object claim (`service/ObjectClaimService.kt`)
+
+`ConversationService.addMessageInConversation` claims every object a message links, before `createMessage`:
+
+- **Linked keys**: each attachment's `s3Key` and `sourceKey` (an assistant row without `sourceKey` also gets its legacy `{s3Key}.source.md`, when it exists) and every `s3_key` image in `toolResultsJson`. A key must match `^customers/[^/]+/(attachments|agent-fs)/`; any other is skipped and logged by attachment id only.
+- A pending or untagged object is retagged `retention=kept`, `conv={conversationId}`. One already kept for this conversation is left as is.
+- An object kept for **another** conversation (a message copied or forked across conversations) is copied to `customers/{owner of the original}/attachments/{newId}`, tagged kept for this conversation, and the row links the copy under the same attachmentId; a PDF's `.source.md` sidecar is copied with it. `newId` is derived from the messageId and the original key, so retries reuse the same copy.
+- A missing object is skipped and counted.
+- Up to 8 objects in parallel, 4 attempts each. If an object still fails, the row is written anyway with `claimPending = 1`, which puts it in the Message table's sparse `claimPendingIndex`.
+- If `createMessage` fails, the objects this write claimed go back to `pending`. When a write replaces a row (edit, regenerate), the keys only the old row linked go back to `pending`, unless another message still links them.
+- **Write guard**: the write is refused when the Conversation row is missing or its purge has started (`purgeStartedAt`). The turn's objects stay pending and expire.
+
+`ClaimReconciler` runs every 5 minutes (first run 1 minute after start-up). It re-claims the 100 oldest `claimPending` messages and clears the flag once a claim is complete. A message still pending after 3 days logs an ERROR and counts `retention_claim_overdue_total`: fix it before the pending rule expires its objects at 7 days.
+
+### Backfill (once per stage)
+
+Rows written before the claim went live link objects that are still pending or untagged. The admin-only (`ADMIN_EMAILS`) backfill claims them:
+
+```
+curl -X POST "$PROXY_URL/api/v1/admin/retention/claim-backfill" \
+  -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"maxItems": 1000}'
+# repeat with {"pageToken": "<nextPageToken from the last response>", "maxItems": 1000} until "done": true
+```
+
+Each call scans one page of the Message table (`maxItems` 1 to 1,000, default 200) at about 20 messages per second and returns `scannedMessages`, `messagesWithFiles`, `claimedMessages`, `pendingMessages`, `copiedObjects`, `vanishedMessages`, `nextPageToken` and `done`. It is idempotent: if a call fails, repeat it with the same `pageToken`. A message it cannot finish gets `claimPending` and the reconciler takes over.
+
+### Rollout order (per stage, development first)
+
+1. **Deploy** (CI): the CDK changes (lifecycle rules with the pending rule disabled, the IAM split, PurgeJobs, the Message `claimPendingIndex`) and the proxy with the claim and the reconciler. The retrieval server and the react app that tag `pending` ship in the same release.
+2. **Backfill** the stage until `done: true`, once step 1 is live there.
+3. **Message `customerIdIndex`**: CloudFormation adds one GSI per table update, so `cdk.json` pins `"messageGsiPhase": "1"` (only `claimPendingIndex`). After both stages have deployed step 1, a commit that removes the pin adds `customerIdIndex`. Account deletion needs it: until then its jobs fail at the sweep and retry. Do not merge the removal to `main` in the same push as step 1, because production would try to add both indexes and the deploy would fail (CloudFormation rolls it back).
+4. **Enable the pending rule**: a commit that sets `"enablePendingExpiry": true` in `cdk.json`. Do this only after the claim is live in production, the backfill has finished in both stages, and nothing in `claimPendingIndex` is overdue.
+5. **Record** the live versioning state of both buckets (above).
+
+Change both pins in `cdk.json`, in a commit. A one-off `cdk deploy -c ...` is undone by the next CI deploy, and for the index pin that means the index is deleted.
+
+### IAM: one AWS user per Fly app (genai-proxy-server-cdk `lib/flyio-iam-stack.ts`)
+
+| IAM user (stack outputs → Fly app) | Attachments bucket | Other grants |
+|---|---|---|
+| `gen-ai-proxy-service-{stage}-flyio-user` (`ProxyAwsAccessKeyId`/`ProxyAwsSecretAccessKey` → proxy server; the user both apps used to share) | Get/Put on every key; PutObjectTagging, GetObjectTagging, DeleteObject on `customers/*`; ListBucket | ListBucketVersions + DeleteObjectVersion on `genflowly-{stage}-customer-documents`; DynamoDB; KMS; lambda:InvokeFunction |
+| `gen-ai-proxy-service-{stage}-retrieval-flyio-user` (`RetrievalAwsAccessKeyId`/`RetrievalAwsSecretAccessKey` → retrieval server) | Get/Put on every key; PutObjectTagging on `customers/*`; ListBucket | DynamoDB; KMS. **No S3 delete of any kind** |
+
+ListBucket makes a missing key read as 404/NoSuchKey instead of AccessDenied, and serves listings (the purge's `listKeys`, the agent's `fs_list`). The deploy workflows read each pair from the `gen-ai-proxy-service-FlyioIamStack` outputs and set it on its own Fly app.
+
+### Customer deletion (plan 3.9)
+
+Deletion is admin-only (`ADMIN_EMAILS`). There is no self-service route, and an admin cannot delete their own account this way.
+
+- `DELETE /api/v1/admin/customers/{customerId}` returns 202 with the job status. Repeating it returns the same job. (The path id follows the deletion contract; it is an exception to the query-parameter rule under Observability.)
+- `GET /api/v1/admin/customers/deletion?customerId=` returns the job status: state, stage, attempts, warnings, last error, and conversation purges done out of total.
+
+**Account job** (`service/AccountDeletionService.kt`; row `ACCOUNT#{customerId}` in PurgeJobs). It resumes after its last completed stage:
+
+1. **Stop writes.** Delete the developer API keys, and delete the Auth0 user through the Management API. The Auth0 user is kept, with a warning on the job, when the Management API is not configured, the login is unknown, or the login also holds another account.
+2. **Rename.** In one TransactWriteItems, the CustomerProfile row is re-keyed to `sub = DELETED#{customerId}` with name "Deleted User", and the username stays. The UsernameLookup row is deleted. Then the customer's in-flight turns are cancelled, and the job waits up to 2 minutes for them to end (`InFlightTurns`).
+3. **Classify** the owned conversations, archived ones included. A conversation with any SharedConversations row (PUBLIC included) is kept, and shows the owner as "Deleted User". Every other one gets a conversation purge job.
+4. **Sweep.** The keep set is every key linked from the kept conversations and from the customer's messages in other people's conversations (Message `customerIdIndex`). Every other object under `customers/{customerId}/` is deleted: unsent uploads, scratch and orphans.
+5. **Delete the rest**:
+   - the run data of the kept messages (retrieval-server `DELETE /runs/{run_id}/data`);
+   - the customer's recipient share rows. A deleted owner's conversation left without any share is purged;
+   - instructions, except those a System agent's node references through `instruction_id` or `harness_instruction_id`, at any depth of the node config (warning `instructions_kept`);
+   - agent graphs and nodes (every version) and the shares of all of these;
+   - RequestAgentMap overrides and every customer-keyed table;
+   - the `{customerId}_*` vector collections (encoding-server `POST /purge-vectors`) and CustomerVectorDBConfig;
+   - every object version under `{customerId}/` in `genflowly-{stage}-customer-documents`.
+6. **Wait** until its conversation purges are DONE, then finish.
+
+**Conversation purge** (`service/ConversationPurgeService.kt`; the row is keyed by the conversationId):
+
+1. Set `purgeStartedAt`, which arms the write guard.
+2. Settle the `pendingRuns`: record each run id; remove runs that are terminal or unknown (404); cancel active runs and retry the job in 5 minutes. After 6 such waits, each one counts as a failed attempt.
+3. Delete the conversation's objects: the exact keys, plus the `.derived/` and scratch prefixes. An object kept for another conversation is never deleted.
+4. Delete the run data, and the conversation's vectors from every participant's collections.
+5. Delete the Message rows and re-read to check none is left. Then delete the shares, the memory META rows, InstructionUsageSeen, and the Conversation row last. If the job crashes before this step, the rows still link everything it needs to re-run.
+
+Archive and unarchive purge nothing. Archiving or unsharing a conversation enqueues its purge only when its owner has an `ACCOUNT#` job and no share row remains: nobody can open such a conversation again.
+
+**Worker** (`service/PurgeJobWorker.kt`): polls every minute for up to 10 due jobs, under a 15-minute lease. A failed attempt backs off from 1 minute, doubling, up to 6 hours. From the 10th attempt, every failure logs an ERROR and counts `purge_jobs_total{status="stuck"}`.
+
+**Configuration** (proxy environment, all optional):
+
+| Variable | Purpose | When unset |
+|---|---|---|
+| `AUTH0_MGMT_DOMAIN`, `AUTH0_MGMT_CLIENT_ID`, `AUTH0_MGMT_CLIENT_SECRET` | the tenant's canonical `*.auth0.com` domain (the Management API does not answer on a custom domain) and a machine-to-machine application with `delete:users` on the Management API. The same application must also be authorized for the API audience: its tokens sign the encoding-server purge calls | (any of the three) the Auth0 user and the vectors are kept; warnings `auth0_not_configured`, `vector_purge_skipped` |
+| `ENCODING_PURGE_AUDIENCE` | audience of the token for `POST /purge-vectors` | `AUTH0_API_AUDIENCE` |
+| `CUSTOMER_DOCUMENTS_BUCKET` | the encoding-server's documents bucket | `genflowly-{APP_ENV}-customer-documents` |
+
+The deploy workflows copy the three `AUTH0_MGMT_*` GitHub environment secrets, when all are set, into the proxy's Fly secrets. The encoding-server accepts `POST /purge-vectors` only from a client-credentials token whose `azp` is listed in its `PURGE_ALLOWED_CLIENT_IDS` (set it to the M2M client id). Unset, every purge call gets a 403, and the jobs retry until they are stuck.
+
+### What deletion does not reach: backup windows
+
+- **DynamoDB**: point-in-time recovery is on for every table, so deleted rows stay restorable for 35 days.
+- **Supabase** (the Postgres run data): the project's own backups keep deleted rows for their retention window.
+- **S3**: the attachments bucket is unversioned (verify it, above). The customer-documents bucket is versioned, and the purge deletes every version.
+- Logs and metrics carry ids, never content (see the logging policy below), and are not purged.
+
 ## Observability — metrics & logging conventions
 
 All services follow ONE set of metric-naming and dimension conventions, pinned here and implemented for Python in `encoding-library/src/encoding_library/observability/`. Dashboards and alarms live in Grafana (fed by Fly Prometheus for the Fly apps and CloudWatch for the lambdas), so a metric must mean the same thing no matter which service emitted it.
@@ -315,6 +448,15 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `graph_stale_serve_total` | — | retrieval-server graph_loader (DDB failure papered over by cache) |
 | `voice_session_total` / `voice_session_duration_seconds` | vendor, status (`ok`\|`error`\|`connect_failed`) | retrieval-server voice sessions |
 | `internal_client_total` / `_duration_seconds` | operation (path), status (`ok`\|`4xx`\|`5xx`\|`error`=transport failure, plus `not_configured` on skipped encoding calls) | Kotlin proxy shared HttpClient → retrieval/encoding servers |
+| `retention_claim_total` | status (`ok`\|`pending` = left to the reconciler) | Kotlin proxy — one per message write that links objects (see Retention) |
+| `retention_claim_copies_total`, `retention_claim_missing_total`, `retention_release_failure_total` | — | Kotlin proxy claim — objects copied for another conversation, linked keys with no object, failed returns to `pending` |
+| `retention_malformed_key_total` | operation (`claim`\|`purge`) | Kotlin proxy — linked keys outside `customers/{cid}/attachments/` and `customers/{cid}/agent-fs/`, skipped |
+| `retention_claim_reconcile_total` | status (`ok`\|`pending`\|`error`) | Kotlin proxy `ClaimReconciler` |
+| `retention_claim_overdue_total` | — | Kotlin proxy `ClaimReconciler` — a message pending more than 3 days; alert on any |
+| `purge_jobs_total` | operation (`account`\|`conversation`), status (`requested`\|`done`\|`rescheduled`\|`error`\|`stuck`) | Kotlin proxy customer deletion — alert on `stuck` |
+| `purge_objects_deleted_total` | operation (`conversation`\|`sweep`\|`documents`) | Kotlin proxy customer deletion — S3 objects (versions, for documents) deleted |
+| `purge_errors_total` | operation (the failed step: `s3`\|`dynamodb`\|`sweep`, else `account`\|`conversation`) | Kotlin proxy `PurgeJobWorker` |
+| `vector_purge_total` | operation (`delete_conversation`\|`drop_collections`\|`invalid`), status (`ok`\|`error`) | encoding-server `POST /purge-vectors` |
 
 ### Python services (retrieval-server, encoding lambdas)
 
