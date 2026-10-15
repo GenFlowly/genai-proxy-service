@@ -94,7 +94,7 @@ class GenerationOrchestratorDurableRunTest {
         return GenerationOrchestrator(
             credentialsService, instructionService, conversationService, mockk(relaxed = true),
             mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-            mockk(relaxed = true), AppScope(), runsClient, appConfig, mockk(relaxed = true)
+            mockk(relaxed = true), AppScope(), runsClient, appConfig, mockk(relaxed = true), ActiveTurns()
         )
     }
 

@@ -54,7 +54,8 @@ class GenerationOrchestratorStreamPersistenceTest {
         AppScope(),
         mockk(relaxed = true),          // runsClient
         mockk(relaxed = true),          // appConfig (durableRunsEnabled=false: stateless path)
-        mockk(relaxed = true)           // conversationManagementService
+        mockk(relaxed = true),          // conversationManagementService
+        ActiveTurns()
     )
 
     init {
@@ -214,7 +215,8 @@ class GenerationOrchestratorStreamPersistenceTest {
         val orchestrator = GenerationOrchestrator(
             credentialsService, instructionService, conversations, retrievalService,
             mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-            mockk(relaxed = true), AppScope(), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true)
+            mockk(relaxed = true), AppScope(), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
+            ActiveTurns()
         )
         streamYields(
             flowOf(

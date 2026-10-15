@@ -50,7 +50,8 @@ class GenerationOrchestratorSystemPromptTest {
         AppScope(),
         mockk(relaxed = true),          // runsClient
         mockk(relaxed = true),          // appConfig (durableRunsEnabled=false → stateless path)
-        mockk(relaxed = true)           // conversationManagementService
+        mockk(relaxed = true),          // conversationManagementService
+        ActiveTurns()
     )
 
     init {

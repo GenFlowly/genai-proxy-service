@@ -63,7 +63,8 @@ class GenerationOrchestratorRequestTest {
         AppScope(),
         runsClient,
         appConfig,
-        mockk(relaxed = true)           // conversationManagementService
+        mockk(relaxed = true),          // conversationManagementService
+        ActiveTurns()
     )
 
     init {

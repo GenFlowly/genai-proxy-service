@@ -41,6 +41,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.job
 
 /**
  * Orchestrates the primary text-generation flows (batch + streaming): request
@@ -62,7 +63,9 @@ class GenerationOrchestrator(
     private val appScope: AppScope,
     private val runsClient: RunsClient,
     private val appConfig: AppConfig,
-    private val conversationManagementService: ConversationManagementService
+    private val conversationManagementService: ConversationManagementService,
+    /** In-flight turns by customer, for the account purge (the Koin singleton). */
+    private val activeTurns: ActiveTurns
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
@@ -236,25 +239,29 @@ class GenerationOrchestrator(
             instructionService.trackInstructionUsage(customerId, activeConversationId, effectiveInstructionId)
         }
         val responseMessageList = coroutineScope {
-            message.aiConfig.map { aiConfig ->
-                async {
-                    fetchResponseFromAIVendor(
-                        aiVendor = aiConfig.aiVendor,
-                        model = aiConfig.model,
-                        maxTokens = aiConfig.maxTokens,
-                        thinkingLevel = aiConfig.thinkingLevel,
-                        message = message,
-                        agentic = agentic,
-                        tools = tools,
-                        toolChoice = toolChoice,
-                        toolResults = toolResults,
-                        responseSchema = responseSchema,
-                        memoryEnabled = memoryEnabled,
-                        agentId = agentId,
-                        locale = locale
-                    )
-                }
-            }.awaitAll()
+            // Registered for the account purge, which may cancel the turn and
+            // waits for it; unregistered once every vendor's reply is stored.
+            activeTurns.register(customerId, activeConversationId, coroutineContext.job).use {
+                message.aiConfig.map { aiConfig ->
+                    async {
+                        fetchResponseFromAIVendor(
+                            aiVendor = aiConfig.aiVendor,
+                            model = aiConfig.model,
+                            maxTokens = aiConfig.maxTokens,
+                            thinkingLevel = aiConfig.thinkingLevel,
+                            message = message,
+                            agentic = agentic,
+                            tools = tools,
+                            toolChoice = toolChoice,
+                            toolResults = toolResults,
+                            responseSchema = responseSchema,
+                            memoryEnabled = memoryEnabled,
+                            agentId = agentId,
+                            locale = locale
+                        )
+                    }
+                }.awaitAll()
+            }
         }
 
         // Step 6 - Return message response list
@@ -530,7 +537,10 @@ class GenerationOrchestrator(
         // generation runs to completion and the response is persisted, so the
         // client can recover it by refetching the conversation.
         val chunkChannel = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
-        val generationJob = appScope.launch {
+        // The turn's entry in the account purge's registry, made before the job
+        // starts so a purge cannot miss it; closed once persistence is done.
+        lateinit var turnRegistration: AutoCloseable
+        val generationJob = appScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             val emit: suspend (String) -> Unit = { chunkChannel.send(it) }
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
@@ -794,17 +804,23 @@ class GenerationOrchestrator(
                 } catch (e: Exception) {
                     logger.error("Failed to persist streamed response $responseMessageId", e)
                 } finally {
+                    // Persistence is over: an account purge waiting on this turn may go on.
+                    turnRegistration.close()
                     // Close AFTER persistence so a connected client's stream end
                     // implies the message is queryable (usage fetch follows it).
                     chunkChannel.close()
                 }
             }
         }
+        turnRegistration = activeTurns.register(customerId, activeConversationId, generationJob)
         activeGenerations[responseMessageId] = ActiveGeneration(customerId, generationJob)
         generationJob.invokeOnCompletion {
             activeGenerations.remove(responseMessageId)
             activeRunIds.remove(responseMessageId)
+            // A job cancelled before it started never ran the finally above.
+            chunkChannel.close()
         }
+        generationJob.start()
         val flow = chunkChannel.consumeAsFlow()
 
         return StreamExecutionResult(
