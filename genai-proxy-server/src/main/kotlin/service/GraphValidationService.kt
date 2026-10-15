@@ -1,7 +1,10 @@
 package com.genflowly.service
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -38,12 +41,21 @@ private val logger = KotlinLogging.logger {}
  *  9. Node config must be valid JSON when provided.
  * 10. name must be non-blank when provided.
  * 11. isDefault=false guard when there is only one graph.
+ * 12. A node config's tool_settings.generate_pdf (the PDF letterhead, plan
+ *     6.1/6.2) holds only its known keys, each with a valid value.
  */
 object GraphValidationService {
 
     private val BOOLEAN_CONDITION_TYPES = setOf("bool", "list_empty")
 
     private val jsonParser = Json { ignoreUnknownKeys = true }
+
+    // Rule 12: what retrieval-server's generate_pdf accepts (generate_pdf.py
+    // _render_options / pdf_typst.py); anything else would be dropped there.
+    private val PDF_PAGE_SIZES = setOf("A4", "Letter", "Legal")
+    private val PDF_ACCENT_COLOR = Regex("^#[0-9A-Fa-f]{6}$")
+    private val PDF_LOGO_ID = Regex("^[A-Za-z0-9-]{8,64}$")
+    private val PDF_TEXT_LIMITS = mapOf("company_name" to 120, "footer_text" to 200)
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -114,14 +126,53 @@ object GraphValidationService {
         }
     }
 
-    /** Rule 9: every patched node config must be valid JSON. */
+    /** Rule 9: every patched node config must be valid JSON (and pass rule 12). */
     private fun validateNodeConfigs(nodePatchConfigs: Map<String, String>) {
         nodePatchConfigs.forEach { (nodeId, config) ->
-            try {
+            val parsed = try {
                 jsonParser.parseToJsonElement(config)
             } catch (e: Exception) {
                 throw IllegalArgumentException(
                     "Node '$nodeId' has an invalid config (not valid JSON): ${e.message}"
+                )
+            }
+            validatePdfToolSettings(nodeId, parsed)
+        }
+    }
+
+    /**
+     * Rule 12: tool_settings.generate_pdf, when present, is an object of the
+     * letterhead keys only. The logo id names an image under the graph owner's
+     * attachments; retrieval-server reads it from that prefix only.
+     */
+    private fun validatePdfToolSettings(nodeId: String, config: JsonElement) {
+        val toolSettings = (config as? JsonObject)?.get("tool_settings") ?: return
+        require(toolSettings is JsonObject) { "Node '$nodeId': tool_settings must be an object." }
+        val pdf = toolSettings["generate_pdf"] ?: return
+        require(pdf is JsonObject) { "Node '$nodeId': tool_settings.generate_pdf must be an object." }
+        pdf.forEach { (key, value) ->
+            if (value is JsonNull) return@forEach
+            val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
+            val field = "Node '$nodeId': tool_settings.generate_pdf.$key"
+            when (key) {
+                "default_page_size" -> require(text in PDF_PAGE_SIZES) {
+                    "$field must be one of ${PDF_PAGE_SIZES.joinToString()}."
+                }
+                "accent_color" -> require(text != null && PDF_ACCENT_COLOR.matches(text)) {
+                    "$field must be a colour like #1F4E79."
+                }
+                "logo_attachment_id" -> require(text != null && PDF_LOGO_ID.matches(text)) {
+                    "$field must be an attachment id."
+                }
+                "company_name", "footer_text" -> {
+                    val limit = PDF_TEXT_LIMITS.getValue(key)
+                    require(text != null && text.length <= limit) {
+                        "$field must be text of at most $limit characters."
+                    }
+                }
+                else -> throw IllegalArgumentException(
+                    "Node '$nodeId': unknown tool_settings.generate_pdf key '$key' (allowed: " +
+                        "default_page_size, company_name, footer_text, accent_color, logo_attachment_id)."
                 )
             }
         }

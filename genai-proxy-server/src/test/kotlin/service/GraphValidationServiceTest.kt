@@ -22,6 +22,48 @@ class GraphValidationServiceTest {
         nodePatchConfigs = emptyMap(),
     )
 
+    private fun validateConfig(config: String) = GraphValidationService.validateAgentUpdate(
+        nodeIds = listOf("T"),
+        nodeTypeById = mapOf("T" to "TOOL_EXECUTOR"),
+        entryPoint = "T",
+        edgesJson = """{"edges":[{"from":"T","to":"__end__"}]}""",
+        maxIterations = 10,
+        name = null,
+        isDefault = null,
+        isOnlyGraph = false,
+        nodePatchConfigs = mapOf("T" to config),
+    )
+
+    @Test
+    fun `pdf letterhead settings with valid values pass`() {
+        validateConfig(
+            """{"tools":["generate_pdf"],"tool_settings":{"generate_pdf":{
+                "default_page_size":"Letter","company_name":"Acme GmbH","footer_text":"Confidential",
+                "accent_color":"#1F4E79","logo_attachment_id":"0b6f1c2e-3d4a-4b5c-9d8e-7f6a5b4c3d2e"}}}"""
+        )
+        // Cleared values and other tools' settings are left alone.
+        validateConfig("""{"tool_settings":{"generate_pdf":{"accent_color":null},"web_search":{"x":1}}}""")
+        validateConfig("""{"tools":["generate_pdf"]}""")
+    }
+
+    @Test
+    fun `pdf letterhead settings with invalid values are rejected`() {
+        val cases = mapOf(
+            """{"tool_settings":{"generate_pdf":{"default_page_size":"Tabloid"}}}""" to "default_page_size",
+            """{"tool_settings":{"generate_pdf":{"accent_color":"red"}}}""" to "colour",
+            """{"tool_settings":{"generate_pdf":{"logo_attachment_id":"../System/x"}}}""" to "attachment id",
+            """{"tool_settings":{"generate_pdf":{"company_name":"${"x".repeat(121)}"}}}""" to "at most 120",
+            """{"tool_settings":{"generate_pdf":{"footer_text":5}}}""" to "footer_text",
+            """{"tool_settings":{"generate_pdf":{"logo_id":"abcdefgh"}}}""" to "unknown",
+            """{"tool_settings":{"generate_pdf":"Acme"}}""" to "must be an object",
+            """{"tool_settings":[]}""" to "tool_settings must be an object",
+        )
+        cases.forEach { (config, expected) ->
+            val e = assertFailsWith<IllegalArgumentException>(config) { validateConfig(config) }
+            assertTrue(e.message!!.contains(expected), "${e.message} should mention $expected")
+        }
+    }
+
     @Test
     fun `multi-way value conditional with default route passes`() {
         validate(
