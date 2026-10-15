@@ -263,8 +263,16 @@ private fun CustomerTool.toUpsertRequest() = UpsertCustomerToolRequest(
  */
 object CustomerToolValidator {
 
-    /** Names reserved by the runtime's built-in tools. */
-    val BUILTIN_TOOL_NAMES = setOf("web_search", "generate_pdf")
+    /**
+     * Names reserved by the runtime's built-in tools. Built-ins resolve before
+     * customer tools, so a customer tool with one of these names would be
+     * silently shadowed; this includes the tools that are rolling out
+     * (revise_pdf and read_pdf_source next to generate_pdf, read_attachment
+     * for uploaded documents).
+     */
+    val BUILTIN_TOOL_NAMES = setOf(
+        "web_search", "generate_pdf", "revise_pdf", "read_pdf_source", "read_attachment"
+    )
 
     val ALLOWED_METHODS = setOf("GET", "POST", "PUT", "PATCH", "DELETE")
     val ALLOWED_PROVIDERS = setOf("http", "mcp")
