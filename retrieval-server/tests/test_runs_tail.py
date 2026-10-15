@@ -2,9 +2,13 @@
 Unit tests for the /runs/{id}/stream tail (routes/runs.py stream_run).
 
 run_events and the DBOS status are faked; the generator is driven to
-completion and its SSE frames inspected. Pinned here (plan 0.2): a run that
-failed or was dead-lettered without a terminal row ends with the error frames,
-then [DONE]; a cancelled run and the idle cap end with a bare [DONE].
+completion and its SSE frames inspected. Pinned here:
+  * plan 0.2 — a run that failed or was dead-lettered without a terminal row
+    ends with the error frames, then [DONE]; a cancelled run and the idle cap
+    end with a bare [DONE];
+  * plan 1.7 — while nothing happens the tail writes an SSE comment line
+    (": keepalive") every 15 s of silence, and writes no run_events row for it
+    (driven on a fake clock, not real time).
 
 Run with `python -m unittest tests.test_runs_tail`.
 """
@@ -120,6 +124,58 @@ class FailedRunTailTest(unittest.IsolatedAsyncioTestCase):
         # A run still PENDING (e.g. waiting on human input) when the cap fires.
         payloads = _data(await _drive(_Tail(statuses=["PENDING"]), _STREAM_MAX_SEC=2.0))
         self.assertEqual(payloads, ["[DONE]"])
+
+
+class _FakeClock:
+    """time.monotonic + asyncio.sleep for the tail: sleeping advances time."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+    async def sleep(self, seconds):
+        self.now += seconds
+
+
+class KeepaliveTest(unittest.IsolatedAsyncioTestCase):
+    async def _drive_on_clock(self, tail, max_sec):
+        clock = _FakeClock()
+
+        async def no_publish(*args, **kwargs):
+            raise AssertionError("the tail must never write a run_events row")
+
+        with patch.object(durable_runtime, "is_ready", lambda: True), \
+                patch.object(run_events, "read_since", tail.read_since), \
+                patch.object(run_events, "publish", no_publish), \
+                patch.object(run_events, "publish_terminal_once", no_publish), \
+                patch.object(runs_routes, "_status", tail.status), \
+                patch.object(runs_routes, "_sleep", clock.sleep), \
+                patch.object(runs_routes, "_clock", clock), \
+                patch.object(runs_routes, "_STREAM_MAX_SEC", max_sec):
+            response = await runs_routes.stream_run("run_1", _Request(), from_seq=0)
+            frames = [frame async for frame in response.body_iterator]
+        return frames, clock
+
+    async def test_forty_idle_seconds_write_two_comment_lines_and_no_rows(self):
+        frames, clock = await self._drive_on_clock(_Tail(statuses=["PENDING"]), max_sec=40.0)
+        self.assertGreaterEqual(clock.now - 1000.0, 40.0 - 0.5)
+        keepalives = [f for f in frames if f.startswith(":")]
+        self.assertGreaterEqual(len(keepalives), 2)
+        self.assertTrue(all(f == ": keepalive\n\n" for f in keepalives))
+        # Comment lines carry no data: the client sees no event for them.
+        self.assertEqual(_data(frames), ["[DONE]"])
+
+    async def test_rows_reset_the_keepalive_timer(self):
+        # A row every ~10 s (25 polls) keeps the stream busy: no keepalive.
+        batches = []
+        for seq in range(1, 4):
+            batches += [[]] * 25 + [[_row(seq, {"content": str(seq)})]]
+        tail = _Tail(batches=batches, statuses=["PENDING"])
+        frames, _ = await self._drive_on_clock(tail, max_sec=12.0)
+        self.assertEqual([f for f in frames if f.startswith(":")], [])
+        self.assertEqual(_data(frames)[:3], [{"content": "1"}, {"content": "2"}, {"content": "3"}])
 
 
 if __name__ == "__main__":

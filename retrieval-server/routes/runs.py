@@ -16,6 +16,7 @@ the proxy's existing SSE→client mapping is unchanged.
 import asyncio
 import json
 import logging
+import time
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request
@@ -63,8 +64,17 @@ def _failure_frames(run_id: str, status: str) -> list[str]:
     return [f"data: {json.dumps(ev)}\n\n" for ev in run_events.failure_events(run_id, message, error_type)]
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
-# Indirection so tests can drive the tail on a fake clock.
+# After this long without writing anything, the tail writes an SSE comment
+# line (plan 1.7, contract C4): a run waiting in the queue, being recovered
+# after a restart or waiting for human input emits no rows, and the proxy cuts
+# a stream that stays silent for 300 s. A comment is skipped by SSE parsers
+# (RunsClient reads only data lines) but resets their socket timers, and it is
+# never written to run_events.
+_KEEPALIVE_SEC = 15.0
+_KEEPALIVE_FRAME = ": keepalive\n\n"
+# Indirections so tests can drive the tail on a fake clock.
 _sleep = asyncio.sleep
+_clock = time.monotonic
 
 
 def _require_ready() -> None:
@@ -112,6 +122,7 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
     async def gen():
         last = start_seq
         waited = 0.0
+        last_write = _clock()
         while True:
             if await request.is_disconnected():
                 logger.info("Stream %s: client disconnected at seq=%s", run_id, last)
@@ -125,6 +136,7 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
                     if row["terminal"]:
                         yield "data: [DONE]\n\n"
                         return
+                last_write = _clock()
                 continue
             # No new events: stop if the workflow is finished (covers a crash
             # that never wrote a terminal row) or if we've tailed too long.
@@ -151,6 +163,9 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
                 logger.warning("Stream %s: max duration reached, closing", run_id)
                 yield "data: [DONE]\n\n"
                 return
+            if _clock() - last_write >= _KEEPALIVE_SEC:
+                yield _KEEPALIVE_FRAME
+                last_write = _clock()
             await _sleep(_POLL_INTERVAL_SEC)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
