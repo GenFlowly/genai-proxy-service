@@ -17,10 +17,15 @@ import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
+import software.amazon.awssdk.services.dynamodb.model.Delete
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
+import software.amazon.awssdk.services.dynamodb.model.Put
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 
 /**
@@ -141,6 +146,10 @@ class CustomerProfileRepository(
 
             val response = dynamoDbClient.getItem(request)
             var item = response.item().takeIf { it.isNotEmpty() } ?: return@withContext null
+
+            // A deleted customer's renamed row must never mint (and reserve) a
+            // fresh, searchable handle on read
+            if (sub.startsWith(RetentionTables.DELETED_SUB_PREFIX)) return@withContext item
 
             if (!item.containsKey("username") || item["username"]?.s().isNullOrBlank()) {
                 val customerId = item["customerId"]?.s() ?: return@withContext item
@@ -494,6 +503,161 @@ class CustomerProfileRepository(
             )
             logger.info("Vendor allowlist saved by $updatedBy: ${allowedVendors.size} vendor(s)")
         }
+
+    // ─── Account deletion (plan 3.9, C9) ──────────────────────────────────────
+
+    /** The login a profile row is keyed by, read without the username backfill. */
+    data class ProfileLogin(val sub: String, val client: String, val username: String?) {
+        val deleted: Boolean get() = sub.startsWith(RetentionTables.DELETED_SUB_PREFIX)
+    }
+
+    enum class DeletedRekeyResult { REKEYED, ALREADY_REKEYED, NOT_FOUND }
+
+    /**
+     * The customer's profile row through customerIdIndex, raw: unlike
+     * [getCustomerProfileByCustomerId] it never backfills a username.
+     */
+    suspend fun findProfileLogin(customerId: String): ProfileLogin? =
+        rawProfileByCustomerId(customerId)?.let { item ->
+            ProfileLogin(
+                sub = item[SUB_PARTITION_KEY]?.s() ?: return@let null,
+                client = item[CLIENT_SORT_KEY]?.s() ?: return@let null,
+                username = item["username"]?.s()?.takeIf { it.isNotBlank() }
+            )
+        }
+
+    /** customerIds of every profile (one per app client) of an Auth0 login. */
+    suspend fun customerIdsForSub(sub: String): List<String> = withContext(Dispatchers.IO) {
+        dynamoDbClient.query(
+            QueryRequest.builder()
+                .tableName(CUSTOMER_PROFILE_TABLE)
+                .keyConditionExpression("#sub = :sub")
+                .expressionAttributeNames(mapOf("#sub" to SUB_PARTITION_KEY))
+                .expressionAttributeValues(mapOf(":sub" to AttributeValue.builder().s(sub).build()))
+                .consistentRead(true)
+                .build()
+        ).items().mapNotNull { it[CUSTOMER_ID_KEY]?.s() }
+    }
+
+    private suspend fun rawProfileByCustomerId(customerId: String): Map<String, AttributeValue>? =
+        withContext(Dispatchers.IO) {
+            val items = dynamoDbClient.query(
+                QueryRequest.builder()
+                    .tableName(CUSTOMER_PROFILE_TABLE)
+                    .indexName(DynamoDBConstants.CUSTOMER_PROFILE_CUSTOMER_ID_GSI)
+                    .keyConditionExpression("customerId = :cid")
+                    .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                    .build()
+            ).items()
+            // A stale index entry of the pre-rename row may linger next to the renamed one
+            items.firstOrNull { it[SUB_PARTITION_KEY]?.s()?.startsWith(RetentionTables.DELETED_SUB_PREFIX) == true }
+                ?: items.firstOrNull()
+        }
+
+    /**
+     * Keeps a deleted customer's profile row but takes it away from their
+     * login: in one TransactWriteItems the row is re-written under
+     * sub = "DELETED#{customerId}" (same client and every other attribute,
+     * username included) with name "Deleted User" and the original
+     * (sub, client) row is deleted; then the customer's UsernameLookup row
+     * is deleted. Shared conversations show "Deleted User" through the
+     * unchanged customerIdIndex read path, while neither the old sub nor a
+     * still-valid token resolves to the account any more. Idempotent.
+     */
+    suspend fun rekeyDeletedCustomer(customerId: String): DeletedRekeyResult = withContext(Dispatchers.IO) {
+        val item = rawProfileByCustomerId(customerId) ?: return@withContext DeletedRekeyResult.NOT_FOUND
+        val sub = item[SUB_PARTITION_KEY]?.s() ?: return@withContext DeletedRekeyResult.NOT_FOUND
+        val client = item[CLIENT_SORT_KEY]?.s() ?: return@withContext DeletedRekeyResult.NOT_FOUND
+        val username = item["username"]?.s()?.takeIf { it.isNotBlank() }
+        val deletedSub = RetentionTables.DELETED_SUB_PREFIX + customerId
+        val deletedKey = mapOf(
+            SUB_PARTITION_KEY to AttributeValue.builder().s(deletedSub).build(),
+            CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+        )
+
+        if (sub == deletedSub) {
+            finishDeletedRekey(customerId, deletedKey, username)
+            return@withContext DeletedRekeyResult.ALREADY_REKEYED
+        }
+
+        val renamed = item + mapOf(
+            SUB_PARTITION_KEY to AttributeValue.builder().s(deletedSub).build(),
+            "name" to AttributeValue.builder().s(RetentionTables.DELETED_USER_NAME).build()
+        )
+        val writes = mutableListOf(
+            TransactWriteItem.builder().put(
+                Put.builder()
+                    .tableName(CUSTOMER_PROFILE_TABLE)
+                    .item(renamed)
+                    .conditionExpression("attribute_not_exists(#sub)")
+                    .expressionAttributeNames(mapOf("#sub" to SUB_PARTITION_KEY))
+                    .build()
+            ).build(),
+            TransactWriteItem.builder().delete(
+                Delete.builder()
+                    .tableName(CUSTOMER_PROFILE_TABLE)
+                    .key(mapOf(
+                        SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                        CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+                    ))
+                    .conditionExpression("#cid = :cid")
+                    .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY))
+                    .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                    .build()
+            ).build()
+        )
+        try {
+            dynamoDbClient.transactWriteItems(TransactWriteItemsRequest.builder().transactItems(writes).build())
+            logger.info { "Re-keyed the profile of deleted customer $customerId" }
+            username?.let { deleteUsernameLookup(it, customerId) }
+            DeletedRekeyResult.REKEYED
+        } catch (e: TransactionCanceledException) {
+            // A stale index read of a row an earlier attempt already re-keyed
+            val alreadyRekeyed = dynamoDbClient.getItem(
+                GetItemRequest.builder().tableName(CUSTOMER_PROFILE_TABLE).key(deletedKey).consistentRead(true).build()
+            ).item()?.isNotEmpty() == true
+            if (!alreadyRekeyed) throw e
+            finishDeletedRekey(customerId, deletedKey, username)
+            DeletedRekeyResult.ALREADY_REKEYED
+        }
+    }
+
+    /** Re-run path: the name is "Deleted User" and the UsernameLookup row is gone. */
+    private fun finishDeletedRekey(customerId: String, deletedKey: Map<String, AttributeValue>, username: String?) {
+        dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(CUSTOMER_PROFILE_TABLE)
+                .key(deletedKey)
+                .updateExpression("SET #n = :n")
+                .conditionExpression("attribute_exists(#sub)")
+                .expressionAttributeNames(mapOf("#n" to "name", "#sub" to SUB_PARTITION_KEY))
+                .expressionAttributeValues(mapOf(":n" to AttributeValue.builder().s(RetentionTables.DELETED_USER_NAME).build()))
+                .build()
+        )
+        if (username != null) deleteUsernameLookup(username, customerId)
+    }
+
+    /**
+     * Deletes the handle's UsernameLookup row, so username search no longer
+     * offers the deleted customer - only while the row is still this
+     * customer's. Outside the re-key transaction: a handle someone else holds
+     * must not block the re-key. Idempotent.
+     */
+    private fun deleteUsernameLookup(username: String, customerId: String) {
+        try {
+            dynamoDbClient.deleteItem(
+                DeleteItemRequest.builder()
+                    .tableName(DynamoDBConstants.USERNAME_LOOKUP_TABLE)
+                    .key(mapOf(DynamoDBConstants.USERNAME_KEY to AttributeValue.builder().s(username).build()))
+                    .conditionExpression("attribute_not_exists(#u) OR #cid = :cid")
+                    .expressionAttributeNames(mapOf("#u" to DynamoDBConstants.USERNAME_KEY, "#cid" to CUSTOMER_ID_KEY))
+                    .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                    .build()
+            )
+        } catch (e: ConditionalCheckFailedException) {
+            // The handle now belongs to someone else: leave their row alone
+        }
+    }
 
     companion object {
         private const val VENDOR_ALLOWLIST_ITEM_ID = "SYSTEM#VENDOR_ALLOWLIST"

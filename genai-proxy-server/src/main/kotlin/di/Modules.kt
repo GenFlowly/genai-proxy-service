@@ -213,7 +213,40 @@ fun appModule(): Module = module {
         com.genflowly.service.ClaimReconciler(get(), get(), get()).also { it.start() }
     }
     single { com.genflowly.service.ClaimBackfillService(get(), get()) }
-    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get()) }
+
+    // Customer deletion (plan 3.9)
+    single { com.genflowly.config.PurgeConfig.fromEnv(get()) }
+    single { com.genflowly.providers.Auth0M2MTokenProvider(get(), get(), get()) }
+    single { com.genflowly.providers.Auth0ManagementClient(get(), get(), get(), get()) }
+    single {
+        com.genflowly.providers.EncodingPurgeClient(
+            get(), get(), get<AppConfig>().encodingServerUrl, get(),
+            get<com.genflowly.config.PurgeConfig>().encodingPurgeAudience
+        )
+    }
+    single { com.genflowly.providers.RunDataClient(get(), get(), get<AppConfig>().retrievalServerUrl) }
+    single {
+        com.genflowly.providers.CustomerDocumentsPurger(
+            get(), get<com.genflowly.config.PurgeConfig>().customerDocumentsBucket, get()
+        )
+    }
+    single { com.genflowly.repository.PurgeJobRepository(get(), get()) }
+    single { com.genflowly.repository.CustomerDataPurgeRepository(get(), get()) }
+    // Replaced at merge by the real per-customer turn registry (service/ActiveTurns.kt)
+    single<com.genflowly.service.InFlightTurns> { com.genflowly.service.NoopInFlightTurns }
+    single { com.genflowly.service.ConversationPurgeService(get(), get(), get(), get(), get(), get(), get()) }
+    single<com.genflowly.service.OrphanedConversationPurge> { get<com.genflowly.service.ConversationPurgeService>() }
+    single {
+        com.genflowly.service.AccountDeletionService(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()
+        )
+    }
+    // Background loop started with the application (eager singleton): runs the
+    // account deletion and conversation purge jobs
+    single(createdAtStart = true) {
+        com.genflowly.service.PurgeJobWorker(get(), get(), get(), get()).also { it.start() }
+    }
+    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.ProjectService(get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }

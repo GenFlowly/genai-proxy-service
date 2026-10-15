@@ -28,7 +28,12 @@ class ConversationManagementService(
     private val sharedUsersResolver: SharedUsersResolver,
     private val agentResolutionService: AgentResolutionService,
     private val generationAgentExecutor: GenerationAgentExecutor,
-    private val appScope: AppScope
+    private val appScope: AppScope,
+    /**
+     * Purges a deleted owner's conversation once archive or unshare removed
+     * its last share row (plan 3.9 step 8). Null: no purge (tests).
+     */
+    private val orphanedConversationPurge: OrphanedConversationPurge? = null
 ) {
     private val logger = LoggerFactory.getLogger("ConversationManagementService")
 
@@ -156,6 +161,19 @@ class ConversationManagementService(
             ?: throw ConversationAccessDeniedException("Conversation not found")
         conversationRepository.archiveConversation(conversationId, owner.customerId)
         shareRepository.unshareAllConversationWithCustomer(conversationId)
+        // Archive stays a restorable soft delete - unless the owner was deleted,
+        // in which case nobody can open the conversation any more
+        purgeIfOrphaned(conversationId, owner.customerId)
+    }
+
+    /** Best effort: a failure leaves the conversation as it is (an admin can re-run). */
+    private suspend fun purgeIfOrphaned(conversationId: String, ownerCustomerId: String) {
+        val purge = orphanedConversationPurge ?: return
+        try {
+            purge.enqueueIfOrphaned(conversationId, ownerCustomerId)
+        } catch (e: Exception) {
+            logger.warn("Could not check conversation {} for an orphan purge: {}", conversationId, e.message)
+        }
     }
 
     suspend fun unarchiveConversation(
@@ -273,6 +291,9 @@ class ConversationManagementService(
     ) {
         requireEditOrOwner(conversationId, sharedByCustomerId, action = "unshare")
         shareRepository.unshareConversationWithCustomer(conversationId, targetCustomerId)
+        conversationRepository.getConversationById(conversationId)?.let { owner ->
+            purgeIfOrphaned(conversationId, owner.customerId)
+        }
     }
 
     suspend fun getSharedUsersForConversation(

@@ -2,6 +2,29 @@ package com.genflowly.models.api
 
 import kotlinx.serialization.Serializable
 
+/** DELETE /admin/customers/{customerId} (202) and GET /admin/customers/deletion. */
+@Serializable
+data class AccountDeletionStatusResponse(
+    val customerId: String,
+    val jobKey: String,
+    /** PENDING, RUNNING or DONE. */
+    val state: String,
+    /** Last account-job step completed (1 writes stopped ... 5 rows deleted). */
+    val stage: Int,
+    /** Failed attempts so far (alerting starts at 10). */
+    val attempts: Int,
+    /** Steps skipped on purpose, e.g. the Auth0 user when the Management API is not configured. */
+    val warnings: List<String> = emptyList(),
+    val lastError: String? = null,
+    /** Conversation purges the job enqueued, and how many are DONE. */
+    val conversationPurges: Int = 0,
+    val conversationPurgesDone: Int = 0,
+    /** True when this request created the job (false: it already existed). */
+    val created: Boolean? = null,
+    val createdAt: String? = null,
+    val completedAt: String? = null
+)
+
 @Serializable
 data class ClaimBackfillRequest(
     /** nextPageToken of the previous call; omit to start from the beginning. */

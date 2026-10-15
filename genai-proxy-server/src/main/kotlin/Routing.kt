@@ -179,6 +179,10 @@ object Routes {
 
     // Retention (plan 1.13): one-time kept-object claim backfill, admin-only
     const val ADMIN_RETENTION_CLAIM_BACKFILL = "$API_V1/admin/retention/claim-backfill"
+    // Customer deletion (plan 3.9), admin-only: DELETE answers 202 with the job's
+    // status; the status route takes ?customerId=
+    const val ADMIN_DELETE_CUSTOMER = "$API_V1/admin/customers/{customerId}"
+    const val ADMIN_CUSTOMER_DELETION_STATUS = "$API_V1/admin/customers/deletion"
 
     const val NODE_PRESETS = "$API_V1/node-presets"
     const val ADMIN_NODE_PRESETS = "$API_V1/admin/node-presets"
@@ -233,6 +237,7 @@ fun Application.configureRouting(
     // Retention and purge services (plans 1.13/3.9), resolved from Koin so the
     // call site in Application.module() stays unchanged
     claimBackfillService: com.genflowly.service.ClaimBackfillService = get(),
+    accountDeletionService: com.genflowly.service.AccountDeletionService = get(),
 ) {
     routing {
         get(Routes.API_ROOT) {
@@ -324,7 +329,7 @@ fun Application.configureRouting(
         registerDefaultGraphRoutes(graphService, customerProfileService, appConfig)
         registerSystemAgentsRoutes(graphService, customerProfileService, appConfig)
         registerNodePresetRoutes(nodePresetService, customerProfileService, appConfig)
-        registerRetentionAdminRoutes(claimBackfillService, customerProfileService, appConfig)
+        registerRetentionAdminRoutes(claimBackfillService, accountDeletionService, customerProfileService, appConfig)
         registerVoiceSessionRoutes(customerProfileService, voiceSessionService)
         registerGetVoiceModelsRoutes(aiModelsService, customerProfileService)
         registerVoiceClientSecretRoutes(customerProfileService, voiceSessionService)

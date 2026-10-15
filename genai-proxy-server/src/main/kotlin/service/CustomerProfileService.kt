@@ -216,4 +216,17 @@ class CustomerProfileService(
 
     suspend fun getProfileByCustomerId(customerId: String) =
         customerProfileRepository.getCustomerProfileByCustomerId(customerId)
+
+    // ─── Account deletion (plan 3.9) ─────────────────────────────────────────
+
+    /** The login (Auth0 sub and app client) of the customer's profile, read without side effects. */
+    suspend fun findProfileLogin(customerId: String) =
+        customerProfileRepository.findProfileLogin(customerId)
+
+    /**
+     * Renames the deleted customer's profile to "Deleted User" and re-keys it
+     * away from their login (see CustomerProfileRepository.rekeyDeletedCustomer).
+     */
+    suspend fun markCustomerDeleted(customerId: String) =
+        customerProfileRepository.rekeyDeletedCustomer(customerId)
 }
