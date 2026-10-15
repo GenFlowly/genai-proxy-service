@@ -158,9 +158,12 @@ class ConversationRepository(
      * owner's row. The caller's own key is tried first, which is the owner in
      * the common case; when no such row exists the caller is a share recipient
      * and the owner is resolved through the conversationId index. Every write
-     * requires the row to exist: an UpdateItem on a missing key would otherwise
-     * create a phantom Conversation row under the recipient, which the
-     * conversationId index would then return alongside the owner's.
+     * requires a real Conversation row (one with its `client`): an UpdateItem on
+     * a missing key would otherwise create a phantom row under the recipient,
+     * which the conversationId index would then return alongside the owner's.
+     * Before this condition, an unconditional remove did create such key-only
+     * rows; requiring `client` keeps them from passing for the owner's row
+     * (scripts/find_phantom_conversation_rows.py lists and deletes them).
      */
     private suspend fun updatePendingRuns(
         callerCustomerId: String,
@@ -195,8 +198,12 @@ class ConversationRepository(
                     CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
                 ))
                 .updateExpression(updateExpression)
-                .conditionExpression("attribute_exists(#cid)")
-                .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY, "#cid" to CONVERSATION_ID_KEY))
+                .conditionExpression("attribute_exists(#cid) AND attribute_exists(#client)")
+                .expressionAttributeNames(mapOf(
+                    "#pr" to PENDING_RUNS_KEY,
+                    "#cid" to CONVERSATION_ID_KEY,
+                    "#client" to "client"
+                ))
                 .expressionAttributeValues(mapOf(":e" to AttributeValue.builder().ss(run.encode()).build()))
                 .build()
         )
@@ -456,6 +463,10 @@ class ConversationRepository(
      * know the owner's customerId.
      */
     suspend fun getConversationById(conversationId: String): Conversation? = withContext(Dispatchers.IO) {
+        // No limit(1): the index has no sort key, and a key-only phantom row
+        // under a share recipient (written by the old unconditional pending-run
+        // remove) can sit next to the owner's row in any order. The real row is
+        // the one with a client.
         val request = QueryRequest.builder()
             .tableName(CONVERSATION_TABLE)
             .indexName(CONVERSATION_ID_GSI_KEY)
@@ -463,11 +474,10 @@ class ConversationRepository(
             .expressionAttributeValues(mapOf(
                 ":cid" to AttributeValue.builder().s(conversationId).build()
             ))
-            .limit(1)
             .build()
 
         val response = dynamoDbClient.query(request)
-        val item = response.items().firstOrNull() ?: return@withContext null
+        val item = response.items().firstOrNull { it["client"]?.s() != null } ?: return@withContext null
         val ownerCustomerId = item[CUSTOMER_ID_KEY]?.s() ?: return@withContext null
         val client = item["client"]?.s() ?: return@withContext null
         Conversation(

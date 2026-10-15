@@ -103,7 +103,9 @@ class PendingRunOwnerRowTest {
         repository.removePendingRun("recipient", "conv-1", run)
 
         assertTrue(updates.isNotEmpty())
-        updates.forEach { assertEquals("attribute_exists(#cid)", it.conditionExpression()) }
+        updates.forEach {
+            assertEquals("attribute_exists(#cid) AND attribute_exists(#client)", it.conditionExpression())
+        }
     }
 
     @Test
@@ -133,5 +135,41 @@ class PendingRunOwnerRowTest {
         conversations.addPendingRun("recipient", "conv-1", run)
 
         assertEquals(setOf("run_1"), conversations.pendingRunIdsIfAccessible("conv-1", "recipient"))
+    }
+
+    @Test
+    fun `a key-only phantom row left by the old remove does not pass for the owner's row`() = runTest {
+        // Before the condition existed, an unconditional remove created rows
+        // holding only the key under the recipient. The condition requires the
+        // conversation's client, which only the real row has.
+        tableWithConversationOwnedBy("owner")
+
+        repository.addPendingRun("recipient", "conv-1", run)
+
+        assertTrue(updates.isNotEmpty())
+        assertTrue(updates.all {
+            it.conditionExpression().contains("attribute_exists(#client)") &&
+                it.expressionAttributeNames()["#client"] == "client"
+        })
+    }
+
+    @Test
+    fun `the conversation lookup skips a phantom row, whatever order the index returns`() = runTest {
+        every { client.query(any<QueryRequest>()) } returns QueryResponse.builder().items(
+            mapOf(
+                DynamoDBConstants.CUSTOMER_ID_KEY to s("recipient"),
+                DynamoDBConstants.CONVERSATION_ID_KEY to s("conv-1")
+            ),
+            mapOf(
+                DynamoDBConstants.CUSTOMER_ID_KEY to s("owner"),
+                DynamoDBConstants.CONVERSATION_ID_KEY to s("conv-1"),
+                "client" to s("REACT_APP")
+            )
+        ).build()
+
+        val conversation = repository.getConversationById("conv-1")
+
+        assertEquals("owner", conversation?.customerId)
+        verify { client.query(match<QueryRequest> { it.limit() == null }) }
     }
 }
