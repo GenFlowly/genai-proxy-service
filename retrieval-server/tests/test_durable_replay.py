@@ -16,7 +16,13 @@ order must not be replayed on the new one, so bump DBOS_APP_VERSION in the
 same change (retrieval-server/development.md, "DBOS_APP_VERSION") and update
 the expected sequence here.
 
-Run with `python -m unittest tests.test_durable_replay` (about 25 s).
+Run with `python -m unittest tests.test_durable_replay` (about 30 s).
+
+The same matrix runs on Postgres — through the real durable_runtime.startup():
+psycopg pool, AsyncPostgresSaver, run_events and the ledger on Postgres — when
+DURABLE_TEST_POSTGRES_URL names a database whose user may CREATE DATABASE
+(each variant gets a fresh database, dropped afterwards), e.g.
+    DURABLE_TEST_POSTGRES_URL=postgresql://user:pw@127.0.0.1:5432/postgres
 """
 import json
 import os
@@ -24,6 +30,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -34,6 +41,7 @@ from tests.durable_harness import (
     FINAL_ANSWER,
     HITL_VALUE,
     INTERRUPTED_PREFIX,
+    POSTGRES_URL_ENV,
     RUN_ID,
     STREAM_ANSWER,
     parse_result,
@@ -59,10 +67,28 @@ EXPECTED_TWO_ROUND_STEPS = [
 ]
 
 
-def _run_variant(variant: str) -> dict:
+POSTGRES_ADMIN_URL = os.environ.get("DURABLE_TEST_POSTGRES_URL")
+
+
+def _database_url(admin_url: str, name: str) -> str:
+    parts = urllib.parse.urlsplit(admin_url)
+    return urllib.parse.urlunsplit(parts._replace(path=f"/{name}"))
+
+
+def _admin_execute(sql: str) -> None:
+    import psycopg
+
+    with psycopg.connect(POSTGRES_ADMIN_URL, autocommit=True) as conn:
+        conn.execute(sql)
+
+
+def _run_variant(variant: str, database_url: str | None = None) -> dict:
     directory = tempfile.mkdtemp(prefix=f"durable-replay-{variant}-")
     env = dict(os.environ, DBOS_APP_VERSION="test-replay-1")
     env.pop("DATABASE_URL", None)
+    env.pop(POSTGRES_URL_ENV, None)
+    if database_url:
+        env[POSTGRES_URL_ENV] = database_url
     launches = []
     for phase in ("start", "recover"):
         proc = subprocess.run(
@@ -259,6 +285,27 @@ class DeterministicReplayTest(unittest.TestCase):
             ["load_graph", "llm_invoke", "llm_invoke", "tool_invoke", "llm_invoke", "tool_invoke",
              "llm_invoke", "llm_invoke"],
         )
+
+
+@unittest.skipUnless(POSTGRES_ADMIN_URL, "set DURABLE_TEST_POSTGRES_URL to run the matrix on Postgres")
+class DeterministicReplayPostgresTest(DeterministicReplayTest):
+    """Every test above, on Postgres through the real durable_runtime.startup()."""
+
+    @classmethod
+    def setUpClass(cls):
+        suffix = uuid.uuid4().hex[:8]
+        cls.databases = {v: f"durable_replay_{v}_{suffix}" for v in VARIANTS}
+        for name in cls.databases.values():
+            _admin_execute(f'CREATE DATABASE "{name}"')
+        with ThreadPoolExecutor(max_workers=3) as pool:  # keep under max_connections
+            futures = {v: pool.submit(_run_variant, v, _database_url(POSTGRES_ADMIN_URL, name))
+                       for v, name in cls.databases.items()}
+            cls.runs = {v: f.result() for v, f in futures.items()}
+
+    @classmethod
+    def tearDownClass(cls):
+        for name in cls.databases.values():
+            _admin_execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
 if __name__ == "__main__":

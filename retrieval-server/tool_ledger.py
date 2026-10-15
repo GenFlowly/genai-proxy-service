@@ -126,7 +126,10 @@ async def begin(workflow_id: str, function_id: int, tool_call_id: str, tool_name
     if _pool is None:
         raise RuntimeError("tool ledger is not set up")
     async with _pool.connection() as conn:
-        for _ in range(3):
+        # Only one execution owns a step, so a lost insert race is rare; each
+        # loss means another writer recorded an attempt, so a few re-reads
+        # always settle it.
+        for _ in range(10):
             cur = await conn.execute(
                 f"SELECT attempt, tool_call_id, status FROM {TABLE} "
                 "WHERE workflow_id = %s AND function_id = %s ORDER BY attempt",

@@ -15,6 +15,12 @@ machine does.
 The last stdout line starting with RESULT_PREFIX carries the scenario's JSON
 result. Everything a scenario observes across processes (executions, side
 effects) is appended to files in --dir.
+
+Postgres mode: with DURABLE_HARNESS_DATABASE_URL set (an empty database per
+scenario), the replay and request_agent scenarios run on Postgres through the
+real durable_runtime.startup() — the production psycopg pool, the LangGraph
+AsyncPostgresSaver, run_events and the tool ledger on Postgres, DBOS.launch(),
+the queue, the recovery log and the sweep — instead of the SQLite stand-ins.
 """
 import argparse
 import asyncio
@@ -23,6 +29,7 @@ import os
 import sys
 import time
 
+POSTGRES_URL_ENV = "DURABLE_HARNESS_DATABASE_URL"
 RESULT_PREFIX = "DURABLE_HARNESS_RESULT "
 RUN_ID = "run_harness"
 RUN_INPUT = {
@@ -241,7 +248,12 @@ def scenario_stranded(args) -> None:
         await runs.register_run_queue()
         if args.phase == "start":
             await runs.enqueue_run(RUN_ID, dict(RUN_INPUT))
-            await wait_for_status(RUN_ID, {"PENDING"})
+            # PENDING is set at dequeue, a moment before the body runs: wait
+            # until the run is really executing (waiting in recv).
+            deadline = time.monotonic() + 30
+            while not read_lines(args.dir, "executions.log") and time.monotonic() < deadline:
+                await asyncio.sleep(0.1)
+            await asyncio.sleep(0.3)
             os._exit(137)  # the machine is replaced while the run waits
         await asyncio.sleep(2)  # give a (wrong) recovery the chance to happen
         before = await DBOS.get_workflow_status_async(RUN_ID)
@@ -453,6 +465,17 @@ def _script(args, messages) -> dict:
     return plan
 
 
+async def _wait_until_published(text: str, timeout: float = 20.0) -> None:
+    """Block (the model's stream, not the run's event loop) until `text` has
+    reached run_events, so a crash right after cuts the answer at that point."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        streamed = "".join(row["event"].get("content", "") for row in await run_event_rows())
+        if streamed.endswith(text):
+            return
+        await asyncio.sleep(0.05)
+
+
 def _make_model(args):
     from langchain_core.language_models.chat_models import BaseChatModel, generate_from_stream
     from langchain_core.messages import AIMessageChunk
@@ -480,7 +503,7 @@ def _make_model(args):
             for i, word in enumerate(words, start=1):
                 yield ChatGenerationChunk(message=AIMessageChunk(content=word))
                 if plan["crash_after_chunks"] and i == plan["crash_after_chunks"]:
-                    await asyncio.sleep(0.8)  # let the run publish what streamed
+                    await _wait_until_published("".join(words[:i]))
                     os._exit(137)
             yield ChatGenerationChunk(message=AIMessageChunk(
                 content="",
@@ -525,20 +548,58 @@ def _make_fake_tool(args):
     return FakeTool()
 
 
-async def _setup_replay_runtime(args):
-    """Install the fakes and the SQLite-backed tables; returns the checkpointer."""
+async def start_runtime(args):
+    """Start the durable runtime for one process lifetime; returns the
+    checkpointer. Postgres mode: the real durable_runtime.startup(). SQLite
+    mode: its pieces on stand-ins — run_events and the tool ledger on an
+    SQLite file, a file-backed checkpointer, DBOS.launch(), the queue."""
     import durable_runtime
     import runs
     import tool_ledger
-    import graph.nodes.llm_node as llm_node
-    import graph.nodes.tool_executor as tool_executor
-    from graph.tools_runtime import get_registry
-    from graph_tools.base import ToolContext
+    from dbos import DBOS
 
+    if os.environ.get(POSTGRES_URL_ENV):
+        await durable_runtime.startup()
+        if not durable_runtime.is_ready():
+            raise RuntimeError("durable_runtime.startup() failed (see the log above)")
+        return durable_runtime.get_checkpointer()
     pool = await setup_app_db(args.dir)
     await tool_ledger.setup(pool)
     saver = _make_file_saver(os.path.join(args.dir, "checkpoints.pkl"))
     durable_runtime._checkpointer = saver
+    DBOS.launch()
+    await runs.register_run_queue()
+    return saver
+
+
+async def shutdown_runtime() -> None:
+    import durable_runtime
+    from dbos import DBOS
+
+    if os.environ.get(POSTGRES_URL_ENV):
+        await durable_runtime.shutdown()
+    else:
+        DBOS.destroy()
+
+
+async def _threads_with_checkpoints(saver) -> list[str]:
+    if hasattr(saver, "storage"):
+        # InMemorySaver's storage is a defaultdict: a read leaves an empty entry.
+        return [thread for thread, namespaces in saver.storage.items() if any(namespaces.values())]
+    import durable_runtime
+
+    async with durable_runtime.get_pool().connection() as conn:
+        cur = await conn.execute("SELECT DISTINCT thread_id FROM checkpoints")
+        return [row["thread_id"] for row in await cur.fetchall()]
+
+
+def _install_replay_fakes(args):
+    """The scripted model, fake_tool, the file-backed S3 and the graph records."""
+    import runs
+    import graph.nodes.llm_node as llm_node
+    import graph.nodes.tool_executor as tool_executor
+    from graph.tools_runtime import get_registry
+    from graph_tools.base import ToolContext
 
     record, nodes = _graph_records(args.variant)
     runs.get_graph_and_nodes_by_id = lambda graph_id: (record, nodes) if graph_id == GRAPH_ID else None
@@ -559,7 +620,6 @@ async def _setup_replay_runtime(args):
         return context
 
     tool_executor.make_tool_context = make_tool_context
-    return saver
 
 
 async def _wait_for_row(predicate, timeout: float = 30.0):
@@ -590,16 +650,11 @@ async def _purge_report(saver, graph, cfg) -> dict:
         "codes": codes,
         "status_after": _status_dict(await DBOS.get_workflow_status_async(RUN_ID))["status"],
         "steps_after": steps_left,
-        "threads_after": _threads_with_checkpoints(saver),
+        "threads_after": await _threads_with_checkpoints(saver),
         "checkpoint_after": bool((await graph.aget_state(cfg)).values),
         "rows_after": len(await run_event_rows()),
         "ledger_after": len(await tool_ledger.attempts(RUN_ID)),
     }
-
-
-def _threads_with_checkpoints(saver) -> list[str]:
-    # InMemorySaver's storage is a defaultdict: a read leaves an empty entry.
-    return [thread for thread, namespaces in saver.storage.items() if any(namespaces.values())]
 
 
 def scenario_request_agent(args) -> None:
@@ -624,9 +679,7 @@ def scenario_request_agent(args) -> None:
     llm_node.resolve_credentials = lambda customer_id, provider: {}
 
     async def main():
-        saver = _make_file_saver(os.path.join(args.dir, "checkpoints.pkl"))
-        durable_runtime._checkpointer = saver
-        DBOS.launch()
+        saver = await start_runtime(args)
         durable_runtime._ready = True
         req = ExecuteAgentGraphRequest(
             graph_id="title-agent", customer_id=CUSTOMER_ID, llm_credentials={}, llm_provider="anthropic",
@@ -638,9 +691,9 @@ def scenario_request_agent(args) -> None:
             "status_code": response.status_code,
             "body": json.loads(response.body),
             "remaining": [w.workflow_id for w in remaining],
-            "threads_after": _threads_with_checkpoints(saver),
+            "threads_after": await _threads_with_checkpoints(saver),
         })
-        DBOS.destroy()
+        await shutdown_runtime()
 
     asyncio.run(main())
 
@@ -672,10 +725,10 @@ def scenario_replay(args) -> None:
 
         tool_executor._durable_tool_invoke = renamed_tool_step
 
+    _install_replay_fakes(args)
+
     async def main():
-        saver = await _setup_replay_runtime(args)
-        DBOS.launch()
-        await runs.register_run_queue()
+        saver = await start_runtime(args)
         if args.phase == "start":
             await runs.enqueue_run(RUN_ID, {**RUN_INPUT, "graph_id": GRAPH_ID})
             if args.variant == "hitl":
@@ -706,7 +759,7 @@ def scenario_replay(args) -> None:
         if args.variant == "main" and st is not None and st.status == "SUCCESS":
             result["purge"] = await _purge_report(saver, graph, cfg)
         emit_result(result)
-        DBOS.destroy()
+        await shutdown_runtime()
 
     asyncio.run(main())
 
@@ -730,7 +783,9 @@ def main(argv=None) -> None:
     args = parser.parse_args(argv)
     # Must be set before durable_runtime is imported: it constructs the DBOS
     # singleton at import, from DATABASE_URL.
-    os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(args.dir, "dbos.sqlite")
+    os.environ["DATABASE_URL"] = (
+        os.environ.get(POSTGRES_URL_ENV) or "sqlite:///" + os.path.join(args.dir, "dbos.sqlite")
+    )
     sys.path.insert(0, os.getcwd())
     SCENARIOS[args.scenario](args)
 
