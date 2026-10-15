@@ -338,6 +338,41 @@ for example `flyctl secrets set --app genai-retrieval-server-production --stage
 DBOS_APP_VERSION=rs-2026-10-15-tool-steps`. Runs in flight at that deploy are stranded; nothing
 re-executes them on the new step order, and the run sweep ends them with an error (below).
 
+### How a recovered run replays
+
+DBOS does not resume a run where it stopped: it re-executes the workflow from the top, and
+LangGraph restarts the graph from START. `runs.py` makes that re-execution a deterministic replay:
+
+- **Clean replay.** Before streaming (once per execution, never inside the human-input loop), a
+  thread that already has checkpoint values marks a re-execution: the run deletes the thread's
+  checkpoints, counts `durable_run_recovered_total` and publishes `{"content_reset": true}`, then
+  runs the graph from START on the initial state.
+- **Every completed step replays from the DBOS memo, in call order**: `load_graph` (the graph and
+  node configs as recorded — a customer's edits since do not apply), `llm_invoke` (no vendor call,
+  identical tool-call ids), `tool_invoke` (the tool does not run again) and `DBOS.recv` (the
+  human input it received). The LLM call in flight at the crash is sent again.
+- **The tool call in flight at the crash is not run again.** `tool_invoke` records each attempt
+  in `tool_call_attempts` (tool_ledger.py) before running the tool; a re-execution that finds an
+  earlier attempt of the same step returns the error result *"This tool call was interrupted when
+  the server restarted and was not run again."* to the model and counts
+  `tool_call_interrupted_total{tool}`. A tool that kills the process therefore does so once. The
+  ledger holds ids, tool names and statuses — never arguments or results — and is pruned with
+  `run_events` after `RUN_EVENTS_TTL_SEC`.
+- **A different call at a recorded step** (`ReplayDivergence`), or a step recorded under another
+  name (`DBOSUnexpectedStepError`), fails the run: the tool executor re-raises them instead of
+  turning them into tool errors. That is what a missed `DBOS_APP_VERSION` bump looks like.
+- `spawn_agent` is not a step (a step inside a step runs as a plain function and would lose the
+  child's memos); the child's own LLM and tool calls are steps of the parent's workflow.
+- Artifacts get deterministic ids on the durable path (`uuid5` of customer, run, step and call),
+  and the scratch-FS namespace derives from the run id, so a replayed call addresses the same keys.
+- Usage is published from the checkpointed state (replayed LLM calls fire no model events), and an
+  answer that replayed from the memo is published from the final state.
+
+The deploy that ships this replay (the `tool_invoke` and `load_graph` steps) changes the step
+sequence, so it **must bump `DBOS_APP_VERSION`**: a pre-change run replayed on the new code would
+find `llm_invoke` recorded where `load_graph` now runs. `tests/test_durable_replay.py` pins the
+recorded step sequence of a two-round run and fails when it changes.
+
 ### Failed, dead-lettered and stranded runs end with an error
 
 A run that ends without finishing must still end its event stream with an error the user sees

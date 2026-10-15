@@ -144,9 +144,12 @@ async def startup() -> None:
         _checkpointer = AsyncPostgresSaver(_pool)
         await _checkpointer.setup()
 
-        # Reattach events table (poll-based stream channel) shares this pool.
+        # Reattach events table (poll-based stream channel) shares this pool,
+        # and so does the tool-call attempt ledger (plan 0.4).
         import run_events
+        import tool_ledger
         await run_events.setup(_pool)
+        await tool_ledger.setup(_pool)
 
         DBOS.launch()  # runs migrations + recovers any interrupted workflows
 
@@ -169,21 +172,26 @@ async def startup() -> None:
 
 
 async def _run_events_ttl_loop() -> None:
-    """Periodically prune run_events past its TTL. Idempotent DELETE, so it's
-    safe for every process to run its own loop."""
+    """Periodically prune run_events and the tool-call attempt ledger past
+    their TTL. Idempotent DELETEs, so it's safe for every process to run its
+    own loop."""
     import asyncio
 
     import run_events
+    import tool_ledger
     while True:
         try:
             await asyncio.sleep(RUN_EVENTS_CLEANUP_INTERVAL_SEC)
             deleted = await run_events.delete_older_than(RUN_EVENTS_TTL_SEC)
             if deleted:
                 logger.info("run_events TTL prune: deleted %d row(s) older than %ds", deleted, RUN_EVENTS_TTL_SEC)
+            deleted = await tool_ledger.delete_older_than(RUN_EVENTS_TTL_SEC)
+            if deleted:
+                logger.info("tool ledger TTL prune: deleted %d row(s) older than %ds", deleted, RUN_EVENTS_TTL_SEC)
         except asyncio.CancelledError:
             break
         except Exception:
-            logger.exception("run_events TTL prune failed")
+            logger.exception("run_events / tool ledger TTL prune failed")
 
 
 class SweepState:
