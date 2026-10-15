@@ -450,3 +450,99 @@ count to 0 and works only while the run's app version is the current one. Pass `
 run lands on DBOS's internal queue and skips the `agent_runs` concurrency cap. If the sweep has
 already ended the run, its stream is over: the user saw the error, and the replayed output is not
 shown.
+
+## PDFs: generating, revising and reading them
+
+### Local setup
+
+Install with the same constraints as CI and the image, then fetch the
+Typst renderer's fonts (pinned by hash; the binaries are not committed):
+
+```bash
+pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
+python scripts/fetch_fonts.py --cache-dir ~/.cache/genflowly-fonts
+```
+
+`constraints.txt` pins the packages that exist only for the x2p_v1 stack
+(xhtml2pdf, reportlab, Markdown and their closure); shared packages stay
+unpinned. Without the fonts, Typst is reported as unavailable (the renderer
+flag falls back to x2p_v1 with a warning) and the Typst render tests skip.
+
+### Where rendering and parsing run
+
+Nothing PDF-related runs in the server process. `graph/pdf_worker.py` runs
+`generate_pdf.render_job` (and PDFium parsing of uploaded PDFs) in a child
+process (`graph/pdf_render_child.py`) with an address-space cap, a per-job
+CPU cap, no core dumps, a seccomp filter (no sockets, exec or ptrace), a
+scrubbed environment, stderr on /dev/null and, when the server is root, the
+`nobody` user. x2p_v1 keeps one warm child (recycled after 25 renders,
+300 MB RSS, any failure or 10 idle minutes); Typst renders and PDF parsing
+get a one-shot child, and the idle warm child is stopped first. Every child
+takes the process-wide heavy slot shared with image normalization
+(`graph/heavy_slot.py`); a job that waits 30 s gets "busy" instead.
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `PDF_QUEUE_WAIT_SECONDS` | 30 | wait for the heavy slot before "busy" |
+| `PDF_RENDER_TIMEOUT_SECONDS` | 120 | wall clock per render, then the child is killed |
+| `PDF_RENDER_RLIMIT_MB` / `PDF_TYPST_RLIMIT_MB` / `PDF_PARSE_RLIMIT_MB` | 400 / 512 / 512 | address-space caps |
+| `PDF_RENDER_CPU_SECONDS` | 115 | CPU seconds per job |
+| `PDF_WORKER_RECYCLE_RENDERS` / `PDF_WORKER_RECYCLE_RSS_MB` / `PDF_WORKER_IDLE_SECONDS` | 25 / 300 / 600 | warm-child recycling |
+| `PDF_PARSE_TIMEOUT_SECONDS` | 60 | wall clock per uploaded-PDF parse |
+
+The image build runs `python -E -s -m graph.pdf_render_child --selftest`:
+it renders with every renderer the image ships and parses the result with
+PDFium, so a broken child, font set or library fails the build.
+
+### Choosing the renderer (plan 2.1 / 5.2)
+
+The renderer is resolved once per turn (the `/retrieve` handler, `POST
+/runs` before enqueue) and pinned on the request, so a durable run recovered
+after a change keeps the renderer it started with.
+
+| Env var | Values | Meaning |
+|---|---|---|
+| `PDF_RENDERER` | `x2p_v1` (default), `typst` | default renderer |
+| `PDF_RENDERER_CANARY` + `PDF_RENDERER_CANARY_CUSTOMERS` | renderer, comma-separated customer ids | canary for listed customers |
+| `PDF_RENDERER_SCRIPT_ROUTE` | `typst` or unset | documents with letters x2p_v1 cannot draw go to Typst (when the bundled fonts cover them) |
+| `PDF_TYPST_MAX_CHARS` / `PDF_TYPST_MAX_TABLE_ROWS` | 150000 / 1000 | Typst input caps; raise after calibration (e.g. 300000 / 2500) |
+
+Changing any of these changes Fly env, which restarts the single machine
+and triggers DBOS recovery: flip at a quiet hour and check the recovery
+panel afterwards. The canary stages are: dev default, internal tenants
+(canary list, at least 7 days), script route for everyone (at least 14
+days), production default, then removal of xhtml2pdf. Compare the
+`pdf_render_*` metrics by renderer at each stage. When xhtml2pdf is finally
+removed from the image, runs pinned to `x2p_v1` render with Typst.
+
+### Files on later turns
+
+Every generated PDF's Markdown is stored next to it at `<key>.source.md`
+(same tags), so `revise_pdf` applies exact edits on a later turn and
+`read_pdf_source` reads it; ids resolve only through the conversation's file
+references (`FileRef`s the proxy sends), never through a key built from model
+input. Uploaded PDFs are parsed once and cached at
+`<s3_key>.derived/text-v1.json` (`retention=derived`); the model gets the
+native file on the turn it was attached (when the model reads PDFs), the
+extracted text otherwise or on later turns, and `read_attachment` for the
+rest.
+
+### Object tags
+
+Everything a tool stores carries a `retention` tag at write time:
+`pending` for artifacts and their source sidecars (the proxy claims them
+when it persists the message), `scratch` for fs_write files and spilled tool
+output, `derived` for extracted text. The bucket's lifecycle rules expire
+them (see genai-proxy-server/development.md for the rules and their rollout
+order).
+
+### Before shipping new built-in tools
+
+`revise_pdf`, `read_pdf_source` and `read_attachment` resolve before customer
+tools of the same name. Run the read-only scan against each stage first:
+
+```bash
+python scripts/scan_reserved_tool_names.py --region us-east-1
+```
+
+Any conflict must be renamed with its customer before the deploy.
