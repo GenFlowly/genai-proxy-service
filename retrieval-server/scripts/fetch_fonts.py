@@ -27,9 +27,10 @@ result must match `output_sha256`. Noto Color Emoji uses this to drop its 20 MB
 
 After fetching, the script (re)writes graph_tools/fonts/coverage.json: the
 merged code point ranges that the bundled fonts map to a glyph (read from each
-font's cmap table). The server reads it through pdf_typst.fonts_cover() to
-decide whether every script in a document has a bundled font, without loading
-any font or importing typst. The file is committed; `--check` verifies it.
+font's cmap table). pdf_typst reads it (uncovered_characters(),
+fonts_cover()) to tell which characters of a document no bundled font draws,
+without loading any font or importing typst. The file is committed; `--check`
+verifies it.
 """
 from __future__ import annotations
 

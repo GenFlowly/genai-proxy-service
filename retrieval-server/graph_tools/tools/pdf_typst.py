@@ -284,10 +284,10 @@ def uncovered_characters(text: str, font_dir: str | None = None) -> set[str]:
 
 
 def fonts_cover(chars, font_dir: str | None = None) -> bool:
-    """True when every character in `chars` (an iterable of characters, e.g.
-    the letters x2p_v1 cannot draw) has a glyph in a bundled font. Intended
-    for the 2.1 script route in the server process: no typst import and no
-    font file is read when coverage.json is present."""
+    """True when every character in `chars` (an iterable of characters or
+    strings) has a glyph in a bundled font. Cheap enough for the server
+    process: no typst import, and no font file is read when coverage.json is
+    present."""
     cov = _load_coverage(font_dir)
     for ch in chars:
         for c in ch:

@@ -4,8 +4,8 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt constraints.txt ./
-# constraints.txt pins the PDF-only dependency closure; CI installs with the
-# same command so tests and the image resolve the same renderer.
+# CI installs with the same command, so tests and the image resolve alike
+# (constraints.txt has no pins since the xhtml2pdf renderer was removed).
 RUN pip install --no-cache-dir --prefix=/install -c constraints.txt -r requirements.txt
 
 ## Stage 1b: the Typst renderer's fonts (plan 5.1): npm tarballs pinned by
@@ -39,10 +39,10 @@ COPY --from=fonts /fonts/graph_tools/fonts/*.ttf ./graph_tools/fonts/
 COPY voice/ ./voice/
 
 # Smoke render (plan 1.1): the PDF worker child must start, lock itself down
-# (rlimits, seccomp), render with every renderer this image ships (x2p_v1,
-# and Typst with the bundled fonts and vendored mitex: a mixed-script page
-# with no missing glyph) and parse a PDF with PDFium, or the build fails here
-# instead of every generate_pdf call failing in production.
+# (rlimits, seccomp), render with Typst, the only renderer, using the bundled
+# fonts and the vendored mitex (a mixed-script page with no missing glyph),
+# and extract and rasterize a rendered PDF with PDFium, or the build fails
+# here instead of every generate_pdf call failing in production.
 RUN python -E -s -m graph.pdf_render_child --selftest
 
 EXPOSE 5001

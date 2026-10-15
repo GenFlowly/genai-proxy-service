@@ -13,9 +13,10 @@ this README.
 `coverage.json` is the merged list of code point ranges the bundled fonts map
 to a glyph (read from each font's `cmap` table), written by `fetch_fonts.py`
 and checked by `fetch_fonts.py --check`. `pdf_typst.fonts_cover(chars)` and
-`pdf_typst.uncovered_characters(text)` read it, so the server can decide
-whether every script in a document has a bundled font without importing typst
-or loading a font file. Regenerate it whenever the lock changes.
+`pdf_typst.uncovered_characters(text)` read it, so any process can tell which
+characters of a document no bundled font draws (the renderer counts them as
+`missing_glyph`) without importing typst or loading a font file. Regenerate
+it whenever the lock changes.
 
 ## Fetch
 

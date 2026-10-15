@@ -455,69 +455,79 @@ shown.
 
 ### Local setup
 
-Install with the same constraints as CI and the image, then fetch the
-Typst renderer's fonts (pinned by hash; the binaries are not committed):
+Install with the same command as CI and the image, then fetch the Typst
+renderer's fonts (pinned by hash; the binaries are not committed):
 
 ```bash
 pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
 python scripts/fetch_fonts.py --cache-dir ~/.cache/genflowly-fonts
 ```
 
-`constraints.txt` pins the packages that exist only for the x2p_v1 stack
-(xhtml2pdf, reportlab, Markdown and their closure); shared packages stay
-unpinned. Without the fonts, Typst is reported as unavailable (the renderer
-flag falls back to x2p_v1 with a warning) and the Typst render tests skip.
+The PDF stack is Typst and markdown-it-py (exact pins in `requirements.txt`)
+plus pypdfium2 for uploaded PDFs; pypdf is test-only (`requirements-dev.txt`).
+`constraints.txt` holds no pins since xhtml2pdf was removed (plan 5.2), but CI
+and the Dockerfile still pass it. A venv created before the removal keeps
+xhtml2pdf, reportlab, Markdown and their closure installed until it is
+recreated; nothing imports them. Without the fonts Typst falls back to its
+few embedded fonts (most scripts then render as boxes, counted as
+`missing_glyph`), the image's smoke step fails and the font-dependent tests
+skip.
 
 ### Where rendering and parsing run
 
 Nothing PDF-related runs in the server process. `graph/pdf_worker.py` runs
 `generate_pdf.render_job` (and PDFium parsing of uploaded PDFs) in a child
-process (`graph/pdf_render_child.py`) with an address-space cap, a per-job
-CPU cap, no core dumps, a seccomp filter (no sockets, exec or ptrace), a
-scrubbed environment, stderr on /dev/null and, when the server is root, the
-`nobody` user. x2p_v1 keeps one warm child (recycled after 25 renders,
-300 MB RSS, any failure or 10 idle minutes); Typst renders and PDF parsing
-get a one-shot child, and the idle warm child is stopped first. Every child
-takes the process-wide heavy slot shared with image normalization
-(`graph/heavy_slot.py`); a job that waits 30 s gets "busy" instead.
+process (`graph/pdf_render_child.py`) with an address-space cap, a CPU cap,
+no core dumps, a seccomp filter (no sockets, exec or ptrace), a scrubbed
+environment, stderr on /dev/null and, when the server is root, the `nobody`
+user. Every render and every parse gets a fresh one-shot child that is
+killed and reaped when its job ends; Typst imports in about 0.04 s, so there
+is no warm child to keep or recycle, and a child that never receives its job
+exits after 60 s. Every child takes the process-wide heavy slot shared with
+image normalization (`graph/heavy_slot.py`); a job that waits 30 s gets
+"busy" instead.
 
 | Env var | Default | Meaning |
 |---|---|---|
 | `PDF_QUEUE_WAIT_SECONDS` | 30 | wait for the heavy slot before "busy" |
 | `PDF_RENDER_TIMEOUT_SECONDS` | 120 | wall clock per render, then the child is killed |
-| `PDF_RENDER_RLIMIT_MB` / `PDF_TYPST_RLIMIT_MB` / `PDF_PARSE_RLIMIT_MB` | 400 / 512 / 512 | address-space caps |
+| `PDF_TYPST_RLIMIT_MB` / `PDF_PARSE_RLIMIT_MB` | 512 / 512 | address-space caps |
 | `PDF_RENDER_CPU_SECONDS` | 115 | CPU seconds per job |
-| `PDF_WORKER_RECYCLE_RENDERS` / `PDF_WORKER_RECYCLE_RSS_MB` / `PDF_WORKER_IDLE_SECONDS` | 25 / 300 / 600 | warm-child recycling |
 | `PDF_PARSE_TIMEOUT_SECONDS` | 60 | wall clock per uploaded-PDF parse |
 
+`PDF_RENDER_RLIMIT_MB` and `PDF_WORKER_RECYCLE_RENDERS` /
+`PDF_WORKER_RECYCLE_RSS_MB` / `PDF_WORKER_IDLE_SECONDS` configured the warm
+xhtml2pdf child, which is gone; they are ignored.
+
 The image build runs `python -E -s -m graph.pdf_render_child --selftest`:
-it renders with every renderer the image ships and parses the result with
-PDFium, so a broken child, font set or library fails the build.
+it renders a mixed-script page with Typst, the bundled fonts and the
+vendored mitex, renders a document through `render_job`, and extracts and
+rasterizes that document with PDFium, so a broken child, font set or library
+fails the build.
 
 ### Choosing the renderer (plan 2.1 / 5.2)
 
-Every PDF renders with Typst: it is the code's default (`graph/pdf_renderer.py`,
-`default_renderer()`), with no setting needed. The renderer is resolved once per
-turn (the `/retrieve` handler, `POST /runs` before enqueue) and pinned on the
-request, so a durable run recovered after a change keeps the renderer it
-started with. xhtml2pdf (`x2p_v1`) stays in the image only as a rollback until
-`scratch/xhtml2pdf-removal/` is applied, and as the fallback of a build
-without Typst or its fonts.
+Typst is the only renderer. xhtml2pdf (`x2p_v1`) was removed in plan 5.2
+(before production had users, so without the planned canary), together with
+the 1.14 "shows as boxes" note, the
+status-emoji map and the 50-row table chunking that only it needed. The
+renderer is still resolved once per turn (the `/retrieve` handler, `POST
+/runs` before enqueue) and pinned on the request, which is where a future
+renderer would plug in. A request or durable run pinned to `x2p_v1` (enqueued
+before the removal deploy and recovered after it) renders with Typst instead
+of failing.
 
 | Env var | Values | Meaning |
 |---|---|---|
-| `PDF_RENDERER` | unset (Typst), `x2p_v1` | rollback: every PDF on the old renderer |
-| `PDF_RENDERER_CANARY` + `PDF_RENDERER_CANARY_CUSTOMERS` | renderer, comma-separated customer ids | a different renderer for the listed customers |
-| `PDF_RENDERER_SCRIPT_ROUTE` | `typst` or unset | while on `x2p_v1`: documents with letters it cannot draw still go to Typst |
-| `PDF_TYPST_MAX_CHARS` / `PDF_TYPST_MAX_TABLE_ROWS` | 150000 / 1000 | Typst input caps; raise after calibration (e.g. 300000 / 2500) |
+| `PDF_RENDERER` | `typst` (default) | the renderer; any other value, `x2p_v1` included, is ignored with one warning per process |
+| `PDF_TYPST_MAX_CHARS` / `PDF_TYPST_MAX_TABLE_ROWS` | 150000 / 1000 | input caps; raise after calibration (e.g. 300000 / 2500) |
 
-These are plain settings, not secrets. A rollback is fastest as
-`flyctl secrets set --app genai-retrieval-server-<stage> PDF_RENDERER=x2p_v1`
-(it restarts the machine without a deploy); keep anything lasting in the app's
-`[env]` in `fly.toml` / `fly.production.toml`. Changing any of these restarts
-the single machine and triggers DBOS recovery: do it at a quiet hour and check
-the recovery panel afterwards. Watch the `pdf_render_*` metrics by renderer;
-after a week or two without problems, apply the xhtml2pdf removal series.
+`PDF_RENDERER_CANARY`, `PDF_RENDERER_CANARY_CUSTOMERS` and
+`PDF_RENDERER_SCRIPT_ROUTE` are obsolete: while still set they are ignored
+with one warning per process, so drop them from the Fly env with the next
+change there. Changing Fly env restarts the single machine and triggers DBOS
+recovery: change it at a quiet hour and check the recovery panel afterwards.
+The `pdf_render_*` metrics now carry `renderer="typst"` only.
 
 ### Files on later turns
 
@@ -533,8 +543,7 @@ rest.
 
 ### Locale, page size and letterhead (plan 6.1 / 6.2)
 
-Typst only (x2p_v1 ignores all of this). The proxy sends the browser's
-`Accept-Language` as `raw_data.locale`: `en-US` and `en-CA` default to Letter,
+The proxy sends the browser's `Accept-Language` as `raw_data.locale`: `en-US` and `en-CA` default to Letter,
 everything else to A4, and the footer's page label is translated. A
 `TOOL_EXECUTOR` node can carry per-agent settings:
 

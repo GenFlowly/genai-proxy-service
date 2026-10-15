@@ -42,7 +42,7 @@ Code we ship. Customer-independent behaviour; only their credentials differ.
 
 | Tool | Description | Credential | Extra deps |
 |---|---|---|---|
-| `generate_pdf` | Render markdown into a styled PDF artifact | none | `markdown`, `xhtml2pdf` |
+| `generate_pdf` | Render markdown into a styled PDF artifact (Typst) | none | `typst`, `markdown-it-py`, `mdit-py-plugins`, `linkify-it-py` |
 | `web_search` | Search the web via Tavily | `WEB_SEARCH` | `httpx` |
 
 ## Providers: tools that are records, not code
