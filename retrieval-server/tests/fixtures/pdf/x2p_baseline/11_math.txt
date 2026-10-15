@@ -1,9 +1,0 @@
-Page 1 of 1
-Math
-Inline: the energy is (E = mc^2) and the root is (x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}).
-Display with brackets:
-[ \int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2} ]
-Display with dollars:
-$$ \sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6} $$
-Single dollar inline: $a_i^2 + b_i^2$ and a price of $5 and $10.
-Matrix: (\begin{pmatrix} a & b \ c & d \end{pmatrix})

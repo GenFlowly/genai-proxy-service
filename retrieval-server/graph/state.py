@@ -77,10 +77,9 @@ class RetrievalState(TypedDict):
     conversation_files: list
     # The user's locale (first Accept-Language tag, e.g. "de-DE"), or None.
     locale: Optional[str]
-    # PDF renderer and script-route setting pinned when the turn started
-    # (graph/pdf_renderer.py); kept across durable-run recovery.
+    # PDF renderer pinned when the turn started (graph/pdf_renderer.py);
+    # kept across durable-run recovery.
     pdf_renderer: Optional[str]
-    pdf_script_route: Optional[str]
 
     # Caller-defined tools: [{name, description, parameters}, ...]. Bound only to
     # the response-generator node (text format); other nodes never see them.

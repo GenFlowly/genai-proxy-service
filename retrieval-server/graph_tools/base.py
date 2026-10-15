@@ -112,9 +112,9 @@ class SpecContext:
 
     enabled      — every tool name bound for the request;
     host         — host facts a tool's description may depend on, e.g.
-                   {"pdf_renderer": "x2p_v1", "pdf_script_route": None,
-                   "pdf_limits": {...}}. A plain dict, so this package needs no
-                   knowledge of the host's configuration."""
+                   {"pdf_renderer": "typst", "pdf_limits": {...}}. A plain
+                   dict, so this package needs no knowledge of the host's
+                   configuration."""
 
     enabled: frozenset = frozenset()
     host: dict = field(default_factory=dict)

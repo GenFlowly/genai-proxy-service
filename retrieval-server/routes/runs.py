@@ -106,7 +106,7 @@ async def start_run(req: RunRequest):
     # The PDF renderer is pinned once per turn, BEFORE the run is enqueued
     # (plan 2.1): a recovered run keeps it across an env flip. Caller values
     # are overwritten.
-    run_input.update(pdf_renderer.pin(req.customer_id))
+    run_input.update(pdf_renderer.pin())
     try:
         await runs_module.enqueue_run(run_id, run_input)
     except Exception as e:

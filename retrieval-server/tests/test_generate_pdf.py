@@ -1,37 +1,68 @@
 """
-Unit tests for the generate_pdf tool and its x2p_v1 renderer.
+Unit tests for the generate_pdf tool. Typst is its only renderer since the
+xhtml2pdf renderer ("x2p_v1") was removed (plan 5.2).
 
 Run with `python -m unittest tests.test_generate_pdf`.
 
-Covers the PDF plan items that live in graph_tools/tools/generate_pdf.py and
-pdf_charsets.py: the pinned dependency closure (1.2), renderer log records
-kept out of the server's logs (1.4), input caps and table chunking (1.5),
-raw HTML escaped except a small allowlist and no resource fetching (1.6), the
-D8 list/table pre-pass (1.6), the honest-limits note (1.14) and titles,
-filenames and emoji (2.7). Rendering runs in-process here (the tool falls
-back to a thread when the host injects no runtime["render_pdf"]).
+Covers what lives in graph_tools/tools/generate_pdf.py: the dependency files
+after the removal (1.2, 5.2) and a server that loads nothing of the removed
+renderer, input caps (1.5), raw HTML printed as text and no resource
+fetching (1.6), lists and tables right after a paragraph line (D8), render
+stats that carry no document text (1.4), titles and filenames (2.7),
+render_job, and the tool itself: source sidecars, stats, errors and requests
+still pinned to the removed renderer. Rendering runs in-process here (the
+tool falls back to a thread when the host injects no runtime["render_pdf"]);
+tests/test_pdf_typst.py covers the renderer itself.
 """
 import asyncio
-import importlib.metadata
 import io
+import json
 import logging
 import os
 import re
 import socket
+import subprocess
+import sys
 import unittest
 from unittest import mock
 
 from graph_tools.base import ToolContext
 from graph_tools.tools import generate_pdf as gp
-from graph_tools.tools import pdf_charsets as pc
+from graph_tools.tools import pdf_markdown, pdf_typst
 
 _APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+FONTS_PRESENT = bool(pdf_typst._font_files(pdf_typst.DEFAULT_FONT_DIR))
+needs_fonts = unittest.skipUnless(
+    FONTS_PRESENT, "bundled fonts missing: run `python scripts/fetch_fonts.py` in retrieval-server/"
+)
+
+# Every package that was installed only for the xhtml2pdf renderer (plan
+# 5.2), with its top-level module.
+REMOVED_PACKAGES = {
+    "xhtml2pdf": "xhtml2pdf", "reportlab": "reportlab", "svglib": "svglib", "pyhanko": "pyhanko",
+    "pyhanko-certvalidator": "pyhanko_certvalidator", "oscrypto": "oscrypto",
+    "asn1crypto": "asn1crypto", "markdown": "markdown", "html5lib": "html5lib",
+    "python-bidi": "bidi", "arabic-reshaper": "arabic_reshaper", "cssselect2": "cssselect2",
+    "tinycss2": "tinycss2", "webencodings": "webencodings", "uritools": "uritools",
+    "tzlocal": "tzlocal", "lxml": "lxml", "pypdf": "pypdf",
+}
 
 
 def _pdf_text(pdf: bytes) -> str:
     from pypdf import PdfReader
 
     return "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages)
+
+
+def _pdf_metadata(pdf: bytes) -> dict:
+    from pypdf import PdfReader
+
+    return dict(PdfReader(io.BytesIO(pdf)).metadata or {})
+
+
+def _made_by_typst(pdf: bytes) -> bool:
+    return str(_pdf_metadata(pdf).get("/Creator", "")).startswith("Typst ")
 
 
 class _MemoryStore:
@@ -63,192 +94,226 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-# --- 1.2: the pinned closure ---------------------------------------------------
+def _render(markdown: str, title: str | None = None, renderer: str = "typst") -> dict:
+    out = gp.render_job({"renderer": renderer, "markdown": markdown, "title": title})
+    assert out["status"] == "ok", out
+    return out
 
 
-def _constraint_pins() -> dict:
-    pins = {}
-    with open(os.path.join(_APP_DIR, "constraints.txt")) as f:
+# --- 1.2 / 5.2: the dependency files and what the server loads ------------------
+
+
+def _requirement_names(filename: str) -> dict:
+    """{normalized name: exact version or None} of a requirements file."""
+    names = {}
+    with open(os.path.join(_APP_DIR, filename)) as f:
         for line in f:
             line = line.split("#", 1)[0].strip()
-            if "==" in line:
-                name, version = line.split("==", 1)
-                pins[name.strip().lower()] = version.strip()
-    return pins
+            if not line or line.startswith("-"):
+                continue
+            m = re.match(r"([A-Za-z0-9._-]+)(?:\[[^\]]*\])?\s*(==\s*([^\s;,]+))?", line)
+            names[m.group(1).lower().replace("_", "-")] = m.group(3)
+    return names
 
 
-class DependencyPinTests(unittest.TestCase):
-    def test_installed_renderer_closure_matches_the_constraints(self):
-        pins = _constraint_pins()
-        self.assertEqual(pins.get("xhtml2pdf"), "0.2.23")
-        self.assertEqual(pins.get("reportlab"), "5.0.1")
-        for name, version in pins.items():
-            with self.subTest(package=name):
-                self.assertEqual(importlib.metadata.version(name), version)
-
-    def test_constraints_leave_shared_packages_to_the_app(self):
-        # These are shared with the rest of the server (aiohttp: LangChain,
-        # cryptography: credentials, pillow: images); pinning them for the PDF
-        # closure would silently hold back security updates elsewhere.
-        pins = _constraint_pins()
+class DependencyTests(unittest.TestCase):
+    def test_constraints_stay_a_file_without_shared_pins(self):
+        # CI and the Dockerfile pass -c constraints.txt. Packages shared with
+        # the rest of the server (aiohttp: LangChain, cryptography:
+        # credentials, pillow: images) must never be pinned there: that would
+        # silently hold back security updates elsewhere.
+        constraints = _requirement_names("constraints.txt")
         for shared in ("aiohttp", "cryptography", "pillow", "six", "requests", "boto3", "urllib3"):
-            self.assertNotIn(shared, pins)
+            self.assertNotIn(shared, constraints)
 
+    def test_the_pdf_stack_is_pinned_and_installed_as_pinned(self):
+        import importlib.metadata
 
-# --- 1.14: what x2p_v1 can draw ------------------------------------------------
+        required = _requirement_names("requirements.txt")
+        for name in ("typst", "markdown-it-py", "mdit-py-plugins", "mdurl", "linkify-it-py", "pypdfium2"):
+            with self.subTest(package=name):
+                self.assertIsNotNone(required.get(name), f"{name} must be pinned exactly")
+                self.assertEqual(importlib.metadata.version(name), required[name])
 
-
-class CharsetTableTests(unittest.TestCase):
-    def test_tables_match_reportlabs_codecs(self):
-        from reportlab.pdfbase.rl_codecs import RL_Codecs
-
-        RL_Codecs.register()
-
-        def ranges(codec):
-            out = []
-            for cp in range(0x20, 0x10000):
-                if cp == 0x7F or 0xD800 <= cp <= 0xDFFF:
-                    continue
-                try:
-                    chr(cp).encode(codec)
-                except (UnicodeEncodeError, ValueError):
-                    continue
-                if out and out[-1][1] == cp - 1:
-                    out[-1][1] = cp
-                else:
-                    out.append([cp, cp])
-            return [tuple(r) for r in out]
-
-        self.assertEqual(ranges("winansi"), list(pc._WINANSI_RANGES))
-        self.assertEqual(ranges("symbol"), list(pc._SYMBOL_RANGES))
-        self.assertEqual(ranges("zapfdingbats"), list(pc._ZAPFDINGBATS_RANGES))
-
-    def test_drawable_symbols_are_not_reported(self):
-        found = pc.find_undrawable("α = 0.05 → ✓, ≤ 3 ∞ ★ café naïve €")
-        self.assertEqual(found.scripts, {})
-        self.assertEqual(found.symbols, 0)
-
-    def test_accented_latin_outside_winansi_is_a_script(self):
-        found = pc.find_undrawable("Łódź")
-        self.assertEqual(found.scripts, {"Latin (accented)": 2})
-        self.assertEqual(found.letters, {"Ł", "ź"})
-
-    def test_emoji_and_their_parts_count_as_symbols(self):
-        self.assertEqual(pc.find_undrawable("⚠️").symbols, 2)
-        self.assertEqual(pc.find_undrawable("⚠️").scripts, {})
-        # U+2011 non-breaking hyphens: punctuation, not a script.
-        self.assertEqual(pc.find_undrawable("state‑of‑the‑art").symbols, 3)
-
-    def test_scripts_are_named_and_marks_follow_their_letter(self):
-        found = pc.find_undrawable("مرحبا שלום नमस्ते 你好")
-        self.assertEqual(found.scripts["Arabic"], 5)
-        self.assertEqual(found.scripts["Hebrew"], 4)
-        # Virama and vowel sign count with the Devanagari letters.
-        self.assertEqual(found.scripts["Devanagari (Hindi, Marathi, Nepali)"], 6)
-        self.assertEqual(found.scripts["Chinese/Japanese (Han)"], 2)
-
-    def test_spaces_and_controls_are_ignored(self):
-        found = pc.find_undrawable("a b c　d\t\n")
-        self.assertEqual((found.scripts, found.symbols), ({}, 0))
-
-    def test_note_names_scripts_by_count(self):
-        note = pc.unsupported_script_note(pc.find_undrawable("שלום مرحبا"))
-        self.assertTrue(note.startswith("Note: this PDF contains Arabic and Hebrew text"))
-        self.assertIn("offer to give the text in the chat instead", note)
-        self.assertIsNone(pc.unsupported_script_note(pc.find_undrawable("⚠️ ok")))
-
-
-# --- 1.6: D8 pre-pass ------------------------------------------------------------
-
-
-class D8PrepassTests(unittest.TestCase):
-    def assertUnchanged(self, text):
-        self.assertEqual(gp.d8_prepass(text), text)
-
-    def test_bullet_list_after_a_paragraph_line_gets_a_blank_line(self):
-        self.assertEqual(gp.d8_prepass("Intro:\n- a\n- b"), "Intro:\n\n- a\n- b")
-        self.assertEqual(gp.d8_prepass("Intro:\n* a"), "Intro:\n\n* a")
-
-    def test_ordered_list_starting_at_one_gets_a_blank_line(self):
-        self.assertEqual(gp.d8_prepass("Steps:\n1. one\n2. two"), "Steps:\n\n1. one\n2. two")
-        self.assertEqual(gp.d8_prepass("Steps:\n1) one"), "Steps:\n\n1) one")
-
-    def test_a_wrapped_number_stays_in_its_paragraph(self):
-        # CommonMark: only an ordered item numbered 1 interrupts a paragraph.
-        self.assertUnchanged("The company grew in\n2024. It was a good year.")
-        self.assertUnchanged("Total\n2. something")
-
-    def test_table_after_a_paragraph_line_gets_a_blank_line(self):
-        text = "Here is the table:\n| a | b |\n|---|---|\n| 1 | 2 |"
-        self.assertEqual(
-            gp.d8_prepass(text), "Here is the table:\n\n| a | b |\n|---|---|\n| 1 | 2 |"
+    def test_server_and_render_load_nothing_of_the_removed_renderer(self):
+        # A fresh interpreter (the test process may have imported anything):
+        # the server app with every route and graph module, both kinds of
+        # worker child's imports, one render through render_job (pinned to
+        # the removed renderer, so the old code path would have loaded
+        # xhtml2pdf) and one PDFium parse. The shared dev venv may still have
+        # the old packages installed; none of them may be imported.
+        # lxml is the exception: langchain_text_splitters imports it
+        # optionally ("try: from lxml import etree") when it happens to be
+        # installed, for HTML splitters this service never uses; the image no
+        # longer installs it.
+        banned = sorted(set(REMOVED_PACKAGES.values()) - {"lxml"})
+        code = (
+            "import sys\n"
+            "import app, runs, routes.retrieve, routes.runs\n"
+            "import graph.tools_runtime, graph.pdf_worker, graph.pdf_renderer, graph.pdf_metrics\n"
+            "import graph.attachments, graph.documents, graph.attachment_tools, graph.nodes.llm_node\n"
+            "from graph_tools.registry import *\n"
+            "from graph_tools.tools import generate_pdf, revise_pdf\n"
+            "from graph import pdf_render_child\n"
+            "pdf_render_child._preload('typst')\n"
+            "pdf_render_child._preload('parse')\n"
+            "out = generate_pdf.render_job({'renderer': 'x2p_v1', 'markdown': '# Hi\\n\\n- a\\n', 'title': None})\n"
+            "assert out['status'] == 'ok' and out['renderer'] == 'typst', out\n"
+            "header, _ = pdf_render_child._parse('inspect_extract', out['pdf'], {})\n"
+            "assert header['status'] == 'ok', header\n"
+            f"banned = {banned!r}\n"
+            "print('LOADED', sorted({m.split('.')[0] for m in sys.modules} & set(banned)))\n"
         )
-
-    def test_a_pipe_line_without_a_delimiter_row_is_not_a_table(self):
-        self.assertUnchanged("Text\n| not a table\nmore text")
-
-    def test_code_is_never_touched(self):
-        self.assertUnchanged("```\nIntro:\n- a\n```")
-        self.assertUnchanged("~~~md\nIntro:\n| a |\n|---|\n~~~")
-        self.assertUnchanged("Paragraph\n    - lazy continuation, not a list")
-
-    def test_list_continuations_stay_in_the_list(self):
-        self.assertUnchanged("- a\n  more\n- b")
-        self.assertEqual(gp.d8_prepass("Intro\n- a\nlazy\n- b"), "Intro\n\n- a\nlazy\n- b")
-
-    def test_setext_and_rules_are_left_alone(self):
-        self.assertUnchanged("Heading\n---")
-        self.assertUnchanged("Para\n***")
-        self.assertUnchanged("Para\n\n- a")
+        proc = subprocess.run([sys.executable, "-c", code], cwd=_APP_DIR, capture_output=True,
+                              text=True, timeout=300)
+        self.assertEqual(proc.returncode, 0, proc.stderr[-2000:])
+        loaded = [line for line in proc.stdout.splitlines() if line.startswith("LOADED ")]
+        self.assertEqual(loaded, ["LOADED []"])
 
 
-# --- 1.6: raw HTML and the allowlist ---------------------------------------------
+# --- render_job ------------------------------------------------------------------
 
 
-class MarkdownHtmlTests(unittest.TestCase):
-    def _html(self, text):
-        return gp._build_markdown().convert(gp.d8_prepass(text))
+class RenderJobTests(unittest.TestCase):
+    @needs_fonts
+    def test_ok_shape(self):
+        out = gp.render_job({"renderer": "typst", "markdown": "# Hi\n\ntext", "title": None})
+        self.assertEqual(out["status"], "ok")
+        self.assertTrue(out["pdf"].startswith(b"%PDF"))
+        self.assertTrue(_made_by_typst(out["pdf"]))
+        self.assertEqual(out["renderer"], "typst")
+        self.assertEqual(out["pages"], 1)
+        self.assertEqual((out["missing_glyphs"], out["math_fallbacks"], out["images_dropped"]), (0, 0, 0))
+        self.assertEqual(out["warnings"], {})
+        self.assertIn("render_cpu_seconds", out)
 
-    def test_angle_bracket_placeholders_print_as_text(self):
-        html = self._html("Dear <Candidate Name>,\n\nSee [Square Brackets].")
-        self.assertIn("&lt;Candidate Name&gt;", html)
-        self.assertIn("[Square Brackets]", html)
+    def test_the_removed_and_unknown_renderers_render_with_typst(self):
+        for renderer in ("x2p_v1", "weasy", None):
+            with self.subTest(renderer=renderer):
+                out = gp.render_job({"renderer": renderer, "markdown": "# Hi\n\ntext", "title": None})
+                self.assertEqual((out["status"], out["renderer"]), ("ok", "typst"))
+                self.assertTrue(_made_by_typst(out["pdf"]))
 
-    def test_raw_tags_and_blocks_are_escaped(self):
-        html = self._html('<img src="http://example.com/x.png">\n\n<div>\nhi\n</div>\n\n<style>p{}</style>')
-        self.assertNotIn("<img", html)
-        self.assertNotIn("<div", html)
-        self.assertNotIn("<style", html)
-        self.assertIn("&lt;img", html)
+    def test_failures_map_to_kinds(self):
+        job = {"renderer": "typst", "markdown": "x"}
 
-    def test_allowlisted_inline_tags_are_rebuilt(self):
-        html = self._html("H<sub>2</sub>O, x<sup>2</sup>, <u>under</u>, a<br>b, c<br/>d")
-        self.assertIn("<sub>2</sub>", html)
-        self.assertIn("<sup>2</sup>", html)
-        self.assertIn("<u>under</u>", html)
-        self.assertEqual(html.count("<br"), 2)
+        def chained(*args, **kwargs):
+            try:
+                raise MemoryError()
+            except MemoryError as e:
+                raise RuntimeError("wrapped") from e
 
-    def test_allowlisted_tags_cannot_smuggle_attributes(self):
-        html = self._html('<u onclick="x">a</u> <sub style="x">b</sub>')
-        self.assertNotIn("<u ", html)
-        self.assertNotIn("<sub ", html)
+        for raised, kind in (
+            (MemoryError(), "oom"),
+            # Out of memory under the child's address-space cap: CPython can
+            # report it as a SystemError when even raising MemoryError fails.
+            (SystemError("returned NULL without setting an exception"), "oom"),
+            (pdf_typst.TypstRenderError("typst compile failed"), "error"),
+            (RuntimeError("boom"), "error"),
+        ):
+            with self.subTest(kind=kind, raised=type(raised).__name__), \
+                    mock.patch.object(pdf_typst, "render_markdown_typst", side_effect=raised):
+                self.assertEqual(gp.render_job(job), {"status": "error", "kind": kind})
+        with mock.patch.object(pdf_typst, "render_markdown_typst", side_effect=chained):
+            self.assertEqual(gp.render_job(job), {"status": "error", "kind": "oom"})
 
-    def test_long_tables_are_split_into_chunks_repeating_the_header(self):
-        rows = "\n".join(f"| r{i} | {i} |" for i in range(120))
-        html = self._html(f"| name | n |\n|---|---|\n{rows}")
-        self.assertEqual(html.count("<table"), 3)
-        self.assertEqual(html.count("<thead>"), 3)
-        for i in range(120):
-            self.assertIn(f"<td>r{i}</td>", html)
-        self.assertIn('class="pdf-chunk-nobottom"', html)
-        self.assertIn('class="pdf-chunk-notop"', html)
+    def test_typst_without_the_library_is_unsupported(self):
+        with mock.patch.dict("sys.modules", {"graph_tools.tools.pdf_typst": None}):
+            out = gp.render_job({"renderer": "typst", "markdown": "x"})
+        self.assertEqual(out, {"status": "error", "kind": "unsupported"})
 
-    def test_short_tables_are_left_alone(self):
-        html = self._html("| a |\n|---|\n| 1 |")
-        self.assertEqual(html.count("<table"), 1)
-        self.assertNotIn("pdf-chunk", html)
+    def test_options_reach_the_renderer(self):
+        with mock.patch.object(pdf_typst, "render_markdown_typst",
+                               wraps=pdf_typst.render_markdown_typst) as spy:
+            out = gp.render_job({
+                "renderer": "typst", "markdown": "text", "title": "T",
+                "options": {"page_size": "Legal", "orientation": "landscape", "locale": "de-DE",
+                            "branding": {"company_name": "Acme"}, "not_an_option": 1},
+            })
+        self.assertEqual(out["status"], "ok")
+        options = spy.call_args.args[2]
+        self.assertEqual((options.page_size, options.orientation, options.locale),
+                         ("Legal", "landscape", "de-DE"))
+        self.assertEqual(options.branding, {"company_name": "Acme"})
 
-    def test_count_table_rows_skips_code_and_headers(self):
+
+# --- rendering through Typst --------------------------------------------------------
+
+
+class RenderTests(unittest.TestCase):
+    def test_placeholders_and_inline_tags_reach_the_pdf(self):
+        # 1.6: raw HTML prints as text ('Dear <Candidate Name>,' used to render
+        # as 'Dear ,'); only <br>, <sub>, <sup> and <u> become structure.
+        text = _pdf_text(_render(
+            "Dear <Candidate Name>, [Start Date]\n\nH<sub>2</sub>O and x<sup>2</sup> and "
+            "<u>underlined</u>\n\n<div>\nraw block\n</div>\n\n<style>p{}</style>"
+        )["pdf"])
+        self.assertIn("<Candidate Name>", text)
+        self.assertIn("[Start Date]", text)
+        self.assertIn("underlined", text)
+        self.assertRegex(text, r"H\s*2\s*O")
+        self.assertIn("<div>", text)
+        self.assertIn("<style>p{}</style>", text)
+
+    def test_line_breaks_in_table_cells_render(self):
+        text = _pdf_text(_render("| a |\n|---|\n| first<br>second |")["pdf"])
+        self.assertIn("first", text)
+        self.assertIn("second", text)
+        self.assertNotIn("<br>", text)
+
+    def test_lists_and_tables_right_after_a_paragraph_line(self):
+        # D8: the chat UI's CommonMark lets a list or table interrupt a
+        # paragraph, and so does the PDF; a wrapped '2024.' stays text.
+        markdown = (
+            "Intro:\n- alpha\n- beta\n\nHere is the table:\n| col1 | col2 |\n|---|---|\n| one | two |\n\n"
+            "The company grew in\n2024. It was a good year."
+        )
+        self.assertEqual([n["type"] for n in pdf_markdown.parse(markdown)["children"]],
+                         ["paragraph", "bullet_list", "paragraph", "table", "paragraph"])
+        text = _pdf_text(_render(markdown)["pdf"])
+        self.assertRegex(text, r"•\s*alpha")
+        self.assertNotIn("- alpha", text)
+        self.assertNotIn("|", text)
+        self.assertRegex(text, r"col1\s+col2\s+one\s+two")
+        self.assertRegex(text, r"grew in\s+2024\.\s*It was a good year")
+
+    def test_never_opens_a_connection_for_images(self):
+        attempts = []
+
+        def refuse(*args, **kwargs):
+            attempts.append(args)
+            raise OSError("network disabled in test")
+
+        with mock.patch.object(socket.socket, "connect", refuse), \
+                mock.patch.object(socket, "getaddrinfo", refuse), \
+                mock.patch.object(socket, "create_connection", refuse):
+            out = _render("![logo](http://example.com/logo.png)\n\n![local](file:///etc/hostname)\n\ntext")
+        self.assertEqual(attempts, [])
+        self.assertTrue(out["pdf"].startswith(b"%PDF"))
+        self.assertGreaterEqual(out["warnings"].get("image_dropped", 0), 1)
+        self.assertIn("[image: logo]", _pdf_text(out["pdf"]))
+
+    def test_title_is_not_printed_twice(self):
+        out = _render("# Quarterly Report\n\nBody text.", title="Quarterly  report")
+        self.assertEqual(len(re.findall(r"Quarterly\s+Report", _pdf_text(out["pdf"]), re.I)), 1)
+
+    def test_title_is_added_when_the_content_has_none(self):
+        out = _render("Body text.", title="Offer Letter")
+        self.assertIn("Offer Letter", _pdf_text(out["pdf"]))
+        self.assertEqual(_pdf_metadata(out["pdf"]).get("/Title"), "Offer Letter")
+
+    def test_pdf_title_is_the_title_else_the_first_h1(self):
+        self.assertEqual(_pdf_metadata(_render("Intro line.\n\n# Annual Review\n\nText.")["pdf"]).get("/Title"),
+                         "Annual Review")
+        self.assertEqual(_pdf_metadata(_render("# Body H1", "Given Title")["pdf"]).get("/Title"),
+                         "Given Title")
+
+
+# --- 1.5: the table-row cap ---------------------------------------------------------
+
+
+class CountTableRowsTests(unittest.TestCase):
+    def test_skips_code_and_headers(self):
         text = (
             "| h |\n|---|\n| 1 |\n| 2 |\n\n"
             "```\n| h |\n|---|\n| x |\n```\n\n"
@@ -256,11 +321,29 @@ class MarkdownHtmlTests(unittest.TestCase):
         )
         self.assertEqual(gp.count_table_rows(text), 3)
 
+    def test_counts_what_the_token_tree_holds(self):
+        # The cap is a cheap line scan in the server process; Typst renders
+        # pdf_markdown's tree. For the tables models write they agree.
+        docs = {
+            "simple": "| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n",
+            "after a paragraph line": "Here is the table:\n| a | b |\n|---|---|\n| 1 | 2 |\n",
+            "aligned": "| a | b |\n|:---|---:|\n| 1 | 2 |\n",
+            "no outer pipes": "a | b\n--- | ---\n1 | 2\n3 | 4\n",
+            "fenced": "```\n| h |\n|---|\n| x |\n```\n",
+            "two tables": "| h |\n|---|\n| 1 |\n\ntext\n\n| h2 | h3 |\n| --- | --- |\n| 3 | 4 |\n| 5 | 6 |\n",
+            "in a list item": "- item\n\n  | h |\n  |---|\n  | 1 |\n",
+            "over the cap": "| a |\n|---|\n" + "| 1 |\n" * (gp.DEFAULT_MAX_TABLE_ROWS + 1),
+        }
+        for name, text in docs.items():
+            with self.subTest(doc=name):
+                self.assertEqual(gp.count_table_rows(text),
+                                 pdf_markdown.count_table_rows(pdf_markdown.parse(text)))
 
-# --- 2.7: filenames, titles, emoji ------------------------------------------------
+
+# --- 2.7: filenames ----------------------------------------------------------------
 
 
-class FilenameAndEmojiTests(unittest.TestCase):
+class FilenameTests(unittest.TestCase):
     def test_sanitize_filename(self):
         cases = {
             "quarterly-report.pdf": "quarterly-report.pdf",
@@ -283,188 +366,6 @@ class FilenameAndEmojiTests(unittest.TestCase):
         name = gp._sanitize_filename("a" * 300 + ".pdf")
         self.assertTrue(name.endswith(".pdf"))
         self.assertEqual(len(name), 120)
-
-    def test_status_emoji_map_to_drawable_symbols(self):
-        self.assertEqual(gp.map_emoji_v1("Done ✅, failed ❌, ⭐ ✔️"), "Done ✓, failed ✗, ★ ✓")
-        for ch in gp.map_emoji_v1("✅❌⭐⬆⬇➡⬅✔✖"):
-            self.assertTrue(pc.x2p_can_draw(ch), hex(ord(ch)))
-        self.assertEqual(gp.map_emoji_v1("plain"), "plain")
-
-
-# --- rendering ----------------------------------------------------------------------
-
-
-class RenderTests(unittest.TestCase):
-    def test_renders_a_pdf_with_its_page_count(self):
-        pdf, stats = gp.render_markdown_pdf("# Title\n\nSome text.", None, "a.pdf")
-        self.assertTrue(pdf.startswith(b"%PDF"))
-        self.assertEqual(stats["pages"], 1)
-        # No warnings at all on plain text, border-collapse included (1.4).
-        self.assertEqual(stats["warnings"], {})
-
-    def test_placeholders_and_inline_tags_reach_the_pdf(self):
-        pdf, _ = gp.render_markdown_pdf(
-            "Dear <Candidate Name>, [Start Date]\n\nH<sub>2</sub>O and x<sup>2</sup> and <u>underlined</u>",
-        )
-        text = _pdf_text(pdf)
-        self.assertIn("<Candidate Name>", text)
-        self.assertIn("[Start Date]", text)
-        self.assertIn("underlined", text)
-        self.assertRegex(text, r"H\s*2\s*O")
-
-    def test_line_breaks_in_table_cells_render(self):
-        pdf, _ = gp.render_markdown_pdf("| a |\n|---|\n| first<br>second |")
-        text = _pdf_text(pdf)
-        self.assertIn("first", text)
-        self.assertIn("second", text)
-        self.assertNotIn("<br>", text)
-
-    def test_never_opens_a_connection_for_images(self):
-        attempts = []
-
-        def refuse(*args, **kwargs):
-            attempts.append(args)
-            raise OSError("network disabled in test")
-
-        with mock.patch.object(socket.socket, "connect", refuse), \
-                mock.patch.object(socket, "getaddrinfo", refuse), \
-                mock.patch.object(socket, "create_connection", refuse):
-            pdf, stats = gp.render_markdown_pdf(
-                "![logo](http://example.com/logo.png)\n\n![local](file:///etc/hostname)\n\ntext"
-            )
-        self.assertEqual(attempts, [])
-        self.assertTrue(pdf.startswith(b"%PDF"))
-        self.assertGreaterEqual(stats["warnings"].get("image", 0), 1)
-
-    def test_title_is_not_printed_twice(self):
-        pdf, _ = gp.render_markdown_pdf("# Quarterly Report\n\nBody text.", title="Quarterly  report")
-        self.assertEqual(len(re.findall(r"Quarterly\s+Report", _pdf_text(pdf), re.I)), 1)
-
-    def test_pdf_title_comes_from_the_first_h1_without_a_title(self):
-        from pypdf import PdfReader
-
-        pdf, _ = gp.render_markdown_pdf("Intro line.\n\n# Annual Review\n\nText.", None, "x.pdf")
-        self.assertEqual(PdfReader(io.BytesIO(pdf)).metadata.title, "Annual Review")
-        pdf, _ = gp.render_markdown_pdf("No headings here.", None, "my-notes.pdf")
-        self.assertEqual(PdfReader(io.BytesIO(pdf)).metadata.title, "my-notes")
-        pdf, _ = gp.render_markdown_pdf("# Body H1", "Given Title", "x.pdf")
-        self.assertEqual(PdfReader(io.BytesIO(pdf)).metadata.title, "Given Title")
-
-    def test_a_token_tree_failure_falls_back_and_is_counted(self):
-        with mock.patch("graph_tools.tools.pdf_markdown.parse", side_effect=RuntimeError("boom")):
-            pdf, stats = gp.render_markdown_pdf("# Heading\n\nText.", None, "x.pdf")
-        self.assertTrue(pdf.startswith(b"%PDF"))
-        self.assertEqual(stats["warnings"].get("title_parse_error"), 1)
-
-    def test_title_is_added_when_the_content_has_none(self):
-        pdf, _ = gp.render_markdown_pdf("Body text.", title="Offer Letter")
-        self.assertIn("Offer Letter", _pdf_text(pdf))
-
-    def test_renderer_records_never_reach_the_root_logger(self):
-        records = []
-
-        class _Capture(logging.Handler):
-            def emit(self, record):
-                records.append(record)
-
-        root = logging.getLogger()
-        capture = _Capture(logging.DEBUG)
-        previous_level = root.level
-        root.addHandler(capture)
-        root.setLevel(logging.DEBUG)
-        x2p = logging.getLogger("xhtml2pdf")
-        before = (x2p.propagate, x2p.level, list(x2p.handlers))
-        try:
-            _, stats = gp.render_markdown_pdf("Secret 你好 مرحبا ⚠️ ![x](http://example.com/a.png)")
-        finally:
-            root.removeHandler(capture)
-            root.setLevel(previous_level)
-        self.assertGreater(stats["warnings"].get("missing_glyph", 0), 0)
-        self.assertEqual([r.name for r in records if r.name.startswith("xhtml2pdf")], [])
-        for record in records:
-            self.assertNotIn("Secret", record.getMessage())
-        self.assertEqual((x2p.propagate, x2p.level, list(x2p.handlers)), before)
-
-
-class RenderJobTests(unittest.TestCase):
-    def test_ok_shape(self):
-        out = gp.render_job({"renderer": "x2p_v1", "markdown": "# Hi\n\ntext", "title": None,
-                             "filename": "hi.pdf"})
-        self.assertEqual(out["status"], "ok")
-        self.assertTrue(out["pdf"].startswith(b"%PDF"))
-        self.assertEqual(out["renderer"], "x2p_v1")
-        self.assertEqual(out["pages"], 1)
-        self.assertIn("render_cpu_seconds", out)
-
-    def test_failures_map_to_kinds(self):
-        job = {"renderer": "x2p_v1", "markdown": "x"}
-        for raised, kind in (
-            (gp.RenderError("render_limit"), "render_limit"),
-            (MemoryError(), "oom"),
-            # Out of memory under the child's address-space cap, measured.
-            (SystemError("returned NULL without setting an exception"), "oom"),
-            (RuntimeError("boom"), "error"),
-        ):
-            with self.subTest(kind=kind), mock.patch.object(gp, "render_markdown_pdf", side_effect=raised):
-                self.assertEqual(gp.render_job(job), {"status": "error", "kind": kind})
-
-    def test_typst_without_the_library_is_unsupported(self):
-        with mock.patch.dict("sys.modules", {"graph_tools.tools.pdf_typst": None}):
-            out = gp.render_job({"renderer": "typst", "markdown": "x"})
-        self.assertEqual(out, {"status": "error", "kind": "unsupported"})
-
-
-# --- 1.6 parity with the renderer before this plan --------------------------------
-
-_FIXTURES = os.path.join(_APP_DIR, "tests", "fixtures", "pdf")
-_BASELINES = os.path.join(_FIXTURES, "x2p_baseline")
-# Fixtures whose text changes on purpose: the status-emoji map (2.7), raw
-# HTML printed as text instead of interpreted (1.6), and lists/tables right
-# after a paragraph line parsed as lists/tables (D8, 1.6). The targeted tests
-# above assert those changes.
-_INTENDED_CHANGES = {
-    "09_emoji", "10_typography", "edge",
-    "19_misc_markdown", "typst_syntax_prose",
-    "22_llm_habits", "mixed",
-}
-
-
-def _pdfium_text(pdf: bytes) -> str:
-    import pypdfium2 as pdfium
-
-    doc = pdfium.PdfDocument(pdf)
-    try:
-        pages = []
-        for i in range(len(doc)):
-            textpage = doc[i].get_textpage()
-            pages.append(textpage.get_text_range())
-            textpage.close()
-        return "\f".join(pages).replace("\r\n", "\n")
-    finally:
-        doc.close()
-
-
-class ParityTests(unittest.TestCase):
-    """Every other fixture extracts exactly the text the unmodified renderer
-    produced (tests/fixtures/pdf/x2p_baseline/, recorded from the code at the
-    start of the PDF plan)."""
-
-    def test_fixtures_extract_as_before(self):
-        names = sorted(n[:-4] for n in os.listdir(_BASELINES) if n.endswith(".txt"))
-        self.assertGreaterEqual(len(names), 25)
-        checked = 0
-        for name in names:
-            if name in _INTENDED_CHANGES:
-                continue
-            with self.subTest(fixture=name):
-                with open(os.path.join(_FIXTURES, f"{name}.md"), encoding="utf-8") as f:
-                    markdown = f.read()
-                with open(os.path.join(_BASELINES, f"{name}.txt"), encoding="utf-8", newline="") as f:
-                    baseline = f.read().replace("\r\n", "\n")
-                pdf, _ = gp.render_markdown_pdf(markdown)
-                self.assertEqual(_pdfium_text(pdf), baseline)
-                checked += 1
-        self.assertGreaterEqual(checked, 20)
 
 
 # --- the tool ---------------------------------------------------------------------
@@ -570,11 +471,8 @@ class RenderOptionsTests(unittest.TestCase):
             self.assertEqual(seen[0]["warnings"]["branding_logo_unavailable"], 1)
 
     def test_typst_draws_the_owners_logo_on_page_one(self):
-        from graph import pdf_renderer
         from PIL import Image
 
-        if not pdf_renderer.typst_available():
-            self.skipTest("typst renderer not installed")
         buf = io.BytesIO()
         Image.new("RGB", (240, 80), (20, 90, 160)).save(buf, "PNG")
         context, store = _context({"pdf_renderer": "typst",
@@ -592,13 +490,21 @@ class RenderOptionsTests(unittest.TestCase):
         xobjects = page["/Resources"].get("/XObject") or {}
         self.assertTrue(any(x.get_object().get("/Subtype") == "/Image" for x in xobjects.values()))
 
-    def test_x2p_ignores_the_settings(self):
-        context, store, jobs, _, _ = self._render({
+    def test_a_request_pinned_to_the_removed_renderer_gets_the_settings_too(self):
+        # x2p_v1 ignored locale and letterhead; a request still pinned to it
+        # renders with Typst (plan 5.2), which applies them.
+        context, store, jobs, seen, _ = self._render({
             "pdf_renderer": "x2p_v1", "locale": "en-US",
             "pdf_settings": {"logo_attachment_id": "logo-0001", "company_name": "Acme"},
         })
+        store.put("customers/cust-1/attachments/logo-0001", self.PNG, "image/png")
         self._go(context)
-        self.assertEqual(jobs[0]["options"], {})
+        self.assertEqual(jobs[0]["renderer"], "typst")
+        options = jobs[0]["options"]
+        self.assertEqual(options["locale"], "en-US")
+        self.assertEqual(options["branding"]["company_name"], "Acme")
+        self.assertEqual(gp.base64.b64decode(options["branding"]["logo_b64"]), self.PNG)
+        self.assertEqual(seen[0]["renderer"], "typst")
 
 
 class GeneratePdfToolTests(unittest.TestCase):
@@ -614,6 +520,7 @@ class GeneratePdfToolTests(unittest.TestCase):
         self.assertEqual(artifact.source_key, f"{artifact.key}.source.md")
         pdf = store.objects[artifact.key]
         self.assertTrue(pdf["data"].startswith(b"%PDF"))
+        self.assertTrue(_made_by_typst(pdf["data"]))
         self.assertEqual(pdf["tags"], {"retention": "pending"})
         self.assertEqual(pdf["filename"], "plan.pdf")
         source = store.objects[artifact.source_key]
@@ -623,15 +530,56 @@ class GeneratePdfToolTests(unittest.TestCase):
         self.assertIn("1 page", result.content)
         stats = result.details["pdf"]
         self.assertEqual(stats["status"], "ok")
-        self.assertEqual(stats["renderer"], "x2p_v1")
+        self.assertEqual(stats["renderer"], "typst")
         self.assertEqual(stats["input_chars"], len("# Plan\n\nText."))
         self.assertEqual(artifact.to_dict()["page_count"], 1)
+
+    def test_a_request_pinned_to_the_removed_renderer_renders_with_typst(self):
+        # Plan 5.2: a durable run enqueued before the removal deploy is
+        # recovered with its pinned renderer ("x2p_v1") and the script-route
+        # fields of that time; it renders with Typst instead of failing.
+        jobs = []
+
+        def render(job):
+            jobs.append(job)
+            return gp.render_job(job)
+
+        async def host_render(job):
+            return await asyncio.to_thread(render, job)
+
+        context, store = _context({
+            "render_pdf": host_render, "pdf_renderer": "x2p_v1", "pdf_script_route": "typst",
+            "pdf_fonts_cover": lambda letters: False,
+            "pdf_limits": {"x2p_v1": {"max_chars": 5}},  # a stale entry is not applied
+        })
+        result = _run(gp.GeneratePdfTool().run(
+            {"content_markdown": "مرحبا بالعالم and Łódź", "filename": "ar.pdf"}, context,
+        ))
+        self.assertEqual(len(result.artifacts), 1, result.content)
+        self.assertEqual(jobs[0]["renderer"], "typst")
+        self.assertTrue(_made_by_typst(store.objects[result.artifacts[0].key]["data"]))
+        self.assertEqual(result.details["pdf"]["renderer"], "typst")
+        self.assertNotIn("Note:", result.content)
+
+    @needs_fonts
+    def test_every_script_renders_without_an_honest_limits_note(self):
+        # The 1.14 note and the unsupported_script/unsupported_symbol counts
+        # were x2p_v1's; Typst draws these with the bundled fonts.
+        context, _ = _context()
+        result = _run(gp.GeneratePdfTool().run(
+            {"content_markdown": "مرحبا بالعالم שלום नमस्ते 你好 Łódź ⚠️ ✅", "filename": "s.pdf"}, context,
+        ))
+        self.assertEqual(len(result.artifacts), 1, result.content)
+        self.assertNotIn("Note:", result.content)
+        warnings = result.details["pdf"]["warnings"]
+        for kind in ("unsupported_script", "unsupported_symbol", "missing_glyph"):
+            self.assertNotIn(kind, warnings)
 
     def test_stats_go_to_the_hosts_recorder_for_every_outcome(self):
         seen = []
         context, _ = _context({"record_pdf_stats": seen.append})
         _run(gp.GeneratePdfTool().run({"content_markdown": "text", "filename": "a.pdf"}, context))
-        context, _ = _context({"record_pdf_stats": seen.append, "pdf_limits": {"x2p_v1": {"max_chars": 2}}})
+        context, _ = _context({"record_pdf_stats": seen.append, "pdf_limits": {"typst": {"max_chars": 2}}})
         _run(gp.GeneratePdfTool().run({"content_markdown": "text", "filename": "a.pdf"}, context))
 
         async def busy(job):
@@ -640,12 +588,46 @@ class GeneratePdfToolTests(unittest.TestCase):
         context, _ = _context({"record_pdf_stats": seen.append, "render_pdf": busy})
         _run(gp.GeneratePdfTool().run({"content_markdown": "text", "filename": "a.pdf"}, context))
         self.assertEqual([s["status"] for s in seen], ["ok", "rejected", "busy"])
+        self.assertEqual({s["renderer"] for s in seen}, {"typst"})
+
+    def test_stats_never_carry_document_text(self):
+        # 1.4, on Typst: the render's warnings (a glyph no bundled font has,
+        # a remote image) are counts; no log record and no stat holds text.
+        records = []
+
+        class _Capture(logging.Handler):
+            def emit(self, record):
+                records.append(record)
+
+        seen = []
+        context, _ = _context({"record_pdf_stats": seen.append})
+        root = logging.getLogger()
+        capture = _Capture(logging.DEBUG)
+        previous_level = root.level
+        root.addHandler(capture)
+        root.setLevel(logging.DEBUG)
+        try:
+            result = _run(gp.GeneratePdfTool().run({
+                "content_markdown": "Secret-payload-123 ሰላም ![x](http://example.com/a.png)",
+                "filename": "Secret-payload-123.pdf",
+            }, context))
+        finally:
+            root.removeHandler(capture)
+            root.setLevel(previous_level)
+        self.assertEqual(len(result.artifacts), 1, result.content)
+        warnings = result.details["pdf"]["warnings"]
+        self.assertGreater(warnings.get("missing_glyph", 0), 0)  # Ethiopic: no bundled font
+        self.assertGreater(warnings.get("image_dropped", 0), 0)
+        self.assertNotIn("Secret", json.dumps(seen))
+        for record in records:
+            self.assertNotIn("Secret", record.getMessage())
 
     def test_empty_content_is_an_error(self):
         context, store = _context()
         result = _run(gp.GeneratePdfTool().run({"content_markdown": "  ", "filename": "x"}, context))
         self.assertTrue(result.content.startswith("Error"))
         self.assertEqual(store.objects, {})
+        self.assertEqual(result.details["pdf"], {"status": "error", "renderer": "typst"})
 
     def test_over_the_caps_nothing_is_rendered(self):
         async def never(job):
@@ -665,26 +647,51 @@ class GeneratePdfToolTests(unittest.TestCase):
                 self.assertEqual(result.details["pdf"]["reason"], reason)
                 self.assertEqual(store.objects, {})
 
-    def test_host_can_raise_the_caps_per_renderer(self):
+    def test_host_sets_the_caps(self):
         seen = []
 
         async def render(job):
             seen.append(job)
-            return {"status": "ok", "pdf": b"%PDF-1.4 fake", "pages": 3, "warnings": {}}
+            return {"status": "ok", "pdf": b"%PDF-1.7 fake", "pages": 3, "warnings": {}}
 
-        context, _ = _context({
-            "render_pdf": render,
-            "pdf_limits": {"x2p_v1": {"max_chars": 10}},
-        })
-        result = _run(gp.GeneratePdfTool().run(
-            {"content_markdown": "x" * 11, "filename": "a.pdf"}, context,
-        ))
+        context, _ = _context({"render_pdf": render, "pdf_limits": {"typst": {"max_chars": 10}}})
+        result = _run(gp.GeneratePdfTool().run({"content_markdown": "x" * 11, "filename": "a.pdf"}, context))
         self.assertEqual(result.details["pdf"]["reason"], "chars")
         self.assertEqual(seen, [])
 
+        # Raised caps (5.2, after calibration) let larger documents through.
+        context, _ = _context({"render_pdf": render, "pdf_limits": {
+            "typst": {"max_chars": 300_000, "max_table_rows": 2_500}}})
+        rows = "| a |\n|---|\n" + "| 1 |\n" * 2_000
+        result = _run(gp.GeneratePdfTool().run({"content_markdown": rows, "filename": "a.pdf"}, context))
+        self.assertEqual(result.details["pdf"]["status"], "ok")
+        self.assertEqual(len(seen), 1)
+
+    def test_page_options_reach_the_job(self):
+        jobs = []
+
+        async def render(job):
+            jobs.append(job)
+            return {"status": "ok", "pdf": b"%PDF-1.7 fake", "pages": 1, "warnings": {}}
+
+        context, _ = _context({"render_pdf": render, "locale": "en-US",
+                               "pdf_settings": {"default_page_size": "Letter"}})
+        _run(gp.GeneratePdfTool().run({"content_markdown": "x", "filename": "a.pdf"}, context))
+        _run(gp.GeneratePdfTool().run({"content_markdown": "x", "filename": "a.pdf", "page_size": "Legal",
+                                       "orientation": "landscape"}, context))
+        _run(gp.GeneratePdfTool().run({"content_markdown": "x", "filename": "a.pdf", "page_size": "B5",
+                                       "orientation": "sideways"}, context))
+        self.assertEqual([j["options"] for j in jobs], [
+            {"locale": "en-US", "page_size": "Letter"},
+            {"locale": "en-US", "page_size": "Legal", "orientation": "landscape"},
+            {"locale": "en-US", "page_size": "Letter"},
+        ])
+        self.assertEqual({j["renderer"] for j in jobs}, {"typst"})
+        self.assertTrue(all("filename" not in j for j in jobs))
+
     def test_uses_the_hosts_renderer_and_maps_its_errors(self):
         for kind, status in (("busy", "busy"), ("oom", "oom"), ("timeout", "timeout"),
-                             ("render_limit", "timeout"), ("weird", "error")):
+                             ("unsupported", "error"), ("weird", "error")):
             async def render(job, kind=kind):
                 return {"status": "error", "kind": kind}
 
@@ -698,50 +705,6 @@ class GeneratePdfToolTests(unittest.TestCase):
                 self.assertEqual(result.details["pdf"]["status"], status)
                 self.assertEqual(result.artifacts, [])
                 self.assertEqual(store.objects, {})
-
-    def test_unsupported_script_note_on_x2p(self):
-        context, _ = _context()
-        result = _run(gp.GeneratePdfTool().run(
-            {"content_markdown": "مرحبا بالعالم", "filename": "ar.pdf"}, context,
-        ))
-        self.assertIn("contains Arabic text", result.content)
-        self.assertEqual(result.details["pdf"]["warnings"]["unsupported_script"], 12)
-
-    def test_symbols_alone_get_no_note(self):
-        context, _ = _context()
-        result = _run(gp.GeneratePdfTool().run(
-            {"content_markdown": "Careful ⚠️", "filename": "w.pdf"}, context,
-        ))
-        self.assertNotIn("Note:", result.content)
-        self.assertEqual(result.details["pdf"]["warnings"]["unsupported_symbol"], 2)
-
-    def test_script_route_sends_undrawable_letters_to_typst(self):
-        jobs = []
-
-        async def render(job):
-            jobs.append(job)
-            return {"status": "ok", "pdf": b"%PDF-1.7 fake", "pages": 1, "warnings": {},
-                    "renderer": job["renderer"]}
-
-        context, _ = _context({"render_pdf": render, "pdf_script_route": "typst"})
-        result = _run(gp.GeneratePdfTool().run(
-            {"content_markdown": "שלום", "filename": "he.pdf"}, context,
-        ))
-        self.assertEqual(jobs[-1]["renderer"], "typst")
-        self.assertNotIn("Note:", result.content)
-        self.assertEqual(result.details["pdf"]["renderer"], "typst")
-
-        # Latin documents stay on the base renderer.
-        _run(gp.GeneratePdfTool().run({"content_markdown": "Hello", "filename": "en.pdf"}, context))
-        self.assertEqual(jobs[-1]["renderer"], "x2p_v1")
-
-        # When the bundled fonts don't cover the letters, stay and say so.
-        context, _ = _context({
-            "render_pdf": render, "pdf_script_route": "typst", "pdf_fonts_cover": lambda letters: False,
-        })
-        result = _run(gp.GeneratePdfTool().run({"content_markdown": "שלום", "filename": "he.pdf"}, context))
-        self.assertEqual(jobs[-1]["renderer"], "x2p_v1")
-        self.assertIn("contains Hebrew text", result.content)
 
     def test_success_log_line_never_names_the_file(self):
         context, _ = _context()

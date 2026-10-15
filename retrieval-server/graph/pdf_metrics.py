@@ -4,12 +4,14 @@ encoding_library: the generate_pdf tool returns content-free render stats in
 ToolResult.details["pdf"], and the tool executor hands them to `record`.
 
 Buckets go to 300 s (the generic tool_execution histogram stops at 10 s, where
-large renders start). `renderer` is the EFFECTIVE renderer, i.e. typst for a
-document the script route sent to Typst.
+large renders start). `renderer` is the renderer that ran: typst, the only
+one since xhtml2pdf (x2p_v1) was removed in plan 5.2.
 """
 import logging
 
 from prometheus_client import Counter, Histogram
+
+from graph.pdf_renderer import DEFAULT_RENDERER, RENDERERS
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +71,9 @@ PDF_EXTRACT_SECONDS = Histogram(
 )
 PDF_SIDECAR = Counter("pdf_text_sidecar_total", "Extracted-text sidecar cache lookups", ["result"])
 
-_KNOWN_RENDERERS = ("x2p_v1", "typst")
-
-
 def _renderer(stats: dict) -> str:
     renderer = stats.get("renderer")
-    return renderer if renderer in _KNOWN_RENDERERS else "x2p_v1"
+    return renderer if renderer in RENDERERS else DEFAULT_RENDERER
 
 
 def record(stats: dict | None) -> None:

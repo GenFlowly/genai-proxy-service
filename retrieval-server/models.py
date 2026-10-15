@@ -172,12 +172,12 @@ class RetrieveRequest(BaseModel):
     # node config's thinking_level; pipeline nodes ignore it. Invalid values
     # are warned-and-ignored downstream (llm_node), never an error.
     thinking_level: Optional[str] = None
-    # The PDF renderer and script-route setting pinned when the turn started
-    # (graph/pdf_renderer.py). Declared so a durable run rebuilt from its
-    # stored input keeps them; the /retrieve handler overwrites whatever a
-    # caller sends.
+    # The PDF renderer pinned when the turn started (graph/pdf_renderer.py).
+    # Declared so a durable run rebuilt from its stored input keeps it; the
+    # /retrieve handler overwrites whatever a caller sends. (Stored input
+    # from before plan 5.2 may also carry pdf_script_route: an undeclared
+    # key, ignored on validation.)
     pdf_renderer: Optional[str] = None
-    pdf_script_route: Optional[str] = None
 
 
 class RunRequest(BaseModel):
@@ -208,9 +208,8 @@ class RunRequest(BaseModel):
     # Same semantics as RetrieveRequest.thinking_level.
     thinking_level: Optional[str] = None
     # Pinned by POST /runs before the run is enqueued (graph/pdf_renderer.py);
-    # values a caller sends are overwritten.
+    # a value a caller sends is overwritten.
     pdf_renderer: Optional[str] = None
-    pdf_script_route: Optional[str] = None
     # Optional client-supplied run id for idempotency / rediscovery. When set it
     # becomes the DBOS workflow id (a duplicate re-attaches to the same run
     # instead of starting a new one). Server-generated when omitted.

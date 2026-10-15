@@ -222,7 +222,6 @@ def spec_context_for(state: dict, names: Iterable[str]) -> SpecContext:
         enabled=frozenset(n for n in names or () if n),
         host={
             "pdf_renderer": pinned["pdf_renderer"],
-            "pdf_script_route": pinned["pdf_script_route"],
             "pdf_limits": pdf_renderer.limits(),
         },
     )
@@ -285,9 +284,8 @@ def request_runtime(
     ToolContext.runtime. The tool executor merges this into every context it
     builds; graph_tools never imports host code, so this is how they get:
 
-    - pdf_renderer / pdf_script_route: the renderer pinned when the turn
-      started (graph/pdf_renderer.py, plan 2.1), and pdf_fonts_cover for the
-      per-document script route;
+    - pdf_renderer: the renderer pinned when the turn started
+      (graph/pdf_renderer.py, plan 2.1; Typst only since 5.2);
     - pdf_limits: input caps per renderer (1.5, raised for Typst in 5.2);
     - render_pdf: renders a job in the capped worker child (1.5);
     - conversation_files: {attachment_id: {s3_key, filename, media_type,
@@ -328,8 +326,6 @@ def request_runtime(
     settings = ((config or {}).get("tool_settings") or {}).get("generate_pdf")
     return {
         "pdf_renderer": pinned["pdf_renderer"],
-        "pdf_script_route": pinned["pdf_script_route"],
-        "pdf_fonts_cover": pdf_renderer.fonts_cover,
         "pdf_limits": pdf_renderer.limits(),
         "render_pdf": pdf_worker.render_pdf,
         # Called by the PDF tools with their content-free stats. Inside the

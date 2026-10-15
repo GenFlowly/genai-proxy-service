@@ -177,13 +177,25 @@ class PdfMetricsTests(unittest.TestCase):
 
         pdf_metrics.record(None)
         pdf_metrics.record({})
-        pdf_metrics.record({"status": "ok", "renderer": "x2p_v1", "pages": 3, "pdf_bytes": 1000,
+        pdf_metrics.record({"status": "ok", "renderer": "typst", "pages": 3, "pdf_bytes": 1000,
                             "render_seconds": 1.5, "render_cpu_seconds": 1.2, "spawn_cpu_seconds": 0.6,
                             "child_peak_rss_bytes": 1.5e8, "queue_wait_seconds": 0.01,
                             "input_chars": 5000, "warnings": {"missing_glyph": 2, "image": 0}})
         pdf_metrics.record({"status": "rejected", "reason": "table_rows", "renderer": "nonsense"})
         pdf_metrics.record({"status": "weird", "render_seconds": "not a number"})
         pdf_metrics.record_truncated("generate_pdf", "max_tokens")
+
+    def test_renderer_labels(self):
+        from graph import pdf_metrics
+
+        self.assertEqual(pdf_metrics._renderer({"renderer": "typst"}), "typst")
+        # Typst is the only renderer since plan 5.2: anything else, the
+        # removed "x2p_v1" included, is labelled with it.
+        for other in ("x2p_v1", "nonsense", None):
+            self.assertEqual(pdf_metrics._renderer({"renderer": other}), "typst")
+        before = pdf_metrics.RENDER_SECONDS.labels(renderer="typst", status="ok")._sum.get()
+        pdf_metrics.record({"status": "ok", "renderer": "x2p_v1", "render_seconds": 2.5})
+        self.assertEqual(pdf_metrics.RENDER_SECONDS.labels(renderer="typst", status="ok")._sum.get(), before + 2.5)
 
     def test_rejections_are_counted_by_reason(self):
         from graph import pdf_metrics

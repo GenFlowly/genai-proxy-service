@@ -113,7 +113,6 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         # Pinned by the caller of this builder (the /retrieve handler, POST
         # /runs); a run enqueued before pinning existed resolves at render time.
         pdf_renderer=req.pdf_renderer,
-        pdf_script_route=req.pdf_script_route,
         tools=[t.model_dump() for t in req.tools],
         tool_choice=req.tool_choice,
         query_tool_results=[r.model_dump() for r in req.tool_results],
@@ -329,7 +328,7 @@ async def retrieve(req: RetrieveRequest):
     builtin_tools = _enabled_builtin_tools(node_type_map, node_configs, req)
     # The PDF renderer is pinned here, once per turn (plan 2.1); a caller
     # cannot choose it.
-    req = req.model_copy(update=pdf_renderer.pin(req.customer_id))
+    req = req.model_copy(update=pdf_renderer.pin())
     state = _build_state(req, node_configs, builtin_tools)
     run_config = {"recursion_limit": max_iterations}
 

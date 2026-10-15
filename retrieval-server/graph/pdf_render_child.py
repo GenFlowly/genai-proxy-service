@@ -4,34 +4,33 @@ Started by graph/pdf_worker.py as
 
     python -E -s -m graph.pdf_render_child '<json params>'
 
+(params: {"kind": "typst" | "parse", "max_address_space", "max_cpu_seconds"})
 from the app directory (the server's working directory). Not `-I`: that
 implies -P, which keeps the working directory off sys.path, and `graph` lives
 there, not in site-packages. -E and -s still ignore PYTHON* variables and the
 user site directory.
 
-The child renders untrusted, model-written documents with large pure-Python
-or native engines (xhtml2pdf + reportlab; Typst). A runaway allocation, a hang
-or a crash costs this child, never the shared server process:
-- address-space cap (RLIMIT_AS) set before any renderer is imported; per-job
-  CPU-time cap (soft RLIMIT_CPU raised to used + max_cpu_seconds per job);
+The child renders untrusted, model-written documents with a native engine
+(Typst) or parses untrusted uploaded PDFs (PDFium). A runaway allocation, a
+hang or a crash costs this child, never the shared server process:
+- address-space cap (RLIMIT_AS) set before any renderer is imported; a
+  CPU-time cap for the job (soft RLIMIT_CPU set to used + max_cpu_seconds);
   file-size cap; no core dumps; first choice of the OOM killer; no new
   privileges;
 - on Linux a seccomp filter refuses sockets (no network at all), exec,
-  ptrace and other processes' memory. File writes stay allowed (xhtml2pdf
-  spills to temporary files past 10 KB; Typst needs a per-render root), but
-  the child runs as `nobody` with a private TMPDIR, so it can write little
-  else;
+  ptrace and other processes' memory. File writes stay allowed (Typst needs
+  a per-render root), but the child runs as `nobody` with a private TMPDIR,
+  so it can write little else;
 - logging is locked down before anything else is imported: no handler can
-  ever print document text (xhtml2pdf appends source fragments to every
-  warning), logging.lastResort is gone, warnings are ignored, and the parent
-  starts the child with stderr on /dev/null.
+  ever print document text, logging.lastResort is gone, warnings are
+  ignored, and the parent starts the child with stderr on /dev/null.
 
 Protocol (both directions): 4-byte big-endian length + UTF-8 JSON header,
 then, when the header carries "data_len" (requests), "pdf_len" or
 "payload_len" (responses), that many raw bytes.
   request  {"op": "render", "job": {...generate_pdf.render_job job...}}
   response {"status": "ok"|"error", "kind"?, "pages"?, "warnings"?,
-            "render_cpu_seconds"?, "spawn_cpu_seconds"?, "peak_rss_bytes",
+            "render_cpu_seconds"?, "spawn_cpu_seconds", "peak_rss_bytes",
             "rss_after_bytes", "pdf_len"?}
   request  {"op": "inspect_extract"|"render_pages", "params": {...},
             "data_len": N} + the uploaded PDF's bytes (plan 4.1)
@@ -39,10 +38,11 @@ then, when the header carries "data_len" (requests), "pdf_len" or
            + a JSON list of each page's text; render_pages: {"status",
            "pages", "image_lens", "payload_len"} + the JPEGs back to back;
            errors carry "kind": encrypted | unreadable | oom | error.
-Warm mode (default) serves jobs until stdin closes or `idle_seconds` pass
-without one; --oneshot serves exactly one job (Typst renders, PDF parsing);
---selftest renders a small document and exits 0/1 (the Docker build's smoke
-step).
+Every child serves exactly ONE job (a Typst render or a PDF parse) and exits;
+it waits at most REQUEST_WAIT_SECONDS for that job and exits without one.
+--selftest renders with Typst (mixed scripts with the bundled fonts, math
+with the vendored mitex), extracts and rasterizes the result with PDFium and
+exits 0/1 (the Docker build's smoke step).
 """
 import errno
 import json
@@ -205,11 +205,12 @@ def _peak_rss_bytes() -> int:
 _MAX_REQUEST_DATA = 64 * 1024 * 1024
 
 
-def _read_frame(stream, idle_seconds: float | None) -> tuple[dict, bytes] | None:
-    """One request frame (header, data), or None on EOF / idle timeout."""
+def _read_frame(stream, wait_seconds: float | None) -> tuple[dict, bytes] | None:
+    """One request frame (header, data), or None on EOF or when nothing
+    arrives within wait_seconds."""
     fd = stream.fileno()
-    if idle_seconds:
-        ready, _, _ = select.select([fd], [], [], idle_seconds)
+    if wait_seconds:
+        ready, _, _ = select.select([fd], [], [], wait_seconds)
         if not ready:
             return None
     header = _read_exact(stream, 4)
@@ -343,21 +344,17 @@ def _handle(request: dict, params: dict, data: bytes = b"") -> tuple[dict, bytes
     return header, pdf, "pdf_len"
 
 
-def _warm_imports(renderer: str) -> float:
-    """Import the renderer up front so its import cost is paid once per
-    child (xhtml2pdf: 0.5-0.8 CPU-s, often more than a render). Returns the
-    CPU seconds the imports took."""
+def _preload(kind: str) -> float:
+    """Import what the job needs before reading it, so the import cost is
+    reported apart from the job's (spawn_cpu_seconds). Returns the CPU
+    seconds the imports took."""
     start = time.process_time()
-    if renderer != "parse":
-        import graph_tools.tools.generate_pdf  # noqa: F401
-
-    if renderer == "x2p_v1":
-        import markdown  # noqa: F401
-        from xhtml2pdf import pisa  # noqa: F401
-    elif renderer == "parse":
+    if kind == "parse":
         import pypdfium2  # noqa: F401
         from PIL import Image  # noqa: F401
-    elif renderer == "typst":
+    else:
+        import graph_tools.tools.generate_pdf  # noqa: F401
+
         try:
             from graph_tools.tools import pdf_typst
 
@@ -366,44 +363,44 @@ def _warm_imports(renderer: str) -> float:
             pdf_typst.prepare_render_process()
             import typst  # noqa: F401
         except ImportError:
-            pass
+            pass  # render_job reports the renderer as unsupported
     return round(time.process_time() - start, 3)
 
 
+_SELFTEST_MD = "# Selftest\n\nLatin text, a list:\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n"
+
+
 def _selftest() -> int:
-    """Render with every renderer this build ships (the Docker smoke step):
-    x2p_v1 while xhtml2pdf is installed, Typst when its library is, and
-    parse a PDF with PDFium. 0 only when all of them work and at least one
-    renderer exists."""
-    import importlib.util
-
-    from graph_tools.tools.generate_pdf import render_job
-
-    renderers = 0
-    if importlib.util.find_spec("xhtml2pdf") is not None:
-        renderers += 1
-        result = render_job({
-            "renderer": "x2p_v1",
-            "markdown": "# Selftest\n\nLatin text, a list:\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n",
-            "title": None,
-            "filename": "selftest.pdf",
-        })
-        if result.get("status") != "ok" or not result.get("pdf", b"").startswith(b"%PDF"):
-            return 1
-        header, _ = _parse("inspect_extract", result["pdf"], {})
-        if header.get("status") != "ok" or header.get("pages") != 1:
-            return 1
+    """The Docker smoke step: Typst renders a mixed-script page with the
+    bundled fonts and the vendored mitex (pdf_typst.selftest), a document
+    renders through render_job, the production entry point, and PDFium
+    extracts its text and rasterizes its page. 0 only when all of it works."""
     try:
         from graph_tools.tools import pdf_typst
-    except ImportError:
-        pdf_typst = None  # Typst not installed in this build
-    if pdf_typst is not None:
-        renderers += 1
-        try:
-            pdf_typst.selftest()
-        except Exception:
-            return 1
-    return 0 if renderers else 1
+        from graph_tools.tools.generate_pdf import render_job
+
+        pdf_typst.selftest()
+    except Exception:
+        return 1
+    result = render_job({"renderer": "typst", "markdown": _SELFTEST_MD, "title": None,
+                         "options": {"locale": "en-US"}})
+    if result.get("status") != "ok" or not result.get("pdf", b"").startswith(b"%PDF"):
+        return 1
+    header, payload = _parse("inspect_extract", result["pdf"], {})
+    if header.get("status") != "ok" or header.get("pages") != 1:
+        return 1
+    if "Selftest" not in "".join(json.loads(payload.decode("utf-8"))):
+        return 1
+    header, payload = _parse("render_pages", result["pdf"], {"pages": [0], "max_edge": 512})
+    if header.get("status") != "ok" or not payload.startswith(b"\xff\xd8"):
+        return 1
+    return 0
+
+
+# How long a child waits for its one job: the parent writes it right after
+# the spawn, so a child that gets nothing (its parent was cancelled while it
+# started) exits instead of lingering.
+REQUEST_WAIT_SECONDS = 60
 
 
 def main(argv: list[str]) -> int:
@@ -414,24 +411,15 @@ def main(argv: list[str]) -> int:
         _limit_self({**params, "seccomp": True})
         return _selftest()
     _limit_self(params)
-    renderer = params.get("renderer") or "x2p_v1"
-    spawn_cpu = _warm_imports(renderer)
-    stdin = sys.stdin.buffer
-    stdout = sys.stdout.buffer
-    idle = float(params.get("idle_seconds") or 600)
-    first = True
-    while True:
-        frame = _read_frame(stdin, idle)
-        if frame is None:
-            return 0
-        request, data = frame
-        header, payload, length_key = _handle(request, params, data)
-        if first:
-            header["spawn_cpu_seconds"] = spawn_cpu
-            first = False
-        _write_response(stdout, header, payload, length_key)
-        if "--oneshot" in flags:
-            return 0
+    spawn_cpu = _preload(params.get("kind") or "typst")
+    frame = _read_frame(sys.stdin.buffer, REQUEST_WAIT_SECONDS)
+    if frame is None:
+        return 0
+    request, data = frame
+    header, payload, length_key = _handle(request, params, data)
+    header["spawn_cpu_seconds"] = spawn_cpu
+    _write_response(sys.stdout.buffer, header, payload, length_key)
+    return 0
 
 
 if __name__ == "__main__":

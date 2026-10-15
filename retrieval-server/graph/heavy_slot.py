@@ -3,7 +3,7 @@
 Production runs ONE machine of the smallest Fly size (1 GB, shared CPU) for
 every tenant. Two heavy jobs at once can exhaust it, so image decode/encode
 (graph/image_normalize.py, including its camera-RAW child), PDF rendering
-(graph/pdf_worker.py: xhtml2pdf and Typst children) and PDF parsing all take
+(graph/pdf_worker.py: Typst render children) and PDF parsing all take
 this one slot: at most one heavy child or heavy in-process job runs at a time.
 
 A plain threading.Lock: image work holds it from worker threads, the PDF

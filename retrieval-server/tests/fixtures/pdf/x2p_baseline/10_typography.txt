@@ -1,6 +1,0 @@
-Page 1 of 1
-Typography
-“Smart double quotes” and ‘smart single quotes’ and it’s an apostrophe. En dash 2020–2026, em
-dash—like this, ellipsis… minus − sign. Bullets: • ■ ■ and middle dot ·. Arrows: → ← ↑ ↓ ⇒ ↔. Check
-marks: ✓ ✔ ✗ ✘ ■ ■. Comparison: ≥ ≤ ≠ ≈ ± × ÷ ∞ °C µ. Trademark ™ © ® § ¶ † ‡ ‰ ½ ¼ ¾ ² ³.
-Non-breaking space: 100 km. Prime: 5′ 10″.

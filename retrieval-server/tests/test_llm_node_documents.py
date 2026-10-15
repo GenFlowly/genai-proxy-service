@@ -51,9 +51,6 @@ class _DocTestCase(unittest.IsolatedAsyncioTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    async def asyncTearDown(self):
-        await pdf_worker.shutdown()
-
     async def _messages(self, provider, model, files=None, history=None):
         recorder = _Recorder()
         state = _state(llm_provider=provider, llm_model=model, query_files=files or [],
@@ -201,13 +198,6 @@ class DifficultDocumentTests(_DocTestCase):
             third = await attachments.load({**_ref(), "filename": "renamed.pdf"})
         self.assertEqual((third.texts, third.filename), (doc.texts, "renamed.pdf"))
 
-    async def test_parsing_stops_the_idle_render_child(self):
-        await pdf_worker.render_pdf({"renderer": "x2p_v1", "markdown": "hi", "title": None, "filename": "a.pdf"})
-        self.assertIsNotNone(pdf_worker.get_worker()._warm)
-        self.store.objects[_KEY] = pdf_fixtures.text_pdf(1)
-        await attachments.load(_ref())
-        self.assertIsNone(pdf_worker.get_worker()._warm)
-
 
 class HistoryReplayTests(_DocTestCase):
     def _history(self, ref):
@@ -297,12 +287,13 @@ class ServerProcessTests(unittest.TestCase):
                 return {"generated_response": "done", "usage": {}, "trace": [], "generated_artifacts": []}
 
         parent = {"customer_id": "c", "llm_provider": "openai", "conversation_files": [_ref()],
-                  "locale": "de-DE", "pdf_renderer": "typst", "pdf_script_route": None}
+                  "locale": "de-DE", "pdf_renderer": "typst"}
         with mock.patch.object(subagent, "_get_child_graph", return_value=_Graph()):
             asyncio.run(subagent.run_subagent(parent, {"name": "general"}, "read it", 1))
         self.assertEqual(captured["conversation_files"], [_ref()])
         self.assertEqual(captured["query_files"], [])
         self.assertEqual((captured["locale"], captured["pdf_renderer"]), ("de-DE", "typst"))
+        self.assertNotIn("pdf_script_route", captured)
 
 
 if __name__ == "__main__":

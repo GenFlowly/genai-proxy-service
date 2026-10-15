@@ -1,6 +1,0 @@
-Page 1 of 1
-Task list
-• [x] Completed item
-• [ ] Open item
-• [X] Uppercase X done
-• [ ] Nested open item

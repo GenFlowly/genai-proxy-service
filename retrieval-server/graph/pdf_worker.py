@@ -1,31 +1,31 @@
 """Host side of PDF rendering: runs generate_pdf.render_job in a child process.
 
-One large table could exhaust the shared 1 GB machine when xhtml2pdf rendered
-inside the server: 2,000 rows took 52-68 s and peaked at 0.9-1.4 GB, an
-asyncio.to_thread render can't be cancelled, and it stalls the event loop
-(GIL). With durable runs that was not one crash but a crash loop: recovery
-replayed the same render after every restart. Here the render runs in
-graph/pdf_render_child.py under an address-space cap, so a too-large document
-costs one child and becomes a tool error ("oom") instead.
+One large table could exhaust the shared 1 GB machine when the first
+renderer (xhtml2pdf, since removed) ran inside the server: 2,000 rows took
+52-68 s and peaked at 0.9-1.4 GB, an asyncio.to_thread render can't be
+cancelled, and it stalls the event loop (GIL). With durable runs that was not
+one crash but a crash loop: recovery replayed the same render after every
+restart. Here the render runs in graph/pdf_render_child.py under an
+address-space cap, so a too-large document costs one child and becomes a tool
+error ("oom") instead.
 
-- x2p_v1: one WARM child, started lazily and reused, because importing
-  xhtml2pdf costs 0.5-0.8 CPU-s, often more than the render. Recycled after
-  RECYCLE_RENDERS renders or when it reports more than RECYCLE_RSS_MB of RSS
-  after a render; it exits by itself after IDLE_SECONDS without work, so
-  there is no idle RSS when nobody makes PDFs.
-- typst: a fresh ONE-SHOT child per render (Typst imports in ~0.04 s).
+- render: Typst, the only renderer since xhtml2pdf was removed (plan 5.2),
+  gets a fresh ONE-SHOT child per render. Typst imports in ~0.04 s, so a
+  warm child would save nothing, and a one-shot child leaves no idle RSS and
+  no heap state from an earlier document behind.
 - parse (plan 4.1): uploaded PDFs are inspected, their text extracted and
   pages rendered to JPEG by PDFium in a fresh one-shot child too (PDFium is
   not thread-safe, and the input is untrusted); the server process never
   imports pypdfium2.
-- Before a one-shot child starts, the idle warm x2p child is stopped: the
-  machine-wide bound is one heavy child at its address-space cap, next to
-  the server's own baseline.
 - Every job takes the process-wide heavy slot (graph/heavy_slot.py, shared
   with image normalization) with a bounded wait: past QUEUE_WAIT_SECONDS the
   tool returns "busy" instead of queueing towards the proxy's idle timeout.
-- A job that takes longer than RENDER_TIMEOUT_SECONDS wall clock is killed
-  with its whole process group and reaped; the next job respawns lazily.
+  The machine-wide bound is one heavy child at its address-space cap, next to
+  the server's own baseline.
+- A job that takes longer than its wall-clock deadline is killed with its
+  whole process group and reaped, as is every child once its job is done,
+  so nothing is left running between jobs (or after a deploy). A child that
+  never receives its job exits by itself (pdf_render_child.py).
 - The child gets a scrubbed environment (no AWS_*, DATABASE_URL or API keys)
   and runs as `nobody` when the server runs as root; its stderr goes to
   /dev/null and only structured status/kind is ever logged here.
@@ -45,6 +45,7 @@ import tempfile
 import time
 
 from graph import heavy_slot
+from graph.pdf_renderer import DEFAULT_RENDERER, RENDERERS
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +59,7 @@ def _env_int(name: str, default: int) -> int:
 
 QUEUE_WAIT_SECONDS = _env_int("PDF_QUEUE_WAIT_SECONDS", 30)
 RENDER_TIMEOUT_SECONDS = _env_int("PDF_RENDER_TIMEOUT_SECONDS", 120)
-RECYCLE_RENDERS = _env_int("PDF_WORKER_RECYCLE_RENDERS", 25)
-RECYCLE_RSS_MB = _env_int("PDF_WORKER_RECYCLE_RSS_MB", 300)
-IDLE_SECONDS = _env_int("PDF_WORKER_IDLE_SECONDS", 600)
-# Address-space caps per renderer (calibrate on the Fly dev app).
-X2P_RLIMIT_MB = _env_int("PDF_RENDER_RLIMIT_MB", 400)
+# Address-space caps (calibrate on the Fly dev app).
 TYPST_RLIMIT_MB = _env_int("PDF_TYPST_RLIMIT_MB", 512)
 PARSE_RLIMIT_MB = _env_int("PDF_PARSE_RLIMIT_MB", 512)
 PARSE_TIMEOUT_SECONDS = _env_int("PDF_PARSE_TIMEOUT_SECONDS", 60)
@@ -106,12 +103,10 @@ def _child_identity() -> dict:
 class _Child:
     """One running child process and its private temp dir."""
 
-    def __init__(self, renderer: str, proc: asyncio.subprocess.Process, tmpdir: str):
-        self.renderer = renderer
+    def __init__(self, kind: str, proc: asyncio.subprocess.Process, tmpdir: str):
+        self.kind = kind
         self.proc = proc
         self.tmpdir = tmpdir
-        self.renders = 0
-        self.spawned_at = time.monotonic()
 
     @property
     def alive(self) -> bool:
@@ -134,26 +129,22 @@ class _Child:
 
 
 class PdfWorker:
-    """Renders jobs in child processes; one at a time per process."""
+    """Runs render and parse jobs in one-shot child processes, one job at a
+    time per process (the heavy slot)."""
 
-    def __init__(self):
-        self._warm: _Child | None = None
-
-    async def _spawn(self, renderer: str, oneshot: bool) -> _Child:
+    async def _spawn(self, kind: str) -> _Child:
+        """Start a one-shot child: kind is "typst" (a render) or "parse"."""
         tmpdir = tempfile.mkdtemp(prefix="pdf-child-")
         identity = _child_identity()
         if identity:
             os.chown(tmpdir, identity["user"], identity["group"])
-        rlimit_mb = {"typst": TYPST_RLIMIT_MB, "parse": PARSE_RLIMIT_MB}.get(renderer, X2P_RLIMIT_MB)
+        rlimit_mb = PARSE_RLIMIT_MB if kind == "parse" else TYPST_RLIMIT_MB
         params = {
-            "renderer": renderer,
+            "kind": kind,
             "max_address_space": rlimit_mb * 1024 * 1024,
             "max_cpu_seconds": MAX_CPU_SECONDS,
-            "idle_seconds": IDLE_SECONDS,
         }
         argv = [sys.executable, "-E", "-s", "-m", "graph.pdf_render_child", json.dumps(params)]
-        if oneshot:
-            argv.append("--oneshot")
         proc = await asyncio.create_subprocess_exec(
             *argv,
             cwd=_APP_DIR,
@@ -165,7 +156,7 @@ class PdfWorker:
             limit=_MAX_HEADER,
             **identity,
         )
-        return _Child(renderer, proc, tmpdir)
+        return _Child(kind, proc, tmpdir)
 
     async def _exchange(self, child: _Child, request: dict, data: bytes = b"") -> tuple[dict, bytes]:
         if data:
@@ -187,49 +178,37 @@ class PdfWorker:
     async def render(self, job: dict) -> dict:
         """Render one generate_pdf job. Returns render_job's result shape plus
         queue_wait_seconds; never raises for a render failure."""
-        renderer = job.get("renderer") or "x2p_v1"
+        renderer = job.get("renderer") if job.get("renderer") in RENDERERS else DEFAULT_RENDERER
         waited_from = time.monotonic()
         if not await heavy_slot.acquire_async(heavy_slot.HEAVY_LOCK, QUEUE_WAIT_SECONDS):
             return {"status": "error", "kind": "busy", "renderer": renderer,
                     "queue_wait_seconds": round(time.monotonic() - waited_from, 3)}
         queue_wait = round(time.monotonic() - waited_from, 3)
         try:
-            result = await self._render_locked(renderer, job)
+            result = await self._render_locked(job)
         finally:
             heavy_slot.HEAVY_LOCK.release()
         result["queue_wait_seconds"] = queue_wait
         result.setdefault("renderer", renderer)
         return result
 
-    async def _render_locked(self, renderer: str, job: dict) -> dict:
-        oneshot = renderer != "x2p_v1"
-        child = None
+    async def _render_locked(self, job: dict) -> dict:
         try:
-            if oneshot:
-                await self._stop_warm()
-                child = await self._spawn(renderer, oneshot=True)
-            else:
-                if self._warm is None or not self._warm.alive:
-                    if self._warm is not None:
-                        await self._warm.kill()
-                    self._warm = await self._spawn(renderer, oneshot=False)
-                child = self._warm
+            child = await self._spawn("typst")
         except OSError as e:
             logger.error("pdf worker: child could not be started (%s)", type(e).__name__)
             return {"status": "error", "kind": "error"}
-
         try:
             header, pdf = await asyncio.wait_for(
                 self._exchange(child, {"op": "render", "job": job}), RENDER_TIMEOUT_SECONDS
             )
         except asyncio.TimeoutError:
             logger.warning("pdf render timed out after %ss; killing the child", RENDER_TIMEOUT_SECONDS)
-            await self._discard(child)
             return {"status": "error", "kind": "timeout"}
         except (asyncio.IncompleteReadError, BrokenPipeError, ConnectionResetError, ValueError) as e:
             # The child died mid-job: SIGKILL (kernel OOM killer) or a crash,
             # SIGXCPU (its CPU allowance), or garbage on the pipe.
-            await self._discard(child)
+            await child.kill()
             code = child.proc.returncode
             # SIGKILL: the kernel OOM killer; SIGABRT: Typst aborts when an
             # allocation fails under the address-space cap.
@@ -237,34 +216,16 @@ class PdfWorker:
                 "timeout" if code == -signal.SIGXCPU else "error")
             logger.warning("pdf render child failed (rc=%s, %s) -> %s", code, type(e).__name__, kind)
             return {"status": "error", "kind": kind}
-
-        child.renders += 1
-        failed = header.get("status") != "ok"
-        if oneshot:
+        finally:
             await child.kill()
-        else:
-            rss_mb = int(header.get("rss_after_bytes") or 0) / (1024 * 1024)
-            # After a failure (an out-of-memory error in particular) the
-            # child's heap is suspect: start fresh next time.
-            if failed or child.renders >= RECYCLE_RENDERS or rss_mb > RECYCLE_RSS_MB:
-                await self._discard(child)
         result = {k: v for k, v in header.items() if k != "pdf_len"}
         if "peak_rss_bytes" in result:
             result["child_peak_rss_bytes"] = result.pop("peak_rss_bytes")
-        if failed:
+        if header.get("status") != "ok":
             logger.warning("pdf render failed: status=%s kind=%s", header.get("status"), header.get("kind"))
             return result
         result["pdf"] = pdf
         return result
-
-    async def _discard(self, child: _Child) -> None:
-        await child.kill()
-        if child is self._warm:
-            self._warm = None
-
-    async def _stop_warm(self) -> None:
-        if self._warm is not None:
-            await self._discard(self._warm)
 
     async def parse(self, op: str, data: bytes, params: dict | None = None) -> tuple[dict, bytes]:
         """Run a PDF parse op ("inspect_extract" or "render_pages") on an
@@ -284,9 +245,8 @@ class PdfWorker:
         return header, payload
 
     async def _parse_locked(self, op: str, data: bytes, params: dict) -> tuple[dict, bytes]:
-        await self._stop_warm()
         try:
-            child = await self._spawn("parse", oneshot=True)
+            child = await self._spawn("parse")
         except OSError as e:
             logger.error("pdf worker: parse child could not be started (%s)", type(e).__name__)
             return {"status": "error", "kind": "error"}, b""
@@ -311,10 +271,6 @@ class PdfWorker:
         header.pop("payload_len", None)
         return header, payload if header.get("status") == "ok" else b""
 
-    async def close(self) -> None:
-        if self._warm is not None:
-            await self._discard(self._warm)
-
 
 _worker: PdfWorker | None = None
 
@@ -334,8 +290,3 @@ async def render_pdf(job: dict) -> dict:
 async def parse_pdf(op: str, data: bytes, params: dict | None = None) -> tuple[dict, bytes]:
     """Inspect / extract / render pages of an uploaded PDF (plan 4.1)."""
     return await get_worker().parse(op, data, params)
-
-
-async def shutdown() -> None:
-    if _worker is not None:
-        await _worker.close()

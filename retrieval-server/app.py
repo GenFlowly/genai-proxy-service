@@ -80,13 +80,6 @@ LOG_LEVEL = getattr(
 )
 setup_logging("retrieval-server", level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
-if _IS_PRODUCTION:
-    # xhtml2pdf appends source text of the document to every warning and
-    # error (plan 1.4). Renders run in the locked-down worker child; this
-    # keeps any in-process record out of production logs as well.
-    _x2p_logger = logging.getLogger("xhtml2pdf")
-    _x2p_logger.addHandler(logging.NullHandler())
-    _x2p_logger.propagate = False
 
 
 @asynccontextmanager
@@ -99,10 +92,6 @@ async def lifespan(app: FastAPI):
     yield
     if durable_runtime is not None:
         await durable_runtime.shutdown()
-    # Stop the PDF worker's warm child (plan 1.5) so a deploy leaves none behind.
-    from graph import pdf_worker
-
-    await pdf_worker.shutdown()
 
 
 # Embedding is API-backed (Voyage/OpenAI); encoders are lightweight clients

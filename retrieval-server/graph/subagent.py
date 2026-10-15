@@ -188,7 +188,6 @@ async def run_subagent(
         "conversation_files": list(parent_state.get("conversation_files") or []),
         "locale": parent_state.get("locale"),
         "pdf_renderer": parent_state.get("pdf_renderer"),
-        "pdf_script_route": parent_state.get("pdf_script_route"),
         "tools": [],
         "tool_choice": None,
         "query_tool_results": [],

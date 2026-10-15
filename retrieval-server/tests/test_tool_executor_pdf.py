@@ -79,12 +79,12 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                   "media_type": "application/pdf", "filename": "x.pdf", "origin": "generated"}]
         await _run(
             _state([{"id": "1", "name": "generate_pdf", "args": {}}], ["generate_pdf"],
-                   conversation_files=files, locale="de-DE", pdf_renderer="x2p_v1"),
+                   conversation_files=files, locale="de-DE", pdf_renderer="typst"),
             [tool],
             config={"tool_settings": {"generate_pdf": {"company_name": "Acme", "default_page_size": "Letter"}}},
         )
         runtime = tool.context.runtime
-        self.assertEqual(runtime["pdf_renderer"], "x2p_v1")
+        self.assertEqual(runtime["pdf_renderer"], "typst")
         self.assertEqual(runtime["locale"], "de-DE")
         self.assertEqual(runtime["pdf_settings"], {"company_name": "Acme", "default_page_size": "Letter"})
         self.assertIsNone(runtime["pdf_settings_owner"])
@@ -92,7 +92,20 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(callable(runtime["render_pdf"]))
         self.assertTrue(callable(runtime["read_scratch"]))
         self.assertIn("generate_pdf", runtime["enabled_tools"])
-        self.assertEqual(runtime["pdf_limits"]["x2p_v1"]["max_chars"], 150_000)
+        self.assertEqual(runtime["pdf_limits"]["typst"]["max_chars"], 150_000)
+        self.assertNotIn("pdf_script_route", runtime)
+        self.assertNotIn("pdf_fonts_cover", runtime)
+
+    async def test_a_run_pinned_to_the_removed_renderer_gets_typst(self):
+        # Plan 5.2: state recovered from a run enqueued before the removal.
+        tool = _Tool("generate_pdf")
+        await _run(
+            _state([{"id": "1", "name": "generate_pdf", "args": {}}], ["generate_pdf"],
+                   pdf_renderer="x2p_v1", pdf_script_route="typst"),
+            [tool],
+        )
+        self.assertEqual(tool.context.runtime["pdf_renderer"], "typst")
+        self.assertEqual(set(tool.context.runtime["pdf_limits"]), {"typst"})
 
     async def test_the_graph_owner_scopes_the_letterhead_settings(self):
         from graph.tools_runtime import GRAPH_OWNER_KEY
