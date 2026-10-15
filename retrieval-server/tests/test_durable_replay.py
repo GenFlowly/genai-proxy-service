@@ -184,6 +184,18 @@ class DeterministicReplayTest(unittest.TestCase):
         self.assertEqual([u["total_tokens"] for u in usage_rows], [45])
         self.assertEqual(rows[-1]["event"]["usage"]["total_tokens"], 45)
 
+    # --- purge (plan 3.9) -------------------------------------------------------
+
+    def test_delete_run_data_purges_every_store_and_repeats_with_204(self):
+        purge = self._get("main")["result"]["purge"]
+        self.assertEqual(purge["codes"], [204, 204])
+        self.assertIsNone(purge["status_after"])           # DBOS rows
+        self.assertIn(purge["steps_after"], (0,))          # step outputs (memoized results)
+        self.assertFalse(purge["checkpoint_after"])        # LangGraph checkpoints
+        self.assertEqual(purge["threads_after"], [])
+        self.assertEqual(purge["rows_after"], 0)           # run_events
+        self.assertEqual(purge["ledger_after"], 0)         # tool ledger
+
     # --- a replay that does not follow the recorded steps ---------------------
 
     def test_a_divergent_replay_fails_the_run_instead_of_feeding_the_model(self):

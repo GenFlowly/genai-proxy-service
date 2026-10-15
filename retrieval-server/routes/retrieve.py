@@ -450,6 +450,7 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
         # Late import: runs.py imports this module at load, so a module-level
         # import here would be circular.
         import runs as runs_module
+        from dbos import SetWorkflowID
 
         run_id = f"ra-{uuid4()}"
         run_input = req.model_dump()
@@ -459,11 +460,23 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
             req.graph_id, req.customer_id, run_id, req.llm_provider,
         )
         try:
-            result = await runs_module.request_agent_run(run_id, run_input)
+            # Workflow id = run id = checkpoint thread id, so everything the
+            # run stores can be found and deleted by it (plan 3.9).
+            with SetWorkflowID(run_id):
+                result = await runs_module.request_agent_run(run_id, run_input)
             return JSONResponse(result)
         except Exception as e:
             logger.error("Durable agent graph %s failed: %s", req.graph_id, e, exc_info=True)
             raise HTTPException(status_code=500, detail=f"Graph error: {e}")
+        finally:
+            # The workflow input holds conversation text, and nothing reads
+            # the run's rows once this request ends: delete them now. Rows a
+            # crash leaves behind are deleted by the run sweep after an hour.
+            try:
+                await runs_module.delete_request_run(run_id)
+            except Exception:
+                logger.warning("Could not delete request agent run %s; the run sweep will", run_id,
+                               exc_info=True)
 
     graph_record, nodes = graph_data
     graph, max_iterations = get_or_build_graph(f"graph#{req.graph_id}", graph_record, nodes)

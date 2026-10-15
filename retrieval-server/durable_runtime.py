@@ -16,8 +16,9 @@ Lifecycle:
   shutdown()    -> DBOS.destroy() + close the pool.
 
 The run sweep (plan 0.2) ends runs nothing else will end — dead-lettered,
-failed or stranded by an app-version bump — with an error the user sees, and
-counts request-agent dead letters.
+failed or stranded by an app-version bump — with an error the user sees,
+counts request-agent dead letters, and deletes request-agent runs a crash
+left behind (plan 3.9).
 
 P0-verified config for the Supabase session pooler: use_listen_notify=False
 (the pooler has no working LISTEN/NOTIFY, so DBOS polls) and dbos_system_schema
@@ -52,6 +53,10 @@ SWEEP_INTERVAL_SEC = float(os.getenv("DURABLE_SWEEP_INTERVAL_SEC", "60"))
 # A PENDING/ENQUEUED run of another app version is never recovered nor
 # dequeued; past this age the sweep cancels it and ends it with an error.
 STRANDED_AFTER_SEC = int(os.getenv("DURABLE_STRANDED_AFTER_SEC", "600"))
+# request_agent_run rows older than this are deleted by the sweep (plan 3.9):
+# their caller deletes them when it returns, so whatever is left was
+# interrupted (crash, dead letter) and still holds conversation text.
+REQUEST_RUN_RETENTION_SEC = int(os.getenv("DURABLE_REQUEST_RUN_RETENTION_SEC", "3600"))
 _SWEEP_BATCH = 200
 
 _dbos_constructed = False  # DBOS() instance exists -> workflows may register/decorate
@@ -270,7 +275,9 @@ async def sweep_once(state: SweepState, dbos=None) -> None:
     if dbos is None:
         from dbos import DBOS as dbos
     now = datetime.now(timezone.utc)
-    for part in (_end_failed_agent_runs, _end_stranded_agent_runs, _count_request_dead_letters):
+    # Dead letters are counted before old request runs are deleted.
+    for part in (_end_failed_agent_runs, _end_stranded_agent_runs, _count_request_dead_letters,
+                 _delete_old_request_runs):
         try:
             await part(dbos, now, state)
         except Exception:
@@ -361,6 +368,32 @@ async def _count_request_dead_letters(dbos, now: datetime, state: SweepState) ->
         durable_metrics.run_dead_lettered("request_agent_run")
         _log_workflow("request agent run dead-lettered after a restart", w)
     state.dead_letter_watermark_ms = newest
+
+
+def _request_run_thread_id(w) -> str:
+    """The checkpoint thread of a request_agent_run: its run id, the first
+    workflow argument (the workflow id itself since plan 3.9; a generated
+    uuid on rows started before)."""
+    inputs = w.input if isinstance(w.input, dict) else {}
+    args = inputs.get("args") or ()
+    return str(args[0]) if args else w.workflow_id
+
+
+async def _delete_old_request_runs(dbos, now: datetime, state: SweepState) -> None:
+    """Delete request_agent_run rows (and their checkpoints) older than
+    REQUEST_RUN_RETENTION_SEC, whatever their status (plan 3.9)."""
+    import runs
+
+    rows = await dbos.list_workflows_async(
+        name="request_agent_run",
+        end_time=_iso(now - timedelta(seconds=REQUEST_RUN_RETENTION_SEC)),
+        limit=100,
+        load_input=True,  # only for the run id (args[0]); never logged
+        load_output=False,
+    )
+    for w in rows:
+        await runs.delete_request_run(w.workflow_id, _request_run_thread_id(w))
+        _log_workflow("deleted a request agent run left behind", w)
 
 
 async def _sweep_loop() -> None:

@@ -14,12 +14,13 @@ import tempfile
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import durable_metrics
 import durable_runtime
 import psycopg.errors
 import run_events
+import runs
 from tests.sqlite_pool import SqlitePool
 
 NOW_MS = int(datetime.now().timestamp() * 1000)
@@ -247,7 +248,25 @@ class SweepTest(_EventsDB):
         self.assertIn("run_dead", text)
         self.assertIn("recovery_attempts=5", text)
         self.assertNotIn("secret", text)
-        self.assertTrue(all(c["load_input"] is False for c in dbos.list_calls))
+        # Inputs are loaded only to find old request runs' thread ids.
+        self.assertEqual([c["name"] for c in dbos.list_calls if c["load_input"]], ["request_agent_run"])
+
+    async def test_request_runs_older_than_an_hour_are_deleted(self):
+        two_hours_ago = NOW_MS - 2 * 3600 * 1000
+        old_legacy = _wf("8f1c-uuid", name="request_agent_run", status="MAX_RECOVERY_ATTEMPTS_EXCEEDED",
+                         created_ms=two_hours_ago)
+        old_legacy.input = {"args": ("ra-legacy", {"variables": {"q": "conversation text"}}), "kwargs": {}}
+        old_current = _wf("ra-new-style", name="request_agent_run", status="PENDING", created_ms=two_hours_ago)
+        old_current.input = {"args": ("ra-new-style", {}), "kwargs": {}}
+        young = _wf("ra-young", name="request_agent_run", status="SUCCESS")
+        agent = _wf("run_old_agent", name="agent_run", status="SUCCESS", created_ms=two_hours_ago)
+        dbos = FakeDBOS([old_legacy, old_current, young, agent])
+        with patch.object(runs, "delete_request_run", AsyncMock()) as delete:
+            with self.assertLogs("durable_runtime", level="WARNING") as logs:
+                await durable_runtime.sweep_once(durable_runtime.SweepState(), dbos)
+        self.assertEqual(sorted(c.args for c in delete.await_args_list),
+                         [("8f1c-uuid", "ra-legacy"), ("ra-new-style", "ra-new-style")])
+        self.assertNotIn("conversation text", "\n".join(logs.output))
 
     async def test_a_failing_part_does_not_stop_the_others(self):
         dbos = FakeDBOS([_wf("run_dead")])

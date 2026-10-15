@@ -2945,7 +2945,7 @@
         },
         {
           "type": "timeseries",
-          "title": "/runs/{run_id}/events",
+          "title": "/runs/{run_id}/data",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROM}"
@@ -2953,6 +2953,223 @@
           "gridPos": {
             "x": 0,
             "y": 110,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "showPoints": "always"
+              }
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "sum by (status) (increase(http_requests_total{app=\"genai-retrieval-server-development\", handler=\"/runs/{run_id}/data\"}[$__rate_interval]))",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "description": "Requests per interval for /runs/{run_id}/data, by status."
+        },
+        {
+          "type": "timeseries",
+          "title": "/runs/{run_id}/data \u2014 latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 110,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-development\", handler=\"/runs/{run_id}/data\"}[$__rate_interval])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-development\", handler=\"/runs/{run_id}/data\"}[$__rate_interval])))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-development\", handler=\"/runs/{run_id}/data\"}[$__rate_interval])))",
+              "legendFormat": "p95",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROM}"
+              },
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{app=\"genai-retrieval-server-development\", handler=\"/runs/{run_id}/data\"}[$__rate_interval])))",
+              "legendFormat": "p99",
+              "refId": "D"
+            }
+          ],
+          "description": "Request latency percentiles for /runs/{run_id}/data."
+        },
+        {
+          "type": "timeseries",
+          "title": "/runs/{run_id}/events",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 118,
             "w": 12,
             "h": 8
           },
@@ -3047,7 +3264,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 110,
+            "y": 118,
             "w": 12,
             "h": 8
           },
@@ -3169,7 +3386,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 118,
+            "y": 126,
             "w": 12,
             "h": 8
           },
@@ -3264,7 +3481,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 118,
+            "y": 126,
             "w": 12,
             "h": 8
           },
@@ -3386,7 +3603,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 126,
+            "y": 134,
             "w": 12,
             "h": 8
           },
@@ -3481,7 +3698,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 126,
+            "y": 134,
             "w": 12,
             "h": 8
           },
@@ -3606,7 +3823,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 134,
+        "y": 142,
         "w": 24,
         "h": 1
       },
@@ -3620,7 +3837,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 135,
+            "y": 143,
             "w": 12,
             "h": 8
           },
@@ -3715,7 +3932,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 135,
+            "y": 143,
             "w": 12,
             "h": 8
           },
@@ -3840,7 +4057,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 143,
+        "y": 151,
         "w": 24,
         "h": 1
       },
@@ -3854,7 +4071,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 144,
+            "y": 152,
             "w": 12,
             "h": 8
           },
@@ -3949,7 +4166,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 144,
+            "y": 152,
             "w": 12,
             "h": 8
           },
@@ -4074,7 +4291,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 152,
+        "y": 160,
         "w": 24,
         "h": 1
       },
@@ -4088,7 +4305,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 153,
+            "y": 161,
             "w": 12,
             "h": 8
           },
@@ -4183,7 +4400,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 153,
+            "y": 161,
             "w": 12,
             "h": 8
           },
@@ -4305,7 +4522,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 161,
+            "y": 169,
             "w": 12,
             "h": 8
           },
@@ -4400,7 +4617,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 161,
+            "y": 169,
             "w": 12,
             "h": 8
           },
@@ -4522,7 +4739,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 169,
+            "y": 177,
             "w": 12,
             "h": 8
           },
@@ -4617,7 +4834,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 169,
+            "y": 177,
             "w": 12,
             "h": 8
           },
@@ -4742,7 +4959,7 @@
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 177,
+        "y": 185,
         "w": 24,
         "h": 1
       },
@@ -4756,7 +4973,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 178,
+            "y": 186,
             "w": 12,
             "h": 8
           },
@@ -4851,7 +5068,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 178,
+            "y": 186,
             "w": 12,
             "h": 8
           },
@@ -4973,7 +5190,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 186,
+            "y": 194,
             "w": 12,
             "h": 8
           },
@@ -5068,7 +5285,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 186,
+            "y": 194,
             "w": 12,
             "h": 8
           },
@@ -5190,7 +5407,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 194,
+            "y": 202,
             "w": 12,
             "h": 8
           },
@@ -5285,7 +5502,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 194,
+            "y": 202,
             "w": 12,
             "h": 8
           },
@@ -5407,7 +5624,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 202,
+            "y": 210,
             "w": 12,
             "h": 8
           },
@@ -5502,7 +5719,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 202,
+            "y": 210,
             "w": 12,
             "h": 8
           },
@@ -5624,7 +5841,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 210,
+            "y": 218,
             "w": 12,
             "h": 8
           },
@@ -5719,7 +5936,7 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 210,
+            "y": 218,
             "w": 12,
             "h": 8
           },

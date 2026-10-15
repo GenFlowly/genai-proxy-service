@@ -416,7 +416,9 @@ def _script(args, messages) -> dict:
 
     plan = {"text": "", "calls": [], "crash_after_chunks": None, "crash_now": False}
     v = args.variant
-    if v in ("main", "divergence", "late_crash"):
+    if v == "request":
+        plan["text"] = "A short title"
+    elif v in ("main", "divergence", "late_crash"):
         if n < 2:
             plan["calls"] = [fake_tool_call(n + 1)]
         else:
@@ -441,10 +443,12 @@ def _script(args, messages) -> dict:
             plan["calls"] = [call("spawn_agent", {"prompt": "Do the delegated work.", "agent_type": "worker"})]
         else:
             plan["text"] = FINAL_ANSWER
+    from dbos import DBOS
+
     append_line(args.dir, "llm_bodies.log", {
         "pid": os.getpid(), "phase": args.phase, "scope": scope, "n_tool_results": n,
         "tool_results": tool_results, "last_human": humans[-1] if humans else "",
-        "minted": [c["id"] for c in plan["calls"]],
+        "minted": [c["id"] for c in plan["calls"]], "workflow_id": DBOS.workflow_id,
     })
     return plan
 
@@ -568,6 +572,79 @@ async def _wait_for_row(predicate, timeout: float = 30.0):
     return None
 
 
+async def _purge_report(saver, graph, cfg) -> dict:
+    """DELETE /runs/{id}/data twice over the finished run (plan 3.9), then
+    what is left of it in each store."""
+    import durable_runtime
+    import tool_ledger
+    from dbos import DBOS
+    from routes import runs as runs_routes
+
+    durable_runtime._ready = True
+    codes = [(await runs_routes.delete_run_data(RUN_ID)).status_code for _ in range(2)]
+    try:
+        steps_left = len(await DBOS.list_workflow_steps_async(RUN_ID))
+    except Exception as e:  # an unknown workflow may raise rather than list nothing
+        steps_left = type(e).__name__
+    return {
+        "codes": codes,
+        "status_after": _status_dict(await DBOS.get_workflow_status_async(RUN_ID))["status"],
+        "steps_after": steps_left,
+        "threads_after": _threads_with_checkpoints(saver),
+        "checkpoint_after": bool((await graph.aget_state(cfg)).values),
+        "rows_after": len(await run_event_rows()),
+        "ledger_after": len(await tool_ledger.attempts(RUN_ID)),
+    }
+
+
+def _threads_with_checkpoints(saver) -> list[str]:
+    # InMemorySaver's storage is a defaultdict: a read leaves an empty entry.
+    return [thread for thread, namespaces in saver.storage.items() if any(namespaces.values())]
+
+
+def scenario_request_agent(args) -> None:
+    """execute_agent_graph with durable=true (plan 3.9): the request agent runs
+    as request_agent_run under workflow id = run id, and its DBOS rows and
+    checkpoints are gone once the route returns."""
+    import durable_runtime
+    import runs
+    import graph.nodes.llm_node as llm_node
+    from dbos import DBOS
+    from models import ExecuteAgentGraphRequest
+    from routes import retrieve as retrieve_routes
+
+    record = {"graphId": "title-agent", "customerId": "System", "entryPoint": "gen", "latestVersion": 1,
+              "edges": json.dumps({"edges": [{"from": "gen", "to": "__end__"}]})}
+    nodes = [{"nodeId": "gen", "nodeType": "GENERATION", "name": "Title",
+              "config": json.dumps({"system_prompt": "Write a title.", "input_template": "{original_query}"})}]
+    retrieve_routes.get_graph_and_nodes_by_id = lambda graph_id: (record, nodes)
+    runs.get_graph_and_nodes_by_id = lambda graph_id: (record, nodes)
+    model = _make_model(args)
+    llm_node._build_llm_and_structured = lambda *a, **k: (model, None)
+    llm_node.resolve_credentials = lambda customer_id, provider: {}
+
+    async def main():
+        saver = _make_file_saver(os.path.join(args.dir, "checkpoints.pkl"))
+        durable_runtime._checkpointer = saver
+        DBOS.launch()
+        durable_runtime._ready = True
+        req = ExecuteAgentGraphRequest(
+            graph_id="title-agent", customer_id=CUSTOMER_ID, llm_credentials={}, llm_provider="anthropic",
+            durable=True, variables={"original_query": "Plan a trip to Lisbon"},
+        )
+        response = await retrieve_routes.execute_agent_graph(req)
+        remaining = await DBOS.list_workflows_async(name="request_agent_run", load_input=False, load_output=False)
+        emit_result({
+            "status_code": response.status_code,
+            "body": json.loads(response.body),
+            "remaining": [w.workflow_id for w in remaining],
+            "threads_after": _threads_with_checkpoints(saver),
+        })
+        DBOS.destroy()
+
+    asyncio.run(main())
+
+
 def scenario_replay(args) -> None:
     import durable_metrics
     import run_events
@@ -610,9 +687,10 @@ def scenario_replay(args) -> None:
         steps = await DBOS.list_workflow_steps_async(RUN_ID)
         summary = await DBOS.get_result_async(RUN_ID) if st is not None and st.status == "SUCCESS" else None
         graph = runs._resolve_durable_graph(CUSTOMER_ID, GRAPH_ID, saver)[0]
-        snap = await graph.aget_state({"configurable": {"thread_id": RUN_ID}})
+        cfg = {"configurable": {"thread_id": RUN_ID}}
+        snap = await graph.aget_state(cfg)
         loop_messages = (snap.values or {}).get("loop_messages") or []
-        emit_result({
+        result = {
             **_status_dict(st),
             "steps": [[s["function_id"], s["function_name"]] for s in steps],
             "summary": summary,
@@ -624,7 +702,10 @@ def scenario_replay(args) -> None:
                        for row in await tool_ledger.attempts(RUN_ID)],
             "recovered_metric": durable_metrics.DURABLE_RUN_RECOVERED._value.get(),
             "interrupted_metric": durable_metrics.TOOL_CALL_INTERRUPTED.labels(tool="fake_tool")._value.get(),
-        })
+        }
+        if args.variant == "main" and st is not None and st.status == "SUCCESS":
+            result["purge"] = await _purge_report(saver, graph, cfg)
+        emit_result(result)
         DBOS.destroy()
 
     asyncio.run(main())
@@ -636,6 +717,7 @@ SCENARIOS = {
     "cancel": scenario_cancel,
     "stranded": scenario_stranded,
     "replay": scenario_replay,
+    "request_agent": scenario_request_agent,
 }
 
 

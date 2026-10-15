@@ -7,6 +7,7 @@ Durable agent-run API (see DURABLE_AGENTS_DBOS_PLAN §5.7). Separate from
   POST /runs/{id}/resume     deliver client-tool results / human input (P2)
   POST /runs/{id}/cancel     cancel the workflow + drop its event channel
   GET  /runs/{id}            status / result (polling / rediscovery)
+  DELETE /runs/{id}/data     purge everything stored for a finished run (3.9)
 
 The stream tails run_events by polling (the Supabase pooler has no NOTIFY, P0),
 so a reconnecting client passes ?from_seq=<last seq it saw> and we replay from
@@ -19,7 +20,7 @@ import logging
 import time
 import uuid
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 import durable_runtime
@@ -209,6 +210,40 @@ async def cancel_run(run_id: str):
     await run_events.delete_run(run_id)
     logger.info("Cancelled durable run %s", run_id)
     return {"run_id": run_id, "status": "cancelled"}
+
+
+# DBOS statuses of a run that may still execute and write.
+_ACTIVE_STATES = {"PENDING", "ENQUEUED", "DELAYED"}
+
+
+@router.delete("/runs/{run_id}/data", status_code=204)
+async def delete_run_data(run_id: str):
+    """Purge everything this service stores for one run (plan 3.9): its DBOS
+    rows (the request it was started with, step outputs with the memoized LLM
+    responses and tool results, messages, child workflows), its LangGraph
+    checkpoints, its run_events rows and its tool-ledger rows. Idempotent: an
+    unknown or already purged run is 204 too.
+
+    A run that may still execute (PENDING/ENQUEUED) is refused with 409, since
+    it could write rows after the purge: cancel it (POST /runs/{id}/cancel),
+    wait until GET /runs/{id} reports a terminal status, then retry.
+
+    Authorization: like every retrieval-server route, this has no app-level
+    authentication; only the app's private Flycast address (no public IP)
+    keeps it off the internet. The proxy is the authorization point: it calls
+    this only from its customer-deletion purge job, with run ids read from its
+    own rows, never with an id a client sent."""
+    _require_ready()
+    st = await _status(run_id)
+    if st is not None and st.status in _ACTIVE_STATES:
+        raise HTTPException(status_code=409, detail="run is still active: cancel it, then retry")
+    try:
+        await runs_module.delete_run_data(run_id)
+    except Exception as e:
+        logger.exception("Failed to purge run %s", run_id)
+        raise HTTPException(status_code=500, detail=f"could not delete run data: {e}")
+    logger.info("Purged durable run %s", run_id)
+    return Response(status_code=204)
 
 
 @router.get("/runs")

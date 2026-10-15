@@ -420,6 +420,29 @@ never logged. Dead letters count `durable_run_dead_lettered_total{workflow}`.
   it reports a failed startup, not a later database outage. `/health` stays constant, so a database
   outage never turns into a restart loop.
 
+### Purging run data (customer deletion)
+
+Postgres holds user content for every durable run: the DBOS workflow input (the whole request),
+step outputs (memoized LLM responses and tool results), LangGraph checkpoints, `run_events` rows
+and `tool_call_attempts` rows.
+
+- **`DELETE /runs/{run_id}/data`** purges all of it for one run: `DBOS.delete_workflows_async([run_id],
+  delete_children=True)` (status, input, output, step outputs; messages and events cascade),
+  `checkpointer.adelete_thread(run_id)` (every namespace), `DELETE FROM run_events WHERE run_id`
+  and `tool_ledger.delete_workflow`. It is idempotent (204 again on a repeat, also for an unknown
+  run) and answers 409 while the run may still execute (PENDING/ENQUEUED): cancel it, wait until
+  `GET /runs/{id}` is terminal, retry. `tool_ledger.delete_customer(customer_id)` purges a
+  customer's ledger rows in one statement.
+- **Authorization.** Like every retrieval-server route, this one has no app-level authentication;
+  only the app's private Flycast address keeps it off the internet. **The proxy is the
+  authorization point**: it calls it only from the customer-deletion purge job, with run ids read
+  from its own rows, never with an id a client sent.
+- **Request agents** (`request_agent_run`: titles, personas, memory extraction) keep nothing:
+  `execute_agent_graph` runs the workflow under workflow id = run id (`ra-…`, also the checkpoint
+  thread) and deletes its DBOS rows and checkpoints in a `finally` once it has the result. Rows a
+  crash leaves behind (the run is dead-lettered on the next start) are deleted by the run sweep
+  once older than an hour (`DURABLE_REQUEST_RUN_RETENTION_SEC`).
+
 **Manual replay** of a dead-lettered `agent_run` (ops only): from a Python shell with the
 production `DATABASE_URL` and DBOS launched,
 `await DBOS.resume_workflow_async("<run id>", queue_name="agent_runs")`. It resets the attempt

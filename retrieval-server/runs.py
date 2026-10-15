@@ -343,7 +343,9 @@ async def _request_agent_run(run_id: str, run_input: dict) -> dict:
     result. Its LLM calls run as DBOS steps (credentials resolved from
     DynamoDB — never checkpointed). It is never re-executed: after a crash its
     HTTP caller is gone, so request_agent_run has max_recovery_attempts=0 and
-    the next start dead-letters it.
+    the next start dead-letters it. Its DBOS rows and checkpoints are deleted
+    by the caller once it has the result (routes.retrieve.execute_agent_graph),
+    or by the run sweep an hour later when the process died first.
     """
     checkpointer = durable_runtime.get_checkpointer()
     if checkpointer is None:
@@ -419,6 +421,36 @@ else:
 
     async def request_agent_run(run_id: str, run_input: dict) -> dict:  # type: ignore[misc]
         raise RuntimeError("durable runs not configured (DATABASE_URL unset)")
+
+
+async def delete_run_data(run_id: str) -> None:
+    """Purge everything this service stores for one durable run (plan 3.9):
+    its DBOS rows — input (the user's request), output, step outputs
+    (memoized LLM responses and tool results), messages and child workflows —
+    its LangGraph checkpoints (every namespace, subagents' included), its
+    run_events rows and its tool-ledger rows. Each delete is idempotent."""
+    import tool_ledger
+    from dbos import DBOS
+
+    await DBOS.delete_workflows_async([run_id], delete_children=True)
+    await durable_runtime.get_checkpointer().adelete_thread(run_id)
+    await run_events.delete_run(run_id)
+    await tool_ledger.delete_workflow(run_id)
+
+
+async def delete_request_run(workflow_id: str, thread_id: str | None = None) -> None:
+    """Delete a request agent's DBOS rows and checkpoints (plan 3.9): its input
+    holds conversation text and nothing reads them once its caller has the
+    result. `thread_id` defaults to the workflow id (they are the same since
+    execute_agent_graph runs the workflow under SetWorkflowID(run_id)).
+    Checkpoints go first, so a failure leaves the DBOS row the run sweep finds
+    them by."""
+    from dbos import DBOS
+
+    checkpointer = durable_runtime.get_checkpointer()
+    if checkpointer is not None:
+        await checkpointer.adelete_thread(thread_id or workflow_id)
+    await DBOS.delete_workflows_async([workflow_id], delete_children=True)
 
 
 async def register_run_queue() -> None:
