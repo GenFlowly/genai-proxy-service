@@ -137,6 +137,59 @@ describe('conversationService', () => {
         expect(result?.blocks[0].responseMessages).toHaveLength(0); // Should be empty
     });
 
+    test('getConversation keeps a failed turn and its error, with or without text', async () => {
+        const mockBackendResponse = {
+            promptAndResponseList: [
+                {
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Write the report' },
+                    responses: [
+                        // Failed before any text (e.g. the durable run was lost)
+                        { text: '', aiVendor: 'CLAUDE', conversationId: mockConversationId, messageId: 'msg-f1',
+                          error: 'The response was lost when the server restarted.' },
+                        // Failed after some text streamed
+                        { text: 'The first half', aiVendor: 'OPENAI', conversationId: mockConversationId, messageId: 'msg-f2',
+                          error: 'Provider quota exceeded' },
+                    ]
+                }
+            ]
+        };
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue(mockBackendResponse)
+        });
+
+        const result = await getConversation(mockToken, mockConversationId);
+
+        const [noText, partial] = result!.blocks[0].responseMessages;
+        expect(noText).toMatchObject({
+            messageId: 'msg-f1',
+            text: '',
+            isLoading: false,
+            error: 'The response was lost when the server restarted.',
+        });
+        expect(partial).toMatchObject({
+            messageId: 'msg-f2',
+            text: 'The first half',
+            error: 'Provider quota exceeded',
+        });
+        // A successful turn carries no error field at all
+        expect(result!.blocks[0].responseMessages).toHaveLength(2);
+    });
+
+    test('getConversation adds no error to successful turns', async () => {
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({
+                promptAndResponseList: [{
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Hi' },
+                    responses: [{ text: 'Hello', aiVendor: 'OPENAI', conversationId: mockConversationId, messageId: 'm1', error: null }]
+                }]
+            })
+        });
+        const result = await getConversation(mockToken, mockConversationId);
+        expect(result!.blocks[0].responseMessages[0]).not.toHaveProperty('error');
+    });
+
     test('getConversation throws error on non-ok response', async () => {
         // Arrange
         mockFetchWithRetry.mockResolvedValue({

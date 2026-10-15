@@ -22,7 +22,7 @@ describe('reattachRunService', () => {
 
         const onDelta = jest.fn();
         const onAwaitingInput = jest.fn();
-        await reattachRun('tok', 'r1', 'c1', { onDelta, onAwaitingInput }, 5);
+        await expect(reattachRun('tok', 'r1', 'c1', { onDelta, onAwaitingInput }, 5)).resolves.toBe('streamed');
 
         expect(mockFetch).toHaveBeenCalledWith(
             endpoints.reattachRun('r1', 'c1', 5),
@@ -33,11 +33,30 @@ describe('reattachRunService', () => {
         expect(reader.releaseLock).toHaveBeenCalled();
     });
 
-    test('treats 404 as a no-op (run already finished)', async () => {
+    test('reports a 404 as "gone" (run already finished), not as an error', async () => {
         mockFetch.mockResolvedValue({ ok: false, status: 404 });
         const onDelta = jest.fn();
-        await expect(reattachRun('t', 'r', 'c', { onDelta })).resolves.toBeUndefined();
+        await expect(reattachRun('t', 'r', 'c', { onDelta })).resolves.toBe('gone');
         expect(onDelta).not.toHaveBeenCalled();
+    });
+
+    test('a failed run\'s "err" frame rejects with a StreamGenerationError', async () => {
+        const enc = new TextEncoder();
+        const reader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: enc.encode('{"t":"c","v":"Half an ans"}\n') })
+                .mockResolvedValueOnce({ done: false, value: enc.encode('{"t":"err","v":"The response was lost when the server restarted."}\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn(),
+        };
+        mockFetch.mockResolvedValue({ ok: true, status: 200, headers: new Map(), body: { getReader: () => reader } });
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        const onDelta = jest.fn();
+        const failure = reattachRun('t', 'r', 'c', { onDelta });
+        await expect(failure).rejects.toThrow('The response was lost when the server restarted.');
+        await expect(failure).rejects.toMatchObject({ name: 'StreamGenerationError' });
+        expect(onDelta).toHaveBeenCalledWith('Half an ans');
     });
 
     test('throws on other non-ok responses', async () => {

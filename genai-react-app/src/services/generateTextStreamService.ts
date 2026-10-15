@@ -5,8 +5,21 @@ import { ThinkingStep, WebSource } from "../models/conversation.models";
 import { AttachmentRef } from "../models/attachment.models";
 import { fetchWithRetry } from "../utils/apiUtils";
 
-/** Vendor failure relayed mid-stream by the proxy ({"t":"err"} chunk). */
-export class StreamGenerationError extends Error {}
+/** Error.name of StreamGenerationError. */
+export const STREAM_GENERATION_ERROR = "StreamGenerationError";
+
+/**
+ * Failure the proxy reported for the turn ({"t":"err"} chunk): a vendor error
+ * mid-stream, or a durable run that failed or was lost. Final — the turn is
+ * stored with this error, so there is nothing to recover. Recognise it by
+ * name (STREAM_GENERATION_ERROR); instanceof breaks across module mocks.
+ */
+export class StreamGenerationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = STREAM_GENERATION_ERROR;
+    }
+}
 
 export interface StreamMetadata {
     conversationId: string | null;
@@ -23,6 +36,18 @@ export interface StreamMetadata {
     totalTokens: number | null;
     tokensReadFromCache: number | null;
     conversationTitle?: string | null;
+}
+
+/**
+ * Progress of a long tool argument being written ({"t":"pg"} frame, at most
+ * every 5 s while the model writes the arguments of generate_pdf, revise_pdf
+ * or fs_write). Same shape as the component library's ToolProgress.
+ */
+export interface StreamToolProgress {
+    /** Tool whose arguments are being written, e.g. "generate_pdf". */
+    tool: string;
+    /** Characters of arguments written so far. */
+    chars: number;
 }
 
 /** Human-in-the-loop request surfaced by a durable run ({"t":"ai"} frame). */
@@ -58,10 +83,17 @@ export interface StreamCallbacks {
     onGeneratedAttachments?: (attachments: AttachmentRef[]) => void;
     /** A durable run paused for human/client input — render a prompt + reply box. */
     onAwaitingInput?: (payload: AwaitingInput) => void;
+    /**
+     * Progress while the model writes a long tool argument (a PDF's text, a
+     * scratch file): the latest "pg" frame, then null once it is over — on
+     * the next content ("c"), generated-file ("ga") or error ("err") frame,
+     * or when the stream ends. Live only, never persisted.
+     */
+    onProgress?: (progress: StreamToolProgress | null) => void;
 }
 
 /**
- * Reads an NDJSON chat stream body ({"t":"c"|"k"|"ks"|"kd"|"ws"|"ga"|"ai"|"err"})
+ * Reads an NDJSON chat stream body ({"t":"c"|"k"|"ks"|"kd"|"ws"|"ga"|"pg"|"ai"|"err"})
  * and dispatches each frame to [cb]. Shared by the live generate-text-stream and
  * the durable-run reattach stream so the frame vocabulary lives in one place.
  */
@@ -74,12 +106,33 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
     const decoder = new TextDecoder("utf-8");
     let lineBuffer = "";
 
+    // A "pg" progress line stays up until content, a generated file or an
+    // error arrives, or the stream ends
+    let progressShown = false;
+    const clearProgress = () => {
+        if (!progressShown) return;
+        progressShown = false;
+        cb.onProgress?.(null);
+    };
+
     const processLine = (line: string) => {
         const trimmed = line.trim();
         if (!trimmed) return;
         try {
             const msg = JSON.parse(trimmed);
-            if (msg.t === "c") cb.onDelta(msg.v);
+            if (msg.t === "c") {
+                clearProgress();
+                cb.onDelta(msg.v);
+            }
+            else if (msg.t === "pg") {
+                // Writing a long tool argument (PDF text, a scratch file)
+                const v = msg.v;
+                const chars = Number(v?.chars);
+                if (v && typeof v === "object" && typeof v.tool === "string" && Number.isFinite(chars)) {
+                    progressShown = true;
+                    cb.onProgress?.({ tool: v.tool, chars });
+                }
+            }
             else if (msg.t === "cr") cb.onContentReset?.();
             else if (msg.t === "sr") {
                 if (typeof msg.v === "string" && msg.v) cb.onStopReason?.(msg.v);
@@ -100,6 +153,7 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
                 if (Array.isArray(msg.v) && msg.v.length > 0) cb.onWebSources?.(msg.v);
             }
             else if (msg.t === "ga") {
+                clearProgress();
                 // Files built-in tools produced (e.g. generated PDFs). The
                 // proxy relays the retrieval-server's snake_case artifact
                 // shape verbatim — normalize to the AttachmentRef the rest of
@@ -123,6 +177,7 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
                 if (msg.v && typeof msg.v === "object") cb.onAwaitingInput?.(msg.v as AwaitingInput);
             }
             else if (msg.t === "err") {
+                clearProgress();
                 // Vendor failure mid-stream (quota exceeded, key rejected, ...)
                 // — the proxy relays the concise reason; surface it so the
                 // response card shows what actually happened.
@@ -141,6 +196,7 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
                 throw new Error(errorMatch[1] || 'Stream failed');
             }
             // Other raw content (legacy format) still flows through as text
+            clearProgress();
             cb.onDelta(line);
         }
     };
@@ -161,6 +217,8 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
         console.error("Error reading stream", error);
         throw error;
     } finally {
+        // Stream over (or failed): no progress line outlives it
+        clearProgress();
         reader.releaseLock();
     }
 }
@@ -178,7 +236,8 @@ export async function generateTextStream(
     onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
     onAwaitingInput?: (payload: AwaitingInput) => void,
     onContentReset?: () => void,
-    onStopReason?: (reason: string) => void
+    onStopReason?: (reason: string) => void,
+    onProgress?: (progress: StreamToolProgress | null) => void
 ): Promise<void> {
     const response = await fetchWithRetry(endpoints.generateTextStream, {
         method: HttpMethod.POST,
@@ -249,5 +308,6 @@ export async function generateTextStream(
         onWebSources,
         onGeneratedAttachments,
         onAwaitingInput,
+        onProgress,
     });
 }

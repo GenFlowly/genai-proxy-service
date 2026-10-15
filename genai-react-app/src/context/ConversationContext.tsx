@@ -7,8 +7,8 @@ import { AIConfig, useAI } from './AIContext'
 import { useLayout } from './LayoutContext'
 import { useToast } from './ToastContext'
 import { generateText } from '../services/generateTextService'
-import { generateTextStream, StreamMetadata, AwaitingInput } from '../services/generateTextStreamService'
-import { reattachRun } from '../services/reattachRunService'
+import { generateTextStream, StreamMetadata, AwaitingInput, STREAM_GENERATION_ERROR } from '../services/generateTextStreamService'
+import { reattachRun, ReattachOutcome } from '../services/reattachRunService'
 import { resumeRun as resumeRunApi } from '../services/resumeRunService'
 import { getAIUsageActivity } from '../services/getAIUsageService'
 import { getConversation } from '../services/conversationService'
@@ -199,25 +199,29 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
      * Background-recovery for interrupted streams: mobile browsers kill the
      * network stream when the app/tab is backgrounded, but the server keeps
      * generating and persists the response under its deterministic message id.
-     * Poll the conversation until that message appears and return its text.
-     * Timers are throttled while the tab is hidden, so in practice this
-     * resumes polling the moment the user returns.
+     * Poll the conversation until that message appears and return it — with
+     * its text, or with the error of a turn that failed meanwhile. Timers are
+     * throttled while the tab is hidden, so in practice this resumes polling
+     * the moment the user returns. `firstDelayMs` 0 checks right away (the
+     * run is known to be finished).
      */
     const recoverPersistedResponse = async (
         token: string,
         conversationId: string,
-        responseMessageId: string
+        responseMessageId: string,
+        firstDelayMs?: number
     ): Promise<Message | null> => {
         const POLL_INTERVAL_MS = 5000
         const MAX_ATTEMPTS = 36
         for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+            const delay = attempt === 0 && firstDelayMs !== undefined ? firstDelayMs : POLL_INTERVAL_MS
+            await new Promise(resolve => setTimeout(resolve, delay))
             try {
                 const data = await getConversation(token, conversationId)
                 const found = data?.blocks
                     ?.flatMap(b => b.responseMessages)
                     .find(m => m.messageId === responseMessageId)
-                if (found?.text) return found
+                if (found?.text || found?.error) return found
             } catch (e) {
                 console.warn('Recovery poll failed, will retry', e)
             }
@@ -391,18 +395,28 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         patch(m => ({ ...m, isLoading: true, text: '' }))
                         let acc = ''
                         let gotContent = false
+                        // The run reported its failure on the stream ("err" frame)
+                        let failed = false
+                        let outcome: ReattachOutcome | undefined
                         const finish = async () => {
                             if (!synthetic) {
-                                // Run finished before we reconnected → poll for the
+                                // Run finished before we reconnected → read the
                                 // persisted message so we never leave an empty card.
-                                if (!gotContent) {
+                                // A run already gone (404) is checked right away; its
+                                // stored message may carry the error of a failed turn,
+                                // which the card must show rather than a blank answer.
+                                if (!gotContent && !failed) {
                                     try {
-                                        const recovered = await recoverPersistedResponse(token, data.conversationId, targetId)
+                                        const recovered = await recoverPersistedResponse(
+                                            token, data.conversationId, targetId,
+                                            outcome === 'gone' ? 0 : undefined
+                                        )
                                         if (recovered) patch(m => ({
                                             ...m,
                                             text: recovered.text,
                                             webSources: recovered.webSources ?? m.webSources,
                                             generatedAttachments: recovered.generatedAttachments ?? m.generatedAttachments,
+                                            ...(recovered.error ? { error: recovered.error } : {}),
                                         }))
                                     } catch (e) { console.warn('Recover after reattach failed', e) }
                                 }
@@ -432,7 +446,16 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             onWebSources: (ws) => patch(m => ({ ...m, webSources: ws })),
                             onGeneratedAttachments: (ga) => patch(m => ({ ...m, generatedAttachments: [...(m.generatedAttachments ?? []), ...ga] })),
                             onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: runId } })),
-                        }).catch(e => console.warn('Reattach to pending run failed', e))
+                        }).then(o => { outcome = o })
+                            .catch(e => {
+                                if (e?.name === STREAM_GENERATION_ERROR) {
+                                    // The run failed: show its error under whatever streamed
+                                    failed = true
+                                    patch(m => ({ ...m, error: e.message || i18n.t('errors.ai.generateTextStreamFailed') }))
+                                } else {
+                                    console.warn('Reattach to pending run failed', e)
+                                }
+                            })
                             .finally(finish)
                     }
 
@@ -980,6 +1003,13 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         return
                     }
                     console.error(`Stream failed for vendor ${conf.aiVendor}`, err)
+                    // The proxy reported the turn as failed ("err" frame): that
+                    // is final and stored with the message — show it now, under
+                    // whatever streamed, instead of polling for a recovery.
+                    if (err?.name === STREAM_GENERATION_ERROR) {
+                        finishVendorMessage(err.message || i18n.t('errors.ai.generateTextStreamFailed'))
+                        return
+                    }
                     // The server keeps generating after a dropped connection
                     // (backgrounded mobile app). When the server-side response
                     // id is already known (metadata arrived before the drop),
@@ -1008,7 +1038,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                                 })
                                 return { ...block, responseMessages: msgs }
                             }))
-                            finishVendorMessage(null)
+                            // The turn may have failed after the connection dropped
+                            finishVendorMessage(recovered.error ?? null)
                             return
                         }
                     }

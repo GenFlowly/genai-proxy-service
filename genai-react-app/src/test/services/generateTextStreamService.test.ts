@@ -436,6 +436,104 @@ describe('generateTextStreamService', () => {
         expect(seen).toEqual(['delta:Let me search.', 'reset', 'delta:The answer is 9.']);
         expect(text).toBe('The answer is 9.');
     });
+
+    describe('"pg" progress frames', () => {
+        const streamOf = (...lines: string[]) => {
+            const encoder = new TextEncoder();
+            const read = jest.fn();
+            lines.forEach(line => read.mockResolvedValueOnce({ done: false, value: encoder.encode(`${line}\n`) }));
+            read.mockResolvedValueOnce({ done: true });
+            mockFetchWithRetry.mockResolvedValue({
+                ok: true,
+                headers: new Map(),
+                body: { getReader: () => ({ read, releaseLock: jest.fn() }) },
+            });
+        };
+        const run = (onDelta: jest.Mock, onProgress: jest.Mock, onGeneratedAttachments?: jest.Mock) =>
+            generateTextStream(
+                mockToken,
+                mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+                onDelta,
+                undefined, undefined, undefined, undefined, undefined, undefined,
+                onGeneratedAttachments,
+                undefined, undefined, undefined,
+                onProgress
+            );
+
+        test('relays growing progress and clears it on the next content frame', async () => {
+            streamOf(
+                '{"t":"c","v":"I\'ll write the report."}',
+                '{"t":"pg","v":{"tool":"generate_pdf","chars":1200}}',
+                '{"t":"pg","v":{"tool":"generate_pdf","chars":5400}}',
+                '{"t":"c","v":" Done."}',
+            );
+            const events: unknown[] = [];
+            const onDelta = jest.fn((c: string) => events.push(`delta:${c}`));
+            const onProgress = jest.fn(p => events.push(p));
+
+            await run(onDelta, onProgress);
+
+            expect(events).toEqual([
+                "delta:I'll write the report.",
+                { tool: 'generate_pdf', chars: 1200 },
+                { tool: 'generate_pdf', chars: 5400 },
+                null,
+                'delta: Done.',
+            ]);
+        });
+
+        test('a generated file clears the progress line', async () => {
+            streamOf(
+                '{"t":"pg","v":{"tool":"revise_pdf","chars":900}}',
+                '{"t":"ga","v":[{"artifact_id":"a1","media_type":"application/pdf","filename":"r.pdf","size_bytes":10}]}',
+            );
+            const events: unknown[] = [];
+            const onProgress = jest.fn(p => events.push(p));
+            const onGeneratedAttachments = jest.fn(() => events.push('ga'));
+
+            await run(jest.fn(), onProgress, onGeneratedAttachments);
+
+            expect(events).toEqual([{ tool: 'revise_pdf', chars: 900 }, null, 'ga']);
+        });
+
+        test('an "err" frame clears the progress line before the failure surfaces', async () => {
+            streamOf(
+                '{"t":"pg","v":{"tool":"fs_write","chars":300}}',
+                '{"t":"err","v":"The response was lost"}',
+            );
+            jest.spyOn(console, 'error').mockImplementation(() => {});
+            const onProgress = jest.fn();
+
+            await expect(run(jest.fn(), onProgress)).rejects.toThrow('The response was lost');
+            expect(onProgress.mock.calls).toEqual([[{ tool: 'fs_write', chars: 300 }], [null]]);
+        });
+
+        test('the end of the stream clears it; no clear is sent when nothing was shown', async () => {
+            streamOf('{"t":"pg","v":{"tool":"generate_pdf","chars":77}}');
+            const onProgress = jest.fn();
+            await run(jest.fn(), onProgress);
+            expect(onProgress.mock.calls).toEqual([[{ tool: 'generate_pdf', chars: 77 }], [null]]);
+
+            streamOf('{"t":"c","v":"Plain answer"}');
+            const quiet = jest.fn();
+            await run(jest.fn(), quiet);
+            expect(quiet).not.toHaveBeenCalled();
+        });
+
+        test('malformed progress frames are ignored', async () => {
+            streamOf(
+                '{"t":"pg","v":{"chars":10}}',
+                '{"t":"pg","v":{"tool":"generate_pdf","chars":"lots"}}',
+                '{"t":"pg","v":null}',
+                '{"t":"c","v":"ok"}',
+            );
+            const onDelta = jest.fn();
+            const onProgress = jest.fn();
+            await run(onDelta, onProgress);
+            expect(onProgress).not.toHaveBeenCalled();
+            expect(onDelta).toHaveBeenCalledWith('ok');
+        });
+    });
 });
 // Trigger coverage run
 // Trigger coverage run

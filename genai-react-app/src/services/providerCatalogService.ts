@@ -8,6 +8,12 @@ export interface ProviderModelInfo {
     name: string
     /** False = agentic features (tools) may degrade on this model */
     supportsTools: boolean
+    /**
+     * Whether the model reads PDF attachments natively. False = it gets the
+     * PDF's extracted text only (the composer says so). Absent from catalogs
+     * older than the field: unknown.
+     */
+    supportsPdfInput?: boolean
 }
 
 export interface ProviderInfo {
