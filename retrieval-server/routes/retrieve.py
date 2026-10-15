@@ -73,6 +73,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         generated_artifacts=[],
         response_schema=req.response_schema,
         tool_calls=None,
+        stop_reason=None,
         rewritten_query=None,
         needs_rewrite=False,
         query_intent=None,
@@ -290,7 +291,11 @@ async def retrieve(req: RetrieveRequest):
         return JSONResponse({
             "customer_id": result["customer_id"],
             "generated_response": result.get("generated_response"),
-            "tool_calls": result.get("tool_calls"),
+            # Caller tool calls only: a response cut off at the output limit
+            # (or carrying malformed calls) forwards none, and stop_reason says
+            # why (plan 1.8).
+            "tool_calls": [c for c in (result.get("tool_calls") or []) if not c.get("truncated")] or None,
+            "stop_reason": result.get("stop_reason"),
             "generated_artifacts": result.get("generated_artifacts", []),
             "retrieval_results": result.get("ranked_results") or result.get("retrieval_results", []),
             # Numbered to match the [n] citation markers the response generator
@@ -397,6 +402,7 @@ def _build_agent_graph_state(
         generated_artifacts=[],
         response_schema=req.response_schema,
         tool_calls=None,
+        stop_reason=None,
         rewritten_query=None,
         needs_rewrite=False,
         query_intent=None,

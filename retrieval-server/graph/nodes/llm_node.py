@@ -17,8 +17,11 @@ from graph.image_normalize import ImageLimits, ImageNormalizationError, limits_f
 from graph.s3_images import image_for_llm
 from graph.state import RetrievalState
 from graph.tools_runtime import specs_for
+from graph.pdf_metrics import record_truncated
+from graph.truncation import cut_off_reason
 
 import durable_runtime
+
 
 logger = logging.getLogger(__name__)
 
@@ -1196,8 +1199,51 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             # reuse it instead of re-summarizing every round.
             result["scratch"] = {**result.get("scratch", {}), **compaction_scratch}
         if tools_bound:
+            # Reset every round: a stop reason describes only the latest one.
+            result["stop_reason"] = None
             raw_tool_calls = getattr(response, "tool_calls", None) or []
-            if raw_tool_calls:
+            invalid_tool_calls = getattr(response, "invalid_tool_calls", None) or []
+            cut_off = cut_off_reason(response)
+            if cut_off or invalid_tool_calls:
+                # Plan 1.8: a call cut off at the output limit parses as VALID
+                # (parse_partial_json), so never trust it. Built-in calls stay,
+                # marked truncated, so the executor answers each with a
+                # NOT-executed result (keeping call/result pairing valid for
+                # every vendor); caller-defined calls are dropped so a
+                # truncated or malformed call never reaches the API caller.
+                builtin_names = set(state.get("builtin_tools") or [])
+                kept: list[dict] = []
+                for c in raw_tool_calls:
+                    name = c.get("name", "")
+                    if cut_off:
+                        if name in builtin_names:
+                            kept.append({"id": c.get("id", ""), "name": name, "args": {},
+                                         "truncated": True, "truncation_reason": cut_off})
+                        else:
+                            record_truncated(name, cut_off)
+                    elif name in builtin_names:
+                        kept.append({"id": c.get("id", ""), "name": name, "args": c.get("args") or {}})
+                    else:
+                        record_truncated(name, "invalid_tool_call")
+                for c in invalid_tool_calls:
+                    name = c.get("name") or ""
+                    reason = cut_off or "invalid_tool_call"
+                    if name in builtin_names:
+                        kept.append({"id": c.get("id") or f"invalid_{len(kept)}", "name": name,
+                                     "args": {}, "truncated": True, "truncation_reason": reason})
+                    else:
+                        record_truncated(name or "unknown", reason)
+                for c in kept:
+                    if c.get("truncated"):
+                        record_truncated(c["name"], c["truncation_reason"])
+                result["stop_reason"] = cut_off or "invalid_tool_call"
+                if kept:
+                    result["tool_calls"] = kept
+                logger.warning(
+                    "Node %s: response %s — %d call(s) kept for refusal, caller calls dropped",
+                    agent_type, result["stop_reason"], sum(1 for c in kept if c.get("truncated")),
+                )
+            elif raw_tool_calls:
                 result["tool_calls"] = [
                     {"id": c.get("id", ""), "name": c.get("name", ""), "args": c.get("args") or {}}
                     for c in raw_tool_calls

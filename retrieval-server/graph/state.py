@@ -156,6 +156,10 @@ class RetrievalState(TypedDict):
     # Tool calls the response generator's model made: [{id, name, args}, ...].
     # Returned to the caller, who executes them and continues via tool_results.
     tool_calls: Optional[list]
+    # Why the last generation ended early, when it did: a cut-off reason
+    # (max_tokens / length / max_output_tokens) or "invalid_tool_call" (plan
+    # 1.8). Its tool calls were not executed or forwarded. None normally.
+    stop_reason: Optional[str]
     error: Optional[str]
 
     # Cycle termination signal — written by RESPONSE_GENERATOR_WITH_REFLECTION.

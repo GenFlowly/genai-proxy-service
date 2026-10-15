@@ -90,6 +90,28 @@ class SpawnAgentToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("subagent failed", out.content)
         self.assertIn("do the work yourself", out.content.lower())
 
+    async def test_files_the_child_made_survive_its_failure(self):
+        # Plan 1.10: a child that rendered a PDF and then failed (or reported
+        # nothing) still made the file; dropping it lost the user's PDF.
+        made = {"artifact_id": "a1", "key": "customers/c/attachments/a1",
+                "media_type": "application/pdf", "filename": "r.pdf", "size_bytes": 10}
+        for content, error in (("", "GraphRecursionError: limit"), ("", None)):
+            spawn = AsyncMock(return_value={"content": content, "usage": None, "trace": [],
+                                            "artifacts": [made], "error": error})
+            with self.subTest(error=error):
+                out = await SpawnAgentTool().run({"prompt": "x"}, _context(spawn=spawn))
+                self.assertEqual([a.artifact_id for a in out.artifacts], ["a1"])
+
+    async def test_long_arguments_in_the_child_trace_are_shortened(self):
+        # Plan 1.9: the trace is persisted with the thinking steps.
+        document = "word " * 5000
+        trace = [{"node": "TOOL_EXECUTOR", "calls": [{"name": "generate_pdf",
+                                                      "args": {"content_markdown": document}}]}]
+        out = await SpawnAgentTool().run({"prompt": "x"}, _context(spawn=_child(trace=trace)))
+        shown = out.details["subagent_trace"][0]["calls"][0]["args"]["content_markdown"]
+        self.assertLess(len(shown), 200)
+        self.assertIn("(25,000 chars)", shown)
+
     async def test_empty_prompt_and_missing_runtime_are_errors(self):
         out = await SpawnAgentTool().run({"prompt": "  "}, _context(spawn=_child()))
         self.assertIn("prompt is empty", out.content)

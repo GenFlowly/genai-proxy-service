@@ -17,6 +17,7 @@ testable and the depth/budget policy stays in one place.
 import logging
 
 from graph_tools.base import Artifact, GraphTool, ToolContext, ToolResult
+from graph.display_args import display_value
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +100,14 @@ class SpawnAgentTool(GraphTool):
         name = profile.get("name", "general")
         details = {
             "subagent": name,
-            "subagent_trace": (out.get("trace") or [])[:_MAX_CHILD_TRACE_ENTRIES],
+            # Long arguments (a whole document) shortened: the trace is
+            # persisted with the message's thinking steps (plan 1.9).
+            "subagent_trace": display_value(
+                (out.get("trace") or [])[:_MAX_CHILD_TRACE_ENTRIES]
+            ),
         }
+        # Files the child made exist in storage whatever happened afterwards:
+        # pass them on in every branch, or the user loses them (plan 1.10).
         artifacts = [Artifact(**a) for a in out.get("artifacts") or []]
 
         if out.get("error") and not out.get("content"):
@@ -111,6 +118,7 @@ class SpawnAgentTool(GraphTool):
                     "work yourself with your own tools."
                 ),
                 usage=out.get("usage"),
+                artifacts=artifacts,
                 details=details,
             )
         if not out.get("content"):
@@ -120,6 +128,7 @@ class SpawnAgentTool(GraphTool):
                     "with a more specific prompt, or do the work yourself."
                 ),
                 usage=out.get("usage"),
+                artifacts=artifacts,
                 details=details,
             )
         return ToolResult(

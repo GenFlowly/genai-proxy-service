@@ -210,6 +210,7 @@ async def run_subagent(
         ),
         "generated_response": None,
         "tool_calls": None,
+        "stop_reason": None,
         "error": None,
         "agent_depth": depth,
     }

@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -7,7 +9,14 @@ from encoding_library.observability import count
 from graph.image_normalize import ImageNormalizationError
 from graph.state import RetrievalState
 
+from graph.display_args import display_args
+from graph.truncation import stop_reason_of, truncation_reason
+
 logger = logging.getLogger(__name__)
+
+# /retrieve keepalive (plan 1.7): well under the proxy's 300 s socket timeout.
+KEEPALIVE_SECONDS = 15
+KEEPALIVE_FRAME = 'data: {"keepalive": true}\n\n'
 
 # Runtime primitive of a node type — drives the thinking panel's icon/verbs.
 # (substring set, error_type, user-facing label) — checked in order, first
@@ -92,14 +101,14 @@ def _stop_reason_of(output) -> str:
     """The vendor's raw finish reason for one LLM call, lowercased, or "".
 
     stop_reason on Anthropic, finish_reason on OpenAI/Gemini — read both so this
-    is vendor-agnostic. Surfaced verbatim to the caller (a refusal, a length cap,
-    a normal end) rather than translated here: the client owns how each reason is
-    worded and how prominently it's shown. A refusal returns empty content and no
+    is vendor-agnostic — and, for the OpenAI Responses API (gpt-5), which sets
+    neither, the reason of an 'incomplete' status (graph/truncation.py).
+    Surfaced verbatim to the caller (a refusal, a length cap, a normal end)
+    rather than translated here: the client owns how each reason is worded and
+    how prominently it's shown. A refusal returns empty content and no
     exception, so without streaming this back the turn would look like a silent
     blank failure."""
-    meta = getattr(output, "response_metadata", None) or {}
-    reason = meta.get("stop_reason") or meta.get("finish_reason") or ""
-    return reason.lower() if isinstance(reason, str) else ""
+    return stop_reason_of(output)
 
 
 def _doc_title(result: dict) -> str:
@@ -107,14 +116,53 @@ def _doc_title(result: dict) -> str:
     return (entity.get("title") or entity.get("subject") or entity.get("note_value") or "")[:120]
 
 
+# 3.7: tools whose arguments carry a whole document while the model writes it.
+PROGRESS_TOOLS = frozenset({"generate_pdf", "revise_pdf", "fs_write"})
+PROGRESS_INTERVAL_SECONDS = 5.0
+
+
+class _ToolArgProgress:
+    """Counts streamed tool-call argument characters per call index and says
+    when a progress event is due ({"tool", "chars"}), at most every
+    PROGRESS_INTERVAL_SECONDS, only for PROGRESS_TOOLS."""
+
+    def __init__(self, clock=time.monotonic):
+        self._clock = clock
+        self._names: dict = {}
+        self._chars: dict = {}
+        self._last = 0.0
+
+    def update(self, chunk) -> dict | None:
+        chunks = getattr(chunk, "tool_call_chunks", None) or []
+        if not chunks:
+            return None
+        for c in chunks:
+            index = c.get("index") if isinstance(c, dict) else getattr(c, "index", None)
+            name = c.get("name") if isinstance(c, dict) else getattr(c, "name", None)
+            args = c.get("args") if isinstance(c, dict) else getattr(c, "args", None)
+            key = index if index is not None else 0
+            if name:
+                self._names[key] = name
+            if args:
+                self._chars[key] = self._chars.get(key, 0) + len(args)
+        due = [k for k, n in self._names.items() if n in PROGRESS_TOOLS and self._chars.get(k)]
+        now = self._clock()
+        if not due or now - self._last < PROGRESS_INTERVAL_SECONDS:
+            return None
+        self._last = now
+        key = due[-1]
+        return {"tool": self._names[key], "chars": self._chars[key]}
+
+
 def _fmt_tool_call(call: dict) -> str:
     """Human-readable call signature for the thinking panel, e.g.
     web_search(query="...", topic="news") — generic over any tool's args, not
     just web_search's, so a customer's own declarative tools render the same
-    way. Args are shown in full, untruncated — the query text is often the
-    one thing worth reading a tool call for."""
+    way. Short args are shown in full — the query text is often the one thing
+    worth reading a tool call for — while long ones (a whole document passed
+    to generate_pdf) are shortened by display_args."""
     name = call.get("name", "")
-    args = call.get("args") or {}
+    args = display_args(call.get("args"))
     if not args:
         return name
     parts = []
@@ -222,7 +270,7 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
             # Structured form of the same calls, for clients that want to render
             # name/args separately rather than parsing the label string.
             payload["tool_calls"] = [
-                {"name": c.get("name", ""), "args": c.get("args") or {}} for c in calls
+                {"name": c.get("name", ""), "args": display_args(c.get("args"))} for c in calls
             ]
         elif output.get("generated_response"):
             payload["detail"] = "Response generated"
@@ -317,6 +365,7 @@ async def stream_events_dicts(
     else:
         logger.info("Stream: resuming astream_events (Command) streaming_nodes=%s", streaming_nodes)
     token_count = 0
+    _progress = _ToolArgProgress()
     event_count = 0
     usage = {
         "input_tokens": 0,
@@ -436,6 +485,16 @@ async def stream_events_dicts(
                 # forced tool — never surface it.
                 if node in streaming_nodes and not structured_output:
                     raw_tool_calls = getattr(output, "tool_calls", None) or []
+                    truncated = truncation_reason(output)
+                    if truncated:
+                        # Plan 1.8: a call cut off at the output limit (or
+                        # malformed) is never forwarded to the caller; built-in
+                        # ones are refused in-graph by the executor. Say why.
+                        raw_tool_calls = [
+                            c for c in raw_tool_calls if c.get("name", "") in builtin_tool_names
+                        ]
+                        logger.warning("Stream: node=%s response %s — caller tool calls withheld", node, truncated)
+                        yield {"stop_reason": truncated}
                     # Built-in tool calls are executed in-graph by the
                     # TOOL_EXECUTOR node — never surfaced to the caller. On a
                     # mixed turn the executor drops the caller-defined calls
@@ -478,6 +537,12 @@ async def stream_events_dicts(
 
             if event_type == "on_chat_model_stream" and node in streaming_nodes and not structured_output:
                 chunk = event["data"].get("chunk")
+                # 3.7: tool-call argument deltas send nothing to the client, so
+                # writing a long document looked like a silent wait. Report the
+                # argument size of document-writing tools every few seconds.
+                progress = _progress.update(chunk)
+                if progress is not None:
+                    yield {"progress": progress}
                 # With tools bound, providers stream tool-call argument deltas as
                 # block lists — extract only the text so raw blocks never leak
                 # into the content stream.
@@ -534,9 +599,22 @@ async def stream_response(
 ) -> AsyncIterator[str]:
     """SSE wrapper over stream_events_dicts for the stateless /retrieve path:
     each event dict becomes a `data: {json}\\n\\n` frame, followed by the
-    terminating `data: [DONE]\\n\\n`."""
-    try:
-        async for payload in stream_events_dicts(
+    terminating `data: [DONE]\\n\\n`.
+
+    Keepalive (plan 1.7): the proxy cuts a stream that is silent for 300 s,
+    and nothing is emitted while the model writes a long tool argument, while
+    a render waits for the heavy-job slot or while a tool runs. So after
+    KEEPALIVE_SECONDS without a frame this emits {"keepalive": true}, which
+    the proxy parses to nothing (unknown key) yet which resets its socket
+    timer. The timer lives here, NOT in stream_events_dicts: the durable
+    runs path consumes that generator too and would publish every keepalive
+    as a run_events row (/runs has its own keepalive in its tail). The inner
+    generator is pumped through a queue from its own task: wrapping its
+    __anext__ in wait_for would cancel the generator on the first timeout."""
+    queue: asyncio.Queue = asyncio.Queue(maxsize=256)
+
+    async def produce() -> None:
+        events = stream_events_dicts(
             state,
             graph=graph,
             node_type_map=node_type_map,
@@ -547,7 +625,35 @@ async def stream_response(
             structured_output=structured_output,
             builtin_tool_names=builtin_tool_names,
             thread_id=thread_id,
-        ):
-            yield f"data: {json.dumps(payload)}\n\n"
+        )
+        try:
+            # aclosing: a cancelled stream closes the graph run now, not
+            # whenever the generator happens to be garbage-collected.
+            async with contextlib.aclosing(events):
+                async for payload in events:
+                    await queue.put(("item", payload))
+            await queue.put(("end", None))
+        except asyncio.CancelledError:
+            raise
+        except BaseException as e:  # re-raised by the consumer below
+            await queue.put(("error", e))
+
+    producer = asyncio.create_task(produce())
+    try:
+        while True:
+            try:
+                kind, value = await asyncio.wait_for(queue.get(), KEEPALIVE_SECONDS)
+            except asyncio.TimeoutError:
+                yield KEEPALIVE_FRAME
+                continue
+            if kind == "item":
+                yield f"data: {json.dumps(value)}\n\n"
+            elif kind == "end":
+                break
+            else:
+                raise value
     finally:
+        if not producer.done():
+            producer.cancel()
+        await asyncio.gather(producer, return_exceptions=True)
         yield "data: [DONE]\n\n"
