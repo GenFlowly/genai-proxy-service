@@ -1,0 +1,7 @@
+# Test-only dependencies (never installed in the image). CI installs this after
+# requirements.txt, with the same constraints file:
+#   pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
+-c constraints.txt
+# PDF text/structure checks in tests/test_generate_pdf.py and the Typst tests.
+pypdf==6.20.1
+pypdfium2==5.14.0
