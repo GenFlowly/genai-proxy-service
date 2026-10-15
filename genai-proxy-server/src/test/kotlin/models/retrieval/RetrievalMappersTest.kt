@@ -165,6 +165,48 @@ class RetrievalMappersTest {
         assertEquals(FileOrigin.UPLOADED, files.single().origin)
     }
 
+    // ── Locale from Accept-Language (6.1, contract C11) ─────────────────────
+
+    @Test
+    fun `the first language tag of Accept-Language is the locale`() {
+        assertEquals("en-US", localeFromAcceptLanguage("en-US,en;q=0.9,de;q=0.8"))
+        assertEquals("de", localeFromAcceptLanguage("de"))
+        assertEquals("zh-Hant-TW", localeFromAcceptLanguage(" zh-Hant-TW ; q=1 , en"))
+        assertEquals("es-419", localeFromAcceptLanguage("es-419;q=0.7"))
+    }
+
+    @Test
+    fun `q-values do not reorder the tags`() {
+        // Browsers list tags by preference; the first listed wins.
+        assertEquals("fr-CA", localeFromAcceptLanguage("fr-CA;q=0.5,en;q=0.9"))
+    }
+
+    @Test
+    fun `the wildcard and implausible tags are skipped`() {
+        assertEquals("fr-CA", localeFromAcceptLanguage("*, fr-CA;q=0.8"))
+        assertEquals("de", localeFromAcceptLanguage("en_US, <script>, de"))
+        assertEquals("pt-BR", localeFromAcceptLanguage("en-${"x".repeat(40)}, pt-BR"))
+    }
+
+    @Test
+    fun `no usable tag gives no locale`() {
+        assertEquals(null, localeFromAcceptLanguage(null))
+        assertEquals(null, localeFromAcceptLanguage(""))
+        assertEquals(null, localeFromAcceptLanguage("   "))
+        assertEquals(null, localeFromAcceptLanguage("*"))
+        assertEquals(null, localeFromAcceptLanguage("x, 12-34, en-"))
+    }
+
+    @Test
+    fun `a 35-character tag is the longest accepted`() {
+        val longest = "abcdefgh-abcdefgh-abcdefgh-abcdefgh"
+        val tooLong = "abcdefg-abcdefgh-abcdefgh-abcdefgh-a" // well-formed, one char over
+        assertEquals(35, longest.length)
+        assertEquals(36, tooLong.length)
+        assertEquals(longest, localeFromAcceptLanguage(longest))
+        assertEquals(null, localeFromAcceptLanguage(tooLong))
+    }
+
     @Test
     fun `malformed input gives an empty list`() {
         listOf(

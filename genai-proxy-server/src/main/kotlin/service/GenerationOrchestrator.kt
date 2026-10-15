@@ -155,8 +155,9 @@ class GenerationOrchestrator(
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         useLearnedPreferences: Boolean = true,
         agentId: String? = null,
-        projectId: String? = null
-
+        projectId: String? = null,
+        /** First language tag of the browser's Accept-Language (e.g. "en-US"), or null. */
+        locale: String? = null
     ): List<Message> {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -226,7 +227,8 @@ class GenerationOrchestrator(
                         toolResults = toolResults,
                         responseSchema = responseSchema,
                         memoryEnabled = memoryEnabled,
-                        agentId = agentId
+                        agentId = agentId,
+                        locale = locale
                     )
                 }
             }.awaitAll()
@@ -249,7 +251,8 @@ class GenerationOrchestrator(
         toolResults: List<ToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         memoryEnabled: Boolean = false,
-        agentId: String? = null
+        agentId: String? = null,
+        locale: String? = null
     ): Message {
         val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, message.customerId)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
@@ -286,7 +289,8 @@ class GenerationOrchestrator(
             memoryEnabled = memoryEnabled,
             graphId = agentId,
             thinkingLevel = thinkingLevel,
-            queryFiles = message.attachments.toFileRefs(FileOrigin.UPLOADED)
+            queryFiles = message.attachments.toFileRefs(FileOrigin.UPLOADED),
+            locale = locale
         )
 
         val responseMessage = Message(
@@ -360,7 +364,9 @@ class GenerationOrchestrator(
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         useLearnedPreferences: Boolean = true,
         agentId: String? = null,
-        projectId: String? = null
+        projectId: String? = null,
+        /** First language tag of the browser's Accept-Language (e.g. "en-US"), or null. */
+        locale: String? = null
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -542,7 +548,8 @@ class GenerationOrchestrator(
                     memoryEnabled = memoryEnabled,
                     graphId = agentId,
                     thinkingLevel = config.thinkingLevel,
-                    queryFiles = queryFiles
+                    queryFiles = queryFiles,
+                    locale = locale
                 )
                 // Durable /runs path (flagged): start a durable background run and
                 // reattach to its event stream. Credentials are NOT sent — the
@@ -570,7 +577,8 @@ class GenerationOrchestrator(
                             memoryEnabled = memoryEnabled,
                             graphId = agentId,
                             thinkingLevel = config.thinkingLevel,
-                            queryFiles = queryFiles
+                            queryFiles = queryFiles,
+                            locale = locale
                         )
                         if (startedRunId != null) {
                             // Add this run to the conversation's pending set (one entry

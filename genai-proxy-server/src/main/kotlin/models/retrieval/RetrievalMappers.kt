@@ -53,6 +53,22 @@ fun List<AttachmentRef>.toFileRefs(origin: FileOrigin): List<FileRef> =
             )
         }
 
+/** A plausible BCP-47 tag: a primary subtag of 2-8 letters, then subtags of 1-8 letters or digits. */
+private val LANGUAGE_TAG = Regex("^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$")
+private const val MAX_LOCALE_LENGTH = 35
+
+/**
+ * The browser's locale for RawData.locale (contract C11): the first language
+ * tag of an Accept-Language header, e.g. "en-US" from "en-US,en;q=0.9,de;q=0.8".
+ * q-values are ignored (browsers already list tags by preference), and so are
+ * "*" and any entry that is not a plausible BCP-47 tag of at most 35
+ * characters. Null when the header is absent or names no usable tag.
+ */
+fun localeFromAcceptLanguage(header: String?): String? =
+    header?.splitToSequence(',')
+        ?.map { it.substringBefore(';').trim() }
+        ?.firstOrNull { it.length <= MAX_LOCALE_LENGTH && LANGUAGE_TAG.matches(it) }
+
 /**
  * Parse the retrieval-server's generated_artifacts JSON —
  * [{"artifact_id","key","media_type","filename","size_bytes","source_key",

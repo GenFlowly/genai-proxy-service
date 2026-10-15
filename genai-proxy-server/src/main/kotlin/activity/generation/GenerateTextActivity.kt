@@ -4,7 +4,9 @@ import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.utils.bearerToken
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import com.genflowly.models.retrieval.localeFromAcceptLanguage
 import io.github.smiley4.ktoropenapi.post
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
@@ -103,6 +105,8 @@ fun Route.registerGenerateTextRoutes(
                     logger.info("GenerateText request payload: {}", request)
                 }
 
+                // The browser's preferred locale (e.g. "en-US"), for locale-aware tools.
+                val locale = localeFromAcceptLanguage(call.request.headers[HttpHeaders.AcceptLanguage])
 
                 val responseMessageList = generationOrchestrator
                     .processTextGenerateRequest(
@@ -122,7 +126,8 @@ fun Route.registerGenerateTextRoutes(
                         request.responseSchema,
                         request.useLearnedPreferences,
                         request.agentId,
-                        request.projectId
+                        request.projectId,
+                        locale = locale
                     )
 
                 val generateTextResponseList =

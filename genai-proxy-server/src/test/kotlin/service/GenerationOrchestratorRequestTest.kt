@@ -104,6 +104,74 @@ class GenerationOrchestratorRequestTest {
         }
     }
 
+    // ── Locale (6.1) ────────────────────────────────────────────────────────
+
+    @Test
+    fun `the locale reaches the stateless stream request`() = runTest {
+        orchestrator.processTextGenerateStreamRequest(
+            aiConfig, "", "", "hi", null, null, "REACT_APP", cust, locale = "en-US"
+        ).flow.toList()
+
+        verify {
+            retrievalService.retrieveAndGenerateStream(
+                customerId = any(), client = any(), query = any(), llmCredentials = any(),
+                llmProvider = any(), llmModel = any(), llmMaxTokens = any(),
+                conversationHistory = any(), systemPrompt = any(), agentic = any(),
+                queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                thinkingLevel = any(), queryFiles = any(), locale = "en-US", fsNamespace = any()
+            )
+        }
+    }
+
+    @Test
+    fun `the locale reaches the non-streamed request`() = runTest {
+        orchestrator.processTextGenerateRequest(
+            aiConfig, "", "", "hi", null, null, "REACT_APP", cust, locale = "de-DE"
+        )
+
+        coVerify {
+            retrievalService.retrieveAndGenerate(
+                customerId = any(), client = any(), query = any(), llmCredentials = any(),
+                llmProvider = any(), llmModel = any(), llmMaxTokens = any(),
+                conversationHistory = any(), systemPrompt = any(), agentic = any(),
+                queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                thinkingLevel = any(), queryFiles = any(), locale = "de-DE", fsNamespace = any()
+            )
+        }
+    }
+
+    @Test
+    fun `the locale and files reach the durable run start`() = runTest {
+        every { appConfig.durableRunsEnabled } returns true
+        coEvery {
+            runsClient.startRun(
+                customerId = any(), client = any(), query = any(), llmProvider = any(), llmModel = any(),
+                llmMaxTokens = any(), conversationHistory = any(), systemPrompt = any(), agentic = any(),
+                queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                thinkingLevel = any(), queryFiles = any(), locale = any(), fsNamespace = any()
+            )
+        } returns "run_1"
+        every { runsClient.streamRun("run_1", any()) } returns flowOf(StreamChunk.Content("ok"))
+
+        orchestrator.processTextGenerateStreamRequest(
+            aiConfig, "", "", "summarise these", null, null, "REACT_APP", cust,
+            attachments = listOf(photo, brief), locale = "fr-CA"
+        ).flow.toList()
+
+        coVerify {
+            runsClient.startRun(
+                customerId = cust, client = any(), query = any(), llmProvider = any(), llmModel = any(),
+                llmMaxTokens = any(), conversationHistory = any(), systemPrompt = any(), agentic = any(),
+                queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                thinkingLevel = any(), queryFiles = uploadedBrief, locale = "fr-CA", fsNamespace = any()
+            )
+        }
+    }
+
     @Test
     fun `a non-streamed turn sends its documents as uploaded files`() = runTest {
         orchestrator.processTextGenerateRequest(

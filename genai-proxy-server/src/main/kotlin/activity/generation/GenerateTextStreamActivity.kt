@@ -16,6 +16,7 @@ import io.ktor.server.routing.Route
 import io.github.smiley4.ktoropenapi.post
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GenerateTextStreamRequest
+import com.genflowly.models.retrieval.localeFromAcceptLanguage
 import org.slf4j.LoggerFactory
 import com.genflowly.service.ExchangeSideEffects
 import com.genflowly.service.GenerationOrchestrator
@@ -98,6 +99,9 @@ fun Route.registerGenerateTextStreamRoutes(
                 call.response.header(HttpHeaders.Connection, "keep-alive")
                 call.response.header(ResponseHeaders.ACCEL_BUFFERING, "no")
 
+                // The browser's preferred locale (e.g. "en-US"), for locale-aware tools.
+                val locale = localeFromAcceptLanguage(call.request.headers[HttpHeaders.AcceptLanguage])
+
                 val streamResult = generationOrchestrator.processTextGenerateStreamRequest(
                     listOf(request.aiConfig),
                     request.prompt.instructionId,
@@ -115,7 +119,8 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.responseSchema,
                     request.useLearnedPreferences,
                     request.agentId,
-                    request.projectId
+                    request.projectId,
+                    locale = locale
                 )
 
                 call.response.header(ResponseHeaders.CONVERSATION_ID, streamResult.conversationId)
