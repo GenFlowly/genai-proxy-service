@@ -557,8 +557,9 @@ class GenerationOrchestrator(
             val capturedThinkingSteps = mutableListOf<String>()
             var success = false
             var cancelled = false
-            // The durable run's stream ended without its terminal event and
-            // could not be re-attached (RunsClient's stream_lost error).
+            // The stream ended before the server said it was complete (a
+            // stream_lost error): for a durable run, without its terminal event
+            // and beyond re-attaching, so the run itself may still be going.
             var streamLost = false
             // The durable run this generation added to the conversation's pending
             // set (one entry per vendor), captured so the finally removes exactly

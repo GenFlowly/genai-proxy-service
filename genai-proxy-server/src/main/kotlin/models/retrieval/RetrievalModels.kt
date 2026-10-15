@@ -102,16 +102,17 @@ internal const val RUN_FAILED_FALLBACK_MESSAGE = "The response could not be comp
 
 /**
  * User-facing text of a turn whose stream was cut off before it ended: a
- * durable run whose stream could not be re-attached before the deadline, or a
- * stream that failed after the turn generated a file.
+ * durable run whose stream could not be re-attached before the deadline, a
+ * /retrieve stream that stopped before its [DONE], or a stream that failed
+ * after the turn generated a file.
  */
 internal const val RESPONSE_INTERRUPTED_MESSAGE = "The response was interrupted before it finished. Please try again."
 
 /**
- * errorType of the [StreamChunk.Error] that ends a durable run's stream when
- * the run never delivered its terminal event and could not be re-attached
- * (contract C5). The turn failed from the user's point of view, but the run
- * itself may still be going.
+ * errorType of the [StreamChunk.Error] that ends a stream the proxy lost
+ * before the server said it was complete: a durable run that never delivered
+ * its terminal event and could not be re-attached (contract C5; the run itself
+ * may still be going), or a /retrieve stream cut off before its [DONE].
  */
 internal const val RUN_STREAM_LOST_ERROR_TYPE = "stream_lost"
 

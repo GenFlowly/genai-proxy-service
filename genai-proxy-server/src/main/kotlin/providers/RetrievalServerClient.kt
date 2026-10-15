@@ -11,6 +11,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
@@ -27,6 +29,9 @@ import com.genflowly.models.retrieval.FileRef
 import com.genflowly.models.retrieval.ImageRef
 import com.genflowly.models.retrieval.PayloadToolDefinition
 import com.genflowly.models.retrieval.PayloadToolResult
+import com.genflowly.models.retrieval.RESPONSE_INTERRUPTED_MESSAGE
+import com.genflowly.models.retrieval.RUN_FAILED_FALLBACK_MESSAGE
+import com.genflowly.models.retrieval.RUN_STREAM_LOST_ERROR_TYPE
 import com.genflowly.models.retrieval.RawData
 import com.genflowly.models.retrieval.RetrievalResult
 import com.genflowly.models.retrieval.StreamChunk
@@ -497,6 +502,10 @@ class RetrievalServerClient(
     ): Flow<StreamChunk> = channelFlow {
         logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, files=${queryFiles.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
         val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, queryFiles = queryFiles, locale = locale, fsNamespace = fsNamespace)
+        // The server ends every stream with [DONE], also after an error event.
+        // A stream that stops without it was cut off (a retrieval-server restart,
+        // a network reset, a timeout) and must not read as a complete answer.
+        var ended = false
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -511,7 +520,16 @@ class RetrievalServerClient(
                 }
             }.execute { response ->
                 if (!response.status.isSuccess()) {
+                    val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
                     logger.error { "Retrieval server error ${response.status}" }
+                    // A rejected request (e.g. an attachment it cannot use) fails
+                    // the turn with the server's readable reason when it has one.
+                    val attachmentError = attachmentErrorMessage(errorBody)
+                    send(
+                        if (attachmentError != null) StreamChunk.Error(attachmentError, "attachment_error")
+                        else StreamChunk.Error(RUN_FAILED_FALLBACK_MESSAGE, "error")
+                    )
+                    ended = true
                     return@execute
                 }
                 val channel = response.bodyAsChannel()
@@ -519,17 +537,22 @@ class RetrievalServerClient(
                     val line = channel.readUTF8Line() ?: break
                     if (!line.startsWith("data: ")) continue
                     val data = line.removePrefix("data: ")
-                    if (data == "[DONE]") break
-                    try {
-                        val jsonObj = json.parseToJsonElement(data).jsonObject
-                        parseRetrievalEvent(jsonObj)?.let { send(it) }
-                    } catch (_: Exception) {
-                        // skip malformed SSE chunk
+                    if (data == "[DONE]") {
+                        ended = true
+                        break
                     }
+                    // A malformed SSE chunk is skipped.
+                    runCatching { parseRetrievalEvent(json.parseToJsonElement(data).jsonObject) }
+                        .getOrNull()?.let { send(it) }
                 }
             }
         } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
             logger.error(e) { "Streaming from retrieval server failed" }
+        }
+        if (!ended) {
+            logger.warn { "Retrieval stream for customer $customerId ended without [DONE]" }
+            send(StreamChunk.Error(RESPONSE_INTERRUPTED_MESSAGE, RUN_STREAM_LOST_ERROR_TYPE))
         }
     }.flowOn(Dispatchers.IO)
 
