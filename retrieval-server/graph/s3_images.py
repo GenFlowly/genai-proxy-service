@@ -31,10 +31,16 @@ from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
 import boto3
+import urllib3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from graph import image_normalize
-from graph.image_normalize import ImageLimits, ImageNormalizationError, ImageTooLargeError
+from graph.image_normalize import (
+    ImageLimits,
+    ImageNormalizationError,
+    ImageTemporarilyUnavailableError,
+    ImageTooLargeError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +49,15 @@ _s3_client = None
 _IMAGE_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="attachment-image")
 
 
-class AttachmentFetchError(ImageNormalizationError):
+class AttachmentFetchError(ImageTemporarilyUnavailableError):
     """The attachment object could not be read from S3 (user-readable).
     Transient by nature, so never cached."""
 
 
 class _ByteBoundedLRU:
-    """LRU keyed by (s3_key, ImageLimits) holding (base64, media_type) results
-    or remembered failures, bounded by total base64 size rather than entry
+    """LRU keyed by (s3_key, ImageLimits) — or (s3_key, None) for failures
+    that depend only on the file — holding (base64, media_type) results or
+    remembered failures, bounded by total base64 size rather than entry
     count. S3 keys are immutable (fresh UUID per upload), so results never go
     stale; failures expire (see _FAILURE_TTL_S)."""
 
@@ -92,6 +99,10 @@ _CACHE = _ByteBoundedLRU(image_normalize._env_int("IMAGE_CACHE_BYTES", 64 * 1024
 # A failure may be transient (memory pressure from other requests, a codec
 # out-of-memory reported as a decode error), so it is retried after this.
 _FAILURE_TTL_S = 600
+# Failures that depend only on the file (the camera RAW decoder's verdict)
+# are remembered per S3 key, whatever the request's limits, for longer: a
+# camera RAW may be a 400 MiB download.
+_FILE_FAILURE_TTL_S = 6 * 3600
 
 
 class _DiskCache:
@@ -212,7 +223,7 @@ async def image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
     Raises ImageNormalizationError (user-readable) when the file can't be used,
     RuntimeError on missing bucket configuration.
     """
-    cached = _from_cache((s3_key, limits))
+    cached = _from_cache((s3_key, limits)) or _from_cache((s3_key, None))
     if cached is not None:
         return cached
     loop = asyncio.get_running_loop()
@@ -224,7 +235,7 @@ def fetch_image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
     type is that of the bytes actually returned (sniffed/converted), never the
     uploader's declaration."""
     key = (s3_key, limits)
-    cached = _from_cache(key)
+    cached = _from_cache(key) or _from_cache((s3_key, None))
     if cached is not None:
         return cached
     on_disk = _DISK_CACHE.get(key)
@@ -234,18 +245,26 @@ def fetch_image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
         return result
     try:
         data, media_type = _fetch_normalized(s3_key, limits)
-    except AttachmentFetchError:
+    except ImageTemporarilyUnavailableError:
         raise
     except ImageNormalizationError as e:
         # Unsupported / too large is usually a property of the (immutable)
         # object and the limits: remember it for a while instead of
         # re-downloading it every turn.
-        _CACHE.put(key, (type(e), str(e), time.monotonic() + _FAILURE_TTL_S), cost=len(str(e)) + 256)
+        if getattr(e, "file_only", False):
+            _CACHE.put((s3_key, None), (type(e), str(e), time.monotonic() + _FILE_FAILURE_TTL_S), cost=len(str(e)) + 256)
+        else:
+            _CACHE.put(key, (type(e), str(e), time.monotonic() + _FAILURE_TTL_S), cost=len(str(e)) + 256)
         raise
     _DISK_CACHE.put(key, data, media_type)
     result = base64.b64encode(data).decode("ascii"), media_type
     _CACHE.put(key, result, cost=len(result[0]))
     return result
+
+
+# Errors reading from S3. StreamingBody wraps most urllib3 errors in botocore
+# ones, but not all (e.g. SSLError).
+_S3_ERRORS = (ClientError, BotoCoreError, urllib3.exceptions.HTTPError)
 
 
 def _fetch_normalized(s3_key: str, limits: ImageLimits) -> tuple[bytes, str]:
@@ -257,11 +276,11 @@ def _fetch_normalized(s3_key: str, limits: ImageLimits) -> tuple[bytes, str]:
         # Operational OOM guard, checked before the body is read into memory.
         size = obj.get("ContentLength")
         if size is not None and size > image_normalize.MAX_SOURCE_BYTES:
-            result = _normalize_large_camera_raw(obj, size, limits)
+            result = _normalize_large_camera_raw(bucket, s3_key, obj, size, limits)
         else:
             data = obj["Body"].read()
             result = None
-    except (ClientError, BotoCoreError) as e:
+    except _S3_ERRORS as e:
         raise _fetch_error(s3_key, e) from e
 
     if result is None:
@@ -277,29 +296,32 @@ def _fetch_normalized(s3_key: str, limits: ImageLimits) -> tuple[bytes, str]:
     return result.data, result.media_type
 
 
-# Enough of an object's start to recognize a camera RAW: magic numbers and the
-# first TIFF IFD (which camera RAWs write right after the header).
+# Enough of an object's start to recognize a camera RAW: magic numbers and,
+# in most TIFF-based RAWs, the first IFD (right after the header).
 _RAW_HEAD_BYTES = 256 * 1024
+# A first IFD of up to 1024 entries, read separately when it lies past the head.
+_IFD_BYTES = 2 + 12 * 1024 + 4
 
 
-def _normalize_large_camera_raw(obj: dict, size: int, limits: ImageLimits) -> image_normalize.NormalizedImage:
+def _normalize_large_camera_raw(bucket: str, s3_key: str, obj: dict, size: int,
+                                limits: ImageLimits) -> image_normalize.NormalizedImage:
     """An object over MAX_SOURCE_BYTES: only a camera RAW (phone DNGs and
-    uncompressed or medium-format RAWs are often that large) up to
-    MAX_RAW_SOURCE_BYTES is processed, streamed straight to a file the RAW
-    child reads — never held in memory. Anything else is refused. S3 read
-    errors propagate (ClientError / BotoCoreError)."""
+    uncompressed or medium-format RAWs are often that large), recognized by
+    its structure, up to MAX_RAW_SOURCE_BYTES is processed — streamed
+    straight to a file the RAW child reads, never held in memory. Anything
+    else is refused after a peek at its start. S3 read errors propagate."""
     body = obj["Body"]
     try:
-        raw_kind = None
-        if size <= image_normalize.MAX_RAW_SOURCE_BYTES:
-            head = body.read(_RAW_HEAD_BYTES)
-            raw_kind = image_normalize.camera_raw_kind(head)
+        head = body.read(_RAW_HEAD_BYTES)
+        raw_kind = image_normalize.camera_raw_kind(head) or _raw_kind_of_late_ifd0(bucket, s3_key, head, size)
         if raw_kind is None:
             raise ImageTooLargeError(image_normalize.source_too_large_message(size, image_normalize.MAX_SOURCE_BYTES))
+        if size > image_normalize.MAX_RAW_SOURCE_BYTES:
+            raise ImageTooLargeError(image_normalize.source_too_large_message(size, image_normalize.MAX_RAW_SOURCE_BYTES))
         try:
             spool = image_normalize.camera_raw_spool()
         except OSError as e:
-            raise _spool_error(e) from e
+            raise image_normalize.spool_unavailable(e) from e
         with spool:
             try:
                 spool.write(head)
@@ -307,8 +329,10 @@ def _normalize_large_camera_raw(obj: dict, size: int, limits: ImageLimits) -> im
                 while chunk := body.read(1024 * 1024):
                     spool.write(chunk)
                 spool.flush()
+            except _S3_ERRORS:
+                raise  # a read error (a read timeout is an OSError too): see _fetch_normalized
             except OSError as e:
-                raise _spool_error(e) from e
+                raise image_normalize.spool_unavailable(e) from e
             return image_normalize.normalize_camera_raw_file(
                 spool.name, size, obj.get("ContentType"), raw_kind,
                 max_base64_bytes=limits.max_base64_bytes, max_edge=limits.max_edge,
@@ -317,14 +341,22 @@ def _normalize_large_camera_raw(obj: dict, size: int, limits: ImageLimits) -> im
         body.close()
 
 
-def _spool_error(e: OSError) -> AttachmentFetchError:
-    """Local disk trouble (full, ...): transient, not a property of the file."""
-    logger.error("Camera RAW could not be written to disk: %s", e)
-    return AttachmentFetchError("An attached image could not be loaded right now. Please try again.")
+def _raw_kind_of_late_ifd0(bucket: str, s3_key: str, head: bytes, size: int) -> str | None:
+    """camera_raw_kind() for a TIFF whose first IFD lies past `head` (writers
+    such as dnglab put it at the end), from a ranged read of just that IFD."""
+    offset = image_normalize.tiff_ifd0_offset(head)
+    if offset is None or not len(head) <= offset < size:
+        return None
+    ifd = _client().get_object(Bucket=bucket, Key=s3_key, Range=f"bytes={offset}-{offset + _IFD_BYTES - 1}")
+    try:
+        return image_normalize.camera_raw_kind_with_ifd0(head, ifd["Body"].read())
+    finally:
+        ifd["Body"].close()
 
 
 def _fetch_error(s3_key: str, e: Exception) -> AttachmentFetchError:
-    code = getattr(e, "response", {}).get("Error", {}).get("Code") or type(e).__name__
+    response = getattr(e, "response", None) or {}  # None on botocore's HTTP client errors
+    code = response.get("Error", {}).get("Code") or type(e).__name__
     logger.warning("Attachment %s could not be read from S3: %s", s3_key, code)
     if code in ("NoSuchKey", "404", "NotFound"):
         return AttachmentFetchError("An attached image is no longer available. Please attach it again.")

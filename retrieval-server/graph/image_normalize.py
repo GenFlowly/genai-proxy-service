@@ -63,6 +63,7 @@ import json
 import logging
 import math
 import os
+import selectors
 import signal
 import struct
 import subprocess
@@ -284,6 +285,11 @@ class ImageTooLargeError(ImageNormalizationError):
     """The image exceeds an operational memory guard (source bytes / pixels)."""
 
 
+class ImageTemporarilyUnavailableError(ImageNormalizationError):
+    """Local trouble (disk full, storage unreachable, ...), not a property of
+    the file: worth retrying, never remembered as the file's outcome."""
+
+
 @dataclass(frozen=True)
 class ImageLimits:
     """What one image may take in a request to a given vendor. Hashable: it is
@@ -384,9 +390,16 @@ def normalize_image(
         raise ImageTooLargeError(source_too_large_message(len(data), max_source_bytes))
 
     def camera_raw(raw_kind: str) -> NormalizedImage:
-        with camera_raw_spool() as spool:
-            spool.write(data)
-            spool.flush()
+        try:
+            spool = camera_raw_spool()
+        except OSError as e:
+            raise spool_unavailable(e) from e
+        with spool:
+            try:
+                spool.write(data)
+                spool.flush()
+            except OSError as e:
+                raise spool_unavailable(e) from e
             return _normalize_camera_raw(
                 spool.name, len(data), declared, raw_kind, budget=budget, max_edge=max_edge,
                 max_decode_bytes=max_decode_bytes, started=started,
@@ -632,11 +645,12 @@ _RAW_MAGIC = (
     (b"IIU\x00", "camera RAW (RW2)"),
     (b"FOVb", "camera RAW (X3F)"),
     (b"\x00MRM", "camera RAW (MRW)"),
-    (b"IIII", "camera RAW (IIQ)"),
-    (b"MMMM", "camera RAW (IIQ)"),
 )
+_TIFF_HEADERS = (b"II*\x00", b"MM\x00*")
 # TIFF compressions only camera RAWs use (Kodak, Sony, Samsung, Nikon, Pentax).
 _RAW_TIFF_COMPRESSIONS = frozenset({262, 32767, 32769, 32770, 32772, 34713, 65000, 65535})
+# A first IFD with any of these holds an image of its own.
+_TIFF_IMAGE_TAGS = frozenset({256, 257, 273, 324})  # width, length, strip / tile offsets
 
 
 def camera_raw_kind(data: bytes) -> str | None:
@@ -647,18 +661,33 @@ def camera_raw_kind(data: bytes) -> str | None:
         return "camera RAW (CR3)"
     if data[:2] in (b"II", b"MM") and data[6:14] == b"HEAPCCDR":
         return "camera RAW (CRW)"
+    if _phase_one_block(data, 0):
+        return "camera RAW (IIQ)"
     for magic, label in _RAW_MAGIC:
         if data.startswith(magic):
             return label
     return _raw_tiff_kind(data)
 
 
-def _raw_tiff_kind(data: bytes) -> str | None:
-    """TIFF-structured RAWs (DNG, CR2, NEF, ARW, PEF, SRW, ...) by their
-    header and first IFD."""
-    if data[:4] in (b"II*\x00", b"MM\x00*") and data[8:12] == b"CR\x02\x00":
+def _phase_one_block(data: bytes, at: int) -> bool:
+    """A Phase One / Leaf raw block ("IIII" or "MMMM", then "Raw") at `at`,
+    checked as LibRaw does."""
+    order = {b"IIII": "<", b"MMMM": ">"}.get(data[at:at + 4])
+    return order is not None and len(data) >= at + 8 and struct.unpack_from(order + "I", data, at + 4)[0] >> 8 == 0x526177
+
+
+def _raw_tiff_kind(data: bytes, ifd0: bytes | None = None) -> str | None:
+    """TIFF-structured RAWs (DNG, CR2, NEF, ARW, PEF, SRW, IIQ, ...) by their
+    header and first IFD. `ifd0`: that IFD's bytes when `data` is just the
+    start of a file that doesn't reach it."""
+    if data[:4] not in _TIFF_HEADERS:
+        return None
+    if data[8:12] == b"CR\x02\x00":  # Canon CR2 header
         return "camera RAW (CR2)"
-    tags = _tiff_ifd0(data)
+    if _phase_one_block(data, 8):  # Phase One / Leaf IIQ, TIFF-wrapped
+        return "camera RAW (IIQ)"
+    order = "<" if data[:2] == b"II" else ">"
+    tags = _tiff_ifd(ifd0, 0, order) if ifd0 is not None else _tiff_ifd(data, tiff_ifd0_offset(data), order)
     if tags is None:
         return None
     if 50706 in tags:  # DNGVersion
@@ -667,24 +696,27 @@ def _raw_tiff_kind(data: bytes) -> str | None:
         # The first IFD is the sensor data: colour-filter-array or linear-raw
         # photometric, or a camera maker's compression.
         return "camera RAW"
-    if tags.get(254) == 1 and 330 in tags:
-        # The first IFD is a reduced-resolution preview; the real image is in SubIFDs.
+    if 330 in tags and (tags.get(254) == 1 or not _TIFF_IMAGE_TAGS & tags.keys()):
+        # The first IFD is a reduced-resolution preview (NEF, ARW, ...) or has
+        # no image at all (Samsung SRW); the real image is in SubIFDs.
         return "camera RAW"
     return None
 
 
-def _tiff_ifd0(data: bytes) -> dict[int, int | None] | None:
-    """A TIFF's first-IFD tags -> their value when it is a single SHORT or
-    LONG (else None). None when the bytes aren't a TIFF or the IFD is cut
-    off. Plain struct parsing, so it also works on just the start of a file."""
-    if data[:4] == b"II*\x00":
-        order = "<"
-    elif data[:4] == b"MM\x00*":
-        order = ">"
-    else:
+def tiff_ifd0_offset(data: bytes) -> int | None:
+    """Where a TIFF's first IFD starts, from its header; None if not a TIFF."""
+    if data[:4] not in _TIFF_HEADERS or len(data) < 8:
+        return None
+    return struct.unpack_from("<I" if data[:2] == b"II" else ">I", data, 4)[0]
+
+
+def _tiff_ifd(data: bytes, offset: int | None, order: str) -> dict[int, int | None] | None:
+    """The tags of the IFD at `offset` -> their value when it is a single
+    SHORT or LONG (else None). None when the IFD is cut off. Plain struct
+    parsing, so it also works on part of a file."""
+    if offset is None:
         return None
     try:
-        (offset,) = struct.unpack_from(order + "I", data, 4)
         (count,) = struct.unpack_from(order + "H", data, offset)
         tags: dict[int, int | None] = {}
         for entry in range(offset + 2, offset + 2 + 12 * min(count, 1024), 12):
@@ -700,6 +732,12 @@ def _tiff_ifd0(data: bytes) -> dict[int, int | None] | None:
         return None
 
 
+def camera_raw_kind_with_ifd0(head: bytes, ifd0: bytes) -> str | None:
+    """camera_raw_kind() for the start of a TIFF whose first IFD lies past it
+    (writers such as dnglab put it at the end), given that IFD's bytes."""
+    return camera_raw_kind(head) or _raw_tiff_kind(head, ifd0)
+
+
 def _raw_unreadable(raw_kind: str, declared: str) -> UnsupportedImageError:
     return UnsupportedImageError(
         f"The attached {raw_kind} file couldn't be read{_paren(_declared(declared))}. "
@@ -713,6 +751,19 @@ def _raw_too_slow() -> ImageTooLargeError:
     )
 
 
+def _file_only(e: ImageNormalizationError) -> ImageNormalizationError:
+    """Mark a failure that depends only on the file (not the request's
+    limits, not the moment): callers may remember it for longer."""
+    e.file_only = True
+    return e
+
+
+def spool_unavailable(e: OSError) -> ImageTemporarilyUnavailableError:
+    """A camera RAW couldn't be written to local disk (full, ...)."""
+    logger.error("Camera RAW could not be written to disk: %s", e)
+    return ImageTemporarilyUnavailableError("An attached image could not be loaded right now. Please try again.")
+
+
 def _raw_child_identity() -> dict:
     """subprocess kwargs that start the RAW child as _RAW_UID when the server
     runs as root."""
@@ -723,17 +774,10 @@ def _raw_child_identity() -> dict:
 
 def camera_raw_spool():
     """A temporary file for a camera RAW the child will read — on disk, not in
-    either process's memory — that only the child's user can read. Deleted
-    on close; use as a context manager."""
-    spool = tempfile.NamedTemporaryFile(prefix="raw-")
-    try:
-        identity = _raw_child_identity()
-        if identity:
-            os.fchown(spool.fileno(), identity["user"], identity["group"])
-    except BaseException:
-        spool.close()
-        raise
-    return spool
+    either process's memory. Readable by the server only, except while its
+    own child runs (see _decode_camera_raw). Deleted on close; use as a
+    context manager."""
+    return tempfile.NamedTemporaryFile(prefix="raw-")
 
 
 def _normalize_camera_raw(path: str, size: int, declared: str, raw_kind: str, *, budget: int,
@@ -759,11 +803,22 @@ def _normalize_camera_raw(path: str, size: int, declared: str, raw_kind: str, *,
     )
 
 
+# What the RAW child may write: the header plus the largest image it renders,
+# and a short error line. More is a misbehaving child.
+_RAW_MAX_STDOUT = 4 + 64 * 1024 + _RAW_OUTPUT_EDGE * _RAW_OUTPUT_EDGE * 3
+_RAW_MAX_STDERR = 64 * 1024
+
+
+class _RawOutputOverflow(Exception):
+    pass
+
+
 def _decode_camera_raw(path: str, declared: str, raw_kind: str,
                        max_decode_bytes: int, max_edge: int) -> tuple[Image.Image, dict]:
     """Run graph/raw_decode.py on the RAW file at `path` in a child process
     (LibRaw never runs in the server process: see that module) and return
-    the upright RGB image it renders plus its header."""
+    the upright RGB image it renders plus its header. Called under
+    _HEAVY_LOCK: one child at a time."""
     params = {
         "path": path,
         "max_decode_bytes": max_decode_bytes,
@@ -779,27 +834,40 @@ def _decode_camera_raw(path: str, declared: str, raw_kind: str,
         "OPENBLAS_NUM_THREADS": "1",
         "JPEGMEM": os.environ.get("JPEGMEM", ""),
     }
+    identity = _raw_child_identity()
     try:
-        # Its own session, so a timeout kills everything it started; as
-        # nobody when the server runs as root.
-        proc = subprocess.Popen(
-            [sys.executable, "-I", _RAW_DECODER, json.dumps(params)],
-            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            env=env, start_new_session=True, **_raw_child_identity(),
-        )
-    except OSError as e:  # incl. an interpreter the child's user can't reach
-        logger.error("Camera RAW decoder could not be started: %s", e)
-        raise _raw_unreadable(raw_kind, declared) from e
-    with proc:
+        if identity:
+            # Only this run's file is the child user's, and only while it runs:
+            # other requests' spool files stay the server's alone.
+            os.chown(path, identity["user"], identity["group"])
         try:
-            stdout, stderr = proc.communicate(timeout=_RAW_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
-            _kill_process_group(proc)
-            logger.warning("Camera RAW decode timed out after %ss", _RAW_TIMEOUT_S)
-            raise _raw_too_slow() from None
-        except BaseException:
-            _kill_process_group(proc)
-            raise
+            # Its own session, so a timeout kills everything it started; as
+            # nobody when the server runs as root.
+            proc = subprocess.Popen(
+                [sys.executable, "-I", _RAW_DECODER, json.dumps(params)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=env, start_new_session=True, **identity,
+            )
+        except OSError as e:  # incl. an interpreter the child's user can't reach
+            logger.error("Camera RAW decoder could not be started: %s", e)
+            raise _raw_unreadable(raw_kind, declared) from e
+        with proc:
+            try:
+                stdout, stderr = _read_child(proc, _RAW_TIMEOUT_S)
+            except subprocess.TimeoutExpired:
+                _kill_process_group(proc)
+                logger.warning("Camera RAW decode timed out after %ss", _RAW_TIMEOUT_S)
+                raise _raw_too_slow() from None
+            except _RawOutputOverflow:
+                _kill_process_group(proc)
+                logger.error("Camera RAW decoder wrote more output than any image can take")
+                raise _raw_unreadable(raw_kind, declared) from None
+            except BaseException:
+                _kill_process_group(proc)
+                raise
+    finally:
+        if identity:
+            os.chown(path, os.geteuid(), os.getegid())
 
     if proc.returncode == 0:
         try:
@@ -810,10 +878,13 @@ def _decode_camera_raw(path: str, declared: str, raw_kind: str,
             if not (0 < width <= _RAW_OUTPUT_EDGE and 0 < height <= _RAW_OUTPUT_EDGE) \
                     or len(pixels) != width * height * 3:
                 raise ValueError(f"bad image geometry {width}x{height} / {len(pixels)} bytes")
-            return Image.frombytes("RGB", (width, height), pixels), header
+            image = Image.frombytes("RGB", (width, height), pixels)
         except (struct.error, ValueError, KeyError, TypeError) as e:
             logger.error("Camera RAW decoder returned malformed output: %s", e)
             raise _raw_unreadable(raw_kind, declared) from e
+        for note in header.get("notes") or ():
+            logger.warning("Camera RAW: %s", str(note)[:300])
+        return image, header
 
     text = stderr.decode("utf-8", "replace").strip()
     failure = {}
@@ -825,19 +896,49 @@ def _decode_camera_raw(path: str, declared: str, raw_kind: str,
     if not isinstance(failure, dict):
         failure = {}
     kind, detail = failure.get("error"), str(failure.get("detail") or text)[-300:]
+    file_only = proc.returncode == 2 and kind in ("too_large", "unsupported")
     if kind == "too_large" or proc.returncode == -signal.SIGKILL:  # SIGKILL: the OOM killer
         logger.warning("Camera RAW too large to process (rc=%s): %s", proc.returncode, detail)
-        raise ImageTooLargeError(
+        e = ImageTooLargeError(
             "The attached camera RAW file is too large to process. Export it as JPEG and try again."
         )
+        raise _file_only(e) if file_only else e
     if proc.returncode == -signal.SIGXCPU:
         logger.warning("Camera RAW decode hit the %ss CPU-time cap", _RAW_CPU_SECONDS)
         raise _raw_too_slow()
     if kind == "unsupported":
         logger.warning("Camera RAW not readable: %s", detail)
-    else:  # "error", a crash (e.g. SIGSEGV in LibRaw) or no reason given
-        logger.error("Camera RAW decoder failed (rc=%s): %s", proc.returncode, detail)
+        raise _file_only(_raw_unreadable(raw_kind, declared))
+    # "error", a crash (e.g. SIGSEGV in LibRaw) or no reason given
+    logger.error("Camera RAW decoder failed (rc=%s): %s", proc.returncode, detail)
     raise _raw_unreadable(raw_kind, declared)
+
+
+def _read_child(proc: subprocess.Popen, timeout: float) -> tuple[bytes, bytes]:
+    """communicate(), with a deadline and a cap on what the child may write
+    (an exploited child could otherwise fill the server's memory through
+    the pipe). Raises subprocess.TimeoutExpired or _RawOutputOverflow."""
+    deadline = time.monotonic() + timeout
+    caps = {proc.stdout: _RAW_MAX_STDOUT, proc.stderr: _RAW_MAX_STDERR}
+    buffers = {stream: bytearray() for stream in caps}
+    with selectors.DefaultSelector() as selector:
+        for stream in caps:
+            selector.register(stream, selectors.EVENT_READ)
+        while selector.get_map():
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise subprocess.TimeoutExpired(proc.args, timeout)
+            for key, _ in selector.select(left):
+                chunk = os.read(key.fd, 1 << 16)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                elif len(buffers[key.fileobj]) + len(chunk) > caps[key.fileobj]:
+                    raise _RawOutputOverflow()
+                else:
+                    buffers[key.fileobj] += chunk
+    # Both pipes closed; the child may still be running.
+    proc.wait(timeout=max(0.0, deadline - time.monotonic()))
+    return bytes(buffers[proc.stdout]), bytes(buffers[proc.stderr])
 
 
 def _kill_process_group(proc: subprocess.Popen) -> None:

@@ -17,6 +17,7 @@ import errno
 import io
 import json
 import os
+import platform
 import signal
 import struct
 import subprocess
@@ -826,7 +827,11 @@ def _tiff_ifd0_only(entries: list, big_endian: bool = False, gap: bytes = b"") -
     image data. `gap` goes between the header and the IFD."""
     order = ">" if big_endian else "<"
     out = (b"MM\x00*" if big_endian else b"II*\x00") + struct.pack(order + "I", 8 + len(gap)) + gap
-    out += struct.pack(order + "H", len(entries))
+    return out + _ifd_entries(entries, order)
+
+
+def _ifd_entries(entries: list, order: str = "<") -> bytes:
+    out = struct.pack(order + "H", len(entries))
     for tag, field_type, value in sorted(entries):
         if field_type == 3:
             payload, count = struct.pack(order + "H", value), 1
@@ -839,10 +844,11 @@ def _tiff_ifd0_only(entries: list, big_endian: bool = False, gap: bytes = b"") -
 
 
 class _FakePopen:
-    """Stands in for subprocess.Popen in _decode_camera_raw."""
+    """Stands in for subprocess.Popen in _decode_camera_raw; patch
+    image_normalize._read_child with its read_child."""
 
-    def __init__(self, returncode=0, stdout=b"", stderr=b"", timeout=False):
-        self.returncode, self._out, self._err, self._timeout = returncode, stdout, stderr, timeout
+    def __init__(self, returncode=0, stdout=b"", stderr=b"", raises=None):
+        self.returncode, self._out, self._err, self._raises = returncode, stdout, stderr, raises
         self.pid = 4242
         self.calls = []
         self.spooled = None
@@ -859,14 +865,18 @@ class _FakePopen:
     def __exit__(self, *exc):
         return False
 
-    def communicate(self, timeout=None):
+    def read_child(self, proc, timeout):
         self.timeout = timeout
-        if self._timeout:
-            raise subprocess.TimeoutExpired("raw_decode", timeout)
+        if self._raises is not None:
+            raise self._raises
         return self._out, self._err
 
     def kill(self):
         pass
+
+    def patches(self):
+        return (patch.object(image_normalize.subprocess, "Popen", self),
+                patch.object(image_normalize, "_read_child", self.read_child))
 
 
 def _no_child(*args, **kwargs):
@@ -891,6 +901,29 @@ def setUpModule():
         as_root = patch.object(image_normalize, "_RAW_UID", 0)
         as_root.start()
         unittest.addModuleCleanup(as_root.stop)
+
+
+def _run_in_locked_down_child(body: str) -> str:
+    """Run `body` (Python, sees `rd` = raw_decode and `out`, a list printed
+    at the end) after raw_decode's real _limit_self and _lock_down."""
+    script = (
+        "import errno, importlib.util, os, resource, socket\n"
+        f"spec = importlib.util.spec_from_file_location('rd', {image_normalize._RAW_DECODER!r})\n"
+        "rd = importlib.util.module_from_spec(spec); spec.loader.exec_module(rd)\n"
+        "rd._limit_self(4_000_000_000, 60)\n"
+        "rd._lock_down()\n"
+        "out = []\n"
+        "def attempt(fn):\n"
+        "    try:\n"
+        "        fn(); out.append('allowed')\n"
+        "    except OSError as e:\n"
+        "        out.append(errno.errorcode[e.errno])\n"
+        + body + "\nprint(*out)\n"
+    )
+    return subprocess_run([sys.executable, "-I", "-c", script])
+
+
+_SECCOMP = sys.platform.startswith("linux") and platform.machine() in ("x86_64", "aarch64")
 
 
 class CameraRawTests(unittest.TestCase):
@@ -918,7 +951,8 @@ class CameraRawTests(unittest.TestCase):
             with self.subTest(render=render), patch.object(image_normalize, "RAW_RENDER", render):
                 out = normalize_image(_fixture("camera_raw_truncated.dng"), None)
                 self.assertEqual((out.source_format, out.output_size), ("RAW (preview)", (160, 120)))
-                left, right = _decode(out.data).convert("RGB").getpixel((20, 60)), _decode(out.data).convert("RGB").getpixel((140, 60))
+                result = _decode(out.data).convert("RGB")
+                left, right = result.getpixel((20, 60)), result.getpixel((140, 60))
                 self.assertGreater(left[0], 2 * left[2])
                 self.assertGreater(right[2], 2 * right[0])
 
@@ -935,20 +969,26 @@ class CameraRawTests(unittest.TestCase):
                     normalize_image(data, declared)  # real child: LibRaw can't read the junk
                 self.assertIn(label, str(ctx.exception))
                 self.assertIn("couldn't be read", str(ctx.exception))
+                self.assertTrue(getattr(ctx.exception, "file_only", False))  # LibRaw's verdict on the file
 
     def test_camera_raw_is_recognized_by_structure(self):
         dng_version = (50706, 1, b"\x01\x04\x00\x00")
+        srw_ifd0 = [(271, 4, 26), (274, 3, 1), (34665, 4, 300), (330, 4, 2048)]  # metadata only
         raw = {
             "DNG": (_tiff_ifd0_only([(256, 4, 64), dng_version]), "camera RAW (DNG)"),
             "big-endian DNG": (_tiff_ifd0_only([dng_version], big_endian=True), "camera RAW (DNG)"),
             "CR2": (_tiff_ifd0_only([(256, 4, 64)], gap=b"CR\x02\x00\x00\x00\x00\x00"), "camera RAW (CR2)"),
-            "CFA sensor data first (PEF, SRW)": (_tiff_ifd0_only([(262, 3, 32803)]), "camera RAW"),
+            "CFA sensor data first (PEF)": (_tiff_ifd0_only([(262, 3, 32803)]), "camera RAW"),
             "linear raw first": (_tiff_ifd0_only([(262, 3, 34892)]), "camera RAW"),
             "maker compression": (_tiff_ifd0_only([(259, 3, 65535)]), "camera RAW"),
             "preview IFD + SubIFDs (NEF, ARW)": (_tiff_ifd0_only([(254, 4, 1), (330, 4, 4096)]), "camera RAW"),
+            "metadata-only IFD + SubIFDs (SRW)": (_tiff_ifd0_only(srw_ifd0), "camera RAW"),
+            "big-endian SRW": (_tiff_ifd0_only(srw_ifd0, big_endian=True), "camera RAW"),
+            "IIQ (TIFF-wrapped)": (_tiff_ifd0_only([(254, 4, 0), (256, 4, 1), (262, 3, 2)], gap=b"IIIICwaR"),
+                                   "camera RAW (IIQ)"),
+            "IIQ": (b"IIIICwaR" + bytes(32), "camera RAW (IIQ)"),
             "CR3": (b"\x00\x00\x00\x18ftypcrx " + bytes(32), "camera RAW (CR3)"),
             "CRW": (b"II\x1a\x00\x00\x00HEAPCCDR" + bytes(32), "camera RAW (CRW)"),
-            "IIQ": (b"IIII\x01\x00\x00\x00" + bytes(32), "camera RAW (IIQ)"),
             "RW2": (b"IIU\x00\x18\x00\x00\x00" + bytes(32), "camera RAW (RW2)"),
         }
         for name, (data, label) in raw.items():
@@ -957,7 +997,10 @@ class CameraRawTests(unittest.TestCase):
         not_raw = {
             "RGB TIFF": _encode(_photo_like(64, 48), "TIFF"),
             "16-bit grey TIFF": _encode(Image.new("I;16", (64, 48)), "TIFF"),
+            "TIFF with SubIFDs and an image of its own": _tiff_ifd0_only([(256, 4, 64), (257, 4, 48), (273, 4, 8), (330, 4, 4096)]),
             "pixel bytes spelling CR": _tiff_ifd0_only([(262, 3, 2)], gap=b"CRZ\x00\x00\x00\x00\x00"),
+            "pixel bytes spelling IIII": _tiff_ifd0_only([(262, 3, 2)], gap=b"IIII\x49\x49\x49\x49"),
+            "IIII without Phase One's mark": b"IIII\x01\x00\x00\x00" + bytes(32),
             "IFD past the end": b"II*\x00" + struct.pack("<I", 10**6) + bytes(64),
             "IFD cut off": _tiff_ifd0_only([dng_version, (256, 4, 64)])[:20],
             "JPEG": _encode(_photo_like(64, 48), "JPEG"),
@@ -966,6 +1009,11 @@ class CameraRawTests(unittest.TestCase):
         for name, data in not_raw.items():
             with self.subTest(name=name):
                 self.assertIsNone(image_normalize.camera_raw_kind(data))
+        # A first IFD past the start of the file, read separately:
+        head = b"II*\x00" + struct.pack("<I", 10**6) + bytes(64)
+        self.assertEqual(image_normalize.tiff_ifd0_offset(head), 10**6)
+        self.assertEqual(image_normalize.camera_raw_kind_with_ifd0(head, _ifd_entries([dng_version])), "camera RAW (DNG)")
+        self.assertIsNone(image_normalize.camera_raw_kind_with_ifd0(head, _ifd_entries([(262, 3, 2)])))
 
     def test_unrecognized_bytes_never_reach_libraw(self):
         # LibRaw "reads" headerless sensor dumps identified by file size alone
@@ -996,10 +1044,10 @@ class CameraRawTests(unittest.TestCase):
         for euid in (0, 1000):
             with self.subTest(server_euid=euid):
                 popen = _FakePopen(stdout=self._raw_output(im))
-                with patch.object(image_normalize.subprocess, "Popen", popen), \
-                        patch.object(image_normalize.os, "geteuid", return_value=euid), \
+                spawn, read = popen.patches()
+                with spawn, read, patch.object(image_normalize.os, "geteuid", return_value=euid), \
                         patch.object(image_normalize, "_RAW_UID", 65534), \
-                        patch.object(image_normalize.os, "fchown") as fchown:
+                        patch.object(image_normalize.os, "chown") as chown:
                     out = normalize_image(data, None)
                 self.assertEqual((out.source_format, out.source_size, out.output_size), ("RAW (preview)", (6000, 4000), (300, 200)))
                 self.assertEqual(_pixels(_decode(out.data)), _pixels(im))  # lossless from the child's pixels
@@ -1015,43 +1063,68 @@ class CameraRawTests(unittest.TestCase):
                 self.assertEqual(popen.timeout, image_normalize._RAW_TIMEOUT_S)
                 self.assertEqual(kwargs["env"]["OMP_NUM_THREADS"], "1")
                 self.assertNotIn("ATTACHMENTS_BUCKET", kwargs["env"])
-                if euid == 0:  # a root server starts the child as nobody, who may read the spool file
+                if euid == 0:
+                    # A root server starts the child as nobody, and gives it
+                    # its own file only while it runs.
                     self.assertEqual((kwargs["user"], kwargs["group"], kwargs["extra_groups"]), (65534, 65534, []))
-                    fchown.assert_called_once()
-                    self.assertEqual(fchown.call_args[0][1:], (65534, 65534))
+                    self.assertEqual(chown.call_args_list, [
+                        unittest.mock.call(params["path"], 65534, 65534),
+                        unittest.mock.call(params["path"], 0, os.getegid()),
+                    ])
                 else:
                     self.assertNotIn("user", kwargs)
-                    fchown.assert_not_called()
+                    chown.assert_not_called()
 
     def test_child_failures_become_readable_errors(self):
         raf = b"FUJIFILMCCD-RAW " + os.urandom(64)
         too_large = json.dumps({"error": "too_large", "detail": "x"}).encode()
+        unsupported = json.dumps({"error": "unsupported", "detail": "x"}).encode()
         internal = json.dumps({"error": "error", "detail": "input file not readable"}).encode()
-        cases = (
-            ("oom-killed", _FakePopen(-signal.SIGKILL), ImageTooLargeError, "too large"),
-            ("cpu cap", _FakePopen(-signal.SIGXCPU), ImageTooLargeError, "took too long"),
-            ("too large", _FakePopen(2, stderr=too_large), ImageTooLargeError, "too large"),
-            ("timeout", _FakePopen(timeout=True), ImageTooLargeError, "took too long"),
-            ("crash", _FakePopen(-signal.SIGSEGV, stderr=b"Segmentation fault"), UnsupportedImageError, "couldn't be read"),
-            ("internal error", _FakePopen(2, stderr=internal), UnsupportedImageError, "couldn't be read"),
-            ("not a JSON object", _FakePopen(2, stderr=b"[1, 2]"), UnsupportedImageError, "couldn't be read"),
-            ("malformed", _FakePopen(0, stdout=b"\x00\x00\x00\x02{}garbage"), UnsupportedImageError, "couldn't be read"),
+        cases = (  # (name, child, error, message, the file's own fault)
+            ("oom-killed", _FakePopen(-signal.SIGKILL), ImageTooLargeError, "too large", False),
+            ("cpu cap", _FakePopen(-signal.SIGXCPU), ImageTooLargeError, "took too long", False),
+            ("too large", _FakePopen(2, stderr=too_large), ImageTooLargeError, "too large", True),
+            ("unsupported", _FakePopen(2, stderr=unsupported), UnsupportedImageError, "couldn't be read", True),
+            ("timeout", _FakePopen(raises=subprocess.TimeoutExpired("x", 90)), ImageTooLargeError, "took too long", False),
+            ("output flood", _FakePopen(raises=image_normalize._RawOutputOverflow()), UnsupportedImageError, "couldn't be read", False),
+            ("crash", _FakePopen(-signal.SIGSEGV, stderr=b"Segmentation fault"), UnsupportedImageError, "couldn't be read", False),
+            ("internal error", _FakePopen(2, stderr=internal), UnsupportedImageError, "couldn't be read", False),
+            ("not a JSON object", _FakePopen(2, stderr=b"[1, 2]"), UnsupportedImageError, "couldn't be read", False),
+            ("malformed", _FakePopen(0, stdout=b"\x00\x00\x00\x02{}garbage"), UnsupportedImageError, "couldn't be read", False),
         )
-        for name, popen, error, message in cases:
+        for name, popen, error, message, file_only in cases:
             with self.subTest(name=name):
-                with patch.object(image_normalize.subprocess, "Popen", popen), \
-                        patch.object(image_normalize.os, "killpg") as killpg:
+                spawn, read = popen.patches()
+                with spawn, read, patch.object(image_normalize.os, "killpg") as killpg:
                     with self.assertRaises(error) as ctx:
                         normalize_image(raf, None)
                 self.assertIn(message, str(ctx.exception))
                 self.assertIn("RAW", str(ctx.exception))
-                if name == "timeout":  # the child and anything it started
+                self.assertEqual(getattr(ctx.exception, "file_only", False), file_only)
+                if name in ("timeout", "output flood"):  # the child and anything it started
                     killpg.assert_called_once_with(popen.pid, signal.SIGKILL)
                 else:
                     killpg.assert_not_called()
         with patch.object(image_normalize.subprocess, "Popen", side_effect=PermissionError(13, "denied")):
             with self.assertRaises(UnsupportedImageError):
                 normalize_image(raf, None)
+
+    def test_child_output_is_read_with_a_cap_and_a_deadline(self):
+        def child(code):
+            return subprocess.Popen([sys.executable, "-I", "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        with child("import sys; sys.stdout.write('o' * 70000); sys.stderr.write('e')") as proc:
+            self.assertEqual(image_normalize._read_child(proc, 30), (b"o" * 70000, b"e"))
+        with patch.object(image_normalize, "_RAW_MAX_STDOUT", 100_000):
+            with child("import sys\nwhile True: sys.stdout.write('x' * 65536)") as proc:
+                with self.assertRaises(image_normalize._RawOutputOverflow):
+                    image_normalize._read_child(proc, 30)
+                proc.kill()
+        for code in ("import time; time.sleep(30)", "import os, time; os.close(1); os.close(2); time.sleep(30)"):
+            with child(code) as proc:
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    image_normalize._read_child(proc, 0.5)
+                proc.kill()
 
     def test_child_caps_its_own_memory_cpu_and_privileges(self):
         script = (
@@ -1066,25 +1139,27 @@ class CameraRawTests(unittest.TestCase):
         out = subprocess_run([sys.executable, "-I", "-c", script])
         self.assertEqual(out.split(), ["1000", "900000000", "42", "47", "0", "0", "1"])
 
-    def test_child_locks_itself_down_before_libraw_opens_the_file(self):
-        # After _lock_down() there is room for exactly one more descriptor —
-        # the RAW file LibRaw opens — and none for sockets or other files.
-        script = (
-            "import errno, importlib.util, os, resource, socket; "
-            f"spec = importlib.util.spec_from_file_location('rd', {image_normalize._RAW_DECODER!r}); "
-            "rd = importlib.util.module_from_spec(spec); spec.loader.exec_module(rd); "
-            "rd._lock_down(); "
-            "os.open(os.devnull, os.O_RDONLY); "
-            "out = []\n"
-            "for attempt in (lambda: os.open('/etc/hostname', os.O_RDONLY), socket.socket):\n"
-            "    try:\n"
-            "        attempt(); out.append('opened')\n"
-            "    except OSError as e:\n"
-            "        out.append(errno.errorcode[e.errno])\n"
-            "print(*out, *resource.getrlimit(resource.RLIMIT_NPROC), *resource.getrlimit(resource.RLIMIT_FSIZE))"
-        )
-        out = subprocess_run([sys.executable, "-I", "-c", script])
-        self.assertEqual(out.split(), ["EMFILE", "EMFILE", "0", "0", "0", "0"])
+    def test_locked_down_child_has_no_network_exec_or_file_changes(self):
+        if not _SECCOMP:
+            self.skipTest("seccomp filter: Linux x86_64/aarch64 only")
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = _run_in_locked_down_child(
+                "os.close(0)\n"  # code inside the parser could free descriptors
+                "attempt(lambda: socket.socket().close())\n"
+                "attempt(lambda: socket.socket(socket.AF_UNIX).close())\n"
+                f"attempt(lambda: os.close(os.open({tmp!r} + '/new', os.O_CREAT | os.O_WRONLY)))\n"
+                f"attempt(lambda: os.symlink('/etc', {tmp!r} + '/link'))\n"
+                f"attempt(lambda: os.mkdir({tmp!r} + '/dir'))\n"
+                f"attempt(lambda: os.chmod({tmp!r}, 0o777))\n"
+                "attempt(lambda: os.execv(sys.executable, [sys.executable]))\n"
+                "attempt(lambda: os.close(os.open(os.devnull, os.O_RDONLY)))\n"  # reading stays possible
+                "out += [*resource.getrlimit(resource.RLIMIT_NPROC), *resource.getrlimit(resource.RLIMIT_FSIZE)]\n"
+                .replace("sys.executable", repr(sys.executable))
+            )
+            self.assertEqual(os.listdir(tmp), [])
+        self.assertEqual(out.split(), ["EPERM"] * 7 + ["allowed", "0", "0", "0", "0"])
 
     def test_child_runs_as_nobody_when_the_server_is_root(self):
         if os.geteuid() != 0:
@@ -1095,12 +1170,15 @@ class CameraRawTests(unittest.TestCase):
 
         probe = (
             "import json, os, struct, sys\n"
-            "r = {'uid': os.getuid()}\n"
-            "for name, path in (('environ', f'/proc/{os.getppid()}/environ'), ('input', json.loads(sys.argv[1])['path'])):\n"
+            "own = json.loads(sys.argv[1])['path']\n"
+            "spools = [os.path.join(os.path.dirname(own), n) for n in os.listdir(os.path.dirname(own)) if n.startswith('raw-')]\n"
+            "r = {'uid': os.getuid(), 'others': []}\n"
+            "for name, path in [('environ', f'/proc/{os.getppid()}/environ'), ('own', own)] + [('others', p) for p in spools if p != own]:\n"
             "    try:\n"
-            "        open(path, 'rb').read(1); r[name] = 'readable'\n"
+            "        open(path, 'rb').read(1); result = 'readable'\n"
             "    except OSError as e:\n"
-            "        r[name] = e.errno\n"
+            "        result = e.errno\n"
+            "    r[name].append(result) if name == 'others' else r.__setitem__(name, result)\n"
             "h = json.dumps({'width': 1, 'height': 1, 'source': 'probe', 'sensor': [1, 1], 'probe': r}).encode()\n"
             "sys.stdout.buffer.write(struct.pack('>I', len(h)) + h + bytes(3))\n"
         )
@@ -1110,11 +1188,20 @@ class CameraRawTests(unittest.TestCase):
             with open(path, "w") as f:
                 f.write(probe)
             os.chmod(path, 0o644)
-            with patch.object(image_normalize, "_RAW_DECODER", path), image_normalize.camera_raw_spool() as spool:
+            with patch.object(image_normalize, "_RAW_DECODER", path), \
+                    image_normalize.camera_raw_spool() as waiting, image_normalize.camera_raw_spool() as spool:
+                waiting.write(b"another request's upload")
+                waiting.flush()
                 spool.write(b"RAW")
                 spool.flush()
                 _, header = image_normalize._decode_camera_raw(spool.name, "", "camera RAW", 10**8, 100)
-        self.assertEqual(header["probe"], {"uid": 65534, "environ": errno.EACCES, "input": "readable"})
+                owner_after = os.stat(spool.name).st_uid
+        self.assertEqual(header["probe"]["uid"], 65534)
+        self.assertEqual(header["probe"]["environ"], errno.EACCES)
+        self.assertEqual(header["probe"]["own"], "readable")
+        self.assertIn(errno.EACCES, header["probe"]["others"])
+        self.assertNotIn("readable", header["probe"]["others"])
+        self.assertEqual(owner_after, 0)
 
 
 class RawRenderTests(unittest.TestCase):
@@ -1127,6 +1214,9 @@ class RawRenderTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("raw_decode", image_normalize._RAW_DECODER)
         cls.rd = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.rd)
+
+    def setUp(self):
+        self.rd._notes.clear()
 
     def _raw(self, thumb=None, flip=0, sensor=(4000, 3000), demosaic=None, stacked=False):
         import rawpy
@@ -1169,11 +1259,28 @@ class RawRenderTests(unittest.TestCase):
     def test_preview_is_rotated_by_the_raw_flip_exactly_once(self):
         for orientation in (None, 6):  # LibRaw's flip alone, or also in the preview's own EXIF
             with self.subTest(preview_exif=orientation):
-                im = self.rd._preview(self._jpeg_thumb(2000, 1000, orientation), 6, 1568)
+                im = self.rd._preview(self._jpeg_thumb(2000, 1000, orientation), 6, 1568, sensor=(4000, 2000))
                 self.assertEqual(im.size, (1000, 2000))
                 top, bottom = im.getpixel((500, 100)), im.getpixel((500, 1900))
                 self.assertGreater(top[0], top[2])
                 self.assertGreater(bottom[2], bottom[0])
+
+    def test_preview_the_camera_software_already_turned_upright_is_not_turned_again(self):
+        # Nikon Transfer rotates a portrait shot's preview pixels and records
+        # the rotation only for the sensor data (LibRaw's flip, which it also
+        # writes into the EXIF it adds to the preview).
+        import numpy as np
+        import rawpy
+
+        for orientation in (None, 6):
+            with self.subTest(preview_exif=orientation):
+                upright = self.rd._preview(self._jpeg_thumb(2000, 3000, orientation), 6, 1568, sensor=(3008, 2000))
+                self.assertEqual(upright.size, (2000, 3000))
+        # The same preview from a sensor that is itself portrait does get turned.
+        self.assertEqual(self.rd._preview(self._jpeg_thumb(2000, 3000), 6, 1568, sensor=(2000, 3008)).size, (3000, 2000))
+        # LibRaw's own already-rotated bitmap previews (Kodak) too.
+        bitmap = MagicMock(format=rawpy.ThumbFormat.BITMAP, data=np.zeros((1126, 750, 3), dtype=np.uint8))
+        self.assertEqual(self.rd._preview(bitmap, 5, 0, sensor=(4516, 3012)).size, (750, 1126))
 
     def test_large_preview_wins_small_preview_loses_to_demosaic(self):
         import numpy as np
@@ -1202,13 +1309,14 @@ class RawRenderTests(unittest.TestCase):
                 # The sensor size is from before the failure reset the handle.
                 self.assertEqual((source, image.size, reported), ("preview", (640, 480), list(sensor)))
 
-    def test_without_any_preview_a_failed_demosaic_says_why(self):
+    def test_without_a_usable_preview_a_failed_demosaic_says_why(self):
         import rawpy
 
         for name, raw, kind in (
             ("over the budget", self._raw(None, sensor=(12000, 9000)), "too_large"),
             ("over the memory cap", self._raw(None, demosaic=MemoryError()), "too_large"),
             ("unreadable sensor data", self._raw(None, demosaic=rawpy.LibRawDataError()), "unsupported"),
+            ("only an icon-sized preview", self._raw(self._jpeg_thumb(8, 8), demosaic=rawpy.LibRawDataError()), "unsupported"),
         ):
             with self.subTest(name=name):
                 with self.assertRaises(self.rd._Fail) as ctx:
@@ -1229,6 +1337,23 @@ class RawRenderTests(unittest.TestCase):
         self.assertEqual(self._render(raw, 10**9)[1], "demosaic")
         raw.postprocess.assert_called_once_with(half_size=False, use_camera_wb=True, output_bps=8)
 
+    def test_unpacking_the_sensor_data_is_held_to_the_decode_budget(self):
+        # rawpy can't tell Bayer from non-Bayer data before unpacking it, and
+        # unpacking non-Bayer data alone can take more than the budget.
+        import rawpy
+        import resource
+
+        seen = []
+        raw = self._raw(None, sensor=(1000, 1000))
+        type(raw).raw_type = unittest.mock.PropertyMock(
+            side_effect=lambda: seen.append(resource.getrlimit(resource.RLIMIT_AS)) or rawpy.RawType.Flat)
+        before = resource.getrlimit(resource.RLIMIT_AS)
+        base = 64 * 1024**4  # far above anything this process uses: the test only watches the limit
+        with patch.object(self.rd, "_base_address_space", base):
+            self.assertFalse(self.rd._unpack_is_stacked(raw, 10**9))
+        self.assertEqual(seen[0][0], base + 10**9 if before[1] == resource.RLIM_INFINITY else min(before[1], base + 10**9))
+        self.assertEqual(resource.getrlimit(resource.RLIMIT_AS), before)  # restored
+
     def test_damaged_or_unusual_previews_fall_back_to_the_sensor_data(self):
         import numpy as np
         import rawpy
@@ -1238,6 +1363,7 @@ class RawRenderTests(unittest.TestCase):
         jpeg.data = jpeg.data[: len(jpeg.data) // 2]  # header intact, scan data cut off
         image, source, _ = self._render(self._raw(jpeg, demosaic=demosaiced), 10**9)
         self.assertEqual(source, "demosaic")
+        self.assertIn("preview unusable", self.rd._notes[0])  # reported to the server's log
         # Monochrome sensors and their previews come as (h, w, 1) arrays.
         grey = MagicMock(format=rawpy.ThumbFormat.BITMAP, data=np.full((1500, 2000, 1), 90, dtype=np.uint8))
         image, source, _ = self._render(self._raw(grey))
@@ -1254,6 +1380,18 @@ class RawRenderTests(unittest.TestCase):
             self.assertTrue(self.rd._out_of_memory(e), repr(e))
         for e in (rawpy.LibRawDataError(), OSError((errno.EIO, "I/O error")), ValueError("x")):
             self.assertFalse(self.rd._out_of_memory(e), repr(e))
+
+    def test_seccomp_filter_is_well_formed_for_both_architectures(self):
+        for machine in ("x86_64", "aarch64"):
+            with self.subTest(machine=machine):
+                program = self.rd._seccomp_program(machine)
+                self.assertLess(len(program), 256)
+                for i, (code, jt, jf, k) in enumerate(program):
+                    if code & 0x07 == 0x05:  # BPF_JMP: both targets inside the program
+                        self.assertTrue(0 <= jt and 0 <= jf and i + 1 + max(jt, jf) < len(program), (i, jt, jf))
+                self.assertEqual([code for code, *_ in program[-3:]], [0x06] * 3)  # allow / EPERM / kill
+        with self.assertRaises(KeyError):
+            self.rd._seccomp_program("riscv64")
 
 
 class S3FetchTests(unittest.TestCase):
@@ -1285,14 +1423,25 @@ class S3FetchTests(unittest.TestCase):
         self.assertEqual(again, (b64, media_type))
         client.get_object.assert_called_once_with(Bucket="bucket", Key="cust/att-1")
 
-    def test_source_ceiling_is_checked_before_reading_the_body(self):
+    def test_source_ceiling_is_checked_before_reading_more_than_a_peek(self):
         client, body = self._client(b"x" * 10)
         client.get_object.return_value["ContentLength"] = 10 * 2**30
         with patch.object(s3_images, "_client", return_value=client):
-            with self.assertRaises(ImageTooLargeError):
+            with self.assertRaises(ImageTooLargeError) as ctx:
                 s3_images.fetch_image_for_llm("cust/huge", limits_for_request(None, 1))
-        body.read.assert_not_called()
+        self.assertIn("the limit is 100 MB", str(ctx.exception))
+        body.read.assert_called_once_with(s3_images._RAW_HEAD_BYTES)
         body.close.assert_called_once()
+
+    def test_camera_raw_over_its_own_limit_is_refused_with_that_limit(self):
+        client, body = self._client(_fixture("camera_raw.dng"))
+        client.get_object.return_value["ContentLength"] = 2 * 2**30
+        with patch.object(s3_images, "_client", return_value=client), \
+                patch.object(image_normalize.subprocess, "Popen", _no_child):
+            with self.assertRaises(ImageTooLargeError) as ctx:
+                s3_images.fetch_image_for_llm("cust/huge.dng", limits_for_request(None, 1))
+        self.assertIn("the limit is 400 MB", str(ctx.exception))
+        body.read.assert_called_once_with(s3_images._RAW_HEAD_BYTES)
 
     def test_large_objects_other_than_camera_raw_are_refused_after_a_peek(self):
         client, body = self._client(_encode(_photo_like(64, 48), "PNG"))
@@ -1327,17 +1476,74 @@ class S3FetchTests(unittest.TestCase):
             self.assertIn(unittest.mock.call(amount), body.read.call_args_list)
 
     def test_disk_trouble_while_spooling_a_camera_raw_is_not_remembered(self):
-        client, body = self._client(_fixture("camera_raw.dng"))
-        body.read.side_effect = lambda n=None: _fixture("camera_raw.dng")[:n]
-        client.get_object.return_value["ContentLength"] = 150 * _MiB
+        dng = _fixture("camera_raw.dng")
         limits = limits_for_request(None, 1)
-        with patch.object(s3_images, "_client", return_value=client), \
-                patch.object(image_normalize, "camera_raw_spool", side_effect=OSError(errno.ENOSPC, "No space left")):
-            for _ in range(2):
-                with self.assertRaises(s3_images.AttachmentFetchError) as ctx:
-                    s3_images.fetch_image_for_llm("cust/big.dng", limits)
-        self.assertIn("try again", str(ctx.exception))
-        self.assertEqual(client.get_object.call_count, 2)  # transient: retried next time
+        for size in (len(dng), 150 * _MiB):  # held in memory, or streamed
+            with self.subTest(size=size):
+                s3_images._CACHE.clear()
+                client, body = self._client(dng)
+                body.read.side_effect = lambda n=None: dng[:n]
+                client.get_object.return_value["ContentLength"] = size
+                with patch.object(s3_images, "_client", return_value=client), \
+                        patch.object(image_normalize, "camera_raw_spool", side_effect=OSError(errno.ENOSPC, "No space left")):
+                    for _ in range(2):
+                        with self.assertRaises(image_normalize.ImageTemporarilyUnavailableError) as ctx:
+                            s3_images.fetch_image_for_llm("cust/raw.dng", limits)
+                self.assertIn("try again", str(ctx.exception))
+                self.assertNotIn("Errno", str(ctx.exception))
+                self.assertEqual(user_facing_llm_error(ctx.exception, "anthropic")[0], "attachment_error")
+                self.assertEqual(client.get_object.call_count, 2)  # transient: retried next time
+
+    def test_storage_errors_while_streaming_are_readable_and_not_remembered(self):
+        from botocore.exceptions import ReadTimeoutError, ResponseStreamingError
+
+        dng = _fixture("camera_raw.dng")
+        limits = limits_for_request(None, 1)
+        for name, side_effect in (
+            ("timeout on the peek", ReadTimeoutError(endpoint_url="https://s3")),
+            ("connection reset mid-stream", [dng[:1000], ResponseStreamingError(error="reset")]),
+        ):
+            with self.subTest(name=name):
+                s3_images._CACHE.clear()
+                client, body = self._client(dng)
+                body.read.side_effect = side_effect
+                client.get_object.return_value["ContentLength"] = 150 * _MiB
+                with patch.object(s3_images, "_client", return_value=client), \
+                        patch.object(image_normalize.subprocess, "Popen", _no_child):
+                    with self.assertRaises(s3_images.AttachmentFetchError) as ctx:
+                        s3_images.fetch_image_for_llm("cust/raw.dng", limits)
+                self.assertIn("could not be loaded right now", str(ctx.exception))
+                body.close.assert_called_once()
+
+    def test_large_raw_whose_first_ifd_is_at_the_end_is_recognized_from_a_ranged_read(self):
+        # dnglab writes the first IFD after the image data.
+        dng_ifd = _ifd_entries([(50706, 1, b"\x01\x04\x00\x00"), (262, 3, 32803)])
+        offset = s3_images._RAW_HEAD_BYTES + 4096
+        data = b"II*\x00" + struct.pack("<I", offset) + os.urandom(offset - 8) + dng_ifd
+        client, body = self._client(data)
+        body.read.side_effect = io.BytesIO(data).read
+        ifd_body = MagicMock()
+        ifd_body.read.return_value = dng_ifd
+        whole = client.get_object.return_value
+        whole["ContentLength"] = 150 * _MiB
+        client.get_object.side_effect = lambda **kw: {"Body": ifd_body} if "Range" in kw else whole
+        with patch.object(s3_images, "_client", return_value=client):
+            with self.assertRaises(UnsupportedImageError) as ctx:  # recognized; LibRaw then can't read the junk
+                s3_images.fetch_image_for_llm("cust/late-ifd.dng", limits_for_request(None, 1))
+        self.assertIn("camera RAW (DNG)", str(ctx.exception))
+        ranged = [c for c in client.get_object.call_args_list if "Range" in c.kwargs]
+        self.assertEqual(ranged[0].kwargs["Range"], f"bytes={offset}-{offset + s3_images._IFD_BYTES - 1}")
+        ifd_body.close.assert_called_once()
+
+    def test_the_raw_decoders_verdict_on_a_file_is_remembered_for_every_limit(self):
+        # A camera RAW may be a 400 MiB download: don't fetch it again for
+        # each per-request limit when LibRaw has said it can't read it.
+        client, _ = self._client(b"FUJIFILMCCD-RAW " + os.urandom(256))
+        with patch.object(s3_images, "_client", return_value=client):
+            for limits in (limits_for_request("anthropic", 1), limits_for_request("anthropic", 30), limits_for_request("xai", 1)):
+                with self.assertRaises(UnsupportedImageError):
+                    s3_images.fetch_image_for_llm("cust/bad.raf", limits)
+        client.get_object.assert_called_once()
 
     def test_disk_cache_directory_is_private(self):
         # The camera RAW decoder runs as another user: it must not read anyone's attachments.
