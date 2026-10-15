@@ -74,6 +74,14 @@ class RendererPrecedenceTests(unittest.TestCase):
             # A run enqueued before pinning existed resolves now.
             self.assertEqual(pdf_renderer.pinned_or_resolved({"customer_id": "c1"})["pdf_renderer"], "x2p_v1")
 
+    def test_runs_pinned_to_a_removed_renderer_fall_back_to_typst(self):
+        # Plan 5.2: once xhtml2pdf is removed, a recovered run pinned to
+        # x2p_v1 renders with Typst instead of failing.
+        with _env(), mock.patch.object(pdf_renderer, "x2p_available", return_value=False):
+            self.assertEqual(pdf_renderer.pin("c1")["pdf_renderer"], "typst")
+            state = {"customer_id": "c1", "pdf_renderer": "x2p_v1", "pdf_script_route": None}
+            self.assertEqual(pdf_renderer.pinned_or_resolved(state)["pdf_renderer"], "typst")
+
     def test_typst_caps_are_configurable(self):
         with _env(PDF_TYPST_MAX_CHARS="300000", PDF_TYPST_MAX_TABLE_ROWS="2500"):
             limits = pdf_renderer.limits()

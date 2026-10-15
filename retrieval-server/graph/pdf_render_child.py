@@ -356,26 +356,39 @@ def _warm_imports(renderer: str) -> float:
 
 
 def _selftest() -> int:
+    """Render with every renderer this build ships (the Docker smoke step):
+    x2p_v1 while xhtml2pdf is installed, Typst when its library is, and
+    parse a PDF with PDFium. 0 only when all of them work and at least one
+    renderer exists."""
+    import importlib.util
+
     from graph_tools.tools.generate_pdf import render_job
 
-    job = {
-        "renderer": "x2p_v1",
-        "markdown": "# Selftest\n\nLatin text, a list:\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n",
-        "title": None,
-        "filename": "selftest.pdf",
-    }
-    result = render_job(job)
-    if result.get("status") != "ok" or not result.get("pdf", b"").startswith(b"%PDF"):
-        return 1
+    renderers = 0
+    if importlib.util.find_spec("xhtml2pdf") is not None:
+        renderers += 1
+        result = render_job({
+            "renderer": "x2p_v1",
+            "markdown": "# Selftest\n\nLatin text, a list:\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n",
+            "title": None,
+            "filename": "selftest.pdf",
+        })
+        if result.get("status") != "ok" or not result.get("pdf", b"").startswith(b"%PDF"):
+            return 1
+        header, _ = _parse("inspect_extract", result["pdf"], {})
+        if header.get("status") != "ok" or header.get("pages") != 1:
+            return 1
     try:
         from graph_tools.tools import pdf_typst
     except ImportError:
-        return 0  # Typst not installed in this build
-    try:
-        pdf_typst.selftest()
-    except Exception:
-        return 1
-    return 0
+        pdf_typst = None  # Typst not installed in this build
+    if pdf_typst is not None:
+        renderers += 1
+        try:
+            pdf_typst.selftest()
+        except Exception:
+            return 1
+    return 0 if renderers else 1
 
 
 def main(argv: list[str]) -> int:

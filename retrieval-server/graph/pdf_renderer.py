@@ -63,6 +63,24 @@ def typst_available() -> bool:
         return False
 
 
+@functools.lru_cache(maxsize=1)
+def x2p_available() -> bool:
+    """Whether this build still ships the bridge renderer (5.2 removes it)."""
+    try:
+        return importlib.util.find_spec("xhtml2pdf") is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def _installed(renderer: str) -> str:
+    """`renderer`, or Typst when x2p_v1 was removed from this build (plan 5.2:
+    a durable run pinned to x2p_v1 and recovered after the removal deploy
+    renders with Typst instead of failing)."""
+    if renderer == "x2p_v1" and not x2p_available() and typst_available():
+        return "typst"
+    return renderer
+
+
 def _usable(value: str, source: str) -> str | None:
     """`value` if it names a renderer this build can run, else None (logged)."""
     if not value:
@@ -88,7 +106,7 @@ def base_renderer(customer_id: str | None) -> str:
     canary = _env("PDF_RENDERER_CANARY")
     if canary and customer_id and customer_id in _canary_customers():
         renderer = _usable(canary, "PDF_RENDERER_CANARY") or renderer
-    return renderer
+    return _installed(renderer)
 
 
 def script_route() -> str | None:
@@ -118,7 +136,8 @@ def pinned_or_resolved(state: dict) -> dict:
     renderer = state.get("pdf_renderer")
     if renderer in RENDERERS:
         route = state.get("pdf_script_route")
-        return {"pdf_renderer": renderer, "pdf_script_route": route if route in SCRIPT_ROUTES else None}
+        return {"pdf_renderer": _installed(renderer),
+                "pdf_script_route": route if route in SCRIPT_ROUTES else None}
     return pin(state.get("customer_id"))
 
 
