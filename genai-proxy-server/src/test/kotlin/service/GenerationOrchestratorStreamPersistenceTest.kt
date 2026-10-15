@@ -210,6 +210,12 @@ class GenerationOrchestratorStreamPersistenceTest {
                 throw itemTooLarge
             }
         }
+        // The write guard (3.9) finds a live conversation, not one being purged.
+        coEvery { repository.getConversationWriteState(any(), any()) } answers {
+            com.genflowly.repository.ConversationWriteState(
+                ownerCustomerId = firstArg(), conversationId = secondArg(), archived = false, purgeStartedAt = null
+            )
+        }
         // The real service between the orchestrator and the mocked repository.
         val conversations = ConversationService(repository, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
         val orchestrator = GenerationOrchestrator(
