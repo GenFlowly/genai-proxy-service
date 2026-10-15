@@ -14,11 +14,10 @@ durable run pinned to `x2p_v1` before the deploy renders with Typst too.
 
 ## When
 
-After the canary stages in retrieval-server/development.md ("Choosing the
-renderer"): internal tenants on `PDF_RENDERER_CANARY=typst` for at least 7
-days, `PDF_RENDERER_SCRIPT_ROUTE=typst` for everyone for at least 14 days, then
-`PDF_RENDERER=typst` in production. Compare the `pdf_render_*` metrics by
-renderer at each stage first.
+Typst is already the default renderer; xhtml2pdf stays only as the
+`PDF_RENDERER=x2p_v1` rollback. Apply this once production has rendered with
+Typst for a week or two without needing that rollback (check the
+`pdf_render_*` metrics), since afterwards a rollback means reverting.
 
 ## Applying
 

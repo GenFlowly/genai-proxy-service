@@ -41,6 +41,8 @@ from graph_tools.tools.pdf_charsets import find_undrawable, unsupported_script_n
 logger = logging.getLogger(__name__)
 
 RENDERERS = ("x2p_v1", "typst")
+# Only when no host pins a renderer (the tool used outside the retrieval
+# server). The host always pins one, Typst by default (graph/pdf_renderer.py).
 DEFAULT_RENDERER = "x2p_v1"
 
 # Input caps (plan 1.5): over a cap the tool refuses with an actionable

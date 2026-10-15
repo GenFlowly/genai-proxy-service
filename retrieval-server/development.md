@@ -496,27 +496,28 @@ PDFium, so a broken child, font set or library fails the build.
 
 ### Choosing the renderer (plan 2.1 / 5.2)
 
-The renderer is resolved once per turn (the `/retrieve` handler, `POST
-/runs` before enqueue) and pinned on the request, so a durable run recovered
-after a change keeps the renderer it started with.
+Every PDF renders with Typst: it is the code's default (`graph/pdf_renderer.py`,
+`default_renderer()`), with no setting needed. The renderer is resolved once per
+turn (the `/retrieve` handler, `POST /runs` before enqueue) and pinned on the
+request, so a durable run recovered after a change keeps the renderer it
+started with. xhtml2pdf (`x2p_v1`) stays in the image only as a rollback until
+`scratch/xhtml2pdf-removal/` is applied, and as the fallback of a build
+without Typst or its fonts.
 
 | Env var | Values | Meaning |
 |---|---|---|
-| `PDF_RENDERER` | `x2p_v1` (default), `typst` | default renderer |
-| `PDF_RENDERER_CANARY` + `PDF_RENDERER_CANARY_CUSTOMERS` | renderer, comma-separated customer ids | canary for listed customers |
-| `PDF_RENDERER_SCRIPT_ROUTE` | `typst` or unset | documents with letters x2p_v1 cannot draw go to Typst (when the bundled fonts cover them) |
+| `PDF_RENDERER` | unset (Typst), `x2p_v1` | rollback: every PDF on the old renderer |
+| `PDF_RENDERER_CANARY` + `PDF_RENDERER_CANARY_CUSTOMERS` | renderer, comma-separated customer ids | a different renderer for the listed customers |
+| `PDF_RENDERER_SCRIPT_ROUTE` | `typst` or unset | while on `x2p_v1`: documents with letters it cannot draw still go to Typst |
 | `PDF_TYPST_MAX_CHARS` / `PDF_TYPST_MAX_TABLE_ROWS` | 150000 / 1000 | Typst input caps; raise after calibration (e.g. 300000 / 2500) |
 
-They are plain settings, not secrets: set them in the app's `[env]` in
-`fly.toml` (development, which already sets `PDF_RENDERER = "typst"`) or
-`fly.production.toml`, so the change is reviewed and ships with the next
-deploy. Changing any of these changes Fly env, which restarts the single
-machine and triggers DBOS recovery: flip at a quiet hour and check the
-recovery panel afterwards. The canary stages are: dev default, internal tenants
-(canary list, at least 7 days), script route for everyone (at least 14
-days), production default, then removal of xhtml2pdf. Compare the
-`pdf_render_*` metrics by renderer at each stage. When xhtml2pdf is finally
-removed from the image, runs pinned to `x2p_v1` render with Typst.
+These are plain settings, not secrets. A rollback is fastest as
+`flyctl secrets set --app genai-retrieval-server-<stage> PDF_RENDERER=x2p_v1`
+(it restarts the machine without a deploy); keep anything lasting in the app's
+`[env]` in `fly.toml` / `fly.production.toml`. Changing any of these restarts
+the single machine and triggers DBOS recovery: do it at a quiet hour and check
+the recovery panel afterwards. Watch the `pdf_render_*` metrics by renderer;
+after a week or two without problems, apply the xhtml2pdf removal series.
 
 ### Files on later turns
 

@@ -2,7 +2,9 @@
 
 Three environment values, read when a turn starts:
 
-- PDF_RENDERER: the default renderer, 'x2p_v1' unless set;
+- PDF_RENDERER: overrides the default renderer, which is 'typst' (or
+  'x2p_v1' in a build without Typst or its fonts). Set it to 'x2p_v1' only
+  to roll back;
 - PDF_RENDERER_CANARY, applied to the customers listed (comma-separated) in
   PDF_RENDERER_CANARY_CUSTOMERS;
 - PDF_RENDERER_SCRIPT_ROUTE: unset by default. When 'typst', a document
@@ -34,7 +36,8 @@ import os
 logger = logging.getLogger(__name__)
 
 RENDERERS = ("x2p_v1", "typst")
-DEFAULT_RENDERER = "x2p_v1"
+PREFERRED_RENDERER = "typst"
+FALLBACK_RENDERER = "x2p_v1"
 SCRIPT_ROUTES = ("typst",)
 
 
@@ -72,6 +75,11 @@ def x2p_available() -> bool:
         return False
 
 
+def default_renderer() -> str:
+    """Typst, unless this build cannot run it (then the bridge renderer)."""
+    return PREFERRED_RENDERER if typst_available() else FALLBACK_RENDERER
+
+
 def _installed(renderer: str) -> str:
     """`renderer`, or Typst when x2p_v1 was removed from this build (plan 5.2:
     a durable run pinned to x2p_v1 and recovered after the removal deploy
@@ -86,11 +94,11 @@ def _usable(value: str, source: str) -> str | None:
     if not value:
         return None
     if value not in RENDERERS:
-        logger.warning("Unknown PDF renderer in %s; using %s", source, DEFAULT_RENDERER)
+        logger.warning("Unknown PDF renderer in %s; using %s", source, default_renderer())
         return None
     if value == "typst" and not typst_available():
         logger.warning("PDF renderer typst from %s is not available in this build; using %s",
-                       source, DEFAULT_RENDERER)
+                       source, default_renderer())
         return None
     return value
 
@@ -102,7 +110,7 @@ def _canary_customers() -> set[str]:
 def base_renderer(customer_id: str | None) -> str:
     """The request's renderer before any per-document route: the canary
     value for listed customers, else PDF_RENDERER, else the default."""
-    renderer = _usable(_env("PDF_RENDERER"), "PDF_RENDERER") or DEFAULT_RENDERER
+    renderer = _usable(_env("PDF_RENDERER"), "PDF_RENDERER") or default_renderer()
     canary = _env("PDF_RENDERER_CANARY")
     if canary and customer_id and customer_id in _canary_customers():
         renderer = _usable(canary, "PDF_RENDERER_CANARY") or renderer
@@ -159,7 +167,7 @@ def fonts_cover(letters: set) -> bool:
         if uncovered is not None:
             return not uncovered("".join(sorted(letters)))
     except Exception:
-        logger.warning("PDF font coverage check failed; keeping the document on %s", DEFAULT_RENDERER)
+        logger.warning("PDF font coverage check failed; keeping the document on %s", FALLBACK_RENDERER)
     return False
 
 
@@ -171,7 +179,7 @@ def resolve(customer_id: str | None, script_hint=None, *, pinned: dict | None = 
     the document: when it holds letters x2p_v1 cannot draw, the script route
     is on and the fonts cover them, the document goes to Typst."""
     fields = pinned or pin(customer_id)
-    renderer = fields.get("pdf_renderer") or DEFAULT_RENDERER
+    renderer = fields.get("pdf_renderer") or default_renderer()
     if (
         renderer == "x2p_v1"
         and fields.get("pdf_script_route") == "typst"

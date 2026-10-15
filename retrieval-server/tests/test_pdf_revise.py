@@ -319,7 +319,7 @@ class LongDocumentTests(unittest.TestCase):
 
     def test_caps_apply_to_the_joined_text(self):
         context, store = self._context()
-        context.runtime["pdf_limits"] = {"x2p_v1": {"max_chars": 10}}
+        context.runtime["pdf_limits"] = {context.runtime["pdf_renderer"]: {"max_chars": 10}}
         _run(FsWriteTool().run({"path": "a.md", "content": "x" * 8}, context))
         _run(FsWriteTool().run({"path": "b.md", "content": "y" * 8}, context))
         result = _run(gp.GeneratePdfTool().run({"source_paths": ["a.md", "b.md"], "filename": "r.pdf"}, context))

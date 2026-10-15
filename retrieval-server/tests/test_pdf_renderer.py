@@ -26,9 +26,15 @@ class RendererPrecedenceTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_default_is_x2p(self):
+    def test_default_is_typst(self):
         with _env():
-            self.assertEqual(pdf_renderer.pin("c1"), {"pdf_renderer": "x2p_v1", "pdf_script_route": None})
+            self.assertEqual(pdf_renderer.pin("c1"), {"pdf_renderer": "typst", "pdf_script_route": None})
+
+    def test_x2p_is_only_a_rollback_or_a_build_without_typst(self):
+        with _env(PDF_RENDERER="x2p_v1"):
+            self.assertEqual(pdf_renderer.pin("c1")["pdf_renderer"], "x2p_v1")
+        with _env(), mock.patch.object(pdf_renderer, "typst_available", return_value=False):
+            self.assertEqual(pdf_renderer.pin("c1")["pdf_renderer"], "x2p_v1")
 
     def test_env_default_and_canary_list(self):
         with _env(PDF_RENDERER="x2p_v1", PDF_RENDERER_CANARY="typst",
@@ -42,7 +48,7 @@ class RendererPrecedenceTests(unittest.TestCase):
     def test_unknown_values_fall_back_with_a_warning(self):
         with _env(PDF_RENDERER="weasy", PDF_RENDERER_SCRIPT_ROUTE="weasy"), \
                 self.assertLogs("graph.pdf_renderer", level="WARNING"):
-            self.assertEqual(pdf_renderer.pin("c1"), {"pdf_renderer": "x2p_v1", "pdf_script_route": None})
+            self.assertEqual(pdf_renderer.pin("c1"), {"pdf_renderer": "typst", "pdf_script_route": None})
 
     def test_typst_unavailable_falls_back(self):
         with _env(PDF_RENDERER_CANARY="typst", PDF_RENDERER_CANARY_CUSTOMERS="c1",
@@ -98,11 +104,11 @@ class RetrieveRequestPinningTests(unittest.TestCase):
         req = RetrieveRequest.model_validate({
             "customer_id": "c1", "client": "web", "data_type": "note",
             "raw_data": {"query_data": "hi"}, "llm_credentials": {},
-            "pdf_renderer": "typst",
+            "pdf_renderer": "x2p_v1",
         })
         with _env():
             pinned = req.model_copy(update=pdf_renderer.pin(req.customer_id))
-        self.assertEqual(pinned.pdf_renderer, "x2p_v1")
+        self.assertEqual(pinned.pdf_renderer, "typst")
 
     def test_declared_fields_survive_a_durable_rebuild(self):
         from models import RetrieveRequest, RunRequest
