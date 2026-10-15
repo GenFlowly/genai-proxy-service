@@ -29,13 +29,13 @@ import com.genflowly.models.Message
 import com.genflowly.models.toCredentialKey
 import com.genflowly.models.toProviderString
 import org.slf4j.LoggerFactory
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -100,6 +100,25 @@ class GenerationOrchestrator(
         messageId: String
     ): List<Message> {
         return conversationService.getMessageThread(conversationId, messageId)
+    }
+
+    /**
+     * Writes a streamed assistant message. When its DynamoDB item exceeds the
+     * 400 KB limit (thinking steps near their budget plus a long answer), it is
+     * written once more without its thinking steps: the answer and its files
+     * matter more than the trace.
+     */
+    private suspend fun addStreamedMessage(message: Message) {
+        try {
+            conversationService.addMessageInConversation(message)
+        } catch (e: Exception) {
+            if (message.thinkingStepsJson == null || !e.isItemSizeLimitError()) throw e
+            logger.warn(
+                "Assistant message {} exceeds the DynamoDB item size; storing it without its thinking steps",
+                message.messageId
+            )
+            conversationService.addMessageInConversation(message.copy(thinkingStepsJson = null))
+        }
     }
 
     /**
@@ -727,7 +746,7 @@ class GenerationOrchestrator(
                         fsNamespace = fsNamespace,
                         runId = durableRunId
                     )
-                    conversationService.addMessageInConversation(responseMessage)
+                    addStreamedMessage(responseMessage)
                 }
                 // Durable run finished — remove just this run from the pending set
                 // (the other vendors' in-flight runs stay reattachable). No-op when
@@ -773,11 +792,54 @@ class GenerationOrchestrator(
 internal fun newFsNamespace(): String = java.util.UUID.randomUUID().toString().replace("-", "")
 
 /**
- * Persisted form of a turn's thinking-step events ("ks" chunks, each already a
- * JSON object). Guards the DDB 400KB item limit: an oversized run (deep graph
- * cycles) keeps every step but drops the bulky prompt/response excerpts.
+ * Budget for a turn's persisted thinking steps, in UTF-8 bytes: DynamoDB's
+ * 400 KB item limit counts bytes, and a CJK character takes three.
  */
-private const val MAX_THINKING_STEPS_JSON_CHARS = 250_000
+internal const val MAX_THINKING_STEPS_JSON_BYTES = 300_000
+
+/** Step fields dropped when the steps are over budget: LLM excerpts, and a label that repeats tool arguments. */
+private val BULKY_STEP_FIELDS = setOf("prompt", "response", "detail")
+
+/** Step fields listing tool calls, whose entries lose their bulky parts when over budget. */
+private val CALL_LIST_FIELDS = setOf("tool_calls", "calls")
+
+/** Fields of a tool-call entry dropped when over budget: its arguments (a whole document for generate_pdf) and a sub-agent's trace. */
+private val BULKY_CALL_FIELDS = setOf("args", "details")
+
+/**
+ * Persisted form of a turn's thinking-step events ("ks" chunks, each already a
+ * JSON object), within [MAX_THINKING_STEPS_JSON_BYTES]. Over budget, every step
+ * is kept but its bulky parts are dropped: the prompt/response excerpts, the
+ * detail label, and the args (and sub-agent details) of each tool_calls/calls
+ * entry, which carry a whole document per generate_pdf call. Still over budget,
+ * the turn stores no thinking steps (null) rather than risk the message.
+ */
+internal fun thinkingStepsToJson(steps: List<String>): String? {
+    if (steps.isEmpty()) return null
+    val full = steps.joinToString(",", "[", "]")
+    if (full.utf8Size() <= MAX_THINKING_STEPS_JSON_BYTES) return full
+    val stripped = runCatching {
+        JsonArray(Json.parseToJsonElement(full).jsonArray.map { it.withoutBulk() }).toString()
+    }.getOrNull() ?: return null
+    return stripped.takeIf { it.utf8Size() <= MAX_THINKING_STEPS_JSON_BYTES }
+}
+
+private fun String.utf8Size(): Int = toByteArray(Charsets.UTF_8).size
+
+private fun JsonElement.withoutBulk(): JsonElement {
+    val step = this as? JsonObject ?: return this
+    return JsonObject(
+        step.filterKeys { it !in BULKY_STEP_FIELDS }.mapValues { (field, value) ->
+            if (field in CALL_LIST_FIELDS && value is JsonArray) {
+                JsonArray(value.map { call ->
+                    (call as? JsonObject)?.let { JsonObject(it.filterKeys { key -> key !in BULKY_CALL_FIELDS }) } ?: call
+                })
+            } else {
+                value
+            }
+        }
+    )
+}
 
 /** Text stored for a turn whose only output is a generated file (its streamed text was empty). */
 internal const val GENERATED_FILE_FALLBACK_TEXT = "Your file is attached."
@@ -803,17 +865,16 @@ internal fun mergeJsonArrays(existing: String?, incoming: String): String {
     return JsonArray(byArtifactId.values.toList()).toString()
 }
 
-private fun thinkingStepsToJson(steps: List<String>): String? {
-    if (steps.isEmpty()) return null
-    val full = steps.joinToString(",", "[", "]")
-    if (full.length <= MAX_THINKING_STEPS_JSON_CHARS) return full
-    return runCatching {
-        val stripped = Json.parseToJsonElement(full).jsonArray.map { el ->
-            JsonObject(el.jsonObject.filterKeys { it != "prompt" && it != "response" })
-        }
-        JsonArray(stripped).toString()
-    }.getOrNull()
-}
+/**
+ * True for DynamoDB's ValidationException for an item over the 400 KB limit
+ * ("Item size has exceeded the maximum allowed size"), anywhere in the cause
+ * chain.
+ */
+internal fun Throwable.isItemSizeLimitError(): Boolean =
+    generateSequence(this) { it.cause }.take(8).any { e ->
+        e is DynamoDbException && e.awsErrorDetails()?.errorCode() == "ValidationException" &&
+            (e.awsErrorDetails()?.errorMessage() ?: e.message.orEmpty()).contains("item size", ignoreCase = true)
+    }
 
 private fun String.toJsonStringValue(): String = buildString {
     append('"')

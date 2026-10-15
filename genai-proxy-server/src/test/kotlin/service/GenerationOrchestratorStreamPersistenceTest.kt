@@ -8,6 +8,7 @@ import com.genflowly.models.Message
 import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.repository.ConversationRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -17,10 +18,13 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException
 import java.net.SocketTimeoutException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -180,6 +184,55 @@ class GenerationOrchestratorStreamPersistenceTest {
         runTurn()
 
         assertEquals(emptyList(), persistedAssistantMessages())
+    }
+
+    // ── 1.9: degrade persistence instead of failing ────────────────────────
+
+    @Test
+    fun `a message the store rejects for its size is stored again without its thinking steps`() = runTest {
+        val repository = mockk<ConversationRepository>(relaxed = true)
+        val itemTooLarge = DynamoDbException.builder()
+            .message("Item size has exceeded the maximum allowed size")
+            .statusCode(400)
+            .awsErrorDetails(
+                AwsErrorDetails.builder()
+                    .errorCode("ValidationException")
+                    .errorMessage("Item size has exceeded the maximum allowed size")
+                    .build()
+            )
+            .build()
+        val puts = mutableListOf<Message>()
+        var rejectedOnce = false
+        coEvery { repository.createMessage(capture(puts)) } answers {
+            if (firstArg<Message>().role == "assistant" && !rejectedOnce) {
+                rejectedOnce = true
+                throw itemTooLarge
+            }
+        }
+        // The real service between the orchestrator and the mocked repository.
+        val conversations = ConversationService(repository, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val orchestrator = GenerationOrchestrator(
+            credentialsService, instructionService, conversations, retrievalService,
+            mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
+            mockk(relaxed = true), AppScope(), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true)
+        )
+        streamYields(
+            flowOf(
+                StreamChunk.ThinkingStep("""{"node":"tools","name":"Tools","kind":"TOOL","status":"done"}"""),
+                StreamChunk.GeneratedArtifacts("[${artifact("art-1")}]"),
+                StreamChunk.Content("Here is your report.")
+            )
+        )
+
+        orchestrator.processTextGenerateStreamRequest(aiConfig, "", "", "write a report", null, null, "REACT_APP", cust)
+            .flow.toList()
+
+        val (rejected, retried) = puts.filter { it.role == "assistant" }
+        assertTrue(rejected.thinkingStepsJson != null)
+        assertNull(retried.thinkingStepsJson)
+        assertEquals(rejected.messageId, retried.messageId)
+        assertEquals("Here is your report.", retried.text)
+        assertEquals(listOf(ref("art-1")), retried.attachments)
     }
 
     @Test
