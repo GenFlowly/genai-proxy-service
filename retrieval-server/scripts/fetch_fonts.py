@@ -81,6 +81,7 @@ def _download(url: str, attempts: int = 3) -> bytes:
     for attempt in range(attempts):
         try:
             with urllib.request.urlopen(url, timeout=300) as resp:
+                expected = resp.headers.get("Content-Length")
                 buf = io.BytesIO()
                 while True:
                     chunk = resp.read(1 << 20)
@@ -89,6 +90,10 @@ def _download(url: str, attempts: int = 3) -> bytes:
                     buf.write(chunk)
                     if buf.tell() > MAX_TARBALL_BYTES:
                         raise FetchError("tarball larger than the size limit")
+                if expected and expected.isdigit() and int(expected) != buf.tell():
+                    # A connection closed early: retry rather than fail the
+                    # integrity check.
+                    raise OSError(f"short read ({buf.tell()} of {expected} bytes)")
                 return buf.getvalue()
         except (urllib.error.URLError, OSError, TimeoutError) as exc:
             last = exc
@@ -325,8 +330,18 @@ def _tarball(pkg: dict, registry: str, cache_dir: str | None) -> bytes:
                 return data
             except FetchError:
                 pass  # stale or corrupt cache entry: fetch again
-    data = _download(_tarball_url(registry, pkg["name"], pkg["version"]))
-    _check_integrity(data, pkg["integrity"])
+    url = _tarball_url(registry, pkg["name"], pkg["version"])
+    for attempt in range(3):
+        data = _download(url)
+        try:
+            _check_integrity(data, pkg["integrity"])
+            break
+        except FetchError:
+            # A corrupted or cut transfer (seen once in an image build behind
+            # a proxy): fetch again; a real mismatch still fails below.
+            if attempt == 2:
+                raise
+            time.sleep(2 * (attempt + 1))
     if cached:
         os.makedirs(cache_dir, exist_ok=True)
         _write_atomic(cached, data)

@@ -43,6 +43,14 @@ jobs:
             retrieval-server/constraints.txt
             retrieval-server/requirements-dev.txt
 
+      # The Typst renderer's fonts (plan 5.1), pinned by hash in the lock
+      # file; the tarballs are cached between runs, keyed on that lock.
+      - name: Cache PDF fonts
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/genflowly-fonts
+          key: pdf-fonts-${{ hashFiles('retrieval-server/graph_tools/fonts/fonts.lock.json') }}
+
       - name: Test Retrieval Server
         working-directory: retrieval-server
         run: |
@@ -50,6 +58,11 @@ jobs:
           # Same resolve as the image (Dockerfile): constraints.txt pins the
           # PDF-only closure; requirements-dev.txt adds test-only packages.
           pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
+          # Bundled fonts (so the Typst render tests run instead of skipping)
+          # and the vendored mitex package checked against upstream.
+          python scripts/fetch_fonts.py --cache-dir ~/.cache/genflowly-fonts
+          python scripts/fetch_fonts.py --check
+          python scripts/verify_mitex.py
           python -m unittest discover -s tests -t . -v
 
       # Kotlin gate (plan 1.1): the proxy's suite runs before any CDK or Fly
