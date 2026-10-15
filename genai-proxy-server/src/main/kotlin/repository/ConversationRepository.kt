@@ -131,65 +131,78 @@ class ConversationRepository(
      * reply, so a reload can rediscover "assistant is mid-run" and reattach. A
      * multi-vendor turn fans out to N concurrent runs, so this is a String Set —
      * each parallel vendor request ADDs its own entry atomically without clobbering
-     * the others. Best-effort: a failure must never fail the generation. Returns
-     * false if the conversation row doesn't exist.
+     * the others. The set lives on the conversation OWNER's row, where reads and
+     * the purge look for it, also when the caller is a share recipient.
+     * Best-effort: a failure must never fail the generation. Returns false if the
+     * conversation row doesn't exist.
      */
     suspend fun addPendingRun(
-        customerId: String,
+        callerCustomerId: String,
         conversationId: String,
         run: PendingRun
+    ): Boolean = updatePendingRuns(callerCustomerId, conversationId, "ADD #pr :e", run, "add")
+
+    /**
+     * Removes one finished run from the pending set on the owner's row
+     * (DynamoDB drops the attribute once it's empty). Best-effort. Clears only
+     * this run's entry so the other vendors' in-flight runs stay reattachable.
+     */
+    suspend fun removePendingRun(
+        callerCustomerId: String,
+        conversationId: String,
+        run: PendingRun
+    ): Boolean = updatePendingRuns(callerCustomerId, conversationId, "DELETE #pr :e", run, "remove")
+
+    /**
+     * Applies [updateExpression] (on #pr with :e = [run]) to the conversation
+     * owner's row. The caller's own key is tried first, which is the owner in
+     * the common case; when no such row exists the caller is a share recipient
+     * and the owner is resolved through the conversationId index. Every write
+     * requires the row to exist: an UpdateItem on a missing key would otherwise
+     * create a phantom Conversation row under the recipient, which the
+     * conversationId index would then return alongside the owner's.
+     */
+    private suspend fun updatePendingRuns(
+        callerCustomerId: String,
+        conversationId: String,
+        updateExpression: String,
+        run: PendingRun,
+        action: String
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            dynamoDbClient.updateItem(
-                UpdateItemRequest.builder()
-                    .tableName(CONVERSATION_TABLE)
-                    .key(mapOf(
-                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
-                    ))
-                    .updateExpression("ADD #pr :e")
-                    .conditionExpression("attribute_exists(#cid)")
-                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY, "#cid" to CONVERSATION_ID_KEY))
-                    .expressionAttributeValues(mapOf(":e" to AttributeValue.builder().ss(run.encode()).build()))
-                    .build()
-            )
-            true
-        } catch (e: ConditionalCheckFailedException) {
-            false
+            if (updatePendingRunsOn(callerCustomerId, conversationId, updateExpression, run)) return@withContext true
+            val ownerCustomerId = getConversationById(conversationId)?.customerId
+            ownerCustomerId != null && ownerCustomerId != callerCustomerId &&
+                updatePendingRunsOn(ownerCustomerId, conversationId, updateExpression, run)
         } catch (e: Exception) {
-            logger.error("Failed to add pending run on conversation $conversationId", e)
+            logger.error("Failed to $action pending run on conversation $conversationId", e)
             false
         }
     }
 
-    /**
-     * Removes one finished run from the pending set (DynamoDB drops the attribute
-     * once it's empty). Best-effort. Clears only this run's entry so the other
-     * vendors' in-flight runs stay reattachable.
-     */
-    suspend fun removePendingRun(
+    /** One conditional pendingRuns update on (customerId, conversationId); false when that row doesn't exist. */
+    private fun updatePendingRunsOn(
         customerId: String,
         conversationId: String,
+        updateExpression: String,
         run: PendingRun
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            dynamoDbClient.updateItem(
-                UpdateItemRequest.builder()
-                    .tableName(CONVERSATION_TABLE)
-                    .key(mapOf(
-                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
-                    ))
-                    .updateExpression("DELETE #pr :e")
-                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY))
-                    .expressionAttributeValues(mapOf(":e" to AttributeValue.builder().ss(run.encode()).build()))
-                    .build()
-            )
-            true
-        } catch (e: Exception) {
-            logger.error("Failed to remove pending run on conversation $conversationId", e)
-            false
-        }
+    ): Boolean = try {
+        dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                ))
+                .updateExpression(updateExpression)
+                .conditionExpression("attribute_exists(#cid)")
+                .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY, "#cid" to CONVERSATION_ID_KEY))
+                .expressionAttributeValues(mapOf(":e" to AttributeValue.builder().ss(run.encode()).build()))
+                .build()
+        )
+        true
+    } catch (e: ConditionalCheckFailedException) {
+        false
     }
 
     /**
