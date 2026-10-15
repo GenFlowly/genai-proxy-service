@@ -697,6 +697,18 @@ def _source_for(content: str, title: str | None) -> str:
     return f"# {title}\n\n{content}"
 
 
+def _report(context: ToolContext, stats: dict) -> None:
+    """Hand content-free render stats to the host's metrics (runtime
+    "record_pdf_stats"); never raises."""
+    record = context.runtime.get("record_pdf_stats")
+    if record is None:
+        return
+    try:
+        record(stats)
+    except Exception:  # metrics must never break a render
+        logger.warning("generate_pdf: recording render stats failed")
+
+
 async def render_document(
     context: ToolContext,
     content: str,
@@ -737,6 +749,9 @@ async def render_document(
         "table_rows" if rows > limits.max_table_rows else None
     )
     if reason:
+        stats = {"status": "rejected", "reason": reason, "renderer": renderer,
+                 "input_chars": len(content)}
+        _report(context, stats)
         return ToolResult(
             content=(
                 "Error: the document is too large and the PDF was NOT created "
@@ -745,10 +760,7 @@ async def render_document(
                 f"{limits.max_chars:,} characters and {limits.max_table_rows:,} "
                 "table rows per PDF)."
             ),
-            details={"pdf": {
-                "status": "rejected", "reason": reason, "renderer": renderer,
-                "input_chars": len(content),
-            }},
+            details={"pdf": stats},
         )
 
     options = await _render_options(context, renderer)
@@ -786,6 +798,7 @@ async def render_document(
         # The engine's own deadline (render_limit) is a timeout too.
         status = "timeout" if kind == "render_limit" else kind
         stats["status"] = status if status in ("oom", "timeout", "busy") else "error"
+        _report(context, stats)
         return ToolResult(content=_ERROR_TEXT.get(kind, _ERROR_TEXT["error"]),
                           details={"pdf": stats})
 
@@ -796,6 +809,7 @@ async def render_document(
         source=_source_for(content, title), page_count=pages,
     )
     stats.update({"status": "ok", "pdf_bytes": len(pdf_bytes)})
+    _report(context, stats)
     logger.info(
         "generate_pdf: rendered artifact %s (%d bytes, %s pages, renderer=%s) for customer=%s",
         artifact.artifact_id, len(pdf_bytes), pages, renderer, context.customer_id,

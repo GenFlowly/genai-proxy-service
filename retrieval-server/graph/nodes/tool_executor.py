@@ -31,7 +31,6 @@ import durable_metrics
 import durable_runtime
 import tool_ledger
 from encoding_library.observability import count, observe
-from graph import pdf_metrics
 from graph.display_args import display_args
 from graph.state import RetrievalState
 from graph.tool_credentials import resolve_tool_credentials, secrets_accessor
@@ -142,8 +141,6 @@ def _render_sources(preamble: str, sources: list, base_index: int) -> str:
 # fs_write) are replaced with a short stub, so later rounds stop replaying the
 # document uncached.
 _STUB_ARGS_OVER_CHARS = 2_000
-# Built-ins that report PDF render stats in ToolResult.details["pdf"].
-_PDF_TOOLS = frozenset({"generate_pdf", "revise_pdf"})
 
 
 def _stub_document_args(call: dict, result) -> dict:
@@ -480,8 +477,6 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
                     round_scratch[key] = value
             if result.usage:
                 round_usage = _add_usage(round_usage, result.usage)
-            if name in _PDF_TOOLS and isinstance((result.details or {}).get("pdf"), dict):
-                pdf_metrics.record(result.details["pdf"])
             # Oversized results spill to the scratch FS: the model gets a
             # structure-preserving excerpt plus the path to the full output.
             if len(content) > max_result_chars:

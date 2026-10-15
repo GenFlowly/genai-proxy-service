@@ -214,7 +214,7 @@ async def _agent_run_body(run_id: str, run_input: dict) -> dict:
 
     (graph, node_type_map, node_name_map, node_configs, streaming_nodes,
      max_iterations) = _resolve_durable_graph(req.customer_id, req.graph_id, checkpointer)
-    builtin_tools = _enabled_builtin_tools(node_type_map, node_configs)
+    builtin_tools = _enabled_builtin_tools(node_type_map, node_configs, req)
     state = _build_state(req, node_configs, builtin_tools)
 
     logger.info("agent_run START run_id=%s customer=%s graph_id=%s", run_id, req.customer_id, req.graph_id)
@@ -310,9 +310,20 @@ async def _agent_run_body(run_id: str, run_input: dict) -> dict:
         # The checkpointed usage channel accumulates every LLM response,
         # replayed or not; the stream's total misses replayed calls.
         "usage": final.get("usage") or usage,
-        "error": error.get("error") or final.get("error"),
+        "error": error.get("error"),
         "error_type": error.get("error_type"),
     }
+    # A node-level error (e.g. a failed retrieval) that still produced an
+    # answer or tool calls is not a failed turn: the proxy reads status
+    # "error" or an "error" text as a failure (contract C5) and would show
+    # the answer as failed. It travels as a warning instead.
+    node_error = final.get("error")
+    if node_error and not error:
+        if summary["generated_response"] or summary["tool_calls"]:
+            summary["warning"] = node_error
+        else:
+            summary["error"] = node_error
+            summary["error_type"] = "error"
     status = "error" if summary["error"] else "completed"
     if replayed and not content_since_reset and not error and summary["generated_response"]:
         # The final answer itself replayed from the memo (the crash came after

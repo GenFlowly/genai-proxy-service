@@ -93,12 +93,14 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("generate_pdf", runtime["enabled_tools"])
         self.assertEqual(runtime["pdf_limits"]["x2p_v1"]["max_chars"], 150_000)
 
-    async def test_render_stats_reach_the_metrics(self):
-        stats = {"status": "ok", "renderer": "x2p_v1", "pages": 2}
-        tool = _Tool("generate_pdf", ToolResult(content="done", details={"pdf": stats}))
-        with patch.object(tool_executor_module.pdf_metrics, "record") as record:
-            await _run(_state([{"id": "1", "name": "generate_pdf", "args": {}}], ["generate_pdf"]), [tool])
-        record.assert_called_once_with(stats)
+    async def test_pdf_tools_record_their_own_stats(self):
+        # Recorded inside the tool run (the durable tool_invoke step), so a
+        # recovered run replaying the memoized result never counts it twice.
+        from graph import pdf_metrics
+
+        tool = _Tool("generate_pdf")
+        await _run(_state([{"id": "1", "name": "generate_pdf", "args": {}}], ["generate_pdf"]), [tool])
+        self.assertIs(tool.context.runtime["record_pdf_stats"], pdf_metrics.record)
 
 
 class FirstRoundSpawnTests(unittest.IsolatedAsyncioTestCase):
@@ -118,6 +120,30 @@ class FirstRoundSpawnTests(unittest.IsolatedAsyncioTestCase):
                              [_Spawner("spawn_agent")])
         self.assertIsNotNone(seen["ns"])
         self.assertEqual(seen["ns"], out["scratch"]["fs_namespace"])
+
+
+class ReplayErrorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_replay_divergence_in_a_child_fails_the_parent(self):
+        import tool_ledger
+        from graph import subagent
+
+        class _Graph:
+            async def ainvoke(self, state, config=None):
+                raise tool_ledger.ReplayDivergence("wf-1", 4, "call-a", "call-b")
+
+        parent = {"customer_id": "c", "llm_provider": "openai"}
+        with patch.object(subagent, "_get_child_graph", return_value=_Graph()):
+            with self.assertRaises(tool_ledger.ReplayDivergence):
+                await subagent.run_subagent(parent, {"name": "general"}, "go", 1)
+
+    def test_replay_errors_reach_the_user_as_a_lost_run(self):
+        import tool_ledger
+        from run_events import RUN_LOST_MESSAGE
+        from streaming import user_facing_llm_error
+
+        kind, message = user_facing_llm_error(tool_ledger.ReplayDivergence("wf-1", 4, "call-a", "call-b"), "openai")
+        self.assertEqual((kind, message), ("run_lost", RUN_LOST_MESSAGE))
+        self.assertNotIn("wf-1", message)
 
 
 class DocumentStubTests(unittest.IsolatedAsyncioTestCase):

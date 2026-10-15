@@ -235,6 +235,12 @@ async def run_subagent(
             child_state, config={"recursion_limit": recursion_limit}
         )
     except Exception as e:
+        # A replay that left the recorded step order must fail the whole
+        # durable run (plan 0.4), not continue on a misaligned memo.
+        from graph.nodes.tool_executor import _REPLAY_ERRORS
+
+        if isinstance(e, _REPLAY_ERRORS):
+            raise
         logger.error("Subagent '%s' FAILED — %s", profile.get("name"), e, exc_info=True)
         return {
             "content": "",

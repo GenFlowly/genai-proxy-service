@@ -61,6 +61,11 @@ def _extract_provider_detail(raw: str) -> str:
     return " ".join(detail.split())[:300]
 
 
+_REPLAY_ERROR_NAMES = frozenset({
+    "ReplayDivergence", "DBOSUnexpectedStepError", "DBOSStepNondeterminismError",
+})
+
+
 def user_facing_llm_error(e: Exception, provider: str) -> tuple[str, str]:
     """Classify an LLM-call failure into (error_type, concise user message).
 
@@ -72,6 +77,13 @@ def user_facing_llm_error(e: Exception, provider: str) -> tuple[str, str]:
         # a user-facing sentence (unsupported format, too large, unreadable,
         # a password-protected PDF).
         return "attachment_error", str(e)
+    if type(e).__name__ in _REPLAY_ERROR_NAMES:
+        # A recovered durable run that could not follow its recorded steps
+        # (plan 0.4): to the user it is a lost run, not a provider failure,
+        # and the DBOS internals stay out of the message.
+        from run_events import RUN_LOST_MESSAGE
+
+        return "run_lost", RUN_LOST_MESSAGE
     raw = f"{type(e).__name__}: {e}"
     low = raw.lower()
     kind, label = "provider_error", "The provider returned an error"

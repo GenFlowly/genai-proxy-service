@@ -127,6 +127,49 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(summary["error"])
 
 
+class NodeErrorSummaryTest(unittest.IsolatedAsyncioTestCase):
+    """A node-level error (e.g. a failed retrieval) that still produced an
+    answer is a completed turn with a warning: the proxy reads status "error"
+    or an "error" text as a failed turn (contract C5)."""
+
+    async def _summary(self, values):
+        class _Snap:
+            pass
+
+        snap = _Snap()
+        snap.values = {**_FakeSnap.values, **values}
+
+        class _Graph(_FakeGraph):
+            async def aget_state(self, config):
+                return snap
+
+        def resolve(customer_id, graph_id, checkpointer):
+            return _Graph(), {"n": "RESPONSE_GENERATOR"}, {"n": "Gen"}, {"n": {}}, {"n"}, 10
+
+        published = []
+
+        async def fake_publish(run_id, event, terminal=False):
+            published.append((event, terminal))
+            return len(published)
+
+        with patch.object(runs, "_resolve_durable_graph", resolve), \
+             patch.object(runs.durable_runtime, "get_checkpointer", lambda: object()), \
+             patch.object(run_events, "publish", fake_publish):
+            await runs._run_agent_graph("run_x", dict(_RUN_INPUT))
+        return next(ev for ev, terminal in published if terminal)
+
+    async def test_an_answer_with_a_node_error_is_completed_with_a_warning(self):
+        terminal = await self._summary({"error": "retrieval failed", "generated_response": "Answer"})
+        self.assertEqual(terminal["status"], "completed")
+        self.assertIsNone(terminal["error"])
+        self.assertEqual(terminal["warning"], "retrieval failed")
+
+    async def test_a_node_error_without_an_answer_fails_the_turn(self):
+        terminal = await self._summary({"error": "retrieval failed", "generated_response": None})
+        self.assertEqual(terminal["status"], "error")
+        self.assertEqual(terminal["error"], "retrieval failed")
+
+
 def _is_terminal(ev: dict) -> bool:
     return ev.get("status") in ("completed", "error")
 

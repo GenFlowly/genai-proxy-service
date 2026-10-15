@@ -294,7 +294,7 @@ def request_runtime(
     - enabled_tools: the names bound this request (descriptions and
       refusal texts mention fs_write or revise_pdf only when enabled).
     """
-    from graph import conversation_files, pdf_renderer, pdf_worker
+    from graph import conversation_files, pdf_metrics, pdf_renderer, pdf_worker
     from graph.fs_tools import safe_path
 
     pinned = pdf_renderer.pinned_or_resolved(state)
@@ -325,6 +325,10 @@ def request_runtime(
         "pdf_fonts_cover": pdf_renderer.fonts_cover,
         "pdf_limits": pdf_renderer.limits(),
         "render_pdf": pdf_worker.render_pdf,
+        # Called by the PDF tools with their content-free stats. Inside the
+        # tool run, i.e. inside the durable tool_invoke step: a recovered
+        # run that replays the memoized result does not count it again.
+        "record_pdf_stats": pdf_metrics.record,
         "conversation_files": conversation_files.by_id(state.get("conversation_files") or []),
         "locale": state.get("locale"),
         "pdf_settings": dict(settings) if isinstance(settings, dict) else {},

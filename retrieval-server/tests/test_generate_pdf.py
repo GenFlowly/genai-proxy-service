@@ -496,6 +496,20 @@ class GeneratePdfToolTests(unittest.TestCase):
         self.assertEqual(stats["input_chars"], len("# Plan\n\nText."))
         self.assertEqual(artifact.to_dict()["page_count"], 1)
 
+    def test_stats_go_to_the_hosts_recorder_for_every_outcome(self):
+        seen = []
+        context, _ = _context({"record_pdf_stats": seen.append})
+        _run(gp.GeneratePdfTool().run({"content_markdown": "text", "filename": "a.pdf"}, context))
+        context, _ = _context({"record_pdf_stats": seen.append, "pdf_limits": {"x2p_v1": {"max_chars": 2}}})
+        _run(gp.GeneratePdfTool().run({"content_markdown": "text", "filename": "a.pdf"}, context))
+
+        async def busy(job):
+            return {"status": "error", "kind": "busy"}
+
+        context, _ = _context({"record_pdf_stats": seen.append, "render_pdf": busy})
+        _run(gp.GeneratePdfTool().run({"content_markdown": "text", "filename": "a.pdf"}, context))
+        self.assertEqual([s["status"] for s in seen], ["ok", "rejected", "busy"])
+
     def test_empty_content_is_an_error(self):
         context, store = _context()
         result = _run(gp.GeneratePdfTool().run({"content_markdown": "  ", "filename": "x"}, context))

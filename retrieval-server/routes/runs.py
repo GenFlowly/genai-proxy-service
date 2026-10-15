@@ -26,6 +26,7 @@ from fastapi.responses import StreamingResponse
 import durable_runtime
 import run_events
 import runs as runs_module
+from graph import pdf_renderer
 from models import RunRequest
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,10 @@ async def start_run(req: RunRequest):
     _require_ready()
     run_id = req.run_id or f"run_{uuid.uuid4().hex}"
     run_input = req.model_dump(exclude={"run_id"})
+    # The PDF renderer is pinned once per turn, BEFORE the run is enqueued
+    # (plan 2.1): a recovered run keeps it across an env flip. Caller values
+    # are overwritten.
+    run_input.update(pdf_renderer.pin(req.customer_id))
     try:
         await runs_module.enqueue_run(run_id, run_input)
     except Exception as e:
