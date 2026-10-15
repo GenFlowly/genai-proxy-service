@@ -69,7 +69,6 @@ import struct
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from dataclasses import dataclass
 
@@ -267,8 +266,9 @@ _RAW_OUTPUT_EDGE = 3200
 # interpreter nobody can't reach) — never in production.
 _RAW_UID = _env_int("IMAGE_RAW_UID", 65534)
 
-# Serializes decode/encode: one heavy image job at a time per process.
-_HEAVY_LOCK = threading.Lock()
+# Serializes decode/encode: one heavy job at a time per process. Shared with
+# the PDF render/parse worker (graph/heavy_slot.py): one machine, 1 GB.
+from graph.heavy_slot import HEAVY_LOCK as _HEAVY_LOCK  # noqa: E402
 
 
 class ImageNormalizationError(ValueError):
