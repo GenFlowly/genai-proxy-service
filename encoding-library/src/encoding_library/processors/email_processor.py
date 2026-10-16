@@ -4,6 +4,11 @@ from typing import Dict, Any, Tuple, List
 from .data_processor import DataProcessor
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.models.encoding.email_model import EmailModel
+from encoding_library.utils.vector_db import (
+    CUSTOMER_ID_MAX_LENGTH,
+    add_customer_id_field,
+    shared_collection_name,
+)
 
 logger = logging.getLogger()
 
@@ -63,7 +68,11 @@ class EmailProcessor(DataProcessor):
         embedding_vector = embeddings[0]['vector'] if embeddings else []
 
         record = {
-            "id": email_model.message_id,
+            # Message-IDs are externally sourced: the same email delivered to
+            # two customers would collide on a bare message_id PK in the
+            # shared collection, so the id is customer-prefixed.
+            "id": f"{state.customer_id}:{email_model.message_id}"[:256],
+            "customer_id": state.customer_id[:CUSTOMER_ID_MAX_LENGTH],
             "vector": embedding_vector,
             "subject": email_model.subject[:500],
             "from_email": email_model.from_addr[:200],
@@ -89,9 +98,7 @@ class EmailProcessor(DataProcessor):
         return f"{email.subject}\n\n{email.body}"
 
     def get_collection_name(self, state: MemoryRequestInternalState) -> str:
-        model_name = state.model_name or 'all-MiniLM-L6-v2'
-        safe_model_name = model_name.replace('-', '_')
-        return f"{state.customer_id}_email_{safe_model_name}"
+        return shared_collection_name("email", state.model_name)
 
     def get_collection_schema(self, dim: int = 384, description: str = "") -> Any:
         """
@@ -115,6 +122,7 @@ class EmailProcessor(DataProcessor):
         schema.add_field(field_name="thread_id", datatype=DataType.VARCHAR, max_length=256)
         schema.add_field(field_name="in_reply_to", datatype=DataType.VARCHAR, max_length=256)
         schema.add_field(field_name="s3_key", datatype=DataType.VARCHAR, max_length=512)
+        add_customer_id_field(schema)
 
         index_params = MilvusClient.prepare_index_params()
         index_params.add_index(field_name="vector", index_type="AUTOINDEX", metric_type="COSINE")

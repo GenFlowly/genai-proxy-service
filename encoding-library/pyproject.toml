@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genflowly-encoding-library"
-version = "0.1.35"
+version = "0.1.36"
 description = "Text encoding and chunking library."
 dependencies = [
     "requests>=2.31.0",
@@ -26,7 +26,10 @@ prometheus = [
 ]
 dev = [
     "pytest",
-    "flake8"
+    "flake8",
+    # The shared-collection schema tests build real Milvus schemas (partition
+    # key declaration) — plain pymilvus, without the [model] extra's ML stack.
+    "pymilvus>=2.4.0"
 ]
 # Local-embedding support (sentence-transformers pulls in torch, ~1GB RSS).
 # get_embedding_model imports langchain_huggingface lazily, so API-only

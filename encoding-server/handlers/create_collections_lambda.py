@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
-from encoding_library.utils.vector_db import get_milvus_client
+from encoding_library.utils.vector_db import ensure_collection, get_milvus_client
 from encoding_library.utils.model_registry import (
     resolve_model,
     get_embedding_dimension,
@@ -25,8 +25,11 @@ auth_service = None
 @track_http_status("create_collections")
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Lambda to create Zilliz collections for a given customer explicitly.
-    Called when a customer onboards (e.g. from genai-proxy-server).
+    Lambda ensuring the SHARED per-data-type collections exist for the
+    requested embedding model. Called on customer onboarding/login (from
+    genai-proxy-server); the first caller creates them, everyone after gets
+    already_existed. Tenancy lives in each row's customer_id partition key,
+    not in per-customer collections.
     """
     try:
         set_request_id(request_id_from_lambda_event(event))
@@ -97,19 +100,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             processor = ProcessorFactory.get_processor(dummy_state)
             collection_name = processor.get_collection_name(dummy_state)
 
-            if milvus_client.has_collection(collection_name):
-                logger.info(f"Collection '{collection_name}' already exists.")
-                already_existed.append(collection_name)
-            else:
-                logger.info(f"Collection '{collection_name}' does not exist. Creating...")
-                schema, index_params = processor.get_collection_schema(dim=dim, description=description)
-                milvus_client.create_collection(
-                    collection_name=collection_name,
-                    schema=schema,
-                    index_params=index_params
-                )
+            schema, index_params = processor.get_collection_schema(dim=dim, description=description)
+            if ensure_collection(milvus_client, collection_name, schema, index_params):
                 logger.info(f"Successfully created '{collection_name}'.")
                 created_collections.append(collection_name)
+            else:
+                logger.info(f"Collection '{collection_name}' already exists.")
+                already_existed.append(collection_name)
 
         return {
             'statusCode': 200,

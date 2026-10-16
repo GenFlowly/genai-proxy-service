@@ -205,18 +205,19 @@ class KnowledgeDiscoveryExclusionTests(unittest.TestCase):
 
         client = MagicMock()
         client.list_collections.return_value = [
-            "cust-1",                        # legacy notes
-            "cust-1_notes_voyage",
-            "cust-1_memory_voyage",          # excluded: consent-gated read paths own it
-            "cust-1_conversation_voyage",    # already excluded
-            "cust-1_instructions_voyage",    # already excluded
-            "cust-2_notes_voyage",           # other tenant
+            "notes_voyage_4_large",
+            "email_voyage_4_large",
+            "memory_voyage_4_large",         # excluded: consent-gated read paths own it
+            "conversation_voyage_4_large",   # excluded: conversation-search feature only
+            "instructions_voyage_4_large",   # excluded: instruction search only
+            "cust-1_notes_voyage",           # legacy per-customer: not a read path anymore
+            "cust-1",                        # legacy unprefixed
         ]
         client.describe_collection.return_value = {"description": None}
 
-        grouped = _discover_collections(client, "cust-1", (None, None))
+        grouped = _discover_collections(client, (None, None))
         names = sorted(n for group in grouped.values() for n in group)
-        self.assertEqual(names, ["cust-1", "cust-1_notes_voyage"])
+        self.assertEqual(names, ["email_voyage_4_large", "notes_voyage_4_large"])
 
 
 if __name__ == "__main__":

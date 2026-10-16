@@ -116,6 +116,12 @@ def _build_workflow(graph_record: dict, nodes: list[dict]) -> tuple[StateGraph, 
     """
     node_map: dict[str, str] = {n["nodeId"]: n["nodeType"] for n in nodes}
     max_iterations = int(graph_record.get("maxIterations") or _DEFAULT_MAX_ITERATIONS)
+    # maxIterations bounds trips around cycles, but it is passed to LangGraph
+    # as recursion_limit, which counts EVERY superstep — a value below the
+    # node count can never finish even one straight-line pass (maxIterations=1
+    # on single-node graphs killed all title generation on 2026-10-14 with
+    # GRAPH_RECURSION_LIMIT). Floor it so one full pass always fits.
+    max_iterations = max(max_iterations, len(nodes) + 1)
 
     workflow = StateGraph(RetrievalState)
 
