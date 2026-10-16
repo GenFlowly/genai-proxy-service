@@ -140,6 +140,24 @@ export class DynamoDBStack extends cdk.Stack {
                 type: dynamodb.AttributeType.STRING
             },
             sortKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
+            globalSecondaryIndexes: [
+                {
+                    // Sparse worklist of messages pending a claim, oldest
+                    // first (only rows with claimPending set appear). Part of
+                    // the already-deployed purge/claim infra — see the
+                    // PurgeJobs note below.
+                    indexName: 'claimPendingIndex',
+                    partitionKey: {
+                        name: 'claimPending',
+                        type: dynamodb.AttributeType.NUMBER,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+                },
+            ],
         };
 
         const customerPreferencesTableProps: CreateTableProps = {
@@ -551,6 +569,37 @@ export class DynamoDBStack extends cdk.Stack {
             },
         };
 
+        // Pending customer-document purge jobs (PK jobKey = one job; the
+        // worker discovers due jobs via the pending-purge-index GSI instead
+        // of a table scan). This table — plus the retrieval-server IAM user
+        // and purge policies in flyio-iam-stack.ts — codifies infrastructure
+        // that is already live in AWS ahead of its feature branch landing:
+        // without it, every CD run wedges trying to delete the in-use
+        // PurgeJobs ARN export (CloudFormation refuses while the deployed
+        // FlyioIamStack imports it; see failed run 38835870063). Reconcile
+        // with the purge feature's branch when it merges.
+        const purgeJobsTableProps: CreateTableProps = {
+            tableName: 'PurgeJobs',
+            partitionKey: {
+                name: 'jobKey',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'pending-purge-index',
+                    partitionKey: {
+                        name: 'pendingShard',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'dueAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const systemVendorApiKeyTable = createDefaultDynamoDbTable(this, systemVendorApiKeyTableProps);
@@ -578,6 +627,7 @@ export class DynamoDBStack extends cdk.Stack {
         const customerMemoryTable = createDefaultDynamoDbTable(this, customerMemoryTableProps);
         const nodePresetsTable = createDefaultDynamoDbTable(this, nodePresetsTableProps);
         const customerProjectsTable = createDefaultDynamoDbTable(this, customerProjectsTableProps);
+        const purgeJobsTable = createDefaultDynamoDbTable(this, purgeJobsTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
@@ -587,7 +637,8 @@ export class DynamoDBStack extends cdk.Stack {
             customerToolCredentialsTable, customerToolsTable, sharedInstructionsTable, sharedConversationsTable,
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
-            requestAgentMapTable, customerMemoryTable, nodePresetsTable, customerProjectsTable
+            requestAgentMapTable, customerMemoryTable, nodePresetsTable, customerProjectsTable,
+            purgeJobsTable
         );
     }
 }
