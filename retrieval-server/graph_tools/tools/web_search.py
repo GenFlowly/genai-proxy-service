@@ -185,16 +185,43 @@ class WebSearchTool(GraphTool):
         if exclude_domains:
             payload["exclude_domains"] = exclude_domains
 
+        key_source = "customer" if credentials.get("api_key") else "platform"
         logger.info(
             "web_search: customer=%s key=%s topic=%s max_results=%d query='%s'",
-            context.customer_id,
-            "customer" if credentials.get("api_key") else "platform",
-            topic, max_results, query[:100],
+            context.customer_id, key_source, topic, max_results, query[:100],
         )
         try:
             data = await self._search(payload, api_key)
         except Exception as e:
-            logger.error("web_search: FAILED — %s", e, exc_info=True)
+            # Which key failed matters more than the stack: "customer" means the
+            # key connected in settings, "platform" the deployment-wide fallback.
+            logger.error("web_search: FAILED (key=%s) — %s", key_source, e, exc_info=True)
+            # Tavily's auth/quota statuses are terminal for the whole turn —
+            # retrying with a new query cannot succeed, so say that outright
+            # instead of inviting the retry loop the generic message allows.
+            # 432 = key/plan limit exceeded, 433 = pay-as-you-go cap, per
+            # https://docs.tavily.com (401 = invalid key).
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status in (432, 433):
+                return ToolResult(
+                    content=(
+                        "Web search is unavailable: the search provider account for "
+                        f"the configured ({key_source}) API key is out of credits or "
+                        "over its plan limit. Retrying will not help. Answer from "
+                        "your own knowledge, note it may not be current, and tell "
+                        "the user their web-search credits are exhausted."
+                    )
+                )
+            if status == 401:
+                return ToolResult(
+                    content=(
+                        "Web search is unavailable: the configured "
+                        f"({key_source}) search API key was rejected as invalid. "
+                        "Retrying will not help. Answer from your own knowledge, "
+                        "note it may not be current, and tell the user their "
+                        "web-search API key needs to be corrected in settings."
+                    )
+                )
             return ToolResult(
                 content=(
                     f"Web search failed for '{query}'. Try again with a different "
