@@ -112,7 +112,9 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
     try:
         data = await _tavily_search(payload, api_key)
     except Exception as e:
-        logger.error("Node web_search: FAILED — %s", e, exc_info=True)
+        # key_source on the ERROR line, not only the INFO one above: production
+        # logs WARNING+ only, so this is the line that says whose key failed.
+        logger.error("Node web_search: FAILED (key=%s) — %s", key_source, e, exc_info=True)
         return {"web_search_results": [], "web_search_answer": ""}
 
     results = [
