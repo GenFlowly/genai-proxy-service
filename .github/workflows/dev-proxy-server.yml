@@ -119,6 +119,14 @@ jobs:
             flyctl secrets set --app $APP_NAME --stage TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY }}"
           fi
 
+          # System Zilliz fallback for customers without a per-customer vector-DB
+          # config row (encoding_library get_zilliz_credentials: DynamoDB -> env).
+          # Without these, every memory/retrieval read fails for system-hosted
+          # customers; staged so the deploy below picks them up
+          if [ -n "${{ secrets.ZILLIZ_ENDPOINT }}" ] && [ -n "${{ secrets.ZILLIZ_TOKEN }}" ]; then
+            flyctl secrets set --app $APP_NAME --stage ZILLIZ_ENDPOINT="${{ secrets.ZILLIZ_ENDPOINT }}" ZILLIZ_TOKEN="${{ secrets.ZILLIZ_TOKEN }}"
+          fi
+
           # Supabase Postgres for durable agent runs (DBOS + LangGraph checkpointer;
           # see retrieval-server/DURABLE_AGENTS_DBOS_PLAN.md). Use the SESSION-pooler
           # URL (port 5432, sslmode=require) — NOT the transaction pooler (6543).
