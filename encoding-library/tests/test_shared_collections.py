@@ -13,6 +13,7 @@ Run (needs pymilvus for the schema tests):
 import sys
 import unittest
 from pathlib import Path
+from typing import Optional
 from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -101,7 +102,8 @@ class EnsureCollectionTests(unittest.TestCase):
             ensure_collection(client, "notes_m", "schema", "index")
 
 
-def _state(data_type: str, raw_data: dict | None = None) -> MemoryRequestInternalState:
+# requires-python is >=3.9: no PEP 604 unions in this file.
+def _state(data_type: str, raw_data: Optional[dict] = None) -> MemoryRequestInternalState:
     return MemoryRequestInternalState(
         data_type=data_type,
         customer_id="cust-1",
