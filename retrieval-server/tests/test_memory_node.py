@@ -199,13 +199,15 @@ class MemoryNodeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class MemoryCollectionFilterTests(unittest.TestCase):
-    def test_matches_only_this_customers_memory_collections(self):
-        self.assertTrue(_is_memory_collection("cust-1_memory_voyage3", "cust-1"))
-        self.assertTrue(_is_memory_collection("cust-1_memory", "cust-1"))
-        self.assertFalse(_is_memory_collection("cust-1_memorybank_x", "cust-1"))
-        self.assertFalse(_is_memory_collection("cust-1_notes_voyage3", "cust-1"))
-        self.assertFalse(_is_memory_collection("cust-2_memory_voyage3", "cust-1"))
-        self.assertFalse(_is_memory_collection("cust-1", "cust-1"))
+    def test_matches_only_shared_memory_collections(self):
+        self.assertTrue(_is_memory_collection("memory_voyage_4_large"))
+        self.assertTrue(_is_memory_collection("memory"))
+        self.assertFalse(_is_memory_collection("memorybank_x"))
+        self.assertFalse(_is_memory_collection("notes_voyage_4_large"))
+        # Legacy per-customer collections are no longer read paths; tenancy
+        # lives in the shared collection's customer_id partition key.
+        self.assertFalse(_is_memory_collection("cust-1_memory_voyage3"))
+        self.assertFalse(_is_memory_collection("cust-1"))
 
 
 class MemoryThinkingStepTests(unittest.TestCase):

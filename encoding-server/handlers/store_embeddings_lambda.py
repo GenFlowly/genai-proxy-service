@@ -6,7 +6,13 @@ from pymilvus import MilvusClient
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.observability import count, set_request_id, setup_logging, track
-from encoding_library.utils.vector_db import get_milvus_client
+from encoding_library.utils.model_registry import build_collection_description, resolve_model
+from encoding_library.utils.vector_db import (
+    customer_filter,
+    ensure_collection,
+    escape_filter_value,
+    get_milvus_client,
+)
 
 from services.content_logging import default_log_level
 
@@ -42,39 +48,37 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         records = processor.prepare_for_vector_db(memory_request_internal_state, vectors)
 
-        if memory_request_internal_state.data_type == "INSTRUCTION":
-            # Instruction collections postdate most customers' onboarding
-            # /create-collections run, so create on demand. Dim comes from the
-            # actual vectors, so it always matches the embedding model used.
-            if not milvus_client.has_collection(collection_name):
-                from encoding_library.utils.model_registry import resolve_model, build_collection_description
-                model_type, model_name = resolve_model(
-                    memory_request_internal_state.model_type,
-                    memory_request_internal_state.model_name,
-                )
-                dim = len(records[0]["vector"])
-                schema, index_params = processor.get_collection_schema(
-                    dim=dim,
-                    description=build_collection_description(model_type, model_name, dim),
-                )
-                milvus_client.create_collection(
-                    collection_name=collection_name,
-                    schema=schema,
-                    index_params=index_params,
-                )
-                logger.info(f"Created missing collection '{collection_name}' (dim={dim})")
+        # Shared collections are created on first write (the onboarding
+        # /create-collections lambda also warms them). Dim comes from the
+        # actual vectors, so it always matches the embedding model used.
+        model_type, model_name = resolve_model(
+            memory_request_internal_state.model_type,
+            memory_request_internal_state.model_name,
+        )
+        dim = len(records[0]["vector"])
+        schema, index_params = processor.get_collection_schema(
+            dim=dim,
+            description=build_collection_description(model_type, model_name, dim),
+        )
+        if ensure_collection(milvus_client, collection_name, schema, index_params):
+            logger.info(f"Created missing collection '{collection_name}' (dim={dim})")
 
+        if memory_request_internal_state.data_type == "INSTRUCTION":
             # Only the latest version is indexed. Chunk ids are {id}_{i}, so a
             # re-encode with fewer chunks would strand stale tail chunks (and
             # Milvus insert does not upsert on duplicate PKs) — drop all prior
-            # chunks for this instruction before inserting.
+            # chunks for this instruction before inserting. Scoped to the
+            # customer's rows: the collection is shared across tenants.
             raw_data = memory_request_internal_state.raw_data or {}
             instruction_key = raw_data.get("instruction_id") or raw_data.get("instructionId")
             if instruction_key:
                 try:
                     milvus_client.delete(
                         collection_name=collection_name,
-                        filter=f'instruction_key == "{instruction_key}"',
+                        filter=customer_filter(
+                            customer_id,
+                            f'instruction_key == "{escape_filter_value(instruction_key)}"',
+                        ),
                     )
                 except Exception as e:
                     logger.warning(f"Failed to delete prior chunks for instruction {instruction_key}: {str(e)}")

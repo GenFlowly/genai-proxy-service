@@ -7,7 +7,15 @@ from pydantic import BaseModel
 
 from encoding_library.observability import count
 from encoding_library.utils.model_registry import build_collection_description, resolve_model
-from encoding_library.utils.vector_db import get_milvus_client
+from encoding_library.utils.vector_db import (
+    CUSTOMER_ID_MAX_LENGTH,
+    add_customer_id_field,
+    collection_data_type,
+    customer_filter,
+    ensure_collection,
+    get_milvus_client,
+    shared_collection_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +53,25 @@ def _escape_filter_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _tenant_scoped_collections(client, customer_id: str, type_token: str, legacy_prefix: str):
+    """Yield (collection_name, filter_scope) pairs a tenant's delete must sweep:
+    shared '{type}_{model}' collections (rows scoped by the customer_id
+    partition key) plus any legacy per-customer '{legacy_prefix}*' collections
+    (single-tenant by naming, no customer_id field — remove this branch once
+    they are migrated and dropped)."""
+    for collection_name in client.list_collections():
+        if collection_data_type(collection_name) == type_token:
+            yield collection_name, True
+        elif collection_name.startswith(legacy_prefix):
+            yield collection_name, False
+
+
 @router.post("/delete-note-vectors")
 async def delete_note_vectors(req: DeleteNoteVectorsRequest):
     """
-    Hard-delete every vector chunk of a note from the customer's vector DB.
-
-    Note collections have historically been named both '{customer_id}_notes'
-    and '{customer_id}_notes_{model_name}', so the note is deleted from every
-    collection carrying the '{customer_id}_notes' prefix.
+    Hard-delete every vector chunk of a note from the vector DB: the shared
+    'notes_{model}' collections (scoped to the customer's rows) plus any
+    not-yet-migrated legacy '{customer_id}_notes*' collections.
     """
     if not req.customer_id or not req.note_key:
         raise HTTPException(status_code=400, detail="customer_id and note_key are required")
@@ -61,14 +80,14 @@ async def delete_note_vectors(req: DeleteNoteVectorsRequest):
 
     try:
         client = get_milvus_client(req.customer_id)
-        notes_prefix = f"{req.customer_id}_notes"
         note_filter = f'note_key == "{_escape_filter_value(req.note_key)}"'
 
         deleted_counts: dict[str, int] = {}
-        for collection_name in client.list_collections():
-            if not collection_name.startswith(notes_prefix):
-                continue
-            result = client.delete(collection_name=collection_name, filter=note_filter)
+        for collection_name, shared in _tenant_scoped_collections(
+            client, req.customer_id, "notes", f"{req.customer_id}_notes"
+        ):
+            scoped = customer_filter(req.customer_id, note_filter) if shared else note_filter
+            result = client.delete(collection_name=collection_name, filter=scoped)
             # MilvusClient.delete returns {'delete_count': n} (dict-like)
             delete_count = result.get("delete_count", 0) if hasattr(result, "get") else 0
             deleted_counts[collection_name] = delete_count
@@ -109,6 +128,7 @@ def _memory_collection_schema(dim: int, description: str):
     schema.add_field(field_name="memory_key", datatype=DataType.VARCHAR, max_length=256)
     schema.add_field(field_name="client", datatype=DataType.VARCHAR, max_length=100)
     schema.add_field(field_name="created_at", datatype=DataType.VARCHAR, max_length=64)
+    add_customer_id_field(schema)
 
     index_params = MilvusClient.prepare_index_params()
     index_params.add_index(field_name="vector", index_type="AUTOINDEX", metric_type="COSINE")
@@ -118,8 +138,9 @@ def _memory_collection_schema(dim: int, description: str):
 @router.post("/encode-memory")
 async def encode_memory(req: EncodeMemoryRequest):
     """
-    Embed one user memory and upsert it into the customer's
-    '{customer_id}_memory_{model}' collection (created on first use).
+    Embed one user memory and upsert it into the shared 'memory_{model}'
+    collection (created on first use), stamped with the customer's
+    customer_id partition key.
 
     This is the realtime write path for memory vectors, replacing the
     encoding-server's /encode-memories for memories: that path requires the
@@ -145,7 +166,7 @@ async def encode_memory(req: EncodeMemoryRequest):
     from graph.nodes.retrieval import _get_cached_embedding_model
 
     model_type, model_name = resolve_model(req.model_type, req.model_name)
-    collection_name = f"{req.customer_id}_memory_{model_name.replace('-', '_')}"
+    collection_name = shared_collection_name("memory", model_name)
     logger.info(
         "Encoding memory — customer=%s memory_key=%s collection=%s",
         req.customer_id, req.memory_key, collection_name,
@@ -160,22 +181,22 @@ async def encode_memory(req: EncodeMemoryRequest):
         vector = embeddings[0]["vector"]
 
         client = get_milvus_client(req.customer_id)
-        if not client.has_collection(collection_name):
-            schema, index_params = _memory_collection_schema(
-                dim=len(vector),
-                description=build_collection_description(model_type, model_name, len(vector)),
-            )
-            client.create_collection(
-                collection_name=collection_name, schema=schema, index_params=index_params
-            )
+        schema, index_params = _memory_collection_schema(
+            dim=len(vector),
+            description=build_collection_description(model_type, model_name, len(vector)),
+        )
+        if ensure_collection(client, collection_name, schema, index_params):
             logger.info("Created memory collection '%s' (dim=%d)", collection_name, len(vector))
 
         client.delete(
             collection_name=collection_name,
-            filter=f'memory_key == "{_escape_filter_value(req.memory_key)}"',
+            filter=customer_filter(
+                req.customer_id, f'memory_key == "{_escape_filter_value(req.memory_key)}"'
+            ),
         )
         record = {
             "id": f"{req.memory_key}_0",
+            "customer_id": req.customer_id[:CUSTOMER_ID_MAX_LENGTH],
             "vector": vector,
             "note_value": req.memory_value[:65535],
             "title": (req.title or "")[:500],
@@ -200,8 +221,9 @@ async def encode_memory(req: EncodeMemoryRequest):
 @router.post("/delete-memory-vectors")
 async def delete_memory_vectors(req: DeleteMemoryVectorsRequest):
     """
-    Hard-delete every vector chunk of a user memory from the customer's vector
-    DB. Memory collections are named '{customer_id}_memory_{model_name}'.
+    Hard-delete every vector chunk of a user memory from the vector DB: the
+    shared 'memory_{model}' collections (scoped to the customer's rows) plus
+    any not-yet-migrated legacy '{customer_id}_memory*' collections.
     """
     if not req.customer_id or not req.memory_key:
         raise HTTPException(status_code=400, detail="customer_id and memory_key are required")
@@ -210,14 +232,14 @@ async def delete_memory_vectors(req: DeleteMemoryVectorsRequest):
 
     try:
         client = get_milvus_client(req.customer_id)
-        memory_prefix = f"{req.customer_id}_memory"
         memory_filter = f'memory_key == "{_escape_filter_value(req.memory_key)}"'
 
         deleted_counts: dict[str, int] = {}
-        for collection_name in client.list_collections():
-            if not collection_name.startswith(memory_prefix):
-                continue
-            result = client.delete(collection_name=collection_name, filter=memory_filter)
+        for collection_name, shared in _tenant_scoped_collections(
+            client, req.customer_id, "memory", f"{req.customer_id}_memory"
+        ):
+            scoped = customer_filter(req.customer_id, memory_filter) if shared else memory_filter
+            result = client.delete(collection_name=collection_name, filter=scoped)
             delete_count = result.get("delete_count", 0) if hasattr(result, "get") else 0
             deleted_counts[collection_name] = delete_count
             logger.info(
@@ -238,8 +260,9 @@ async def delete_memory_vectors(req: DeleteMemoryVectorsRequest):
 @router.post("/delete-instruction-vectors")
 async def delete_instruction_vectors(req: DeleteInstructionVectorsRequest):
     """
-    Hard-delete every vector chunk of an instruction from the customer's vector
-    DB. Instruction collections are named '{customer_id}_instructions_{model_name}'.
+    Hard-delete every vector chunk of an instruction from the vector DB: the
+    shared 'instructions_{model}' collections (scoped to the customer's rows)
+    plus any not-yet-migrated legacy '{customer_id}_instructions*' collections.
     """
     if not req.customer_id or not req.instruction_key:
         raise HTTPException(status_code=400, detail="customer_id and instruction_key are required")
@@ -249,14 +272,16 @@ async def delete_instruction_vectors(req: DeleteInstructionVectorsRequest):
 
     try:
         client = get_milvus_client(req.customer_id)
-        instructions_prefix = f"{req.customer_id}_instructions"
         instruction_filter = f'instruction_key == "{_escape_filter_value(req.instruction_key)}"'
 
         deleted_counts: dict[str, int] = {}
-        for collection_name in client.list_collections():
-            if not collection_name.startswith(instructions_prefix):
-                continue
-            result = client.delete(collection_name=collection_name, filter=instruction_filter)
+        for collection_name, shared in _tenant_scoped_collections(
+            client, req.customer_id, "instructions", f"{req.customer_id}_instructions"
+        ):
+            scoped = (
+                customer_filter(req.customer_id, instruction_filter) if shared else instruction_filter
+            )
+            result = client.delete(collection_name=collection_name, filter=scoped)
             delete_count = result.get("delete_count", 0) if hasattr(result, "get") else 0
             deleted_counts[collection_name] = delete_count
             logger.info(

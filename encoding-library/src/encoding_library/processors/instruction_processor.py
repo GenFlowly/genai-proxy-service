@@ -3,6 +3,11 @@ import logging
 from typing import Dict, Any, Tuple, List
 from .data_processor import DataProcessor
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
+from encoding_library.utils.vector_db import (
+    CUSTOMER_ID_MAX_LENGTH,
+    add_customer_id_field,
+    shared_collection_name,
+)
 
 try:
     from models.encoding.instruction_model import InstructionModel
@@ -73,6 +78,7 @@ class InstructionProcessor(DataProcessor):
         for i, chunk_data in enumerate(embeddings):
             record = {
                 "id": f"{instruction_model.instruction_id}_{i}",
+                "customer_id": state.customer_id[:CUSTOMER_ID_MAX_LENGTH],
                 "vector": chunk_data['vector'],
                 "note_value": chunk_data['text'][:65535],
                 "title": (instruction_model.name or "")[:500],
@@ -101,9 +107,7 @@ class InstructionProcessor(DataProcessor):
         return f"{header}\n\n{instruction.instructions}" if header else instruction.instructions
 
     def get_collection_name(self, state: MemoryRequestInternalState) -> str:
-        model_name = state.model_name or 'all-MiniLM-L6-v2'
-        safe_model_name = model_name.replace('-', '_')
-        return f"{state.customer_id}_instructions_{safe_model_name}"
+        return shared_collection_name("instructions", state.model_name)
 
     def get_collection_schema(self, dim: int = 384, description: str = "") -> Any:
         """
@@ -126,6 +130,7 @@ class InstructionProcessor(DataProcessor):
         schema.add_field(field_name="category", datatype=DataType.VARCHAR, max_length=256)
         schema.add_field(field_name="client", datatype=DataType.VARCHAR, max_length=100)
         schema.add_field(field_name="created_at", datatype=DataType.VARCHAR, max_length=64)
+        add_customer_id_field(schema)
 
         index_params = MilvusClient.prepare_index_params()
         index_params.add_index(field_name="vector", index_type="AUTOINDEX", metric_type="COSINE")

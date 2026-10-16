@@ -84,14 +84,14 @@ def _get_cached_memories(customer_id: str) -> list[dict]:
     return memories
 
 
-# ── EPISODIC recall (vector search over the customer's memory collections) ──
+# ── EPISODIC recall (vector search over the shared memory collections) ──
 #
-# The write side has always embedded every memory into
-# '{customer_id}_memory_{model}' (MemoryExtractionService.encodeMemoryVector);
-# this is the read side: embed the current message, search those collections,
-# and join hits back to DynamoDB by memory_key. DDB stays the source of truth —
-# a hit whose key is no longer stored (deleted memory, stale vector) or is CORE
-# (already injected unconditionally) is dropped.
+# The write side embeds every memory into the shared 'memory_{model}'
+# collection, stamped with the customer_id partition key (/encode-memory);
+# this is the read side: embed the current message, search those collections
+# customer-scoped, and join hits back to DynamoDB by memory_key. DDB stays the
+# source of truth — a hit whose key is no longer stored (deleted memory, stale
+# vector) or is CORE (already injected unconditionally) is dropped.
 
 
 def _milvus_client(customer_id: str):
@@ -113,19 +113,22 @@ def _embed_query(query: str, model_type: Optional[str], model_name: Optional[str
     return embeddings[0].get("vector")
 
 
-def _is_memory_collection(name: str, customer_id: str) -> bool:
-    prefix = f"{customer_id}_"
-    if not name.startswith(prefix):
-        return False
-    return name[len(prefix):].split("_")[0] == "memory"
+def _is_memory_collection(name: str) -> bool:
+    # Lazy import: pymilvus/boto3-adjacent modules must not be a price of
+    # importing this module.
+    from encoding_library.utils.vector_db import collection_data_type
+
+    return collection_data_type(name) == "memory"
 
 
 def _memory_collections(client, customer_id: str, fallback_model: tuple) -> dict:
-    """The customer's memory collections grouped by embedding model, read from
-    the collection-description metadata (same convention as the retrieval
-    node); cached per customer. The request-supplied fallback model only
-    applies to legacy collections without metadata, so caching across requests
-    is safe in practice."""
+    """The shared memory collections grouped by embedding model, read from the
+    collection-description metadata (same convention as the retrieval node);
+    cached per customer (the Milvus client — and so the visible collections —
+    is resolved per customer). Searches against these collections must be
+    customer-scoped. The request-supplied fallback model only applies to
+    collections without metadata, so caching across requests is safe in
+    practice."""
     now = time.monotonic()
     cached = _collection_cache.get(customer_id)
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -135,7 +138,7 @@ def _memory_collections(client, customer_id: str, fallback_model: tuple) -> dict
 
     grouped: dict = {}
     for name in client.list_collections():
-        if not _is_memory_collection(name, customer_id):
+        if not _is_memory_collection(name):
             continue
         model = resolve_model(*fallback_model)
         try:
@@ -162,6 +165,9 @@ def _recall_episodic(
         return []
     customer_id = state["customer_id"]
 
+    # Lazy import, same reason as _milvus_client.
+    from encoding_library.utils.vector_db import customer_filter
+
     client = _milvus_client(customer_id)
     grouped = _memory_collections(
         client, customer_id, (state.get("model_type"), state.get("model_name"))
@@ -182,6 +188,8 @@ def _recall_episodic(
             search_res = client.search(
                 collection_name=collection_name,
                 data=[vector],
+                # Shared collection: scope to this customer's rows.
+                filter=customer_filter(customer_id),
                 # Over-fetch: CORE hits (already injected) and stale vectors
                 # are dropped after the search, so the floor must survive that.
                 limit=max(top_k * 2, 8),

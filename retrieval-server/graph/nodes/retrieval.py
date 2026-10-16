@@ -7,7 +7,7 @@ from content_logging import redact
 from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
-from encoding_library.utils.vector_db import get_milvus_client
+from encoding_library.utils.vector_db import collection_data_type, customer_filter, get_milvus_client
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -23,37 +23,37 @@ def _get_cached_embedding_model(model_type: str | None, model_name: str | None) 
     return _embedding_model_cache[key]
 
 
+# Shared collections injected into generation context as knowledge. The other
+# types are deliberately excluded:
+#  - conversation: backs the explicit conversation-search feature only —
+#    surfacing past chats in generation context would need its own product
+#    decision.
+#  - instructions: backs semantic instruction search only — instruction
+#    (persona) text is not knowledge and must not be injected into context.
+#  - memory: has its own consent-gated read paths (the MEMORY node's recall
+#    and the search_memories tool), both of which join hits back to DynamoDB —
+#    the source of truth. Surfacing raw memory chunks here would bypass
+#    consent and resurface deleted memories (stale vectors) as anonymous
+#    "knowledge".
+_KNOWLEDGE_TYPES = {"notes", "email"}
+
+
 def _discover_collections(
-    client: MilvusClient, customer_id: str, fallback_model: tuple[str | None, str | None]
+    client: MilvusClient, fallback_model: tuple[str | None, str | None]
 ) -> dict[tuple[str, str], list[str]]:
     """
-    Find this customer's collections and group them by embedding model.
+    Find the shared knowledge collections and group them by embedding model.
 
-    The model is read from the collection-description metadata written at
-    creation time (model_registry.build_collection_description). Legacy
-    collections without metadata fall back to the request-supplied model
-    (or the platform default).
+    Collections are shared across tenants ('{type}_{model}', customer_id
+    partition key) — every search against them must carry a customer_id
+    filter. The model is read from the collection-description metadata written
+    at creation time (model_registry.build_collection_description); collections
+    without metadata fall back to the request-supplied model (or the platform
+    default).
     """
     grouped: dict[tuple[str, str], list[str]] = {}
     for name in client.list_collections():
-        if name != customer_id and not name.startswith(f"{customer_id}_"):
-            continue
-        # Conversation collections back the explicit conversation-search
-        # feature (/search-conversations) only — surfacing past chats in
-        # generation context would need its own product decision.
-        if name.startswith(f"{customer_id}_conversation"):
-            continue
-        # Instruction collections back semantic instruction search only —
-        # instruction (persona) text is not knowledge and must not be
-        # injected into generation context.
-        if name.startswith(f"{customer_id}_instructions"):
-            continue
-        # Memory collections have their own consent-gated read paths (the
-        # MEMORY node's recall and the search_memories tool), both of which
-        # join hits back to DynamoDB — the source of truth. Surfacing raw
-        # memory chunks here would bypass consent and resurface deleted
-        # memories (stale vectors) as anonymous "knowledge".
-        if name.startswith(f"{customer_id}_memory"):
+        if collection_data_type(name) not in _KNOWLEDGE_TYPES:
             continue
         model = resolve_model(*fallback_model)
         try:
@@ -134,9 +134,9 @@ async def search_knowledge(
     client = get_milvus_client(customer_id)
     logger.info("Node retrieval: connected to Zilliz")
 
-    grouped = _discover_collections(client, customer_id, (model_type, model_name))
+    grouped = _discover_collections(client, (model_type, model_name))
     if not grouped:
-        logger.warning("Node retrieval: no collections found for customer=%s", customer_id)
+        logger.warning("Node retrieval: no knowledge collections exist yet (customer=%s)", customer_id)
         return []
 
     all_results = []
@@ -161,6 +161,9 @@ async def search_knowledge(
             search_res = client.search(
                 collection_name=collection_name,
                 data=[query_vector],
+                # Shared collection: the partition-key equality scopes the
+                # search to this customer's rows.
+                filter=customer_filter(customer_id),
                 limit=top_n,
                 search_params=search_params,
                 output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"],

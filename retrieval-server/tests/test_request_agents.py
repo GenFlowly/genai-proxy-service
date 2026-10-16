@@ -355,28 +355,33 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         result, client = await self._run(self._request(), has_collection=False)
 
         name, schema, _index = client.created
-        self.assertEqual(name, "cust-1_memory_voyage_4_large")
+        self.assertEqual(name, "memory_voyage_4_large")
         field_names = {f.name for f in schema.fields}
         self.assertEqual(
             field_names,
-            {"id", "vector", "note_value", "title", "memory_key", "client", "created_at"},
+            {"id", "vector", "note_value", "title", "memory_key", "client", "created_at", "customer_id"},
         )
+        customer_field = next(f for f in schema.fields if f.name == "customer_id")
+        self.assertTrue(customer_field.is_partition_key)
         self.assertIn('"model_name": "voyage-4-large"', schema.description)
-        self.assertEqual(result["collection"], "cust-1_memory_voyage_4_large")
+        self.assertEqual(result["collection"], "memory_voyage_4_large")
 
     async def test_deletes_then_inserts_so_reencodes_are_idempotent(self):
         _, client = await self._run(self._request(), has_collection=True)
 
         self.assertIsNone(client.created)
-        self.assertEqual(client.deleted[0], "cust-1_memory_voyage_4_large")
+        self.assertEqual(client.deleted[0], "memory_voyage_4_large")
         self.assertIn('memory_key == "MEM#abc"', client.deleted[1])
+        # Shared collection: the delete must be scoped to this customer's rows.
+        self.assertIn('customer_id == "cust-1"', client.deleted[1])
         _, data = client.inserted
         record = data[0]
         self.assertEqual(record["id"], "MEM#abc_0")
+        self.assertEqual(record["customer_id"], "cust-1")
         self.assertEqual(record["note_value"], "Is named Neel.")
         self.assertEqual(record["memory_key"], "MEM#abc")
         self.assertEqual(record["created_at"], "2026-10-10T00:00:00Z")
-        self.assertEqual(client.flushed, "cust-1_memory_voyage_4_large")
+        self.assertEqual(client.flushed, "memory_voyage_4_large")
 
     async def test_blank_fields_are_a_400(self):
         from fastapi import HTTPException
