@@ -23,6 +23,15 @@ export class FlyioIamStack extends cdk.Stack {
             userName: `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-flyio-user`,
         });
 
+        // Separate IAM user for the retrieval server's Fly app, so its
+        // credentials are scoped to what it actually touches (DynamoDB, KMS,
+        // attachments bucket) instead of sharing the proxy's user. Codifies
+        // infrastructure already live in AWS — see the PurgeJobs note in
+        // dynamodb-stack.ts.
+        const retrievalServerUser = new iam.User(this, 'RetrievalServerUser', {
+            userName: `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-retrieval-flyio-user`,
+        });
+
         // Grant DynamoDB read/write via a customer-managed policy attached to the user.
         // We used to call table.grantReadWriteData(flyioUser) per table, which appended
         // statements to the user's inline default policy. Inline user policies cap at
@@ -33,7 +42,7 @@ export class FlyioIamStack extends cdk.Stack {
             `${table.tableArn}/index/*`,
         ]);
         new iam.ManagedPolicy(this, 'FlyioDynamoDbAccess', {
-            users: [flyioUser],
+            users: [flyioUser, retrievalServerUser],
             statements: [
                 new iam.PolicyStatement({
                     actions: [
@@ -68,14 +77,62 @@ export class FlyioIamStack extends cdk.Stack {
                     resources: [props.attachmentsBucket.arnForObjects('*')],
                 }),
                 new iam.PolicyStatement({
+                    // Tag/delete is deliberately limited to customer-owned
+                    // keys — the purge pipeline tags and removes customer
+                    // attachments but never touches other prefixes.
+                    actions: ['s3:DeleteObject', 's3:GetObjectTagging', 's3:PutObjectTagging'],
+                    resources: [props.attachmentsBucket.arnForObjects('customers/*')],
+                }),
+                new iam.PolicyStatement({
                     actions: ['s3:ListBucket'],
                     resources: [props.attachmentsBucket.bucketArn],
                 }),
             ],
         });
 
+        // Attachments access for the retrieval server (generated artifacts +
+        // reading image bytes for LLM calls), mirroring the proxy's policy
+        // minus deletion.
+        new iam.ManagedPolicy(this, 'RetrievalAttachmentsBucketAccess', {
+            users: [retrievalServerUser],
+            statements: [
+                new iam.PolicyStatement({
+                    actions: ['s3:GetObject', 's3:PutObject'],
+                    resources: [props.attachmentsBucket.arnForObjects('*')],
+                }),
+                new iam.PolicyStatement({
+                    actions: ['s3:PutObjectTagging'],
+                    resources: [props.attachmentsBucket.arnForObjects('customers/*')],
+                }),
+                new iam.PolicyStatement({
+                    actions: ['s3:ListBucket'],
+                    resources: [props.attachmentsBucket.bucketArn],
+                }),
+            ],
+        });
+
+        // The proxy's customer-documents purge worker lists and hard-deletes
+        // object VERSIONS in the per-stage customer-documents bucket. That
+        // bucket belongs to the encoding service's stacks, so it is referenced
+        // by name rather than imported.
+        const customerDocumentsBucketArn = `arn:${cdk.Aws.PARTITION}:s3:::genflowly-${props.stage}-customer-documents`;
+        new iam.ManagedPolicy(this, 'ProxyCustomerDocumentsPurge', {
+            users: [flyioUser],
+            statements: [
+                new iam.PolicyStatement({
+                    actions: ['s3:ListBucketVersions'],
+                    resources: [customerDocumentsBucketArn],
+                }),
+                new iam.PolicyStatement({
+                    actions: ['s3:DeleteObjectVersion'],
+                    resources: [`${customerDocumentsBucketArn}/*`],
+                }),
+            ],
+        });
+
         // Grant access to KMS key
         props.kmsKey.grantEncryptDecrypt(flyioUser);
+        props.kmsKey.grantEncryptDecrypt(retrievalServerUser);
 
         // Grant access to invoke Lambda functions
         flyioUser.addToPrincipalPolicy(new iam.PolicyStatement({
@@ -83,10 +140,15 @@ export class FlyioIamStack extends cdk.Stack {
             resources: ['*'], // Can be scoped down to specific lambda ARNs if known
         }));
 
-        // Create access keys for the user
+        // Create access keys for the users
         const accessKey = new iam.AccessKey(this, 'FlyioUserAccessKey', { user: flyioUser });
+        const retrievalAccessKey = new iam.AccessKey(this, 'RetrievalServerAccessKey', { user: retrievalServerUser });
 
-        // Output the credentials so they can be securely added to Fly.io
+        // Output the credentials so they can be securely added to Fly.io.
+        // The FlyioAws* pair are the legacy names the deploy workflows read
+        // (and feed to BOTH Fly apps today); the Proxy*/Retrieval* names are
+        // the per-app split the deployed stack already exposes — keep both
+        // until the workflows move over.
         new cdk.CfnOutput(this, 'FlyioAwsAccessKeyId', {
             value: accessKey.accessKeyId,
             description: 'Set this as AWS_ACCESS_KEY_ID in Fly.io secrets',
@@ -95,6 +157,26 @@ export class FlyioIamStack extends cdk.Stack {
         new cdk.CfnOutput(this, 'FlyioAwsSecretAccessKey', {
             value: accessKey.secretAccessKey.unsafeUnwrap(), // Only outputs once at creation time
             description: 'Set this as AWS_SECRET_ACCESS_KEY in Fly.io secrets',
+        });
+
+        new cdk.CfnOutput(this, 'ProxyAwsAccessKeyId', {
+            value: accessKey.accessKeyId,
+            description: 'AWS_ACCESS_KEY_ID of the proxy server Fly.io app',
+        });
+
+        new cdk.CfnOutput(this, 'ProxyAwsSecretAccessKey', {
+            value: accessKey.secretAccessKey.unsafeUnwrap(),
+            description: 'AWS_SECRET_ACCESS_KEY of the proxy server Fly.io app',
+        });
+
+        new cdk.CfnOutput(this, 'RetrievalAwsAccessKeyId', {
+            value: retrievalAccessKey.accessKeyId,
+            description: 'AWS_ACCESS_KEY_ID of the retrieval server Fly.io app',
+        });
+
+        new cdk.CfnOutput(this, 'RetrievalAwsSecretAccessKey', {
+            value: retrievalAccessKey.secretAccessKey.unsafeUnwrap(),
+            description: 'AWS_SECRET_ACCESS_KEY of the retrieval server Fly.io app',
         });
     }
 }
