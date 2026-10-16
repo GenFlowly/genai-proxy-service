@@ -108,7 +108,10 @@ class RequestAgentMapRepository(
                             "updatedAt" to AttributeValue.builder().s(now).build(),
                         )
                     )
-                    .conditionExpression("attribute_not_exists($REQUEST_AGENT_SCOPE_KEY)")
+                    // "scope" is a DynamoDB reserved keyword — alias it, or the
+                    // put 400s and the seeder can never create the row
+                    .conditionExpression("attribute_not_exists(#scope)")
+                    .expressionAttributeNames(mapOf("#scope" to REQUEST_AGENT_SCOPE_KEY))
                     .build()
             )
             logger.info("Created request-agent map entry ${entry.scope}/${entry.requestType} → ${entry.graphId}")

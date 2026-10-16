@@ -26,6 +26,23 @@ def _load():
     return graph_record, template["nodes"]
 
 
+class RecursionLimitFloorTests(unittest.TestCase):
+    def test_single_node_graph_gets_a_runnable_recursion_limit(self):
+        # maxIterations is handed to LangGraph as recursion_limit, which counts
+        # every superstep — 1 can never complete even a one-node pass
+        # (GRAPH_RECURSION_LIMIT killed all title generation on 2026-10-14).
+        # The builder must floor it to node count + 1.
+        graph_record = {
+            "graphId": "GRP1",
+            "entryPoint": "gen",
+            "maxIterations": "1",
+            "edges": json.dumps({"edges": [{"from": "gen", "to": "__end__"}]}),
+        }
+        nodes = [{"nodeId": "gen", "nodeType": "GENERATION", "config": "{}"}]
+        _, max_iterations = _build_workflow(graph_record, nodes)
+        self.assertGreaterEqual(max_iterations, 2)
+
+
 class AgentTemplateTests(unittest.TestCase):
     def test_template_compiles_into_a_runnable_graph(self):
         graph_record, nodes = _load()
