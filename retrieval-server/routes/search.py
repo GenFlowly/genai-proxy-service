@@ -7,7 +7,7 @@ from content_logging import redact
 from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
-from encoding_library.utils.vector_db import get_milvus_client
+from encoding_library.utils.vector_db import collection_data_type, customer_filter, get_milvus_client
 from graph.nodes.retrieval import _get_cached_embedding_model
 
 logger = logging.getLogger(__name__)
@@ -18,10 +18,11 @@ router = APIRouter()
 # source item, so this is deliberately larger than the result limit.
 _CHUNK_SEARCH_LIMIT = 50
 
-# Collections are named '{customer_id}_{type}_{model_name}'; the first segment
-# after the customer id is the data type. Per-type grouping key: chunk hits
-# sharing this entity field collapse into one result. Types absent from this
-# map (including future ones) group by the row id — one result per vector —
+# Collections are shared across tenants, named '{type}_{model_name}' with a
+# customer_id partition key (encoding_library.utils.vector_db); the first
+# name segment is the data type. Per-type grouping key: chunk hits sharing
+# this entity field collapse into one result. Types absent from this map
+# (including future ones) group by the row id — one result per vector —
 # which is always safe; add an entry here when a new chunked type ships.
 _GROUP_FIELD_BY_TYPE = {
     "conversation": "conversation_key",
@@ -49,17 +50,6 @@ class SearchRequest(BaseModel):
     # Data types to search (e.g. ["conversation", "notes"]); None = everything
     types: list[str] | None = None
     similarity_threshold: float = 0.0
-
-
-def _collection_type(name: str, customer_id: str) -> str | None:
-    """Data-type segment of a collection name, or None if not this customer's."""
-    if name == customer_id:
-        # Legacy unprefixed collections predate typed names; they hold notes.
-        return "notes"
-    prefix = f"{customer_id}_"
-    if not name.startswith(prefix):
-        return None
-    return name[len(prefix):].split("_")[0]
 
 
 def _snippet(entity: dict) -> str:
@@ -93,12 +83,12 @@ async def search(req: SearchRequest):
     try:
         client = get_milvus_client(req.customer_id)
 
-        # Group this customer's collections by embedding model (from the
+        # Group the shared collections by embedding model (from the
         # collection-description metadata) so the query is embedded once per
         # distinct model — same convention as the RAG retrieval node.
         grouped: dict[tuple[str, str], list[tuple[str, str]]] = {}
         for name in client.list_collections():
-            data_type = _collection_type(name, req.customer_id)
+            data_type = collection_data_type(name)
             if data_type is None:
                 continue
             if wanted_types is not None and data_type not in wanted_types:
@@ -131,6 +121,8 @@ async def search(req: SearchRequest):
                 search_res = client.search(
                     collection_name=collection_name,
                     data=[query_vector],
+                    # Shared collection: scope to this customer's rows.
+                    filter=customer_filter(req.customer_id),
                     limit=_CHUNK_SEARCH_LIMIT,
                     output_fields=_OUTPUT_FIELDS,
                 )

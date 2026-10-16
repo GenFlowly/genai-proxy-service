@@ -6,7 +6,8 @@ Scans the Instructions table, picks the LATEST version of every instruction,
 and pushes it into the embedding pipeline by sending a MemoryRequestInternalState
 message straight to the ingestion SQS queue (the same queue /encode-instructions
 feeds). Sending directly avoids needing a per-creator bearer token — the
-pipeline scopes each instruction to its creator's collection via customer_id.
+pipeline stamps each row with its creator's customer_id (the partition key of
+the shared instructions collection).
 
 Skipped rows:
   - creators SYSTEM / PUBLIC (no shared collection in v1)
