@@ -279,8 +279,12 @@ jobs:
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
-          # Auth0 client ids of the proxy's machine-to-machine app, allowed to call
-          # POST /purge-vectors (PDF plan 3.9); unset, the endpoint refuses every call
+          # Passed by the CDK app (bin/cdk.ts) into the purge-vectors Lambda's
+          # environment. POST /purge-vectors deletes a customer's or a conversation's
+          # vectors when the proxy purges a deleted account or conversation (PDF plan
+          # 3.9). The Lambda accepts only Auth0 client-credentials tokens whose client
+          # id is in this comma-separated list (the proxy's machine-to-machine app);
+          # user tokens get 403, and while the secret is unset every call gets 403.
           PURGE_ALLOWED_CLIENT_IDS: ${{ secrets.PURGE_ALLOWED_CLIENT_IDS }}
           CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
         run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
