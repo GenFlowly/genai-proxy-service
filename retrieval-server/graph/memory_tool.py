@@ -157,6 +157,7 @@ class SearchMemoriesTool(GraphTool):
             _memory_collections,
             _milvus_client,
         )
+        from encoding_library.utils.vector_db import customer_filter
 
         failure = ToolResult(
             content=(
@@ -205,6 +206,8 @@ class SearchMemoriesTool(GraphTool):
                     search_res = client.search(
                         collection_name=collection_name,
                         data=[vector],
+                        # Shared collection: scope to this customer's rows.
+                        filter=customer_filter(context.customer_id),
                         # Over-fetch: stale vectors (deleted memories) drop out
                         # in the DynamoDB join below, so the cap must survive it.
                         limit=max(top_k * 2, 8),
