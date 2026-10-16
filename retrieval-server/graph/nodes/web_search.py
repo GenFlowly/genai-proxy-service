@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -7,12 +8,19 @@ from content_logging import redact
 from encoding_library.observability import count, track
 from encoding_library.utils.retry import is_transient_http_error, retry
 from graph.state import RetrievalState
+from graph.tool_credentials import resolve_tool_credentials
+from graph_tools.tools.web_search import WebSearchTool
 
 logger = logging.getLogger(__name__)
 
 _TAVILY_URL = "https://api.tavily.com/search"
 _DEFAULT_MAX_RESULTS = 5
 _REQUEST_TIMEOUT_SECONDS = 15.0
+
+# The credential the Settings page stores for the web_search TOOL. The node
+# honors the same row, so a customer's connected Tavily key applies no matter
+# whether their graph searches through this fixed node or the model-called tool.
+_CREDENTIAL_REF = WebSearchTool.credential_ref
 
 
 def web_search(node_id: str | None = None):
@@ -35,8 +43,14 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
     only a missing API key is surfaced as a state error, since that is a
     configuration bug rather than a transient upstream failure.
 
+    The API key is resolved per request: the customer's stored WEB_SEARCH
+    credential (saved from the Settings page, same row the web_search tool
+    reads) wins, then the node config's api_key, then the platform-wide
+    TAVILY_API_KEY env var.
+
     Config (node_configs["WEB_SEARCH"], all optional except the API key):
-      api_key          (str)  — Tavily key; falls back to TAVILY_API_KEY env var
+      api_key          (str)  — Tavily key; used only when the customer has not
+                         connected their own, before the TAVILY_API_KEY env var
       query_key        (str)  — state/scratch field holding a focused search
                          query (e.g. written by an upstream analyzer node);
                          falls back to rewritten_query/original_query when
@@ -70,11 +84,15 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
         customer_id, bool(focused_query), redact(query, 100),
     )
 
-    api_key = config.get("api_key") or os.getenv("TAVILY_API_KEY")
+    api_key, key_source = await _resolve_api_key(customer_id, config)
     if not api_key:
         count("web_search_total", status="missing_key")
-        logger.error("Node web_search: no API key in node config or TAVILY_API_KEY env")
+        logger.error(
+            "Node web_search: customer=%s has no stored WEB_SEARCH credential, no "
+            "node-config api_key, and TAVILY_API_KEY is not set", customer_id,
+        )
         return {"web_search_results": [], "web_search_answer": "", "error": "Web search is not configured (missing API key)"}
+    logger.info("Node web_search: using %s Tavily key", key_source)
 
     payload: dict = {
         "query": query,
@@ -108,6 +126,39 @@ async def _web_search(state: RetrievalState, node_id: str | None) -> dict:
     ]
     logger.info("Node web_search: END — %d result(s) returned", len(results))
     return {"web_search_results": results, "web_search_answer": data.get("answer") or ""}
+
+
+async def _resolve_api_key(customer_id: str, config: dict) -> tuple[str | None, str]:
+    """The Tavily key for this run and where it came from ("customer" |
+    "node_config" | "platform" | "none").
+
+    The customer's stored WEB_SEARCH credential wins — connecting a key in the
+    Settings page must take effect without a graph edit — then the node
+    config's api_key, then the platform env var. The lookup is DynamoDB + KMS
+    through blocking boto3, so it runs off the event loop; a lookup FAILURE
+    (not a miss) degrades to the fallbacks rather than aborting the turn, the
+    same posture as tool_executor.
+    """
+    stored = None
+    try:
+        resolved = await asyncio.to_thread(
+            resolve_tool_credentials, customer_id, [_CREDENTIAL_REF]
+        )
+        stored = (resolved.get(_CREDENTIAL_REF) or {}).get("api_key")
+    except Exception as e:
+        logger.error(
+            "Node web_search: could not resolve stored credentials for customer=%s "
+            "— falling back to node config / platform key (%s)",
+            customer_id, e, exc_info=True,
+        )
+    if stored:
+        return stored, "customer"
+    if config.get("api_key"):
+        return config["api_key"], "node_config"
+    env_key = os.getenv("TAVILY_API_KEY")
+    if env_key:
+        return env_key, "platform"
+    return None, "none"
 
 
 @track("web_search")
