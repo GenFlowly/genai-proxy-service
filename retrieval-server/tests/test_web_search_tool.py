@@ -23,6 +23,16 @@ def _ctx(secrets: dict | None = None) -> ToolContext:
     return context
 
 
+class _StatusError(Exception):
+    """Stands in for httpx.HTTPStatusError: the tool only reads
+    e.response.status_code, so any exception with that shape exercises the
+    status-specific degrade paths."""
+
+    def __init__(self, status_code: int):
+        super().__init__(f"Client error '{status_code}'")
+        self.response = type("R", (), {"status_code": status_code})()
+
+
 _SAMPLE = {
     "results": [
         {
@@ -147,6 +157,30 @@ class WebSearchToolTest(unittest.IsolatedAsyncioTestCase):
             result = await tool.run({"query": "x"}, _ctx())
         self.assertIn("failed", result.content.lower())
         self.assertEqual(result.artifacts, [])
+
+    async def test_quota_exhaustion_is_terminal_and_names_the_key(self):
+        # Tavily 432/433 are account-level quota limits: retrying cannot succeed,
+        # so the message must say so (not invite another attempt) and must name
+        # which key tier hit the wall so the user hears the right remedy.
+        tool = WebSearchTool()
+        error = _StatusError(432)
+        ctx = _ctx({"WEB_SEARCH": {"api_key": "tvly-customer"}})
+        with patch.dict("os.environ", {}, clear=True), \
+                patch.object(tool, "_search", AsyncMock(side_effect=error)):
+            result = await tool.run({"query": "x"}, ctx)
+        self.assertIn("out of credits", result.content.lower())
+        self.assertIn("customer", result.content)
+        self.assertNotIn("try again", result.content.lower())
+
+    async def test_invalid_key_is_terminal_and_names_the_key(self):
+        tool = WebSearchTool()
+        error = _StatusError(401)
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "bad"}, clear=True), \
+                patch.object(tool, "_search", AsyncMock(side_effect=error)):
+            result = await tool.run({"query": "x"}, _ctx({}))
+        self.assertIn("invalid", result.content.lower())
+        self.assertIn("platform", result.content)
+        self.assertNotIn("try again", result.content.lower())
 
 class WebSearchCredentialTest(unittest.IsolatedAsyncioTestCase):
     """The customer's own key must win over the platform-wide env var, which
