@@ -26,10 +26,9 @@ private val logger = KotlinLogging.logger {}
  *     output_key is legal — custom keys land in the runtime's scratch
  *     channel). condition_type bool/list_empty needs exactly true+false
  *     routes; "value" needs at least one route.
- *  6. Cycle safety: if the graph contains a directed cycle (over plain and
- *     conditional edges combined), at least one node must be of type
- *     RESPONSE_GENERATOR_WITH_REFLECTION (the cycle-exit signal writer).
- *     Acyclic branching needs no reflection node. Cycles closed only through
+ *  6. Cycle safety: directed cycles (over plain and conditional edges) are
+ *     rejected — the reflection node that provided a cycle-exit signal was
+ *     removed with the pipeline-era nodes. Cycles closed only through
  *     tool_route conditional edges are exempt: the tool loop terminates by
  *     construction (no tool calls → "none"/"caller" route), with the graph's
  *     maxIterations recursion limit as backstop.
@@ -84,7 +83,7 @@ object GraphValidationService {
         validateEntryPoint(entryPoint, nodeIdSet)
         validateEdges(edgesObj, nodeIdSet)
         validateConditionalEdges(edgesObj, nodeIdSet)
-        validateCycleSafety(edgesObj, nodeTypeById)
+        validateCycleSafety(edgesObj)
         validateReachability(entryPoint, nodeIdSet, edgesObj)
     }
 
@@ -199,28 +198,22 @@ object GraphValidationService {
 
     /**
      * Rule 6: Cycle safety.
-     * Only a graph that actually contains a directed cycle (over plain and
-     * conditional edges combined) must carry a RESPONSE_GENERATOR_WITH_REFLECTION
-     * node — that is the node that writes `needs_more_context` (the cycle-exit
-     * signal). Acyclic branching, multi-way or not, needs no reflection node.
+     * Directed cycles over plain and conditional edges are rejected: the
+     * RESPONSE_GENERATOR_WITH_REFLECTION node that wrote the cycle-exit signal
+     * (`needs_more_context`) was removed along with the pipeline-era nodes, so
+     * no node type can terminate such a loop any more. Acyclic branching,
+     * multi-way or not, is fine.
      *
      * tool_route conditional edges are excluded from cycle detection: the
      * agent↔TOOL_EXECUTOR loop they close exits by construction once the model
      * stops emitting built-in tool calls (the "none"/"caller" routes), and the
      * runtime's recursion limit (maxIterations) bounds it regardless.
      */
-    private fun validateCycleSafety(
-        edgesObj: JsonObject,
-        nodeTypeById: Map<String, String>,
-    ) {
-        if (!hasDirectedCycle(buildAdjacency(edgesObj, includeToolRoutes = false))) return
-
-        val hasReflection = nodeTypeById.values.any {
-            it == "RESPONSE_GENERATOR_WITH_REFLECTION"
-        }
-        require(hasReflection) {
-            "This graph contains a cycle, so it must include a " +
-            "RESPONSE_GENERATOR_WITH_REFLECTION node to provide a safe cycle-exit signal."
+    private fun validateCycleSafety(edgesObj: JsonObject) {
+        require(!hasDirectedCycle(buildAdjacency(edgesObj, includeToolRoutes = false))) {
+            "This graph contains a cycle. Loops are only supported through a " +
+            "TOOL_EXECUTOR node's tool_route edges, which terminate when the " +
+            "model stops calling tools."
         }
     }
 
