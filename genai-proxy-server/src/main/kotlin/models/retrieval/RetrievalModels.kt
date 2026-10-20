@@ -55,8 +55,8 @@ sealed class StreamChunk {
     data class GeneratedArtifacts(val json: String) : StreamChunk()
     /**
      * Raw JSON array of web-search sources backing the [n] citation markers in
-     * the generated text: [{"index","title","url"}]. Emitted once, when the
-     * WEB_SEARCH graph node completes.
+     * the generated text: [{"index","title","url"}]. Emitted when a
+     * TOOL_EXECUTOR round surfaces citable tool sources (web_search).
      */
     data class WebSources(val json: String) : StreamChunk()
     data class Usage(
