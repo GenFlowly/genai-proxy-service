@@ -75,14 +75,8 @@ def user_facing_llm_error(e: Exception, provider: str) -> tuple[str, str]:
 
 def _kind_of(node_type: str) -> str:
     key = (node_type or "").upper()
-    if key == "RETRIEVAL":
-        return "RETRIEVAL"
-    if key == "WEB_SEARCH":
-        return "WEB_SEARCH"
     if key == "MEMORY":
         return "MEMORY"
-    if key == "RESPONSE_GENERATOR_WITH_REFLECTION":
-        return "REFLECTION"
     if key == "TOOL_EXECUTOR":
         return "TOOL"
     return "LLM"
@@ -100,11 +94,6 @@ def _stop_reason_of(output) -> str:
     meta = getattr(output, "response_metadata", None) or {}
     reason = meta.get("stop_reason") or meta.get("finish_reason") or ""
     return reason.lower() if isinstance(reason, str) else ""
-
-
-def _doc_title(result: dict) -> str:
-    entity = result.get("entity", {}) or {}
-    return (entity.get("title") or entity.get("subject") or entity.get("note_value") or "")[:120]
 
 
 def _fmt_tool_call(call: dict) -> str:
@@ -140,23 +129,7 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
         payload["prompt"] = entry.get("prompt", "")
         payload["response"] = entry.get("response", "")
 
-    if kind == "RETRIEVAL":
-        results = output.get("retrieval_results", [])
-        payload["detail"] = f"Found {len(results)} relevant document(s)"
-        payload["items"] = [t for t in (_doc_title(r) for r in results[:_MAX_ITEMS]) if t]
-    elif kind == "WEB_SEARCH":
-        results = output.get("web_search_results", [])
-        payload["detail"] = f"Found {len(results)} web result(s)"
-        payload["items"] = [r.get("title", "")[:120] for r in results[:_MAX_ITEMS]]
-        # Untruncated {index, title, url} triples — items above stays
-        # title-only/capped for older clients. index matches the numbering the
-        # separate web_sources event uses below, so a client can correlate a
-        # source shown here with the [n] marker it becomes in the final answer.
-        payload["sources"] = [
-            {"index": i, "title": r.get("title", ""), "url": r.get("url", "")}
-            for i, r in enumerate(results, 1)
-        ]
-    elif kind == "TOOL":
+    if kind == "TOOL":
         artifacts = output.get("generated_artifacts", [])
         sources = output.get("tool_sources", [])
         # Per-call breakdown (name, args, its own sources/artifacts/error) — see
@@ -389,19 +362,12 @@ async def stream_events_dicts(
                         # Citable sources any built-in tool surfaced (web_search
                         # today). Already {index, title, url} with turn-global
                         # indices — the full accumulated snapshot, so the answer's
-                        # [n] markers resolve to links. Same event and shape as
-                        # the legacy WEB_SEARCH node below; the caller can't tell
-                        # which produced them.
+                        # [n] markers resolve to links. Same event and shape the
+                        # legacy WEB_SEARCH node used to emit, so clients are
+                        # unchanged.
                         tool_sources = output.get("tool_sources") or []
                         if tool_sources:
                             yield {"web_sources": tool_sources}
-                    if node_type and node_type.upper() == "WEB_SEARCH":
-                        sources = [
-                            {"index": i, "title": r.get("title", ""), "url": r.get("url", "")}
-                            for i, r in enumerate(output.get("web_search_results", []), 1)
-                        ]
-                        if sources:
-                            yield {"web_sources": sources}
                     # Structured output: the guaranteed-JSON response arrives as
                     # one content chunk when the generator node completes.
                     if structured_output and node in streaming_nodes:

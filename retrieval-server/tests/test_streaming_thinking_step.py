@@ -36,26 +36,6 @@ class FmtToolCallTests(unittest.TestCase):
         self.assertNotIn("...", rendered)
 
 
-class WebSearchNodeTests(unittest.TestCase):
-    """The static WEB_SEARCH graph node's done payload."""
-
-    def test_items_stay_capped_and_title_only_for_back_compat(self):
-        results = [{"title": f"T{i}", "url": f"https://u{i}"} for i in range(1, 8)]
-        payload = _step_done_payload("WEB_SEARCH", {"web_search_results": results})
-
-        self.assertEqual(payload["detail"], "Found 7 web result(s)")
-        self.assertEqual(len(payload["items"]), 5)
-        self.assertEqual(payload["items"][0], "T1")
-
-    def test_sources_are_the_full_untruncated_indexed_list(self):
-        results = [{"title": f"T{i}", "url": f"https://u{i}"} for i in range(1, 8)]
-        payload = _step_done_payload("WEB_SEARCH", {"web_search_results": results})
-
-        self.assertEqual(len(payload["sources"]), 7)
-        self.assertEqual(payload["sources"][0], {"index": 1, "title": "T1", "url": "https://u1"})
-        self.assertEqual(payload["sources"][6], {"index": 7, "title": "T7", "url": "https://u7"})
-
-
 class ToolExecutorNodeTests(unittest.TestCase):
     """The TOOL kind (TOOL_EXECUTOR node) done payload."""
 
