@@ -21,11 +21,10 @@ def _get_cached_embedding_model(model_type: str | None, model_name: str | None) 
     return _embedding_model_cache[key]
 
 
-# Shared collections injected into generation context as knowledge. The other
-# types are deliberately excluded:
-#  - conversation: backs the explicit conversation-search feature only —
-#    surfacing past chats in generation context would need its own product
-#    decision.
+# Shared collections injected into generation context as knowledge.
+# conversation is included by product decision (2026-10-20): chat may ground
+# answers in the user's past exchanges, not only notes/email. The remaining
+# types stay deliberately excluded:
 #  - instructions: backs semantic instruction search only — instruction
 #    (persona) text is not knowledge and must not be injected into context.
 #  - memory: has its own consent-gated read paths (the MEMORY node's recall
@@ -33,7 +32,7 @@ def _get_cached_embedding_model(model_type: str | None, model_name: str | None) 
 #    the source of truth. Surfacing raw memory chunks here would bypass
 #    consent and resurface deleted memories (stale vectors) as anonymous
 #    "knowledge".
-_KNOWLEDGE_TYPES = {"notes", "email"}
+_KNOWLEDGE_TYPES = {"notes", "email", "conversation"}
 
 
 def _discover_collections(
