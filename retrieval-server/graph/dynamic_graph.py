@@ -7,10 +7,7 @@ from langgraph.graph import END, StateGraph
 from graph.nodes.human_input import human_input
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
-from graph.nodes.reflection_node import make_reflection_node
-from graph.nodes.retrieval import retrieval
 from graph.nodes.tool_executor import tool_executor
-from graph.nodes.web_search import web_search
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -89,18 +86,17 @@ def _make_condition_router(condition: dict, routes: dict[str, str]):
 
 
 def _build_node_fn(node_type: str, node_id: str):
+    # RETRIEVAL / WEB_SEARCH / RESPONSE_GENERATOR_WITH_REFLECTION are gone:
+    # knowledge and web search are model-triggered tools bound by TOOL_EXECUTOR
+    # (search_knowledge_base / web_search), and reflection loops belong to the
+    # generator's own tool loop. Their graph records were soft-deleted; any
+    # unknown type that resurfaces falls through to a generic LLM node.
     if node_type == "MEMORY":
         return memory(node_id)
-    if node_type == "RETRIEVAL":
-        return retrieval(node_id)
-    if node_type == "WEB_SEARCH":
-        return web_search(node_id)
     if node_type == "TOOL_EXECUTOR":
         return tool_executor(node_id)
     if node_type == "HUMAN_INPUT":
         return human_input(node_id)
-    if node_type == "RESPONSE_GENERATOR_WITH_REFLECTION":
-        return make_reflection_node(node_type, node_id)
     return make_llm_node(node_type, node_id)
 
 

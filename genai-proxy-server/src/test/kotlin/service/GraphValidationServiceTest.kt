@@ -70,22 +70,24 @@ class GraphValidationServiceTest {
     }
 
     @Test
-    fun `conditional cycle requires a reflection node`() {
-        val nodeTypesNoReflection = mapOf("A" to "GENERATION", "B" to "GENERATION")
+    fun `non-tool cycle is rejected`() {
+        // The reflection node that provided a cycle-exit signal is gone, so a
+        // directed cycle outside the tool loop can never terminate — reject it
+        // regardless of what node types the graph carries.
         val cyclicEdges = """{"edges":[{"from":"A","to":"B"}],
             "conditional_edges":[{"from":"B","condition_key":"needs_more_context","routes":{"true":"A","false":"__end__"}}]}"""
 
-        val e = assertFailsWith<IllegalArgumentException> { validate(cyclicEdges, nodeTypesNoReflection) }
+        val e = assertFailsWith<IllegalArgumentException> {
+            validate(cyclicEdges, mapOf("A" to "GENERATION", "B" to "GENERATION"))
+        }
         assertTrue(e.message!!.contains("cycle"))
-
-        validate(cyclicEdges, mapOf("A" to "GENERATION", "B" to "RESPONSE_GENERATOR_WITH_REFLECTION"))
     }
 
     @Test
-    fun `tool_route cycle passes without a reflection node`() {
+    fun `tool_route cycle passes`() {
         // Agent loop: RESPONSE_GENERATOR → tool_route → TOOL_EXECUTOR → back.
-        // Exits by construction (no tool calls → "none" route), so no
-        // reflection node is required.
+        // Exits by construction (no tool calls → "none" route), so it is the
+        // one permitted cycle shape.
         validate(
             edges = """{"edges":[{"from":"T","to":"A"}],
                 "conditional_edges":[{"from":"A","condition_key":"tool_calls","condition_type":"tool_route",
@@ -118,7 +120,7 @@ class GraphValidationServiceTest {
     }
 
     @Test
-    fun `non-tool cycle still requires reflection even when a tool_route edge exists`() {
+    fun `non-tool cycle is rejected even when a tool_route edge exists`() {
         // A ⇄ B is a plain bool cycle; the separate tool_route loop must not
         // exempt it.
         val e = assertFailsWith<IllegalArgumentException> {

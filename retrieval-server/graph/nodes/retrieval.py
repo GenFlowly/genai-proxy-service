@@ -3,12 +3,10 @@ from typing import Any
 
 from pymilvus import MilvusClient
 
-from content_logging import redact
 from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
 from encoding_library.utils.vector_db import collection_data_type, customer_filter, get_milvus_client
-from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
 
@@ -66,50 +64,6 @@ def _discover_collections(
     return grouped
 
 
-def retrieval(node_id: str | None = None):
-    """Factory: retrieval node reading its own (nodeId-keyed) config, with a
-    nodeType-keyed fallback for statically-built graphs."""
-    async def node(state: RetrievalState) -> dict:
-        return await _retrieval(state, node_id)
-
-    node.__name__ = "retrieval"
-    return node
-
-
-async def _retrieval(state: RetrievalState, node_id: str | None) -> dict:
-    # The graph degrades gracefully (empty results + error in state), so the
-    # metric lives on the raising inner function — a swallowed failure here
-    # would otherwise be invisible to alarms.
-    try:
-        return await _retrieval_impl(state, node_id)
-    except Exception as e:
-        logger.error("Node retrieval: FAILED — %s", e, exc_info=True)
-        return {"retrieval_results": [], "error": str(e)}
-
-
-async def _retrieval_impl(state: RetrievalState, node_id: str | None) -> dict:
-    query = state.get("rewritten_query") or state["original_query"]
-    customer_id = state["customer_id"]
-    logger.info("Node retrieval: START — customer=%s query='%s'", customer_id, redact(query, 100))
-
-    configs = state.get("node_configs", {})
-    config = (configs.get(node_id) if node_id else None) or configs.get("RETRIEVAL", {})
-    top_n = config.get("top_n") or state["top_n"]
-    similarity_threshold = config.get("similarity_threshold") or state["similarity_threshold"]
-    search_params = config.get("search_params") or state["search_params"]
-
-    results = await search_knowledge(
-        customer_id=customer_id,
-        query=query,
-        top_n=top_n,
-        similarity_threshold=similarity_threshold,
-        search_params=search_params,
-        model_type=state.get("model_type"),
-        model_name=state.get("model_name"),
-    )
-    return {"retrieval_results": results}
-
-
 @track("vector_retrieval", source="retrieve")
 async def search_knowledge(
     customer_id: str,
@@ -122,12 +76,12 @@ async def search_knowledge(
 ) -> list[dict]:
     """Semantic search over a customer's knowledge collections.
 
-    The shared core behind the RETRIEVAL node and the search_knowledge_base
-    built-in tool (graph.knowledge_tool) — one implementation so relevance
-    changes land on both the pipeline and the agent path. Returns the result
-    dicts the pipeline has always produced ({id, distance, entity,
-    source_collection}), sorted by score, at most top_n. Raises on
-    infrastructure failure; callers own their degradation story.
+    The engine behind the search_knowledge_base built-in tool
+    (graph.knowledge_tool). Previously also backed the RETRIEVAL graph node;
+    that node is gone — knowledge search is model-triggered through the tool.
+    Returns result dicts ({id, distance, entity, source_collection}), sorted
+    by score, at most top_n. Raises on infrastructure failure; callers own
+    their degradation story.
     """
     logger.info("Node retrieval: connecting to Zilliz for customer=%s", customer_id)
     # get_milvus_client returns a retry-wrapped client (backoff on every call)
