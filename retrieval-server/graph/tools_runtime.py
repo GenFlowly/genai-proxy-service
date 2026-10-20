@@ -40,15 +40,16 @@ _ATTACHMENT_KEY_TEMPLATE = "customers/{customer_id}/attachments/{artifact_id}"
 # Built-ins a TOOL_EXECUTOR node must name EXPLICITLY in its config's "tools"
 # list — excluded from the all-built-ins enablement default. These are tools
 # whose implicit arrival would change the behavior of existing graphs:
-# search_knowledge_base would make every pipeline graph with an unscoped
-# TOOL_EXECUTOR node retrieve twice (once via its RETRIEVAL node, once when
-# the model calls the tool); search_memories exposes learned user memories and
-# additionally requires memory consent (MEMORY_CONSENT_TOOLS below); the
-# agent-harness tools (todos, scratch FS, subagent spawning) are opt-in
-# capabilities an agent graph names, never a behavior an untouched pipeline
-# graph silently grows.
+# search_memories exposes learned user memories and additionally requires
+# memory consent (MEMORY_CONSENT_TOOLS below); the agent-harness tools (todos,
+# scratch FS, subagent spawning) are opt-in capabilities an agent graph names,
+# never a behavior an untouched graph silently grows.
+#
+# search_knowledge_base is deliberately NOT here: with the RETRIEVAL graph
+# node gone, the tool is the only knowledge-search path, so every graph with
+# an unscoped TOOL_EXECUTOR gets it by default — retrieval is model-triggered
+# now, the same shift web search made.
 _EXPLICIT_ONLY_TOOLS = {
-    "search_knowledge_base",
     "search_memories",
     "write_todos",
     "fs_write",
