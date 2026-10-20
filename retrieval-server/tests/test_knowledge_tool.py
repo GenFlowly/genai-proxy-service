@@ -60,6 +60,17 @@ class SearchKnowledgeBaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(out.sources, [])
         self.assertEqual(out.artifacts, [])
 
+    async def test_untitled_conversation_hits_are_attributed_to_past_conversations(self):
+        out, _ = await self._run(
+            {"query": "q"},
+            results=[{"id": "m1_0", "distance": 0.88,
+                      "entity": {"title": "", "note_value": "User: I prefer dark mode\nAssistant: noted"},
+                      "source_collection": "conversation_voyage_4_large"}],
+        )
+
+        self.assertIn("[1] (past conversation) (similarity 0.88)", out.content)
+        self.assertIn("I prefer dark mode", out.content)
+
     async def test_empty_query_is_an_error_message_not_a_search(self):
         out, search = await self._run({"query": "   "})
 

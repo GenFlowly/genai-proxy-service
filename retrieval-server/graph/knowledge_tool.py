@@ -43,7 +43,12 @@ def _render_results(query: str, results: list[dict]) -> str:
     ]
     for i, r in enumerate(results, 1):
         entity = r.get("entity", {}) or {}
-        title = entity.get("title") or entity.get("subject") or "(untitled)"
+        # Conversation chunks carry no title; name the source so the model can
+        # attribute ("in an earlier conversation you said...") instead of
+        # citing an "(untitled)" document.
+        is_conversation = str(r.get("source_collection", "")).split("_", 1)[0] == "conversation"
+        fallback = "(past conversation)" if is_conversation else "(untitled)"
+        title = entity.get("title") or entity.get("subject") or fallback
         body = (entity.get("note_value") or "").strip()
         lines.append(f"[{i}] {title} (similarity {r.get('distance', 0.0):.2f})")
         if body:
@@ -61,9 +66,10 @@ class SearchKnowledgeBaseTool(GraphTool):
     credential_ref = None
     description = (
         "Search this customer's private knowledge base (their stored notes, "
-        "documents, and records) for information relevant to the user's "
-        "question. Call this whenever the answer may depend on the customer's "
-        "own data rather than general knowledge. Write a focused, "
+        "documents, records, and past conversation history) for information "
+        "relevant to the user's question. Call this whenever the answer may "
+        "depend on the customer's own data rather than general knowledge, "
+        "including things they told you in earlier conversations. Write a focused, "
         "keyword-style query. You may call it several times with different "
         "queries to cover multi-part questions, or refine the query after "
         "reading the first results. If nothing comes back, retry once with "
