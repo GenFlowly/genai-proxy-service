@@ -84,7 +84,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logger.warning(f"Failed to delete prior chunks for instruction {instruction_key}: {str(e)}")
 
         result = milvus_client.insert(collection_name=collection_name, data=records)
-        milvus_client.flush(collection_name=collection_name)
+        # No flush: Zilliz serverless auto-seals segments and reads see growing
+        # data, so per-insert flush buys nothing — and the cluster allows ~1
+        # flush per 20s TOTAL (gRPC RateLimiter, rate=0.05). The Map state runs
+        # up to 3 chunk batches concurrently, so any payload over one batch had
+        # sibling flushes exhaust pymilvus's retries and fail the execution
+        # AFTER its insert succeeded — long messages never embedded.
         milvus_ids = [r["id"] for r in records]
 
         count("vector_store_chunks_total", result.get("insert_count", 0),
