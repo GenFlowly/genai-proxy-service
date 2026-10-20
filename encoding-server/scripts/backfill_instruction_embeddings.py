@@ -10,13 +10,15 @@ pipeline stamps each row with its creator's customer_id (the partition key of
 the shared instructions collection).
 
 Skipped rows:
-  - creators SYSTEM / PUBLIC (no shared collection in v1)
-  - latest versions already stamped is_synced_with_milvus=true (re-runnable)
+  - creators SYSTEM / PUBLIC, any casing (no shared collection in v1)
+  - latest versions already stamped is_synced_with_milvus=true (re-runnable);
+    pass --ignore-synced to resend them too — the stamp only proves a past
+    sync, not that the rows still exist (e.g. the cluster was replaced)
 
 Usage:
     python scripts/backfill_instruction_embeddings.py \
         --queue-url https://sqs.us-east-1.amazonaws.com/<acct>/<ingestion-queue> \
-        [--table Instructions] [--region us-east-1] [--dry-run]
+        [--table Instructions] [--region us-east-1] [--dry-run] [--ignore-synced]
 """
 import argparse
 import json
@@ -76,6 +78,7 @@ def main() -> None:
     parser.add_argument("--table", default="Instructions")
     parser.add_argument("--region", default="us-east-1")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--ignore-synced", action="store_true")
     args = parser.parse_args()
 
     dynamodb = boto3.client("dynamodb", region_name=args.region)
@@ -86,10 +89,11 @@ def main() -> None:
 
     for iid, item in sorted(latest.items()):
         creator = item.get("creator", "")
-        if creator in SKIPPED_CREATORS or not creator:
+        # Data has mixed casing ("System"); match the intent, not the bytes
+        if creator.upper() in SKIPPED_CREATORS or not creator:
             skipped_creator += 1
             continue
-        if item.get("is_synced_with_milvus"):
+        if item.get("is_synced_with_milvus") and not args.ignore_synced:
             skipped_synced += 1
             continue
         if not item.get("instructions"):
