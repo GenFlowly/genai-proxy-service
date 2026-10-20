@@ -39,7 +39,7 @@ data class NewAgentNode(
  * Structural validation is enforced server-side before any write:
  *  - entryPoint must be present in the existing nodeIds list.
  *  - All edge from/to references must be existing nodeIds or "__end__".
- *  - Cycles require a RESPONSE_GENERATOR_WITH_REFLECTION node.
+ *  - Cycles are rejected, except the generator↔TOOL_EXECUTOR tool_route loop.
  *  - maxIterations must be in [1, 100].
  */
 @Serializable
