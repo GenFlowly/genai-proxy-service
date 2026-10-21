@@ -1,0 +1,54 @@
+name: Grafana Keep-Alive
+
+# Free-tier Grafana Cloud instances hibernate after inactivity — the next
+# visitor gets a 503 "Click to continue loading your instance" — and, after
+# prolonged inactivity, the org can be deactivated. A daily authenticated ping
+# wakes the instance AND registers account activity so it is never deactivated.
+#
+# Reuses the production environment's existing GRAFANA_URL / GRAFANA_SA_TOKEN;
+# no new secrets required. Scheduled workflows run from the default branch only.
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping Grafana
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Wake and register activity
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_SA_TOKEN: ${{ secrets.GRAFANA_SA_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # A hibernating instance answers the first hit with a 503 "Loading"
+          # page and starts waking; retry /api/health until it is up.
+          code=""
+          for attempt in $(seq 1 10); do
+            code=$(curl -s -o /tmp/health.json -w '%{http_code}' --max-time 30 "$GRAFANA_URL/api/health" || echo "000")
+            if [[ "$code" == "200" ]]; then
+              echo "Healthy on attempt $attempt: $(cat /tmp/health.json)"
+              break
+            fi
+            echo "Attempt $attempt: HTTP $code (waking up?), retrying in 15s…"
+            sleep 15
+          done
+          if [[ "$code" != "200" ]]; then
+            echo "Grafana did not become healthy after retries (last HTTP $code)"
+            cat /tmp/health.json 2>/dev/null || true
+            exit 1
+          fi
+
+          # Authenticated call so the visit also counts as account activity
+          # (an unauthenticated health check may not).
+          code=$(curl -s -o /tmp/org.json -w '%{http_code}' --max-time 30 \
+            -H "Authorization: Bearer $GRAFANA_SA_TOKEN" "$GRAFANA_URL/api/org")
+          echo "Authenticated activity ping: HTTP $code"
+          if [[ "$code" != "200" ]]; then
+            cat /tmp/org.json 2>/dev/null || true
+            exit 1
+          fi
