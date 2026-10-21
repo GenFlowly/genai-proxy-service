@@ -38,6 +38,25 @@ export class EcrStack extends cdk.Stack {
             lifecycleRules: [{ maxImageCount: 5 }],
         });
 
+        /**
+         * Gone from the app, pinned here: the DEPLOYED (stage-1) LambdaStack
+         * still imports this repo's Arn/name, and EcrStack deploys BEFORE
+         * LambdaStack in the same run — dropping the auto-exports first fails
+         * the update ("Cannot delete export ... in use by
+         * encoding-service-LambdaStack", 2026-10-21). exportValue() re-creates
+         * those exact exports so this stack can update while the old consumer
+         * still exists; the same-run LambdaStack deploy then drops the
+         * imports. Once that LambdaStack is live everywhere (prod AND dev), a
+         * cleanup commit may remove this repo and both pins together.
+         */
+        const createEmbeddingsRepo = new Repository(this, 'CreateEmbeddingsLambdaRepo', {
+            repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-embeddings-repo`,
+            removalPolicy: removalPolicy,
+            lifecycleRules: [{ maxImageCount: 5 }],
+        });
+        this.exportValue(createEmbeddingsRepo.repositoryArn);
+        this.exportValue(createEmbeddingsRepo.repositoryName);
+
         // Store Embeddings Lambda Repository
         this.storeEmbeddingsRepo = new Repository(this, 'StoreEmbeddingsLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-repo`,
