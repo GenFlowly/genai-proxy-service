@@ -307,6 +307,8 @@
             "followUp": "Follow up",
             "generationFailed": "Generation failed: {{reason}}",
             "learningFacts": "Learning facts…",
+            "memoryCoreLabel": "Core memories",
+            "memoryRecalledLabel": "Recalled for this message",
             "noApiKeysSet": "No API keys set",
             "noNewFacts": "No new facts added to memory",
             "noResponsesGenerated": "No responses were generated",
