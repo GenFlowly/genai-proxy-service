@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - 'observability/grafana/*-production.json'
+      - 'observability/grafana/datasources/*-production.json'
       - '.github/workflows/prod-grafana-dashboards.yml'
   workflow_dispatch:
 
@@ -40,6 +41,30 @@ jobs:
           if [[ "$code" != "200" && "$code" != "409" && "$code" != "412" ]]; then
             echo "Folder create failed ($code):"; cat /tmp/folder.json; exit 1
           fi
+
+          # Datasources-as-code: upsert the CloudWatch datasources by uid so the
+          # uids the dashboards pin survive a cold-start rebuild. Writing
+          # datasources needs an Admin SA token (dashboards only need Editor), so
+          # a 403 is a skip-with-warning — it must never block the deploy below.
+          shopt -s nullglob
+          for df in observability/grafana/datasources/*-"$STAGE".json; do
+            uid=$(jq -r '.uid' "$df"); dsname=$(jq -r '.name' "$df")
+            code=$(curl -s -o /tmp/ds_get.json -w '%{http_code}' "$GRAFANA_URL/api/datasources/uid/$uid" "${auth[@]}")
+            case "$code" in
+              200) method=PUT;  target="$GRAFANA_URL/api/datasources/uid/$uid" ;;
+              404) method=POST; target="$GRAFANA_URL/api/datasources" ;;
+              403) echo "WARNING: SA token lacks datasource access — skipping $dsname ($uid); upgrade the service account to Admin to manage datasources as code"; continue ;;
+              *)   echo "Datasource lookup for $dsname failed ($code):"; cat /tmp/ds_get.json; exit 1 ;;
+            esac
+            code=$(curl -s -o /tmp/ds_resp.json -w '%{http_code}' -X "$method" "$target" "${auth[@]}" -d @"$df")
+            if [[ "$code" == "403" ]]; then
+              echo "WARNING: SA token lacks datasource:write — skipping $dsname ($uid); upgrade the service account to Admin"
+            elif [[ "$code" != "200" ]]; then
+              echo "Datasource upsert for $dsname failed ($code):"; cat /tmp/ds_resp.json; exit 1
+            else
+              echo "  -> datasource $dsname ($uid) upserted via $method"
+            fi
+          done
 
           for f in observability/grafana/*-"$STAGE".json; do
             echo "Deploying $f"
