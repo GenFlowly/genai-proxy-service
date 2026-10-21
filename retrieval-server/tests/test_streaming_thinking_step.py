@@ -74,6 +74,19 @@ class ToolExecutorNodeTests(unittest.TestCase):
         self.assertIn("report.pdf", payload["items"])
         self.assertIn("T1", payload["items"])
 
+    def test_items_are_never_capped_or_truncated(self):
+        # Regression: items used to stop at 5 entries cut to 120 chars.
+        long_title = "T" * 300
+        output = {
+            "generated_artifacts": [],
+            "tool_sources": [{"index": i, "title": f"{long_title}{i}", "url": f"u{i}"} for i in range(9)],
+            "trace": [{"node": "TOOL_EXECUTOR", "prompt": "x", "response": "y", "calls": []}],
+        }
+        payload = _step_done_payload("TOOL_EXECUTOR", output)
+
+        self.assertEqual(len(payload["items"]), 9)
+        self.assertTrue(all(len(t) > 120 for t in payload["items"]))
+
 
 class GeneratorToolCallTests(unittest.TestCase):
     """The LLM (response-generator) node's done payload when the model calls tools."""
