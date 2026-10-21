@@ -67,6 +67,12 @@ _EXCLUDED_PROVIDERS = {
 class ProviderModel(BaseModel):
     name: str
     supportsTools: bool
+    # Whether the model reads an attached PDF natively (document block) vs. the
+    # retrieval-server's fallback (page images for vision models, else extracted
+    # text), and whether it accepts images at all. Let clients hint how a PDF
+    # will be consumed. Both default False when the LiteLLM map has no entry.
+    supportsPdfInput: bool = False
+    supportsVision: bool = False
     # Token limits + pricing (USD per 1M tokens) from the LiteLLM price map —
     # lets the proxy's AIModelCatalog price long-tail vendors without needing
     # a vendor API key. Null when the map has no figure.
@@ -116,6 +122,7 @@ def _per_mtok(info: dict, key: str) -> float | None:
 def _build_catalog() -> ListProvidersResponse:
     import litellm
     from graph.llm_factory import NATIVE_PROVIDERS
+    from graph.model_capabilities import caps_from_info
 
     native_ids = set(NATIVE_PROVIDERS) | {"openai", "anthropic", "gemini"}
 
@@ -137,6 +144,7 @@ def _build_catalog() -> ListProvidersResponse:
             # litellm.supports_function_calling() runs provider code paths
             # and can even block on interactive auth (github_copilot).
             tools = bool(info.get("supports_function_calling", False))
+            caps = caps_from_info(provider, m, info)
             stripped = m.removeprefix(f"{provider}/")
             if stripped in chat_models_by_name:
                 continue
@@ -144,6 +152,8 @@ def _build_catalog() -> ListProvidersResponse:
                 ProviderModel(
                     name=stripped,
                     supportsTools=tools,
+                    supportsPdfInput=caps.pdf_input,
+                    supportsVision=caps.vision,
                     maxInputTokens=_as_int(info.get("max_input_tokens")),
                     maxOutputTokens=_as_int(info.get("max_output_tokens")),
                     inputCostPerMTok=_per_mtok(info, "input_cost_per_token"),

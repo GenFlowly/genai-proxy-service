@@ -179,6 +179,9 @@ async def run_subagent(
         "llm_max_tokens": parent_state.get("llm_max_tokens"),
         "conversation_history": [],
         "query_images": [],
+        # Subagents start from the delegated task only; the root's attached
+        # documents aren't re-fed into every child (mirrors query_images).
+        "query_files": [],
         "tools": [],
         "tool_choice": None,
         "query_tool_results": [],
