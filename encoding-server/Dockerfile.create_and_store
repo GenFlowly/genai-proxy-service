@@ -1,0 +1,28 @@
+# Build stage
+FROM public.ecr.aws/lambda/python:3.11 AS builder
+
+# Install build dependencies
+RUN yum install -y gcc gcc-c++ make cmake
+
+# Copy and install dependencies
+COPY requirements.txt /tmp/
+COPY requirements-create-and-store.txt /tmp/
+RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements-create-and-store.txt --target /tmp/python
+
+# Runtime stage
+FROM public.ecr.aws/lambda/python:3.11
+
+# Redirect HuggingFace cache to /tmp (the only writable dir in Lambda)
+ENV HF_HOME=/tmp/hf_cache
+ENV TRANSFORMERS_CACHE=/tmp/hf_cache
+ENV SENTENCE_TRANSFORMERS_HOME=/tmp/hf_cache
+
+# Copy installed dependencies (including baked-in model) to Lambda task directory
+COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
+
+# Copy application code
+COPY handlers/create_and_store_lambda.py ${LAMBDA_TASK_ROOT}/handlers/create_and_store_lambda.py
+COPY services/content_logging.py ${LAMBDA_TASK_ROOT}/services/content_logging.py
+
+# Set the handler
+CMD [ "handlers.create_and_store_lambda.handler" ]

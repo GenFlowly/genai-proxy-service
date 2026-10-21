@@ -16,6 +16,7 @@ export class EcrStack extends cdk.Stack {
     public readonly embedRepo: IRepository;//todo remove
     public readonly createEmbeddingsRepo: IRepository;
     public readonly storeEmbeddingsRepo: IRepository;
+    public readonly createAndStoreRepo: IRepository;
     public readonly createCollectionsRepo: IRepository;
 
     constructor(scope: Construct, id: string, props: EcrStackProps) {
@@ -52,6 +53,13 @@ export class EcrStack extends cdk.Stack {
             lifecycleRules: [{ maxImageCount: 5 }],
         });
 
+        // Create-and-Store Lambda Repository (merged embed+store step)
+        this.createAndStoreRepo = new Repository(this, 'CreateAndStoreLambdaRepo', {
+            repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-and-store-repo`,
+            removalPolicy: removalPolicy,
+            lifecycleRules: [{ maxImageCount: 5 }],
+        });
+
         // Create Collections Lambda Repository
         this.createCollectionsRepo = new Repository(this, 'CreateCollectionsLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collections-repo`,
@@ -74,6 +82,10 @@ export class EcrStack extends cdk.Stack {
 
         new CfnOutput(this, 'StoreEmbeddingsRepoUri', {
             value: this.storeEmbeddingsRepo.repositoryUri,
+        });
+
+        new CfnOutput(this, 'CreateAndStoreRepoUri', {
+            value: this.createAndStoreRepo.repositoryUri,
         });
 
         new CfnOutput(this, 'CreateCollectionsRepoUri', {
