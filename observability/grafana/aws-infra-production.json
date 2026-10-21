@@ -16,38 +16,6 @@
   "templating": {
     "list": [
       {
-        "name": "function",
-        "label": "Lambda",
-        "type": "query",
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "bfxh1tvnrnu9sf"
-        },
-        "query": {
-          "queryType": "dimensionValues",
-          "namespace": "AWS/Lambda",
-          "metricName": "Invocations",
-          "dimensionKey": "FunctionName",
-          "dimensionFilters": {},
-          "region": "default",
-          "refId": "CloudWatchVariableQueryEditor-VariableQuery"
-        },
-        "regex": "/^encoding-service-production-/",
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "sort": 1,
-        "current": {
-          "selected": true,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
         "name": "table",
         "label": "DynamoDB table",
         "type": "query",
@@ -83,9 +51,8 @@
   "panels": [
     {
       "type": "row",
-      "title": "Lambda: $function",
+      "title": "Lambda (all functions)",
       "collapsed": true,
-      "repeat": "function",
       "gridPos": {
         "x": 0,
         "y": 0,
@@ -95,7 +62,7 @@
       "panels": [
         {
           "type": "timeseries",
-          "title": "Success & errors",
+          "title": "Invocations",
           "datasource": {
             "type": "cloudwatch",
             "uid": "bfxh1tvnrnu9sf"
@@ -109,13 +76,28 @@
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "line",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "showPoints": "always"
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
               }
             },
             "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/^(?!encoding-service-)/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "viz": true,
+                      "legend": true,
+                      "tooltip": true
+                    }
+                  }
+                ]
+              },
               {
                 "__schemeRef": "status-color-scheme",
                 "matcher": {
@@ -190,95 +172,22 @@
               "statistic": "Sum",
               "dimensions": {
                 "FunctionName": [
-                  "$function"
+                  "*"
                 ]
               },
               "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "invocations",
-              "id": "i",
-              "alias": "",
-              "hide": true
-            },
-            {
-              "refId": "B",
-              "datasource": {
-                "type": "cloudwatch",
-                "uid": "bfxh1tvnrnu9sf"
-              },
-              "queryMode": "Metrics",
-              "metricQueryType": 0,
-              "metricEditorMode": 0,
-              "namespace": "AWS/Lambda",
-              "metricName": "Errors",
-              "statistic": "Sum",
-              "dimensions": {
-                "FunctionName": [
-                  "$function"
-                ]
-              },
-              "matchExact": true,
-              "region": "default",
-              "period": "",
-              "expression": "",
-              "label": "errors",
-              "id": "e",
-              "alias": ""
-            },
-            {
-              "refId": "C",
-              "datasource": {
-                "type": "cloudwatch",
-                "uid": "bfxh1tvnrnu9sf"
-              },
-              "queryMode": "Metrics",
-              "metricQueryType": 0,
-              "metricEditorMode": 1,
-              "namespace": "",
-              "metricName": "",
-              "statistic": "",
-              "dimensions": {},
-              "matchExact": false,
-              "region": "default",
-              "period": "",
-              "expression": "i - e",
-              "label": "success",
-              "id": "",
-              "alias": ""
-            },
-            {
-              "refId": "D",
-              "datasource": {
-                "type": "cloudwatch",
-                "uid": "bfxh1tvnrnu9sf"
-              },
-              "queryMode": "Metrics",
-              "metricQueryType": 0,
-              "metricEditorMode": 0,
-              "namespace": "AWS/Lambda",
-              "metricName": "Throttles",
-              "statistic": "Sum",
-              "dimensions": {
-                "FunctionName": [
-                  "$function"
-                ]
-              },
-              "matchExact": true,
-              "region": "default",
-              "period": "",
-              "expression": "",
-              "label": "throttles",
+              "label": "${PROP('Dim.FunctionName')}",
               "id": "",
               "alias": ""
             }
-          ],
-          "description": "Successful (invocations - errors), failed and throttled runs. 5-minute buckets."
+          ]
         },
         {
           "type": "timeseries",
-          "title": "Latency (avg / max)",
+          "title": "Errors",
           "datasource": {
             "type": "cloudwatch",
             "uid": "bfxh1tvnrnu9sf"
@@ -295,10 +204,276 @@
                 "lineWidth": 2,
                 "fillOpacity": 8,
                 "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/^(?!encoding-service-)/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "viz": true,
+                      "legend": true,
+                      "tooltip": true
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/Lambda",
+              "metricName": "Errors",
+              "statistic": "Sum",
+              "dimensions": {
+                "FunctionName": [
+                  "*"
+                ]
+              },
+              "matchExact": true,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.FunctionName')}",
+              "id": "",
+              "alias": ""
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Throttles",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 9,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/^(?!encoding-service-)/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "viz": true,
+                      "legend": true,
+                      "tooltip": true
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "bfxh1tvnrnu9sf"
+              },
+              "queryMode": "Metrics",
+              "metricQueryType": 0,
+              "metricEditorMode": 0,
+              "namespace": "AWS/Lambda",
+              "metricName": "Throttles",
+              "statistic": "Sum",
+              "dimensions": {
+                "FunctionName": [
+                  "*"
+                ]
+              },
+              "matchExact": true,
+              "region": "default",
+              "period": "",
+              "expression": "",
+              "label": "${PROP('Dim.FunctionName')}",
+              "id": "",
+              "alias": ""
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Duration (avg)",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 9,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
               },
               "unit": "ms"
             },
             "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/^(?!encoding-service-)/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "viz": true,
+                      "legend": true,
+                      "tooltip": true
+                    }
+                  }
+                ]
+              },
               {
                 "__schemeRef": "status-color-scheme",
                 "matcher": {
@@ -373,19 +548,120 @@
               "statistic": "Average",
               "dimensions": {
                 "FunctionName": [
-                  "$function"
+                  "*"
                 ]
               },
               "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "avg",
+              "label": "${PROP('Dim.FunctionName')}",
               "id": "",
               "alias": ""
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Duration (max)",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "bfxh1tvnrnu9sf"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 17,
+            "w": 12,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
+              },
+              "unit": "ms"
             },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/^(?!encoding-service-)/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "viz": true,
+                      "legend": true,
+                      "tooltip": true
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "yellow"
+                    }
+                  }
+                ]
+              },
+              {
+                "__schemeRef": "status-color-scheme",
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
             {
-              "refId": "B",
+              "refId": "A",
               "datasource": {
                 "type": "cloudwatch",
                 "uid": "bfxh1tvnrnu9sf"
@@ -398,130 +674,18 @@
               "statistic": "Maximum",
               "dimensions": {
                 "FunctionName": [
-                  "$function"
+                  "*"
                 ]
               },
               "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "max",
+              "label": "${PROP('Dim.FunctionName')}",
               "id": "",
               "alias": ""
             }
-          ],
-          "description": "Per-run duration."
-        },
-        {
-          "type": "timeseries",
-          "title": "Invocations",
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "bfxh1tvnrnu9sf"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 9,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "drawStyle": "line",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "showPoints": "always"
-              }
-            },
-            "overrides": [
-              {
-                "__schemeRef": "status-color-scheme",
-                "matcher": {
-                  "id": "byRegexp",
-                  "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "green"
-                    }
-                  }
-                ]
-              },
-              {
-                "__schemeRef": "status-color-scheme",
-                "matcher": {
-                  "id": "byRegexp",
-                  "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "yellow"
-                    }
-                  }
-                ]
-              },
-              {
-                "__schemeRef": "status-color-scheme",
-                "matcher": {
-                  "id": "byRegexp",
-                  "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "red"
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "datasource": {
-                "type": "cloudwatch",
-                "uid": "bfxh1tvnrnu9sf"
-              },
-              "queryMode": "Metrics",
-              "metricQueryType": 0,
-              "metricEditorMode": 0,
-              "namespace": "AWS/Lambda",
-              "metricName": "Invocations",
-              "statistic": "Sum",
-              "dimensions": {
-                "FunctionName": [
-                  "$function"
-                ]
-              },
-              "matchExact": true,
-              "region": "default",
-              "period": "",
-              "expression": "",
-              "label": "invocations",
-              "id": "",
-              "alias": ""
-            }
-          ],
-          "description": "Runs per 5-minute bucket."
+          ]
         },
         {
           "type": "timeseries",
@@ -532,21 +696,36 @@
           },
           "gridPos": {
             "x": 12,
-            "y": 9,
+            "y": 17,
             "w": 12,
             "h": 8
           },
           "fieldConfig": {
             "defaults": {
               "custom": {
-                "drawStyle": "line",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "showPoints": "always"
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "showPoints": "never"
               },
               "unit": "ms"
             },
             "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/^(?!encoding-service-)/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "viz": true,
+                      "legend": true,
+                      "tooltip": true
+                    }
+                  }
+                ]
+              },
               {
                 "__schemeRef": "status-color-scheme",
                 "matcher": {
@@ -621,19 +800,18 @@
               "statistic": "Sum",
               "dimensions": {
                 "FunctionName": [
-                  "$function"
+                  "*"
                 ]
               },
               "matchExact": true,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "total run time",
+              "label": "${PROP('Dim.FunctionName')}",
               "id": "",
               "alias": ""
             }
-          ],
-          "description": "Summed execution time per 5-minute bucket."
+          ]
         }
       ],
       "fieldConfig": {
