@@ -115,9 +115,6 @@ def _fmt_tool_call(call: dict) -> str:
     return f"{name}({', '.join(parts)})"
 
 
-_MAX_ITEMS = 5
-
-
 def _step_done_payload(node_type: str, output: dict) -> dict:
     """detail / items / prompt / response of a completed node, from its update."""
     payload: dict = {}
@@ -143,10 +140,10 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
         todos = trace[-1].get("todos") if trace else None
         if todos is not None:
             payload["todos"] = todos
-        # Back-compat flat view: artifact filenames + newest cited titles, capped.
-        items = [a.get("filename", "")[:120] for a in artifacts]
-        items += [s.get("title", "")[:120] for s in sources[-_MAX_ITEMS:] if s.get("title")]
-        payload["items"] = items[:_MAX_ITEMS]
+        # Back-compat flat view: artifact filenames + cited titles.
+        items = [a.get("filename", "") for a in artifacts]
+        items += [s.get("title", "") for s in sources if s.get("title")]
+        payload["items"] = items
     elif kind == "MEMORY":
         block = output.get("memories_block") or ""
         memories = [line[2:] for line in block.splitlines() if line.startswith("- ")]
@@ -160,15 +157,19 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
             if recalled_count:
                 parts.append(f"recalled {recalled_count} related to this message")
             payload["detail"] = "; ".join(parts) if parts else "No stored memories to apply"
-            # The block renders core lines first, then recalled; recalled are
-            # the per-message news, so they lead the (capped) item list.
+            # The block renders core lines first, then recalled. The labeled
+            # split is what current clients render (each group under its own
+            # heading); the flat items list stays for older clients, recalled
+            # first — they are the per-message news.
+            core_items = memories[:core_count]
             recalled_items = memories[core_count:]
-            payload["items"] = [m[:120] for m in (recalled_items + memories[:core_count])[:_MAX_ITEMS]]
+            payload["memories"] = {"core": core_items, "recalled": recalled_items}
+            payload["items"] = recalled_items + core_items
         else:
             payload["detail"] = (
                 f"Applied {len(memories)} learned memori(es)" if memories else "No stored memories to apply"
             )
-            payload["items"] = [m[:120] for m in memories[:_MAX_ITEMS]]
+            payload["items"] = memories
     else:
         # LLM-backed nodes: summarize the well-known output fields.
         intent = output.get("query_intent")
