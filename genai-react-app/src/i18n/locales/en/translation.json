@@ -297,8 +297,11 @@
             "attachmentFormatUnsupported": "{{name}} isn't a supported image format. Supported formats: {{formats}}",
             "attachmentFormatsUnsupported": "{{count}} files aren't in a supported image format ({{names}}). Supported formats: {{formats}}",
             "pastedFile": "The pasted file",
-            "removeAttachment": "Remove image",
-            "addImageAttachment": "Add image attachment"
+            "removeAttachment": "Remove attachment",
+            "addImageAttachment": "Add image attachment",
+            "addAttachment": "Add image or PDF attachment",
+            "attachmentPdfTooLarge": "PDFs must be 10 MB or smaller",
+            "attachmentPdfLimitReached": "You can attach at most {{max}} PDFs per message"
         },
         "response": {
             "deleteFact": "Delete fact from memory: {{fact}}",

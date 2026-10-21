@@ -69,6 +69,10 @@ export async function uploadAttachment(token: string, file: File): Promise<Attac
         attachmentId: presign.attachmentId,
         s3Key: presign.s3Key,
         mediaType: presign.mediaType,
+        // Carry the display name so the backend can name the document to the
+        // model (e.g. "[Attached PDF: report.pdf]") and in download cards.
+        // Harmless for images (shown as a label only).
+        filename: file.name || undefined,
     }
 }
 
