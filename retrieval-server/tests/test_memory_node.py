@@ -8,23 +8,31 @@ Pinned here:
 
   * consent gating: memory_enabled=false → inert, no data access at all
   * the CORE block format is unchanged (continuity with the Kotlin-era block)
-  * EPISODIC recall joins vector hits back to DynamoDB by memory_key: CORE
+  * EPISODIC recall joins vector hits back to DynamoDB by memory_key: shown-CORE
     duplicates and stale vectors (deleted memories) are dropped, the score
     floor gates, best-score-per-key dedup applies, and top_k caps the block
+  * ranking blends a bounded recency boost into the cosine; the floor stays on
+    the RAW cosine, and recall_recency_weight: 0 restores pure-cosine order
+  * CORE past max_memories is demoted to recall-eligible — never silently lost
   * any recall failure degrades to the CORE-only block — never breaks the turn
   * recall_top_k: 0 (node config) disables recall entirely
   * the thinking-step payload distinguishes core vs recalled memories
 """
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from graph.nodes import memory as memory_mod
-from graph.nodes.memory import _is_memory_collection, memory
+from graph.nodes.memory import _is_memory_collection, _parse_timestamp, _recency_boost, memory
 from streaming import _step_done_payload
 
 
 def _mem(key: str, kind: str, text: str, updated: str = "2026-01-01T00:00:00Z") -> dict:
     return {"memoryId": key, "kind": kind, "text": text, "updatedAt": updated}
+
+
+def _iso_days_ago(days: float) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _state(**overrides) -> dict:
@@ -148,6 +156,69 @@ class MemoryNodeTests(unittest.IsolatedAsyncioTestCase):
         recalled = [line for line in block.splitlines() if line.startswith("- ")]
         self.assertEqual(recalled, ["- Fact 0.", "- Fact 1.", "- Fact 2.", "- Fact 3."])
 
+    async def test_recency_breaks_ties_but_relevance_still_dominates(self):
+        memories = [
+            _mem("MEM#old-tie", "EPISODIC", "Old tie fact.", _iso_days_ago(365)),
+            _mem("MEM#new-tie", "EPISODIC", "New tie fact.", _iso_days_ago(0)),
+            _mem("MEM#old-strong", "EPISODIC", "Old strong fact.", _iso_days_ago(365)),
+            _mem("MEM#new-weak", "EPISODIC", "New weak fact.", _iso_days_ago(0)),
+        ]
+        hits = [
+            _hit("MEM#old-tie", 0.70),
+            _hit("MEM#new-tie", 0.70),   # same cosine, a year fresher → ranks above
+            _hit("MEM#old-strong", 0.92),  # max boost (+0.2) cannot overtake this
+            _hit("MEM#new-weak", 0.60),
+        ]
+        result, _ = await self._run(_state(), memories, hits=hits)
+
+        recalled = [l for l in result["memories_block"].splitlines() if l.startswith("- ")]
+        self.assertEqual(
+            recalled,
+            # blended: 0.92+~0, 0.70+0.2, 0.60+0.2, 0.70+~0
+            ["- Old strong fact.", "- New tie fact.", "- New weak fact.", "- Old tie fact."],
+        )
+
+    async def test_recency_weight_zero_restores_pure_cosine_ranking(self):
+        memories = [
+            _mem("MEM#old", "EPISODIC", "Old fact.", _iso_days_ago(365)),
+            _mem("MEM#new", "EPISODIC", "New fact.", _iso_days_ago(0)),
+        ]
+        hits = [_hit("MEM#old", 0.70), _hit("MEM#new", 0.65)]
+        state = _state(node_configs={"NODE1": {"recall_recency_weight": 0}})
+        result, _ = await self._run(state, memories, hits=hits)
+
+        recalled = [l for l in result["memories_block"].splitlines() if l.startswith("- ")]
+        self.assertEqual(recalled, ["- Old fact.", "- New fact."])
+
+    async def test_floor_gates_on_raw_cosine_not_the_boosted_score(self):
+        memories = [_mem("MEM#fresh", "EPISODIC", "Fresh noise.", _iso_days_ago(0))]
+        # 0.45 raw is under the 0.5 floor; the +0.2 recency boost must not rescue it
+        result, _ = await self._run(_state(), memories, hits=[_hit("MEM#fresh", 0.45)])
+        self.assertEqual(result, {})
+
+    async def test_core_overflow_is_demoted_to_recall_not_dropped(self):
+        memories = [
+            _mem("MEM#new-core", "CORE", "Newest core fact.", _iso_days_ago(1)),
+            _mem("MEM#old-core", "CORE", "Oldest core fact.", _iso_days_ago(300)),
+        ]
+        hits = [
+            _hit("MEM#new-core", 0.95),  # injected above — still dropped from recall
+            _hit("MEM#old-core", 0.90),  # over the cap — now recall-eligible
+        ]
+        state = _state(node_configs={"NODE1": {"max_memories": 1}})
+        result, _ = await self._run(state, memories, hits=hits)
+
+        block = result["memories_block"]
+        core_section, recall_section = block.split("## Possibly relevant")
+        self.assertIn("- Newest core fact.", core_section)
+        self.assertNotIn("- Oldest core fact.", core_section)
+        self.assertIn("- Oldest core fact.", recall_section)
+        self.assertNotIn("- Newest core fact.", recall_section)
+        self.assertEqual(
+            result["scratch"]["memory_stats"],
+            {"core": 1, "recalled": 1, "core_overflow": 1},
+        )
+
     async def test_recall_failure_degrades_to_core_only(self):
         memories = [
             _mem("MEM#a", "CORE", "Works as an engineer."),
@@ -196,6 +267,29 @@ class MemoryNodeTests(unittest.IsolatedAsyncioTestCase):
     async def test_nothing_stored_returns_empty_update(self):
         result, _ = await self._run(_state(), [])
         self.assertEqual(result, {})
+
+
+class RecencyHelperTests(unittest.TestCase):
+    def test_timestamp_parsing_tolerates_z_and_nanoseconds(self):
+        # Real DDB rows carry both plain-seconds and 9-digit fractional forms
+        self.assertIsNotNone(_parse_timestamp("2026-09-06T17:32:25Z"))
+        self.assertIsNotNone(_parse_timestamp("2026-09-06T17:32:25.916654398Z"))
+        self.assertIsNotNone(_parse_timestamp("2026-09-06T17:32:25.916654398+00:00"))
+        self.assertIsNone(_parse_timestamp(None))
+        self.assertIsNone(_parse_timestamp(""))
+        self.assertIsNone(_parse_timestamp("not-a-date"))
+
+    def test_boost_halves_per_half_life_and_unknown_age_counts_as_old(self):
+        now = datetime(2026, 10, 20, tzinfo=timezone.utc)
+        thirty_days_old = {"updatedAt": "2026-09-20T00:00:00Z"}
+        self.assertAlmostEqual(_recency_boost(thirty_days_old, now, 30.0), 0.5, places=3)
+        fresh = {"updatedAt": "2026-10-20T00:00:00Z"}
+        self.assertAlmostEqual(_recency_boost(fresh, now, 30.0), 1.0, places=3)
+        self.assertEqual(_recency_boost({}, now, 30.0), 0.0)
+        # createdAt is the fallback when updatedAt is absent
+        self.assertAlmostEqual(
+            _recency_boost({"createdAt": "2026-09-20T00:00:00Z"}, now, 30.0), 0.5, places=3
+        )
 
 
 class MemoryCollectionFilterTests(unittest.TestCase):
