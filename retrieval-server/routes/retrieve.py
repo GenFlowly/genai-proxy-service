@@ -65,6 +65,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         model_name=req.model_name,
         original_query=req.raw_data.query_data,
         query_images=[img.model_dump() for img in req.raw_data.images],
+        query_files=[f.model_dump() for f in req.raw_data.files],
         tools=[t.model_dump() for t in req.tools],
         tool_choice=req.tool_choice,
         query_tool_results=[r.model_dump() for r in req.tool_results],

@@ -5,6 +5,7 @@ import com.genflowly.models.Message
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import com.genflowly.models.isImageAttachmentMediaType
+import com.genflowly.models.isPdfAttachmentMediaType
 import com.genflowly.models.normalizeAttachmentMediaType
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -28,6 +29,17 @@ private val jsonParser = Json { ignoreUnknownKeys = true }
 fun List<AttachmentRef>.toImageRefs(): List<ImageRef> =
     filter { isImageAttachmentMediaType(it.mediaType) }
         .map { ImageRef(s3Key = it.s3Key, mediaType = normalizeAttachmentMediaType(it.mediaType)) }
+
+/**
+ * Attachments to send to the LLM as documents (PDFs today): the complement of
+ * [toImageRefs] for the kinds the retrieval-server reads as files. The stored
+ * s3Key is passed exactly as persisted (a file under another participant's
+ * prefix stays addressable), along with the display filename. Images and
+ * unknown types are skipped.
+ */
+fun List<AttachmentRef>.toFileRefs(): List<FileRef> =
+    filter { isPdfAttachmentMediaType(it.mediaType) }
+        .map { FileRef(s3Key = it.s3Key, mediaType = normalizeAttachmentMediaType(it.mediaType), filename = it.filename) }
 
 /**
  * Parse the retrieval-server's generated_artifacts JSON —
@@ -58,6 +70,10 @@ fun Message.toConversationMessage(): ConversationMessage =
         role = role,
         content = text,
         images = attachments.toImageRefs(),
+        // Only a user turn's uploaded PDFs are replayed as input files; an
+        // assistant turn's attachments are generated artifacts (e.g. a PDF the
+        // generate_pdf tool produced) and must not be fed back as model input.
+        files = if (role == "user") attachments.toFileRefs() else emptyList(),
         toolCalls = toolCallsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() },
         toolResults = toolResultsJson?.let { runCatching { jsonParser.parseToJsonElement(it) }.getOrNull() }
     )

@@ -8,6 +8,7 @@ import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.toNdjsonFrame
 import com.genflowly.models.retrieval.parseGeneratedArtifacts
 import com.genflowly.models.retrieval.toConversationMessage
+import com.genflowly.models.retrieval.toFileRefs
 import com.genflowly.models.retrieval.toImageRefs
 import com.genflowly.models.retrieval.toPayloadToolResults
 import com.genflowly.models.retrieval.toPayloadTools
@@ -277,6 +278,7 @@ class GenerationOrchestrator(
             ),
             agentic = agentic,
             queryImages = message.attachments.toImageRefs(),
+            queryFiles = message.attachments.toFileRefs(),
             tools = tools.toPayloadTools(),
             toolChoice = toolChoice,
             toolResults = toolResults.toPayloadToolResults(),
@@ -530,6 +532,7 @@ class GenerationOrchestrator(
                     systemPrompt = vendorSystemPrompt,
                     agentic = agentic,
                     queryImages = attachments.toImageRefs(),
+                    queryFiles = attachments.toFileRefs(),
                     tools = tools.toPayloadTools(),
                     toolChoice = toolChoice,
                     toolResults = toolResults.toPayloadToolResults(),
@@ -557,6 +560,7 @@ class GenerationOrchestrator(
                             systemPrompt = vendorSystemPrompt,
                             agentic = agentic,
                             queryImages = attachments.toImageRefs(),
+                    queryFiles = attachments.toFileRefs(),
                             tools = tools.toPayloadTools(),
                             toolChoice = toolChoice,
                             toolResults = toolResults.toPayloadToolResults(),
