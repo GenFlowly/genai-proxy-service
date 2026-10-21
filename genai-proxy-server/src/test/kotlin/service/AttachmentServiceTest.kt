@@ -1,6 +1,8 @@
 package com.genflowly.service
 
 import com.genflowly.models.DEFAULT_ATTACHMENT_MEDIA_TYPE
+import com.genflowly.models.MAX_PDF_SIZE_BYTES
+import com.genflowly.models.PDF_MEDIA_TYPE
 import com.genflowly.providers.S3Provider
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -62,6 +64,22 @@ class AttachmentServiceTest {
         val a = service.createUploadUrl(customerId, "image/jpeg", 10)
         val b = service.createUploadUrl(customerId, "image/jpeg", 10)
         assertTrue(a.attachmentId != b.attachmentId)
+    }
+
+    @Test
+    fun `accepts a PDF within the size limit and presigns with application pdf`() = runTest {
+        val upload = service.createUploadUrl(customerId, "application/pdf", MAX_PDF_SIZE_BYTES)
+        assertEquals(PDF_MEDIA_TYPE, upload.mediaType)
+        coVerify(exactly = 1) { s3Provider.presignPut(upload.s3Key, PDF_MEDIA_TYPE, any()) }
+    }
+
+    @Test
+    fun `rejects a PDF declared over the size limit at presign`() = runTest {
+        val e = assertFailsWith<IllegalArgumentException> {
+            service.createUploadUrl(customerId, "application/pdf", MAX_PDF_SIZE_BYTES + 1)
+        }
+        assertTrue(e.message!!.contains("MB"), "unexpected message: ${e.message}")
+        coVerify(exactly = 0) { s3Provider.presignPut(any(), any(), any()) }
     }
 
     @Test

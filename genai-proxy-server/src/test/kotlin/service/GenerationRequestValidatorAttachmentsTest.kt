@@ -3,6 +3,9 @@ package com.genflowly.service
 import com.genflowly.models.AttachmentObjectInfo
 import com.genflowly.models.AttachmentRef
 import com.genflowly.models.MAX_ATTACHMENTS_PER_MESSAGE
+import com.genflowly.models.MAX_PDFS_PER_MESSAGE
+import com.genflowly.models.MAX_PDF_SIZE_BYTES
+import com.genflowly.models.PDF_MEDIA_TYPE
 import com.genflowly.providers.S3Provider
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -13,9 +16,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Current-turn attachment checks: count, ownership, image-ness and existence.
- * There is no size or image-type check — the retrieval-server
- * converts/compresses images for each vendor.
+ * Current-turn attachment checks: count (and a stricter PDF sub-count),
+ * ownership, accepted kind, existence, and — for PDFs only — the real stored
+ * content type and size (HEAD). Images carry no size/type check: the
+ * retrieval-server converts/compresses them per vendor.
  */
 class GenerationRequestValidatorAttachmentsTest {
 
@@ -57,9 +61,38 @@ class GenerationRequestValidatorAttachmentsTest {
     }
 
     @Test
-    fun `rejects attachments declared as a non-image type instead of dropping them`() = runTest {
+    fun `rejects attachments of an unsupported kind instead of dropping them`() = runTest {
         stubUploaded(sizeBytes = 10)
-        rejects(listOf(ref("a"), ref("pdf", mediaType = "application/pdf")), "not an image")
+        rejects(listOf(ref("a"), ref("txt", mediaType = "text/plain")), "unsupported type")
+    }
+
+    @Test
+    fun `accepts a PDF within the size limit when stored as application pdf`() = runTest {
+        coEvery { s3Provider.head(any()) } returns AttachmentObjectInfo(1_000_000, PDF_MEDIA_TYPE)
+        validator.validateAttachments(listOf(ref("p", mediaType = PDF_MEDIA_TYPE)), customerId)
+    }
+
+    @Test
+    fun `rejects a PDF whose stored content type is not application pdf`() = runTest {
+        // A client declaring application/pdf for an object stored as something
+        // else (e.g. octet-stream) must not slip through.
+        coEvery { s3Provider.head(any()) } returns AttachmentObjectInfo(10, "application/octet-stream")
+        rejects(listOf(ref("p", mediaType = PDF_MEDIA_TYPE)), "not stored as a PDF")
+    }
+
+    @Test
+    fun `rejects a PDF over the size limit`() = runTest {
+        coEvery { s3Provider.head(any()) } returns AttachmentObjectInfo(MAX_PDF_SIZE_BYTES + 1, PDF_MEDIA_TYPE)
+        rejects(listOf(ref("p", mediaType = PDF_MEDIA_TYPE)), "MB limit")
+    }
+
+    @Test
+    fun `rejects more than the maximum number of PDFs`() = runTest {
+        coEvery { s3Provider.head(any()) } returns AttachmentObjectInfo(10, PDF_MEDIA_TYPE)
+        rejects(
+            (1..MAX_PDFS_PER_MESSAGE + 1).map { ref("p$it", mediaType = PDF_MEDIA_TYPE) },
+            "At most $MAX_PDFS_PER_MESSAGE PDFs"
+        )
     }
 
     @Test
