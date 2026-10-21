@@ -320,9 +320,32 @@ class MemoryThinkingStepTests(unittest.TestCase):
             payload["detail"],
             "Applied 2 core memori(es); recalled 1 related to this message",
         )
-        # Recalled items lead — they are the per-message news
+        # Labeled split for clients that render the two groups
+        self.assertEqual(
+            payload["memories"],
+            {"core": ["Core fact A.", "Core fact B."], "recalled": ["Recalled fact."]},
+        )
+        # Back-compat flat list: recalled items lead — they are the per-message news
         self.assertEqual(payload["items"][0], "Recalled fact.")
         self.assertEqual(payload["items"][1:], ["Core fact A.", "Core fact B."])
+
+    def test_nothing_is_capped_or_truncated(self):
+        # Regression: 8 core + 1 recalled used to render as 5 bullets cut at
+        # 120 chars — every memory must survive in full.
+        long = "L" * 300
+        core_lines = "\n".join(f"- Core fact {i}. {long}" for i in range(8))
+        block = (
+            f"## What you know about this user\nintro:\n{core_lines}\n\n"
+            f"## Possibly relevant background for this message\nintro:\n- Recalled fact. {long}"
+        )
+        payload = _step_done_payload(
+            "MEMORY",
+            {"memories_block": block, "scratch": {"memory_stats": {"core": 8, "recalled": 1}}},
+        )
+        self.assertEqual(len(payload["items"]), 9)
+        self.assertEqual(len(payload["memories"]["core"]), 8)
+        self.assertEqual(payload["memories"]["recalled"], [f"Recalled fact. {long}"])
+        self.assertTrue(all(len(m) > 120 for m in payload["items"]))
 
     def test_core_only_wording(self):
         block = "## What you know about this user\nintro:\n- Core fact A."
