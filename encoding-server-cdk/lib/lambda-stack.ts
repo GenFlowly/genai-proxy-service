@@ -21,11 +21,13 @@ export interface LambdaStackProps extends cdk.StackProps {
     parseAndChunkRepo: ecr.IRepository;
     embedRepo: ecr.IRepository;
     storeEmbeddingsRepo: ecr.IRepository;
+    createAndStoreRepo: ecr.IRepository;
     createCollectionsRepo: ecr.IRepository;
     ingestionImageTag?: string;
     parseAndChunkImageTag?: string;
     embedImageTag?: string;
     storeEmbeddingsImageTag?: string;
+    createAndStoreImageTag?: string;
     createCollectionsImageTag?: string;
     zillizEndpoint: string;
     zillizToken: string;
@@ -43,6 +45,7 @@ export class LambdaStack extends cdk.Stack {
     public readonly parseAndChunkLambda: DockerImageFunction;
     public readonly embedLambda: DockerImageFunction;
     public readonly storeEmbeddingsLambda: DockerImageFunction;
+    public readonly createAndStoreLambda: DockerImageFunction;
     public readonly createCollectionsLambda: DockerImageFunction;
     public readonly pollVoyageBatchesLambda: DockerImageFunction;
     public readonly accumulateVoyageNotesLambda: DockerImageFunction;
@@ -199,6 +202,57 @@ export class LambdaStack extends cdk.Stack {
         customerNotesTable.grantReadWriteData(this.storeEmbeddingsLambda);
         instructionsTable.grantReadWriteData(this.storeEmbeddingsLambda);
         this.storeEmbeddingsLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'],
+        }));
+
+        /**
+         * Keep the embed/store function ARNs exported while the DEPLOYED
+         * StepFunctionsV2 stack still imports them. Stage 1 of the merge
+         * stops referencing them in the SFN template, but LambdaStack deploys
+         * first in the same run — without these explicit exports, CloudFormation
+         * would try to delete in-use exports and fail the deploy. Stage 2
+         * (after stage 1 is live) deletes both lambdas AND these two lines.
+         */
+        this.exportValue(this.embedLambda.functionArn);
+        this.exportValue(this.storeEmbeddingsLambda.functionArn);
+
+        /**
+         * 1+2 merged. Create-and-Store Lambda: embeds a Map-state batch and
+         * inserts it into the vector DB in ONE invocation, so vectors never
+         * cross a Step Functions state boundary (256KB payload cap —
+         * States.DataLimitExceeded made messages over ~24K chars unembeddable).
+         * Replaces embedLambda + storeEmbeddingsLambda; those two are removed
+         * in stage 2 once the new state machine definition is live.
+         */
+        this.createAndStoreLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-and-store-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-and-store-lambda`,
+            code: DockerImageCode.fromEcr(props.createAndStoreRepo, {
+                tagOrDigest: props.createAndStoreImageTag || 'create-and-store-latest',
+                cmd: ['handlers.create_and_store_lambda.handler'],
+            }),
+            memorySize: 3008,
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ...appEnv,
+                JOBLIB_TEMP_FOLDER: '/tmp',
+                // API keys for hosted embedding providers (voyage/openai model types)
+                ...(process.env.VOYAGE_API_KEY ? { VOYAGE_API_KEY: process.env.VOYAGE_API_KEY } : {}),
+                ...(process.env.OPENAI_API_KEY ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY } : {}),
+                ZILLIZ_ENDPOINT: props.zillizEndpoint,
+                ZILLIZ_TOKEN: props.zillizToken,
+                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
+                CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
+                INSTRUCTIONS_TABLE: props.instructionsTableName,
+            },
+        });
+        customerVectorDBConfigTable.grantReadData(this.createAndStoreLambda);
+        // Store step marks NOTE rows synced and stamps INSTRUCTION rows with
+        // their milvus_ids after insertion.
+        customerNotesTable.grantReadWriteData(this.createAndStoreLambda);
+        instructionsTable.grantReadWriteData(this.createAndStoreLambda);
+        this.createAndStoreLambda.addToRolePolicy(new iam.PolicyStatement({
             actions: ['kms:Decrypt'],
             resources: ['*'],
         }));

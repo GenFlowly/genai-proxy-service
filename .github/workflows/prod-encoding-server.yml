@@ -65,6 +65,7 @@ jobs:
           PARSE_AND_CHUNK_IMAGE_TAG: "placeholder"
           CREATE_EMBEDDINGS_IMAGE_TAG: "placeholder"
           STORE_EMBEDDINGS_IMAGE_TAG: "placeholder"
+          CREATE_AND_STORE_IMAGE_TAG: "placeholder"
           CREATE_COLLECTIONS_IMAGE_TAG: "placeholder"
 
       - name: Get ECR Repository URIs
@@ -101,6 +102,14 @@ jobs:
           echo "STORE_EMBEDDINGS_ECR_URI=$STORE_EMBEDDINGS_ECR_URI" >> $GITHUB_ENV
           echo "STORE_EMBEDDINGS_ECR_REPO=$(basename $STORE_EMBEDDINGS_ECR_URI)" >> $GITHUB_ENV
           echo "Using Store Embeddings Lambda ECR: $STORE_EMBEDDINGS_ECR_URI"
+
+          CREATE_AND_STORE_ECR_URI=$(aws cloudformation describe-stacks \
+            --stack-name encoding-service-EcrStack \
+            --query "Stacks[0].Outputs[?OutputKey=='CreateAndStoreRepoUri'].OutputValue" \
+            --output text)
+          echo "CREATE_AND_STORE_ECR_URI=$CREATE_AND_STORE_ECR_URI" >> $GITHUB_ENV
+          echo "CREATE_AND_STORE_ECR_REPO=$(basename $CREATE_AND_STORE_ECR_URI)" >> $GITHUB_ENV
+          echo "Using Create And Store Lambda ECR: $CREATE_AND_STORE_ECR_URI"
 
           CREATE_COLLECTIONS_ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name encoding-service-EcrStack \
@@ -227,6 +236,30 @@ jobs:
           docker rmi store-embeddings-lambda:${GITHUB_SHA::7}
           docker system prune -f
 
+      - name: Build Create And Store Lambda Docker image
+        working-directory: encoding-server
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -f Dockerfile.create_and_store -t create-and-store-lambda:$IMAGE_TAG .
+          docker tag create-and-store-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_AND_STORE_ECR_REPO:create-and-store-$IMAGE_TAG
+          docker tag create-and-store-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_AND_STORE_ECR_REPO:create-and-store-latest
+          echo "CREATE_AND_STORE_IMAGE_URI=$ECR_REGISTRY/$CREATE_AND_STORE_ECR_REPO:create-and-store-$IMAGE_TAG" >> $GITHUB_ENV
+          echo "CREATE_AND_STORE_IMAGE_TAG=create-and-store-$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Push Create And Store Lambda Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker push $CREATE_AND_STORE_IMAGE_URI
+          docker push $ECR_REGISTRY/$CREATE_AND_STORE_ECR_REPO:create-and-store-latest
+          echo "Pushed Create And Store Lambda: $CREATE_AND_STORE_IMAGE_URI and create-and-store-latest"
+          docker rmi $CREATE_AND_STORE_IMAGE_URI
+          docker rmi $ECR_REGISTRY/$CREATE_AND_STORE_ECR_REPO:create-and-store-latest
+          docker rmi create-and-store-lambda:${GITHUB_SHA::7}
+          docker system prune -f
+
       - name: Build Create Collections Lambda Docker image
         working-directory: encoding-server
         env:
@@ -258,10 +291,12 @@ jobs:
           PARSE_AND_CHUNK_IMAGE_TAG: ${{ env.PARSE_AND_CHUNK_IMAGE_TAG }}
           CREATE_EMBEDDINGS_IMAGE_TAG: ${{ env.CREATE_EMBEDDINGS_IMAGE_TAG }}
           STORE_EMBEDDINGS_IMAGE_TAG: ${{ env.STORE_EMBEDDINGS_IMAGE_TAG }}
+          CREATE_AND_STORE_IMAGE_TAG: ${{ env.CREATE_AND_STORE_IMAGE_TAG }}
           CREATE_COLLECTIONS_IMAGE_TAG: ${{ env.CREATE_COLLECTIONS_IMAGE_TAG }}
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
           ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+          ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
           CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
         run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never
