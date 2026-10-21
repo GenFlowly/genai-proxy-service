@@ -28,11 +28,13 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
     embedRepo: ecrStack.createEmbeddingsRepo,
     storeEmbeddingsRepo: ecrStack.storeEmbeddingsRepo,
+    createAndStoreRepo: ecrStack.createAndStoreRepo,
     createCollectionsRepo: ecrStack.createCollectionsRepo,
     ingestionImageTag: process.env.INGESTION_IMAGE_TAG || 'latest',
     parseAndChunkImageTag: process.env.PARSE_AND_CHUNK_IMAGE_TAG || 'latest',
     embedImageTag: process.env.CREATE_EMBEDDINGS_IMAGE_TAG || 'latest',
     storeEmbeddingsImageTag: process.env.STORE_EMBEDDINGS_IMAGE_TAG || 'latest',
+    createAndStoreImageTag: process.env.CREATE_AND_STORE_IMAGE_TAG || 'latest',
     createCollectionsImageTag: process.env.CREATE_COLLECTIONS_IMAGE_TAG || 'latest',
     zillizEndpoint: process.env.ZILLIZ_ENDPOINT || 'dummy_zilliz_endpoint',
     zillizToken: process.env.ZILLIZ_TOKEN || 'dummy_zilliz_token',
@@ -46,10 +48,11 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
 const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsV2Stack`, {
     stage: stage,
     ingestionQueue: sqsStack.ingestionQueue,
+    deadLetterQueue: sqsStack.deadLetterQueue,
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
     parseAndChunkLambda: lambdaStack.parseAndChunkLambda,
-    embedLambda: lambdaStack.embedLambda,
-    storeEmbeddingsLambda: lambdaStack.storeEmbeddingsLambda,
+    createAndStoreLambda: lambdaStack.createAndStoreLambda,
+    alertEmails: process.env.ADMIN_EMAILS,
 });
 
 
