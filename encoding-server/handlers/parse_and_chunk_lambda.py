@@ -84,7 +84,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 data_chunks=chunks[i:i + BATCH_SIZE],
                 request_id=memory_request_internal_state.request_id,
             )
-            batches.append(batch_state.to_dict())
+            batch = batch_state.to_dict()
+            # Global index of this batch's first chunk, read back by
+            # create-and-store. Processors number vector ids within the batch
+            # (..._0.._N), so without the offset every batch after the first
+            # would reuse the first batch's primary keys. Stamped outside the
+            # typed state: the model doesn't know the field and the consumer
+            # pops it before from_dict.
+            batch["chunk_offset"] = i
+            batches.append(batch)
 
         logger.info(f"Returning {len(batches)} batches.")
         return {"batches": batches}

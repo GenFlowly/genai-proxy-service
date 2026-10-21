@@ -63,7 +63,6 @@ jobs:
         env:
           INGESTION_IMAGE_TAG: "placeholder"
           PARSE_AND_CHUNK_IMAGE_TAG: "placeholder"
-          CREATE_EMBEDDINGS_IMAGE_TAG: "placeholder"
           STORE_EMBEDDINGS_IMAGE_TAG: "placeholder"
           CREATE_AND_STORE_IMAGE_TAG: "placeholder"
           CREATE_COLLECTIONS_IMAGE_TAG: "placeholder"
@@ -86,14 +85,6 @@ jobs:
           echo "PARSE_AND_CHUNK_ECR_URI=$PARSE_AND_CHUNK_ECR_URI" >> $GITHUB_ENV
           echo "PARSE_AND_CHUNK_ECR_REPO=$(basename $PARSE_AND_CHUNK_ECR_URI)" >> $GITHUB_ENV
           echo "Using Parse and Chunk Lambda ECR: $PARSE_AND_CHUNK_ECR_URI"
-
-          CREATE_EMBEDDINGS_ECR_URI=$(aws cloudformation describe-stacks \
-            --stack-name encoding-service-EcrStack \
-            --query "Stacks[0].Outputs[?OutputKey=='CreateEmbeddingsRepoUri'].OutputValue" \
-            --output text)
-          echo "CREATE_EMBEDDINGS_ECR_URI=$CREATE_EMBEDDINGS_ECR_URI" >> $GITHUB_ENV
-          echo "CREATE_EMBEDDINGS_ECR_REPO=$(basename $CREATE_EMBEDDINGS_ECR_URI)" >> $GITHUB_ENV
-          echo "Using Create Embeddings Lambda ECR: $CREATE_EMBEDDINGS_ECR_URI"
 
           STORE_EMBEDDINGS_ECR_URI=$(aws cloudformation describe-stacks \
             --stack-name encoding-service-EcrStack \
@@ -183,30 +174,6 @@ jobs:
           docker rmi parse-and-chunk-lambda:${GITHUB_SHA::7}
           docker system prune -f
 
-      - name: Build Create Embeddings Lambda Docker image
-        working-directory: encoding-server
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          IMAGE_TAG=${GITHUB_SHA::7}
-          docker build -f Dockerfile.create_embeddings -t create-embeddings-lambda:$IMAGE_TAG .
-          docker tag create-embeddings-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-$IMAGE_TAG
-          docker tag create-embeddings-lambda:$IMAGE_TAG $ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-latest
-          echo "CREATE_EMBEDDINGS_IMAGE_URI=$ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
-          echo "CREATE_EMBEDDINGS_IMAGE_TAG=create-embeddings-$IMAGE_TAG" >> $GITHUB_ENV
-
-      - name: Push Create Embeddings Lambda Docker image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          docker push $CREATE_EMBEDDINGS_IMAGE_URI
-          docker push $ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-latest
-          echo "Pushed Create Embeddings Lambda: $CREATE_EMBEDDINGS_IMAGE_URI and create-embeddings-latest"
-          docker rmi $CREATE_EMBEDDINGS_IMAGE_URI
-          docker rmi $ECR_REGISTRY/$CREATE_EMBEDDINGS_ECR_REPO:create-embeddings-latest
-          docker rmi create-embeddings-lambda:${GITHUB_SHA::7}
-          docker system prune -f
-
       - name: Build Zilliz Base Docker image
         working-directory: encoding-server
         run: |
@@ -289,7 +256,6 @@ jobs:
         env:
           INGESTION_IMAGE_TAG: ${{ env.INGESTION_IMAGE_TAG }}
           PARSE_AND_CHUNK_IMAGE_TAG: ${{ env.PARSE_AND_CHUNK_IMAGE_TAG }}
-          CREATE_EMBEDDINGS_IMAGE_TAG: ${{ env.CREATE_EMBEDDINGS_IMAGE_TAG }}
           STORE_EMBEDDINGS_IMAGE_TAG: ${{ env.STORE_EMBEDDINGS_IMAGE_TAG }}
           CREATE_AND_STORE_IMAGE_TAG: ${{ env.CREATE_AND_STORE_IMAGE_TAG }}
           CREATE_COLLECTIONS_IMAGE_TAG: ${{ env.CREATE_COLLECTIONS_IMAGE_TAG }}
