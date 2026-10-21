@@ -44,11 +44,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     messages over roughly 24K characters could never embed. Keeping the
     vectors inside one invocation removes that ceiling entirely.
 
-    The insert is the last fallible operation (no flush — see #216): a FAILED
-    execution has stored nothing, so redriving its original message from the
-    DLQ can never duplicate rows.
+    Redrive-safe: a failed execution may still have stored SIBLING batches of
+    the same payload before the failure, so this step deletes its own chunk
+    ids before inserting — replaying the original message from the DLQ (or any
+    resend) converges to exactly one row per id instead of duplicating
+    (Milvus insert does not upsert on duplicate primary keys).
     """
     try:
+        # Global index of this batch's first chunk, stamped by parse-and-chunk
+        # outside the typed state; popped before from_dict sees it.
+        chunk_offset = int(event.pop("chunk_offset", 0) or 0)
         memory_request_internal_state = MemoryRequestInternalState.from_dict(event)
         set_request_id(memory_request_internal_state.request_id)
         customer_id = memory_request_internal_state.customer_id
@@ -74,6 +79,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         collection_name = processor.get_collection_name(memory_request_internal_state)
 
         records = processor.prepare_for_vector_db(memory_request_internal_state, vectors)
+
+        if chunk_offset and memory_request_internal_state.data_type != "EMAIL":
+            # Processors number chunk ids within the batch, so sibling batches
+            # of one payload would collide on _0.._N. Shift by the global
+            # offset. EMAIL is excluded: its ids are "{customer}:{message_id}"
+            # with no positional suffix. The endswith guard is a backstop for
+            # any id shape that doesn't carry the enumerate index.
+            for j, record in enumerate(records):
+                if record["id"].endswith(f"_{j}"):
+                    record["id"] = f"{record['id'][: -len(str(j))]}{chunk_offset + j}"
 
         # Shared collections are created on first write (the onboarding
         # /create-collections lambda also warms them). Dim comes from the
@@ -109,6 +124,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     )
                 except Exception as e:
                     logger.warning(f"Failed to delete prior chunks for instruction {instruction_key}: {str(e)}")
+
+        # Replace, don't append: delete this batch's ids first so a DLQ
+        # redrive or sweep resend overwrites rows instead of duplicating them.
+        # Deleting ids that don't exist is a no-op, so the common path pays
+        # one cheap extra call.
+        ids_expr = ", ".join(f'"{escape_filter_value(r["id"])}"' for r in records)
+        milvus_client.delete(
+            collection_name=collection_name,
+            filter=customer_filter(customer_id, f"id in [{ids_expr}]"),
+        )
 
         result = milvus_client.insert(collection_name=collection_name, data=records)
         # No flush: Zilliz serverless auto-seals segments and reads see growing
