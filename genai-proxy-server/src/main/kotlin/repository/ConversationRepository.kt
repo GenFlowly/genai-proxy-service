@@ -893,11 +893,17 @@ class ConversationRepository(
                 attachments.map { attachment ->
                     AttributeValue.builder()
                         .m(
-                            mapOf(
-                                "attachmentId" to AttributeValue.builder().s(attachment.attachmentId).build(),
-                                "s3Key" to AttributeValue.builder().s(attachment.s3Key).build(),
-                                "mediaType" to AttributeValue.builder().s(attachment.mediaType).build()
-                            )
+                            buildMap {
+                                put("attachmentId", AttributeValue.builder().s(attachment.attachmentId).build())
+                                put("s3Key", AttributeValue.builder().s(attachment.s3Key).build())
+                                put("mediaType", AttributeValue.builder().s(attachment.mediaType).build())
+                                // Persist the display name when set (uploaded PDFs, generated
+                                // artifacts) so a reloaded conversation names the document;
+                                // rows written before this read back with a null filename.
+                                attachment.filename?.let {
+                                    put("filename", AttributeValue.builder().s(it).build())
+                                }
+                            }
                         )
                         .build()
                 }
@@ -912,6 +918,11 @@ class ConversationRepository(
             val attachmentId = map["attachmentId"]?.s() ?: return@mapNotNull null
             val s3Key = map["s3Key"]?.s() ?: return@mapNotNull null
             val mediaType = map["mediaType"]?.s() ?: return@mapNotNull null
-            com.genflowly.models.AttachmentRef(attachmentId = attachmentId, s3Key = s3Key, mediaType = mediaType)
+            com.genflowly.models.AttachmentRef(
+                attachmentId = attachmentId,
+                s3Key = s3Key,
+                mediaType = mediaType,
+                filename = map["filename"]?.s()
+            )
         } ?: emptyList()
 }

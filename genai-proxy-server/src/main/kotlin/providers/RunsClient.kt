@@ -1,6 +1,7 @@
 package com.genflowly.providers
 
 import com.genflowly.models.retrieval.ConversationMessage
+import com.genflowly.models.retrieval.FileRef
 import com.genflowly.models.retrieval.ImageRef
 import com.genflowly.models.retrieval.PayloadToolDefinition
 import com.genflowly.models.retrieval.PayloadToolResult
@@ -60,7 +61,9 @@ private data class RunStartPayload(
 private data class RunRawData(
     val query_data: String,
     val top_n: Int = 3,
-    val images: List<ImageRef> = emptyList()
+    val images: List<ImageRef> = emptyList(),
+    /** Non-image documents (PDFs) attached to the current-turn query */
+    val files: List<FileRef> = emptyList()
 )
 
 /** Status snapshot of a durable run (GET /runs/{id}). */
@@ -101,6 +104,7 @@ class RunsClient(
         systemPrompt: String? = null,
         agentic: Boolean = true,
         queryImages: List<ImageRef> = emptyList(),
+        queryFiles: List<FileRef> = emptyList(),
         tools: List<PayloadToolDefinition> = emptyList(),
         toolChoice: String? = null,
         toolResults: List<PayloadToolResult> = emptyList(),
@@ -116,7 +120,7 @@ class RunsClient(
                 customer_id = customerId,
                 client = client,
                 data_type = "text",
-                raw_data = RunRawData(query_data = query, images = queryImages),
+                raw_data = RunRawData(query_data = query, images = queryImages, files = queryFiles),
                 llm_provider = llmProvider,
                 llm_model = llmModel,
                 llm_max_tokens = llmMaxTokens,
