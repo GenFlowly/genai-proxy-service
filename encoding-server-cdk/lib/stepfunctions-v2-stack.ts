@@ -6,6 +6,10 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cwactions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { DockerImageCode, DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { RESOURCE_NAMES } from "./constants";
@@ -13,10 +17,15 @@ import { RESOURCE_NAMES } from "./constants";
 export interface StepFunctionsV2StackProps extends cdk.StackProps {
     stage: STAGES;
     ingestionQueue: sqs.IQueue;
+    // Failed executions quarantine their ORIGINAL message here (see below) —
+    // this is the same DLQ the ingestion queue's redrive policy points at, so
+    // one queue holds every kind of dead letter and redrive replays them all.
+    deadLetterQueue: sqs.IQueue;
     parseAndChunkRepo: ecr.IRepository;
     parseAndChunkLambda: lambda.IFunction;
-    embedLambda: lambda.IFunction;
-    storeEmbeddingsLambda: lambda.IFunction;
+    createAndStoreLambda: lambda.IFunction;
+    // Comma-separated emails subscribed to the pipeline-alerts SNS topic.
+    alertEmails?: string;
 }
 
 export class StepFunctionsV2Stack extends cdk.Stack {
@@ -33,27 +42,57 @@ export class StepFunctionsV2Stack extends cdk.Stack {
             payloadResponseOnly: true, // Return only the payload sequentially
         });
 
-        const createEmbeddingsTask = new tasks.LambdaInvoke(this, 'CreateEmbeddings', {
-            stateName:'CreateEmbeddings',
-            lambdaFunction: props.embedLambda,
+        // One step embeds AND stores: vectors never cross a state boundary, so
+        // the 256KB state-payload cap (States.DataLimitExceeded on any batch of
+        // ~10+ inline vectors — long messages could never embed) is structural
+        // history, not a tuning concern.
+        const createAndStoreTask = new tasks.LambdaInvoke(this, 'CreateAndStoreEmbeddings', {
+            stateName:'CreateAndStoreEmbeddings',
+            lambdaFunction: props.createAndStoreLambda,
             payloadResponseOnly: true,
         });
-
-        const storeEmbeddingsTask = new tasks.LambdaInvoke(this, 'StoreEmbeddings', {
-            stateName:'StoreEmbeddings',
-            lambdaFunction: props.storeEmbeddingsLambda,
-            payloadResponseOnly: true,
-        });
-
-        const processBatchDefinition = createEmbeddingsTask.next(storeEmbeddingsTask);
 
         const processBatchesMap = new sfn.Map(this, 'Process Batches Concurrently', {
-            maxConcurrency: 3, // Set due to OpenAI API rate limits
+            maxConcurrency: 3, // Bounds concurrent embed+insert calls per message
             itemsPath: sfn.JsonPath.stringAt('$.batches'),
             resultPath: sfn.JsonPath.DISCARD, // keep the state shape stable at the join
         });
 
-        processBatchesMap.itemProcessor(processBatchDefinition);
+        processBatchesMap.itemProcessor(createAndStoreTask);
+
+        /**
+         * Failure quarantine. The trigger lambda deletes the SQS message the
+         * moment it starts an execution, so a failed execution used to vanish
+         * silently — no redelivery, an empty DLQ, no alarm (hundreds of embeds
+         * were lost unnoticed this way). On any failure, send the execution's
+         * ORIGINAL input (the verbatim queue message, via the context object —
+         * untouched by state transforms) to the DLQ, then still end in Fail so
+         * ExecutionsFailed metrics/alarms stay truthful. Recovery is the SQS
+         * redrive button: DLQ → ingestion queue → a fresh execution. A FAILED
+         * execution has stored nothing (insert is the handler's last fallible
+         * op), so replays cannot duplicate rows.
+         */
+        const sendFailedToDlq = new tasks.SqsSendMessage(this, 'Quarantine Original To DLQ', {
+            stateName: 'Quarantine Original To DLQ',
+            queue: props.deadLetterQueue,
+            messageBody: sfn.TaskInput.fromText(
+                sfn.JsonPath.jsonToString(sfn.JsonPath.objectAt('$$.Execution.Input'))
+            ),
+            resultPath: sfn.JsonPath.DISCARD,
+        });
+        const embeddingFailed = new sfn.Fail(this, 'Embedding Failed', {
+            error: 'EmbeddingPipelineFailed',
+            cause: 'Original message quarantined to the DLQ; redrive it after fixing the cause.',
+        });
+        const quarantine = sendFailedToDlq.next(embeddingFailed);
+        parseAndChunkTask.addCatch(quarantine, {
+            errors: ['States.ALL'],
+            resultPath: sfn.JsonPath.DISCARD,
+        });
+        processBatchesMap.addCatch(quarantine, {
+            errors: ['States.ALL'],
+            resultPath: sfn.JsonPath.DISCARD,
+        });
 
         // Define Master Sequence Chain. This pipeline is realtime-only: Voyage
         // batch embedding is customer-level (embeddingMode=batch preference) and
@@ -78,6 +117,43 @@ export class StepFunctionsV2Stack extends cdk.Stack {
                 includeExecutionData: true,
             },
         });
+
+        /**
+         * Alerting: a failed embed must page someone, not hide in console
+         * history. Two alarms on one topic — executions failing, and anything
+         * sitting in the DLQ (covers the quarantine path AND classic
+         * trigger-delivery dead letters).
+         */
+        const alertsTopic = new sns.Topic(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-pipeline-alerts`, {
+            topicName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-pipeline-alerts`,
+        });
+        (props.alertEmails || '')
+            .split(',')
+            .map((email) => email.trim())
+            .filter((email) => email.length > 0)
+            .forEach((email) => alertsTopic.addSubscription(new subscriptions.EmailSubscription(email)));
+
+        const executionsFailedAlarm = new cloudwatch.Alarm(this, 'PipelineExecutionsFailedAlarm', {
+            alarmName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-pipeline-executions-failed`,
+            alarmDescription: 'Encoding pipeline executions are failing; originals are quarantined in the DLQ.',
+            metric: this.processingStateMachine.metricFailed({ period: cdk.Duration.minutes(5), statistic: 'Sum' }),
+            threshold: 1,
+            evaluationPeriods: 1,
+            comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        });
+        executionsFailedAlarm.addAlarmAction(new cwactions.SnsAction(alertsTopic));
+
+        const dlqNotEmptyAlarm = new cloudwatch.Alarm(this, 'PipelineDlqNotEmptyAlarm', {
+            alarmName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-dlq-not-empty`,
+            alarmDescription: 'Encoding DLQ has messages; redrive them to the ingestion queue after fixing the cause.',
+            metric: props.deadLetterQueue.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(5), statistic: 'Maximum' }),
+            threshold: 1,
+            evaluationPeriods: 1,
+            comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        });
+        dlqNotEmptyAlarm.addAlarmAction(new cwactions.SnsAction(alertsTopic));
 
         /**
          * Trigger Lambda V2 - Reads from SQS and starts Step Function V2
