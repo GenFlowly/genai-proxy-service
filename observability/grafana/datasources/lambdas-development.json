@@ -1,0 +1,13 @@
+{
+  "uid": "afxh14dyp3ldsd",
+  "name": "DevelopmentLambdas",
+  "type": "cloudwatch",
+  "access": "proxy",
+  "jsonData": {
+    "authType": "grafana_assume_role",
+    "assumeRoleArn": "arn:aws:iam::571600870493:role/GrafanaCloudWatchReadOnly",
+    "defaultRegion": "us-east-1",
+    "customMetricsNamespaces": "GenFlowly",
+    "logsTimeout": "5m"
+  }
+}
