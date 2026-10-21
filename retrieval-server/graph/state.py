@@ -68,6 +68,12 @@ class RetrievalState(TypedDict):
     # nodes stay text-only).
     query_images: list
 
+    # Documents (PDFs) attached to the current-turn query:
+    # [{s3_key, media_type, filename}, ...]. Only the response-generator node
+    # feeds them to the model — natively (document block), as page images, or as
+    # extracted text, per the model's capabilities (graph/pdf_input.py).
+    query_files: list
+
     # Caller-defined tools: [{name, description, parameters}, ...]. Bound only to
     # the response-generator node (text format); other nodes never see them.
     tools: list

@@ -49,6 +49,7 @@ describe('attachmentService', () => {
                 attachmentId: 'att-1',
                 s3Key: 'customers/CU1/attachments/att-1',
                 mediaType: 'image/png',
+                filename: 'shot.png',
             })
         })
 
@@ -95,6 +96,7 @@ describe('attachmentService', () => {
                 attachmentId: 'att-2',
                 s3Key: 'customers/CU1/attachments/att-2',
                 mediaType: 'application/octet-stream',
+                filename: 'IMG_0001.HEIC',
             })
         })
 

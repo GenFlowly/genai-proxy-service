@@ -1,6 +1,8 @@
 package com.genflowly.models
 
+import com.genflowly.models.retrieval.FileRef
 import com.genflowly.models.retrieval.ImageRef
+import com.genflowly.models.retrieval.toFileRefs
 import com.genflowly.models.retrieval.toImageRefs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,13 +34,37 @@ class AttachmentMediaTypeTest {
     @Test
     fun `non-image and scriptable types are stored as octet-stream, never rejected`() {
         // A presigned GET serves the object with its stored type: an uploaded
-        // page or SVG must not render (and run script) under the bucket's host
+        // page or SVG must not render (and run script) under the bucket's host.
+        // (application/pdf is the one document type kept as itself — see below.)
         for (type in listOf(
-            "application/pdf", "text/html", "application/xhtml+xml", "text/xml",
+            "text/html", "application/xhtml+xml", "text/xml",
             "application/javascript", "image/svg+xml", "IMAGE/SVG+XML; charset=utf-8",
             "image/svg", "image/foo+xml", "application/octet-stream"
         )) {
             assertEquals(octet, normalizeAttachmentMediaType(type), "for '$type'")
+        }
+    }
+
+    @Test
+    fun `application pdf is kept so the retrieval-server routes it to a document block`() {
+        assertEquals(PDF_MEDIA_TYPE, normalizeAttachmentMediaType("application/pdf"))
+        assertEquals(PDF_MEDIA_TYPE, normalizeAttachmentMediaType("APPLICATION/PDF; charset=utf-8"))
+        assertEquals(AttachmentKind.PDF, attachmentKind("application/pdf"))
+        assertEquals(true, isPdfAttachmentMediaType("application/pdf"))
+        assertEquals(false, isImageAttachmentMediaType("application/pdf"))
+    }
+
+    @Test
+    fun `attachmentKind classifies images, pdfs and unknowns`() {
+        for (type in listOf("image/png", "IMAGE/JPEG; q=1", "", "  ", "application/octet-stream")) {
+            assertEquals(AttachmentKind.IMAGE, attachmentKind(type), "for '$type'")
+        }
+        assertEquals(AttachmentKind.PDF, attachmentKind("application/pdf"))
+        // NB: attachmentKind keys off the broad category only — image/svg+xml is
+        // IMAGE here; it is the normalizer (not the kind) that neutralizes a
+        // scriptable SVG to octet-stream at upload time.
+        for (type in listOf("text/plain", "text/html", "application/zip")) {
+            assertEquals(AttachmentKind.UNKNOWN, attachmentKind(type), "for '$type'")
         }
     }
 
@@ -112,6 +138,19 @@ class AttachmentMediaTypeTest {
     @Test
     fun `explicitly non-image attachments such as generated PDFs are not forwarded`() {
         assertEquals(emptyList<ImageRef>(), listOf(ref("application/pdf"), ref("text/plain")).toImageRefs())
+    }
+
+    @Test
+    fun `pdf attachments are forwarded as files, images and unknowns are not`() {
+        val refs = listOf(
+            AttachmentRef("p", "customers/c1/attachments/p", "application/pdf", filename = "report.pdf"),
+            AttachmentRef("img", "customers/c1/attachments/img", "image/png"),
+            AttachmentRef("txt", "customers/c1/attachments/txt", "text/plain"),
+        )
+        assertEquals(
+            listOf(FileRef("customers/c1/attachments/p", "application/pdf", "report.pdf")),
+            refs.toFileRefs()
+        )
     }
 
     @Test

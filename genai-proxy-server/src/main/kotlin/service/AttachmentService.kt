@@ -3,7 +3,9 @@ package com.genflowly.service
 import com.genflowly.providers.S3Provider
 import java.util.UUID
 import com.genflowly.models.AttachmentUpload
+import com.genflowly.models.MAX_PDF_SIZE_BYTES
 import com.genflowly.models.attachmentS3Key
+import com.genflowly.models.isPdfAttachmentMediaType
 import com.genflowly.models.normalizeAttachmentMediaType
 import org.slf4j.LoggerFactory
 
@@ -24,13 +26,21 @@ class AttachmentService(
      * later converts/compresses the image for each LLM vendor. The returned
      * [AttachmentUpload.mediaType] is the effective type bound into the
      * presigned PUT — the client must upload with exactly that Content-Type.
-     * Throws IllegalArgumentException with a client-facing message only for a
-     * non-positive size.
+     * Throws IllegalArgumentException with a client-facing message for a
+     * non-positive size or a PDF over [MAX_PDF_SIZE_BYTES]. Images stay
+     * uncapped. The declared size is advisory (a presigned PUT can't enforce a
+     * size at S3), so the generation validator HEADs the stored object and
+     * re-checks the real size before the PDF ever reaches the model.
      */
     suspend fun createUploadUrl(customerId: String, mediaType: String?, sizeBytes: Long): AttachmentUpload {
         require(sizeBytes >= 1) { "Attachment size must be at least 1 byte" }
 
         val effectiveMediaType = normalizeAttachmentMediaType(mediaType)
+        if (isPdfAttachmentMediaType(effectiveMediaType)) {
+            require(sizeBytes <= MAX_PDF_SIZE_BYTES) {
+                "PDF attachments must be at most ${MAX_PDF_SIZE_BYTES / (1024 * 1024)} MB"
+            }
+        }
         val attachmentId = UUID.randomUUID().toString()
         val s3Key = attachmentS3Key(customerId, attachmentId)
         val uploadUrl = s3Provider.presignPut(s3Key, effectiveMediaType)

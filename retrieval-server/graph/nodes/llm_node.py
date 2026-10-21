@@ -318,6 +318,59 @@ def _user_content(text: str, image_blocks: list):
     return [{"type": "text", "text": text}, *image_blocks]
 
 
+async def _file_blocks(files: list, provider: str, model: str | None, limits: ImageLimits) -> list:
+    """
+    Resolve current-turn document attachments (PDFs) into content blocks,
+    choosing the representation the chosen model can consume (see
+    graph/model_capabilities and graph/pdf_input):
+
+      * pdf_input → one native vendor document block carrying the raw PDF;
+      * else vision → each page rendered to an image block (reuses the image
+        pipeline's per-vendor limits);
+      * else → the extracted text as a text block.
+
+    Strict (current turn only — history files replay as a note): a PdfInputError
+    propagates and the request fails with a user-facing attachment message, the
+    same contract as a current-turn image that can't be decoded.
+    """
+    if not files:
+        return []
+    from graph import pdf_input
+    from graph.model_capabilities import model_capabilities
+
+    caps = model_capabilities(provider, model)
+    blocks: list = []
+    for f in files:
+        s3_key = f.get("s3_key", "")
+        media_type = f.get("media_type", "")
+        filename = f.get("filename")
+        if media_type != "application/pdf":
+            # Only PDFs are wired today; anything else was gated at the proxy,
+            # but degrade visibly rather than silently dropping it.
+            blocks.append({"type": "text", "text":
+                           f"[Attached file {filename or ''} ({media_type}) is not a supported type and was not read.]"})
+            continue
+        if caps.pdf_input:
+            blocks.append(await pdf_input.native_pdf_block(provider, s3_key, filename))
+        elif caps.vision:
+            blocks.extend(await pdf_input.pdf_page_image_blocks(
+                s3_key, limits.max_edge, limits.max_base64_bytes, limits.passthrough_formats,
+            ))
+        else:
+            blocks.append({"type": "text", "text": await pdf_input.pdf_extracted_text(s3_key, filename)})
+    return blocks
+
+
+def _history_file_note(files: list) -> str:
+    """A one-line reminder that documents were attached on a past turn — they
+    are NOT re-sent in full every turn (a PDF would blow the token budget)."""
+    names = [(f.get("filename") or "document.pdf") for f in (files or [])]
+    if not names:
+        return ""
+    return (f"[Earlier in this conversation you attached: {', '.join(names)}. "
+            "Ask the user to resend it if you need to read it again.]")
+
+
 # Beta header each Anthropic-native tool version requires. A tool's options may
 # carry an explicit "anthropic_beta" to override/extend this mapping.
 _NATIVE_TOOL_BETAS = {
@@ -975,11 +1028,16 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         # Only the response generator sees images — retrieval/ranking/classification
         # nodes stay text-only (they don't need pixels, and it keeps them cheap).
         query_image_blocks: list = []
+        query_file_blocks: list = []
         image_plan = plan_request_images(state, provider, with_history=include_history and is_response_node)
         image_limits = image_plan.limits
         if is_response_node:
             query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True, limits=image_limits)
-        current_content = _user_content(rendered_input, query_image_blocks)
+            # Documents (PDFs) attached this turn, fed per the model's capabilities.
+            query_file_blocks = await _file_blocks(
+                state.get("query_files", []), provider, effective_model, image_limits,
+            )
+        current_content = _user_content(rendered_input, query_image_blocks + query_file_blocks)
 
         # Tool results for the current turn — must directly follow the assistant
         # message whose tool_calls they answer (the last history turn).
@@ -988,7 +1046,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
         )
         # A tool-continuation request may carry no new prompt text; don't send an
         # empty user message in that case.
-        has_current_text = bool(rendered_input.strip()) or bool(query_image_blocks)
+        has_current_text = bool(rendered_input.strip()) or bool(query_image_blocks) or bool(query_file_blocks)
 
         def _append_current_turn():
             messages.extend(current_tool_messages)
@@ -1015,6 +1073,10 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                         turn_blocks = await _image_blocks(
                             turn.get("images", []), strict=False, limits=image_limits, omitted=image_plan.omitted,
                         )
+                        # Documents attached on a past turn: a note, not a re-send.
+                        file_note = _history_file_note(turn.get("files"))
+                        if file_note:
+                            turn_blocks = turn_blocks + [{"type": "text", "text": file_note}]
                         if content or turn_blocks:
                             messages.append(_make_human(_user_content(content, turn_blocks), cache_this))
                     else:

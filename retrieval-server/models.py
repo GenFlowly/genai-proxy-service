@@ -8,6 +8,16 @@ class ImageRef(BaseModel):
     media_type: str
 
 
+class FileRef(BaseModel):
+    """Reference to a non-image document (PDF today) in the attachments S3
+    bucket; bytes are fetched at LLM-call time and fed to the model as a native
+    document block, page images, or extracted text depending on the model's
+    capabilities. `filename` names the document in prompts and error messages."""
+    s3_key: str
+    media_type: str
+    filename: Optional[str] = None
+
+
 class ToolDefinition(BaseModel):
     """
     Caller-defined tool the LLM may call. Two flavors:
@@ -45,12 +55,17 @@ class RawData(BaseModel):
     similarity_threshold: float = 0.6
     # Images attached to the current-turn query
     images: list[ImageRef] = []
+    # Non-image documents (PDFs) attached to the current-turn query
+    files: list[FileRef] = []
 
 
 class ConversationMessage(BaseModel):
     role: str
     content: str
     images: list[ImageRef] = []
+    # Documents (PDFs) the user attached on this turn; replayed as a lightweight
+    # note on later turns rather than re-sent in full.
+    files: list[FileRef] = []
     # Assistant turns: tool calls the model made — [{id, name, args}, ...]
     tool_calls: Optional[list] = None
     # User turns: results for the preceding assistant turn's tool calls

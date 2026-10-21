@@ -185,11 +185,27 @@ data class ImageRef(
     @SerialName("media_type") val mediaType: String
 )
 
+/**
+ * Non-image document (PDF today) passed to the retrieval-server, which fetches
+ * the bytes from S3 and feeds the model a native document block, page images,
+ * or extracted text depending on the chosen model's capabilities. Carries the
+ * display filename so the model and any error message can name the document.
+ */
+@Serializable
+data class FileRef(
+    @SerialName("s3_key") val s3Key: String,
+    @SerialName("media_type") val mediaType: String,
+    val filename: String? = null
+)
+
 @Serializable
 data class ConversationMessage(
     val role: String,
     val content: String,
     val images: List<ImageRef> = emptyList(),
+    /** Non-image documents (PDFs) the user attached on this turn; replayed as a
+     *  lightweight note in later turns rather than re-sent in full. */
+    val files: List<FileRef> = emptyList(),
     /** Assistant turns: [{"id","name","args"}] tool calls the model made */
     @SerialName("tool_calls") val toolCalls: kotlinx.serialization.json.JsonElement? = null,
     /** User turns: [{"tool_call_id","content"}] results the caller executed */
