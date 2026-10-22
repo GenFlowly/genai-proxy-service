@@ -2,6 +2,7 @@ import { HttpMethod } from '../constants/http';
 import { endpoints } from '../config/endpoints';
 import { fetchWithRetry } from '../utils/apiUtils';
 import {
+    ForkConversationResponse,
     GetCustomerConversationsResponse,
     GetPinnedConversationsResponse,
     GetProjectsResponse,
@@ -88,6 +89,28 @@ export const unpinConversation = async (
     if (!response.ok) {
         throw new Error(`Failed to unpin conversation: ${response.statusText}`);
     }
+};
+
+export const forkConversation = async (
+    token: string,
+    conversationId: string,
+    messageId: string
+): Promise<ForkConversationResponse> => {
+    const response = await fetchWithRetry(
+        endpoints.forkConversation(conversationId, messageId),
+        {
+            method: HttpMethod.POST,
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to fork conversation: ${response.statusText}`);
+    }
+
+    return response.json();
 };
 
 export const getProjects = async (token: string): Promise<GetProjectsResponse> => {
