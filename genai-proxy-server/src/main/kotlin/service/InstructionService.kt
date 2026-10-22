@@ -181,10 +181,14 @@ class InstructionService(
         instructionRepository.saveInstruction(newInstruction)
 
         // Push the new version into the embedding pipeline (semantic search
-        // index). Only when the caller is the creator: the encoding server
-        // resolves the collection from the caller's token, and each customer's
-        // instructions collection indexes only instructions they created.
-        // Fire-and-forget — indexing is best-effort; DDB is the source of truth.
+        // index). Only when the caller is the creator: index rows are stamped
+        // with the encoder's customer_id and the store step's delete-before-
+        // insert is scoped to it, so a shared-EDIT save would strand the
+        // creator's chunks of prior versions under a different partition.
+        // Search doesn't care whose partition the rows are in (it filters by
+        // instruction key), but each instruction's rows must stay under
+        // exactly one customer. Fire-and-forget — indexing is best-effort;
+        // DDB is the source of truth.
         if (bearerToken != null && creator == customerId) {
             encodeInstructionAsync(customerId, newInstruction, bearerToken)
         }
@@ -339,44 +343,37 @@ class InstructionService(
     }
 
     /**
-     * Search over the latest version of every instruction the customer can
-     * access. Combines semantic hits from the vector index (the customer's
-     * own instructions, ranked by similarity) with the case-insensitive
-     * lexical match on name, category, tags or instruction text; semantic
-     * hits rank first, lexical-only matches follow. A blank query returns
-     * all latest instructions. The vector index is best-effort — on any
-     * failure this degrades to pure lexical search.
+     * Semantic search over the latest version of every instruction the
+     * customer can access — owned AND shared/SYSTEM — served by the vector
+     * index (instruction text, name, category and tags are all embedded),
+     * ordered by similarity. Each instruction is indexed exactly once, under
+     * its creator; visibility is enforced at query time by sending the
+     * accessible instruction ids as the index's allow-list, so sharing and
+     * unsharing take effect on the next search with no index writes. Hits
+     * are hydrated back from the accessible-latest set — content always
+     * comes from DDB; the index knows only chunk text and keys. A blank
+     * query returns all latest instructions. Vector-index failures propagate
+     * to the caller.
      */
     suspend fun searchInstructions(customerId: String, query: String): GetCustomerInstructionListResponse {
         val latest = getLatestCustomerInstructions(customerId)
-        val q = query.trim().lowercase()
+        val q = query.trim()
 
         if (q.isEmpty()) {
             return GetCustomerInstructionListResponse(instructions = latest)
         }
 
-        val lexicalMatches = latest.filter { instruction ->
-            instruction.name.lowercase().contains(q) ||
-                (instruction.category?.lowercase()?.contains(q) ?: false) ||
-                (instruction.tags?.any { it.lowercase().contains(q) } ?: false) ||
-                instruction.instruction.lowercase().contains(q)
-        }
-
-        // Semantic hits carry instruction ids (the index's grouping key);
-        // hydrate them from the accessible-latest set so deleted or unshared
-        // instructions are silently dropped and content comes from DDB.
         val accessibleById = latest.associateBy { it.id }
-        val semanticMatches = try {
-            retrievalServerClient
-                .search(customerId, query.trim(), topN = SEMANTIC_SEARCH_TOP_N, types = listOf("instructions"))
-                .mapNotNull { accessibleById[it.key] }
-        } catch (e: Exception) {
-            logger.warn { "Semantic instruction search failed for $customerId, falling back to lexical: ${e.message}" }
-            emptyList()
-        }
-
-        val merged = (semanticMatches + lexicalMatches).distinctBy { it.id }
-        return GetCustomerInstructionListResponse(instructions = merged)
+        val hits = retrievalServerClient
+            .search(
+                customerId,
+                q,
+                topN = SEMANTIC_SEARCH_TOP_N,
+                types = listOf("instructions"),
+                allowedKeys = mapOf("instructions" to latest.map { it.id })
+            )
+            .mapNotNull { accessibleById[it.key] }
+        return GetCustomerInstructionListResponse(instructions = hits)
     }
 
     /**
