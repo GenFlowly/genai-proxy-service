@@ -50,7 +50,7 @@ export default function ConversationHeader(): React.ReactElement | null {
     const displayTitle = isNewChat ? t('conversation.conversationHeader.newChat') : (conversationTitle ?? t('conversation.conversationHeader.untitledConversation'))
 
     const handleShareSave = async (
-        _mode: VisibilityMode,
+        mode: VisibilityMode,
         users: SearchUserResponse[],
         removedUsers: SearchUserResponse[]
     ) => {
@@ -64,6 +64,17 @@ export default function ConversationHeader(): React.ReactElement | null {
                 await unshareConversation(token, conversationId, user.customerId)
             }
             showToast(t('conversation.conversationHeader.shareSettingsUpdated'))
+            if (mode !== 'PRIVATE') {
+                // The link is what the user shares next — put it on the
+                // clipboard. Best-effort: a denied clipboard permission must
+                // not turn a successful share into the failure toast.
+                try {
+                    await navigator.clipboard.writeText(`${window.location.origin}/chat/${conversationId}`)
+                    showToast(t('conversation.conversationHeader.urlCopiedToClipboard'))
+                } catch (copyErr) {
+                    console.error('Failed to copy conversation URL', copyErr)
+                }
+            }
         } catch (err) {
             console.error('Failed to update conversation share', err)
             showToast(t('conversation.conversationHeader.shareSettingsUpdateFailed'))
