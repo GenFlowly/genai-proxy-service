@@ -23,6 +23,7 @@ on the next iteration if it still needs them.
 """
 import asyncio
 import logging
+import re
 import time
 import uuid
 
@@ -136,8 +137,29 @@ _TRACE_TOTAL_LIMIT = 4000
 
 _CITATION_INSTRUCTION = (
     "Cite each claim inline with the bracketed number shown next to the source "
-    "you drew it from, e.g. [1] or [2][3]."
+    "you drew it from, e.g. [1] or [2][3]. Never write your own Sources or "
+    "References section — the application renders the numbered source list to "
+    "the user from these entries."
 )
+
+_CITATION_MARKER = re.compile(r"\[(\d{1,3})\]")
+
+
+def _shift_markers(text: str, base: int, count: int) -> str:
+    """Shift a tool's own inline [n] markers (tool-local numbering 1..count) by
+    the turn-global base, so they keep pointing at the same entries after
+    _render_sources renumbers the list. Today only spawn_agent returns content
+    that already carries markers — a subagent report citing its own sources.
+    Bracketed numbers outside 1..count are left alone: they can't be citations
+    of this tool's sources."""
+    if base <= 0 or count <= 0 or not text:
+        return text
+
+    def _sub(m):
+        n = int(m.group(1))
+        return f"[{n + base}]" if 1 <= n <= count else m.group(0)
+
+    return _CITATION_MARKER.sub(_sub, text)
 
 
 def _render_sources(preamble: str, sources: list, base_index: int) -> str:
@@ -145,10 +167,11 @@ def _render_sources(preamble: str, sources: list, base_index: int) -> str:
 
     Numbering is turn-global (starts at base_index + 1) so inline [n] markers
     stay unique across several tool calls in one turn and line up with the
-    web_sources the client renders as links."""
+    web_sources the client renders as links. [n] markers already inside the
+    preamble (a subagent report) are shifted to match."""
     lines: list[str] = []
     if preamble:
-        lines.append(preamble)
+        lines.append(_shift_markers(preamble, base_index, len(sources)))
         lines.append("")
     for offset, s in enumerate(sources, start=1):
         header = f"[{base_index + offset}] {s.title} ({s.url})".rstrip()

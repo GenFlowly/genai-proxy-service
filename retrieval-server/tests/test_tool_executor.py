@@ -23,13 +23,14 @@ from graph_tools.base import GraphTool, Source, ToolContext, ToolResult
 class _Recorder(GraphTool):
     """A tool that records the context it was handed."""
 
-    def __init__(self, name, credential_ref=None, raises=None, sources=None):
+    def __init__(self, name, credential_ref=None, raises=None, sources=None, content=None):
         self.name = name
         self.description = f"stub {name}"
         self.parameters = {"type": "object", "properties": {}}
         self.credential_ref = credential_ref
         self._raises = raises
         self._sources = sources or []
+        self._content = content
         self.seen_context: ToolContext | None = None
         self.seen_args: dict | None = None
         self.run_count = 0
@@ -40,7 +41,7 @@ class _Recorder(GraphTool):
         self.seen_context = context
         if self._raises:
             raise self._raises
-        return ToolResult(content=f"{self.name} ran", sources=self._sources)
+        return ToolResult(content=self._content or f"{self.name} ran", sources=self._sources)
 
 
 def _state(calls, enabled):
@@ -214,6 +215,43 @@ class SourceTests(unittest.IsolatedAsyncioTestCase):
             {"index": 2, "title": "Y", "url": "u2"},
             {"index": 3, "title": "C", "url": "https://c"},
         ])
+
+    async def test_content_markers_are_shifted_to_the_turn_global_numbering(self):
+        # A tool whose content already cites its own sources with local 1..k
+        # markers (spawn_agent returning a subagent report). Earlier rounds
+        # set the base at 2, so the report's [1][2] must become [3][4] — while
+        # a bracketed number beyond the tool's own source count stays put.
+        state = _state([{"id": "1", "name": "spawn_agent"}], ["spawn_agent"])
+        state["tool_sources"] = [
+            {"index": 1, "title": "X", "url": "u1"},
+            {"index": 2, "title": "Y", "url": "u2"},
+        ]
+        tool = _Recorder(
+            "spawn_agent",
+            content="PSE has an API [1]; WM too [2]. See RFC [7].",
+            sources=[Source(title="PSE", url="https://pse"), Source(title="WM", url="https://wm")],
+        )
+        out = await _run(state, [tool])
+
+        msg = out["loop_messages"][1]["content"]
+        self.assertIn("PSE has an API [3]; WM too [4]. See RFC [7].", msg)
+        self.assertIn("[3] PSE (https://pse)", msg)
+        self.assertIn("[4] WM (https://wm)", msg)
+        self.assertEqual(out["tool_sources"][-2:], [
+            {"index": 3, "title": "PSE", "url": "https://pse"},
+            {"index": 4, "title": "WM", "url": "https://wm"},
+        ])
+
+    async def test_content_markers_stay_put_when_the_tool_leads_the_turn(self):
+        # No prior sources this turn → base 0 → local numbering IS the global
+        # numbering; the content must come through byte-identical.
+        tool = _Recorder(
+            "spawn_agent",
+            content="answer [1] and [2]",
+            sources=[Source(title="A", url="https://a"), Source(title="B", url="https://b")],
+        )
+        out = await _run(_state([{"id": "1", "name": "spawn_agent"}], ["spawn_agent"]), [tool])
+        self.assertIn("answer [1] and [2]", out["loop_messages"][1]["content"])
 
     async def test_no_sources_means_no_tool_sources_key(self):
         # A tool that cites nothing leaves tool_sources untouched (no empty write).
