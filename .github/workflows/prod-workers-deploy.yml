@@ -1,9 +1,14 @@
 name: Production Workers Deploy
 
-# Manual-only: deploys the router workers that sit in front of the
-# production domains (react app + admin panel). Deploy from the Actions
-# tab (always builds main).
+# Deploys the router workers that sit in front of the production domains
+# (react app + admin panel). Runs automatically when the worker source
+# changes on main, or manually from the Actions tab (always builds main).
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/router-worker/**'
+      - '.github/workflows/prod-workers-deploy.yml'
   workflow_dispatch:
 
 jobs:

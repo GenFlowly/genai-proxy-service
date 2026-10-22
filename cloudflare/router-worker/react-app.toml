@@ -20,6 +20,8 @@ name = "development"
 [env.development.vars]
 API_HOST = "api-development.genflowly.com"
 STATIC_HOST = "development.genflowly-react-app.pages.dev"
+# Rewrite /chat/:id titles for publicly shared conversations (react app only)
+CONVERSATION_PREVIEWS = "true"
 
 [env.production]
 name = "production"
@@ -27,3 +29,5 @@ name = "production"
 [env.production.vars]
 API_HOST = "api.genflowly.com"
 STATIC_HOST = "genflowly-react-app.pages.dev"
+# Rewrite /chat/:id titles for publicly shared conversations (react app only)
+CONVERSATION_PREVIEWS = "true"

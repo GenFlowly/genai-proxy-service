@@ -11,6 +11,7 @@ import com.genflowly.activity.agent.registerUpdateAgentRoutes
 import com.genflowly.activity.conversation.registerCreateConversationShareRoutes
 import com.genflowly.activity.conversation.registerCreateConversationTitleRoutes
 import com.genflowly.activity.conversation.registerDeleteConversationRoutes
+import com.genflowly.activity.conversation.registerGetConversationMetaRoutes
 import com.genflowly.activity.conversation.registerGetConversationRoutes
 import com.genflowly.activity.conversation.registerGetConversationSharedUsersRoutes
 import com.genflowly.activity.conversation.registerAssignConversationProjectRoutes
@@ -103,6 +104,7 @@ object Routes {
     const val PROVIDERS = "$API_V1/providers"
     const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
     const val GET_CONVERSATION = "$API_V1/chat"
+    const val GET_CONVERSATION_META = "$API_V1/chat/meta"
     const val CREATE_INSTRUCTION = "$API_V1/instruction"
     const val CREATE_INSTRUCTION_SHARE = "$API_V1/instruction/share"
     const val GET_INSTRUCTION_SHARED_USERS = "$API_V1/instruction/shared"
@@ -269,6 +271,7 @@ fun Application.configureRouting(
         registerGetTextGenerationModelsRoutes(aiModelsService, customerProfileService, vendorAllowlistService)
         registerSaveAIConfigPreferencesRoutes(customerProfileService, customerCredentialsService)
         registerGetConversationRoutes(customerProfileService, conversationService)
+        registerGetConversationMetaRoutes(customerProfileService, conversationService)
         registerCreateInstructionRoutes(instructionService, customerProfileService)
         registerCreateInstructionShareRoutes(instructionService, customerProfileService)
         registerCreateConversationShareRoutes(customerProfileService, conversationManagementService)
