@@ -19,6 +19,7 @@ import com.genflowly.activity.conversation.registerGetCustomerConversationsPagin
 import com.genflowly.activity.conversation.registerGetPinnedConversationsRoutes
 import com.genflowly.activity.project.registerProjectRoutes
 import com.genflowly.activity.search.registerSearchRoutes
+import com.genflowly.activity.conversation.registerForkConversationRoutes
 import com.genflowly.activity.conversation.registerPinConversationRoutes
 import com.genflowly.activity.conversation.registerUnarchiveConversationRoutes
 import com.genflowly.activity.conversation.registerUnpinConversationRoutes
@@ -124,6 +125,7 @@ object Routes {
     // the per-route metrics (development.md "API metrics & dashboards").
     const val PIN_CONVERSATION = "$API_V1/conversation/pin"
     const val UNPIN_CONVERSATION = "$API_V1/conversation/unpin"
+    const val FORK_CONVERSATION = "$API_V1/conversation/fork"
     const val GET_PINNED_CONVERSATIONS = "$API_V1/conversations/pinned"
     const val ASSIGN_CONVERSATION_PROJECT = "$API_V1/conversation/assign-project"
     const val UNASSIGN_CONVERSATION_PROJECT = "$API_V1/conversation/unassign-project"
@@ -289,6 +291,7 @@ fun Application.configureRouting(
         registerUnarchiveConversationRoutes(customerProfileService, conversationManagementService)
         registerPinConversationRoutes(customerProfileService, conversationManagementService)
         registerUnpinConversationRoutes(customerProfileService, conversationManagementService)
+        registerForkConversationRoutes(customerProfileService, conversationManagementService)
         registerGetPinnedConversationsRoutes(customerProfileService, conversationManagementService)
         registerAssignConversationProjectRoutes(customerProfileService, conversationManagementService)
         registerProjectRoutes(projectService, customerProfileService)

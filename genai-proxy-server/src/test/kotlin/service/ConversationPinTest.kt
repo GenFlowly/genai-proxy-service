@@ -29,6 +29,7 @@ class ConversationPinTest {
     private val service = ConversationManagementService(
         conversationService, conversationRepo, shareRepo,
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
+        mockk(relaxed = true),
         com.genflowly.di.AppScope()
     )
 
