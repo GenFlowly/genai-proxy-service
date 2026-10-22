@@ -37,6 +37,8 @@ export const endpoints = {
     getPinnedConversations: `${BASE}${API_PREFIX}/conversations/pinned`,
     pinConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/pin?conversationId=${encodeURIComponent(conversationId)}`,
     unpinConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/unpin?conversationId=${encodeURIComponent(conversationId)}`,
+    forkConversation: (conversationId: string, messageId: string) =>
+        `${BASE}${API_PREFIX}/conversation/fork?conversationId=${encodeURIComponent(conversationId)}&messageId=${encodeURIComponent(messageId)}`,
     getProjects: `${BASE}${API_PREFIX}/projects`,
     createProject: `${BASE}${API_PREFIX}/project`,
     assignConversationProject: (conversationId: string, projectId: string) =>

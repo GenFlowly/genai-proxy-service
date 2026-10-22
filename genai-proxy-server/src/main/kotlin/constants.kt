@@ -90,6 +90,10 @@ object DynamoDBConstants {
     const val DELETED_AT_KEY = "deletedAt"
     const val ARCHIVED_AT_KEY = "archivedAt"
     const val PINNED_AT_KEY = "pinnedAt"
+    // Conversation this one was forked from (POST /conversation/fork). Never
+    // removed or updated after creation; the sidebar uses it to draw the fork
+    // tree. A dangling value (parent archived/deleted) renders the fork flat.
+    const val PARENT_CONVERSATION_ID_KEY = "parentConversationId"
     // Points at the durable agent run currently generating this conversation's
     // reply (DURABLE_AGENTS_DBOS_PLAN §5.8) — set while a /runs stream is live so
     // a page reload can rediscover and reattach; cleared when the run ends.

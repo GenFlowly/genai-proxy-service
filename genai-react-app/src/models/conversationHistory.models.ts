@@ -10,6 +10,20 @@ export interface ConversationSummary {
     // section and hides that section while no conversation has one.
     projectId?: string | null;
     projectName?: string | null;
+    // Conversation this one was forked from; the history panel nests forks
+    // under their parent (when the parent is visible in the same section).
+    parentConversationId?: string | null;
+}
+
+/** POST /conversation/fork — the newly created forked conversation. */
+export interface ForkConversationResponse {
+    conversationId: string;
+    title: string;
+    parentConversationId: string;
+    projectId?: string | null;
+    pinnedAt?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
 }
 
 export interface GetCustomerConversationsResponse {

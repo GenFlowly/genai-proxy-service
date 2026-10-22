@@ -15,11 +15,12 @@ import {
     assignConversationToProject,
     unassignConversationFromProject,
 } from '../../../services/conversationHistoryService'
-import { ConversationSummary, Project } from '../../../models/conversationHistory.models'
+import { ConversationSummary, ForkConversationResponse, Project } from '../../../models/conversationHistory.models'
 import { CollapsedVendorBrandName } from '../../common/BrandName/BrandName'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
-import { SidebarListPanel, SidebarListGroup, SidebarListLoadMore, Modal, InputTextWithHint } from '@genflowly/component-library'
+import { CONVERSATION_FORKED_EVENT } from '../../../constants/events'
+import { SidebarListPanel, SidebarListGroup, SidebarListItem, SidebarListLoadMore, Modal, InputTextWithHint } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
 import { loadHistoryCache, saveHistoryCache, getExpandedProject, setExpandedProject } from './historyCache'
@@ -166,6 +167,36 @@ export default function ConversationHistoryComponent() {
             return next
         })
     }, [conversationId, conversationTitle, pendingProjectId, projects])
+
+    // Insert a fork the moment it is created (ConversationContext announces it
+    // right before navigating there): the list is only fetched on mount, and
+    // the title-patch effect above doesn't know the parent, so without this
+    // the fork would render flat at the top instead of nested under its parent
+    useEffect(() => {
+        const onForked = (e: Event) => {
+            const fork = (e as CustomEvent<ForkConversationResponse>).detail
+            if (!fork?.conversationId) return
+            const now = new Date().toISOString()
+            const summary: ConversationSummary = {
+                conversationId: fork.conversationId,
+                title: fork.title,
+                createdAt: fork.createdAt ?? now,
+                updatedAt: fork.updatedAt ?? now,
+                pinnedAt: fork.pinnedAt ?? undefined,
+                projectId: fork.projectId ?? undefined,
+                projectName: fork.projectId
+                    ? projects.find(p => p.projectId === fork.projectId)?.name
+                    : undefined,
+                parentConversationId: fork.parentConversationId,
+            }
+            setItems(prev => [summary, ...prev.filter(c => c.conversationId !== summary.conversationId)])
+            if (summary.pinnedAt) {
+                setPinned(prev => [summary, ...prev.filter(c => c.conversationId !== summary.conversationId)])
+            }
+        }
+        window.addEventListener(CONVERSATION_FORKED_EVENT, onForked)
+        return () => window.removeEventListener(CONVERSATION_FORKED_EVENT, onForked)
+    }, [projects])
 
     const handleLoadMore = () => fetchPage(lastKey)
 
@@ -404,6 +435,33 @@ export default function ConversationHistoryComponent() {
         }
     }
 
+    /**
+     * Nest forked conversations under their parent, forming the fork tree the
+     * sidebar draws with indent + connector lines. A conversation becomes a
+     * child only when its parent renders in the SAME section list (pinned vs
+     * recent vs a project's subsection) — otherwise it stays a flat root, so
+     * a fork never disappears just because its parent moved elsewhere. Forks
+     * of forks nest recursively; parents keep the list's order.
+     */
+    const toTreeRows = (list: ConversationSummary[], isPinned: boolean): SidebarListItem[] => {
+        const idsInList = new Set(list.map(c => c.conversationId))
+        const childrenByParent = new Map<string, ConversationSummary[]>()
+        const roots: ConversationSummary[] = []
+        for (const conv of list) {
+            const parentId = conv.parentConversationId
+            if (parentId && parentId !== conv.conversationId && idsInList.has(parentId)) {
+                childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), conv])
+            } else {
+                roots.push(conv)
+            }
+        }
+        const build = (conv: ConversationSummary): SidebarListItem => ({
+            ...toRow(conv, isPinned),
+            children: (childrenByParent.get(conv.conversationId) ?? []).map(build),
+        })
+        return roots.map(build)
+    }
+
     // A project renders as a collapsible row holding its own Pinned/Recent
     // subsections. First mount expands the project of the active conversation;
     // after that the user's own toggles win for the rest of the session
@@ -447,14 +505,14 @@ export default function ConversationHistoryComponent() {
                     ? [{
                         id: `project-${project.id}-pinned`,
                         label: t('conversation.conversationHistory.pinned'),
-                        items: project.pinned.map(conv => toRow(conv, true)),
+                        items: toTreeRows(project.pinned, true),
                     }]
                     : []),
                 ...(project.recent.length > 0
                     ? [{
                         id: `project-${project.id}-recent`,
                         label: t('conversation.conversationHistory.recent'),
-                        items: project.recent.map(conv => toRow(conv, false)),
+                        items: toTreeRows(project.recent, false),
                     }]
                     : []),
             ],
@@ -494,14 +552,14 @@ export default function ConversationHistoryComponent() {
             ? [{
                 id: 'pinned',
                 label: t('conversation.conversationHistory.pinned'),
-                items: globalPinned.map(conv => toRow(conv, true)),
+                items: toTreeRows(globalPinned, true),
             }]
             : []),
         ...(globalRecent.length > 0
             ? [{
                 id: 'recent',
                 label: t('conversation.conversationHistory.recents'),
-                items: globalRecent.map(conv => toRow(conv, false)),
+                items: toTreeRows(globalRecent, false),
             }]
             : []),
     ]
