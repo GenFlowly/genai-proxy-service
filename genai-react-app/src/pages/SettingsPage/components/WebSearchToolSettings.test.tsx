@@ -10,10 +10,10 @@ jest.mock('../../../services/customerToolsService', () => ({
 }))
 // Render library inputs/buttons/cards as native elements so the form is inspectable
 jest.mock('@genflowly/component-library', () => ({
-    InputTextWithHint: ({ hint, value, onChange, placeholder, disabled }: any) => (
+    InputTextWithHint: ({ hint, value, onChange, placeholder, disabled, type: inputType, 'data-testid': testId }: any) => (
         <label>
             {hint}
-            <input value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} />
+            <input value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} type={inputType} data-testid={testId} />
         </label>
     ),
     PillButton: ({ onClick, label, disabled, 'data-testid': testId }: any) => (
@@ -82,7 +82,7 @@ describe('WebSearchToolSettings', () => {
             />
         )
 
-        await userEvent.type(screen.getByRole('textbox'), 'tvly-secret-key')
+        await userEvent.type(screen.getByTestId('web-search-credential-key-input'), 'tvly-secret-key')
         await userEvent.click(screen.getByTestId('web-search-credential-save'))
 
         await waitFor(() => {
@@ -157,12 +157,87 @@ describe('WebSearchToolSettings', () => {
             />
         )
 
-        await userEvent.type(screen.getByRole('textbox'), 'tvly-secret-key')
+        await userEvent.type(screen.getByTestId('web-search-credential-key-input'), 'tvly-secret-key')
         await userEvent.click(screen.getByTestId('web-search-credential-save'))
 
         await waitFor(() => {
             expect(screen.getByText('KMS unavailable')).toBeInTheDocument()
         })
         expect(mockOnChanged).not.toHaveBeenCalled()
+    })
+
+    test('shows the default limit of 5 with the save button disabled', () => {
+        render(
+            <WebSearchToolSettings
+                connected={false}
+                getAccessTokenSilently={mockGetAccessTokenSilently}
+                onChanged={mockOnChanged}
+            />
+        )
+
+        expect(screen.getByTestId('web-search-limit-input')).toHaveValue(5)
+        // Unchanged value → nothing to save.
+        expect(screen.getByTestId('web-search-limit-save')).toBeDisabled()
+    })
+
+    test('shows the stored limit from settings', () => {
+        render(
+            <WebSearchToolSettings
+                connected
+                settings={{ max_searches_per_turn: '3' }}
+                getAccessTokenSilently={mockGetAccessTokenSilently}
+                onChanged={mockOnChanged}
+            />
+        )
+
+        expect(screen.getByTestId('web-search-limit-input')).toHaveValue(3)
+    })
+
+    test('saves a changed limit as settings only, never touching credentials', async () => {
+        mockStore.mockResolvedValue({
+            toolCredentialStatus: {
+                toolType: 'WEB_SEARCH', authType: 'api_key', connected: true,
+                settings: { max_searches_per_turn: '8' },
+            },
+        })
+        render(
+            <WebSearchToolSettings
+                connected
+                getAccessTokenSilently={mockGetAccessTokenSilently}
+                onChanged={mockOnChanged}
+            />
+        )
+
+        const input = screen.getByTestId('web-search-limit-input')
+        await userEvent.clear(input)
+        await userEvent.type(input, '8')
+        await userEvent.click(screen.getByTestId('web-search-limit-save'))
+
+        await waitFor(() => {
+            expect(mockStore).toHaveBeenCalledWith('test-token', {
+                toolType: 'WEB_SEARCH',
+                authType: 'api_key',
+                settings: { max_searches_per_turn: '8' },
+            })
+        })
+        expect(screen.getByText('Search limit saved.')).toBeInTheDocument()
+        expect(mockOnChanged).toHaveBeenCalled()
+    })
+
+    test('keeps the save button disabled for an out-of-bounds limit', async () => {
+        render(
+            <WebSearchToolSettings
+                connected={false}
+                getAccessTokenSilently={mockGetAccessTokenSilently}
+                onChanged={mockOnChanged}
+            />
+        )
+
+        const input = screen.getByTestId('web-search-limit-input')
+        await userEvent.clear(input)
+        await userEvent.type(input, '50')
+
+        expect(screen.getByTestId('web-search-limit-save')).toBeDisabled()
+        expect(mockStore).not.toHaveBeenCalled()
     })
 })

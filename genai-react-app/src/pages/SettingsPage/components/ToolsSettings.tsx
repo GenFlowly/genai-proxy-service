@@ -680,6 +680,7 @@ export function ToolsSettings(): React.ReactElement {
                 <p className={styles.subtitle}>{t('settingsPage.toolsSettings.builtInSubtitle')}</p>
                 <WebSearchToolSettings
                     connected={credentialConnected('WEB_SEARCH')}
+                    settings={credentialStatuses.find(s => s.toolType === 'WEB_SEARCH')?.settings ?? null}
                     getAccessTokenSilently={getAccessTokenSilently}
                     onChanged={loadTools}
                 />

@@ -22,6 +22,12 @@ CustomerCredentialsService.storeToolCredentials:
   authType          — "api_key" | "oauth2" (oauth2 blobs additionally carry
                       refresh_token / access_token / access_token_expiry;
                       refresh is the proxy's job, not this module's)
+  settings          — OPTIONAL plain-JSON object of NON-SECRET per-tool config
+                      the customer set in Settings → Tools (e.g. WEB_SEARCH's
+                      "max_searches_per_turn"). Never encrypted, may exist on
+                      an item that stores no credentials at all (a customer on
+                      the platform key tuning limits), and is fetched in the
+                      same GetItem as the credentials — no extra round trip.
 
 Decryption uses the generic KMS decrypt (the CMK id is embedded in the
 ciphertext blob, so no key id is passed), identical to graph/credentials.py
@@ -61,8 +67,9 @@ class ToolCredentialResolver:
     def __init__(self, dynamodb_resource=None, kms_client=None):
         self._ddb = dynamodb_resource
         self._kms = kms_client
-        # (customer_id, credential_ref) -> values dict ({} for a miss, cached too)
-        self._cache: dict[tuple[str, str], dict] = {}
+        # (customer_id, credential_ref) -> (secret values, plain settings)
+        # ({}, {}) for a miss, cached too.
+        self._cache: dict[tuple[str, str], tuple[dict, dict]] = {}
 
     def _clients(self):
         if self._ddb is None or self._kms is None:
@@ -73,17 +80,36 @@ class ToolCredentialResolver:
                 self._kms = boto3.client("kms", region_name=region)
         return self._ddb, self._kms
 
-    def credentials(self, customer_id: str, credential_ref: str) -> dict:
-        """The customer's decrypted values for `credential_ref`, or {} when the
-        customer has stored none.
-
-        A missing credential is NOT an error: tools degrade to a message the
-        model can act on (see WebSearchTool.run), so an unconfigured tool never
-        aborts a turn. Fetch/decrypt failures DO raise — those are real faults
-        and the executor records them per call.
-        """
-        if not customer_id or not credential_ref:
+    @staticmethod
+    def _parse_settings(raw, customer_id: str, credential_ref: str) -> dict:
+        """Plain-JSON `settings` attribute → dict of strings; anything
+        malformed degrades to {} (defaults apply) rather than raising — a bad
+        stored setting must never take search down with it."""
+        if not raw:
             return {}
+        try:
+            settings = json.loads(raw)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Malformed tool settings for customer=%s ref=%s — ignoring",
+                customer_id, credential_ref,
+            )
+            return {}
+        if not isinstance(settings, dict):
+            logger.warning(
+                "Tool settings for customer=%s ref=%s are not a JSON object — ignoring",
+                customer_id, credential_ref,
+            )
+            return {}
+        return {str(k): v for k, v in settings.items()}
+
+    def _fetch(self, customer_id: str, credential_ref: str) -> tuple[dict, dict]:
+        """One GetItem per (customer, ref) per resolver lifetime, yielding
+        (decrypted secret values, plain settings). Settings may exist without
+        credentials (a platform-key customer tuning limits), so they are read
+        before the no-credentials early return."""
+        if not customer_id or not credential_ref:
+            return {}, {}
         cache_key = (customer_id, credential_ref)
         if cache_key in self._cache:
             return self._cache[cache_key]
@@ -93,7 +119,7 @@ class ToolCredentialResolver:
             table = ddb.Table(TOOL_CREDS_TABLE_NAME)
             item = table.get_item(
                 Key={"customerId": customer_id, "toolType": credential_ref}
-            ).get("Item")
+            ).get("Item") or {}
         except Exception:
             logger.exception(
                 "Failed to fetch tool credentials for customer=%s ref=%s",
@@ -101,13 +127,15 @@ class ToolCredentialResolver:
             )
             raise
 
-        encrypted = item.get("credentials") if item else None
+        settings = self._parse_settings(item.get("settings"), customer_id, credential_ref)
+
+        encrypted = item.get("credentials")
         if not encrypted:
             logger.info(
                 "No stored tool credentials for customer=%s ref=%s", customer_id, credential_ref
             )
-            self._cache[cache_key] = {}
-            return {}
+            self._cache[cache_key] = ({}, settings)
+            return {}, settings
 
         try:
             plaintext = kms.decrypt(
@@ -131,13 +159,38 @@ class ToolCredentialResolver:
         # Values are strings on the Kotlin side (Map<String,String>); normalize
         # defensively so a tool can rely on .get() returning a string or None.
         values = {str(k): v for k, v in values.items()}
-        self._cache[cache_key] = values
-        return values
+        self._cache[cache_key] = (values, settings)
+        return values, settings
+
+    def credentials(self, customer_id: str, credential_ref: str) -> dict:
+        """The customer's decrypted values for `credential_ref`, or {} when the
+        customer has stored none.
+
+        A missing credential is NOT an error: tools degrade to a message the
+        model can act on (see WebSearchTool.run), so an unconfigured tool never
+        aborts a turn. Fetch/decrypt failures DO raise — those are real faults
+        and the executor records them per call.
+        """
+        return self._fetch(customer_id, credential_ref)[0]
 
     def resolve(self, customer_id: str, refs: Iterable[str]) -> dict[str, dict]:
         """{credential_ref: values} for each requested ref. Blocking; call via
         asyncio.to_thread from async code."""
         return {ref: self.credentials(customer_id, ref) for ref in refs if ref}
+
+    def resolve_with_settings(
+        self, customer_id: str, refs: Iterable[str]
+    ) -> tuple[dict[str, dict], dict[str, dict]]:
+        """({ref: secret values}, {ref: plain settings}) for each requested
+        ref, from the same single GetItem per ref. Blocking; call via
+        asyncio.to_thread from async code."""
+        creds: dict[str, dict] = {}
+        settings: dict[str, dict] = {}
+        for ref in refs:
+            if not ref:
+                continue
+            creds[ref], settings[ref] = self._fetch(customer_id, ref)
+        return creds, settings
 
 
 # --- Module-level accessor used by the graph nodes -------------------------------
@@ -171,6 +224,14 @@ def resolve_tool_credentials(customer_id: str, refs: Iterable[str]) -> dict[str,
     """Fetch + decrypt `refs` for one customer as {ref: values}. Blocking — call
     it via asyncio.to_thread from the event loop."""
     return make_resolver().resolve(customer_id, refs)
+
+
+def resolve_tool_credentials_and_settings(
+    customer_id: str, refs: Iterable[str]
+) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Fetch `refs` for one customer as ({ref: secret values}, {ref: plain
+    settings}) in a single pass. Blocking — call via asyncio.to_thread."""
+    return make_resolver().resolve_with_settings(customer_id, refs)
 
 
 def secrets_accessor(resolved: dict[str, dict]):

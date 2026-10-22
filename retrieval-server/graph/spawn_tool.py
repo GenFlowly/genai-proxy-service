@@ -15,13 +15,48 @@ injects the actual spawn callable and nesting depth through ToolContext.runtime
 testable and the depth/budget policy stays in one place.
 """
 import logging
+import re
 
-from graph_tools.base import Artifact, GraphTool, ToolContext, ToolResult
+from graph_tools.base import Artifact, GraphTool, Source, ToolContext, ToolResult
 
 logger = logging.getLogger(__name__)
 
 # Keep a child's step trace bounded in the parent's trace payload.
 _MAX_CHILD_TRACE_ENTRIES = 30
+
+# Same shape streaming.py matches when trimming the panel to cited entries.
+_CITATION_MARKER = re.compile(r"\[(\d{1,3})\]")
+
+
+def _cited_sources(report: str, child_sources: list) -> tuple[str, list[Source]]:
+    """The child's web sources as this tool's ToolResult sources: trimmed to
+    the entries the report actually cites, the report's [n] markers compacted
+    to 1..k over the kept list.
+
+    The child numbered its sources for its OWN turn; the parent's executor
+    renumbers whatever a tool returns into the PARENT's turn-global sequence
+    and shifts the content's markers to match (_render_sources), but both
+    assume the tool-local numbering is 1..len(sources) — which compacting here
+    guarantees. Without this fold, a delegating turn ends with no structured
+    sources for the subagents' evidence, and the model compensates by
+    hand-writing its own Sources section — which the client then renders next
+    to the real panel (the double-"Sources" bug).
+
+    A report that cites nothing keeps the child's full source list (the same
+    full-provenance rule as streaming's end-of-turn trim). Titles and urls
+    only, no snippets — the report itself is the content."""
+    by_index = {s.get("index"): s for s in child_sources if s.get("index")}
+    cited = sorted({int(n) for n in _CITATION_MARKER.findall(report)} & by_index.keys())
+    if cited:
+        remap = {old: new for new, old in enumerate(cited, start=1)}
+        report = _CITATION_MARKER.sub(
+            lambda m: f"[{remap[int(m.group(1))]}]" if int(m.group(1)) in remap else m.group(0),
+            report,
+        )
+        kept = [by_index[i] for i in cited]
+    else:
+        kept = child_sources
+    return report, [Source(title=s.get("title", ""), url=s.get("url", "")) for s in kept]
 
 
 class SpawnAgentTool(GraphTool):
@@ -122,9 +157,11 @@ class SpawnAgentTool(GraphTool):
                 usage=out.get("usage"),
                 details=details,
             )
+        report, sources = _cited_sources(out["content"], out.get("sources") or [])
         return ToolResult(
-            content=f"Report from the '{name}' subagent:\n\n{out['content']}",
+            content=f"Report from the '{name}' subagent:\n\n{report}",
             usage=out.get("usage"),
             artifacts=artifacts,
+            sources=sources,
             details=details,
         )

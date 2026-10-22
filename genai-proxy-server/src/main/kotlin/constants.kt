@@ -110,6 +110,11 @@ object DynamoDBConstants {
     const val TOOL_TYPE_KEY = "toolType"
     const val TOOL_AUTH_TYPE_KEY = "authType"
     const val TOOL_CREDENTIALS_KEY = "credentials"
+    // Plain-JSON NON-SECRET per-tool config (e.g. WEB_SEARCH's
+    // max_searches_per_turn). Never encrypted; may exist without credentials.
+    // Read by the retrieval-server's ToolCredentialResolver in the same
+    // GetItem as the credentials.
+    const val TOOL_SETTINGS_KEY = "settings"
 
     // Per-customer declarative HTTP tools. PK=customerId, SK=name (the
     // model-facing tool name), so per-customer name uniqueness is a schema
