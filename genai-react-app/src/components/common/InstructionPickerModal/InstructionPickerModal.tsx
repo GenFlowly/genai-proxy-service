@@ -131,19 +131,21 @@ export default function InstructionPickerModal({
                     </p>
                 ) : (
                     <ScrollArea className={styles.tiles}>
-                        {shown.map(instruction => (
-                            <InstructionTile
-                                key={instruction.id}
-                                title={instruction.name || t('common.instructionTile.untitledInstruction')}
-                                detail={instruction.instruction}
-                                icon={instruction.icon || undefined}
-                                color={instruction.color || undefined}
-                                tags={instruction.tags || undefined}
-                                version={instruction.version}
-                                onClick={() => onSelect(instruction)}
-                                data-testid={`instruction-picker-tile-${instruction.id}`}
-                            />
-                        ))}
+                        <div className={styles.tilesGrid}>
+                            {shown.map(instruction => (
+                                <InstructionTile
+                                    key={instruction.id}
+                                    title={instruction.name || t('common.instructionTile.untitledInstruction')}
+                                    detail={instruction.instruction}
+                                    icon={instruction.icon || undefined}
+                                    color={instruction.color || undefined}
+                                    tags={instruction.tags || undefined}
+                                    version={instruction.version}
+                                    onClick={() => onSelect(instruction)}
+                                    data-testid={`instruction-picker-tile-${instruction.id}`}
+                                />
+                            ))}
+                        </div>
                     </ScrollArea>
                 )}
             </div>
