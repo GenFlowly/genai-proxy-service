@@ -2,8 +2,10 @@ package com.genflowly.activity.generation
 
 import com.genflowly.ResponseHeaders
 import com.genflowly.Routes
+import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.toNdjsonFrame
 import com.genflowly.providers.RunsClient
+import com.genflowly.utils.MemoryRedaction
 import com.genflowly.service.ConversationAccessDeniedException
 import com.genflowly.service.ConversationService
 import com.genflowly.service.CustomerProfileService
@@ -68,6 +70,16 @@ fun Route.registerRunRoutes(
                 call.respond(HttpStatusCode.NotFound, mapOf("error" to "run is not active for this conversation"))
                 return@get
             }
+            // Memory privacy: the MEMORY step's "ks" frames carry the turn
+            // author's memory texts. The in-flight turn's author is the
+            // customerId of the conversation's latest persisted message (the
+            // turn's user message lands before generation starts, and any
+            // already-persisted sibling response inherits the same author).
+            // Anyone else watching a shared conversation live gets counts only;
+            // an unresolvable author redacts rather than leaks.
+            val turnAuthor = conversationService.getLatestMessageId(conversationId)
+                ?.let { conversationService.getMessage(conversationId, it)?.customerId }
+            val redactMemorySteps = turnAuthor != customerId
             call.response.header(HttpHeaders.CacheControl, "no-cache, no-transform")
             call.response.header(HttpHeaders.Connection, "keep-alive")
             call.response.header(ResponseHeaders.ACCEL_BUFFERING, "no")
@@ -76,7 +88,10 @@ fun Route.registerRunRoutes(
                     write(" ")  // heartbeat so the client sees TTFB immediately
                     flush()
                     runsClient.streamRun(runId, fromSeq).collect { chunk ->
-                        chunk.toNdjsonFrame()?.let { write(it); flush() }
+                        val safeChunk = if (redactMemorySteps && chunk is StreamChunk.ThinkingStep) {
+                            MemoryRedaction.redactThinkingStepJson(chunk.json)?.let { StreamChunk.ThinkingStep(it) }
+                        } else chunk
+                        safeChunk?.toNdjsonFrame()?.let { write(it); flush() }
                     }
                 } catch (e: java.io.IOException) {
                     logger.warn("Reattach stream closed by client: {}", e.message)
