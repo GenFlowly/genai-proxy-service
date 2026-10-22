@@ -22,10 +22,15 @@
 }
 
 .tiles {
+    max-height: 55vh;
+}
+
+// The grid lives on an inner wrapper, not on the ScrollArea itself: the
+// ScrollArea renders its overlay-scrollbar track as a first child, which
+// would otherwise occupy the first grid cell and misalign the tiles
+.tilesGrid {
     display: grid;
     // Two columns in the wide desktop modal, one on narrow screens
     grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
     gap: 0.75rem;
-    max-height: 55vh;
-    overflow-y: auto;
 }
