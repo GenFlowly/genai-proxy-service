@@ -81,6 +81,22 @@ class ConversationService(
         return shareRepository.getConversationShare(conversationId, "PUBLIC")
     }
 
+    /**
+     * Title-only lookup with the same access gating as [getConversationHistory]
+     * (owner, direct share, or PUBLIC — anonymous callers pass "PUBLIC").
+     * Serves the edge worker's link-preview <title>/og:title injection, which
+     * must not pull the full message history on every page load.
+     */
+    suspend fun getConversationTitle(conversationId: String, callerCustomerId: String): String? {
+        getConversationRole(conversationId, callerCustomerId)
+            ?: throw ConversationAccessDeniedException("Conversation not found or access denied")
+
+        val owner = conversationRepository.getConversationById(conversationId)
+            ?: throw ConversationAccessDeniedException("Conversation not found")
+
+        return conversationRepository.getConversationTitle(conversationId, owner.customerId)
+    }
+
     suspend fun getConversationHistory(conversationId: String, customerId: String): GetConversationResponse {
         val role = getConversationRole(conversationId, customerId)
             ?: throw ConversationAccessDeniedException("Conversation not found or access denied")

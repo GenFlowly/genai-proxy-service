@@ -9,6 +9,16 @@
       name="description"
       content="Prompt Engineering and AI conversations"
     />
+    <!--
+      Link-preview (Open Graph) defaults. For publicly shared /chat/:id
+      pages the Cloudflare router worker rewrites og:title and <title>
+      with the conversation's real title; everything else keeps these.
+    -->
+    <meta property="og:site_name" content="Genflowly" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Better AI prompting" />
+    <meta property="og:description" content="Prompt Engineering and AI conversations" />
+    <meta name="twitter:card" content="summary" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a

@@ -72,3 +72,6 @@ genai-proxy-server/.env
 # Node
 node_modules/
 **/node_modules/
+
+# Wrangler local dev state
+.wrangler/
