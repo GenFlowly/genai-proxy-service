@@ -53,15 +53,17 @@ def _state(calls, enabled):
     }
 
 
-async def _run(state, tools, resolved=None, resolve_error=None):
-    """Execute the node with `tools` as the request's enabled set."""
-    resolver = AsyncMock(return_value=resolved or {})
+async def _run(state, tools, resolved=None, resolve_error=None, settings=None):
+    """Execute the node with `tools` as the request's enabled set. `settings`
+    maps credential_ref -> plain per-customer tool settings, riding the same
+    resolution call as the credentials."""
+    resolver = AsyncMock(return_value=(resolved or {}, settings or {}))
     if resolve_error:
         resolver = AsyncMock(side_effect=resolve_error)
     with patch.object(tool_executor_module, "tools_for", return_value=tools), \
-            patch.object(tool_executor_module, "resolve_tool_credentials") as sync_resolver, \
+            patch.object(tool_executor_module, "resolve_tool_credentials_and_settings") as sync_resolver, \
             patch.object(tool_executor_module.asyncio, "to_thread", resolver):
-        sync_resolver.return_value = resolved or {}
+        sync_resolver.return_value = (resolved or {}, settings or {})
         return await tool_executor("node-1")(state)
 
 
@@ -137,9 +139,9 @@ class CredentialTests(unittest.IsolatedAsyncioTestCase):
         # boto3 + KMS are blocking and this process serves every tenant on one
         # loop, so the fetch must go through asyncio.to_thread.
         tool = _Recorder("web_search", credential_ref="WEB_SEARCH")
-        resolver = AsyncMock(return_value={"WEB_SEARCH": {"api_key": "k"}})
+        resolver = AsyncMock(return_value=({"WEB_SEARCH": {"api_key": "k"}}, {}))
         with patch.object(tool_executor_module, "tools_for", return_value=[tool]), \
-                patch.object(tool_executor_module, "resolve_tool_credentials") as sync_resolver, \
+                patch.object(tool_executor_module, "resolve_tool_credentials_and_settings") as sync_resolver, \
                 patch.object(tool_executor_module.asyncio, "to_thread", resolver):
             await tool_executor("node-1")(
                 _state([{"id": "1", "name": "web_search"}], ["web_search"])
@@ -608,6 +610,80 @@ class SearchBudgetTests(unittest.IsolatedAsyncioTestCase):
     async def test_turn_without_searches_leaves_scratch_counter_untouched(self):
         out = await _run(_state([{"id": "1", "name": "t"}], ["t"]), [_Recorder("t")])
         self.assertNotIn("web_search_calls", out["scratch"])
+
+
+class HardSearchCapTests(unittest.IsolatedAsyncioTestCase):
+    """The vendor-style HARD ceiling (default 5): past it even the grace
+    search is denied and the tool answers with a terminal message. Customer
+    value comes from the WEB_SEARCH settings resolved with the credentials."""
+
+    @staticmethod
+    def _searches(n, start=1):
+        return [{"id": str(i), "name": "web_search", "args": {"query": f"q{i}"}}
+                for i in range(start, start + n)]
+
+    async def test_default_hard_cap_denies_the_grace_search_at_five(self):
+        tool = _Recorder("web_search")
+        state = _state(self._searches(2), ["web_search"])
+        state["scratch"] = {"web_search_calls": 5}
+        out = await _run(state, [tool])
+
+        self.assertEqual(tool.run_count, 0)  # no grace past the hard cap
+        for content in [m["content"] for m in out["loop_messages"][1:]]:
+            self.assertIn("no longer available this turn", content)
+            self.assertIn("limit (5)", content)
+        self.assertNotIn("web_search_calls", out["scratch"])  # nothing ran
+
+    async def test_grace_still_runs_between_soft_budget_and_hard_cap(self):
+        tool = _Recorder("web_search")
+        state = _state(self._searches(1), ["web_search"])
+        state["scratch"] = {"web_search_calls": 4}
+        out = await _run(state, [tool])
+
+        self.assertEqual(tool.run_count, 1)
+        self.assertIn("Consolidate", out["loop_messages"][1]["content"])
+        self.assertEqual(out["scratch"]["web_search_calls"], 5)
+
+    async def test_customer_setting_overrides_the_default(self):
+        # credential_ref makes resolution run, which is what carries settings.
+        tool = _Recorder("web_search", credential_ref="WEB_SEARCH")
+        state = _state(self._searches(3), ["web_search"])
+        out = await _run(
+            state, [tool],
+            settings={"WEB_SEARCH": {"max_searches_per_turn": "2"}},
+        )
+
+        # Hard cap 2 undercuts the soft budget of 3: two run, the third is
+        # terminal — never a refine-guidance skip.
+        self.assertEqual(tool.run_count, 2)
+        contents = [m["content"] for m in out["loop_messages"][1:]]
+        self.assertIn("no longer available this turn", contents[2])
+        self.assertEqual(out["scratch"]["web_search_calls"], 2)
+
+    async def test_a_round_straddling_the_hard_cap_mixes_modes(self):
+        tool = _Recorder("web_search")
+        state = _state(self._searches(4), ["web_search"])
+        state["scratch"] = {"web_search_calls": 4}
+        out = await _run(state, [tool])
+
+        # prior=4: one grace search reaches the cap of 5; the rest are terminal.
+        self.assertEqual(tool.run_count, 1)
+        contents = [m["content"] for m in out["loop_messages"][1:]]
+        self.assertIn("Consolidate", contents[0])
+        for content in contents[1:]:
+            self.assertIn("no longer available this turn", content)
+
+    async def test_malformed_customer_setting_falls_back_to_default(self):
+        tool = _Recorder("web_search", credential_ref="WEB_SEARCH")
+        state = _state(self._searches(1), ["web_search"])
+        state["scratch"] = {"web_search_calls": 4}
+        out = await _run(
+            state, [tool],
+            settings={"WEB_SEARCH": {"max_searches_per_turn": "lots"}},
+        )
+
+        self.assertEqual(tool.run_count, 1)  # default cap 5 still allows the grace
+        self.assertEqual(out["scratch"]["web_search_calls"], 5)
 
 
 if __name__ == "__main__":

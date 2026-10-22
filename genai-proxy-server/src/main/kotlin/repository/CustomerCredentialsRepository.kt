@@ -297,25 +297,53 @@ class CustomerCredentialsRepository(
 
     // ─── Tool credentials ─────────────────────────────────────────────────────
 
+    /**
+     * Upserts the provided pieces of one tool's item. UpdateItem, not PutItem:
+     * a credentials write must not clobber stored settings and a settings
+     * write must work on its own — even creating the item when the customer
+     * has no stored key at all (platform-key users tuning limits). Null
+     * arguments leave their attribute untouched.
+     */
     suspend fun saveCustomerToolCredentials(
         customerId: String,
         toolType: String,
         authType: String,
-        encryptedCredentials: String,
+        encryptedCredentials: String?,
+        settingsJson: String? = null,
     ) = withContext(Dispatchers.IO) {
         try {
-            val item = withTimestamps(mapOf(
-                CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                DynamoDBConstants.TOOL_TYPE_KEY to AttributeValue.builder().s(toolType).build(),
-                DynamoDBConstants.TOOL_AUTH_TYPE_KEY to AttributeValue.builder().s(authType).build(),
-                DynamoDBConstants.TOOL_CREDENTIALS_KEY to AttributeValue.builder().s(encryptedCredentials).build(),
-            ))
-            dynamoDbClient.putItem(
-                PutItemRequest.builder()
-                    .tableName(DynamoDBConstants.CUSTOMER_TOOL_CREDENTIALS_TABLE)
-                    .item(item)
-                    .build()
+            val now = java.time.Instant.now().toString()
+            val sets = mutableListOf(
+                "updatedAt = :now",
+                "createdAt = if_not_exists(createdAt, :now)",
             )
+            val values = mutableMapOf<String, AttributeValue>(
+                ":now" to AttributeValue.builder().s(now).build(),
+            )
+            val names = mutableMapOf<String, String>()
+            if (encryptedCredentials != null) {
+                sets += "#credentials = :credentials"
+                sets += "#authType = :authType"
+                names["#credentials"] = DynamoDBConstants.TOOL_CREDENTIALS_KEY
+                names["#authType"] = DynamoDBConstants.TOOL_AUTH_TYPE_KEY
+                values[":credentials"] = AttributeValue.builder().s(encryptedCredentials).build()
+                values[":authType"] = AttributeValue.builder().s(authType).build()
+            }
+            if (settingsJson != null) {
+                sets += "#settings = :settings"
+                names["#settings"] = DynamoDBConstants.TOOL_SETTINGS_KEY
+                values[":settings"] = AttributeValue.builder().s(settingsJson).build()
+            }
+            val update = UpdateItemRequest.builder()
+                .tableName(DynamoDBConstants.CUSTOMER_TOOL_CREDENTIALS_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    DynamoDBConstants.TOOL_TYPE_KEY to AttributeValue.builder().s(toolType).build(),
+                ))
+                .updateExpression("SET " + sets.joinToString(", "))
+                .expressionAttributeValues(values)
+            if (names.isNotEmpty()) update.expressionAttributeNames(names)
+            dynamoDbClient.updateItem(update.build())
             logger.info("Saved tool credentials for $customerId / $toolType")
         } catch (e: Exception) {
             logger.error("Failed to save tool credentials for $customerId / $toolType", e)

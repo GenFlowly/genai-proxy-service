@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CredentialCard, CredentialStatusPill, InputTextWithHint, PillButton } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
@@ -12,9 +12,19 @@ const WEB_SEARCH_TOOL_TYPE = 'WEB_SEARCH'
 /** Credentials stored from this card are a plain secret value, not OAuth. */
 const AUTH_TYPE = 'api_key'
 
+/** Settings key for the hard per-message search cap. Name, bounds and the
+ * default must stay in sync with the proxy's CustomerCredentialsService
+ * validation and the retrieval-server's tool_executor. */
+const MAX_SEARCHES_SETTING = 'max_searches_per_turn'
+const MAX_SEARCHES_DEFAULT = 5
+const MAX_SEARCHES_MIN = 1
+const MAX_SEARCHES_MAX = 20
+
 interface WebSearchToolSettingsProps {
     /** Whether a key is currently stored for WEB_SEARCH. */
     connected: boolean
+    /** Stored WEB_SEARCH settings, or null when the customer saved none. */
+    settings?: Record<string, string> | null
     getAccessTokenSilently: () => Promise<string>
     /** Called after a successful save/remove so the caller can refresh status. */
     onChanged: () => void | Promise<void>
@@ -29,6 +39,7 @@ interface WebSearchToolSettingsProps {
  */
 export function WebSearchToolSettings({
     connected,
+    settings,
     getAccessTokenSilently,
     onChanged,
 }: WebSearchToolSettingsProps): React.ReactElement {
@@ -37,6 +48,12 @@ export function WebSearchToolSettings({
     const [busy, setBusy] = useState(false)
     const [message, setMessage] = useState<string | null>(null)
     const [messageKind, setMessageKind] = useState<'success' | 'error' | null>(null)
+
+    const storedLimit = parseStoredLimit(settings)
+    const [limitInput, setLimitInput] = useState(String(storedLimit))
+    // Statuses load after mount — refresh the field whenever the stored value
+    // arrives or changes (a save calls onChanged, which reloads statuses).
+    useEffect(() => { setLimitInput(String(storedLimit)) }, [storedLimit])
 
     const errorMessage = (error: unknown): string => (
         error instanceof Error && error.message
@@ -63,6 +80,38 @@ export function WebSearchToolSettings({
             })
             setKeyInput('')
             setMessage(t('settingsPage.toolsSettings.builtInKeySavedToast'))
+            setMessageKind('success')
+            await onChanged()
+        } catch (error) {
+            setMessage(errorMessage(error))
+            setMessageKind('error')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    const limitValue = parseLimitInput(limitInput)
+    const limitDirty = limitValue !== null && limitValue !== storedLimit
+
+    const handleSaveLimit = async () => {
+        if (limitValue === null) {
+            setMessage(t('settingsPage.toolsSettings.builtInSearchLimitInvalidToast'))
+            setMessageKind('error')
+            return
+        }
+        setBusy(true)
+        setMessage(null)
+        setMessageKind(null)
+        try {
+            const token = await getAccessTokenSilently()
+            // Settings-only save: stored credentials are left untouched, and
+            // the limit works even for customers on the platform search key.
+            await storeToolCredentials(token, {
+                toolType: WEB_SEARCH_TOOL_TYPE,
+                authType: AUTH_TYPE,
+                settings: { [MAX_SEARCHES_SETTING]: String(limitValue) },
+            })
+            setMessage(t('settingsPage.toolsSettings.builtInSearchLimitSavedToast'))
             setMessageKind('success')
             await onChanged()
         } catch (error) {
@@ -140,6 +189,44 @@ export function WebSearchToolSettings({
                     />
                 )}
             </div>
+            <div className={styles.limitBlock}>
+                <p className={styles.description}>
+                    {t('settingsPage.toolsSettings.builtInSearchLimitLabel')}
+                    {' — '}
+                    {t('settingsPage.toolsSettings.builtInSearchLimitDescription')}
+                </p>
+                <div className={styles.keyRow}>
+                    <InputTextWithHint
+                        hint={t('settingsPage.toolsSettings.builtInSearchLimitHint')}
+                        type="number"
+                        value={limitInput}
+                        disabled={busy}
+                        onChange={e => setLimitInput(e.target.value)}
+                        className={styles.limitInput}
+                        data-testid="web-search-limit-input"
+                    />
+                    <PillButton
+                        label={busy ? t('settingsPage.toolsSettings.savingLabel') : t('settingsPage.toolsSettings.builtInSearchLimitSave')}
+                        icon={ICONS.SAVE_ICON}
+                        disabled={busy || !limitDirty}
+                        onClick={() => void handleSaveLimit()}
+                        data-testid="web-search-limit-save"
+                    />
+                </div>
+            </div>
         </CredentialCard>
     )
+}
+
+/** The stored hard cap, falling back to the platform default of 5. */
+function parseStoredLimit(settings?: Record<string, string> | null): number {
+    const parsed = parseLimitInput(settings?.[MAX_SEARCHES_SETTING] ?? '')
+    return parsed ?? MAX_SEARCHES_DEFAULT
+}
+
+/** A valid in-bounds whole number, or null. */
+function parseLimitInput(raw: string): number | null {
+    if (!/^\d+$/.test(raw.trim())) return null
+    const n = Number(raw.trim())
+    return n >= MAX_SEARCHES_MIN && n <= MAX_SEARCHES_MAX ? n : null
 }
