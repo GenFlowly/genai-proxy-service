@@ -28,6 +28,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Unit tests before any image or stack is deployed (plan 1.1); the
+      # vector store is faked, so they need no AWS access or network.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: encoding-server/requirements.txt
+
+      - name: Test encoding server
+        working-directory: encoding-server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m unittest discover -s tests -t . -v
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -266,5 +282,12 @@ jobs:
           ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
           ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
+          # Passed by the CDK app (bin/cdk.ts) into the purge-vectors Lambda's
+          # environment. POST /purge-vectors deletes a customer's or a conversation's
+          # vectors when the proxy purges a deleted account or conversation (PDF plan
+          # 3.9). The Lambda accepts only Auth0 client-credentials tokens whose client
+          # id is in this comma-separated list (the proxy's machine-to-machine app);
+          # user tokens get 403, and while the secret is unset every call gets 403.
+          PURGE_ALLOWED_CLIENT_IDS: ${{ secrets.PURGE_ALLOWED_CLIENT_IDS }}
           CUSTOMER_PROFILE_TABLE_NAME: "CustomerProfile"
         run: cdk deploy encoding-service-S3Stack encoding-service-SqsStack encoding-service-LambdaStack encoding-service-StepFunctionsV2Stack encoding-service-ApiGatewayStack --require-approval never

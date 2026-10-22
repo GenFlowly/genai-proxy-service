@@ -913,13 +913,34 @@ class RetrievalServerClient(
      * /search — conversations, notes, memories, emails and future data types.
      * Returns chunk hits already grouped to one entry per source item (best
      * snippet + score). Pass [types] to restrict the searched data types;
-     * null searches everything. Throws on transport errors — callers decide
-     * whether that is fatal.
+     * null searches everything. [allowedKeys] maps a data type to the exact
+     * group-key values the caller may see (e.g. "instructions" to accessible
+     * instruction ids): that type is then matched by key instead of by the
+     * customer's partition, so items indexed under OTHER customers (shared
+     * instructions live under their creator) become findable — the id list IS
+     * the access control, so it must come from an authoritative ACL check.
+     * Throws on transport errors — callers decide whether that is fatal.
      */
-    suspend fun search(customerId: String, query: String, topN: Int, types: List<String>? = null): List<SearchVectorHit> {
+    suspend fun search(
+        customerId: String,
+        query: String,
+        topN: Int,
+        types: List<String>? = null,
+        allowedKeys: Map<String, List<String>>? = null
+    ): List<SearchVectorHit> {
         val response = httpClient.post("$retrievalServerUrl/search") {
             contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(SearchPayload(customer_id = customerId, query = query, top_n = topN, types = types)))
+            setBody(
+                json.encodeToString(
+                    SearchPayload(
+                        customer_id = customerId,
+                        query = query,
+                        top_n = topN,
+                        types = types,
+                        allowed_keys = allowedKeys
+                    )
+                )
+            )
         }
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
@@ -1045,7 +1066,8 @@ private data class SearchPayload(
     val customer_id: String,
     val query: String,
     val top_n: Int,
-    val types: List<String>? = null
+    val types: List<String>? = null,
+    val allowed_keys: Map<String, List<String>>? = null
 )
 
 @Serializable

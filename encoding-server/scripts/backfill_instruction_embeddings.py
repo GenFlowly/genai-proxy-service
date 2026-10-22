@@ -9,8 +9,12 @@ feeds). Sending directly avoids needing a per-creator bearer token — the
 pipeline stamps each row with its creator's customer_id (the partition key of
 the shared instructions collection).
 
+SYSTEM / PUBLIC instructions are included: their rows land under the
+"SYSTEM"/"PUBLIC" partition and search finds them via the query-time
+instruction_key allow-list filter, which doesn't care who created a row.
+
 Skipped rows:
-  - creators SYSTEM / PUBLIC (no shared collection in v1)
+  - rows with no creator
   - latest versions already stamped is_synced_with_milvus=true (re-runnable)
 
 Usage:
@@ -23,8 +27,6 @@ import json
 
 import boto3
 from boto3.dynamodb.types import TypeDeserializer
-
-SKIPPED_CREATORS = {"SYSTEM", "PUBLIC"}
 
 MODEL_TYPE = "voyage"
 MODEL_NAME = "voyage-4-large"
@@ -86,7 +88,7 @@ def main() -> None:
 
     for iid, item in sorted(latest.items()):
         creator = item.get("creator", "")
-        if creator in SKIPPED_CREATORS or not creator:
+        if not creator:
             skipped_creator += 1
             continue
         if item.get("is_synced_with_milvus"):
@@ -112,7 +114,7 @@ def main() -> None:
 
     print(
         f"\nDone: {sent} sent, {skipped_synced} already synced, "
-        f"{skipped_creator} system/public skipped, {skipped_empty} empty skipped "
+        f"{skipped_creator} creator-less skipped, {skipped_empty} empty skipped "
         f"({len(latest)} instructions total)"
     )
 

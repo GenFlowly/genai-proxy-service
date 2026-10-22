@@ -2,6 +2,9 @@ FROM milvus-base:latest
 
 # Copy application code
 COPY handlers/create_collections_lambda.py ${LAMBDA_TASK_ROOT}/handlers/create_collections_lambda.py
+# Same image backs POST /purge-vectors (its lambda overrides CMD with
+# handlers.purge_vectors_lambda.handler)
+COPY handlers/purge_vectors_lambda.py ${LAMBDA_TASK_ROOT}/handlers/purge_vectors_lambda.py
 COPY handlers/http_metrics.py ${LAMBDA_TASK_ROOT}/handlers/http_metrics.py
 COPY services/ ${LAMBDA_TASK_ROOT}/services/
 

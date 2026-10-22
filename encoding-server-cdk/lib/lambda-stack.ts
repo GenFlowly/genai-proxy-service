@@ -37,6 +37,8 @@ export interface LambdaStackProps extends cdk.StackProps {
     customerNotesTableName: string;
     instructionsTableName: string;
     voyageApiKey?: string;
+    /** Auth0 client ids allowed to call POST /purge-vectors (comma-separated; empty refuses all). */
+    purgeAllowedClientIds?: string;
 }
 
 export class LambdaStack extends cdk.Stack {
@@ -46,6 +48,7 @@ export class LambdaStack extends cdk.Stack {
     public readonly parseAndChunkLambda: DockerImageFunction;
     public readonly createAndStoreLambda: DockerImageFunction;
     public readonly createCollectionsLambda: DockerImageFunction;
+    public readonly purgeVectorsLambda: DockerImageFunction;
     public readonly pollVoyageBatchesLambda: DockerImageFunction;
     public readonly accumulateVoyageNotesLambda: DockerImageFunction;
     public readonly voyageBatchJobsTable: dynamodb.Table;
@@ -328,5 +331,106 @@ export class LambdaStack extends cdk.Stack {
             actions: ['kms:Decrypt'],
             resources: ['*'], 
         }));
+
+        /**
+         * Purge Vectors Lambda (PDF plan 3.9)
+         * Deletes a customer's conversation vectors, or drops all their
+         * collections, when genai-proxy-server purges a conversation or a
+         * customer. Same image as create-collections with its own handler;
+         * service-only: the handler accepts just the Auth0 client-credentials
+         * tokens of the clients in PURGE_ALLOWED_CLIENT_IDS.
+         */
+        this.purgeVectorsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-purge-vectors-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-purge-vectors-lambda`,
+            code: DockerImageCode.fromEcr(props.createCollectionsRepo, {
+                tagOrDigest: props.createCollectionsImageTag || 'create-collections-latest',
+                cmd: ['handlers.purge_vectors_lambda.handler'],
+            }),
+            memorySize: 512,
+            // API Gateway answers after 30 s anyway; the purge is idempotent and re-run by the proxy
+            timeout: cdk.Duration.seconds(60),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ...appEnv,
+                ZILLIZ_ENDPOINT: props.zillizEndpoint,
+                ZILLIZ_TOKEN: props.zillizToken,
+                CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
+                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
+                PURGE_ALLOWED_CLIENT_IDS: props.purgeAllowedClientIds || '',
+            },
+        });
+
+        customerProfileTable.grantReadData(this.purgeVectorsLambda);
+        customerVectorDBConfigTable.grantReadData(this.purgeVectorsLambda);
+        this.purgeVectorsLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'],
+        }));
+
+        /**
+         * SUPERSEDED pipeline lambdas, pinned during the stage-1/stage-2
+         * rollout (same pattern as EcrStack's create-embeddings repo pins):
+         * the DEPLOYED StepFunctionsV2Stack still imports both ARNs, and this
+         * stack deploys BEFORE it in the same run, so dropping the exports
+         * first wedges the update ("Cannot delete export ... in use by
+         * encoding-service-StepFunctionsV2Stack", 2026-10-22). Restoring the
+         * functions under their original construct ids (identical logical
+         * ids — no-op resource updates) and pinning their ARN exports lets
+         * this stack deploy; the same-run StepFunctionsV2 deploy then drops
+         * the imports. Once the import-free StepFunctionsV2Stack is live in
+         * dev AND prod, a cleanup commit may remove this whole block.
+         * Deliberately not exposed as stack properties: nothing in the app
+         * may grow a dependency on them.
+         */
+        const createEmbeddingsRepo = ecr.Repository.fromRepositoryName(
+            this,
+            'CreateEmbeddingsRepoRef',
+            `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-embeddings-repo`
+        );
+        const embedLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-embeddings-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-embeddings-lambda`,
+            code: DockerImageCode.fromEcr(createEmbeddingsRepo, {
+                // The image is no longer built; pin the repo's last published
+                // tag. (The old 'embed-latest' fallback never existed in ECR.)
+                tagOrDigest: 'create-embeddings-latest',
+                cmd: ['handlers.create_embeddings_lambda.handler'],
+            }),
+            memorySize: 3008,
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ...appEnv,
+                JOBLIB_TEMP_FOLDER: '/tmp',
+                ...(process.env.VOYAGE_API_KEY ? { VOYAGE_API_KEY: process.env.VOYAGE_API_KEY } : {}),
+                ...(process.env.OPENAI_API_KEY ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY } : {}),
+            },
+        });
+        const storeEmbeddingsLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-lambda`,
+            code: DockerImageCode.fromEcr(props.storeEmbeddingsRepo, {
+                tagOrDigest: props.storeEmbeddingsImageTag || 'store-embeddings-latest',
+                cmd: ['handlers.store_embeddings_lambda.handler'],
+            }),
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ...appEnv,
+                ZILLIZ_ENDPOINT: props.zillizEndpoint,
+                ZILLIZ_TOKEN: props.zillizToken,
+                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
+                CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
+                INSTRUCTIONS_TABLE: props.instructionsTableName,
+            },
+        });
+        customerVectorDBConfigTable.grantReadData(storeEmbeddingsLambda);
+        customerNotesTable.grantReadWriteData(storeEmbeddingsLambda);
+        instructionsTable.grantReadWriteData(storeEmbeddingsLambda);
+        storeEmbeddingsLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'],
+        }));
+        this.exportValue(embedLambda.functionArn);
+        this.exportValue(storeEmbeddingsLambda.functionArn);
     }
 }
