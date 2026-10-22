@@ -27,12 +27,13 @@ def _context(depth=0, subagents=None, spawn=None) -> ToolContext:
     return context
 
 
-def _child(content="child report", usage=None, trace=None, error=None):
+def _child(content="child report", usage=None, trace=None, error=None, sources=None):
     return AsyncMock(return_value={
         "content": content,
         "usage": usage,
         "trace": trace or [],
         "artifacts": [],
+        "sources": sources or [],
         "error": error,
     })
 
@@ -65,6 +66,43 @@ class SpawnAgentToolTests(unittest.IsolatedAsyncioTestCase):
         # Spend and trace flow back for the executor to accumulate/surface.
         self.assertEqual(out.usage["total_tokens"], 123)
         self.assertEqual(out.details["subagent"], "researcher")
+
+    async def test_cited_child_sources_flow_back_with_compacted_markers(self):
+        # The child cites [2] and [5] of its own turn-global numbering; the
+        # uncited entry is dropped, the kept ones become structured ToolResult
+        # sources, and the report's markers are compacted to 1..k so the
+        # executor can renumber them into the PARENT's turn-global sequence.
+        spawn = _child(
+            content="PSE has an API [2]. WM too [5]. See footnote [9].",
+            sources=[
+                {"index": 1, "title": "Junk", "url": "https://junk"},
+                {"index": 2, "title": "PSE", "url": "https://pse"},
+                {"index": 5, "title": "WM", "url": "https://wm"},
+            ],
+        )
+        out = await SpawnAgentTool().run({"prompt": "x"}, _context(spawn=spawn))
+
+        self.assertEqual(
+            [(s.title, s.url) for s in out.sources],
+            [("PSE", "https://pse"), ("WM", "https://wm")],
+        )
+        # [9] matches no child source, so it is not a citation — left alone.
+        self.assertIn("PSE has an API [1]. WM too [2]. See footnote [9].", out.content)
+
+    async def test_uncited_report_keeps_full_child_provenance(self):
+        spawn = _child(content="no inline markers here", sources=[
+            {"index": 1, "title": "A", "url": "https://a"},
+            {"index": 2, "title": "B", "url": "https://b"},
+        ])
+        out = await SpawnAgentTool().run({"prompt": "x"}, _context(spawn=spawn))
+
+        self.assertEqual([(s.title, s.url) for s in out.sources],
+                         [("A", "https://a"), ("B", "https://b")])
+        self.assertIn("no inline markers here", out.content)
+
+    async def test_child_without_sources_cites_nothing(self):
+        out = await SpawnAgentTool().run({"prompt": "x"}, _context(spawn=_child()))
+        self.assertEqual(out.sources, [])
 
     async def test_depth_cap_refuses_without_spawning(self):
         spawn = _child()
