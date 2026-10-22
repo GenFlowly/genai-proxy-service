@@ -191,6 +191,89 @@ describe('ConversationHeader', () => {
         })
     })
 
+    test('public share copies the conversation URL and shows a second toast', async () => {
+        const writeTextMock = jest.fn().mockResolvedValue(undefined)
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText: writeTextMock },
+            configurable: true,
+        })
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+        })
+        ;(conversationService.shareConversation as jest.Mock).mockResolvedValue({})
+        ;(conversationService.getConversationSharedUsers as jest.Mock).mockResolvedValue([])
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        fireEvent.click(screen.getByTestId('conversation-share-button'))
+        fireEvent.click(await screen.findByLabelText('Make public to everyone'))
+        fireEvent.click(await screen.findByText('Save'))
+
+        await waitFor(() => {
+            expect(showToastMock).toHaveBeenCalledWith('URL copied to clipboard')
+        })
+        expect(writeTextMock).toHaveBeenCalledWith(`${window.location.origin}/chat/123`)
+        // Copied toast comes after/below the share confirmation
+        expect(showToastMock.mock.calls.map(c => c[0])).toEqual([
+            'Share settings updated',
+            'URL copied to clipboard',
+        ])
+    })
+
+    test('private save neither copies the URL nor shows the copied toast', async () => {
+        const writeTextMock = jest.fn().mockResolvedValue(undefined)
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText: writeTextMock },
+            configurable: true,
+        })
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+        })
+        ;(conversationService.getConversationSharedUsers as jest.Mock).mockResolvedValue([])
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        fireEvent.click(screen.getByTestId('conversation-share-button'))
+        // PRIVATE is the default mode — save directly
+        fireEvent.click(await screen.findByText('Save'))
+
+        await waitFor(() => {
+            expect(showToastMock).toHaveBeenCalledWith('Share settings updated')
+        })
+        expect(writeTextMock).not.toHaveBeenCalled()
+        expect(showToastMock).not.toHaveBeenCalledWith('URL copied to clipboard')
+    })
+
+    test('denied clipboard still leaves the share success toast', async () => {
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText: jest.fn().mockRejectedValue(new Error('denied')) },
+            configurable: true,
+        })
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+        })
+        ;(conversationService.shareConversation as jest.Mock).mockResolvedValue({})
+        ;(conversationService.getConversationSharedUsers as jest.Mock).mockResolvedValue([])
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        fireEvent.click(screen.getByTestId('conversation-share-button'))
+        fireEvent.click(await screen.findByLabelText('Make public to everyone'))
+        fireEvent.click(await screen.findByText('Save'))
+
+        await waitFor(() => {
+            expect(showToastMock).toHaveBeenCalledWith('Share settings updated')
+        })
+        expect(showToastMock).not.toHaveBeenCalledWith('URL copied to clipboard')
+        expect(showToastMock).not.toHaveBeenCalledWith('Failed to update share settings')
+    })
+
     test('shows error toast when save fails', async () => {
         mockUseConversation.mockReturnValue({
             conversationId: '123',
