@@ -23,10 +23,13 @@ fun Route.registerSearchInstructionsRoutes(
         get(Routes.SEARCH_INSTRUCTIONS, {
             tags("Instructions")
             summary = "Search instructions"
-            description = "Case-insensitive search over the latest version of every instruction " +
-                    "the caller can access, matching name, category, tags or instruction text. " +
-                    "A blank query returns all latest instructions. Authentication is optional: " +
-                    "unauthenticated callers search the public instruction set."
+            description = "Semantic search over the latest version of every instruction the " +
+                    "caller can access, owned and shared alike (visibility is enforced by an " +
+                    "accessible-ids filter at query time; each instruction is indexed once, " +
+                    "under its creator). Instruction text, name, category and tags are " +
+                    "embedded; results are ordered by similarity. A blank query returns all " +
+                    "latest instructions. Authentication is optional: unauthenticated callers " +
+                    "search the public instruction set."
             request {
                 queryParameter<String>("q") {
                     description = "Search query; blank returns all latest instructions"
