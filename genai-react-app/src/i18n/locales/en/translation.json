@@ -250,7 +250,8 @@
             "share": "Share",
             "shareSettingsUpdateFailed": "Failed to update share settings",
             "shareSettingsUpdated": "Share settings updated",
-            "untitledConversation": "Untitled conversation"
+            "untitledConversation": "Untitled conversation",
+            "urlCopiedToClipboard": "URL copied to clipboard"
         },
         "conversationHistory": {
             "archiveConversation": "Archive conversation",
