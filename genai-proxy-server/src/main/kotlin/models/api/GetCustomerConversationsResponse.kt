@@ -17,7 +17,10 @@ data class ConversationSummary(
     // read time from the projects table (never denormalized), so a rename
     // shows up immediately; a dangling projectId yields projectName = null.
     val projectId: String? = null,
-    val projectName: String? = null
+    val projectName: String? = null,
+    // Conversation this one was forked from; the sidebar nests forks under
+    // their parent. Null for non-forks and when the parent is unknown.
+    val parentConversationId: String? = null
 )
 
 @Serializable

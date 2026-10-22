@@ -24,6 +24,8 @@ import {
 import { applyThinkingStep } from '../utils/thinkingStepUtils'
 import { AttachmentRef } from '../models/attachment.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
+import { forkConversation as forkConversationApi } from '../services/conversationHistoryService'
+import { CONVERSATION_FORKED_EVENT } from '../constants/events'
 import i18n from '../i18n'
 
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
@@ -509,6 +511,29 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         const ok = await resumeRunApi(token, runId, conversationIdRef.current, { reply })
         if (!ok) showToast('Failed to send your reply — please try again')
     }, [awaitingInputs, getAccessTokenSilently, showToast])
+
+    /**
+     * Fork the loaded conversation at [messageId]: the backend copies every
+     * message up to and including it into a new conversation titled
+     * "Forked <title>", recording the parent id. The history sidebar owns its
+     * list in component-local state, so the fork is announced via a window
+     * event (it nests the fork under its parent immediately); then we
+     * navigate to the fork, which loads it like any other conversation.
+     */
+    const forkConversation = useCallback(async (messageId: string) => {
+        const sourceConversationId = conversationIdRef.current
+        if (!sourceConversationId) return
+        try {
+            const token = await getAccessTokenSilently()
+            const fork = await forkConversationApi(token, sourceConversationId, messageId)
+            window.dispatchEvent(new CustomEvent(CONVERSATION_FORKED_EVENT, { detail: fork }))
+            showToast(i18n.t('conversation.conversationHistory.forkedToast'))
+            navigate(`/chat/${fork.conversationId}`)
+        } catch (err) {
+            console.error('Failed to fork conversation:', err)
+            showToast(i18n.t('conversation.conversationHistory.forkFailed'))
+        }
+    }, [getAccessTokenSilently, navigate, showToast])
 
     const resetConversation = useCallback(() => {
         navigate('/chat')
@@ -1250,6 +1275,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         generateResponses: generateResponsesStable,
         generateResponsesStream: generateResponsesStreamStable,
         stopGenerating,
+        forkConversation,
         selectedResponseByBlock,
         setSelectedResponseForBlock,
         getSelectedResponseForBlock,
@@ -1275,6 +1301,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         generateResponsesStable,
         generateResponsesStreamStable,
         stopGenerating,
+        forkConversation,
         selectedResponseByBlock,
         setSelectedResponseForBlock,
         getSelectedResponseForBlock,

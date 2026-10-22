@@ -34,7 +34,7 @@ class ConversationProjectTest {
     private val projectRepo = mockk<ProjectRepository>()
     private val service = ConversationManagementService(
         conversationService, conversationRepo, mockk(relaxed = true), projectRepo,
-        mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
+        mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
         com.genflowly.di.AppScope()
     )
 

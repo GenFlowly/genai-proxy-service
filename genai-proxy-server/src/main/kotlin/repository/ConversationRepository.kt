@@ -8,6 +8,7 @@ import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
+import com.genflowly.DynamoDBConstants.PARENT_CONVERSATION_ID_KEY
 import com.genflowly.DynamoDBConstants.PENDING_RUNS_KEY
 import com.genflowly.DynamoDBConstants.PINNED_AT_KEY
 import com.genflowly.DynamoDBConstants.PROJECT_ID_KEY
@@ -52,6 +53,19 @@ data class PendingRun(
 }
 
 /**
+ * The display/lifecycle attributes of a Conversation row that live outside the
+ * thin [Conversation] data class (raw DynamoDB attributes). Read in one GetItem
+ * where several of them are needed together (e.g. forking).
+ */
+data class ConversationAttributes(
+    val title: String? = null,
+    val pinnedAt: String? = null,
+    val archivedAt: String? = null,
+    val projectId: String? = null,
+    val parentConversationId: String? = null
+)
+
+/**
  * Data access for the Conversation and Message tables.
  */
 class ConversationRepository(
@@ -88,6 +102,78 @@ class ConversationRepository(
             logger.error("Failed to Create Conversation in DynamoDB", e)
             throw e
         }
+    }
+
+    /**
+     * Creates the Conversation row of a fork in a single put: unlike the
+     * create-then-update dance of organic conversations (title generated
+     * later, pin set by hand), a fork knows its title, pin state and parent at
+     * birth. Returns the stamped createdAt/updatedAt instant.
+     */
+    suspend fun createForkedConversation(
+        conversation: Conversation,
+        title: String,
+        pinnedAt: String?,
+        parentConversationId: String
+    ): String = withContext(Dispatchers.IO) {
+        try {
+            val now = Instant.now().toString()
+            val item = mutableMapOf(
+                CUSTOMER_ID_KEY to AttributeValue.builder().s(conversation.customerId).build(),
+                CONVERSATION_ID_KEY to AttributeValue.builder().s(conversation.conversationId).build(),
+                "client" to AttributeValue.builder().s(conversation.client).build(),
+                "title" to AttributeValue.builder().s(title).build(),
+                PARENT_CONVERSATION_ID_KEY to AttributeValue.builder().s(parentConversationId).build(),
+                "createdAt" to AttributeValue.builder().s(now).build(),
+                "updatedAt" to AttributeValue.builder().s(now).build()
+            )
+            conversation.projectId?.takeIf { it.isNotBlank() }?.let {
+                item[PROJECT_ID_KEY] = AttributeValue.builder().s(it).build()
+            }
+            pinnedAt?.let {
+                item[PINNED_AT_KEY] = AttributeValue.builder().s(it).build()
+            }
+
+            dynamoDbClient.putItem(
+                PutItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .item(item)
+                    .build()
+            )
+            logger.info("Created forked Conversation ${conversation.conversationId} " +
+                "from $parentConversationId for ${conversation.customerId}")
+            now
+        } catch (e: Exception) {
+            logger.error("Failed to create forked Conversation in DynamoDB", e)
+            throw e
+        }
+    }
+
+    /**
+     * The out-of-data-class attributes of one Conversation row in a single
+     * GetItem. Null when the row doesn't exist.
+     */
+    suspend fun getConversationAttributes(
+        conversationId: String,
+        customerId: String
+    ): ConversationAttributes? = withContext(Dispatchers.IO) {
+        val response = dynamoDbClient.getItem(
+            GetItemRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                ))
+                .build()
+        )
+        val item = response.item()?.takeIf { it.isNotEmpty() } ?: return@withContext null
+        ConversationAttributes(
+            title = item["title"]?.s(),
+            pinnedAt = item[PINNED_AT_KEY]?.s(),
+            archivedAt = item[ARCHIVED_AT_KEY]?.s(),
+            projectId = item[PROJECT_ID_KEY]?.s(),
+            parentConversationId = item[PARENT_CONVERSATION_ID_KEY]?.s()
+        )
     }
 
     /**
@@ -504,12 +590,12 @@ class ConversationRepository(
 
         val response = dynamoDbClient.query(queryBuilder.build())
 
-        // The listing GSI's INCLUDE projection doesn't carry projectId (same
-        // reason the pinned query reads the base table), and changing a GSI
-        // projection means replacing the index. One BatchGetItem on the base
-        // table per page (≤50 keys) fills the gap instead.
+        // The listing GSI's INCLUDE projection carries neither projectId nor
+        // parentConversationId (same reason the pinned query reads the base
+        // table), and changing a GSI projection means replacing the index. One
+        // BatchGetItem on the base table per page (≤50 keys) fills the gap instead.
         val pageConversationIds = response.items().mapNotNull { it[CONVERSATION_ID_KEY]?.s() }
-        val projectIdByConversation: Map<String, String> =
+        val baseRowByConversation: Map<String, Map<String, AttributeValue>> =
             if (pageConversationIds.isEmpty()) emptyMap()
             else dynamoDbClient.batchGetWithRetry(
                 tableName = CONVERSATION_TABLE,
@@ -519,11 +605,13 @@ class ConversationRepository(
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(it).build()
                     )
                 },
-                projectionExpression = "$CONVERSATION_ID_KEY, #pid",
-                expressionAttributeNames = mapOf("#pid" to PROJECT_ID_KEY)
+                projectionExpression = "$CONVERSATION_ID_KEY, #pid, #parent",
+                expressionAttributeNames = mapOf(
+                    "#pid" to PROJECT_ID_KEY,
+                    "#parent" to PARENT_CONVERSATION_ID_KEY
+                )
             ).mapNotNull { item ->
-                val convId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
-                item[PROJECT_ID_KEY]?.s()?.let { convId to it }
+                item[CONVERSATION_ID_KEY]?.s()?.let { it to item }
             }.toMap()
 
         val conversations = response.items().mapNotNull { item ->
@@ -541,7 +629,8 @@ class ConversationRepository(
                 createdAt = createdAt,
                 updatedAt = updatedAt,
                 vendors = vendors,
-                projectId = projectIdByConversation[convId]
+                projectId = baseRowByConversation[convId]?.get(PROJECT_ID_KEY)?.s(),
+                parentConversationId = baseRowByConversation[convId]?.get(PARENT_CONVERSATION_ID_KEY)?.s()
             )
         }
 
@@ -609,7 +698,8 @@ class ConversationRepository(
                     updatedAt = item["updatedAt"]?.s(),
                     pinnedAt = item[PINNED_AT_KEY]?.s(),
                     vendors = vendors,
-                    projectId = item[PROJECT_ID_KEY]?.s()
+                    projectId = item[PROJECT_ID_KEY]?.s(),
+                    parentConversationId = item[PARENT_CONVERSATION_ID_KEY]?.s()
                 )
             }
     }
@@ -713,8 +803,13 @@ class ConversationRepository(
         response.items().mapNotNull { itemToMessage(it) }
     }
 
+    /**
+     * @param preserveCreatedAt keep [Message.createdAt] instead of stamping now —
+     * fork copies must keep the original turn's time, not the fork's.
+     */
     suspend fun createMessage(
-        message: Message
+        message: Message,
+        preserveCreatedAt: Boolean = false
     ) = withContext(Dispatchers.IO) {
         try {
             val item = withTimestamps(
@@ -810,8 +905,15 @@ class ConversationRepository(
                     message.stopReason?.let {
                         map["stopReason"] = AttributeValue.builder().s(it).build()
                     }
+                    message.learnedFactsJson?.let {
+                        map["learnedFactsJson"] = AttributeValue.builder().s(it).build()
+                    }
                 }
-            )
+            ).let { stamped ->
+                if (preserveCreatedAt && message.createdAt != null) {
+                    stamped + ("createdAt" to AttributeValue.builder().s(message.createdAt).build())
+                } else stamped
+            }
 
             val putReq = PutItemRequest.builder()
                 .tableName(MESSAGE_TABLE)

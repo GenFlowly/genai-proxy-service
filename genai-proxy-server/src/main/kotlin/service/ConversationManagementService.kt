@@ -1,9 +1,11 @@
 package com.genflowly.service
 
 import com.genflowly.di.AppScope
+import com.genflowly.models.Conversation
 import com.genflowly.models.RequestType
 import com.genflowly.models.ShareRole
 import com.genflowly.models.api.ConversationSummary
+import com.genflowly.models.api.ForkConversationResponse
 import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ProjectRepository
@@ -13,6 +15,8 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -25,6 +29,7 @@ class ConversationManagementService(
     private val conversationRepository: ConversationRepository,
     private val shareRepository: ShareRepository,
     private val projectRepository: ProjectRepository,
+    private val conversationIndexingService: ConversationIndexingService,
     private val sharedUsersResolver: SharedUsersResolver,
     private val agentResolutionService: AgentResolutionService,
     private val generationAgentExecutor: GenerationAgentExecutor,
@@ -213,6 +218,110 @@ class ConversationManagementService(
     ) {
         requireOwner(conversationId, customerId, action = "unassign-project")
         conversationRepository.removeConversationProject(conversationId, customerId)
+    }
+
+    /**
+     * Forks [conversationId] at [forkAtMessageId]: creates a brand-new
+     * conversation owned by the caller, titled "Forked <source title>",
+     * containing a copy of every message up to and including the fork point —
+     * nothing after it. The parent id is recorded on the new row so the
+     * sidebar can draw the fork tree, and a fork can itself be forked.
+     *
+     * Any read access (owner, direct share, PUBLIC) suffices — a fork only
+     * duplicates content the caller can already see, into the caller's own
+     * account. Pin state and project grouping are per-customer, so they are
+     * inherited only when the caller owns the source.
+     */
+    suspend fun forkConversation(
+        conversationId: String,
+        forkAtMessageId: String,
+        callerCustomerId: String,
+        bearerToken: String? = null
+    ): ForkConversationResponse {
+        val role = conversationService.getConversationRole(conversationId, callerCustomerId)
+            ?: throw ConversationAccessDeniedException("Conversation not found or access denied")
+        val source = conversationRepository.getConversationById(conversationId)
+            ?: throw ConversationAccessDeniedException("Conversation not found")
+        val attributes = conversationRepository.getConversationAttributes(conversationId, source.customerId)
+
+        // Same ordering the history endpoint renders (sequence, with createdAt
+        // breaking the ties racing parallel vendor streams can produce), so
+        // "everything above the fork point" matches what the user saw.
+        val messages = conversationRepository.getMessagesForConversation(conversationId)
+            .sortedWith(compareBy({ it.sequence ?: 0 }, { it.createdAt ?: "" }))
+        val forkIndex = messages.indexOfFirst { it.messageId == forkAtMessageId }
+        require(forkIndex >= 0) { "Message $forkAtMessageId not found in conversation $conversationId" }
+        val toCopy = messages.subList(0, forkIndex + 1)
+
+        val isOwner = role == ShareRole.OWNER
+        val fork = Conversation(
+            customerId = callerCustomerId,
+            client = source.client,
+            projectId = if (isOwner) attributes?.projectId else null
+        )
+        val title = "Forked ${attributes?.title?.trim().takeUnless { it.isNullOrBlank() } ?: "conversation"}"
+            .take(200)
+        val pinnedAt = if (isOwner && attributes?.pinnedAt != null) Instant.now().toString() else null
+        val now = conversationRepository.createForkedConversation(
+            conversation = fork,
+            title = title,
+            pinnedAt = pinnedAt,
+            parentConversationId = conversationId
+        )
+
+        // Fresh message ids so vector-index keys and future stream writes can
+        // never collide with the source's; previousMessageId chains are
+        // remapped onto the new ids. Author customerId is kept as-is so a
+        // forked shared conversation still attributes turns correctly.
+        val newIdByOldId = toCopy.associate { it.messageId to UUID.randomUUID().toString() }
+        for (message in toCopy) {
+            conversationRepository.createMessage(
+                message.copy(
+                    messageId = newIdByOldId.getValue(message.messageId),
+                    conversationId = fork.conversationId,
+                    previousMessageId = message.previousMessageId
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { newIdByOldId[it] }
+                        ?: ""
+                ),
+                preserveCreatedAt = true
+            )
+        }
+        logger.info(
+            "Forked conversation $conversationId at $forkAtMessageId into ${fork.conversationId} " +
+                "(${toCopy.size} of ${messages.size} messages) for $callerCustomerId"
+        )
+
+        // The vector index is keyed by (conversationId, messageId), so the
+        // source's entries don't cover the copies — re-index each copied
+        // exchange under the fork's ids. Fire-and-forget, like the
+        // generation-time indexing.
+        var lastUserText: String? = null
+        for (message in toCopy) {
+            when (message.role) {
+                "user" -> lastUserText = message.text
+                "assistant" -> lastUserText?.let { userText ->
+                    conversationIndexingService.indexExchangeAsync(
+                        customerId = callerCustomerId,
+                        conversationId = fork.conversationId,
+                        client = fork.client,
+                        userText = userText,
+                        responseMessageId = newIdByOldId.getValue(message.messageId),
+                        bearerToken = bearerToken
+                    )
+                }
+            }
+        }
+
+        return ForkConversationResponse(
+            conversationId = fork.conversationId,
+            title = title,
+            parentConversationId = conversationId,
+            projectId = fork.projectId,
+            pinnedAt = pinnedAt,
+            createdAt = now,
+            updatedAt = now
+        )
     }
 
     suspend fun getPinnedConversations(customerId: String): List<ConversationSummary> {
