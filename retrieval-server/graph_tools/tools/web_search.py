@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 _TAVILY_URL = "https://api.tavily.com/search"
 _REQUEST_TIMEOUT_SECONDS = 15.0
 _DEFAULT_MAX_RESULTS = 5
-_MAX_RESULTS_CAP = 10
+# Results beyond ~5 are rarely cited and mostly inflate the context the model
+# re-reads every loop round, so the cap equals the default and max_results is
+# no longer advertised in the schema (still accepted and clamped if passed).
+_MAX_RESULTS_CAP = 5
 _DEFAULT_NEWS_DAYS = 7
 
 
@@ -79,8 +82,10 @@ class WebSearchTool(GraphTool):
         "the search to specific sites, pass include_domains (e.g. "
         "['docs.anthropic.com']) rather than a 'site:' operator inside the query "
         "— the query is matched as plain text, so 'site:' there does not work. "
-        "You may call this more than once to refine or broaden a search before "
-        "answering."
+        "One well-chosen search is usually enough. Search again only if the "
+        "results come back empty or clearly off-target — and then refine the "
+        "query rather than re-running variations of it. Avoid issuing several "
+        "overlapping searches for the same question."
     )
     parameters = {
         "type": "object",
@@ -109,13 +114,9 @@ class WebSearchTool(GraphTool):
                     "raise it for slower-moving stories."
                 ),
             },
-            "max_results": {
-                "type": "integer",
-                "description": (
-                    f"How many results to return (default {_DEFAULT_MAX_RESULTS}, "
-                    f"max {_MAX_RESULTS_CAP})."
-                ),
-            },
+            # max_results is deliberately NOT advertised: models asked for the
+            # cap whenever offered one. run() still clamps a value a model
+            # passes anyway.
             "include_domains": {
                 "type": "array",
                 "items": {"type": "string"},

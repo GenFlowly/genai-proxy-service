@@ -123,7 +123,7 @@ class WebSearchToolTest(unittest.IsolatedAsyncioTestCase):
         payload = search.await_args.args[0]
         self.assertEqual(payload["topic"], "news")
         self.assertEqual(payload["days"], 7)  # default news window
-        self.assertEqual(payload["max_results"], 10)  # clamped to cap
+        self.assertEqual(payload["max_results"], 5)  # clamped to cap
 
     async def test_general_topic_omits_days(self):
         tool = WebSearchTool()
@@ -254,6 +254,9 @@ class WebSearchRegistrationTest(unittest.TestCase):
         self.assertEqual(spec["name"], "web_search")
         self.assertIn("query", spec["parameters"]["properties"])
         self.assertEqual(spec["parameters"]["required"], ["query"])
+        # Deliberately unadvertised — models asked for the cap whenever the
+        # schema offered one (run() still clamps a value passed anyway).
+        self.assertNotIn("max_results", spec["parameters"]["properties"])
 
 
 if __name__ == "__main__":

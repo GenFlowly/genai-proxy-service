@@ -32,8 +32,10 @@ class _Recorder(GraphTool):
         self._sources = sources or []
         self.seen_context: ToolContext | None = None
         self.seen_args: dict | None = None
+        self.run_count = 0
 
     async def run(self, args: dict, context: ToolContext) -> ToolResult:
+        self.run_count += 1
         self.seen_args = args
         self.seen_context = context
         if self._raises:
@@ -487,6 +489,87 @@ class FailureTests(unittest.IsolatedAsyncioTestCase):
         call = out["trace"][0]["calls"][0]
         self.assertEqual(call["error"], "upstream down")
         self.assertEqual(call["sources"], [])
+
+
+class SearchBudgetTests(unittest.IsolatedAsyncioTestCase):
+    """Per-turn web_search budget: fan-out beyond the budget is answered with
+    guidance instead of an API call; over-budget rounds keep exactly one
+    "refine and retry" search; the running total rides scratch."""
+
+    @staticmethod
+    def _searches(n, start=1):
+        return [{"id": str(i), "name": "web_search", "args": {"query": f"q{i}"}}
+                for i in range(start, start + n)]
+
+    async def test_fan_out_beyond_budget_is_skipped_with_guidance(self):
+        tool = _Recorder("web_search")
+        out = await _run(_state(self._searches(5), ["web_search"]), [tool])
+
+        self.assertEqual(tool.run_count, 3)
+        contents = [m["content"] for m in out["loop_messages"][1:]]
+        self.assertEqual(contents[:3], ["web_search ran"] * 3)
+        for skipped in contents[3:]:
+            self.assertIn("Web search skipped", skipped)
+            self.assertIn("ONE refined query", skipped)
+        self.assertEqual(out["scratch"]["web_search_calls"], 3)
+        # Skipped calls still answer their tool_call ids — no dangling pairs.
+        self.assertEqual(len(contents), 5)
+
+    async def test_over_budget_round_runs_one_grace_search_with_note(self):
+        tool = _Recorder("web_search")
+        state = _state(self._searches(2), ["web_search"])
+        state["scratch"] = {"web_search_calls": 3}
+        out = await _run(state, [tool])
+
+        self.assertEqual(tool.run_count, 1)
+        contents = [m["content"] for m in out["loop_messages"][1:]]
+        self.assertIn("web_search ran", contents[0])
+        self.assertIn("Consolidate", contents[0])  # the appended note
+        self.assertIn("Web search skipped", contents[1])
+        self.assertEqual(out["scratch"]["web_search_calls"], 4)
+
+    async def test_round_crossing_the_boundary_gets_no_grace_search(self):
+        # prior=2, budget=3: the first call lands within budget, and the round
+        # gets NO grace — the model issued the rest before seeing any budget
+        # message, so they are unrefined duplicates by construction.
+        tool = _Recorder("web_search")
+        state = _state(self._searches(3), ["web_search"])
+        state["scratch"] = {"web_search_calls": 2}
+        out = await _run(state, [tool])
+
+        self.assertEqual(tool.run_count, 1)
+        contents = [m["content"] for m in out["loop_messages"][1:]]
+        self.assertEqual(contents[0], "web_search ran")  # within budget, no note
+        self.assertIn("Web search skipped", contents[1])
+        self.assertIn("Web search skipped", contents[2])
+        self.assertEqual(out["scratch"]["web_search_calls"], 3)
+
+    async def test_budget_is_configurable_via_node_config(self):
+        tool = _Recorder("web_search")
+        state = _state(self._searches(2), ["web_search"])
+        state["node_configs"] = {"node-1": {"max_web_searches": 1}}
+        out = await _run(state, [tool])
+
+        self.assertEqual(tool.run_count, 1)
+        self.assertEqual(out["scratch"]["web_search_calls"], 1)
+
+    async def test_other_tools_are_never_budgeted(self):
+        search = _Recorder("web_search")
+        other = _Recorder("search_knowledge_base")
+        state = _state(
+            self._searches(1) + [{"id": "9", "name": "search_knowledge_base", "args": {}}],
+            ["web_search", "search_knowledge_base"],
+        )
+        state["scratch"] = {"web_search_calls": 7}  # far over budget
+        out = await _run(state, [search, other])
+
+        self.assertEqual(other.run_count, 1)
+        contents = [m["content"] for m in out["loop_messages"][1:]]
+        self.assertEqual(contents[1], "search_knowledge_base ran")
+
+    async def test_turn_without_searches_leaves_scratch_counter_untouched(self):
+        out = await _run(_state([{"id": "1", "name": "t"}], ["t"]), [_Recorder("t")])
+        self.assertNotIn("web_search_calls", out["scratch"])
 
 
 if __name__ == "__main__":

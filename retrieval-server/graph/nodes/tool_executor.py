@@ -30,6 +30,7 @@ from encoding_library.observability import count, observe
 from graph.state import RetrievalState
 from graph.tool_credentials import resolve_tool_credentials, secrets_accessor
 from graph.tools_runtime import credential_refs_for, make_tool_context, tools_for
+from graph_tools.base import ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,41 @@ _FS_PREFIX_TEMPLATE = "customers/{customer_id}/agent-fs/{namespace}/"
 # spilled: full content to the scratch FS, a structure-preserving excerpt into
 # loop_messages. Bounds per-round context growth AND checkpoint size.
 _DEFAULT_MAX_TOOL_RESULT_CHARS = 8_000
+
+# Per-turn web-search budget (node config "max_web_searches"). Searches within
+# budget run as issued. Once the turn's running total (scratch
+# "web_search_calls", which survives durable resume) reaches it, fan-out stops
+# paying: each LATER round still executes ONE web_search — so "refine and
+# retry" always works and the model is never hard-stopped — while every other
+# search call in that round is answered with the guidance below instead of
+# hitting the search API. A round that crosses the boundary mid-round gets no
+# such grace call: the model issued those parallel calls before seeing any
+# budget message, so the extras are unrefined duplicates by construction. The
+# worst case is budget + one search per remaining round, bounded by the
+# graph's iteration limit — versus the unbounded N-per-round fan-out
+# aggressive models otherwise produce.
+_DEFAULT_MAX_WEB_SEARCHES = 3
+_WEB_SEARCH_TOOL = "web_search"
+
+
+def _search_budget_skip_message(total: int) -> str:
+    """Returned INSTEAD of search results once the budget is spent and the
+    round's single grace search (if any) is taken."""
+    return (
+        f"Web search skipped — this turn has already used {total} web "
+        "search(es). Review the results you already have before searching "
+        "again. If a specific fact is still missing, issue ONE refined query "
+        "naming exactly that fact — a single refined search per round will run."
+    )
+
+
+def _search_budget_note(total: int) -> str:
+    """Appended to the results of an over-budget search that did run."""
+    return (
+        f"\n\n[Note: this turn has now used {total} web search(es). "
+        "Consolidate — answer from the results you have unless a specific "
+        "fact is still missing.]"
+    )
 
 _USAGE_KEYS = (
     "input_tokens", "output_tokens", "total_tokens",
@@ -181,6 +217,37 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     fs_prefix = _FS_PREFIX_TEMPLATE.format(customer_id=customer_id, namespace=fs_namespace)
     agent_depth = int(state.get("agent_depth") or 0)
 
+    # Web-search budget: decide per call, in the model's call order, BEFORE
+    # dispatch — deterministic regardless of concurrent execution order.
+    # "run" executes normally, "note" executes with a consolidation note
+    # appended (the one over-budget grace search a fresh round is allowed),
+    # "skip" never reaches the search API and returns guidance instead.
+    search_budget = int(config.get("max_web_searches") or _DEFAULT_MAX_WEB_SEARCHES)
+    prior_searches = int(scratch_state.get("web_search_calls") or 0)
+    grace_available = prior_searches >= search_budget
+    searches_run = 0
+    call_modes: list[str] = []
+    for call in builtin_calls:
+        if call.get("name") != _WEB_SEARCH_TOOL:
+            call_modes.append("run")
+        elif prior_searches + searches_run < search_budget:
+            call_modes.append("run")
+            searches_run += 1
+        elif grace_available:
+            call_modes.append("note")
+            searches_run += 1
+            grace_available = False
+        else:
+            call_modes.append("skip")
+    searches_after_round = prior_searches + searches_run
+    if "skip" in call_modes:
+        logger.info(
+            "Node tool_executor: web-search budget (%d) reached for customer=%s — "
+            "%d of %d search call(s) skipped this round",
+            search_budget, customer_id,
+            call_modes.count("skip"), call_modes.count("skip") + searches_run,
+        )
+
     # Resolve every credential this turn needs in one pass, off the event loop
     # (DynamoDB + KMS through boto3 are blocking, and this process serves every
     # tenant on a single loop). A failure here must not abort the turn: tools
@@ -248,15 +315,22 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     # with no query, no per-call source attribution).
     calls_trace: list[dict] = []
 
-    async def _run_one(call: dict):
+    async def _run_one(call: dict, mode: str = "run"):
         """Execute one call with per-call error isolation. Returns
         (result | None, error | None) — never raises, so one failing tool can
-        neither stop the others nor abort the turn."""
+        neither stop the others nor abort the turn. mode "skip" short-circuits
+        a budget-exhausted web_search without touching the search API; "note"
+        executes but appends the consolidation note to the result."""
         name = call.get("name", "")
+        if mode == "skip":
+            count("tool_execution_total", status="budget_skipped", tool=name)
+            return ToolResult(content=_search_budget_skip_message(searches_after_round)), None
         start = time.perf_counter()
         try:
             result = await by_name[name].run(call.get("args") or {}, context)
             count("tool_execution_total", status="ok", tool=name)
+            if mode == "note":
+                result.content = (result.content or "") + _search_budget_note(searches_after_round)
             return result, None
         except Exception as e:
             count("tool_execution_total", status="error", tool=name)
@@ -279,9 +353,11 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     except Exception:
         durable = False
     if durable:
-        outcomes = [await _run_one(c) for c in builtin_calls]
+        outcomes = [await _run_one(c, m) for c, m in zip(builtin_calls, call_modes)]
     else:
-        outcomes = await asyncio.gather(*(_run_one(c) for c in builtin_calls))
+        outcomes = await asyncio.gather(
+            *(_run_one(c, m) for c, m in zip(builtin_calls, call_modes))
+        )
 
     # Accumulated across the round, merged into the update once at the end.
     round_scratch: dict = {}
@@ -361,6 +437,10 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         round_scratch["fs_files"] = {
             **(scratch_state.get("fs_files") or {}), **round_scratch["fs_files"],
         }
+    if searches_run:
+        # Running per-turn search total, read back by the next round's budget
+        # planning. Written AFTER tool state_patches so no tool can reset it.
+        round_scratch["web_search_calls"] = searches_after_round
     scratch_update = {"fs_namespace": fs_namespace, **round_scratch}
     trace_entry = {
         "node": "TOOL_EXECUTOR",
