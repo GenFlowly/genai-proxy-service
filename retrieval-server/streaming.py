@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from typing import Any, AsyncIterator, Optional
 
@@ -8,6 +9,40 @@ from graph.image_normalize import ImageNormalizationError
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
+
+# Same marker shape the client's linkifyCitations matches (Response.tsx).
+_CITATION_MARKER = re.compile(r"\[(\d{1,3})\]")
+
+
+def _cited_web_sources(sources: list, answer: str) -> Optional[list]:
+    """The subset of `sources` the final answer actually cites — or None when
+    no trimming event should be emitted.
+
+    Models search broadly but cite narrowly, so the mid-turn web_sources
+    snapshots (every result of every search) are mostly noise by the time the
+    answer exists. Consumers treat web_sources as last-write-wins (the client
+    replaces its list, the proxy persists the last event), so one trimmed
+    event at end of turn is all it takes to show/persist only cited entries —
+    while the thinking trace keeps every per-call result for debugging.
+
+    Original `index` values are preserved: the client resolves [n] markers via
+    each entry's index field, never array position, so gaps are fine and the
+    already-streamed answer text needs no rewriting.
+
+    None (emit nothing, the full list stands) when: there are no sources; the
+    answer carries no [n] markers at all — a model that searched but cited
+    nothing keeps full provenance; the markers match no entry (stray
+    numbering — a full list beats an empty one); or nothing would be trimmed.
+    """
+    if not sources or not answer:
+        return None
+    cited = {int(n) for n in _CITATION_MARKER.findall(answer)}
+    if not cited:
+        return None
+    trimmed = [s for s in sources if s.get("index") in cited]
+    if not trimmed or len(trimmed) == len(sources):
+        return None
+    return trimmed
 
 # Runtime primitive of a node type — drives the thinking panel's icon/verbs.
 # (substring set, error_type, user-facing label) — checked in order, first
@@ -292,6 +327,10 @@ async def stream_events_dicts(
         logger.info("Stream: resuming astream_events (Command) streaming_nodes=%s", streaming_nodes)
     token_count = 0
     event_count = 0
+    # Final-answer accumulator + last emitted web_sources snapshot, for the
+    # end-of-turn cited-only trimming event (see _cited_web_sources).
+    answer_parts: list[str] = []
+    last_web_sources: list = []
     usage = {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -368,6 +407,7 @@ async def stream_events_dicts(
                         # unchanged.
                         tool_sources = output.get("tool_sources") or []
                         if tool_sources:
+                            last_web_sources = tool_sources
                             yield {"web_sources": tool_sources}
                     # Structured output: the guaranteed-JSON response arrives as
                     # one content chunk when the generator node completes.
@@ -378,6 +418,7 @@ async def stream_events_dicts(
                                 thinking_duration_ms = int((time.monotonic() - request_start) * 1000)
                                 yield {"thinking_duration_ms": thinking_duration_ms}
                             token_count += 1
+                            answer_parts.append(content)
                             yield {"content": content}
 
             if event_type == "on_chat_model_start":
@@ -428,6 +469,7 @@ async def stream_events_dicts(
                         # buffer and the client clears the visible text. The
                         # preamble itself is preserved in the thinking step's
                         # `reasoning` field, so nothing is lost from the panel.
+                        answer_parts.clear()
                         yield {"content_reset": True}
                     if not raw_tool_calls:
                         # This round produced no tool calls, so it terminates the
@@ -462,6 +504,7 @@ async def stream_events_dicts(
                         logger.info("Stream: thinking phase took %d ms", thinking_duration_ms)
                         yield {"thinking_duration_ms": thinking_duration_ms}
                     token_count += 1
+                    answer_parts.append(chunk.content)
                     yield {"content": chunk.content}
 
         logger.info(
@@ -477,6 +520,17 @@ async def stream_events_dicts(
             usage["input_tokens"], usage["output_tokens"], usage["total_tokens"],
             usage["cache_read_tokens"], usage["cache_creation_tokens"], usage["reasoning_tokens"],
         )
+        # Turn complete — replace the full web_sources snapshot with the cited
+        # subset (last-write-wins downstream: live panel trims, proxy persists
+        # only these). Skipped on the error path above: a partial answer keeps
+        # the full list.
+        trimmed_sources = _cited_web_sources(last_web_sources, "".join(answer_parts))
+        if trimmed_sources is not None:
+            logger.info(
+                "Stream: trimming web_sources to cited entries — %d → %d",
+                len(last_web_sources), len(trimmed_sources),
+            )
+            yield {"web_sources": trimmed_sources}
         yield {"usage": usage}
     except Exception as e:
         # The HTTP status is already 200 by now — this counter is the only
