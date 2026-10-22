@@ -129,9 +129,11 @@ async def run_subagent(
 ) -> dict:
     """Run one child loop to completion.
 
-    Returns {"content", "usage", "trace", "artifacts", "error"} — never
-    raises, so a failed child becomes an actionable tool result for the
-    parent model rather than an aborted parent turn.
+    Returns {"content", "usage", "trace", "artifacts", "sources", "error"} —
+    never raises, so a failed child becomes an actionable tool result for the
+    parent model rather than an aborted parent turn. "sources" is the child's
+    accumulated tool_sources ({index, title, url} with CHILD-local indices);
+    the spawn tool folds them into the parent's turn-global numbering.
     """
     tools = [t for t in (profile.get("tools") or DEFAULT_SUBAGENT_TOOLS) if t]
     if depth >= MAX_DEPTH:
@@ -233,6 +235,7 @@ async def run_subagent(
             "usage": None,
             "trace": [],
             "artifacts": [],
+            "sources": [],
             "error": f"{type(e).__name__}: {e}",
         }
     logger.info(
@@ -243,5 +246,6 @@ async def run_subagent(
         "usage": result.get("usage"),
         "trace": result.get("trace") or [],
         "artifacts": result.get("generated_artifacts") or [],
+        "sources": result.get("tool_sources") or [],
         "error": result.get("error"),
     }
