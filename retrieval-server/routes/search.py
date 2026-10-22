@@ -7,7 +7,12 @@ from content_logging import redact
 from encoding_library.observability import count, track
 from encoding_library.utils.embedding_utils import create_embeddings
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
-from encoding_library.utils.vector_db import collection_data_type, customer_filter, get_milvus_client
+from encoding_library.utils.vector_db import (
+    collection_data_type,
+    customer_filter,
+    escape_filter_value,
+    get_milvus_client,
+)
 from graph.nodes.retrieval import _get_cached_embedding_model
 
 logger = logging.getLogger(__name__)
@@ -50,6 +55,33 @@ class SearchRequest(BaseModel):
     # Data types to search (e.g. ["conversation", "notes"]); None = everything
     types: list[str] | None = None
     similarity_threshold: float = 0.0
+    # Per-type allow-list of group-key values, e.g.
+    # {"instructions": ["INS-1", "INS-2"]}. A listed type is matched by group
+    # key INSTEAD of by the caller's customer_id — the caller owns access
+    # control there, and the rows may live under other customers' partitions
+    # (shared items are indexed once, under their creator). An empty list means
+    # the caller can access nothing of that type. Unlisted types keep the
+    # customer_id scope.
+    allowed_keys: dict[str, list[str]] | None = None
+
+
+def _row_filter(req: SearchRequest, data_type: str) -> str | None:
+    """
+    Milvus row filter for one collection: the caller's own partition by
+    default; types listed in allowed_keys are matched by group key instead
+    (losing partition pruning — the allow-list IS the access control).
+    None means nothing can match — skip the collection. Types without a
+    group field can't be key-filtered, so an allow-list on them skips too
+    rather than silently widening to customer scope.
+    """
+    allowed = (req.allowed_keys or {}).get(data_type)
+    if allowed is None:
+        return customer_filter(req.customer_id)
+    group_field = _GROUP_FIELD_BY_TYPE.get(data_type)
+    if not group_field or not allowed:
+        return None
+    quoted = ", ".join(f'"{escape_filter_value(key)}"' for key in allowed)
+    return f"{group_field} in [{quoted}]"
 
 
 def _snippet(entity: dict) -> str:
@@ -76,8 +108,11 @@ async def search(req: SearchRequest):
 
     wanted_types = {t.strip().lower() for t in req.types} if req.types else None
     logger.info(
-        "Unified search — customer=%s types=%s query='%s'",
-        req.customer_id, sorted(wanted_types) if wanted_types else "all", redact(req.query, 100),
+        "Unified search — customer=%s types=%s allowed_keys=%s query='%s'",
+        req.customer_id,
+        sorted(wanted_types) if wanted_types else "all",
+        {t: len(keys) for t, keys in req.allowed_keys.items()} if req.allowed_keys else None,
+        redact(req.query, 100),
     )
 
     try:
@@ -86,12 +121,15 @@ async def search(req: SearchRequest):
         # Group the shared collections by embedding model (from the
         # collection-description metadata) so the query is embedded once per
         # distinct model — same convention as the RAG retrieval node.
-        grouped: dict[tuple[str, str], list[tuple[str, str]]] = {}
+        grouped: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
         for name in client.list_collections():
             data_type = collection_data_type(name)
             if data_type is None:
                 continue
             if wanted_types is not None and data_type not in wanted_types:
+                continue
+            row_filter = _row_filter(req, data_type)
+            if row_filter is None:
                 continue
             model = resolve_model(None, None)
             try:
@@ -100,7 +138,7 @@ async def search(req: SearchRequest):
                     model = resolve_model(meta.get("model_type"), meta.get("model_name"))
             except Exception as e:
                 logger.warning("Could not read metadata for collection '%s': %s", name, e)
-            grouped.setdefault(model, []).append((name, data_type))
+            grouped.setdefault(model, []).append((name, data_type, row_filter))
 
         if not grouped:
             logger.info("No matching collections for customer %s", req.customer_id)
@@ -117,12 +155,13 @@ async def search(req: SearchRequest):
                 continue
             query_vector = query_embeddings[0].get("vector")
 
-            for collection_name, data_type in collections:
+            for collection_name, data_type, row_filter in collections:
                 search_res = client.search(
                     collection_name=collection_name,
                     data=[query_vector],
-                    # Shared collection: scope to this customer's rows.
-                    filter=customer_filter(req.customer_id),
+                    # Customer partition by default; allow-listed types match
+                    # by group key across partitions (see _row_filter).
+                    filter=row_filter,
                     limit=_CHUNK_SEARCH_LIMIT,
                     output_fields=_OUTPUT_FIELDS,
                 )
