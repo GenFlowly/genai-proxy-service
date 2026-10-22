@@ -15,6 +15,7 @@ import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.PendingRun
 import com.genflowly.repository.ProjectRepository
 import com.genflowly.repository.ShareRepository
+import com.genflowly.utils.MemoryRedaction
 import org.slf4j.LoggerFactory
 
 class ConversationAccessDeniedException(message: String) : Exception(message)
@@ -131,6 +132,13 @@ class ConversationService(
                     if (nextMsg.role == "assistant") {
                         val config = nextMsg.aiConfig.firstOrNull()
                         val vendor = config?.aiVendor?.name
+                        // Memory privacy: the MEMORY thinking step and the learned
+                        // facts carry the turn author's actual memory texts
+                        // (assistant messages inherit the author's customerId).
+                        // Only that author gets the contents; every other viewer —
+                        // owner reading a recipient's turn, share recipients,
+                        // PUBLIC/logged-out — gets counts only.
+                        val viewerIsAuthor = nextMsg.customerId == customerId
                         responses.add(
                             GenerateTextResponse(
                                 text = nextMsg.text,
@@ -149,10 +157,10 @@ class ConversationService(
                                 stopReason = nextMsg.stopReason,
                                 thinkingSteps = nextMsg.thinkingStepsJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
-                                },
-                                learnedFacts = nextMsg.learnedFactsJson?.let {
+                                }?.let { if (viewerIsAuthor) it else MemoryRedaction.redactThinkingSteps(it) },
+                                learnedFacts = if (viewerIsAuthor) nextMsg.learnedFactsJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
-                                },
+                                } else null,
                                 webSources = nextMsg.webSourcesJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
                                 },
