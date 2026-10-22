@@ -44,12 +44,17 @@ fun Route.registerToolCredentialsRoutes(
             val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
             val request = call.receive<StoreToolCredentialsRequest>()
             logger.info("Storing tool credentials for customerId={} toolType={}", customerId, request.toolType)
-            val response = customerCredentialsService.storeToolCredentials(
-                customerId = customerId,
-                toolType = request.toolType,
-                authType = request.authType,
-                credentials = request.credentials,
-            )
+            val response = try {
+                customerCredentialsService.storeToolCredentials(
+                    customerId = customerId,
+                    toolType = request.toolType,
+                    authType = request.authType,
+                    credentials = request.credentials,
+                    settings = request.settings,
+                )
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(HttpStatusCode.BadRequest, e.message ?: "Invalid request")
+            }
             call.respond(response)
         }
 

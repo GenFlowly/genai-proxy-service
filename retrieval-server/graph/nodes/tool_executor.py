@@ -29,7 +29,7 @@ import uuid
 
 from encoding_library.observability import count, observe
 from graph.state import RetrievalState
-from graph.tool_credentials import resolve_tool_credentials, secrets_accessor
+from graph.tool_credentials import resolve_tool_credentials_and_settings, secrets_accessor
 from graph.tools_runtime import credential_refs_for, make_tool_context, tools_for
 from graph_tools.base import ToolResult
 
@@ -57,6 +57,43 @@ _DEFAULT_MAX_TOOL_RESULT_CHARS = 8_000
 # aggressive models otherwise produce.
 _DEFAULT_MAX_WEB_SEARCHES = 3
 _WEB_SEARCH_TOOL = "web_search"
+# Must match WebSearchTool.credential_ref — the key under which the tool's
+# credentials AND its customer settings live in CustomerToolCredentials.
+_WEB_SEARCH_CREDENTIAL_REF = "WEB_SEARCH"
+
+# HARD per-turn ceiling above which even the grace search is denied — the
+# vendor-style cap (Anthropic max_uses / OpenAI max_tool_calls). Customer-set
+# in Settings → Tools → Web Search (stored as the WEB_SEARCH item's settings
+# "max_searches_per_turn", written by the proxy's tool-credentials API), node
+# config "max_web_searches_hard" as fallback, then this default. Clamped so a
+# malformed stored value can never disable search outright.
+_DEFAULT_MAX_WEB_SEARCHES_HARD = 5
+_HARD_CAP_BOUNDS = (1, 20)
+# Keep in sync with the proxy's CustomerCredentialsService validation and the
+# react app's WebSearchToolSettings card.
+_MAX_SEARCHES_SETTING = "max_searches_per_turn"
+
+
+def _hard_search_cap(config: dict, web_search_settings: dict | None) -> int:
+    raw = (web_search_settings or {}).get(_MAX_SEARCHES_SETTING)
+    if raw is None:
+        raw = config.get("max_web_searches_hard")
+    try:
+        cap = int(raw) if raw is not None else _DEFAULT_MAX_WEB_SEARCHES_HARD
+    except (TypeError, ValueError):
+        cap = _DEFAULT_MAX_WEB_SEARCHES_HARD
+    return max(_HARD_CAP_BOUNDS[0], min(cap, _HARD_CAP_BOUNDS[1]))
+
+
+def _search_budget_exhausted_message(cap: int) -> str:
+    """Returned once the HARD cap is hit — terminal for the turn, phrased like
+    the Tavily 432 handling so the model stops calling instead of retrying."""
+    return (
+        f"Web search is no longer available this turn: the per-message search "
+        f"limit ({cap}) has been reached. Do not call web_search again — "
+        "further calls will not run. Answer now from the results you already "
+        "have, noting any gaps."
+    )
 
 
 def _search_budget_skip_message(total: int) -> str:
@@ -240,48 +277,20 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     fs_prefix = _FS_PREFIX_TEMPLATE.format(customer_id=customer_id, namespace=fs_namespace)
     agent_depth = int(state.get("agent_depth") or 0)
 
-    # Web-search budget: decide per call, in the model's call order, BEFORE
-    # dispatch — deterministic regardless of concurrent execution order.
-    # "run" executes normally, "note" executes with a consolidation note
-    # appended (the one over-budget grace search a fresh round is allowed),
-    # "skip" never reaches the search API and returns guidance instead.
-    search_budget = int(config.get("max_web_searches") or _DEFAULT_MAX_WEB_SEARCHES)
-    prior_searches = int(scratch_state.get("web_search_calls") or 0)
-    grace_available = prior_searches >= search_budget
-    searches_run = 0
-    call_modes: list[str] = []
-    for call in builtin_calls:
-        if call.get("name") != _WEB_SEARCH_TOOL:
-            call_modes.append("run")
-        elif prior_searches + searches_run < search_budget:
-            call_modes.append("run")
-            searches_run += 1
-        elif grace_available:
-            call_modes.append("note")
-            searches_run += 1
-            grace_available = False
-        else:
-            call_modes.append("skip")
-    searches_after_round = prior_searches + searches_run
-    if "skip" in call_modes:
-        logger.info(
-            "Node tool_executor: web-search budget (%d) reached for customer=%s — "
-            "%d of %d search call(s) skipped this round",
-            search_budget, customer_id,
-            call_modes.count("skip"), call_modes.count("skip") + searches_run,
-        )
-
     # Resolve every credential this turn needs in one pass, off the event loop
     # (DynamoDB + KMS through boto3 are blocking, and this process serves every
     # tenant on a single loop). A failure here must not abort the turn: tools
     # degrade on an empty credential map, so the model still gets an answer it
-    # can act on.
+    # can act on. The same read carries each tool's plain per-customer settings
+    # (Settings → Tools), consumed by the budget planning below — on failure
+    # they fall back to defaults like the credentials do.
     refs = credential_refs_for(by_name[c["name"]] for c in builtin_calls)
     resolved: dict[str, dict] = {}
+    tool_settings: dict[str, dict] = {}
     if refs:
         try:
-            resolved = await asyncio.to_thread(
-                resolve_tool_credentials, customer_id, refs
+            resolved, tool_settings = await asyncio.to_thread(
+                resolve_tool_credentials_and_settings, customer_id, refs
             )
         except Exception as e:
             count("tool_credential_resolution_total", status="error")
@@ -292,6 +301,43 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             )
         else:
             count("tool_credential_resolution_total", status="ok")
+
+    # Web-search budget: decide per call, in the model's call order, BEFORE
+    # dispatch — deterministic regardless of concurrent execution order.
+    # "run" executes normally, "note" executes with a consolidation note
+    # appended (the one over-budget grace search a fresh round is allowed),
+    # "skip" never reaches the search API and returns refine guidance, and
+    # "exhausted" — past the HARD cap — returns a terminal message with no
+    # grace at all, the vendor-style ceiling for pathological loops.
+    search_budget = int(config.get("max_web_searches") or _DEFAULT_MAX_WEB_SEARCHES)
+    hard_search_cap = _hard_search_cap(config, tool_settings.get(_WEB_SEARCH_CREDENTIAL_REF))
+    prior_searches = int(scratch_state.get("web_search_calls") or 0)
+    grace_available = prior_searches >= search_budget
+    searches_run = 0
+    call_modes: list[str] = []
+    for call in builtin_calls:
+        if call.get("name") != _WEB_SEARCH_TOOL:
+            call_modes.append("run")
+        elif prior_searches + searches_run >= hard_search_cap:
+            call_modes.append("exhausted")
+        elif prior_searches + searches_run < search_budget:
+            call_modes.append("run")
+            searches_run += 1
+        elif grace_available:
+            call_modes.append("note")
+            searches_run += 1
+            grace_available = False
+        else:
+            call_modes.append("skip")
+    searches_after_round = prior_searches + searches_run
+    denied = call_modes.count("skip") + call_modes.count("exhausted")
+    if denied:
+        logger.info(
+            "Node tool_executor: web-search budget (soft=%d hard=%d) reached for "
+            "customer=%s — %d of %d search call(s) denied this round (%d exhausted)",
+            search_budget, hard_search_cap, customer_id,
+            denied, denied + searches_run, call_modes.count("exhausted"),
+        )
 
     context = make_tool_context(customer_id, secrets=secrets_accessor(resolved))
 
@@ -345,6 +391,9 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         a budget-exhausted web_search without touching the search API; "note"
         executes but appends the consolidation note to the result."""
         name = call.get("name", "")
+        if mode == "exhausted":
+            count("tool_execution_total", status="budget_exhausted", tool=name)
+            return ToolResult(content=_search_budget_exhausted_message(hard_search_cap)), None
         if mode == "skip":
             count("tool_execution_total", status="budget_skipped", tool=name)
             return ToolResult(content=_search_budget_skip_message(searches_after_round)), None

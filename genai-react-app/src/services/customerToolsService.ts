@@ -102,6 +102,8 @@ export interface ToolCredentialStatus {
     authType: string
     connected: boolean
     connectedAt?: string | null
+    /** Plain non-secret per-tool config, e.g. WEB_SEARCH's max_searches_per_turn. */
+    settings?: Record<string, string> | null
 }
 
 export interface GetToolCredentialStatusListResponse {
@@ -111,7 +113,10 @@ export interface GetToolCredentialStatusListResponse {
 export interface StoreToolCredentialsRequest {
     toolType: string
     authType: string
-    credentials: Record<string, string>
+    /** Omit to update settings only — stored credentials are left untouched. */
+    credentials?: Record<string, string>
+    /** Omit to update credentials only — stored settings are left untouched. */
+    settings?: Record<string, string>
 }
 
 export interface StoreToolCredentialsResponse {

@@ -27,6 +27,11 @@ private val logger = KotlinLogging.logger {}
 // is echoed back to the client.
 private const val VALIDATION_DETAIL_MAX_CHARS = 300
 
+/** WEB_SEARCH settings key: hard per-message web-search limit. Name and the
+ * 1..20 bounds must stay in sync with the retrieval-server's tool_executor
+ * and the react app's WebSearchToolSettings card. */
+private const val MAX_SEARCHES_SETTING = "max_searches_per_turn"
+
 class CustomerCredentialsService(
     private val kmsProvider: KMSProvider,
     private val customerCredentialsRepository: CustomerCredentialsRepository,
@@ -354,19 +359,52 @@ class CustomerCredentialsService(
         customerId: String,
         toolType: String,
         authType: String,
-        credentials: Map<String, String>,
+        credentials: Map<String, String>?,
+        settings: Map<String, String>? = null,
     ): StoreToolCredentialsResponse {
-        val credentialsJson = Json.encodeToString(credentials)
-        val encrypted = kmsProvider.encrypt(credentialsJson)
-        customerCredentialsRepository.saveCustomerToolCredentials(customerId, toolType, authType, encrypted)
+        require(!credentials.isNullOrEmpty() || settings != null) {
+            "Provide credentials and/or settings"
+        }
+        settings?.let { validateToolSettings(it) }
+        val encrypted = credentials?.takeIf { it.isNotEmpty() }
+            ?.let { kmsProvider.encrypt(Json.encodeToString(it)) }
+        val settingsJson = settings?.let { Json.encodeToString(it) }
+        customerCredentialsRepository.saveCustomerToolCredentials(
+            customerId, toolType, authType, encrypted, settingsJson
+        )
+        // Read back so `connected` reflects what is actually stored — a
+        // settings-only save on an item with no key must not report connected.
+        val item = customerCredentialsRepository.getCustomerToolCredentials(customerId, toolType)
         return StoreToolCredentialsResponse(
             toolCredentialStatus = ToolCredentialStatus(
                 toolType = toolType,
-                authType = authType,
-                connected = true,
+                authType = item?.get("authType")?.s() ?: authType,
+                connected = !item?.get("credentials")?.s().isNullOrBlank(),
+                connectedAt = item?.get("createdAt")?.s(),
+                settings = parseToolSettings(item?.get(com.genflowly.DynamoDBConstants.TOOL_SETTINGS_KEY)?.s()),
             )
         )
     }
+
+    /**
+     * Plain non-secret per-tool config. Only known keys are validated;
+     * unknown keys pass through so a newer client is never rejected by an
+     * older server. Bounds must stay in sync with the retrieval-server's
+     * tool_executor (_HARD_CAP_BOUNDS) and the Settings → Tools card.
+     */
+    private fun validateToolSettings(settings: Map<String, String>) {
+        settings[MAX_SEARCHES_SETTING]?.let { raw ->
+            val n = raw.toIntOrNull()
+            require(n != null && n in 1..20) {
+                "$MAX_SEARCHES_SETTING must be an integer between 1 and 20"
+            }
+        }
+    }
+
+    private fun parseToolSettings(json: String?): Map<String, String>? =
+        json?.takeIf { it.isNotBlank() }?.let {
+            runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrNull()
+        }
 
     suspend fun getToolCredentials(customerId: String, toolType: String): Map<String, String>? {
         val item = customerCredentialsRepository.getCustomerToolCredentials(customerId, toolType) ?: return null
@@ -382,6 +420,7 @@ class CustomerCredentialsService(
                 authType = item["authType"]?.s() ?: "api_key",
                 connected = !item["credentials"]?.s().isNullOrBlank(),
                 connectedAt = item["createdAt"]?.s(),
+                settings = parseToolSettings(item[com.genflowly.DynamoDBConstants.TOOL_SETTINGS_KEY]?.s()),
             )
         }
         return GetToolCredentialStatusListResponse(toolCredentialStatuses = statuses)
