@@ -1,23 +1,16 @@
 @import '../../../styles/themes.scss';
 @import '../../../styles/mixins.scss';
 
-// Desktop: vertical section nav inside the library ResizableSidebar (which
-// owns the width). Mobile: the same buttons as a horizontally scrollable row
-// above the grid.
+// 📱 Mobile-only chip row (desktop categories live in the SidebarListPanel).
 
 .nav {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 0.25rem;
     width: 100%;
-    padding: 0.25rem 0.75rem 0.25rem 0;
-
-    @include respond-to-mobile {
-        flex-direction: row;
-        overflow-x: auto;
-        padding: 0 0 0.25rem 0;
-        -webkit-overflow-scrolling: touch;
-    }
+    overflow-x: auto;
+    padding: 0 0 0.25rem 0;
+    -webkit-overflow-scrolling: touch;
 }
 
 .navButton {
@@ -25,10 +18,11 @@
     display: flex;
     align-items: center;
     gap: 0.625rem;
+    flex: 0 0 auto;
     padding: 0.55rem 0.75rem;
-    border: 1px solid transparent;
+    border: 1px solid $color-border;
     border-radius: $radius-md;
-    background: none;
+    background: $color-background-secondary;
     color: $color-text-secondary;
     font-size: 0.875rem;
     font-weight: 500;
@@ -40,27 +34,16 @@
         background: $color-background-hover;
         color: $color-text-primary;
     }
-
-    @include respond-to-mobile {
-        flex: 0 0 auto;
-        border: 1px solid $color-border;
-        background: $color-background-secondary;
-    }
 }
 
 .active {
     background: $color-background-selected;
-    color: $color-text-primary;
+    color: $color-primary;
     font-weight: 600;
-    border-color: $color-border;
+    border-color: $color-primary;
 
     &:hover {
         background: $color-background-selected;
-    }
-
-    @include respond-to-mobile {
-        border-color: $color-primary;
-        color: $color-primary;
     }
 }
 

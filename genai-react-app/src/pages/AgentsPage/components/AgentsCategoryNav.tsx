@@ -13,12 +13,17 @@ export const CATEGORY_LABEL_KEYS: Record<CategoryFilter, string> = {
     INSTRUCTIONS: 'agentsPage.categories.instructions',
 }
 
-const CATEGORY_ICONS: Record<CategoryFilter, string> = {
+export const CATEGORY_ICONS: Record<CategoryFilter, string> = {
     ALL: '🗂️',
     CONVERSATION: '💬',
     MEMORY: '🧠',
     TITLE_CREATOR: '🏷️',
     INSTRUCTIONS: '📜',
+}
+
+/** Agents in [filter] (ALL = every agent), for the category counts. */
+export function categoryCount(agents: Agent[], filter: CategoryFilter): number {
+    return filter === 'ALL' ? agents.length : agents.filter(a => agentCategory(a) === filter).length
 }
 
 interface AgentsCategoryNavProps {
@@ -28,15 +33,12 @@ interface AgentsCategoryNavProps {
 }
 
 /**
- * Category sections for the Agents page: a left sidebar on desktop, a
- * horizontally scrollable row of the same buttons on mobile (CSS switches the
- * layout — one code path). Follows the SettingsSidebar section-nav pattern.
+ * 📱 Mobile category picker: a horizontally scrollable chip row above the
+ * tiles. On desktop the page renders the categories as a SidebarListPanel
+ * inside the standard resizable left sidebar instead.
  */
 export default function AgentsCategoryNav({ agents, selected, onSelect }: AgentsCategoryNavProps) {
     const { t } = useTranslation()
-
-    const countFor = (filter: CategoryFilter) =>
-        filter === 'ALL' ? agents.length : agents.filter(a => agentCategory(a) === filter).length
 
     const filters: CategoryFilter[] = ['ALL', ...AGENT_CATEGORIES]
 
@@ -53,7 +55,7 @@ export default function AgentsCategoryNav({ agents, selected, onSelect }: Agents
                 >
                     <span className={styles.icon} aria-hidden="true">{CATEGORY_ICONS[filter]}</span>
                     <span className={styles.label}>{t(CATEGORY_LABEL_KEYS[filter])}</span>
-                    <span className={styles.count}>{countFor(filter)}</span>
+                    <span className={styles.count}>{categoryCount(agents, filter)}</span>
                 </button>
             ))}
         </nav>
