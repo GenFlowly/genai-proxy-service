@@ -15,19 +15,19 @@
     },
     {
       "requestType": "CONVERSATION_TITLE",
-      "mapKey": "ConversationTitleDefault",
+      "mapKey": "TitleCreatorDefault",
       "outputFormat": "TEXT",
       "modelPreference": { "aiVendor": "OPENAI", "model": "gpt-5-mini" },
-      "systemPromptResource": "config/prompts/conversation-title.system.txt",
-      "userMessageResource": "config/prompts/conversation-title.user.txt"
+      "systemPromptResource": "config/prompts/title-creator.system.txt",
+      "userMessageResource": "config/prompts/title-creator.user.txt"
     },
     {
       "requestType": "NOTE_TITLE",
-      "mapKey": "NoteTitleDefault",
+      "mapKey": "TitleCreatorDefault",
       "outputFormat": "TEXT",
       "modelPreference": { "aiVendor": "OPENAI", "model": "gpt-5-mini" },
-      "systemPromptResource": "config/prompts/note-title.system.txt",
-      "userMessageResource": "config/prompts/note-title.user.txt"
+      "systemPromptResource": "config/prompts/title-creator.system.txt",
+      "userMessageResource": "config/prompts/title-creator.user.txt"
     },
     {
       "requestType": "MEMORY_EXTRACTION",

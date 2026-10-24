@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { getCustomerAgents } from '../../../../services/agentsService'
 import { saveAIConfigPreferences } from '../../../../services/saveAIConfigService'
 import { useToast } from '../../../../context/ToastContext'
-import { Agent, effectiveDefaultAgentId } from '../../../../models/agents.models'
+import { Agent, agentCategory, effectiveDefaultAgentId } from '../../../../models/agents.models'
 import styles from './AgentPickerWidget.module.scss'
 import { Icon, Tooltip } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
@@ -12,10 +12,11 @@ import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/Sideb
 
 /**
  * Right-sidebar picker for the agent (graph) a conversation runs through.
- * Lists every agent the customer can access (own + System-published), hiding
- * the internal request agents (title/persona/memory generators — requestType
- * is set on those). No explicit pick (selectedAgentId=null) follows the
- * server-side default: the customer's default agent, else the System one.
+ * Lists only CONVERSATION-category agents the customer can access (own +
+ * System-published) — memory/title/instruction agents never belong in a
+ * conversation, whether mapped (requestType set) or not. No explicit pick
+ * (selectedAgentId=null) follows the server-side default: the customer's
+ * default agent, else the System one.
  */
 export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
     const { t } = useTranslation()
@@ -32,9 +33,14 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
         try {
             const token = await getAccessTokenSilently()
             const response = await getCustomerAgents(token)
-            // Internal request agents (conversation/note title, persona
-            // creator, memory extraction) never appear in the picker.
-            setAgents((response.agents || []).filter(a => !a.requestType))
+            // Only conversation agents belong here: the category filter keeps
+            // memory/title/instruction agents out, and the requestType filter
+            // additionally drops mapped internal agents (belt and braces).
+            setAgents(
+                (response.agents || []).filter(
+                    a => !a.requestType && agentCategory(a) === 'CONVERSATION'
+                )
+            )
             setLoadFailed(false)
         } catch (err) {
             console.error('Failed to fetch agents:', err)

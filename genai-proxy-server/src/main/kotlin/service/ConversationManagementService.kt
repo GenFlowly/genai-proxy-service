@@ -117,7 +117,11 @@ class ConversationManagementService(
             val agent = agentResolutionService.resolve(RequestType.CONVERSATION_TITLE, customerId)
             val result = generationAgentExecutor.executeWithCustomerKey(
                 agent = agent,
+                // "content" feeds the merged Title Creator agent; the legacy
+                // keys keep pre-merge published templates rendering (extra
+                // variables are no-ops in the renderer).
                 variables = mapOf(
+                    "content" to "Starting a conversation with ${instructionName ?: "no specific instruction"}. First message: $prompt",
                     "instructionName" to (instructionName ?: "no specific instruction"),
                     "prompt" to prompt
                 ),

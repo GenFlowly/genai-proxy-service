@@ -21,13 +21,18 @@ enum class RequestType(
         "Instruction Persona Creation",
         listOf("{{categoryJson}}", "{{instructionText}}")
     ),
+    // Both title types are served by the single Title Creator agent; the
+    // server passes the ready-made {{content}} for either flow. The legacy
+    // per-flow variables ({{instructionName}}/{{prompt}}, {{noteContent}}) are
+    // still supplied as a superset so environments whose published agents
+    // predate the merge keep rendering until migrated.
     CONVERSATION_TITLE(
         "Conversation Title Generation",
-        listOf("{{instructionName}}", "{{prompt}}")
+        listOf("{{content}}")
     ),
     NOTE_TITLE(
         "Note Title Generation",
-        listOf("{{noteContent}}")
+        listOf("{{content}}")
     ),
     MEMORY_EXTRACTION(
         "Learn about User",

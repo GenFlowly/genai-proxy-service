@@ -84,7 +84,7 @@ class PublishSystemAgentTest {
             graphRepo.createCustomerGraph(
                 customerId = any(), graphId = any(), name = any(), isDefault = capture(isDefaultSlot),
                 nodeIds = any(), edges = capture(edgesSlot), entryPoint = any(),
-                maxIterations = any(), layout = anyNullable(),
+                maxIterations = any(), layout = anyNullable(), category = anyNullable(),
             )
         } answers {
             written = mapOf(
@@ -97,7 +97,7 @@ class PublishSystemAgentTest {
                 "edges" to AttributeValue.builder().s(arg<String>(5)).build(),
                 "entryPoint" to AttributeValue.builder().s(arg<String>(6)).build(),
                 "maxIterations" to AttributeValue.builder().n(arg<Int>(7).toString()).build(),
-            )
+            ) + (arg<String?>(9)?.let { mapOf("category" to AttributeValue.builder().s(it).build()) } ?: emptyMap())
         }
         coEvery { graphRepo.getCustomerGraph(any()) } answers { written }
         coEvery { graphRepo.listCustomerGraphNodes(SYSTEM_GRAPH_OWNER) } answers { nodeItems }
@@ -137,5 +137,25 @@ class PublishSystemAgentTest {
         service.publishSystemAgent(agentLoopRequest(isDefault = true))
 
         assertFalse(isDefaultSlot.captured)
+    }
+
+    @Test
+    fun `category defaults to CONVERSATION and an explicit one passes through`() = runTest {
+        captureWrites()
+
+        assertEquals("CONVERSATION", service.publishSystemAgent(agentLoopRequest()).category)
+        assertEquals(
+            "MEMORY",
+            service.publishSystemAgent(agentLoopRequest().copy(category = "MEMORY")).category,
+        )
+    }
+
+    @Test
+    fun `an unknown category is rejected before anything is written`() = runTest {
+        captureWrites()
+
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            service.publishSystemAgent(agentLoopRequest().copy(category = "NOT_A_CATEGORY"))
+        }
     }
 }

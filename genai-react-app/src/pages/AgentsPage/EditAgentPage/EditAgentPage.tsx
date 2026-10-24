@@ -6,9 +6,17 @@ import i18n from '../../../i18n'
 import { useLayout } from '../../../context/LayoutContext'
 import { usePageTitle } from '../../../hooks/usePageTitle'
 import { useAuth } from '../../../context/AuthContext'
-import { getAgent, updateAgent } from '../../../services/agentsService'
+import { forkAgent, getAgent, updateAgent } from '../../../services/agentsService'
 import { createInstruction, getCustomerInstructions } from '../../../services/instructionService'
-import { Agent, AgentNode, UpdateAgentNodePatch, UpdateAgentRequest } from '../../../models/agents.models'
+import {
+    AGENT_CATEGORIES,
+    Agent,
+    AgentCategory,
+    AgentNode,
+    UpdateAgentNodePatch,
+    UpdateAgentRequest,
+    agentCategory,
+} from '../../../models/agents.models'
 import { InstructionResponse } from '../../../models/instruction.models'
 import { ScrollArea } from '@genflowly/component-library'
 import styles from './EditAgentPage.module.scss'
@@ -441,6 +449,7 @@ export default function EditAgentPage() {
     // Form state
     const [name, setName] = useState('')
     const [maxIterations, setMaxIterations] = useState(10)
+    const [category, setCategory] = useState<AgentCategory>('CONVERSATION')
     const [nodePatchNames, setNodePatchNames] = useState<Record<string, string>>({})
     const [nodePatchConfigs, setNodePatchConfigs] = useState<Record<string, string>>({})
 
@@ -449,6 +458,10 @@ export default function EditAgentPage() {
     const [saveError, setSaveError] = useState<string | null>(null)
     const [saved, setSaved] = useState(false)
     const savedTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+    // System agents are read-only; the Fork button creates an editable copy
+    const isReadOnly = !!agent?.isSystem
+    const [forking, setForking] = useState(false)
 
     useEffect(() => {
         setLeftSidebarExpanded(false)
@@ -468,6 +481,7 @@ export default function EditAgentPage() {
                 setAgent(found)
                 setName(found.name)
                 setMaxIterations(found.maxIterations)
+                setCategory(agentCategory(found))
                 const names: Record<string, string> = {}
                 const configs: Record<string, string> = {}
                 found.nodes.forEach(n => {
@@ -549,6 +563,7 @@ export default function EditAgentPage() {
         const req: UpdateAgentRequest = {}
         if (name.trim() !== agent.name) req.name = name.trim()
         if (maxIterations !== agent.maxIterations) req.maxIterations = maxIterations
+        if (category !== agentCategory(agent)) req.category = category
         if (nodeDiffs.length > 0) req.nodes = nodeDiffs
 
         if (Object.keys(req).length === 0) { navigate('/agents'); return }
@@ -569,20 +584,45 @@ export default function EditAgentPage() {
             setNodePatchConfigs(configs)
             setName(updated.name)
             setMaxIterations(updated.maxIterations)
+            setCategory(agentCategory(updated))
             setSaved(true)
             clearTimeout(savedTimerRef.current)
             savedTimerRef.current = setTimeout(() => setSaved(false), 3000)
-            // Editing a System agent forks it server-side: the response carries
-            // a new graphId, so move (replace) to the customer's own copy
-            if (updated.graphId !== agent.graphId) {
-                navigate(`/agents/${updated.graphId}`, { replace: true })
-            }
         } catch (err: any) {
             setSaveError(err.message ?? t('agentsPage.editAgentPage.saveFailed'))
         } finally {
             setSaving(false)
         }
-    }, [agent, name, maxIterations, nodePatchNames, nodePatchConfigs, getAccessTokenSilently, navigate, t])
+    }, [agent, name, maxIterations, category, nodePatchNames, nodePatchConfigs, getAccessTokenSilently, navigate, t])
+
+    // Fork the read-only System agent into an editable copy and open it
+    const handleFork = useCallback(async () => {
+        if (!agent) return
+        setForking(true)
+        setSaveError(null)
+        try {
+            const token = await getAccessTokenSilently()
+            const fork = await forkAgent(token, agent.graphId)
+            navigate(`/agents/${fork.graphId}`, { replace: true })
+            // Reload the form from the fork (same route component instance)
+            setAgent(fork)
+            setName(fork.name)
+            setMaxIterations(fork.maxIterations)
+            setCategory(agentCategory(fork))
+            const names: Record<string, string> = {}
+            const configs: Record<string, string> = {}
+            fork.nodes.forEach(n => {
+                names[n.nodeId] = n.name
+                configs[n.nodeId] = tryPrettyJson(n.config)
+            })
+            setNodePatchNames(names)
+            setNodePatchConfigs(configs)
+        } catch (err: any) {
+            setSaveError(err.message ?? t('agentsPage.editAgentPage.forkFailed'))
+        } finally {
+            setForking(false)
+        }
+    }, [agent, getAccessTokenSilently, navigate, t])
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -627,26 +667,41 @@ export default function EditAgentPage() {
                             type="button"
                             className={styles.cancelBtn}
                             onClick={() => navigate('/agents')}
-                            disabled={saving}
+                            disabled={saving || forking}
                         >
                             {t('agentsPage.editAgentPage.discard')}
                         </button>
-                        <button
-                            type="button"
-                            className={styles.saveBtn}
-                            onClick={handleSave}
-                            disabled={saving || !agent}
-                        >
-                            {saving
-                                ? <><span className={styles.savingSpinner} />{t('agentsPage.editAgentPage.saving')}</>
-                                : t('agentsPage.editAgentPage.saveChanges')
-                            }
-                        </button>
+                        {isReadOnly ? (
+                            <button
+                                type="button"
+                                className={styles.saveBtn}
+                                onClick={handleFork}
+                                disabled={forking}
+                                data-testid="edit-agent-fork"
+                            >
+                                {forking
+                                    ? <><span className={styles.savingSpinner} />{t('agentsPage.editAgentPage.forking')}</>
+                                    : <>🔱 {t('agentsPage.editAgentPage.forkToEdit')}</>
+                                }
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                className={styles.saveBtn}
+                                onClick={handleSave}
+                                disabled={saving || !agent}
+                            >
+                                {saving
+                                    ? <><span className={styles.savingSpinner} />{t('agentsPage.editAgentPage.saving')}</>
+                                    : t('agentsPage.editAgentPage.saveChanges')
+                                }
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                {/* System default agent — informational banner */}
-                {agent?.isSystem && (
+                {/* System agent — read-only banner with the fork escape hatch */}
+                {isReadOnly && (
                     <div className={styles.systemBanner} role="note">
                         <span aria-hidden="true">ℹ️</span>
                         <p>{t('agentsPage.editAgentPage.systemBanner')}</p>
@@ -672,6 +727,10 @@ export default function EditAgentPage() {
                 )}
 
                 {agent && (
+                    // A disabled fieldset natively disables every nested form
+                    // control — System agents render read-only without each
+                    // input needing its own disabled wiring.
+                    <fieldset className={styles.readOnlyFieldset} disabled={isReadOnly}>
                     <div className={styles.editLayout}>
                         {/* ── Left column: agent-level settings ── */}
                         <ScrollArea as="aside" className={styles.sidebar}>
@@ -703,6 +762,25 @@ export default function EditAgentPage() {
                                         value={maxIterations}
                                         onChange={e => setMaxIterations(Number(e.target.value))}
                                     />
+                                </div>
+
+                                <div className={styles.fieldGroup}>
+                                    <label className={styles.fieldLabel} htmlFor="agent-category">
+                                        {t('agentsPage.editAgentPage.categoryLabel')}
+                                    </label>
+                                    <select
+                                        id="agent-category"
+                                        className={styles.fieldInput}
+                                        value={category}
+                                        onChange={e => setCategory(e.target.value as AgentCategory)}
+                                        data-testid="agent-category-select"
+                                    >
+                                        {AGENT_CATEGORIES.map(c => (
+                                            <option key={c} value={c}>
+                                                {t(`agentsPage.categories.${c === 'TITLE_CREATOR' ? 'titleCreator' : c.toLowerCase()}`)}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 {saveError && (
@@ -772,6 +850,7 @@ export default function EditAgentPage() {
                             </div>
                         </ScrollArea>
                     </div>
+                    </fieldset>
                 )}
             </div>
         </div>

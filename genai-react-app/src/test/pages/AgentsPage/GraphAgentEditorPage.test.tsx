@@ -65,6 +65,7 @@ jest.mock('../../../services/agentsService', () => ({
     getAgent: jest.fn(),
     createGraphAgent: jest.fn(),
     updateAgent: jest.fn(),
+    forkAgent: jest.fn(),
 }));
 
 jest.mock('../../../services/instructionService', () => ({
@@ -313,11 +314,37 @@ describe('GraphAgentEditorPage', () => {
         errorSpy.mockRestore();
     });
 
-    test('shows the system banner for a system agent', async () => {
+    test('renders a system agent read-only with the fork banner', async () => {
         await renderLoadedEditor({ ...baseAgent, isSystem: true });
         expect(
-            screen.getByText('This is a shared system agent — saving your changes creates your own copy.')
+            screen.getByText('This is a shared system agent — it is read-only. Fork it to make an editable copy.')
         ).toBeInTheDocument();
+        expect(screen.getByTestId('graph-editor-fork')).toBeInTheDocument();
+        expect(mockGraphEditorProps.readOnly).toBe(true);
+        // No category select for read-only agents
+        expect(screen.queryByTestId('agent-category-select')).not.toBeInTheDocument();
+    });
+
+    test('own agents render editable with the category select', async () => {
+        await renderLoadedEditor({ ...baseAgent, category: 'MEMORY' } as Agent);
+        expect(mockGraphEditorProps.readOnly).toBe(false);
+        expect(screen.queryByTestId('graph-editor-fork')).not.toBeInTheDocument();
+        expect(screen.getByTestId('agent-category-select')).toHaveValue('MEMORY');
+    });
+
+    test('changing the category on an existing agent saves immediately', async () => {
+        (agentsService.updateAgent as jest.Mock).mockResolvedValue({ ...baseAgent, category: 'MEMORY' });
+        await renderLoadedEditor();
+
+        const select = screen.getByTestId('agent-category-select');
+        await act(async () => {
+            const { fireEvent } = await import('@testing-library/react');
+            fireEvent.change(select, { target: { value: 'MEMORY' } });
+        });
+
+        await waitFor(() =>
+            expect(agentsService.updateAgent).toHaveBeenCalledWith(mockToken, 'graph-001', { category: 'MEMORY' })
+        );
     });
 
     test('opens /instructions in a new tab on onRequestCreateInstruction', async () => {
@@ -410,21 +437,23 @@ describe('GraphAgentEditorPage', () => {
         });
     });
 
-    test('navigates (replace) to the forked graphId when saving a system agent', async () => {
-        (agentsService.updateAgent as jest.Mock).mockResolvedValue({
+    test('the Fork button forks the system agent and navigates (replace) to the fork', async () => {
+        (agentsService.forkAgent as jest.Mock).mockResolvedValue({
             ...baseAgent,
             graphId: 'graph-fork-001',
-            name: 'My Copy',
+            name: 'Default Graph-1-forked',
+            isSystem: false,
         });
         await renderLoadedEditor({ ...baseAgent, isSystem: true });
 
-        const emitted = emittedFrom(baseAgent);
-        emitted.name = 'My Copy';
-        await act(async () => mockGraphEditorProps.onSave(emitted));
+        const userEvent = (await import('@testing-library/user-event')).default;
+        await userEvent.click(screen.getByTestId('graph-editor-fork'));
 
         await waitFor(() =>
             expect(mockNavigate).toHaveBeenCalledWith('/agents/graph-fork-001', { replace: true })
         );
+        expect(agentsService.forkAgent).toHaveBeenCalledWith(mockToken, 'graph-001');
+        expect(agentsService.updateAgent).not.toHaveBeenCalled();
     });
 
     test('passes the server error message to the editor when updateAgent fails', async () => {
@@ -485,6 +514,7 @@ describe('GraphAgentEditorPage', () => {
             entryPoint: 'new-1',
             edges,
             layout,
+            category: 'CONVERSATION',
             nodes: [
                 { tempId: 'new-1', nodeType: 'RETRIEVAL', name: 'Retrieval', config: '{}' },
                 { tempId: 'new-2', nodeType: 'RESPONSE_GENERATOR', name: 'Responder', config: '{"is_streaming":true}' },

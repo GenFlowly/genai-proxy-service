@@ -4,6 +4,7 @@ import com.genflowly.activity.agent.registerCreateAgentRoutes
 import com.genflowly.activity.agent.registerCustomerRequestAgentRoutes
 import com.genflowly.activity.agent.registerCreateGraphAgentRoutes
 import com.genflowly.activity.agent.registerDeleteAgentRoutes
+import com.genflowly.activity.agent.registerForkAgentRoutes
 import com.genflowly.activity.agent.registerGetAgentRoutes
 import com.genflowly.activity.agent.registerGetCustomerAgentsRoutes
 import com.genflowly.activity.agent.registerNodePresetRoutes
@@ -163,6 +164,7 @@ object Routes {
     const val GET_AGENT = "$API_V1/agents/{graphId}"
     const val UPDATE_AGENT = "$API_V1/agents/{graphId}"
     const val DELETE_AGENT = "$API_V1/agents/{graphId}"
+    const val FORK_AGENT = "$API_V1/agents/{graphId}/fork"
 
     const val DEVELOPER_API_KEYS = "$API_V1/developer/api-keys"
     const val DEVELOPER_API_KEY = "$API_V1/developer/api-keys/{keyId}"
@@ -301,6 +303,7 @@ fun Application.configureRouting(
         registerCreateGraphAgentRoutes(graphService, customerProfileService)
         registerGetAgentRoutes(graphService, customerProfileService)
         registerUpdateAgentRoutes(graphService, customerProfileService, appConfig)
+        registerForkAgentRoutes(graphService, customerProfileService)
         registerCustomerRequestAgentRoutes(customerRequestAgentMapService, customerProfileService)
         registerDeleteAgentRoutes(graphService, customerProfileService)
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)

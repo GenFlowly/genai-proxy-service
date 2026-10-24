@@ -1,19 +1,21 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Navbar from '../../components/navbar/Navbar'
 import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader'
 import i18n from '../../i18n'
-import { ScrollArea } from '@genflowly/component-library'
+import { PillButton, ScrollArea } from '@genflowly/component-library'
 import styles from './AgentsPage.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useWindowSize } from '../../hooks/useWindowSize'
 import { useAuth } from '../../context/AuthContext'
-import { getCustomerAgents } from '../../services/agentsService'
-import { Agent, effectiveDefaultAgentId } from '../../models/agents.models'
+import { useToast } from '../../context/ToastContext'
+import { forkAgent, getCustomerAgents } from '../../services/agentsService'
+import { Agent, agentCategory, effectiveDefaultAgentId } from '../../models/agents.models'
 import { useAI } from '../../context/AIContext'
 import { formatServerDateTime } from '../../utils/timeUtils'
+import AgentsCategoryNav, { CategoryFilter } from './components/AgentsCategoryNav'
 
 // ── Node type display helpers ─────────────────────────────────────────────────
 
@@ -39,9 +41,12 @@ interface AgentCardProps {
     /** True only for the ONE effective default agent (pick → own default → System). */
     isEffectiveDefault: boolean
     onEdit: (agent: Agent) => void
+    /** System agents are read-only: View opens the editor read-only, Fork creates an editable copy. */
+    onFork: (agent: Agent) => void
+    forking: boolean
 }
 
-function AgentCard({ agent, isEffectiveDefault, onEdit }: AgentCardProps) {
+function AgentCard({ agent, isEffectiveDefault, onEdit, onFork, forking }: AgentCardProps) {
     const { t } = useTranslation()
     const [expanded, setExpanded] = useState(false)
 
@@ -65,18 +70,40 @@ function AgentCard({ agent, isEffectiveDefault, onEdit }: AgentCardProps) {
                     {agent.isSystem && (
                         <span className={styles.systemBadge}>{t('agentsPage.agentCard.systemBadge')}</span>
                     )}
-                    <button
-                        type="button"
-                        className={styles.editBtn}
-                        onClick={() => onEdit(agent)}
-                        aria-label={t('agentsPage.agentCard.editAriaLabel', { name: agent.name })}
-                    >
-                        ✏️ {t('agentsPage.agentCard.edit')}
-                    </button>
+                    {agent.isSystem ? (
+                        <>
+                            <button
+                                type="button"
+                                className={styles.editBtn}
+                                onClick={() => onEdit(agent)}
+                                aria-label={t('agentsPage.agentCard.viewAriaLabel', { name: agent.name })}
+                            >
+                                👁️ {t('agentsPage.agentCard.view')}
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.editBtn}
+                                onClick={() => onFork(agent)}
+                                disabled={forking}
+                                aria-label={t('agentsPage.agentCard.forkAriaLabel', { name: agent.name })}
+                            >
+                                🔱 {t('agentsPage.agentCard.fork')}
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            type="button"
+                            className={styles.editBtn}
+                            onClick={() => onEdit(agent)}
+                            aria-label={t('agentsPage.agentCard.editAriaLabel', { name: agent.name })}
+                        >
+                            ✏️ {t('agentsPage.agentCard.edit')}
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {/* System default agents are shared — editing forks a private copy */}
+            {/* System agents are shared and read-only — forking creates an editable copy */}
             {agent.isSystem && (
                 <p className={styles.systemHint}>{t('agentsPage.agentCard.systemHint')}</p>
             )}
@@ -153,6 +180,7 @@ export default function AgentsPage() {
     const navigate = useNavigate()
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const { getAccessTokenSilently } = useAuth()
+    const { showToast } = useToast()
     const { width } = useWindowSize()
     const isMobile = width <= 768
     usePageTitle()
@@ -160,8 +188,21 @@ export default function AgentsPage() {
     const [agents, setAgents] = useState<Agent[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [category, setCategory] = useState<CategoryFilter>('ALL')
+    const [ownership, setOwnership] = useState<'all' | 'mine'>('all')
+    const [forking, setForking] = useState(false)
     const { selectedAgentId } = useAI()
     const defaultId = effectiveDefaultAgentId(agents, selectedAgentId)
+
+    const visibleAgents = useMemo(
+        () =>
+            agents.filter(
+                a =>
+                    (category === 'ALL' || agentCategory(a) === category) &&
+                    (ownership === 'all' || !a.isSystem)
+            ),
+        [agents, category, ownership]
+    )
 
     useEffect(() => {
         setLeftSidebarExpanded(false)
@@ -184,8 +225,23 @@ export default function AgentsPage() {
 
     useEffect(() => { fetchAgents() }, [fetchAgents])
 
-    // Navigate to the full-screen edit page
+    // Navigate to the full-screen edit page (read-only for System agents)
     const handleEdit = (agent: Agent) => navigate(`/agents/${agent.graphId}`)
+
+    // Fork a System agent into an editable customer-owned copy and open it
+    const handleFork = async (agent: Agent) => {
+        setForking(true)
+        try {
+            const token = await getAccessTokenSilently()
+            const fork = await forkAgent(token, agent.graphId)
+            navigate(`/agents/${fork.graphId}`)
+        } catch (err) {
+            console.error('Failed to fork agent:', err)
+            showToast(t('agentsPage.agentCard.forkFailed'))
+        } finally {
+            setForking(false)
+        }
+    }
 
     return (
         <div className={styles.page}>
@@ -234,15 +290,50 @@ export default function AgentsPage() {
                 )}
 
                 {!loading && !error && agents.length > 0 && (
-                    <div className={styles.grid}>
-                        {agents.map(agent => (
-                            <AgentCard
-                                key={agent.graphId}
-                                agent={agent}
-                                isEffectiveDefault={agent.graphId === defaultId}
-                                onEdit={handleEdit}
-                            />
-                        ))}
+                    <div className={styles.layout}>
+                        {/* Category sections: sidebar on desktop, chip row on mobile */}
+                        <AgentsCategoryNav agents={agents} selected={category} onSelect={setCategory} />
+
+                        <div className={styles.main}>
+                            {/* Ownership filter chips */}
+                            <div className={styles.filterChips}>
+                                <PillButton
+                                    label={t('agentsPage.filters.allAgents')}
+                                    variant={ownership === 'all' ? 'primary' : 'secondary'}
+                                    onClick={() => setOwnership('all')}
+                                    aria-pressed={ownership === 'all'}
+                                    data-testid="agents-filter-all"
+                                />
+                                <PillButton
+                                    label={t('agentsPage.filters.createdByMe')}
+                                    variant={ownership === 'mine' ? 'primary' : 'secondary'}
+                                    onClick={() => setOwnership('mine')}
+                                    aria-pressed={ownership === 'mine'}
+                                    data-testid="agents-filter-mine"
+                                />
+                            </div>
+
+                            {visibleAgents.length === 0 ? (
+                                <div className={styles.stateContainer}>
+                                    <div className={styles.emptyIcon}>🤖</div>
+                                    <p className={styles.stateText}>{t('agentsPage.agentsPage.noMatchesTitle')}</p>
+                                    <p className={styles.stateSubText}>{t('agentsPage.agentsPage.noMatchesSubtitle')}</p>
+                                </div>
+                            ) : (
+                                <div className={styles.grid}>
+                                    {visibleAgents.map(agent => (
+                                        <AgentCard
+                                            key={agent.graphId}
+                                            agent={agent}
+                                            isEffectiveDefault={agent.graphId === defaultId}
+                                            onEdit={handleEdit}
+                                            onFork={handleFork}
+                                            forking={forking}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </ScrollArea>

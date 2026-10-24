@@ -30,11 +30,17 @@ class RequestAgentMapRepository(
     private val logger: KLogger
 ) {
 
-    suspend fun getMapEntry(scope: String, requestType: String): RequestAgentMapEntry? =
+    suspend fun getMapEntry(
+        scope: String,
+        requestType: String,
+        /** Strongly-consistent read — the seeder's existence check must not act on a stale miss. */
+        consistentRead: Boolean = false,
+    ): RequestAgentMapEntry? =
         withContext(Dispatchers.IO) {
             val request = GetItemRequest.builder()
                 .tableName(REQUEST_AGENT_MAP_TABLE)
                 .key(keyOf(scope, requestType))
+                .consistentRead(consistentRead)
                 .build()
             val item = dynamoDbClient.getItem(request).item()
             if (item.isNullOrEmpty()) null else itemToMapEntry(item)

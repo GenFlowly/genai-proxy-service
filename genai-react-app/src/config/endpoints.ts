@@ -54,6 +54,7 @@ export const endpoints = {
     getRequestAgents: `${BASE}${API_PREFIX}/request-agents`,
     requestAgentMapping: (requestType: string) => `${BASE}${API_PREFIX}/request-agents/${requestType}`,
     getAgent: (graphId: string) => `${BASE}${API_PREFIX}/agents/${graphId}`,
+    forkAgent: (graphId: string) => `${BASE}${API_PREFIX}/agents/${graphId}/fork`,
     createAgentGraph: `${BASE}${API_PREFIX}/agents/graph`,
     getNodePresets: `${BASE}${API_PREFIX}/node-presets`,
     customerTools: `${BASE}${API_PREFIX}/tools`,

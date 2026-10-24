@@ -87,11 +87,19 @@ class RequestAgentMapAdminService(
 
         // Globally mapped agents follow the instruction ownership model: they
         // become System-owned, which makes them visible to every customer
-        // (read-only, fork-on-edit) instead of hiding inside the admin account.
+        // (read-only, forked explicitly to edit) instead of hiding inside the
+        // admin account.
         if (owner == adminCustomerId) {
             val nodeIds = graphItem[DynamoDBConstants.GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
             nodeIds.forEach { graphRepository.transferNodeOwnership(it, SYSTEM_GRAPH_OWNER) }
             graphRepository.transferGraphOwnership(request.graphId, SYSTEM_GRAPH_OWNER)
+        }
+
+        // The global mapping is authoritative about what the agent powers —
+        // stamp the matching category so the agent lands in the right section
+        // of the Agents page and stays out of the conversation picker.
+        com.genflowly.models.AgentCategory.categoryForRequestType(requestType.name)?.let { category ->
+            graphRepository.setGraphCategory(request.graphId, category.name)
         }
 
         requestAgentMapRepository.putMapEntry(

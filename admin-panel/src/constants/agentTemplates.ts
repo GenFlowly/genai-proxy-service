@@ -49,6 +49,7 @@ const HARNESS_PROMPT = [
 export const AGENT_LOOP_TEMPLATE: PublishDefaultGraphRequest = {
     name: 'Agent',
     maxIterations: 40,
+    category: 'CONVERSATION',
     entryPoint: 'memory',
     edges: JSON.stringify({
         edges: [

@@ -1,4 +1,4 @@
-import { createGraphAgent, getAgent, getCustomerAgents, updateAgent } from '../../services/agentsService';
+import { createGraphAgent, forkAgent, getAgent, getCustomerAgents, updateAgent } from '../../services/agentsService';
 import { CreateGraphAgentRequest, UpdateAgentRequest } from '../../models/agents.models';
 import { endpoints } from '../../config/endpoints';
 import * as apiUtils from '../../utils/apiUtils';
@@ -174,6 +174,49 @@ describe('agentsService', () => {
             });
 
             await expect(updateAgent(mockToken, 'g1', updateReq)).rejects.toThrow('Update agent failed: 502 Bad Gateway');
+        });
+    });
+
+    describe('forkAgent', () => {
+        test('POSTs to the fork endpoint and returns the fork', async () => {
+            const mockFork = { graphId: 'g-fork', name: 'Agent-3-forked', isSystem: false, category: 'MEMORY' };
+            (apiUtils.fetchWithRetry as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                json: async () => mockFork,
+            });
+
+            const result = await forkAgent(mockToken, 'g-sys');
+
+            expect(apiUtils.fetchWithRetry).toHaveBeenCalledWith(endpoints.forkAgent('g-sys'), {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${mockToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+            expect(result).toEqual(mockFork);
+        });
+
+        test('throws error message from response body on HTTP failure', async () => {
+            (apiUtils.fetchWithRetry as jest.Mock).mockResolvedValueOnce({
+                ok: false,
+                status: 404,
+                statusText: 'Not Found',
+                json: async () => ({ error: "Agent (graph) 'g-sys' not found." }),
+            });
+
+            await expect(forkAgent(mockToken, 'g-sys')).rejects.toThrow("Agent (graph) 'g-sys' not found.");
+        });
+
+        test('throws fallback status message when the error body is empty', async () => {
+            (apiUtils.fetchWithRetry as jest.Mock).mockResolvedValueOnce({
+                ok: false,
+                status: 500,
+                statusText: 'Internal Server Error',
+                json: async () => ({}),
+            });
+
+            await expect(forkAgent(mockToken, 'g-sys')).rejects.toThrow('Fork agent failed: 500 Internal Server Error');
         });
     });
 });

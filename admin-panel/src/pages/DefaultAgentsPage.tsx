@@ -29,6 +29,14 @@ function getNodeMeta(nodeType: string) {
     return NODE_TYPE_META[nodeType] ?? { icon: '⚙️', label: nodeType, color: '#6b7280' }
 }
 
+/** Display labels for the agent category stored on each graph. */
+const CATEGORY_LABELS: Record<string, string> = {
+    CONVERSATION: 'Conversation',
+    MEMORY: 'Memory',
+    TITLE_CREATOR: 'Title Creator',
+    INSTRUCTIONS: 'Instructions',
+}
+
 /**
  * All System agents as cards (mirroring the customer app's Agents page):
  * name, node pipeline, badges for what each agent serves, edit/delete and a
@@ -256,6 +264,9 @@ export default function DefaultAgentsPage() {
                                     {isChatDefault && (
                                         <span className="agent-badge default">Conversation Default Agent</span>
                                     )}
+                                    <span className="agent-badge">
+                                        {CATEGORY_LABELS[agent.category ?? 'CONVERSATION'] ?? agent.category}
+                                    </span>
                                     {actions.map((label) => (
                                         <span className="agent-badge action" key={label}>
                                             {label}

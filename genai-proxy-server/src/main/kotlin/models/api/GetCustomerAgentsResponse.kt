@@ -31,8 +31,8 @@ data class AgentResponse(
     val layout: String? = null,
     /**
      * True when this is an admin-published System-owned agent, visible to every
-     * customer read-only. Editing it forks it into a customer-owned copy (the
-     * response carries the new graphId).
+     * customer read-only. Customers edit one by forking it explicitly
+     * (POST /agents/{graphId}/fork); direct edits are rejected with 403.
      */
     val isSystem: Boolean = false,
     /**
@@ -41,6 +41,12 @@ data class AgentResponse(
      * Pickers for conversation agents should exclude these.
      */
     val requestType: String? = null,
+    /**
+     * [com.genflowly.models.AgentCategory] name. Always resolved server-side:
+     * the stored attribute when present, else derived from the request-agent
+     * map, else CONVERSATION.
+     */
+    val category: String = "CONVERSATION",
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
