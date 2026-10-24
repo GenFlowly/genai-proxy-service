@@ -114,19 +114,7 @@
     flex-wrap: wrap;
 }
 
-// ── Agent grid ────────────────────────────────────────────────────────────────
-
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
-    gap: 1.5rem;
-
-    @include respond-to-mobile {
-        grid-template-columns: 1fr;
-    }
-}
-
-// ── Agent card ────────────────────────────────────────────────────────────────
+// ── Agent card (laid out by the library Grid: span 12 / md 6 / lg 4) ──────────
 
 .card {
     background: $color-background-secondary;
@@ -139,6 +127,7 @@
     box-shadow: $shadow-sm;
     transition: box-shadow var(--transition-fast), transform var(--transition-fast);
     min-width: 0; // Grid items must be allowed to shrink below content width
+    height: 100%; // Fill the grid cell so cards in a row align
 
     // Hover lift only on devices that actually hover (avoids sticky-hover jumps on touch)
     @media (hover: hover) {
@@ -165,17 +154,19 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.75rem;
-
-    @include respond-to-mobile {
-        flex-wrap: wrap; // Actions drop below the title instead of overflowing
-    }
+    // Badges + actions wrap below the title instead of crushing it into a
+    // one-character-per-line column when the card is narrow.
+    flex-wrap: wrap;
 }
 
 .cardTitleRow {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    min-width: 0; // Allow the title block to shrink
+    // The title claims a readable minimum width before anything else fits on
+    // its row; it may still shrink on very narrow cards instead of overflowing.
+    flex: 1 1 12rem;
+    min-width: 0;
 
     > div {
         min-width: 0;
@@ -249,6 +240,7 @@
     align-items: center;
     gap: 0.5rem;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 .editBtn {

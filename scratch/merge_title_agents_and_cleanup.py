@@ -16,9 +16,12 @@ What it does (in order, each step previews before writing):
      map row at it (preserving enabled), sets both rows' mapKey to
      TitleCreatorDefault, and deletes the old note-title graph + nodes.
   2. ORPHAN SWEEP — deletes System-owned live graphs referenced by NO
-     RequestAgentMap row (any scope) and not isDefault: the duplicate
+     RequestAgentMap row (any scope), not isDefault, AND named like a seeded
+     request agent (*DefaultAgent): the duplicate
      MemoryExtractionDefaultAgent/... copies left behind by the old seeder's
      lost races. Their now-unreferenced System instructions are removed too.
+     Unmapped System graphs with other names (deliberately published shared
+     templates, e.g. AgentLegacy) are listed but never deleted.
   3. "-personal" DUPLICATES — lists customer-owned live graphs whose name ends
      in "-personal" (stale pre-fork-flow copies); deletes them (and any map
      rows pointing at them) only with --delete-personal.
@@ -349,12 +352,18 @@ def step2_orphan_sweep(env: Env, keep_id):
     system_graphs = env.live_system_graphs()
     orphans, kept = [], []
     for g in system_graphs:
-        is_orphan = (
+        unmapped = (
             g["graphId"] not in referenced
             and not g.get("isDefault")
             and g["graphId"] != keep_id
         )
-        (orphans if is_orphan else kept).append(g)
+        # Only seeder-published names are safe to sweep: unmapped System graphs
+        # with other names are deliberately published shared templates.
+        if unmapped and not str(g.get("name", "")).endswith("DefaultAgent"):
+            print(f"  keeping unmapped System graph {g['graphId']} ({g.get('name', '')!r}) — "
+                  "not a seeded name; delete manually if unwanted")
+            unmapped = False
+        (orphans if unmapped else kept).append(g)
 
     if not orphans:
         print("  no orphaned System graphs found")
