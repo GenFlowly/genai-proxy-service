@@ -83,6 +83,26 @@ describe('AgentPickerWidget', () => {
         expect(screen.queryByTestId('agent-option-GRP-TITLE')).not.toBeInTheDocument();
     });
 
+    it('lists only CONVERSATION-category agents; a missing category counts as CONVERSATION', async () => {
+        mockGetCustomerAgents.mockResolvedValue({
+            agents: [
+                // No category attribute (pre-category response) → treated as CONVERSATION
+                agent({ graphId: 'GRP-LEGACY', name: 'Legacy Agent', isDefault: true }),
+                agent({ graphId: 'GRP-CONV', name: 'Chat Agent', category: 'CONVERSATION' }),
+                // Unmapped memory agent (no requestType) must STILL be hidden via category
+                agent({ graphId: 'GRP-MEM', name: 'My Memory Agent', category: 'MEMORY' }),
+                agent({ graphId: 'GRP-TITLE', name: 'My Title Agent', category: 'TITLE_CREATOR' }),
+            ],
+        });
+
+        render(<AgentPickerWidget />);
+
+        expect(await screen.findByTestId('agent-option-GRP-LEGACY')).toBeInTheDocument();
+        expect(screen.getByTestId('agent-option-GRP-CONV')).toBeInTheDocument();
+        expect(screen.queryByTestId('agent-option-GRP-MEM')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('agent-option-GRP-TITLE')).not.toBeInTheDocument();
+    });
+
     it('shows the System default as the dropdown value when no explicit pick', async () => {
         mockGetCustomerAgents.mockResolvedValue({
             agents: [

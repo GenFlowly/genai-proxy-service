@@ -28,6 +28,11 @@ jest.mock('../../hooks/usePageTitle', () => ({
     usePageTitle: jest.fn(),
 }));
 
+const mockShowToast = jest.fn();
+jest.mock('../../context/ToastContext', () => ({
+    useToast: () => ({ showToast: mockShowToast }),
+}));
+
 // Mock react-router-dom navigate
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
@@ -38,6 +43,7 @@ jest.mock('react-router-dom', () => ({
 // Mock agentsService
 jest.mock('../../services/agentsService', () => ({
     getCustomerAgents: jest.fn(),
+    forkAgent: jest.fn(),
 }));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -75,6 +81,7 @@ function renderPage() {
 describe('AgentsPage Component', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockGetAccessTokenSilently.mockResolvedValue(mockToken);
         (useAuth as jest.Mock).mockReturnValue({
             getAccessTokenSilently: mockGetAccessTokenSilently,
         });
@@ -241,7 +248,7 @@ describe('AgentsPage Component', () => {
 
     // ── System default agents ─────────────────────────────────────────────────
 
-    test('shows System default badge and edit hint for a system agent', async () => {
+    test('shows System badge, read-only hint, and View/Fork actions for a system agent', async () => {
         const systemAgent = {
             ...mockAgent,
             graphId: 'system-graph-001',
@@ -254,8 +261,92 @@ describe('AgentsPage Component', () => {
         renderPage();
         await waitFor(() => expect(screen.getByText('System')).toBeInTheDocument());
         expect(
-            screen.getByText('Shared system agent — editing it creates your own copy.')
+            screen.getByText('Shared system agent — read-only. Fork it to get your own editable copy.')
         ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /view agent shared default/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /fork agent shared default/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /edit agent shared default/i })).not.toBeInTheDocument();
+    });
+
+    test('forking a system agent calls the fork endpoint and opens the fork', async () => {
+        const systemAgent = {
+            ...mockAgent,
+            graphId: 'system-graph-001',
+            name: 'Shared Default',
+            isSystem: true,
+        };
+        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+            agents: [systemAgent],
+        });
+        (agentsService.forkAgent as jest.Mock).mockResolvedValueOnce({
+            ...systemAgent,
+            graphId: 'fork-001',
+            name: 'Shared Default-3-forked',
+            isSystem: false,
+        });
+        renderPage();
+        await waitFor(() => screen.getByRole('button', { name: /fork agent shared default/i }));
+
+        await userEvent.click(screen.getByRole('button', { name: /fork agent shared default/i }));
+        await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/agents/fork-001'));
+        expect(agentsService.forkAgent).toHaveBeenCalledWith(mockToken, 'system-graph-001');
+    });
+
+    test('a failed fork surfaces a toast instead of navigating', async () => {
+        const systemAgent = { ...mockAgent, graphId: 'system-graph-001', name: 'Shared Default', isSystem: true };
+        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [systemAgent] });
+        (agentsService.forkAgent as jest.Mock).mockRejectedValueOnce(new Error('nope'));
+        renderPage();
+        await waitFor(() => screen.getByRole('button', { name: /fork agent shared default/i }));
+
+        await userEvent.click(screen.getByRole('button', { name: /fork agent shared default/i }));
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+        expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    // ── Category sidebar + ownership chips ────────────────────────────────────
+
+    test('category sections filter the grid; missing category counts as Conversation', async () => {
+        const memoryAgent = {
+            ...mockAgent,
+            graphId: 'graph-mem',
+            name: 'Memory Agent',
+            isDefault: false,
+            category: 'MEMORY',
+        };
+        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+            agents: [mockAgent, memoryAgent], // mockAgent has no category → CONVERSATION
+        });
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Memory Agent')).toBeInTheDocument());
+
+        await userEvent.click(screen.getByTestId('agents-category-memory'));
+        expect(screen.getByText('Memory Agent')).toBeInTheDocument();
+        expect(screen.queryByText('Default Graph')).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getByTestId('agents-category-conversation'));
+        expect(screen.getByText('Default Graph')).toBeInTheDocument();
+        expect(screen.queryByText('Memory Agent')).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getByTestId('agents-category-all'));
+        expect(screen.getByText('Default Graph')).toBeInTheDocument();
+        expect(screen.getByText('Memory Agent')).toBeInTheDocument();
+    });
+
+    test('"Created by me" chip hides System agents', async () => {
+        const systemAgent = { ...mockAgent, graphId: 'sys-1', name: 'Shared Default', isDefault: false, isSystem: true };
+        (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+            agents: [mockAgent, systemAgent],
+        });
+        renderPage();
+        await waitFor(() => expect(screen.getByText('Shared Default')).toBeInTheDocument());
+
+        await userEvent.click(screen.getByTestId('agents-filter-mine'));
+        expect(screen.getByText('Default Graph')).toBeInTheDocument();
+        expect(screen.queryByText('Shared Default')).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getByTestId('agents-filter-all'));
+        expect(screen.getByText('Shared Default')).toBeInTheDocument();
     });
 
     test('does not show System default badge for customer agents', async () => {

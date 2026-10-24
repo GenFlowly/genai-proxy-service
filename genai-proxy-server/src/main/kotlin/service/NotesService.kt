@@ -39,7 +39,12 @@ class NotesService(
             val agent = agentResolutionService.resolve(RequestType.NOTE_TITLE, customerId)
             val result = generationAgentExecutor.executeWithCustomerKey(
                 agent = agent,
-                variables = mapOf("noteContent" to noteContent.take(4000)),
+                // "content" feeds the merged Title Creator agent; "noteContent"
+                // keeps pre-merge published templates rendering.
+                variables = mapOf(
+                    "content" to noteContent.take(4000),
+                    "noteContent" to noteContent.take(4000)
+                ),
                 customerId = customerId,
                 conversationId = "note-title-generation"
             )

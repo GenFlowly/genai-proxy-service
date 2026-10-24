@@ -5,6 +5,7 @@ import com.genflowly.config.AppConfig
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.GraphService
+import com.genflowly.service.SystemAgentEditForbiddenException
 import com.genflowly.utils.isAdminCustomer
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.put
@@ -30,13 +31,17 @@ fun Route.registerUpdateAgentRoutes(
          *
          * Edits an agent (graph + nodes) in place with full LangGraph structural validation.
          *
-         * Editable graph fields : name, isDefault, maxIterations, entryPoint, edges
+         * Editable graph fields : name, isDefault, maxIterations, entryPoint, edges, category
          * Editable per-node fields: name, config  (nodeType is NOT editable here)
          * nodeIds are immutable via this endpoint — use the graph-node CRUD APIs.
+         *
+         * System agents are read-only for non-admins: fork first
+         * (POST /api/v1/agents/{graphId}/fork), then edit the fork.
          *
          * Responses:
          *   200  — updated AgentResponse (hydrated graph + nodes)
          *   400  — structural validation failure (descriptive error message)
+         *   403  — System agent targeted by a non-admin (fork to edit)
          *   404  — graphId not found or not owned by this customer
          *   500  — unexpected server error
          */
@@ -44,8 +49,9 @@ fun Route.registerUpdateAgentRoutes(
             tags("Agents")
             summary = "Update an agent"
             description = "Edits an agent (graph + nodes) in place with full structural validation. " +
-                    "Editable graph fields: name, isDefault, maxIterations, entryPoint, edges. " +
-                    "Editable per-node fields: name, config. nodeType and nodeIds are immutable here."
+                    "Editable graph fields: name, isDefault, maxIterations, entryPoint, edges, category. " +
+                    "Editable per-node fields: name, config. nodeType and nodeIds are immutable here. " +
+                    "System agents are read-only — fork them first via POST /agents/{graphId}/fork."
             request {
                 pathParameter<String>("graphId") {
                     description = "Agent graph to update"
@@ -62,6 +68,10 @@ fun Route.registerUpdateAgentRoutes(
                 }
                 code(HttpStatusCode.BadRequest) {
                     description = "Structural validation failure"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.Forbidden) {
+                    description = "System agents are read-only — fork to edit"
                     body<ErrorResponse>()
                 }
                 code(HttpStatusCode.NotFound) {
@@ -87,6 +97,9 @@ fun Route.registerUpdateAgentRoutes(
                 // Structural validation failure or node-not-in-graph error
                 logger.warn("Agent update validation failed for graphId=$graphId: ${e.message}")
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+            } catch (e: SystemAgentEditForbiddenException) {
+                logger.warn("Non-admin tried to edit System agent graphId=$graphId")
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to e.message))
             } catch (e: IllegalStateException) {
                 // Graph not found or ownership check failed
                 logger.warn("Agent update not found for graphId=$graphId: ${e.message}")

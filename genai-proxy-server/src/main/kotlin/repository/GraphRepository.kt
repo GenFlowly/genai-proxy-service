@@ -6,6 +6,7 @@ import com.genflowly.DynamoDBConstants.CUSTOMER_GRAPH_NODES_GSI_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_GRAPH_NODES_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.DELETED_AT_KEY
+import com.genflowly.DynamoDBConstants.GRAPH_CATEGORY_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_EDGES_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_ENTRY_POINT_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_ID_KEY
@@ -257,18 +258,11 @@ class GraphRepository(
         entryPoint: String,
         maxIterations: Int = 10,
         layout: String? = null,
+        category: String? = null,
     ) = withContext(Dispatchers.IO) {
         try {
             val now = Instant.now().toString()
-            val nodeIdAttrList = nodeIds.map { AttributeValue.builder().s(it).build() }
-            val baseFields = mapOf(
-                GRAPH_NAME_KEY to AttributeValue.builder().s(name).build(),
-                GRAPH_IS_DEFAULT_KEY to AttributeValue.builder().bool(isDefault).build(),
-                GRAPH_NODE_IDS_KEY to AttributeValue.builder().l(nodeIdAttrList).build(),
-                GRAPH_EDGES_KEY to AttributeValue.builder().s(edges).build(),
-                GRAPH_ENTRY_POINT_KEY to AttributeValue.builder().s(entryPoint).build(),
-                GRAPH_MAX_ITERATIONS_KEY to AttributeValue.builder().n(maxIterations.toString()).build(),
-            ) + (layout?.let { mapOf(GRAPH_LAYOUT_KEY to AttributeValue.builder().s(it).build()) } ?: emptyMap())
+            val baseFields = graphBaseFields(name, isDefault, nodeIds, edges, entryPoint, maxIterations, layout, category)
             val historyItem = baseFields + mapOf(
                 GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),
                 VERSION_KEY to AttributeValue.builder().n("1").build(),
@@ -291,6 +285,80 @@ class GraphRepository(
         }
     }
 
+    /**
+     * Seeder variant of [createCustomerGraph]: the LIVE (v=0) row is written
+     * with a conditional create, so concurrent instances seeding the same
+     * deterministic graphId race harmlessly — exactly one writes, the rest
+     * return false and create nothing. The v=1 snapshot is written only by the
+     * winner, after the live row succeeded.
+     */
+    suspend fun createCustomerGraphIfAbsent(
+        customerId: String,
+        graphId: String,
+        name: String,
+        isDefault: Boolean,
+        nodeIds: List<String>,
+        edges: String,
+        entryPoint: String,
+        maxIterations: Int = 10,
+        layout: String? = null,
+        category: String? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val now = Instant.now().toString()
+        val baseFields = graphBaseFields(name, isDefault, nodeIds, edges, entryPoint, maxIterations, layout, category)
+        val currentItem = baseFields + mapOf(
+            GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),
+            VERSION_KEY to AttributeValue.builder().n("0").build(),
+            CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+            LATEST_VERSION_KEY to AttributeValue.builder().n("1").build(),
+            "createdAt" to AttributeValue.builder().s(now).build(),
+            "updatedAt" to AttributeValue.builder().s(now).build(),
+        )
+        try {
+            dynamoDbClient.putItem(
+                PutItemRequest.builder()
+                    .tableName(CUSTOMER_GRAPHS_TABLE)
+                    .item(currentItem)
+                    .conditionExpression("attribute_not_exists(#gid)")
+                    .expressionAttributeNames(mapOf("#gid" to GRAPH_ID_KEY))
+                    .build()
+            )
+        } catch (e: software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException) {
+            return@withContext false
+        }
+        val historyItem = baseFields + mapOf(
+            GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),
+            VERSION_KEY to AttributeValue.builder().n("1").build(),
+            "createdAt" to AttributeValue.builder().s(now).build(),
+        )
+        dynamoDbClient.putItem(PutItemRequest.builder().tableName(CUSTOMER_GRAPHS_TABLE).item(historyItem).build())
+        logger.info("Created graph $graphId ($name) v1 for customer $customerId (conditional)")
+        true
+    }
+
+    private fun graphBaseFields(
+        name: String,
+        isDefault: Boolean,
+        nodeIds: List<String>,
+        edges: String,
+        entryPoint: String,
+        maxIterations: Int,
+        layout: String?,
+        category: String?,
+    ): Map<String, AttributeValue> {
+        val nodeIdAttrList = nodeIds.map { AttributeValue.builder().s(it).build() }
+        return mapOf(
+            GRAPH_NAME_KEY to AttributeValue.builder().s(name).build(),
+            GRAPH_IS_DEFAULT_KEY to AttributeValue.builder().bool(isDefault).build(),
+            GRAPH_NODE_IDS_KEY to AttributeValue.builder().l(nodeIdAttrList).build(),
+            GRAPH_EDGES_KEY to AttributeValue.builder().s(edges).build(),
+            GRAPH_ENTRY_POINT_KEY to AttributeValue.builder().s(entryPoint).build(),
+            GRAPH_MAX_ITERATIONS_KEY to AttributeValue.builder().n(maxIterations.toString()).build(),
+        ) +
+            (layout?.let { mapOf(GRAPH_LAYOUT_KEY to AttributeValue.builder().s(it).build()) } ?: emptyMap()) +
+            (category?.let { mapOf(GRAPH_CATEGORY_KEY to AttributeValue.builder().s(it).build()) } ?: emptyMap())
+    }
+
     suspend fun updateCustomerGraph(
         graphId: String,
         name: String,
@@ -300,6 +368,7 @@ class GraphRepository(
         entryPoint: String,
         maxIterations: Int,
         layout: String? = null,
+        category: String? = null,
     ): Map<String, AttributeValue> = withContext(Dispatchers.IO) {
         val current = getCustomerGraph(graphId) ?: error("Graph $graphId not found")
         val latestVersion = current[LATEST_VERSION_KEY]?.n()?.toInt() ?: 1
@@ -308,17 +377,10 @@ class GraphRepository(
         val createdAt = current["createdAt"]?.s() ?: Instant.now().toString()
         val now = Instant.now().toString()
 
-        // layout=null keeps the stored layout (callers pass it only when it changed)
+        // layout/category=null keeps the stored value (callers pass them only when changed)
         val mergedLayout = layout ?: current[GRAPH_LAYOUT_KEY]?.s()
-        val nodeIdAttrList = nodeIds.map { AttributeValue.builder().s(it).build() }
-        val baseFields = mapOf(
-            GRAPH_NAME_KEY to AttributeValue.builder().s(name).build(),
-            GRAPH_IS_DEFAULT_KEY to AttributeValue.builder().bool(isDefault).build(),
-            GRAPH_NODE_IDS_KEY to AttributeValue.builder().l(nodeIdAttrList).build(),
-            GRAPH_EDGES_KEY to AttributeValue.builder().s(edges).build(),
-            GRAPH_ENTRY_POINT_KEY to AttributeValue.builder().s(entryPoint).build(),
-            GRAPH_MAX_ITERATIONS_KEY to AttributeValue.builder().n(maxIterations.toString()).build(),
-        ) + (mergedLayout?.let { mapOf(GRAPH_LAYOUT_KEY to AttributeValue.builder().s(it).build()) } ?: emptyMap())
+        val mergedCategory = category ?: current[GRAPH_CATEGORY_KEY]?.s()
+        val baseFields = graphBaseFields(name, isDefault, nodeIds, edges, entryPoint, maxIterations, mergedLayout, mergedCategory)
         val historyItem = baseFields + mapOf(
             GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),
             VERSION_KEY to AttributeValue.builder().n(nextVersion.toString()).build(),
@@ -426,6 +488,27 @@ class GraphRepository(
         }
 
     /**
+     * Stamps the category on a live (v=0) graph row. Used when an admin maps a
+     * graph to a request type — the mapping is authoritative about what the
+     * agent powers, so its category follows.
+     */
+    suspend fun setGraphCategory(graphId: String, category: String) = withContext(Dispatchers.IO) {
+        dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(CUSTOMER_GRAPHS_TABLE)
+                .key(mapOf(
+                    GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),
+                    VERSION_KEY to AttributeValue.builder().n("0").build(),
+                ))
+                .updateExpression("SET #cat = :cat")
+                .expressionAttributeNames(mapOf("#cat" to GRAPH_CATEGORY_KEY))
+                .expressionAttributeValues(mapOf(":cat" to AttributeValue.builder().s(category).build()))
+                .build()
+        )
+        logger.info("Set graph $graphId category to $category")
+    }
+
+    /**
      * Re-owns a live (v=0) graph row. Used when an admin maps a graph into the
      * global request-agent map: the graph becomes System infrastructure. The
      * sparse customerIdIndex GSI follows the attribute automatically.
@@ -506,7 +589,13 @@ class GraphRepository(
                 GRAPH_NAME_KEY, GRAPH_IS_DEFAULT_KEY, GRAPH_NODE_IDS_KEY,
                 GRAPH_EDGES_KEY, GRAPH_ENTRY_POINT_KEY, GRAPH_MAX_ITERATIONS_KEY,
                 GRAPH_LAYOUT_KEY
-            ).mapNotNull { key -> target[key]?.let { key to it } }.toMap()
+            ).mapNotNull { key -> target[key]?.let { key to it } }.toMap() +
+                // Category survives rollback to a pre-category snapshot: fall back
+                // to the live row's value rather than silently dropping it.
+                listOfNotNull(
+                    (target[GRAPH_CATEGORY_KEY] ?: current[GRAPH_CATEGORY_KEY])
+                        ?.let { GRAPH_CATEGORY_KEY to it }
+                ).toMap()
 
             val historyItem = restoredFields + mapOf(
                 GRAPH_ID_KEY to AttributeValue.builder().s(graphId).build(),

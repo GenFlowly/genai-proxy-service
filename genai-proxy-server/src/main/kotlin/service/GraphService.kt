@@ -1,6 +1,7 @@
 package com.genflowly.service
 
 import com.genflowly.DynamoDBConstants.DELETED_AT_KEY
+import com.genflowly.DynamoDBConstants.GRAPH_CATEGORY_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_EDGES_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_ENTRY_POINT_KEY
 import com.genflowly.DynamoDBConstants.GRAPH_ID_KEY
@@ -17,6 +18,7 @@ import com.genflowly.DynamoDBConstants.NODE_NAME_KEY
 import com.genflowly.DynamoDBConstants.NODE_TYPE_KEY
 import com.genflowly.DynamoDBConstants.VERSION_KEY
 import com.genflowly.GENERATION_NODE_TYPE
+import com.genflowly.models.AgentCategory
 import com.genflowly.models.GenerationNodeConfig
 import com.genflowly.models.NodeModelPreference
 import com.genflowly.SYSTEM_SCOPE
@@ -47,6 +49,11 @@ import mu.KotlinLogging
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
 private val logger = KotlinLogging.logger {}
+
+/** Thrown when a non-admin tries to edit a System-owned agent in place (→ HTTP 403). */
+class SystemAgentEditForbiddenException(graphId: String) : RuntimeException(
+    "Agent '$graphId' is a shared System agent and is read-only — fork it to edit."
+)
 
 class GraphService(
     private val graphRepository: GraphRepository,
@@ -94,6 +101,7 @@ class GraphService(
         )
         val configJson = nodeConfigJson.encodeToString(GenerationNodeConfig.serializer(), nodeConfig)
 
+        val category = (req.category?.let { AgentCategory.parse(it) } ?: AgentCategory.CONVERSATION).name
         val nodeId = com.genflowly.models.generateNodeId()
         val graphId = com.genflowly.models.generateGraphId()
         val edges = """{"edges":[{"from":"$nodeId","to":"__end__"}]}"""
@@ -107,6 +115,7 @@ class GraphService(
             edges = edges,
             entryPoint = nodeId,
             maxIterations = 1,
+            category = category,
         )
         logger.info { "Created generation agent $graphId ('${req.name}') → instruction ${req.instructionId} for $customerId" }
 
@@ -117,6 +126,7 @@ class GraphService(
             entryPoint = nodeId,
             maxIterations = 1,
             edges = edges,
+            category = category,
             nodes = listOf(
                 AgentNodeResponse(nodeId = nodeId, nodeType = GENERATION_NODE_TYPE, name = req.name, config = configJson)
             ),
@@ -129,8 +139,9 @@ class GraphService(
     //
     // There is no per-customer seeding. The admin panel authors and publishes a
     // single default graph owned by SYSTEM_GRAPH_OWNER; every customer without
-    // an own default graph is served that graph (isSystem=true in responses),
-    // and their first edit forks it into a customer-owned copy.
+    // an own default graph is served that graph (isSystem=true in responses).
+    // Customers never edit System graphs in place — they fork explicitly via
+    // [forkAgent] and edit the fork.
 
     /** The published System default graph, hydrated, or null when unpublished. */
     suspend fun getSystemDefaultAgentOrNull(): AgentResponse? {
@@ -154,13 +165,86 @@ class GraphService(
     /**
      * Publishes a NON-default System-owned agent (admin only): a shared
      * template every customer sees read-only in their agent picker (e.g. the
-     * agent-loop template) and forks on first edit — the same ownership model
-     * as the default graph, minus the "served to graphless customers" role.
-     * isDefault is pinned to false so this can never displace the System
-     * default graph and flip graphless customers to a different behavior.
+     * agent-loop template) and forks explicitly via [forkAgent] — the same
+     * ownership model as the default graph, minus the "served to graphless
+     * customers" role. isDefault is pinned to false so this can never displace
+     * the System default graph and flip graphless customers to a different
+     * behavior.
      */
     suspend fun publishSystemAgent(req: CreateGraphAgentRequest): AgentResponse =
         createGraphAgent(SYSTEM_GRAPH_OWNER, req.copy(isDefault = false), isSystem = true)
+
+    /**
+     * Seeder variant of [publishSystemAgent]: every id (graph, nodes) is
+     * supplied by the caller and the graph's live row is written with a
+     * conditional create, so racing instances writing identical ids/content
+     * cannot produce duplicates. Returns the (created or already-present)
+     * hydrated agent.
+     */
+    suspend fun publishSeededSystemAgent(
+        req: CreateGraphAgentRequest,
+        graphId: String,
+        nodeIdByTempId: Map<String, String>,
+    ): AgentResponse {
+        require(req.name.isNotBlank()) { "name must not be blank" }
+        require(req.nodes.isNotEmpty()) { "A graph needs at least one node." }
+        validateTempIds(req.nodes)
+        req.nodes.forEach { require(it.tempId in nodeIdByTempId) { "node '${it.tempId}' is missing a seeded nodeId" } }
+
+        val edges = substituteNodeIds(req.edges, nodeIdByTempId)
+        val entryPoint = nodeIdByTempId[req.entryPoint] ?: req.entryPoint
+        val nodeIds = req.nodes.map { nodeIdByTempId.getValue(it.tempId) }
+        val nodeTypeById = req.nodes.associate { nodeIdByTempId.getValue(it.tempId) to it.nodeType }
+        val configById = req.nodes.associate { nodeIdByTempId.getValue(it.tempId) to it.config }
+
+        GraphValidationService.validateAgentUpdate(
+            nodeIds          = nodeIds,
+            nodeTypeById     = nodeTypeById,
+            entryPoint       = entryPoint,
+            edgesJson        = edges,
+            maxIterations    = req.maxIterations,
+            name             = req.name,
+            isDefault        = false,
+            isOnlyGraph      = false,
+            nodePatchConfigs = configById,
+        )
+        configById.forEach { (nodeId, config) ->
+            validateInstructionRef(nodeId, config, nodeTypeById[nodeId])
+        }
+
+        req.nodes.forEach { node ->
+            graphRepository.createCustomerGraphNode(
+                customerId = SYSTEM_GRAPH_OWNER,
+                nodeId = nodeIdByTempId.getValue(node.tempId),
+                nodeType = node.nodeType,
+                name = node.name,
+                config = node.config,
+            )
+        }
+        val created = graphRepository.createCustomerGraphIfAbsent(
+            customerId = SYSTEM_GRAPH_OWNER,
+            graphId = graphId,
+            name = req.name,
+            isDefault = false,
+            nodeIds = nodeIds,
+            edges = edges,
+            entryPoint = entryPoint,
+            maxIterations = req.maxIterations,
+            layout = req.layout,
+            category = req.category?.let { AgentCategory.parse(it).name },
+        )
+        if (!created) {
+            logger.info { "Seeded graph $graphId already exists — another instance won; reusing it" }
+        } else {
+            logger.info { "Published seeded System agent $graphId ('${req.name}')" }
+        }
+
+        val item = graphRepository.getCustomerGraph(graphId)
+            ?: throw IllegalStateException("Seeded graph $graphId not readable after creation.")
+        val nodeById = graphRepository.listCustomerGraphNodes(SYSTEM_GRAPH_OWNER)
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+        return agentResponseFrom(item, nodeById, isSystem = true)
+    }
 
     /**
      * Applies an agent update to the published System default graph (admin only).
@@ -176,13 +260,16 @@ class GraphService(
     }
 
     /**
-     * Clones the System default graph (and all its nodes) into a customer-owned
-     * copy marked as the customer's default. Returns the new live graph item
-     * plus the System-nodeId → cloned-nodeId map.
+     * Clones a System graph (and all its nodes) into a customer-owned copy.
+     * Returns the new live graph item plus the System-nodeId → cloned-nodeId
+     * map.
      */
     private suspend fun forkSystemGraph(
         customerId: String,
         systemGraph: Map<String, AttributeValue>,
+        nameOverride: String? = null,
+        /** Resolved category for the fork; pass it in because the source row may predate categories. */
+        category: String? = null,
     ): Pair<Map<String, AttributeValue>, Map<String, String>> {
         val oldNodeIds = systemGraph[GRAPH_NODE_IDS_KEY]?.l()?.map { it.s() } ?: emptyList()
         val systemNodes = graphRepository.listCustomerGraphNodes(SYSTEM_GRAPH_OWNER)
@@ -191,7 +278,7 @@ class GraphService(
         val idMap = oldNodeIds.associateWith { com.genflowly.models.generateNodeId() }
         oldNodeIds.forEach { oldId ->
             val node = systemNodes[oldId]
-                ?: throw IllegalStateException("System default graph references missing node '$oldId'.")
+                ?: throw IllegalStateException("System graph references missing node '$oldId'.")
             graphRepository.createCustomerGraphNode(
                 customerId = customerId,
                 nodeId = idMap.getValue(oldId),
@@ -205,7 +292,7 @@ class GraphService(
         graphRepository.createCustomerGraph(
             customerId = customerId,
             graphId = newGraphId,
-            name = systemGraph[GRAPH_NAME_KEY]?.s() ?: "Default Graph",
+            name = nameOverride ?: systemGraph[GRAPH_NAME_KEY]?.s() ?: "Default Graph",
             // A fork of the System default graph replaces it as the customer's
             // default; forks of other System agents (request-type generators)
             // stay non-default and take effect via the per-customer map entry.
@@ -213,14 +300,76 @@ class GraphService(
             nodeIds = oldNodeIds.map { idMap.getValue(it) },
             edges = substituteNodeIds(systemGraph[GRAPH_EDGES_KEY]?.s() ?: "{}", idMap),
             entryPoint = idMap[systemGraph[GRAPH_ENTRY_POINT_KEY]?.s()]
-                ?: throw IllegalStateException("System default graph has an invalid entryPoint."),
+                ?: throw IllegalStateException("System graph has an invalid entryPoint."),
             maxIterations = systemGraph[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10,
             layout = systemGraph[GRAPH_LAYOUT_KEY]?.s()?.let { substituteNodeIds(it, idMap) },
+            category = category ?: systemGraph[GRAPH_CATEGORY_KEY]?.s(),
         )
-        logger.info { "Forked System default graph into $newGraphId for customer $customerId" }
+        logger.info { "Forked System graph into $newGraphId for customer $customerId" }
         val forked = graphRepository.getCustomerGraph(newGraphId)
             ?: throw IllegalStateException("Forked graph $newGraphId not readable after creation.")
         return forked to idMap
+    }
+
+    /**
+     * Explicitly forks a System (shared) agent into a customer-owned copy named
+     * `<agent-name>-<version>-forked` (version = the source's latest at fork
+     * time). The fork inherits the source's category; for request-type agents
+     * the customer's map overrides are mirrored onto the fork so it takes
+     * effect; a fork of the System default graph becomes the customer's
+     * default. This is the ONLY way for non-admins to derive an editable copy
+     * — direct edits of System agents are rejected (see [updateAgent]).
+     *
+     * @throws IllegalStateException when the graph is missing or not System-owned (→ 404).
+     */
+    suspend fun forkAgent(customerId: String, graphId: String): AgentResponse {
+        val source = graphRepository.getCustomerGraph(graphId)
+            ?: throw IllegalStateException("Agent (graph) '$graphId' not found.")
+        if (source["customerId"]?.s() != SYSTEM_GRAPH_OWNER) {
+            // Only System agents are forkable; anything else reads as not-found
+            // (customers fork their own agents by just editing them).
+            throw IllegalStateException("Agent (graph) '$graphId' not found.")
+        }
+
+        val requestTypeByGraphId = (
+            requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE) +
+                requestAgentMapRepository.listMapEntries(customerId)
+            ).associate { it.graphId to it.requestType }
+        val version = source[LATEST_VERSION_KEY]?.n()?.toInt() ?: 1
+        val sourceName = source[GRAPH_NAME_KEY]?.s() ?: "Agent"
+        val category = source[GRAPH_CATEGORY_KEY]?.s()
+            ?: requestTypeByGraphId[graphId]?.let { AgentCategory.categoryForRequestType(it)?.name }
+            ?: AgentCategory.CONVERSATION.name
+
+        val (forked, _) = forkSystemGraph(
+            customerId = customerId,
+            systemGraph = source,
+            nameOverride = "$sourceName-$version-forked",
+            category = category,
+        )
+        val forkedId = forked[GRAPH_ID_KEY]?.s()
+            ?: throw IllegalStateException("Forked graph is missing its graphId.")
+
+        // Forking a request-type agent only takes effect through the map:
+        // mirror every SYSTEM mapping of the original as a per-customer
+        // override pointing at the fork. (The default graph needs no map —
+        // its fork wins by being the customer's isDefault graph.)
+        if (source[GRAPH_IS_DEFAULT_KEY]?.bool() != true) {
+            requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE)
+                .filter { it.graphId == graphId }
+                .forEach { entry ->
+                    requestAgentMapRepository.putMapEntry(
+                        entry.copy(scope = customerId, graphId = forkedId, updatedBy = customerId)
+                    )
+                    logger.info {
+                        "Customer $customerId override: ${entry.requestType} → fork $forkedId of $graphId"
+                    }
+                }
+        }
+
+        val nodeById = graphRepository.listCustomerGraphNodes(customerId)
+            .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
+        return agentResponseFrom(forked, nodeById, isSystem = false)
     }
 
     /**
@@ -477,7 +626,13 @@ class GraphService(
         }
         val nodeById = graphRepository.listCustomerGraphNodes(if (isSystem) SYSTEM_GRAPH_OWNER else customerId)
             .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
-        return agentResponseFrom(item, nodeById, isSystem = isSystem)
+        // Same map getCustomerAgents builds, so requestType/category fallback
+        // behave identically whether an agent is listed or fetched directly.
+        val requestTypeByGraphId = (
+            requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE) +
+                requestAgentMapRepository.listMapEntries(customerId)
+            ).associate { it.graphId to it.requestType }
+        return agentResponseFrom(item, nodeById, isSystem = isSystem, requestTypeByGraphId)
     }
 
     // ─── Create Agent (multi-node graph from the visual editor) ───────────────
@@ -541,6 +696,7 @@ class GraphService(
             entryPoint = entryPoint,
             maxIterations = req.maxIterations,
             layout = layout,
+            category = (req.category?.let { AgentCategory.parse(it) } ?: AgentCategory.CONVERSATION).name,
         )
         logger.info { "Created graph agent $graphId ('${req.name}', ${nodeIds.size} node(s)) for $ownerId" }
 
@@ -565,6 +721,7 @@ class GraphService(
      *
      * @throws IllegalArgumentException on structural validation failure → mapped to HTTP 400.
      * @throws IllegalStateException    if the graph is not found or not owned → mapped to HTTP 404.
+     * @throws SystemAgentEditForbiddenException when a non-admin targets a System agent → HTTP 403.
      */
     suspend fun updateAgent(
         customerId: String,
@@ -573,7 +730,7 @@ class GraphService(
         /**
          * True when the caller passed the admin allowlist: admins edit
          * System-owned agents in place (they ARE the System operator);
-         * everyone else gets the fork-on-edit copy below.
+         * for everyone else System agents are strictly read-only.
          */
         isAdmin: Boolean = false,
     ): AgentResponse {
@@ -587,47 +744,10 @@ class GraphService(
             return applyAgentUpdate(currentGraph, SYSTEM_GRAPH_OWNER, graphId, req.copy(isDefault = null), isSystem = true)
         }
 
-        // Editing the System-published default graph forks it into a
-        // customer-owned copy first, then applies the update to the fork with
-        // every System nodeId reference translated to its cloned counterpart.
-        // The response carries the fork's graphId — clients must switch to it.
+        // System agents are read-only for customers; deriving an editable copy
+        // happens only through the explicit [forkAgent] flow.
         if (owner == SYSTEM_GRAPH_OWNER) {
-            val (forked, idMap) = forkSystemGraph(customerId, currentGraph)
-            val forkedId = forked[GRAPH_ID_KEY]?.s()
-                ?: throw IllegalStateException("Forked graph is missing its graphId.")
-
-            // Forking a request-type agent only takes effect through the map:
-            // mirror every SYSTEM mapping of the original as a per-customer
-            // override pointing at the fork. (The default graph needs no map —
-            // its fork wins by being the customer's isDefault graph.)
-            if (currentGraph[GRAPH_IS_DEFAULT_KEY]?.bool() != true) {
-                requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE)
-                    .filter { it.graphId == graphId }
-                    .forEach { entry ->
-                        requestAgentMapRepository.putMapEntry(
-                            entry.copy(scope = customerId, graphId = forkedId, updatedBy = customerId)
-                        )
-                        logger.info {
-                            "Customer $customerId override: ${entry.requestType} → fork $forkedId of $graphId"
-                        }
-                    }
-            }
-            val translated = req.copy(
-                // The fork replaces the System graph as this customer's default.
-                isDefault = null,
-                entryPoint = req.entryPoint?.let { idMap[it] ?: it },
-                edges = req.edges?.let { substituteNodeIds(it, idMap) },
-                layout = req.layout?.let { substituteNodeIds(it, idMap) },
-                nodes = req.nodes?.map { patch ->
-                    patch.copy(nodeId = idMap[patch.nodeId]
-                        ?: throw IllegalArgumentException("Node '${patch.nodeId}' is not part of the System default graph."))
-                },
-                removeNodeIds = req.removeNodeIds?.map { rid ->
-                    idMap[rid]
-                        ?: throw IllegalArgumentException("Node '$rid' is not part of the System default graph.")
-                },
-            )
-            return applyAgentUpdate(forked, customerId, forkedId, translated, isSystem = false)
+            throw SystemAgentEditForbiddenException(graphId)
         }
 
         requireOwnership(currentGraph, customerId, "graph", graphId)
@@ -679,6 +799,8 @@ class GraphService(
         val mergedEdges       = req.edges?.let { substituteNodeIds(it, idMap) }
             ?: currentGraph[GRAPH_EDGES_KEY]?.s() ?: "{}"
         val mergedLayout      = req.layout?.let { substituteNodeIds(it, idMap) }
+        // Validate (→ 400) before any write; null keeps the stored category.
+        val patchedCategory   = req.category?.let { AgentCategory.parse(it).name }
 
         // Per-node config validation set: patches on surviving nodes + new nodes.
         val nodePatchConfigs: Map<String, String> = buildMap {
@@ -744,6 +866,8 @@ class GraphService(
             entryPoint    = mergedEntryPoint,
             maxIterations = mergedMaxIter,
             layout        = mergedLayout,
+            // null keeps the stored category (repo-level merge, like layout)
+            category      = patchedCategory,
         )
         logger.info { "Updated agent $graphId for $ownerId (${addNodes.size} added, ${removeSet.size} removed node(s))" }
 
@@ -852,6 +976,12 @@ class GraphService(
             }
         }
         val graphId = graphItem[GRAPH_ID_KEY]?.s() ?: ""
+        // Graphs created before categories carry no attribute: derive from the
+        // request-agent map when referenced (so a memory/title agent never
+        // defaults into the conversation picker), else CONVERSATION.
+        val category = graphItem[GRAPH_CATEGORY_KEY]?.s()
+            ?: requestTypeByGraphId[graphId]?.let { AgentCategory.categoryForRequestType(it)?.name }
+            ?: AgentCategory.CONVERSATION.name
         return AgentResponse(
             graphId = graphId,
             name = graphItem[GRAPH_NAME_KEY]?.s() ?: "",
@@ -862,6 +992,7 @@ class GraphService(
             layout = graphItem[GRAPH_LAYOUT_KEY]?.s(),
             isSystem = isSystem,
             requestType = requestTypeByGraphId[graphId],
+            category = category,
             nodes = hydratedNodes,
             createdAt = graphItem["createdAt"]?.s(),
             updatedAt = graphItem["updatedAt"]?.s(),

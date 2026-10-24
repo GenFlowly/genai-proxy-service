@@ -66,6 +66,8 @@ export interface AgentResponse {
     maxIterations: number
     edges: string
     nodes: AgentNodeResponse[]
+    /** Always resolved server-side; defaults to CONVERSATION on older rows. */
+    category?: string
     createdAt?: string | null
     updatedAt?: string | null
 }

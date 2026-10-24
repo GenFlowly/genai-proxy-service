@@ -7,6 +7,20 @@ export interface AgentNode {
     instructionName?: string | null
 }
 
+/**
+ * Coarse grouping of agents by what they power. The server always resolves a
+ * category (stored attribute → request-type mapping → CONVERSATION), but the
+ * field stays optional here for responses cached by older clients.
+ */
+export type AgentCategory = 'CONVERSATION' | 'MEMORY' | 'TITLE_CREATOR' | 'INSTRUCTIONS'
+
+export const AGENT_CATEGORIES: AgentCategory[] = ['CONVERSATION', 'MEMORY', 'TITLE_CREATOR', 'INSTRUCTIONS']
+
+/** The category to filter/act on when a response predates categories. */
+export function agentCategory(agent: Agent): AgentCategory {
+    return agent.category ?? 'CONVERSATION'
+}
+
 export interface Agent {
     graphId: string
     name: string
@@ -17,7 +31,10 @@ export interface Agent {
     nodes: AgentNode[]
     /** Serialized canvas layout for the visual graph editor */
     layout?: string
-    /** True for the System-published default graph shared across customers */
+    /**
+     * True for admin-published System-owned agents, shared read-only across
+     * customers. Editing one requires forking it first (POST .../fork).
+     */
     isSystem?: boolean
     /**
      * Non-null when the graph backs an internal request flow (e.g.
@@ -25,6 +42,7 @@ export interface Agent {
      * Conversation agent pickers exclude these.
      */
     requestType?: string | null
+    category?: AgentCategory
     createdAt?: string
     updatedAt?: string
 }
@@ -63,6 +81,8 @@ export interface CreateGraphAgentRequest {
     edges: string
     layout?: string
     isDefault?: boolean
+    /** Omitted → the server defaults to CONVERSATION. */
+    category?: AgentCategory
     nodes: NewAgentNode[]
 }
 
@@ -84,15 +104,19 @@ export interface UpdateAgentRequest {
     entryPoint?: string
     edges?: string
     layout?: string
+    /** Omitted → the stored category is kept. */
+    category?: AgentCategory
     nodes?: UpdateAgentNodePatch[]
     addNodes?: NewAgentNode[]
     removeNodeIds?: string[]
 }
 
 /**
- * The backend returns the same shape as a single Agent on a successful PUT.
- * NOTE: when the edited agent has isSystem=true the server forks it — the
- * response's graphId differs from the requested one and the UI must navigate
- * to the returned graphId.
+ * The backend returns the same shape as a single Agent on a successful PUT,
+ * always under the same graphId. System agents reject edits with 403 — the
+ * editable copy comes from the explicit fork endpoint instead.
  */
 export type UpdateAgentResponse = Agent
+
+/** POST /agents/{graphId}/fork returns the customer-owned fork. */
+export type ForkAgentResponse = Agent

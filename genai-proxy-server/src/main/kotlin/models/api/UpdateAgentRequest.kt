@@ -90,4 +90,7 @@ data class UpdateAgentRequest(
      * Presentational only — never read by the graph runtime.
      */
     val layout: String? = null,
+
+    /** [com.genflowly.models.AgentCategory] name; null keeps the current value. */
+    val category: String? = null,
 )
