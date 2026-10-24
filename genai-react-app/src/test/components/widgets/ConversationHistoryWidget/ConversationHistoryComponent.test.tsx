@@ -168,6 +168,18 @@ describe('ConversationHistoryComponent', () => {
         expect(
             projectsPane.compareDocumentPosition(historyPane) & Node.DOCUMENT_POSITION_FOLLOWING
         ).toBeTruthy()
+
+        // A draggable divider sits between the panes so their heights trade
+        // off against each other
+        const divider = screen.getByTestId('history-split-handle')
+        expect(divider).toHaveAttribute('role', 'separator')
+        expect(divider).toHaveAttribute('aria-label', 'Resize the Projects and History panels')
+        expect(
+            projectsPane.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
+        expect(
+            divider.compareDocumentPosition(historyPane) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
     })
 
     test('shows error state when fetch fails', async () => {

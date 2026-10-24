@@ -299,6 +299,7 @@
             "moveToProjectTitle": "Move to project",
             "movedToProject": "Moved to {{name}}",
             "newConversationInProject": "New conversation",
+            "resizePanels": "Resize the Projects and History panels",
             "newProject": "New project",
             "newProjectTitle": "Create project",
             "noConversationsYet": "No conversations yet",
