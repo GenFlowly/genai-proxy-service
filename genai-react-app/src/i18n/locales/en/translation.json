@@ -39,6 +39,7 @@
             "instructions": "Instructions",
             "memory": "Memory",
             "navAriaLabel": "Agent categories",
+            "sectionLabel": "Categories",
             "titleCreator": "Title Creator"
         },
         "filters": {

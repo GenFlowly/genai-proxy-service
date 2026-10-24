@@ -4,7 +4,16 @@ import { useTranslation } from 'react-i18next'
 import Navbar from '../../components/navbar/Navbar'
 import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader'
 import i18n from '../../i18n'
-import { Grid, GridCol, PillButton, ResizableSidebar, ScrollArea } from '@genflowly/component-library'
+import {
+    Grid,
+    GridCol,
+    PageHeader,
+    PillButton,
+    ResizableSidebar,
+    ScrollArea,
+    SidebarListPanel,
+} from '@genflowly/component-library'
+import type { SidebarListGroup } from '@genflowly/component-library'
 import styles from './AgentsPage.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
@@ -12,10 +21,15 @@ import { useWindowSize } from '../../hooks/useWindowSize'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { forkAgent, getCustomerAgents } from '../../services/agentsService'
-import { Agent, agentCategory, effectiveDefaultAgentId } from '../../models/agents.models'
+import { AGENT_CATEGORIES, Agent, agentCategory, effectiveDefaultAgentId } from '../../models/agents.models'
 import { useAI } from '../../context/AIContext'
 import { formatServerDateTime } from '../../utils/timeUtils'
-import AgentsCategoryNav, { CategoryFilter } from './components/AgentsCategoryNav'
+import AgentsCategoryNav, {
+    CATEGORY_ICONS,
+    CATEGORY_LABEL_KEYS,
+    CategoryFilter,
+    categoryCount,
+} from './components/AgentsCategoryNav'
 
 // ── Node type display helpers ─────────────────────────────────────────────────
 
@@ -243,70 +257,117 @@ export default function AgentsPage() {
         }
     }
 
+    // Categories as a standard sidebar list (same panel the conversation and
+    // memory pages use), with the live count per category.
+    const categoryGroup: SidebarListGroup = {
+        id: 'categories',
+        label: t('agentsPage.categories.sectionLabel'),
+        items: (['ALL', ...AGENT_CATEGORIES] as CategoryFilter[]).map(filter => ({
+            id: filter,
+            label: (
+                <span className={styles.categoryItem}>
+                    <span aria-hidden="true">{CATEGORY_ICONS[filter]}</span>
+                    <span className={styles.categoryItemLabel}>{t(CATEGORY_LABEL_KEYS[filter])}</span>
+                    <span className={styles.categoryCount}>{categoryCount(agents, filter)}</span>
+                </span>
+            ),
+            isActive: category === filter,
+            ariaCurrent: 'true' as const,
+            onSelect: () => setCategory(filter),
+            testId: `agents-category-${filter.toLowerCase()}`,
+        })),
+    }
+
     return (
         <div className={styles.page}>
-            {/* 📱 Mobile: no navbar — a transparent overlay header floats over
-                the full-screen content instead */}
-            {isMobile ? <MobileHeader title={t('agentsPage.agentsPage.title')} /> : <Navbar />}
+            {/* Standard page skeleton: header band on top, then a canvas row of
+                [resizable left sidebar | transparent main] */}
+            {isMobile ? (
+                // 📱 No navbar — a transparent overlay header floats over the
+                // full-screen content; Create agent lives in its menu
+                <MobileHeader
+                    title={t('agentsPage.agentsPage.title')}
+                    menuItems={[
+                        {
+                            label: t('agentsPage.agentsPage.createAgent'),
+                            onClick: () => navigate('/agents/new'),
+                            'data-testid': 'create-agent-button',
+                        },
+                    ]}
+                />
+            ) : (
+                <>
+                    <Navbar />
+                    <PageHeader
+                        title={t('agentsPage.agentsPage.title')}
+                        subtitle={t('agentsPage.agentsPage.subtitle')}
+                        actions={
+                            <PillButton
+                                label={t('agentsPage.agentsPage.createAgent')}
+                                variant="primary"
+                                onClick={() => navigate('/agents/new')}
+                                data-testid="create-agent-button"
+                            />
+                        }
+                        data-testid="agents-page-header"
+                    />
+                </>
+            )}
 
-            <ScrollArea className={styles.content}>
-                <div className={styles.pageHeader}>
-                    <div>
-                        <h1 className={styles.pageTitle}>{t('agentsPage.agentsPage.title')}</h1>
-                        <p className={styles.pageSubtitle}>{t('agentsPage.agentsPage.subtitle')}</p>
-                    </div>
-                    <button
-                        type="button"
-                        className={styles.createBtn}
-                        onClick={() => navigate('/agents/new')}
+            <div className={styles.layout}>
+                {!isMobile && (
+                    <ResizableSidebar
+                        storageKey="agentsCategorySidebarWidth"
+                        minWidth={180}
+                        defaultWidth={216}
+                        maxWidth={320}
+                        data-testid="agents-category-sidebar"
                     >
-                        ＋ {t('agentsPage.agentsPage.createAgent')}
-                    </button>
-                </div>
-
-                {loading && (
-                    <div className={styles.stateContainer}>
-                        <div className={styles.spinner} aria-label={t('agentsPage.agentsPage.loadingAriaLabel')} />
-                        <p className={styles.stateText}>{t('agentsPage.agentsPage.loading')}</p>
-                    </div>
+                        <SidebarListPanel
+                            groups={[categoryGroup]}
+                            isLoading={loading}
+                            hasError={false}
+                            errorText=""
+                            emptyText=""
+                            listAriaLabel={t('agentsPage.categories.navAriaLabel')}
+                            data-testid="agents-category-panel"
+                        />
+                    </ResizableSidebar>
                 )}
 
-                {!loading && error && (
-                    <div className={styles.stateContainer}>
-                        <div className={styles.errorIcon}>⚠️</div>
-                        <p className={styles.stateText}>{error}</p>
-                        <button className={styles.retryBtn} onClick={fetchAgents} type="button">{t('agentsPage.agentsPage.retry')}</button>
-                    </div>
-                )}
+                <ScrollArea className={styles.main}>
+                    {/* 📱 Categories as a chip row above the tiles */}
+                    {isMobile && !loading && !error && agents.length > 0 && (
+                        <AgentsCategoryNav agents={agents} selected={category} onSelect={setCategory} />
+                    )}
 
-                {!loading && !error && agents.length === 0 && (
-                    <div className={styles.stateContainer}>
-                        <div className={styles.emptyIcon}>🤖</div>
-                        <p className={styles.stateText}>{t('agentsPage.agentsPage.emptyTitle')}</p>
-                        <p className={styles.stateSubText}>
-                            {t('agentsPage.agentsPage.emptySubtitle')}
-                        </p>
-                    </div>
-                )}
+                    {loading && (
+                        <div className={styles.stateContainer}>
+                            <div className={styles.spinner} aria-label={t('agentsPage.agentsPage.loadingAriaLabel')} />
+                            <p className={styles.stateText}>{t('agentsPage.agentsPage.loading')}</p>
+                        </div>
+                    )}
 
-                {!loading && !error && agents.length > 0 && (
-                    <div className={styles.layout}>
-                        {/* Category sections: resizable sidebar on desktop, chip row on mobile */}
-                        {isMobile ? (
-                            <AgentsCategoryNav agents={agents} selected={category} onSelect={setCategory} />
-                        ) : (
-                            <ResizableSidebar
-                                storageKey="agentsCategorySidebarWidth"
-                                minWidth={180}
-                                defaultWidth={216}
-                                maxWidth={320}
-                                data-testid="agents-category-sidebar"
-                            >
-                                <AgentsCategoryNav agents={agents} selected={category} onSelect={setCategory} />
-                            </ResizableSidebar>
-                        )}
+                    {!loading && error && (
+                        <div className={styles.stateContainer}>
+                            <div className={styles.errorIcon}>⚠️</div>
+                            <p className={styles.stateText}>{error}</p>
+                            <button className={styles.retryBtn} onClick={fetchAgents} type="button">{t('agentsPage.agentsPage.retry')}</button>
+                        </div>
+                    )}
 
-                        <div className={styles.main}>
+                    {!loading && !error && agents.length === 0 && (
+                        <div className={styles.stateContainer}>
+                            <div className={styles.emptyIcon}>🤖</div>
+                            <p className={styles.stateText}>{t('agentsPage.agentsPage.emptyTitle')}</p>
+                            <p className={styles.stateSubText}>
+                                {t('agentsPage.agentsPage.emptySubtitle')}
+                            </p>
+                        </div>
+                    )}
+
+                    {!loading && !error && agents.length > 0 && (
+                        <>
                             {/* Ownership filter chips */}
                             <div className={styles.filterChips}>
                                 <PillButton
@@ -346,10 +407,10 @@ export default function AgentsPage() {
                                     ))}
                                 </Grid>
                             )}
-                        </div>
-                    </div>
-                )}
-            </ScrollArea>
+                        </>
+                    )}
+                </ScrollArea>
+            </div>
         </div>
     )
 }
