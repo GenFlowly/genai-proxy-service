@@ -75,6 +75,10 @@ object DynamoDBConstants {
     // Editor canvas layout: JSON {"positions":{"<nodeId>":{"x":n,"y":n}}}. Purely
     // presentational — never read by the graph runtime.
     const val GRAPH_LAYOUT_KEY = "layout"
+    // AgentCategory name (CONVERSATION|MEMORY|TITLE_CREATOR|INSTRUCTIONS); may be
+    // absent on graphs created before categories — responses then derive it from
+    // the request-agent map, else default CONVERSATION.
+    const val GRAPH_CATEGORY_KEY = "category"
     const val CUSTOMER_GRAPHS_GSI_KEY = "customerIdIndex"
 
     // Owner (customerId attribute) of the admin-published default graph that

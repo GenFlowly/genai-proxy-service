@@ -65,6 +65,7 @@ class CreateGenerationAgentTest {
                 edges = response.edges,
                 entryPoint = response.entryPoint,
                 maxIterations = 1,
+                category = "CONVERSATION",
             )
         }
     }

@@ -198,7 +198,7 @@ fun appModule(): Module = module {
     single { com.genflowly.repository.NodePresetRepository(get(), get()) }
     single { com.genflowly.service.NodePresetService(get(), get()) }
     single { com.genflowly.service.RequestAgentSeeds() }
-    single { com.genflowly.service.RequestAgentSeeder(get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.RequestAgentSeeder(get(), get(), get(), get(), get(), get()) }
     single { AgentResolutionService(get(), get(), get()) }
     single { GenerationAgentExecutor(get(), get(), get(), get(), get()) }
     single { RequestAgentMapAdminService(get(), get(), get()) }

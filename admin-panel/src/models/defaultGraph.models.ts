@@ -38,6 +38,8 @@ export interface PublishDefaultGraphRequest {
     edges: string
     layout?: string
     isDefault?: boolean
+    /** CONVERSATION | MEMORY | TITLE_CREATOR | INSTRUCTIONS; the server defaults to CONVERSATION. */
+    category?: string
     nodes: PublishDefaultGraphNode[]
 }
 

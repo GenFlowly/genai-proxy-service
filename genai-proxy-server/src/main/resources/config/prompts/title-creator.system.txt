@@ -1,0 +1,1 @@
+Create a short descriptive title (at most 8 words) for the content the user sends — the opening of a conversation (possibly naming its assistant persona) or a note. Respond with the title only - no quotes, no trailing punctuation, no extra text.

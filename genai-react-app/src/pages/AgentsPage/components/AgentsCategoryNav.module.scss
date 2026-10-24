@@ -1,0 +1,85 @@
+@import '../../../styles/themes.scss';
+@import '../../../styles/mixins.scss';
+
+// Desktop: vertical section nav (SettingsSidebar pattern).
+// Mobile: the same buttons as a horizontally scrollable row above the grid.
+
+.nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 13.5rem;
+    flex-shrink: 0;
+
+    @include respond-to-mobile {
+        flex-direction: row;
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 0.25rem;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+.navButton {
+    @include interactive-base;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid transparent;
+    border-radius: $radius-md;
+    background: none;
+    color: $color-text-secondary;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+
+    &:hover {
+        background: $color-background-hover;
+        color: $color-text-primary;
+    }
+
+    @include respond-to-mobile {
+        flex: 0 0 auto;
+        border: 1px solid $color-border;
+        background: $color-background-secondary;
+    }
+}
+
+.active {
+    background: $color-background-selected;
+    color: $color-text-primary;
+    font-weight: 600;
+    border-color: $color-border;
+
+    &:hover {
+        background: $color-background-selected;
+    }
+
+    @include respond-to-mobile {
+        border-color: $color-primary;
+        color: $color-primary;
+    }
+}
+
+.icon {
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.label {
+    flex: 1;
+    @include ellipsis;
+}
+
+.count {
+    font-size: 0.75rem;
+    color: $color-text-muted;
+    background: $color-background-tertiary;
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    flex-shrink: 0;
+}

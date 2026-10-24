@@ -47,14 +47,19 @@ class RequestAgentMapAdminServiceTest {
         ))
         coEvery { graphRepo.transferNodeOwnership(any(), any()) } returns Unit
         coEvery { graphRepo.transferGraphOwnership(any(), any()) } returns Unit
+        coEvery { graphRepo.setGraphCategory(any(), any()) } returns Unit
 
         service.putMapEntry(RequestType.INSTRUCTION_PERSONA, request, "CU-admin")
 
         coVerify { resolution.buildAgentFromGraph("GRP1", RequestType.INSTRUCTION_PERSONA, "PersonaCustom") }
         // A globally mapped agent becomes System infrastructure (visible to
-        // every customer read-only, fork-on-edit) — nodes first, then graph.
+        // every customer read-only, forked explicitly to edit) — nodes first,
+        // then graph.
         coVerify { graphRepo.transferNodeOwnership("NOD1", DynamoDBConstants.SYSTEM_GRAPH_OWNER) }
         coVerify { graphRepo.transferGraphOwnership("GRP1", DynamoDBConstants.SYSTEM_GRAPH_OWNER) }
+        // The mapping is authoritative about the agent's purpose — its
+        // category follows the request type.
+        coVerify { graphRepo.setGraphCategory("GRP1", "INSTRUCTIONS") }
         coVerify {
             mapRepo.putMapEntry(match {
                 it.scope == SYSTEM_SCOPE &&
@@ -70,6 +75,7 @@ class RequestAgentMapAdminServiceTest {
     fun `putMapEntry accepts an already System-owned graph without re-transferring`() = runTest {
         coEvery { graphRepo.getCustomerGraph("GRP1") } returns
             graphOwnedBy(DynamoDBConstants.SYSTEM_GRAPH_OWNER)
+        coEvery { graphRepo.setGraphCategory(any(), any()) } returns Unit
 
         service.putMapEntry(RequestType.INSTRUCTION_PERSONA, request, "CU-admin")
 

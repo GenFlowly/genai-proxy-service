@@ -22,7 +22,12 @@ class GetCustomerAgentsTest {
     private val requestAgentMapRepo = mockk<RequestAgentMapRepository>(relaxed = true)
     private val service = GraphService(graphRepo, instructionRepo, requestAgentMapRepo)
 
-    private fun graphItem(graphId: String, isDefault: Boolean, name: String = graphId): Map<String, AttributeValue> =
+    private fun graphItem(
+        graphId: String,
+        isDefault: Boolean,
+        name: String = graphId,
+        category: String? = null,
+    ): Map<String, AttributeValue> =
         mapOf(
             "graphId" to AttributeValue.builder().s(graphId).build(),
             "name" to AttributeValue.builder().s(name).build(),
@@ -30,7 +35,7 @@ class GetCustomerAgentsTest {
             "entryPoint" to AttributeValue.builder().s("N1").build(),
             "edges" to AttributeValue.builder().s("{}").build(),
             "nodeIds" to AttributeValue.builder().l(emptyList()).build(),
-        )
+        ) + (category?.let { mapOf("category" to AttributeValue.builder().s(it).build()) } ?: emptyMap())
 
     private fun mapEntry(graphId: String, requestType: String, scope: String = SYSTEM_SCOPE) =
         RequestAgentMapEntry(scope = scope, requestType = requestType, mapKey = "k", graphId = graphId)
@@ -69,5 +74,33 @@ class GetCustomerAgentsTest {
         assertEquals("CONVERSATION_TITLE", agents.first { it.graphId == "GRP-TITLE" }.requestType)
         assertEquals("NOTE_TITLE", agents.first { it.graphId == "GRP-FORKED-TITLE" }.requestType)
         assertNull(agents.first { it.graphId == "GRP-SYS" }.requestType)
+    }
+
+    @Test
+    fun `category is the stored attribute, else derived from the map, else CONVERSATION`() = runTest {
+        coEvery { graphRepo.listCustomerGraphs("CU1") } returns listOf(
+            graphItem("GRP-STORED", isDefault = false, category = "MEMORY"),
+        )
+        coEvery { graphRepo.listCustomerGraphs(SYSTEM_GRAPH_OWNER) } returns listOf(
+            // Pre-category seeded memory agent: no attribute, but mapped.
+            graphItem("GRP-MEM", isDefault = false),
+            // Pre-category plain agent: no attribute, unmapped.
+            graphItem("GRP-SYS", isDefault = true),
+            // Stored attribute wins even when the map would say otherwise.
+            graphItem("GRP-TITLE", isDefault = false, category = "CONVERSATION"),
+        )
+        coEvery { graphRepo.listCustomerGraphNodes(any()) } returns emptyList()
+        coEvery { requestAgentMapRepo.listMapEntries(SYSTEM_SCOPE) } returns listOf(
+            mapEntry("GRP-MEM", "MEMORY_EXTRACTION"),
+            mapEntry("GRP-TITLE", "CONVERSATION_TITLE"),
+        )
+        coEvery { requestAgentMapRepo.listMapEntries("CU1") } returns emptyList()
+
+        val agents = service.getCustomerAgents("CU1").agents
+
+        assertEquals("MEMORY", agents.first { it.graphId == "GRP-STORED" }.category)
+        assertEquals("MEMORY", agents.first { it.graphId == "GRP-MEM" }.category)
+        assertEquals("CONVERSATION", agents.first { it.graphId == "GRP-SYS" }.category)
+        assertEquals("CONVERSATION", agents.first { it.graphId == "GRP-TITLE" }.category)
     }
 }
