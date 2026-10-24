@@ -33,16 +33,19 @@
     }
 }
 
-// Transparent main section — tiles and chips render directly on the canvas
+// Main section: same panel treatment as the chat/memory center section
 .main {
     flex: 1 1 auto;
     min-width: 0;
+    background-color: $color-background;
+    border-radius: $widget-radius;
     padding: 1.5rem 2rem 3rem;
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
 
     @include respond-to-mobile {
+        border-radius: 0;
         padding: 1.25rem;
         // Rest below the fixed MobileHeader overlay (3.5rem matches its
         // height); being inside the scroll container, content still scrolls
