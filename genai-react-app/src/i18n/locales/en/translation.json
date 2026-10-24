@@ -6,6 +6,9 @@
             "edit": "Edit",
             "editAriaLabel": "Edit agent {{name}}",
             "entryPoint": "Entry point",
+            "fork": "Fork",
+            "forkAriaLabel": "Fork agent {{name}}",
+            "forkFailed": "Could not fork the agent",
             "graphId": "Graph ID",
             "hideDetails": "▲ Hide details",
             "lastUpdated": "Last updated",
@@ -13,7 +16,9 @@
             "meta_other": "{{count}} nodes · max {{maxIterations}} iterations",
             "showDetails": "▼ Show details",
             "systemBadge": "System",
-            "systemHint": "Shared system agent — editing it creates your own copy."
+            "systemHint": "Shared system agent — read-only. Fork it to get your own editable copy.",
+            "view": "View",
+            "viewAriaLabel": "View agent {{name}}"
         },
         "agentsPage": {
             "emptySubtitle": "Agents are created automatically when you onboard. If you see this, try refreshing.",
@@ -21,10 +26,24 @@
             "loadFailed": "Failed to load agents",
             "loading": "Loading agents…",
             "loadingAriaLabel": "Loading agents",
+            "noMatchesSubtitle": "No agents match the selected category and filter.",
+            "noMatchesTitle": "Nothing here",
             "retry": "Retry",
             "subtitle": "AI pipelines powering your conversations",
             "title": "My Agents",
             "createAgent": "Create agent"
+        },
+        "categories": {
+            "all": "All agents",
+            "conversation": "Conversation",
+            "instructions": "Instructions",
+            "memory": "Memory",
+            "navAriaLabel": "Agent categories",
+            "titleCreator": "Title Creator"
+        },
+        "filters": {
+            "allAgents": "All agents",
+            "createdByMe": "Created by me"
         },
         "createAgentPanel": {
             "addCustomTool": "+ Add Custom Tool",
@@ -87,9 +106,13 @@
             "agentSettings": "Agent Settings",
             "backToAgents": "← Back to Agents",
             "backToAgentsPlain": "Back to Agents",
+            "categoryLabel": "Category",
             "defaultBadge": "Default",
             "discard": "Discard",
             "entryPoint": "Entry point",
+            "forkFailed": "Could not fork the agent",
+            "forkToEdit": "Fork to edit",
+            "forking": "Forking…",
             "errorBadge": "⚠️ Error",
             "errorMaxIterations": "Max iterations must be between 1 and 100.",
             "errorNameBlank": "Agent name must not be blank.",
@@ -108,7 +131,7 @@
             "savedBadge": "✓ Saved",
             "saving": "Saving…",
             "systemBadge": "System",
-            "systemBanner": "This is a shared system agent — saving your changes creates your own copy.",
+            "systemBanner": "This is a shared system agent — it is read-only. Fork it to make an editable copy.",
             "topBarMeta_one": "{{count}} node · max {{maxIterations}} iterations",
             "topBarMeta_other": "{{count}} nodes · max {{maxIterations}} iterations"
         },
@@ -163,12 +186,16 @@
         },
         "graphEditorPage": {
             "backToAgents": "Back to Agents",
+            "categoryLabel": "Category",
             "conditions": {
                 "needsRewrite": "Needs rewrite",
                 "needsMoreContext": "Needs more context",
                 "retrievalResultsEmpty": "Retrieval results empty",
                 "errorOccurred": "Error occurred"
             },
+            "forkFailed": "Could not fork the agent",
+            "forkToEdit": "Fork to edit",
+            "forking": "Forking…",
             "loadFailed": "Failed to load agent",
             "loading": "Loading agent…",
             "mobileCreateBody": "The visual agent editor needs a larger screen. Please open this page on a desktop or a tablet in landscape to create a new agent.",

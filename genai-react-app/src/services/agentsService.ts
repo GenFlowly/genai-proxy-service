@@ -4,6 +4,7 @@ import {
     Agent,
     CreateGraphAgentRequest,
     CreateGraphAgentResponse,
+    ForkAgentResponse,
     GetCustomerAgentsResponse,
     UpdateAgentRequest,
     UpdateAgentResponse,
@@ -83,4 +84,26 @@ export async function updateAgent(
     }
 
     return (await response.json()) as UpdateAgentResponse
+}
+
+/**
+ * Forks a System (shared) agent into a customer-owned editable copy named
+ * `<agent-name>-<version>-forked`. The only way to derive an editable copy —
+ * System agents reject direct edits with 403.
+ */
+export async function forkAgent(token: string, graphId: string): Promise<ForkAgentResponse> {
+    const response = await fetchWithRetry(endpoints.forkAgent(graphId), {
+        method: HttpMethod.POST,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body?.error ?? `Fork agent failed: ${response.status} ${response.statusText}`)
+    }
+
+    return (await response.json()) as ForkAgentResponse
 }

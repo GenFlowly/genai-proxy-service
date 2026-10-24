@@ -18,5 +18,7 @@ data class CreateAgentRequest(
     val inputTemplate: String = "",
     val maxTokens: Int? = null,
     /** Reasoning effort pinned on the node ("none"|"low"|"medium"|"high"); null = vendor default. */
-    val thinkingLevel: String? = null
+    val thinkingLevel: String? = null,
+    /** [com.genflowly.models.AgentCategory] name; null (older clients) defaults to CONVERSATION. */
+    val category: String? = null,
 )

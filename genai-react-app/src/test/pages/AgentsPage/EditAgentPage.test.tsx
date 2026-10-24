@@ -34,6 +34,7 @@ jest.mock('react-router-dom', () => ({
 jest.mock('../../../services/agentsService', () => ({
     getAgent: jest.fn(),
     updateAgent: jest.fn(),
+    forkAgent: jest.fn(),
 }));
 
 jest.mock('../../../services/instructionService', () => ({
@@ -389,15 +390,19 @@ describe('EditAgentPage Component', () => {
 
     // ── System default agent ──────────────────────────────────────────────────
 
-    test('shows System default badge and banner for a system agent', async () => {
+    test('renders a system agent read-only with the fork banner and no Save button', async () => {
         (agentsService.getAgent as jest.Mock).mockResolvedValueOnce({ ...mockAgent, isSystem: true });
         renderPage();
         await waitFor(() =>
             expect(
-                screen.getByText('This is a shared system agent — saving your changes creates your own copy.')
+                screen.getByText('This is a shared system agent — it is read-only. Fork it to make an editable copy.')
             ).toBeInTheDocument()
         );
         expect(screen.getByText('System')).toBeInTheDocument();
+        expect(screen.getByTestId('edit-agent-fork')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+        // The whole form is disabled via the wrapping fieldset
+        expect(screen.getByLabelText('Name')).toBeDisabled();
     });
 
     test('does not show the system banner for a customer-owned agent', async () => {
@@ -405,29 +410,46 @@ describe('EditAgentPage Component', () => {
         renderPage();
         await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
         expect(
-            screen.queryByText('This is a shared system agent — saving your changes creates your own copy.')
+            screen.queryByText('This is a shared system agent — it is read-only. Fork it to make an editable copy.')
         ).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Name')).toBeEnabled();
     });
 
-    test('navigates (replace) to the forked graphId when saving a system agent', async () => {
+    test('the Fork button forks the system agent and navigates (replace) to the fork', async () => {
         (agentsService.getAgent as jest.Mock).mockResolvedValueOnce({ ...mockAgent, isSystem: true });
-        (agentsService.updateAgent as jest.Mock).mockResolvedValueOnce({
+        (agentsService.forkAgent as jest.Mock).mockResolvedValueOnce({
             ...mockAgent,
             graphId: 'graph-fork-001',
             isSystem: false,
-            name: 'My Copy',
+            name: 'Default Graph-1-forked',
         });
 
         renderPage();
-        await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('edit-agent-fork')).toBeInTheDocument());
 
-        const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
-        await userEvent.clear(nameInput);
-        await userEvent.type(nameInput, 'My Copy');
-        await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        await userEvent.click(screen.getByTestId('edit-agent-fork'));
 
         await waitFor(() =>
             expect(mockNavigate).toHaveBeenCalledWith('/agents/graph-fork-001', { replace: true })
+        );
+        expect(agentsService.forkAgent).toHaveBeenCalledWith(mockToken, 'graph-001');
+        expect(agentsService.updateAgent).not.toHaveBeenCalled();
+        // The form reloads from the fork and becomes editable
+        expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Default Graph-1-forked');
+        expect(screen.getByLabelText('Name')).toBeEnabled();
+    });
+
+    test('a changed category is included in the update request', async () => {
+        (agentsService.getAgent as jest.Mock).mockResolvedValueOnce(mockAgent);
+        (agentsService.updateAgent as jest.Mock).mockResolvedValueOnce({ ...mockAgent, category: 'MEMORY' });
+        renderPage();
+        await waitFor(() => expect(screen.getByTestId('agent-category-select')).toBeInTheDocument());
+
+        await userEvent.selectOptions(screen.getByTestId('agent-category-select'), 'MEMORY');
+        await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() =>
+            expect(agentsService.updateAgent).toHaveBeenCalledWith(mockToken, 'graph-001', { category: 'MEMORY' })
         );
     });
 

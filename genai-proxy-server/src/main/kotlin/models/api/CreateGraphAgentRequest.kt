@@ -22,5 +22,7 @@ data class CreateGraphAgentRequest(
     /** Editor canvas layout JSON referencing tempIds; optional. */
     val layout: String? = null,
     val isDefault: Boolean = false,
+    /** [com.genflowly.models.AgentCategory] name; null (older clients) defaults to CONVERSATION. */
+    val category: String? = null,
     val nodes: List<NewAgentNode>,
 )

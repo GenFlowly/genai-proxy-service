@@ -40,6 +40,53 @@
     p { margin: 0; line-height: 1.4; }
 }
 
+.forkBtn {
+    @include interactive-base;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.875rem;
+    background: $color-primary;
+    color: #fff;
+    border: none;
+    border-radius: $radius-md;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover { background: $color-primary-hover-alt; }
+    &:disabled { opacity: 0.6; cursor: default; }
+}
+
+// ── Category bar (outside the canvas; the editor never sees category) ─────────
+
+.categoryBar {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 2rem;
+    border-bottom: 1px solid $color-border-light;
+    flex-shrink: 0;
+}
+
+.categoryLabel {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $color-text-muted;
+}
+
+.categorySelect {
+    padding: 0.3rem 0.625rem;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    background: $color-background-secondary;
+    color: $color-text-primary;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
 // ── Loading / error states ────────────────────────────────────────────────────
 
 .stateContainer {

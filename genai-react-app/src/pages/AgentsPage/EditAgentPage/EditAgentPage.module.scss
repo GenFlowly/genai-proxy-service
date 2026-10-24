@@ -272,6 +272,16 @@
 
 // ── Two-column edit layout ────────────────────────────────────────────────────
 
+// Bare wrapper so the disabled state (read-only System agents) reaches every
+// nested form control without affecting the layout.
+.readOnlyFieldset {
+    display: contents;
+    border: none;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}
+
 .editLayout {
     flex: 1;
     overflow: hidden;

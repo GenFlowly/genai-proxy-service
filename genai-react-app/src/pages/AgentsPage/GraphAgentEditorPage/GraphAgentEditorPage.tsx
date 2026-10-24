@@ -9,7 +9,7 @@ import EditAgentPage from '../EditAgentPage/EditAgentPage'
 import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { usePageTitle } from '../../../hooks/usePageTitle'
-import { createGraphAgent, getAgent, updateAgent } from '../../../services/agentsService'
+import { createGraphAgent, forkAgent, getAgent, updateAgent } from '../../../services/agentsService'
 import { getCustomerInstructions } from '../../../services/instructionService'
 import { getNodePresets } from '../../../services/nodePresetsService'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
@@ -17,11 +17,14 @@ import { AIVendor } from '../../../constants/vendors'
 import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import {
+    AGENT_CATEGORIES,
     Agent,
+    AgentCategory,
     CreateGraphAgentRequest,
     NewAgentNode,
     UpdateAgentNodePatch,
     UpdateAgentRequest,
+    agentCategory,
 } from '../../../models/agents.models'
 import { InstructionResponse } from '../../../models/instruction.models'
 import { NodePreset } from '../../../models/nodePresets.models'
@@ -140,6 +143,11 @@ export default function GraphAgentEditorPage() {
     const [saving, setSaving] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [dirty, setDirty] = useState(false)
+    const [forking, setForking] = useState(false)
+    // Category for NEW agents (existing agents save category changes immediately)
+    const [newAgentCategory, setNewAgentCategory] = useState<AgentCategory>('CONVERSATION')
+
+    const isReadOnly = !!agent?.isSystem
 
     useEffect(() => {
         setLeftSidebarExpanded(false)
@@ -294,6 +302,7 @@ export default function GraphAgentEditorPage() {
                     maxIterations: emitted.maxIterations,
                     entryPoint: emitted.entryPoint,
                     edges: emitted.edges,
+                    category: newAgentCategory,
                     ...(emitted.layout !== undefined ? { layout: emitted.layout } : {}),
                     ...(emitted.isDefault !== undefined ? { isDefault: emitted.isDefault } : {}),
                     nodes: emitted.nodes.map(n => ({
@@ -308,23 +317,56 @@ export default function GraphAgentEditorPage() {
                 setAgent(created)
                 navigate(`/agents/${created.graphId}`, { replace: true })
             } else {
+                // Own agents only — System agents are read-only (edits 403)
+                // and are copied via the explicit Fork button instead.
                 const req = buildUpdateAgentRequest(agent, emitted)
                 if (Object.keys(req).length === 0) return
                 const updated = await updateAgent(token, agent.graphId, req)
                 setDirty(false)
                 setAgent(updated)
-                // Saving a System agent forks it server-side: the response
-                // carries a new graphId — move (replace) to the private copy
-                if (updated.graphId !== agent.graphId) {
-                    navigate(`/agents/${updated.graphId}`, { replace: true })
-                }
             }
         } catch (err: any) {
             setErrorMessage(err?.message ?? t('agentsPage.graphEditorPage.saveFailed'))
         } finally {
             setSaving(false)
         }
+    }, [agent, newAgentCategory, getAccessTokenSilently, navigate, t])
+
+    // Fork the read-only System agent into an editable copy and open it
+    const handleFork = useCallback(async () => {
+        if (!agent) return
+        setForking(true)
+        setErrorMessage(null)
+        try {
+            const token = await getAccessTokenSilently()
+            const fork = await forkAgent(token, agent.graphId)
+            setAgent(fork)
+            navigate(`/agents/${fork.graphId}`, { replace: true })
+        } catch (err: any) {
+            setErrorMessage(err?.message ?? t('agentsPage.graphEditorPage.forkFailed'))
+        } finally {
+            setForking(false)
+        }
     }, [agent, getAccessTokenSilently, navigate, t])
+
+    // Category changes on an existing own agent save immediately (the graph
+    // save button only activates on canvas edits).
+    const handleCategoryChange = useCallback(async (value: AgentCategory) => {
+        if (!agent) {
+            setNewAgentCategory(value)
+            return
+        }
+        const previous = agent
+        setAgent({ ...agent, category: value })
+        try {
+            const token = await getAccessTokenSilently()
+            const updated = await updateAgent(token, agent.graphId, { category: value })
+            setAgent(current => (current?.graphId === updated.graphId ? updated : current))
+        } catch (err: any) {
+            setAgent(previous)
+            setErrorMessage(err?.message ?? t('agentsPage.graphEditorPage.saveFailed'))
+        }
+    }, [agent, getAccessTokenSilently, t])
 
     const handleDirtyChange = useCallback((value: boolean) => setDirty(value), [])
 
@@ -359,10 +401,42 @@ export default function GraphAgentEditorPage() {
         <div className={styles.page}>
             <Navbar />
 
-            {agent?.isSystem && (
+            {isReadOnly && (
                 <div className={styles.systemBanner} role="note">
                     <span aria-hidden="true">ℹ️</span>
                     <p>{t('agentsPage.editAgentPage.systemBanner')}</p>
+                    <button
+                        type="button"
+                        className={styles.forkBtn}
+                        onClick={handleFork}
+                        disabled={forking}
+                        data-testid="graph-editor-fork"
+                    >
+                        🔱 {forking ? t('agentsPage.graphEditorPage.forking') : t('agentsPage.graphEditorPage.forkToEdit')}
+                    </button>
+                </div>
+            )}
+
+            {/* Category lives outside the canvas: it groups the agent on the
+                Agents page and gates the conversation picker */}
+            {!loading && !loadError && !isReadOnly && (
+                <div className={styles.categoryBar}>
+                    <label className={styles.categoryLabel} htmlFor="agent-category-select">
+                        {t('agentsPage.graphEditorPage.categoryLabel')}
+                    </label>
+                    <select
+                        id="agent-category-select"
+                        className={styles.categorySelect}
+                        value={agent ? agentCategory(agent) : newAgentCategory}
+                        onChange={e => handleCategoryChange(e.target.value as AgentCategory)}
+                        data-testid="agent-category-select"
+                    >
+                        {AGENT_CATEGORIES.map(c => (
+                            <option key={c} value={c}>
+                                {t(`agentsPage.categories.${c === 'TITLE_CREATOR' ? 'titleCreator' : c.toLowerCase()}`)}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             )}
 
@@ -392,6 +466,7 @@ export default function GraphAgentEditorPage() {
                         conditionOptions={conditionOptions}
                         vendors={vendors}
                         getModelsForVendor={getModelsForVendor}
+                        readOnly={isReadOnly}
                         saving={saving}
                         errorMessage={errorMessage}
                         onSave={handleSave}
