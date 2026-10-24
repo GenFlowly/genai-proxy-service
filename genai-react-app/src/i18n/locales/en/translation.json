@@ -215,6 +215,7 @@
             "view": "View"
         },
         "textContainer": {
+            "askSelection": "Ask",
             "copyCode": "Copy Code",
             "copyResponse": "Copy Response",
             "loadingContentRenderer": "Loading content renderer..."
