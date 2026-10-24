@@ -20,13 +20,17 @@ import { CollapsedVendorBrandName } from '../../common/BrandName/BrandName'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { CONVERSATION_FORKED_EVENT } from '../../../constants/events'
-import { SidebarListPanel, SidebarListGroup, SidebarListItem, SidebarListLoadMore, Modal, InputTextWithHint } from '@genflowly/component-library'
+import { SidebarListPanel, SidebarListGroup, SidebarListItem, SidebarListLoadMore, Modal, InputTextWithHint, VerticalSplit } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
 import { loadHistoryCache, saveHistoryCache, getExpandedProject, setExpandedProject } from './historyCache'
 import { formatServerDateTime, formatServerTime, parseServerDate } from '../../../utils/timeUtils'
 
 const PAGE_SIZE = 15
+
+// Top (Projects) pane's share of the sidebar height, persisted as a fraction
+// so both panes keep scaling together when the sidebar resizes
+const HISTORY_SPLIT_STORAGE_KEY = 'conversation_history_split_fraction'
 
 // One entry in the Projects section: the project's own pinned and recent
 // conversations, rendered as subsections under a collapsible project row
@@ -566,20 +570,23 @@ export default function ConversationHistoryComponent() {
 
     return (
         <>
-            <div className={styles.stack}>
-                {showProjectsPanel && (
-                    <div className={styles.projectsPane} data-testid="projects-pane">
-                        <SidebarListPanel
-                            groups={projectsGroups}
-                            isLoading={false}
-                            hasError={false}
-                            errorText={t('conversation.conversationHistory.failedToLoad')}
-                            emptyText={t('conversation.conversationHistory.noProjectsYet')}
-                            listAriaLabel={t('conversation.conversationHistory.projects')}
-                        />
-                    </div>
-                )}
-                <div className={styles.historyPane} data-testid="history-pane">
+            <VerticalSplit
+                storageKey={HISTORY_SPLIT_STORAGE_KEY}
+                separatorLabel={t('conversation.conversationHistory.resizePanels')}
+                handleTestId="history-split-handle"
+                topTestId="projects-pane"
+                bottomTestId="history-pane"
+                top={showProjectsPanel ? (
+                    <SidebarListPanel
+                        groups={projectsGroups}
+                        isLoading={false}
+                        hasError={false}
+                        errorText={t('conversation.conversationHistory.failedToLoad')}
+                        emptyText={t('conversation.conversationHistory.noProjectsYet')}
+                        listAriaLabel={t('conversation.conversationHistory.projects')}
+                    />
+                ) : null}
+                bottom={
                     <SidebarListPanel
                         groups={historyGroups}
                         isLoading={isLoading}
@@ -596,8 +603,8 @@ export default function ConversationHistoryComponent() {
                             />
                         )}
                     />
-                </div>
-            </div>
+                }
+            />
 
             <Modal
                 isOpen={isCreateProjectOpen}
