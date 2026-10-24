@@ -34,7 +34,6 @@
             "createAgent": "Create agent"
         },
         "categories": {
-            "all": "All agents",
             "conversation": "Conversation",
             "instructions": "Instructions",
             "memory": "Memory",

@@ -306,7 +306,7 @@ describe('AgentsPage Component', () => {
 
     // ── Category sidebar + ownership chips ────────────────────────────────────
 
-    test('category sections filter the grid; missing category counts as Conversation', async () => {
+    test('category sections filter the grid; Conversation is the default view', async () => {
         const memoryAgent = {
             ...mockAgent,
             graphId: 'graph-mem',
@@ -318,7 +318,9 @@ describe('AgentsPage Component', () => {
             agents: [mockAgent, memoryAgent], // mockAgent has no category → CONVERSATION
         });
         renderPage();
-        await waitFor(() => expect(screen.getByText('Memory Agent')).toBeInTheDocument());
+        // Conversation is selected by default: the memory agent is hidden
+        await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
+        expect(screen.queryByText('Memory Agent')).not.toBeInTheDocument();
 
         await userEvent.click(screen.getByTestId('agents-category-memory'));
         expect(screen.getByText('Memory Agent')).toBeInTheDocument();
@@ -327,10 +329,6 @@ describe('AgentsPage Component', () => {
         await userEvent.click(screen.getByTestId('agents-category-conversation'));
         expect(screen.getByText('Default Graph')).toBeInTheDocument();
         expect(screen.queryByText('Memory Agent')).not.toBeInTheDocument();
-
-        await userEvent.click(screen.getByTestId('agents-category-all'));
-        expect(screen.getByText('Default Graph')).toBeInTheDocument();
-        expect(screen.getByText('Memory Agent')).toBeInTheDocument();
     });
 
     test('"Created by me" chip hides System agents', async () => {
