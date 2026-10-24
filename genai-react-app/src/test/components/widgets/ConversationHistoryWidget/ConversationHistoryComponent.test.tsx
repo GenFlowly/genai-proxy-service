@@ -632,7 +632,11 @@ describe('ConversationHistoryComponent', () => {
                 expect(screen.getByTestId('conv-history-project-proj-9')).toBeInTheDocument()
             })
             expect(screen.getByText('Empty One')).toBeInTheDocument()
-            expect(screen.getByTestId('conv-history-project-proj-9')).toHaveAttribute('aria-expanded', 'false')
+            // Nothing to expand yet: the row renders without a chevron or
+            // expand semantics until a conversation lands in the project
+            const row = screen.getByTestId('conv-history-project-proj-9')
+            expect(row).not.toHaveAttribute('aria-expanded')
+            expect(row.querySelector('svg')).toBeNull()
         })
 
         test('creates a project from the sidebar', async () => {
@@ -741,9 +745,11 @@ describe('ConversationHistoryComponent', () => {
             fireEvent.click(btn)
 
             expect(mockStartConversationInProject).toHaveBeenCalledWith('proj-1')
-            // The project force-expands so the upcoming conversation is
-            // visible inside it once the first message creates it
-            expect(screen.getByTestId('conv-history-project-proj-1')).toHaveAttribute('aria-expanded', 'true')
+            // The empty project row stays chevron-less (nothing to expand
+            // yet); the force-expanded state is recorded so the upcoming
+            // conversation renders visible once the first message creates it
+            // (covered by the born-in-project test below)
+            expect(screen.getByTestId('conv-history-project-proj-1')).not.toHaveAttribute('aria-expanded')
         })
 
         test('a conversation born in a project groups under it when its title arrives', async () => {
