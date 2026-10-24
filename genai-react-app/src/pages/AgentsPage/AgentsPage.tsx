@@ -5,6 +5,7 @@ import Navbar from '../../components/navbar/Navbar'
 import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader'
 import i18n from '../../i18n'
 import {
+    Chip,
     Grid,
     GridCol,
     PageHeader,
@@ -202,7 +203,7 @@ export default function AgentsPage() {
     const [agents, setAgents] = useState<Agent[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [category, setCategory] = useState<CategoryFilter>('ALL')
+    const [category, setCategory] = useState<CategoryFilter>('CONVERSATION')
     const [ownership, setOwnership] = useState<'all' | 'mine'>('all')
     const [forking, setForking] = useState(false)
     const { selectedAgentId } = useAI()
@@ -211,9 +212,7 @@ export default function AgentsPage() {
     const visibleAgents = useMemo(
         () =>
             agents.filter(
-                a =>
-                    (category === 'ALL' || agentCategory(a) === category) &&
-                    (ownership === 'all' || !a.isSystem)
+                a => agentCategory(a) === category && (ownership === 'all' || !a.isSystem)
             ),
         [agents, category, ownership]
     )
@@ -262,7 +261,7 @@ export default function AgentsPage() {
     const categoryGroup: SidebarListGroup = {
         id: 'categories',
         label: t('agentsPage.categories.sectionLabel'),
-        items: (['ALL', ...AGENT_CATEGORIES] as CategoryFilter[]).map(filter => ({
+        items: (AGENT_CATEGORIES as CategoryFilter[]).map(filter => ({
             id: filter,
             label: (
                 <span className={styles.categoryItem}>
@@ -370,18 +369,16 @@ export default function AgentsPage() {
                         <>
                             {/* Ownership filter chips */}
                             <div className={styles.filterChips}>
-                                <PillButton
+                                <Chip
                                     label={t('agentsPage.filters.allAgents')}
-                                    variant={ownership === 'all' ? 'primary' : 'secondary'}
+                                    selected={ownership === 'all'}
                                     onClick={() => setOwnership('all')}
-                                    aria-pressed={ownership === 'all'}
                                     data-testid="agents-filter-all"
                                 />
-                                <PillButton
+                                <Chip
                                     label={t('agentsPage.filters.createdByMe')}
-                                    variant={ownership === 'mine' ? 'primary' : 'secondary'}
+                                    selected={ownership === 'mine'}
                                     onClick={() => setOwnership('mine')}
-                                    aria-pressed={ownership === 'mine'}
                                     data-testid="agents-filter-mine"
                                 />
                             </div>

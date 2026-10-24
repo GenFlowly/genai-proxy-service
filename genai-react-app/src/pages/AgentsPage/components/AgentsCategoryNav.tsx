@@ -3,10 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { AGENT_CATEGORIES, Agent, AgentCategory, agentCategory } from '../../../models/agents.models'
 import styles from './AgentsCategoryNav.module.scss'
 
-export type CategoryFilter = 'ALL' | AgentCategory
+export type CategoryFilter = AgentCategory
 
 export const CATEGORY_LABEL_KEYS: Record<CategoryFilter, string> = {
-    ALL: 'agentsPage.categories.all',
     CONVERSATION: 'agentsPage.categories.conversation',
     MEMORY: 'agentsPage.categories.memory',
     TITLE_CREATOR: 'agentsPage.categories.titleCreator',
@@ -14,16 +13,15 @@ export const CATEGORY_LABEL_KEYS: Record<CategoryFilter, string> = {
 }
 
 export const CATEGORY_ICONS: Record<CategoryFilter, string> = {
-    ALL: '🗂️',
     CONVERSATION: '💬',
     MEMORY: '🧠',
     TITLE_CREATOR: '🏷️',
     INSTRUCTIONS: '📜',
 }
 
-/** Agents in [filter] (ALL = every agent), for the category counts. */
+/** Agents in [filter], for the category counts. */
 export function categoryCount(agents: Agent[], filter: CategoryFilter): number {
-    return filter === 'ALL' ? agents.length : agents.filter(a => agentCategory(a) === filter).length
+    return agents.filter(a => agentCategory(a) === filter).length
 }
 
 interface AgentsCategoryNavProps {
@@ -40,7 +38,7 @@ interface AgentsCategoryNavProps {
 export default function AgentsCategoryNav({ agents, selected, onSelect }: AgentsCategoryNavProps) {
     const { t } = useTranslation()
 
-    const filters: CategoryFilter[] = ['ALL', ...AGENT_CATEGORIES]
+    const filters: CategoryFilter[] = AGENT_CATEGORIES
 
     return (
         <nav className={styles.nav} aria-label={t('agentsPage.categories.navAriaLabel')}>
