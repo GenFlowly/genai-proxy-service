@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import { useNavigate } from 'react-router-dom'
-import { InstructionTile } from '@genflowly/component-library'
+import { Grid, GridCol, InstructionTile } from '@genflowly/component-library'
 import { getCustomerInstructions } from '../services/instructionsService'
 import { InstructionResponse } from '../models/instructions.models'
 
@@ -57,22 +57,23 @@ export default function InstructionsPage() {
             ) : ownInstructions.length === 0 ? (
                 <p className="page-description">No instructions yet. Create one to get started.</p>
             ) : (
-                <div className="tile-grid">
+                <Grid data-testid="instructions-grid">
                     {ownInstructions.map((instruction) => (
-                        <InstructionTile
-                            key={instruction.id}
-                            title={instruction.name || 'Untitled instruction'}
-                            detail={instruction.instruction}
-                            icon={instruction.icon || undefined}
-                            color={instruction.color || undefined}
-                            tags={instruction.tags || undefined}
-                            version={instruction.version}
-                            owner={user?.name ? { name: user.name, avatarUrl: user.picture } : undefined}
-                            onClick={() => navigate(`/instructions/${instruction.id}`)}
-                            data-testid={`instruction-tile-${instruction.id}`}
-                        />
+                        <GridCol key={instruction.id} span={12} md={6} lg={4}>
+                            <InstructionTile
+                                title={instruction.name || 'Untitled instruction'}
+                                detail={instruction.instruction}
+                                icon={instruction.icon || undefined}
+                                color={instruction.color || undefined}
+                                tags={instruction.tags || undefined}
+                                version={instruction.version}
+                                owner={user?.name ? { name: user.name, avatarUrl: user.picture } : undefined}
+                                onClick={() => navigate(`/instructions/${instruction.id}`)}
+                                data-testid={`instruction-tile-${instruction.id}`}
+                            />
+                        </GridCol>
                     ))}
-                </div>
+                </Grid>
             )}
         </section>
     )

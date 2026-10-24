@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
-import { Modal, InputTextWithHint, InstructionTile, ScrollArea } from '@genflowly/component-library'
+import { Grid, GridCol, Modal, InputTextWithHint, InstructionTile, ScrollArea } from '@genflowly/component-library'
 import { searchInstructions, getRecentInstructions } from '../../../services/instructionService'
 import { InstructionResponse } from '../../../models/instruction.models'
 import { loadRecentInstructionsCache, saveRecentInstructionsCache } from './recentInstructionsCache'
@@ -131,21 +131,23 @@ export default function InstructionPickerModal({
                     </p>
                 ) : (
                     <ScrollArea className={styles.tiles}>
-                        <div className={styles.tilesGrid}>
+                        {/* Two tiles per row in the wide desktop modal, one when narrow */}
+                        <Grid gap="sm" data-testid="instruction-picker-grid">
                             {shown.map(instruction => (
-                                <InstructionTile
-                                    key={instruction.id}
-                                    title={instruction.name || t('common.instructionTile.untitledInstruction')}
-                                    detail={instruction.instruction}
-                                    icon={instruction.icon || undefined}
-                                    color={instruction.color || undefined}
-                                    tags={instruction.tags || undefined}
-                                    version={instruction.version}
-                                    onClick={() => onSelect(instruction)}
-                                    data-testid={`instruction-picker-tile-${instruction.id}`}
-                                />
+                                <GridCol key={instruction.id} span={12} md={6}>
+                                    <InstructionTile
+                                        title={instruction.name || t('common.instructionTile.untitledInstruction')}
+                                        detail={instruction.instruction}
+                                        icon={instruction.icon || undefined}
+                                        color={instruction.color || undefined}
+                                        tags={instruction.tags || undefined}
+                                        version={instruction.version}
+                                        onClick={() => onSelect(instruction)}
+                                        data-testid={`instruction-picker-tile-${instruction.id}`}
+                                    />
+                                </GridCol>
                             ))}
-                        </div>
+                        </Grid>
                     </ScrollArea>
                 )}
             </div>
