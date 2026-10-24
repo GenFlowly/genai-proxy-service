@@ -1,21 +1,21 @@
 @import '../../../styles/themes.scss';
 @import '../../../styles/mixins.scss';
 
-// Desktop: vertical section nav (SettingsSidebar pattern).
-// Mobile: the same buttons as a horizontally scrollable row above the grid.
+// Desktop: vertical section nav inside the library ResizableSidebar (which
+// owns the width). Mobile: the same buttons as a horizontally scrollable row
+// above the grid.
 
 .nav {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    width: 13.5rem;
-    flex-shrink: 0;
+    width: 100%;
+    padding: 0.25rem 0.75rem 0.25rem 0;
 
     @include respond-to-mobile {
         flex-direction: row;
-        width: 100%;
         overflow-x: auto;
-        padding-bottom: 0.25rem;
+        padding: 0 0 0.25rem 0;
         -webkit-overflow-scrolling: touch;
     }
 }

@@ -118,12 +118,7 @@ main > .page {
     min-height: 0;
 }
 
-.tile-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1rem;
-    align-content: start;
-}
+/* Instruction tiles are laid out by the library Grid (span 12 / md 6 / lg 4). */
 
 /* Editor fills the remaining viewport below the title row */
 .instruction-editor-container {
@@ -599,13 +594,10 @@ button.danger {
     margin: 0;
 }
 
-.agents-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
-    gap: 1.5rem;
-}
-
+/* Cards are laid out by the library Grid (span 12 / md 6 / lg 4). */
 .agent-card {
+    height: 100%;
+    box-sizing: border-box;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;

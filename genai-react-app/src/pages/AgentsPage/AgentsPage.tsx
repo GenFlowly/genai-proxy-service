@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import Navbar from '../../components/navbar/Navbar'
 import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader'
 import i18n from '../../i18n'
-import { PillButton, ScrollArea } from '@genflowly/component-library'
+import { Grid, GridCol, PillButton, ResizableSidebar, ScrollArea } from '@genflowly/component-library'
 import styles from './AgentsPage.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
@@ -291,8 +291,20 @@ export default function AgentsPage() {
 
                 {!loading && !error && agents.length > 0 && (
                     <div className={styles.layout}>
-                        {/* Category sections: sidebar on desktop, chip row on mobile */}
-                        <AgentsCategoryNav agents={agents} selected={category} onSelect={setCategory} />
+                        {/* Category sections: resizable sidebar on desktop, chip row on mobile */}
+                        {isMobile ? (
+                            <AgentsCategoryNav agents={agents} selected={category} onSelect={setCategory} />
+                        ) : (
+                            <ResizableSidebar
+                                storageKey="agentsCategorySidebarWidth"
+                                minWidth={180}
+                                defaultWidth={216}
+                                maxWidth={320}
+                                data-testid="agents-category-sidebar"
+                            >
+                                <AgentsCategoryNav agents={agents} selected={category} onSelect={setCategory} />
+                            </ResizableSidebar>
+                        )}
 
                         <div className={styles.main}>
                             {/* Ownership filter chips */}
@@ -320,18 +332,19 @@ export default function AgentsPage() {
                                     <p className={styles.stateSubText}>{t('agentsPage.agentsPage.noMatchesSubtitle')}</p>
                                 </div>
                             ) : (
-                                <div className={styles.grid}>
+                                <Grid data-testid="agents-grid">
                                     {visibleAgents.map(agent => (
-                                        <AgentCard
-                                            key={agent.graphId}
-                                            agent={agent}
-                                            isEffectiveDefault={agent.graphId === defaultId}
-                                            onEdit={handleEdit}
-                                            onFork={handleFork}
-                                            forking={forking}
-                                        />
+                                        <GridCol key={agent.graphId} span={12} md={6} lg={4}>
+                                            <AgentCard
+                                                agent={agent}
+                                                isEffectiveDefault={agent.graphId === defaultId}
+                                                onEdit={handleEdit}
+                                                onFork={handleFork}
+                                                forking={forking}
+                                            />
+                                        </GridCol>
                                     ))}
-                                </div>
+                                </Grid>
                             )}
                         </div>
                     </div>
