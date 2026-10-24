@@ -33,6 +33,9 @@ function LandingPageContent() {
             {!isMobile && isHistoryWidgetExpanded && config.pageId === 'CHAT_PAGE' && (
                 <ResizableSidebar
                     storageKey={HISTORY_WIDTH_STORAGE_KEY}
+                    // The split's two stacked cards are the visible panels;
+                    // this column only owns the shared width
+                    variant="plain"
                     data-testid="history-sidebar"
                     handleTestId="history-resize-handle"
                 >

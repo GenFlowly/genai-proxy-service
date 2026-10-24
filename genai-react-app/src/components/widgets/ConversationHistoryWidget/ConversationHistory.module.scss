@@ -1,36 +1,6 @@
 // Content-specific styles for conversation-history list items; the list
 // chrome itself comes from the shared SidebarListPanel
 
-// Two library panels stacked in one resizable column — Projects on top,
-// History (Pinned/Recents) below. A single column means a single drag
-// handle, so both panels always share the same width.
-.stack {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-}
-
-// Hugs its content (flex-basis auto, no shrink) up to half the viewport;
-// past the cap the panel's internal ScrollArea takes over scrolling.
-.projectsPane {
-    display: flex;
-    flex-direction: column;
-    flex: 0 0 auto;
-    min-height: 0;
-    max-height: 50vh;
-    border-bottom: 1px solid var(--color-border);
-}
-
-.historyPane {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 0;
-    min-height: 0;
-}
-
 .vendorIcons {
     display: flex;
     align-items: center;
