@@ -64,6 +64,13 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // Plain-HTTP requests must stay on our domain; without this, the Pages
+    // origin answers http with a 301 to its own pages.dev hostname.
+    if (url.protocol === "http:") {
+      url.protocol = "https:";
+      return Response.redirect(url.toString(), 301);
+    }
+
     // Handle CORS preflight at the edge
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -80,6 +87,7 @@ export default {
     const isApi = url.pathname.startsWith("/api");
     const targetUrl = new URL(request.url);
     targetUrl.hostname = isApi ? env.API_HOST : env.STATIC_HOST;
+    targetUrl.protocol = "https:";
 
     console.log({
       incoming: url.pathname,
