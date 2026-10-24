@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import styles from './InstructionsPage.module.scss';
 import {
+    Grid,
+    GridCol,
     InputTextWithHint,
     InstructionTile,
     PageHeader,
@@ -99,28 +101,29 @@ export default function InstructionsPage() {
                     <p>{t('instructionsPage.instructionsPage.noSearchResults')}</p>
                 </div>
             ) : (
-                <div className={styles.grid}>
+                <Grid data-testid="instructions-grid">
                     {visibleInstructions.map(instruction => (
-                        <InstructionTile
-                            key={instruction.id}
-                            title={instruction.name || t('common.instructionTile.untitledInstruction')}
-                            detail={instruction.instruction}
-                            icon={instruction.icon || undefined}
-                            color={instruction.color || undefined}
-                            tags={instruction.tags || undefined}
-                            version={instruction.version}
-                            // The list only knows the creator for the user's own
-                            // instructions; shared ones omit the avatar
-                            owner={
-                                instruction.role === 'OWNER' && user?.name
-                                    ? { name: user.name, avatarUrl: user.picture }
-                                    : undefined
-                            }
-                            onClick={() => navigate(`/instructions/${instruction.id}`)}
-                            data-testid={`instruction-tile-${instruction.id}`}
-                        />
+                        <GridCol key={instruction.id} span={12} md={6} lg={4}>
+                            <InstructionTile
+                                title={instruction.name || t('common.instructionTile.untitledInstruction')}
+                                detail={instruction.instruction}
+                                icon={instruction.icon || undefined}
+                                color={instruction.color || undefined}
+                                tags={instruction.tags || undefined}
+                                version={instruction.version}
+                                // The list only knows the creator for the user's own
+                                // instructions; shared ones omit the avatar
+                                owner={
+                                    instruction.role === 'OWNER' && user?.name
+                                        ? { name: user.name, avatarUrl: user.picture }
+                                        : undefined
+                                }
+                                onClick={() => navigate(`/instructions/${instruction.id}`)}
+                                data-testid={`instruction-tile-${instruction.id}`}
+                            />
+                        </GridCol>
                     ))}
-                </div>
+                </Grid>
             )}
         </ScrollArea>
         </div>

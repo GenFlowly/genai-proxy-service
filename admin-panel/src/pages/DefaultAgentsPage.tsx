@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
+import { Grid, GridCol } from '@genflowly/component-library'
 import { DefaultGraphResponse } from '../models/defaultGraph.models'
 import { AgentResponse, RequestAgentMapStatus } from '../models/requestAgents.models'
 import { getDefaultGraph } from '../services/defaultGraphService'
@@ -236,7 +237,7 @@ export default function DefaultAgentsPage() {
                 />
             )}
 
-            <div className="agents-grid">
+            <Grid data-testid="agents-grid">
                 {cards.map((agent) => {
                     const isChatDefault = agent.graphId === defaultGraphId
                     const actions = servedActions(agent.graphId)
@@ -245,9 +246,9 @@ export default function DefaultAgentsPage() {
                         ? '/default-agents/default-graph'
                         : `/default-agents/agent/${agent.graphId}`
                     return (
+                        <GridCol key={agent.graphId} span={12} md={6} lg={4}>
                         <div
                             className={`agent-card ${isChatDefault ? 'is-default' : ''}`}
-                            key={agent.graphId}
                         >
                             <div className="agent-card-header">
                                 <div className="agent-card-title-row">
@@ -330,9 +331,10 @@ export default function DefaultAgentsPage() {
                                 </span>
                             </div>
                         </div>
+                        </GridCol>
                     )
                 })}
-            </div>
+            </Grid>
 
             {!defaultGraph && (
                 <p className="agents-subtitle">
