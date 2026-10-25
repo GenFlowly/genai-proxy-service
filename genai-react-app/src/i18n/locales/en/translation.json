@@ -691,7 +691,8 @@
         },
         "vectorDbUsageSettings": {
             "title": "Vector DB Usage",
-            "subtitle": "An estimated cost for your vector database operations, based on an admin-configurable rate card — not a real bill from your provider.",
+            "subtitle": "Operation volume for your vector database — Zilliz prices by data size and compute, not a figure we can estimate here.",
+            "noCostNote": "No cost shown — your vector database provider bills by data size and compute, not by operation count, so a dollar estimate here wouldn't reflect your real bill.",
             "byOperation": "By operation",
             "operation": "Operation",
             "operationCount": "Count",
