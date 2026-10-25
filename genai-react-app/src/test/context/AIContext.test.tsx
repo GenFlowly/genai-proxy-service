@@ -192,6 +192,129 @@ describe('AIContext UI Integration', () => {
         expect(select).not.toBeInTheDocument();
     });
 
+    test('Seeds thinking level from preferredModels preferences', async () => {
+        mockUseAuth.mockReturnValue({
+            ...mockUseAuth(),
+            aiVendorAPIKeyStatusList: [
+                { aiVendor: AIVendor.OPENAI, isAPIKeyValid: true, status: APIKeyStatus.VALID }
+            ],
+            aiConfigPreferences: {
+                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5', thinkingLevel: 'high' }]
+            }
+        });
+        (getTextGenerationModels as jest.Mock).mockResolvedValue({
+            aiVendorModelList: [{ aiVendor: 'OPENAI', modelsList: ['gpt-5'] }]
+        });
+
+        await act(async () => {
+            customRender(<AIVendorWidget />);
+        });
+
+        const thinkingSelect = await screen.findByTestId('thinking-select-OPENAI');
+        expect(thinkingSelect).toHaveValue('high');
+    });
+
+    test('Falls back to vendor key status thinking level when preferences lack it', async () => {
+        // Settings-page saves predating thinkingLevel in preferredModels only
+        // stored it on the vendor key item
+        mockUseAuth.mockReturnValue({
+            ...mockUseAuth(),
+            aiVendorAPIKeyStatusList: [
+                { aiVendor: AIVendor.OPENAI, isAPIKeyValid: true, status: APIKeyStatus.VALID, thinkingLevel: 'high' }
+            ],
+            aiConfigPreferences: {
+                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5' }]
+            }
+        });
+        (getTextGenerationModels as jest.Mock).mockResolvedValue({
+            aiVendorModelList: [{ aiVendor: 'OPENAI', modelsList: ['gpt-5'] }]
+        });
+
+        await act(async () => {
+            customRender(<AIVendorWidget />);
+        });
+
+        const thinkingSelect = await screen.findByTestId('thinking-select-OPENAI');
+        expect(thinkingSelect).toHaveValue('high');
+    });
+
+    test('Later preference updates do not overwrite active session selections', async () => {
+        const base = mockUseAuth();
+        const makeTree = () => (
+            <MemoryRouter>
+                <ToastProvider>
+                    <LayoutProvider>
+                        <AuthProvider>
+                            <AIProvider>
+                                <ConversationProvider>
+                                    <AIVendorWidget />
+                                </ConversationProvider>
+                            </AIProvider>
+                        </AuthProvider>
+                    </LayoutProvider>
+                </ToastProvider>
+            </MemoryRouter>
+        );
+        mockUseAuth.mockReturnValue({
+            ...base,
+            aiConfigPreferences: {
+                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5' }]
+            }
+        });
+        (getTextGenerationModels as jest.Mock).mockResolvedValue({
+            aiVendorModelList: [{ aiVendor: 'OPENAI', modelsList: ['gpt-5', 'gpt-5-mini'] }]
+        });
+
+        let utils: ReturnType<typeof render>;
+        await act(async () => {
+            utils = render(makeTree());
+        });
+
+        const select = await screen.findByTestId('model-select-OPENAI');
+        expect(select).toHaveValue('gpt-5');
+
+        // User picks a different model this session
+        fireEvent.change(select, { target: { value: 'gpt-5-mini' } });
+
+        // Backend preferences change afterwards (e.g. saved from settings)
+        mockUseAuth.mockReturnValue({
+            ...base,
+            aiConfigPreferences: {
+                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5', thinkingLevel: 'low' }]
+            }
+        });
+        await act(async () => {
+            utils!.rerender(makeTree());
+        });
+
+        expect(screen.getByTestId('model-select-OPENAI')).toHaveValue('gpt-5-mini');
+    });
+
+    test('useAI outside AIProvider returns an inert fallback', () => {
+        const { useAI } = require('../../context/AIContext');
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
+        let api: any;
+        function Orphan() {
+            api = useAI();
+            return null;
+        }
+
+        render(<Orphan />);
+
+        expect(warnSpy).toHaveBeenCalled();
+        expect(api.config).toEqual([]);
+        // The fallback setters are no-ops and must not throw
+        api.setSelectedModelForAIVendor('OPENAI', 'gpt-5');
+        api.setThinkingLevelForAIVendor('OPENAI', 'high');
+        api.resetConfig();
+        api.setActiveBlockId('block-1');
+        api.setSupplementalText('text');
+        api.setSystemPrompt('prompt');
+        api.setSelectedInstructionId('inst-1');
+        api.setSelectedAgentId('agent-1');
+        warnSpy.mockRestore();
+    });
+
     test('Loads cached models from localStorage and updates with API data', async () => {
         // 1. Setup Cache
         const cachedModels = [{
