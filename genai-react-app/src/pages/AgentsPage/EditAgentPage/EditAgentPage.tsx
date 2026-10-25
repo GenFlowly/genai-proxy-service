@@ -18,7 +18,8 @@ import {
     agentCategory,
 } from '../../../models/agents.models'
 import { InstructionResponse } from '../../../models/instruction.models'
-import { ScrollArea } from '@genflowly/component-library'
+import { Icon, ScrollArea } from '@genflowly/component-library'
+import { ICONS } from '../../../constants/icons'
 import styles from './EditAgentPage.module.scss'
 import { formatServerDateTime } from '../../../utils/timeUtils'
 import { getThinkingLevelInfo } from '../../../utils/thinkingLevels'
@@ -681,7 +682,7 @@ export default function EditAgentPage() {
                             >
                                 {forking
                                     ? <><span className={styles.savingSpinner} />{t('agentsPage.editAgentPage.forking')}</>
-                                    : <>🔱 {t('agentsPage.editAgentPage.forkToEdit')}</>
+                                    : <><Icon src={ICONS.GIT_FORK} size={14} /> {t('agentsPage.editAgentPage.forkToEdit')}</>
                                 }
                             </button>
                         ) : (
