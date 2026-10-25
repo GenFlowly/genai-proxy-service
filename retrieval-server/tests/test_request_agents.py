@@ -345,7 +345,7 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         embeddings = [{"vector": vector if vector is not None else [0.1, 0.2], "text": req.memory_value}]
         with (
             patch.object(notes_module, "get_milvus_client", return_value=client),
-            patch("graph.nodes.retrieval._get_cached_embedding_model", return_value=MagicMock()),
+            patch("graph.nodes.retrieval.customer_embedding_model", return_value=MagicMock()),
             patch("encoding_library.utils.embedding_utils.create_embeddings", return_value=embeddings),
         ):
             result = await encode_memory(req)
@@ -396,12 +396,30 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         client = _FakeMilvusForEncode(True)
         with (
             patch.object(notes_module, "get_milvus_client", return_value=client),
-            patch("graph.nodes.retrieval._get_cached_embedding_model", return_value=MagicMock()),
+            patch("graph.nodes.retrieval.customer_embedding_model", return_value=MagicMock()),
             patch("encoding_library.utils.embedding_utils.create_embeddings", return_value=[]),
         ):
             with self.assertRaises(HTTPException) as ctx:
                 await encode_memory(self._request())
         self.assertEqual(ctx.exception.status_code, 500)
+        self.assertIsNone(client.inserted)
+
+    async def test_missing_embedding_key_is_a_409(self):
+        from fastapi import HTTPException
+
+        from encoding_library.utils.embedding_utils import EmbeddingKeyMissing
+
+        client = _FakeMilvusForEncode(True)
+        with (
+            patch.object(notes_module, "get_milvus_client", return_value=client),
+            patch(
+                "graph.nodes.retrieval.customer_embedding_model",
+                side_effect=EmbeddingKeyMissing("voyage"),
+            ),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                await encode_memory(self._request())
+        self.assertEqual(ctx.exception.status_code, 409)
         self.assertIsNone(client.inserted)
 
 

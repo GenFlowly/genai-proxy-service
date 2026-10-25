@@ -32,7 +32,7 @@ from encoding_library.observability import (
     setup_logging,
     track,
 )
-from encoding_library.utils.vector_db import get_milvus_client
+from encoding_library.utils.vector_db import VectorDBNotConfigured, get_milvus_client
 from handlers.http_metrics import track_http_status
 from services.content_logging import default_log_level
 
@@ -164,6 +164,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info("Dropped %d collection(s) of customer %s", len(collections), customer_id)
         return _response(200, {"action": action, "dropped": collections})
 
+    except VectorDBNotConfigured:
+        # No vector DB means nothing was ever stored — purge is a no-op,
+        # matching the idempotent "nothing to delete" contract above.
+        count("vector_purge_total", operation=action, status="ok")
+        logger.info("No vector DB configured for customer %s; nothing to purge", customer_id)
+        return _response(200, {"action": action, "deleted": 0})
     except Exception as e:
         count("vector_purge_total", operation=action, status="error")
         logger.error("Vector purge failed: %s", type(e).__name__, exc_info=True)

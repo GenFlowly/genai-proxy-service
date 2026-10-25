@@ -7,18 +7,15 @@ graph node that searches on every turn with a static query.
 Provider: Tavily (a plain HTTPS call, independent of which LLM provider the
 request resolves to). The API key is the customer's own, resolved per request
 by the host and delivered through context.secrets (credential_ref
-"WEB_SEARCH"). A customer who has not connected a key falls back to the
-platform-wide TAVILY_API_KEY environment variable, which keeps existing
-deployments working; that fallback is the only env var read here and it is
-never per-customer. A missing key or an upstream failure degrades to a plain
-message the model can act on (it may answer from its own knowledge or retry),
-never an exception that aborts the turn.
+"WEB_SEARCH"); there is deliberately no platform-wide fallback key — a
+customer without a stored key has no web search. A missing key or an upstream
+failure degrades to a plain message the model can act on (it may answer from
+its own knowledge or retry), never an exception that aborts the turn.
 
 Self-contained: imports only stdlib plus httpx (imported lazily in run(), like
 the other tools import their renderers), so the package stays extractable.
 """
 import logging
-import os
 
 from graph_tools.base import GraphTool, Source, ToolContext, ToolResult
 
@@ -139,14 +136,11 @@ class WebSearchTool(GraphTool):
         if not query:
             return ToolResult(content="Error: query is empty — pass a search query.")
 
-        # Customer's own key first; the platform key is a deployment-wide
-        # fallback, not a per-tenant value.
         credentials = context.secrets(self.credential_ref) or {}
-        api_key = credentials.get("api_key") or os.getenv("TAVILY_API_KEY")
+        api_key = credentials.get("api_key")
         if not api_key:
-            logger.error(
-                "web_search: customer=%s has no stored key and TAVILY_API_KEY is not set",
-                context.customer_id,
+            logger.warning(
+                "web_search: customer=%s has no stored Tavily key", context.customer_id
             )
             return ToolResult(
                 content=(
@@ -186,17 +180,14 @@ class WebSearchTool(GraphTool):
         if exclude_domains:
             payload["exclude_domains"] = exclude_domains
 
-        key_source = "customer" if credentials.get("api_key") else "platform"
         logger.info(
-            "web_search: customer=%s key=%s topic=%s max_results=%d query='%s'",
-            context.customer_id, key_source, topic, max_results, query[:100],
+            "web_search: customer=%s topic=%s max_results=%d query='%s'",
+            context.customer_id, topic, max_results, query[:100],
         )
         try:
             data = await self._search(payload, api_key)
         except Exception as e:
-            # Which key failed matters more than the stack: "customer" means the
-            # key connected in settings, "platform" the deployment-wide fallback.
-            logger.error("web_search: FAILED (key=%s) — %s", key_source, e, exc_info=True)
+            logger.error("web_search: FAILED — %s", e, exc_info=True)
             # Tavily's auth/quota statuses are terminal for the whole turn —
             # retrying with a new query cannot succeed, so say that outright
             # instead of inviting the retry loop the generic message allows.
@@ -207,7 +198,7 @@ class WebSearchTool(GraphTool):
                 return ToolResult(
                     content=(
                         "Web search is unavailable: the search provider account for "
-                        f"the configured ({key_source}) API key is out of credits or "
+                        "the connected API key is out of credits or "
                         "over its plan limit. Retrying will not help. Answer from "
                         "your own knowledge, note it may not be current, and tell "
                         "the user their web-search credits are exhausted."
@@ -216,8 +207,8 @@ class WebSearchTool(GraphTool):
             if status == 401:
                 return ToolResult(
                     content=(
-                        "Web search is unavailable: the configured "
-                        f"({key_source}) search API key was rejected as invalid. "
+                        "Web search is unavailable: the connected "
+                        "search API key was rejected as invalid. "
                         "Retrying will not help. Answer from your own knowledge, "
                         "note it may not be current, and tell the user their "
                         "web-search API key needs to be corrected in settings."

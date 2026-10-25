@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
-from encoding_library.utils.vector_db import ensure_collection, get_milvus_client
+from encoding_library.utils.vector_db import VectorDBNotConfigured, ensure_collection, get_milvus_client
 from encoding_library.utils.model_registry import (
     resolve_model,
     get_embedding_dimension,
@@ -124,6 +124,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             })
         }
         
+    except VectorDBNotConfigured as e:
+        logger.warning(f"Cannot create collections: {e}")
+        return {
+            'statusCode': 409,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({'error': str(e)}),
+        }
     except Exception as e:
         logger.error(f"Error creating collections: {str(e)}", exc_info=True)
         return {

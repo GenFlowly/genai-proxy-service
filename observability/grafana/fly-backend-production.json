@@ -1104,7 +1104,7 @@
     },
     {
       "type": "stat",
-      "title": "Zilliz credential fallbacks 24h",
+      "title": "Vector DB not configured 24h",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROM}"
@@ -1150,7 +1150,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum(increase(zilliz_credential_fallback_total{app=~\".*-production\"}[24h])) or vector(0)",
+          "expr": "sum(increase(vector_db_not_configured_total{app=~\".*-production\"}[24h])) or vector(0)",
           "refId": "A"
         }
       ]

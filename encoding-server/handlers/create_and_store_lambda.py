@@ -5,7 +5,7 @@ from typing import Dict, Any
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.observability import count, set_request_id, setup_logging, track
 from encoding_library.processors.processor_factory import ProcessorFactory
-from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
+from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model_for_customer
 from encoding_library.utils.model_registry import build_collection_description, resolve_model
 from encoding_library.utils.vector_db import (
     customer_filter,
@@ -65,7 +65,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.warning("No data_chunks found in batch payload. Skipping.")
             return _summary(memory_request_internal_state, collection="", inserted=0)
 
-        encoder = get_embedding_model(
+        encoder = get_embedding_model_for_customer(
+            customer_id,
             memory_request_internal_state.model_type,
             memory_request_internal_state.model_name,
         )

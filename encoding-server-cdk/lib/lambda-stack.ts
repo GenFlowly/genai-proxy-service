@@ -30,13 +30,15 @@ export interface LambdaStackProps extends cdk.StackProps {
     storeEmbeddingsImageTag?: string;
     createAndStoreImageTag?: string;
     createCollectionsImageTag?: string;
-    zillizEndpoint: string;
-    zillizToken: string;
     customerProfileTableName: string;
     customerVectorDBConfigTableName: string;
     customerNotesTableName: string;
     instructionsTableName: string;
-    voyageApiKey?: string;
+    // Per-customer embedding (and vendor LLM) API keys — the proxy's
+    // CustomerVendorApiKeys table, KMS-encrypted. Hosted embedding models
+    // (voyage/openai) run exclusively on the customer's own key; there is no
+    // platform-wide fallback.
+    customerApiKeyTableName: string;
     /** Auth0 client ids allowed to call POST /purge-vectors (comma-separated; empty refuses all). */
     purgeAllowedClientIds?: string;
 }
@@ -66,6 +68,8 @@ export class LambdaStack extends cdk.Stack {
         });
         const NOTES_EMBEDDING_STATUS_INDEX = 'embedding-status-index';
         const instructionsTable = dynamodb.Table.fromTableName(this, 'InstructionsTable', props.instructionsTableName);
+        const customerApiKeyTable = dynamodb.Table.fromTableName(this, 'CustomerVendorApiKeysTable', props.customerApiKeyTableName);
+        const customerApiKeyEnv = { CUSTOMER_API_KEY_TABLE: props.customerApiKeyTableName };
 
         // Drives each lambda's log level and user-content gating — see
         // genai-proxy-server/development.md "Logging policy".
@@ -150,13 +154,16 @@ export class LambdaStack extends cdk.Stack {
                 ...appEnv,
                 JOBLIB_TEMP_FOLDER: '/tmp',
                 ...modelRegistryEnv,
-                // API keys for hosted embedding providers (voyage/openai model types).
-                // Only needed by semantic chunking here; sourced from the deploy environment.
-                ...(process.env.VOYAGE_API_KEY ? { VOYAGE_API_KEY: process.env.VOYAGE_API_KEY } : {}),
-                ...(process.env.OPENAI_API_KEY ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY } : {}),
+                ...customerApiKeyEnv,
             },
         });
         embeddingModelRegistryTable.grantReadData(this.parseAndChunkLambda);
+        // Semantic chunking (only) embeds on the customer's own hosted-provider key.
+        customerApiKeyTable.grantReadData(this.parseAndChunkLambda);
+        this.parseAndChunkLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'],
+        }));
 
         /**
          * Create-and-Store Lambda: embeds a Map-state batch and inserts it
@@ -177,17 +184,15 @@ export class LambdaStack extends cdk.Stack {
             environment: {
                 ...appEnv,
                 JOBLIB_TEMP_FOLDER: '/tmp',
-                // API keys for hosted embedding providers (voyage/openai model types)
-                ...(process.env.VOYAGE_API_KEY ? { VOYAGE_API_KEY: process.env.VOYAGE_API_KEY } : {}),
-                ...(process.env.OPENAI_API_KEY ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY } : {}),
-                ZILLIZ_ENDPOINT: props.zillizEndpoint,
-                ZILLIZ_TOKEN: props.zillizToken,
+                ...customerApiKeyEnv,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
                 CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
                 INSTRUCTIONS_TABLE: props.instructionsTableName,
             },
         });
         customerVectorDBConfigTable.grantReadData(this.createAndStoreLambda);
+        // Embeds on the customer's own hosted-provider key (voyage/openai).
+        customerApiKeyTable.grantReadData(this.createAndStoreLambda);
         // Store step marks NOTE rows synced and stamps INSTRUCTION rows with
         // their milvus_ids after insertion.
         customerNotesTable.grantReadWriteData(this.createAndStoreLambda);
@@ -207,7 +212,6 @@ export class LambdaStack extends cdk.Stack {
          * full realtime compute plus batch bookkeeping.
          * Both Lambdas ride in the store-embeddings image (milvus-base) via cmd.
          */
-        const voyageApiKeyEnv: Record<string, string> = props.voyageApiKey ? { VOYAGE_API_KEY: props.voyageApiKey } : {};
 
         // Tracking table of in-flight batch jobs; poller queries by status.
         this.voyageBatchJobsTable = new dynamodb.Table(this, 'VoyageBatchJobsTable', {
@@ -244,11 +248,9 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
             environment: {
                 ...appEnv,
-                ZILLIZ_ENDPOINT: props.zillizEndpoint,
-                ZILLIZ_TOKEN: props.zillizToken,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
                 CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
-                ...voyageApiKeyEnv,
+                ...customerApiKeyEnv,
                 ...documentsEnv,
             },
         });
@@ -257,6 +259,8 @@ export class LambdaStack extends cdk.Stack {
         customerVectorDBConfigTable.grantReadData(this.pollVoyageBatchesLambda);
         // Poller marks notes synced (store step) and resets them on failure
         customerNotesTable.grantReadWriteData(this.pollVoyageBatchesLambda);
+        // Resolves the job's customer's Voyage key to poll/download their batch.
+        customerApiKeyTable.grantReadData(this.pollVoyageBatchesLambda);
         this.pollVoyageBatchesLambda.addToRolePolicy(new iam.PolicyStatement({
             actions: ['kms:Decrypt'],
             resources: ['*'],
@@ -279,7 +283,7 @@ export class LambdaStack extends cdk.Stack {
                 CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
                 NOTES_EMBEDDING_STATUS_INDEX,
                 ...modelRegistryEnv,
-                ...voyageApiKeyEnv,
+                ...customerApiKeyEnv,
                 ...documentsEnv,
             },
         });
@@ -287,6 +291,12 @@ export class LambdaStack extends cdk.Stack {
         props.customerDocumentsBucket.grantReadWrite(this.accumulateVoyageNotesLambda);
         this.voyageBatchJobsTable.grantReadWriteData(this.accumulateVoyageNotesLambda);
         customerNotesTable.grantReadWriteData(this.accumulateVoyageNotesLambda);
+        // Resolves each pending note's customer's Voyage key before grouping.
+        customerApiKeyTable.grantReadData(this.accumulateVoyageNotesLambda);
+        this.accumulateVoyageNotesLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'],
+        }));
 
         // Sweep on a schedule (less frequent than the poller — accumulate first,
         // then let the poller reconcile). Cadence tunable per cost/latency needs.
@@ -318,8 +328,6 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
             environment: {
                 ...appEnv,
-                ZILLIZ_ENDPOINT: props.zillizEndpoint,
-                ZILLIZ_TOKEN: props.zillizToken,
                 CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
             },
@@ -352,8 +360,6 @@ export class LambdaStack extends cdk.Stack {
             architecture: lambda.Architecture.X86_64,
             environment: {
                 ...appEnv,
-                ZILLIZ_ENDPOINT: props.zillizEndpoint,
-                ZILLIZ_TOKEN: props.zillizToken,
                 CUSTOMER_PROFILE_TABLE_NAME: props.customerProfileTableName,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
                 PURGE_ALLOWED_CLIENT_IDS: props.purgeAllowedClientIds || '',
