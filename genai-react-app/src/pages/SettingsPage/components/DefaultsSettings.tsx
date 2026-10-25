@@ -4,15 +4,20 @@ import { InputSelectWithHint, PillButton } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
 import { useAI } from '../../../context/AIContext'
 import { useToast } from '../../../context/ToastContext'
-import { getCustomerAgents } from '../../../services/agentsService'
 import { saveAIConfigPreferences } from '../../../services/saveAIConfigService'
 import {
     CustomerRequestAgentStatus,
+    GetCustomerRequestAgentsResponse,
     deleteRequestAgentMapping,
-    getRequestAgents,
     putRequestAgentMapping,
 } from '../../../services/requestAgentsService'
-import { Agent, agentCategory, effectiveDefaultAgentId } from '../../../models/agents.models'
+import { customerAgentsCache, requestAgentsCache } from '../../../services/defaultsCacheService'
+import {
+    Agent,
+    GetCustomerAgentsResponse,
+    agentCategory,
+    effectiveDefaultAgentId,
+} from '../../../models/agents.models'
 import { ICONS } from '../../../constants/icons'
 import { InstructionDefaultsSettings } from './InstructionDefaultsSettings'
 import { EmbeddingModelDefaults } from './EmbeddingModelDefaults'
@@ -93,15 +98,8 @@ export function DefaultsSettings(): React.ReactElement {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
-    const load = useCallback(async () => {
-        if (!isAuthenticated) return
-        setLoading(true)
-        try {
-            const token = await getAccessTokenSilently()
-            const [actionsResponse, agentsResponse] = await Promise.all([
-                getRequestAgents(token),
-                getCustomerAgents(token),
-            ])
+    const applyData = useCallback(
+        (actionsResponse: GetCustomerRequestAgentsResponse, agentsResponse: GetCustomerAgentsResponse) => {
             const allAgents = agentsResponse.agents ?? []
             setActions(actionsResponse.entries)
             // Only the user's own agents are candidates for action rows
@@ -119,13 +117,45 @@ export function DefaultsSettings(): React.ReactElement {
                     buildRows(actionsResponse.entries).map(row => [row.key, rowMappedGraphId(row)])
                 )
             )
+        },
+        []
+    )
+
+    const load = useCallback(async () => {
+        if (!isAuthenticated || !customerId) return
+        // Last known data (this or a previous session) renders immediately;
+        // the server fetch below revalidates it.
+        const cachedActions = requestAgentsCache.getCached(customerId)
+        const cachedAgents = customerAgentsCache.getCached(customerId)
+        const seeded = cachedActions && cachedAgents
+        if (seeded) {
+            applyData(cachedActions, cachedAgents)
+            setLoading(false)
+        } else {
+            setLoading(true)
+        }
+        try {
+            const token = await getAccessTokenSilently()
+            const [actionsResponse, agentsResponse] = await Promise.all([
+                requestAgentsCache.fetch(token, customerId),
+                customerAgentsCache.fetch(token, customerId),
+            ])
+            // An unchanged refresh is not re-applied: applying rebuilds the
+            // dropdown selections and would discard an in-progress edit.
+            if (
+                seeded &&
+                JSON.stringify([actionsResponse, agentsResponse]) ===
+                    JSON.stringify([cachedActions, cachedAgents])
+            ) return
+            applyData(actionsResponse, agentsResponse)
         } catch (error: any) {
             console.error('Failed to load defaults:', error)
-            showToast(error?.message || t('settingsPage.defaultAgents.loadErrorToast'))
+            // With cached data already on screen a failed refresh is non-fatal
+            if (!seeded) showToast(error?.message || t('settingsPage.defaultAgents.loadErrorToast'))
         } finally {
             setLoading(false)
         }
-    }, [isAuthenticated, getAccessTokenSilently, showToast, t])
+    }, [isAuthenticated, customerId, getAccessTokenSilently, applyData, showToast, t])
 
     useEffect(() => {
         void load()

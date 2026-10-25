@@ -6,8 +6,8 @@ import { useToast } from '../../../context/ToastContext'
 import {
     EmbeddingVendor,
     EmbeddingVendorModels,
-    getEmbeddingModels,
 } from '../../../services/embeddingKeysService'
+import { embeddingModelsCache } from '../../../services/defaultsCacheService'
 import { saveAIConfigPreferences } from '../../../services/saveAIConfigService'
 import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import { ICONS } from '../../../constants/icons'
@@ -50,11 +50,15 @@ export function EmbeddingModelDefaults(): React.ReactElement {
 
     // Models are fetched with the customer's stored keys — providers without
     // a saved key come back absent, so the dropdown only offers usable models.
+    // The last known list renders immediately while the fetch (which can wait
+    // on a server-side probe) revalidates it.
     const loadModels = useCallback(async () => {
         if (!isAuthenticated || !customerId) return
+        const cached = embeddingModelsCache.getCached(customerId)
+        if (cached) setVendorModels(cached.vendorModels)
         try {
             const token = await getAccessTokenSilently()
-            const response = await getEmbeddingModels(token)
+            const response = await embeddingModelsCache.fetch(token, customerId)
             setVendorModels(response.vendorModels)
         } catch (err) {
             console.error('EmbeddingModelDefaults: failed to fetch embedding models', err)
