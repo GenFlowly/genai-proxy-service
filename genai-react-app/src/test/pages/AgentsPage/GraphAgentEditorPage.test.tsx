@@ -20,6 +20,7 @@ jest.mock('@genflowly/component-library', () => ({
         mockGraphEditorProps = props;
         return <div data-testid="graph-editor" />;
     },
+    Icon: ({ src }: { src: string }) => <span data-testid="icon" data-src={src} />,
     // Trimmed stand-in for the library's primitive metadata (hasPrompt derivation)
     DEFAULT_NODE_TYPE_INFOS: [
         { nodeType: 'GENERATION', label: 'LLM', hasPrompt: true },

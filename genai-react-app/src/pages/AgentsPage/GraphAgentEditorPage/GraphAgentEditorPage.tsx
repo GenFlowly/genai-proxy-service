@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { DEFAULT_NODE_TYPE_INFOS, GraphEditor } from '@genflowly/component-library'
+import { DEFAULT_NODE_TYPE_INFOS, GraphEditor, Icon } from '@genflowly/component-library'
 import type { AgentGraph, ConditionOption, InstructionOption, NodeCatalogEntry } from '@genflowly/component-library'
 import Navbar from '../../../components/navbar/Navbar'
 import MobileHeader from '../../../components/widgets/MobileHeader/MobileHeader'
@@ -14,6 +14,7 @@ import { getCustomerInstructions } from '../../../services/instructionService'
 import { getNodePresets } from '../../../services/nodePresetsService'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
 import { AIVendor } from '../../../constants/vendors'
+import { ICONS } from '../../../constants/icons'
 import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import {
@@ -412,7 +413,8 @@ export default function GraphAgentEditorPage() {
                         disabled={forking}
                         data-testid="graph-editor-fork"
                     >
-                        🔱 {forking ? t('agentsPage.graphEditorPage.forking') : t('agentsPage.graphEditorPage.forkToEdit')}
+                        <Icon src={ICONS.GIT_FORK} size={14} />{' '}
+                        {forking ? t('agentsPage.graphEditorPage.forking') : t('agentsPage.graphEditorPage.forkToEdit')}
                     </button>
                 </div>
             )}
