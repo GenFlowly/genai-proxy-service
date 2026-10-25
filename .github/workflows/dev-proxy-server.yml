@@ -117,7 +117,14 @@ jobs:
             flyctl secrets set --app $APP_NAME --stage DATABASE_URL="${{ secrets.DATABASE_URL }}"
           fi
 
-          flyctl deploy --app $APP_NAME --yes
+          # --no-cache: an unpinned dependency (genflowly-encoding-library>=X)
+          # resolves differently over time on PyPI, but Fly's remote builder
+          # caches Docker layers by file content hash — a requirements.txt
+          # that hasn't changed text can silently reuse a pip-install layer
+          # resolved against a now-stale PyPI snapshot (2026-10-25 prod
+          # outage: a crash-looping image shipped with an old library wheel).
+          # Always rebuild from scratch so this class of staleness can't recur.
+          flyctl deploy --app $APP_NAME --no-cache --yes
 
       - name: Deploy Proxy Server to Fly.io
         working-directory: ${{ env.SERVICE_APP_PATH }}

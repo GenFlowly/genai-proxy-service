@@ -118,7 +118,14 @@ jobs:
           fi
 
           # Pin the prod config: the default fly.toml is dev-only (Flycast + auto_stop)
-          flyctl deploy --config fly.production.toml --app $APP_NAME --yes
+          # --no-cache: an unpinned dependency (genflowly-encoding-library>=X)
+          # resolves differently over time on PyPI, but Fly's remote builder
+          # caches Docker layers by file content hash — a requirements.txt
+          # that hasn't changed text can silently reuse a pip-install layer
+          # resolved against a now-stale PyPI snapshot (2026-10-25 outage: a
+          # crash-looping image shipped with an old library wheel). Always
+          # rebuild from scratch so this class of staleness can't recur.
+          flyctl deploy --config fly.production.toml --app $APP_NAME --no-cache --yes
 
       # A rolling deploy updates a crash-stopped machine without starting it and
       # still reports success (2026-10-10 outage): start anything stopped, then
