@@ -71,7 +71,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             memory_request_internal_state.model_name,
         )
         logger.info(f"Generating vectors for {len(chunks)} chunks...")
-        vectors = create_embeddings(chunks, encoder)
+        vectors = create_embeddings(chunks, encoder, customer_id=customer_id)
         count("embedding_chunks_total", len(vectors))
 
         logger.info(f"Storing {len(vectors)} vectors for customer {customer_id}")

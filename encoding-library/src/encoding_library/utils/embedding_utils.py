@@ -1,5 +1,8 @@
+import logging
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingKeyMissing(Exception):
@@ -35,7 +38,9 @@ class VoyageContextualizedEmbeddings:
         self.model = model
         self.api_key = api_key
 
-    def _call(self, inputs: List[List[str]], input_type: str) -> List[List[List[float]]]:
+    def _call_with_usage(
+        self, inputs: List[List[str]], input_type: str
+    ) -> Tuple[List[List[List[float]]], Optional[int]]:
         import requests
         from encoding_library.utils.retry import is_transient_http_error, retry_call
         api_key = self.api_key
@@ -52,11 +57,23 @@ class VoyageContextualizedEmbeddings:
             return r
 
         response = retry_call(_post, operation="voyage", retry_if=is_transient_http_error)
-        docs = sorted(response.json()["data"], key=lambda d: d["index"])
-        return [
+        body = response.json()
+        docs = sorted(body["data"], key=lambda d: d["index"])
+        vectors = [
             [c["embedding"] for c in sorted(doc["data"], key=lambda c: c["index"])]
             for doc in docs
         ]
+        # Not verified against a live response at the time this was written —
+        # the voyageai SDK's own ContextualizedEmbeddingsObject reads this same
+        # field off the equivalent SDK-wrapped call (response.usage.total_tokens),
+        # so it should mirror here since this hits the identical REST endpoint;
+        # degrades to None (no usage recorded) rather than raising if absent.
+        total_tokens = (body.get("usage") or {}).get("total_tokens")
+        return vectors, total_tokens
+
+    def _call(self, inputs: List[List[str]], input_type: str) -> List[List[List[float]]]:
+        vectors, _ = self._call_with_usage(inputs, input_type)
+        return vectors
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         if not texts:
@@ -150,20 +167,121 @@ def create_chunks(
 
     return chunker.chunk(text_to_encode)
 
-def create_embeddings(chunks: List[str], encoder: Any) -> List[Dict[str, Any]]:
+def _embed_voyage_with_usage(encoder: Any, chunks: List[str]) -> Tuple[List[List[float]], Optional[int]]:
+    """
+    Embeds via the raw voyageai client instead of the langchain_voyageai
+    wrapper's embed_documents(), which discards the vendor's token-usage
+    field (voyageai.object.embeddings.EmbeddingsObject.total_tokens / the
+    contextualized equivalent both carry it; the wrapper only keeps
+    .embeddings). Reuses the wrapper's own _build_batches() so request-size
+    batching behavior is identical to going through embed_documents() —
+    this is NOT a from-scratch reimplementation of its batching, just a
+    swap of which call extracts the result from each batch.
+    """
+    from encoding_library.utils.retry import retry_call
+
+    vectors: List[List[float]] = []
+    total_tokens = 0
+    saw_tokens = False
+    is_context_model = encoder._is_context_model()
+    for batch, _ in encoder._build_batches(chunks):
+        if is_context_model:
+            kwargs: dict = dict(
+                inputs=[batch],
+                model=encoder.model,
+                input_type="document",
+                output_dimension=encoder.output_dimension,
+                chunk_size=32_000,
+                enable_auto_chunking=True,
+            )
+            response = retry_call(
+                encoder._client.contextualized_embed, operation="embedding", **kwargs
+            )
+            vectors.extend(emb for result in response.results for emb in result.embeddings)
+        else:
+            response = retry_call(
+                encoder._client.embed,
+                batch,
+                model=encoder.model,
+                input_type="document",
+                truncation=encoder.truncation,
+                output_dimension=encoder.output_dimension,
+                operation="embedding",
+            )
+            vectors.extend(response.embeddings)
+        batch_tokens = getattr(response, "total_tokens", None)
+        if batch_tokens is not None:
+            total_tokens += batch_tokens
+            saw_tokens = True
+    return vectors, (total_tokens if saw_tokens else None)
+
+
+def _record_embedding_usage_safe(
+    customer_id: Optional[str], vendor: Optional[str], model: Optional[str], total_tokens: Optional[int]
+) -> None:
+    if not customer_id or not vendor or not model:
+        return
+    try:
+        from encoding_library.utils.embedding_pricing import get_embedding_cost_per_mtok
+        from encoding_library.utils.usage_tracking import record_embedding_usage
+        cost_per_mtok = get_embedding_cost_per_mtok(vendor, model)
+        cost_usd = (
+            (total_tokens / 1_000_000) * cost_per_mtok
+            if total_tokens is not None and cost_per_mtok is not None
+            else None
+        )
+        record_embedding_usage(customer_id, vendor, model, total_tokens, cost_usd)
+    except Exception:
+        logger.warning("Failed to record embedding usage (customer=%s)", customer_id, exc_info=True)
+
+
+def create_embeddings(
+    chunks: List[str], encoder: Any, customer_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
     Creates embeddings for the provided chunks using the specified encoder.
     Returns a list of chunks (dicts with vector, text, index).
+
+    customer_id, when given, enables Cost and Usage tracking: for hosted
+    encoders (Voyage) the vendor's real token usage is captured by bypassing
+    the langchain wrapper's embed_documents() (which discards it) in favor of
+    calling the same underlying client directly. OpenAI embeddings are NOT
+    instrumented yet — langchain_openai's wrapper does its own token-aware
+    length-safe batching (_get_len_safe_embeddings) that would be risky to
+    reimplement just for usage capture; a future pass could add tiktoken-based
+    estimation instead of bypassing it. Local sentence-transformer models have
+    no cost and are never instrumented.
     """
     if not chunks:
         return []
 
-    # Encode chunks using native Langchain API implementation format.
-    # Retried with backoff: hosted encoders (Voyage/OpenAI) are 3rd-party API
-    # calls; for local models a retry is a cheap no-op-on-success.
     from encoding_library.utils.retry import retry_call
-    embeddings = retry_call(encoder.embed_documents, chunks, operation="embedding")
-         
+
+    vendor: Optional[str] = None
+    model: Optional[str] = None
+    total_tokens: Optional[int] = None
+
+    is_voyage_langchain = False
+    try:
+        from langchain_voyageai import VoyageAIEmbeddings
+        is_voyage_langchain = isinstance(encoder, VoyageAIEmbeddings)
+    except ImportError:
+        pass
+
+    if is_voyage_langchain:
+        vendor, model = "VOYAGE", encoder.model
+        embeddings, total_tokens = _embed_voyage_with_usage(encoder, chunks)
+    elif isinstance(encoder, VoyageContextualizedEmbeddings):
+        vendor, model = "VOYAGE", encoder.model
+        embeddings, total_tokens = encoder._call_with_usage([chunks], input_type="document")
+        embeddings = embeddings[0]
+    else:
+        # OpenAI hosted + local sentence-transformer path: native langchain
+        # API, no usage capture (see docstring).
+        embeddings = retry_call(encoder.embed_documents, chunks, operation="embedding")
+
+    _record_embedding_usage_safe(customer_id, vendor, model, total_tokens)
+
     # Format result
     result = []
     for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):

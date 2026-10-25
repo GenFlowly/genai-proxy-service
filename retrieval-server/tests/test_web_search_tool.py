@@ -142,6 +142,41 @@ class WebSearchToolTest(unittest.IsolatedAsyncioTestCase):
             await tool.run({"query": "x", "topic": "bogus"}, _keyed_ctx())
         self.assertEqual(search.await_args.args[0]["topic"], "general")
 
+    async def test_search_depth_defaults_to_basic(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value={"results": []})
+        with patch.object(tool, "_search", search):
+            await tool.run({"query": "x"}, _keyed_ctx())
+        self.assertEqual(search.await_args.args[0]["search_depth"], "basic")
+
+    async def test_search_depth_advanced_passes_through(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value={"results": []})
+        with patch.object(tool, "_search", search):
+            await tool.run({"query": "x", "search_depth": "advanced"}, _keyed_ctx())
+        self.assertEqual(search.await_args.args[0]["search_depth"], "advanced")
+
+    async def test_invalid_search_depth_falls_back_to_basic(self):
+        tool = WebSearchTool()
+        search = AsyncMock(return_value={"results": []})
+        with patch.object(tool, "_search", search):
+            await tool.run({"query": "x", "search_depth": "bogus"}, _keyed_ctx())
+        self.assertEqual(search.await_args.args[0]["search_depth"], "basic")
+
+    async def test_records_usage_with_depth_and_credits_after_a_successful_search(self):
+        tool = WebSearchTool()
+        with patch.object(tool, "_search", AsyncMock(return_value={"results": []})), \
+             patch("encoding_library.utils.usage_tracking.record_web_search_usage") as mock_record:
+            await tool.run({"query": "x", "search_depth": "advanced"}, _keyed_ctx())
+        mock_record.assert_called_once_with("cust-1", "advanced", 2)
+
+    async def test_does_not_record_usage_when_the_search_call_fails(self):
+        tool = WebSearchTool()
+        with patch.object(tool, "_search", AsyncMock(side_effect=RuntimeError("boom"))), \
+             patch("encoding_library.utils.usage_tracking.record_web_search_usage") as mock_record:
+            await tool.run({"query": "x"}, _keyed_ctx())
+        mock_record.assert_not_called()
+
     async def test_no_results_message(self):
         tool = WebSearchTool()
         with patch.object(tool, "_search", AsyncMock(return_value={"results": []})):

@@ -13,6 +13,8 @@ from encoding_library.utils.voyage_batch import (
     download_file_content,
     parse_batch_results,
 )
+from encoding_library.utils.embedding_pricing import get_embedding_cost_per_mtok
+from encoding_library.utils.usage_tracking import record_embedding_usage
 from handlers.voyage_batch_store import store_batch_results
 
 from encoding_library.observability import setup_logging, track
@@ -174,6 +176,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # jobs carry note_refs_json instead and leave this None.
         staging_key = job.get("payload_s3_key", {}).get("S")
         customer_id = job.get("customer_id", {}).get("S")
+        model_name = job.get("model_name", {}).get("S")
         try:
             api_key = get_customer_embedding_key(customer_id, "voyage") if customer_id else None
             if not api_key:
@@ -198,9 +201,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     failed += 1
                     continue
 
-                vectors_by_id = parse_batch_results(download_file_content(output_file_id, api_key))
+                vectors_by_id, total_tokens = parse_batch_results(download_file_content(output_file_id, api_key))
                 batches = _load_batches(job)
                 stored, missing = store_batch_results(batches, vectors_by_id, context)
+
+                if customer_id and model_name and total_tokens:
+                    try:
+                        realtime_rate = get_embedding_cost_per_mtok("VOYAGE", model_name)
+                        # Voyage Batch API runs at ~50% of the realtime per-token
+                        # rate — see project notes on the accumulator/poller pair.
+                        cost_usd = (
+                            (total_tokens / 1_000_000) * realtime_rate * 0.5
+                            if realtime_rate is not None else None
+                        )
+                        record_embedding_usage(customer_id, "VOYAGE", model_name, total_tokens, cost_usd)
+                    except Exception:
+                        logger.warning(f"Failed to record batch embedding usage for {batch_id}", exc_info=True)
 
                 _set_status(batch_id, "done", {
                     "output_file_id": {"S": output_file_id},
