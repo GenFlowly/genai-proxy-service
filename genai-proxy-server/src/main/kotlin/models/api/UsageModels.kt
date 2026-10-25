@@ -42,15 +42,33 @@ data class EstimatedUsageBreakdownRow(
 )
 
 /**
- * Vector DB and Web Search totals: priced at READ time from UsageRateCard
- * against raw operation/credit counts, never a real vendor bill —
- * [isEstimate] is always true and must stay visible in the UI.
+ * Web Search totals: priced at READ time from UsageRateCard against raw
+ * credit counts, never a real vendor bill — [isEstimate] is always true and
+ * must stay visible in the UI.
  */
 @Serializable
 data class EstimatedUsageSummaryResponse(
     val totalCostUsd: Double,
     val isEstimate: Boolean = true,
     val breakdown: List<EstimatedUsageBreakdownRow>
+)
+
+/** One operation-type row: raw count only, no dollar figure. */
+@Serializable
+data class VectorDbUsageBreakdownRow(
+    val opType: String,
+    val count: Long
+)
+
+/**
+ * Vector DB totals: Zilliz bills by data size/compute units, not per
+ * operation call, so a count can never be converted into a meaningful dollar
+ * estimate — this intentionally carries no cost field at all, only raw
+ * operation-volume counts.
+ */
+@Serializable
+data class VectorDbUsageSummaryResponse(
+    val breakdown: List<VectorDbUsageBreakdownRow>
 )
 
 /**

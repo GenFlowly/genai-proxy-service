@@ -2,25 +2,25 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DateRangePicker, DateRange } from '@genflowly/component-library'
 import { useAuth } from '../../../../context/AuthContext'
-import { getVectorDbUsage, EstimatedUsageSummary } from '../../../../services/getUsageService'
+import { getVectorDbUsage, VectorDbUsageSummary } from '../../../../services/getUsageService'
 import { defaultUsageRange, usageDateRangePresets } from './usageDateRange'
-import { formatUsd, formatCount } from './usageFormat'
+import { formatCount } from './usageFormat'
 import { UsageNotTrackedYet } from './UsageNotTrackedYet'
 import styles from './VectorDbUsageSettings.module.scss'
 
 /**
- * Cost and Usage > Vector DB. The response is always an ESTIMATE — op-count
- * (search/query/insert/upsert/delete) × an admin-configurable rate card,
- * never a real bill from the customer's own Zilliz cluster (we never see
- * it). The disclaimer banner must stay visible whenever real data renders —
- * explicit product requirement, not optional copy.
+ * Cost and Usage > Vector DB. No cost figure is ever shown here — Zilliz
+ * bills by data size/compute units on the customer's own cluster, not per
+ * operation call, so an op count can't be converted into a meaningful
+ * dollar estimate. This page shows raw search/query/insert/upsert/delete
+ * counts only.
  */
 export function VectorDbUsageSettings(): React.ReactElement {
     const { t } = useTranslation()
     const { isAuthenticated, getAccessTokenSilently } = useAuth()
 
     const [range, setRange] = useState<DateRange>(defaultUsageRange)
-    const [summary, setSummary] = useState<EstimatedUsageSummary | null>(null)
+    const [summary, setSummary] = useState<VectorDbUsageSummary | null>(null)
     const [loading, setLoading] = useState(false)
 
     const load = useCallback(async (nextRange: DateRange) => {
@@ -72,16 +72,9 @@ export function VectorDbUsageSettings(): React.ReactElement {
 
             {!loading && summary && (
                 <>
-                    <p className={styles.estimateBanner} data-testid="vector-db-usage-estimate-banner">
-                        {t('settingsPage.usageCommon.estimateDisclaimer')}
+                    <p className={styles.noCostNote} data-testid="vector-db-usage-no-cost-note">
+                        {t('settingsPage.vectorDbUsageSettings.noCostNote')}
                     </p>
-
-                    <div className={styles.statTiles}>
-                        <div className={styles.statTile} data-testid="vector-db-usage-total-cost">
-                            <span className={styles.statLabel}>{t('settingsPage.usageCommon.totalCost')}</span>
-                            <span className={styles.statValue}>{formatUsd(summary.totalCostUsd)}</span>
-                        </div>
-                    </div>
 
                     {hasRows ? (
                         <div className={styles.breakdownBlock}>
@@ -95,15 +88,13 @@ export function VectorDbUsageSettings(): React.ReactElement {
                                         <th className={styles.numeric}>
                                             {t('settingsPage.vectorDbUsageSettings.operationCount')}
                                         </th>
-                                        <th className={styles.numeric}>{t('settingsPage.usageCommon.totalCost')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {summary.breakdown.map(row => (
-                                        <tr key={row.key}>
-                                            <td>{row.key}</td>
+                                        <tr key={row.opType}>
+                                            <td>{row.opType}</td>
                                             <td className={styles.numeric}>{formatCount(row.count)}</td>
-                                            <td className={styles.numeric}>{formatUsd(row.costUsd)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

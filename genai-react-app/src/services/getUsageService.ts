@@ -41,14 +41,29 @@ export interface EstimatedUsageBreakdownRow {
 }
 
 /**
- * Vector DB and Web Search totals: priced at read time from an admin rate
- * card against raw operation/credit counts — never a real vendor bill.
- * `isEstimate` is always true; the UI must keep that visible.
+ * Web Search totals: priced at read time from an admin rate card against raw
+ * credit counts — never a real vendor bill. `isEstimate` is always true; the
+ * UI must keep that visible.
  */
 export interface EstimatedUsageSummary {
     totalCostUsd: number
     isEstimate: boolean
     breakdown: EstimatedUsageBreakdownRow[]
+}
+
+/** One operation-type row: raw count only, no dollar figure. */
+export interface VectorDbUsageBreakdownRow {
+    opType: string
+    count: number
+}
+
+/**
+ * Vector DB totals: Zilliz bills by data size/compute units, not per
+ * operation call, so a count can never be converted into a meaningful dollar
+ * estimate — no cost field at all, only raw operation-volume counts.
+ */
+export interface VectorDbUsageSummary {
+    breakdown: VectorDbUsageBreakdownRow[]
 }
 
 export interface UsageDateRange {
@@ -106,12 +121,12 @@ export async function getEmbeddingUsage(
     return fetchUsageOrNotLive<EmbeddingUsageSummary>(endpoints.usageEmbedding(range.from, range.to), token)
 }
 
-/** Per-customer estimated vector DB usage for a date range. `null` until that phase ships. */
+/** Per-customer vector DB operation counts for a date range. `null` until that phase ships. */
 export async function getVectorDbUsage(
     token: string,
     range: UsageDateRange
-): Promise<EstimatedUsageSummary | null> {
-    return fetchUsageOrNotLive<EstimatedUsageSummary>(endpoints.usageVectorDb(range.from, range.to), token)
+): Promise<VectorDbUsageSummary | null> {
+    return fetchUsageOrNotLive<VectorDbUsageSummary>(endpoints.usageVectorDb(range.from, range.to), token)
 }
 
 /** Per-customer estimated web search usage for a date range. `null` until that phase ships. */
