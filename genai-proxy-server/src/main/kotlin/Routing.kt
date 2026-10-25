@@ -54,6 +54,8 @@ import com.genflowly.activity.admin.registerDefaultGraphRoutes
 import com.genflowly.activity.admin.registerSystemAgentsRoutes
 import com.genflowly.activity.admin.registerRequestAgentMapRoutes
 import com.genflowly.activity.admin.registerVendorAllowlistRoutes
+import com.genflowly.activity.admin.registerUsageRateCardRoutes
+import com.genflowly.activity.usage.registerUsageRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.memory.registerMemoryRoutes
@@ -175,6 +177,14 @@ object Routes {
     const val ADMIN_SYSTEM_API_KEY = "$API_V1/admin/system-api-keys/{aiVendor}"
     const val ADMIN_SYSTEM_API_KEY_MODELS = "$API_V1/admin/system-api-keys/models"
     const val ADMIN_MODEL_CATALOG_REFRESH = "$API_V1/admin/model-catalog/refresh"
+    const val ADMIN_USAGE_RATE_CARD = "$API_V1/admin/usage-rate-card"
+
+    // Cost and Usage settings pages — per-customer usage/cost summaries over
+    // a date range. See repository/UsageRollupRepository.kt.
+    const val USAGE_LLM = "$API_V1/usage/llm"
+    const val USAGE_EMBEDDING = "$API_V1/usage/embedding"
+    const val USAGE_VECTOR_DB = "$API_V1/usage/vector-db"
+    const val USAGE_WEB_SEARCH = "$API_V1/usage/web-search"
 
     const val ADMIN_REQUEST_AGENT_MAP = "$API_V1/admin/request-agent-map"
     const val ADMIN_REQUEST_AGENT_MAP_ENTRY = "$API_V1/admin/request-agent-map/{requestType}"
@@ -230,6 +240,8 @@ fun Application.configureRouting(
     customerToolsService: com.genflowly.service.CustomerToolsService,
     connectorsService: com.genflowly.service.ConnectorsService,
     projectService: com.genflowly.service.ProjectService,
+    usageSummaryService: com.genflowly.service.UsageSummaryService,
+    usageRateCardRepository: com.genflowly.repository.UsageRateCardRepository,
     appConfig: AppConfig,
 ) {
     routing {
@@ -309,7 +321,8 @@ fun Application.configureRouting(
         registerToolCredentialsRoutes(customerCredentialsService, customerProfileService)
         registerCustomerToolsRoutes(customerToolsService, customerProfileService)
         registerConnectorsRoutes(connectorsService, customerProfileService)
-        
+        registerUsageRoutes(usageSummaryService, customerProfileService)
+
         registerCustomerProfileSettingsRoutes(customerProfileService)
         registerSearchRoutes(customerProfileService)
         registerGetProfileRoutes(customerProfileService)
@@ -322,6 +335,7 @@ fun Application.configureRouting(
         )
         registerRequestAgentMapRoutes(requestAgentMapAdminService, customerProfileService, appConfig)
         registerVendorAllowlistRoutes(vendorAllowlistService, aiModelsService, customerProfileService, appConfig)
+        registerUsageRateCardRoutes(usageRateCardRepository, customerProfileService, appConfig)
         registerDefaultGraphRoutes(graphService, customerProfileService, appConfig)
         registerSystemAgentsRoutes(graphService, customerProfileService, appConfig)
         registerNodePresetRoutes(nodePresetService, customerProfileService, appConfig)

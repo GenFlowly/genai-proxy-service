@@ -50,6 +50,25 @@ def get_zilliz_credentials(customer_id: str) -> Tuple[str, str]:
     return decrypted_endpoint, decrypted_token
 
 
+# Operation names counted for Cost and Usage's Vector DB page — every other
+# MilvusClient method (list_collections, describe_collection, connect, ...)
+# still retries through the proxy but isn't billed-estimate-worthy traffic.
+_BILLABLE_VECTOR_DB_OPS = {"search", "query", "insert", "upsert", "delete"}
+
+
+def _record_vector_db_op(customer_id: str, op_name: str, success: bool) -> None:
+    # success is intentionally unused: a failed-after-retries op still
+    # consumed real Zilliz compute on each attempt, so it's counted too —
+    # see encoding_library.utils.usage_tracking.record_vector_db_op.
+    if op_name not in _BILLABLE_VECTOR_DB_OPS:
+        return
+    try:
+        from encoding_library.utils.usage_tracking import record_vector_db_op
+        record_vector_db_op(customer_id, op_name)
+    except Exception:
+        logger.warning("Failed to record vector_db usage op=%s", op_name, exc_info=True)
+
+
 def get_milvus_client(customer_id: str):
     """
     Creates and returns an authenticated MilvusClient for the given customer.
@@ -72,8 +91,14 @@ def get_milvus_client(customer_id: str):
             operation="milvus.connect",
         )
         logger.info(f"MilvusClient connected for customer {customer_id}")
-        # Every Milvus call (search/insert/delete/...) retries with backoff.
-        return RetryingProxy(client, operation="milvus")
+        # Every Milvus call (search/insert/delete/...) retries with backoff
+        # and fans search/query/insert/upsert/delete into the Cost and Usage
+        # rollup (both on success and on failed-after-retries, by design).
+        return RetryingProxy(
+            client,
+            operation="milvus",
+            on_complete=lambda op_name, ok: _record_vector_db_op(customer_id, op_name, ok),
+        )
     except Exception as e:
         logger.error(f"Failed to connect to Milvus for customer {customer_id}: {e}")
         raise

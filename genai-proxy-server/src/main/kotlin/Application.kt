@@ -459,5 +459,7 @@ fun Application.module() {
     val customerToolsService = get<com.genflowly.service.CustomerToolsService>()
     val connectorsService = get<com.genflowly.service.ConnectorsService>()
     val projectService = get<com.genflowly.service.ProjectService>()
-    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, projectService, appConfig)
+    val usageSummaryService = get<com.genflowly.service.UsageSummaryService>()
+    val usageRateCardRepository = get<com.genflowly.repository.UsageRateCardRepository>()
+    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, projectService, usageSummaryService, usageRateCardRepository, appConfig)
 }

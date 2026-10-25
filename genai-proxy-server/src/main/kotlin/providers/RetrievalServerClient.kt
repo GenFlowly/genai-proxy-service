@@ -577,6 +577,7 @@ class RetrievalServerClient(
     // successful fetch is cached for this process's lifetime too.
     @Volatile
     private var providerCatalogCache: com.genflowly.models.api.ProviderCatalogResponse? = null
+    private var embeddingProviderCatalogCache: com.genflowly.models.api.EmbeddingProviderCatalogResponse? = null
 
     /**
      * Every provider the retrieval server can call (native tier + LiteLLM
@@ -596,6 +597,27 @@ class RetrievalServerClient(
         } catch (e: Exception) {
             logger.warn { "Failed to fetch provider catalog: ${e.message}" }
             com.genflowly.models.api.ProviderCatalogResponse(providers = emptyList())
+        }
+    }
+
+    /**
+     * Embedding-model pricing catalog from /embedding-providers — the
+     * embedding-mode counterpart of [getProviderCatalog], used only to seed
+     * AIModelCatalog pricing rows for Cost and Usage's Embedding Models page.
+     */
+    suspend fun getEmbeddingProviderCatalog(): com.genflowly.models.api.EmbeddingProviderCatalogResponse {
+        embeddingProviderCatalogCache?.let { return it }
+        return try {
+            val response: HttpResponse = httpClient.get("$retrievalServerUrl/embedding-providers")
+            if (!response.status.isSuccess()) {
+                logger.warn { "Retrieval server /embedding-providers returned ${response.status}" }
+                return com.genflowly.models.api.EmbeddingProviderCatalogResponse(providers = emptyList())
+            }
+            json.decodeFromString<com.genflowly.models.api.EmbeddingProviderCatalogResponse>(response.bodyAsText())
+                .also { embeddingProviderCatalogCache = it }
+        } catch (e: Exception) {
+            logger.warn { "Failed to fetch embedding provider catalog: ${e.message}" }
+            com.genflowly.models.api.EmbeddingProviderCatalogResponse(providers = emptyList())
         }
     }
 

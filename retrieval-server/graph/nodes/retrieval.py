@@ -112,7 +112,7 @@ async def search_knowledge(
     for (group_model_type, group_model_name), collection_names in grouped.items():
         logger.info("Node retrieval: embedding query with model_type=%s model_name=%s for %d collection(s)", group_model_type, group_model_name, len(collection_names))
         encoder = customer_embedding_model(customer_id, group_model_type, group_model_name)
-        query_embeddings = create_embeddings([query], encoder)
+        query_embeddings = create_embeddings([query], encoder, customer_id=customer_id)
         if not query_embeddings:
             count("embedding_failure_total", source="retrieve", model=group_model_name)
             logger.error("Node retrieval: embedding creation returned empty result for model %s/%s", group_model_type, group_model_name)

@@ -1,0 +1,79 @@
+package com.genflowly.models.api
+
+import kotlinx.serialization.Serializable
+
+/**
+ * One breakdown row for the Cost and Usage pages — either grouped by vendor
+ * (model is "" — not meaningful at that grouping level) or by vendor+model.
+ */
+@Serializable
+data class UsageByDimResponse(
+    val vendor: String,
+    val model: String = "",
+    val costUsd: Double,
+    val totalTokens: Long? = null,
+    val inputTokens: Long? = null,
+    val outputTokens: Long? = null,
+    val cacheReadTokens: Long? = null,
+    val cacheWriteTokens: Long? = null,
+    val requestCount: Long
+)
+
+@Serializable
+data class LlmUsageSummaryResponse(
+    val totalCostUsd: Double,
+    val byVendor: List<UsageByDimResponse>,
+    val byModel: List<UsageByDimResponse>
+)
+
+@Serializable
+data class EmbeddingUsageSummaryResponse(
+    val totalCostUsd: Double,
+    val byVendor: List<UsageByDimResponse>,
+    val byModel: List<UsageByDimResponse>
+)
+
+/** One estimate-breakdown row: opType (vector_db) or searchDepth (web_search). */
+@Serializable
+data class EstimatedUsageBreakdownRow(
+    val key: String,
+    val count: Long,
+    val costUsd: Double
+)
+
+/**
+ * Vector DB and Web Search totals: priced at READ time from UsageRateCard
+ * against raw operation/credit counts, never a real vendor bill —
+ * [isEstimate] is always true and must stay visible in the UI.
+ */
+@Serializable
+data class EstimatedUsageSummaryResponse(
+    val totalCostUsd: Double,
+    val isEstimate: Boolean = true,
+    val breakdown: List<EstimatedUsageBreakdownRow>
+)
+
+/**
+ * Admin-panel view of the UsageRateCard table: current per-unit USD rates
+ * for the two read-time-priced categories (vector_db op counts, web_search
+ * credits). Both categories are returned together since the admin UI edits
+ * them from one page.
+ */
+@Serializable
+data class UsageRateCardEntry(
+    val category: String,
+    val rateKey: String,
+    val usdRate: Double
+)
+
+@Serializable
+data class GetUsageRateCardResponse(
+    val rates: List<UsageRateCardEntry>
+)
+
+@Serializable
+data class PutUsageRateCardRequest(
+    val category: String,
+    val rateKey: String,
+    val usdRate: Double
+)

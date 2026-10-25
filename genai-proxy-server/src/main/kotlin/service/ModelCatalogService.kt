@@ -1,6 +1,7 @@
 package com.genflowly.service
 
 import com.genflowly.models.AIVendor
+import com.genflowly.models.EmbeddingVendor
 import com.genflowly.repository.ModelCatalogRepository
 import com.genflowly.providers.RetrievalServerClient
 import kotlinx.coroutines.CancellationException
@@ -139,8 +140,56 @@ class ModelCatalogService(
             counts[vendor.name] = deduped.size
         }
 
+        refreshEmbeddingCatalog()
+
         logger.info { "Model catalog refreshed: $counts" }
         return counts
+    }
+
+    // Provider-id (retrieval-server /embedding-providers, LiteLLM-shaped) ->
+    // the EmbeddingVendor this codebase keys embedding rows/credentials under.
+    // AIVendor.of() is NOT used here: it lowercases to "voyage", inconsistent
+    // with AIVendor.EMBEDDING_ONLY_NAMES = setOf("VOYAGE") and every other
+    // place Voyage is keyed (CustomerVendorApiKeys, CustomerEmbeddingModels).
+    private val embeddingProviderToVendor = mapOf(
+        "voyage" to EmbeddingVendor.VOYAGE,
+        "openai" to EmbeddingVendor.OPENAI
+    )
+
+    /**
+     * Seeds AIModelCatalog with embedding-model pricing (Voyage/OpenAI) from
+     * the retrieval server's /embedding-providers, the embedding-mode
+     * counterpart of the chat-model sync above. Own failure boundary: an
+     * embedding-pricing fetch failure must not abort the (unrelated) chat
+     * catalog refresh this is called from.
+     */
+    private suspend fun refreshEmbeddingCatalog() {
+        try {
+            val catalog = retrievalServerClient.getEmbeddingProviderCatalog()
+            var stored = 0
+            for (provider in catalog.providers) {
+                val vendor = embeddingProviderToVendor[provider.id]
+                if (vendor == null) {
+                    logger.debug { "Skipping unmapped embedding provider: ${provider.id}" }
+                    continue
+                }
+                val entries = provider.models.mapNotNull { m ->
+                    if (m.inputCostPerMTok == null) return@mapNotNull null
+                    ModelCatalogEntry(
+                        model = m.name,
+                        maxOutputTokens = null,
+                        maxInputTokens = null,
+                        inputCostPerMTok = m.inputCostPerMTok
+                    )
+                }
+                if (entries.isEmpty()) continue
+                modelCatalogRepository.saveModelCatalogEntries(vendor.name, entries)
+                stored += entries.size
+            }
+            logger.info { "Embedding model catalog refreshed: $stored entries" }
+        } catch (e: Exception) {
+            logger.warn(e) { "Embedding model catalog refresh failed — keeping existing catalog rows" }
+        }
     }
 
     /**

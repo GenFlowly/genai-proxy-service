@@ -7,8 +7,21 @@ object DynamoDBConstants {
     const val SUB_PARTITION_KEY = "sub"
     const val CLIENT_SORT_KEY = "client"
 
+    // Per-customer usage/cost rollup. usageDate (the sort key) is a composite
+    // "{YYYY-MM-DD}#{category}#{dim2}#{dim3}" string, not a bare date — see
+    // repository/UsageRollupRepository.kt for the full key scheme.
     const val CUSTOMER_USAGE_TABLE = "CustomerAIUsage"
     const val USAGE_DATE_SORT_KEY = "usageDate"
+    const val USAGE_CATEGORY_KEY = "category"
+    const val USAGE_VENDOR_KEY = "vendor"
+    const val USAGE_DIM3_KEY = "dim3" // model | opType | searchDepth, depending on category
+
+    // Admin-configurable per-unit rates for categories with no real per-request
+    // vendor price (Vector DB ops, Web Search credits) — priced at READ time.
+    // PK=category, SK=rateKey.
+    const val USAGE_RATE_CARD_TABLE = "UsageRateCard"
+    const val USAGE_RATE_KEY = "rateKey"
+    const val USAGE_USD_RATE_KEY = "usdRate"
 
     const val CUSTOMER_API_KEY_TABLE = "CustomerVendorApiKeys"
     const val CUSTOMER_ID_KEY = "customerId"

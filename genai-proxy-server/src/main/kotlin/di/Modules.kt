@@ -160,7 +160,7 @@ fun appModule(): Module = module {
     single { EncodingServerClient(get(), get(), get<AppConfig>().encodingServerUrl) }
 
     // Per-domain repositories (the dissolved DynamoDBProvider)
-    single { ConversationRepository(get(), get()) }
+    single { ConversationRepository(get(), get(), get()) }
     single { CustomerProfileRepository(get(), get()) }
     single { ShareRepository(get(), get()) }
     single { CustomerCredentialsRepository(get(), get()) }
@@ -169,6 +169,8 @@ fun appModule(): Module = module {
     single { DeveloperApiKeyRepository(get(), get()) }
     single { SystemApiKeyRepository(get(), get()) }
     single { ModelCatalogRepository(get(), get()) }
+    single { com.genflowly.repository.UsageRollupRepository(get(), get()) }
+    single { com.genflowly.repository.UsageRateCardRepository(get(), get()) }
     single { NotesRepository(get(), get()) }
     single { com.genflowly.repository.MemoryRepository(get(), get()) }
     single { com.genflowly.repository.ProjectRepository(get(), get()) }
@@ -228,6 +230,7 @@ fun appModule(): Module = module {
     single { com.genflowly.service.SystemApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.ModelCatalogService(get(), get(), get()) }
     single { com.genflowly.service.CostCalculationService(get()) }
+    single { com.genflowly.service.UsageSummaryService(get(), get()) }
 }
 
 fun provideJson(): Json {

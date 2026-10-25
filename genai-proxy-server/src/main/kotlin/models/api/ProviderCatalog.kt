@@ -44,3 +44,27 @@ data class ProviderInfo(
 data class ProviderCatalogResponse(
     val providers: List<ProviderInfo>
 )
+
+/**
+ * Embedding-model pricing catalog from the retrieval server's
+ * /embedding-providers — the embedding-mode counterpart of /providers, used
+ * only to seed AIModelCatalog pricing rows for Cost and Usage (see
+ * ModelCatalogService's embedding sync step). No tool/vision/PDF capability
+ * fields — embeddings don't have them.
+ */
+@Serializable
+data class EmbeddingProviderModelInfo(
+    val name: String,
+    val inputCostPerMTok: Double? = null
+)
+
+@Serializable
+data class EmbeddingProviderInfo(
+    val id: String,
+    val models: List<EmbeddingProviderModelInfo>
+)
+
+@Serializable
+data class EmbeddingProviderCatalogResponse(
+    val providers: List<EmbeddingProviderInfo>
+)
