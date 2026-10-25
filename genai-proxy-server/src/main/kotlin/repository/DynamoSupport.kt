@@ -29,14 +29,17 @@ internal fun aiConfigToAttributeValue(aiConfig: List<AIConfig>): AttributeValue 
     AttributeValue.builder()
         .l(
             aiConfig.map { config ->
-                AttributeValue.builder()
-                    .m(
-                        mapOf(
-                            "aiVendor" to AttributeValue.builder().s(config.aiVendor.name).build(),
-                            "model" to AttributeValue.builder().s(config.model).build()
-                        )
-                    )
-                    .build()
+                val entry = buildMap {
+                    put("aiVendor", AttributeValue.builder().s(config.aiVendor.name).build())
+                    put("model", AttributeValue.builder().s(config.model).build())
+                    config.maxTokens?.let {
+                        put("maxTokens", AttributeValue.builder().n(it.toString()).build())
+                    }
+                    config.thinkingLevel?.takeIf { it.isNotBlank() }?.let {
+                        put("thinkingLevel", AttributeValue.builder().s(it).build())
+                    }
+                }
+                AttributeValue.builder().m(entry).build()
             }
         )
         .build()
@@ -46,7 +49,9 @@ internal fun attributeValueToAiConfig(attributeValue: AttributeValue): List<AICo
         val map = av.m()
         AIConfig(
             aiVendor = AIVendor.valueOf(map["aiVendor"]!!.s()),
-            model = map["model"]!!.s()
+            model = map["model"]!!.s(),
+            maxTokens = map["maxTokens"]?.n()?.toIntOrNull(),
+            thinkingLevel = map["thinkingLevel"]?.s()
         )
     }
 

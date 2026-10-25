@@ -43,7 +43,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     const [config, setConfig] = useState<AIConfig[]>([])
     const [activeBlockId, setActiveBlockId] = useState<string>('')
     const [supplementalText, setSupplementalText] = useState<string>('')
-    const { customerInstructions, customerId, aiConfigPreferences } = useAuth()
+    const { customerInstructions, customerId, aiConfigPreferences, aiVendorAPIKeyStatusList } = useAuth()
     const [systemPrompt, setSystemPrompt] = useState<string>('')
     const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null)
     const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
@@ -122,14 +122,20 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
             aiConfigPreferences.preferredModels.forEach(pref => {
                 if (pref.aiVendor && pref.model) {
                     setSelectedModelForAIVendor(pref.aiVendor, pref.model)
-                    if (pref.thinkingLevel) {
-                        setThinkingLevelForAIVendor(pref.aiVendor, pref.thinkingLevel)
+                    // Settings-page saves predating thinkingLevel in
+                    // preferredModels only stored it on the vendor key item,
+                    // so fall back to the key-status list (as AISettings does)
+                    const thinkingLevel = pref.thinkingLevel
+                        ?? aiVendorAPIKeyStatusList
+                            .find(s => s.aiVendor === pref.aiVendor)?.thinkingLevel
+                    if (thinkingLevel) {
+                        setThinkingLevelForAIVendor(pref.aiVendor, thinkingLevel)
                     }
                 }
             })
         }
         setLoadedPreferencesSignature(currentSignature)
-    }, [aiConfigPreferences, loadedPreferencesSignature, config])
+    }, [aiConfigPreferences, loadedPreferencesSignature, config, aiVendorAPIKeyStatusList])
 
     // 🔹 Update or insert vendor+model config safely
     const setSelectedModelForAIVendor = (aiVendor: string, model: string) => {
