@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
-import { AIVendor } from '../../../constants/vendors'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendorApiKeysService'
 import {
@@ -17,11 +16,18 @@ import {
 import { VendorBrandName } from '../../../components/common/BrandName/BrandName'
 import styles from './EmbeddingKeysSettings.module.scss'
 
+const keySet = (status?: EmbeddingKeyStatus): boolean =>
+    status?.status === APIKeyStatus.VALID || !!status?.isAPIKeyValid
+
 /**
  * Bring-your-own API keys for the embedding models that index and search the
  * customer's data. The OpenAI key is the same key as on the LLM API Keys
- * page (one key serves generation and embeddings), so it reads and writes the
+ * page (one key serves generation and embeddings), so saving here writes the
  * shared vendor-key state; Voyage is embedding-only and has its own key.
+ * Both pills read the embedding-keys endpoint, whose status is capability-
+ * aware: a key the vendor rejects for embeddings (e.g. an OpenAI key without
+ * embeddings permission) reports as not set, with the backend's detail
+ * message shown below — even though the LLM page shows the same key as set.
  * The per-category default embedding models live on the Defaults page.
  */
 export function EmbeddingKeysSettings(): React.ReactElement {
@@ -30,18 +36,17 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         customerId,
         isAuthenticated,
         getAccessTokenSilently,
-        aiVendorAPIKeyStatusList,
         updateVendorApiKeyStatus,
     } = useAuth()
 
-    const [voyageStatus, setVoyageStatus] = useState<EmbeddingKeyStatus | null>(null)
+    const [statuses, setStatuses] = useState<EmbeddingKeyStatus[]>([])
 
     const loadStatuses = useCallback(async () => {
         if (!isAuthenticated || !customerId) return
         try {
             const token = await getAccessTokenSilently()
             const response = await getEmbeddingKeys(token)
-            setVoyageStatus(response.statuses.find(s => s.vendor === EmbeddingVendor.VOYAGE) ?? null)
+            setStatuses(response.statuses)
         } catch (err) {
             console.error('EmbeddingKeysSettings: failed to fetch key statuses', err)
         }
@@ -51,24 +56,26 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         void loadStatuses()
     }, [loadStatuses])
 
-    // OpenAI state lives in the shared vendor-key list, so a key stored on
-    // the LLM API Keys page shows as set here (and vice versa)
-    const openAiVendorStatus = aiVendorAPIKeyStatusList.find(s => s.aiVendor === AIVendor.OPENAI)
-    const openAiKeySet =
-        openAiVendorStatus?.status === APIKeyStatus.VALID || !!openAiVendorStatus?.isAPIKeyValid
+    const setStatus = (status: EmbeddingKeyStatus) =>
+        setStatuses(prev => [...prev.filter(s => s.vendor !== status.vendor), status])
 
     const rows: VendorApiKeyRowData[] = useMemo(() => ([
         {
             vendor: EmbeddingVendor.OPENAI,
             label: <VendorBrandName vendorId={EmbeddingVendor.OPENAI} className={styles.vendorBrand} />,
-            keySet: openAiKeySet,
+            keySet: keySet(statuses.find(s => s.vendor === EmbeddingVendor.OPENAI)),
         },
         {
             vendor: EmbeddingVendor.VOYAGE,
             label: t('settingsPage.embeddingKeysSettings.voyageLabel'),
-            keySet: voyageStatus?.status === APIKeyStatus.VALID || !!voyageStatus?.isAPIKeyValid,
+            keySet: keySet(statuses.find(s => s.vendor === EmbeddingVendor.VOYAGE)),
         },
-    ]), [openAiKeySet, voyageStatus, t])
+    ]), [statuses, t])
+
+    const vendorLabel = (vendor: EmbeddingVendor) =>
+        vendor === EmbeddingVendor.VOYAGE
+            ? t('settingsPage.embeddingKeysSettings.voyageLabel')
+            : 'OpenAI'
 
     const handleSaveKey = async (vendor: string, apiKey: string) => {
         if (!isAuthenticated || !customerId) {
@@ -77,10 +84,18 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         const token = await getAccessTokenSilently()
 
         if (vendor === EmbeddingVendor.OPENAI) {
-            // Same endpoint as the LLM API Keys page: one OpenAI key for both
+            // Same endpoint as the LLM API Keys page: one OpenAI key for both.
+            // The embedding-capability verdict lands asynchronously (the server
+            // probes on save), so reflect the save result optimistically here;
+            // the next status load reports capability.
             const response = await storeCustomerVendorApiKey(token, { aiVendor: vendor, apiKey })
             if (response.apiKeyStatus.updateSuccessful) {
                 updateVendorApiKeyStatus(response.apiKeyStatus)
+                setStatus({
+                    vendor: EmbeddingVendor.OPENAI,
+                    isAPIKeyValid: true,
+                    status: APIKeyStatus.VALID,
+                })
             }
             return {
                 success: response.apiKeyStatus.updateSuccessful,
@@ -90,13 +105,15 @@ export function EmbeddingKeysSettings(): React.ReactElement {
 
         const response = await storeEmbeddingKey(token, vendor as EmbeddingVendor, apiKey)
         if (response.keyStatus.updateSuccessful) {
-            setVoyageStatus(response.keyStatus)
+            setStatus(response.keyStatus)
         }
         return {
             success: !!response.keyStatus.updateSuccessful,
             message: response.keyStatus.detail || response.keyStatus.status,
         }
     }
+
+    const problems = statuses.filter(s => s.detail)
 
     return (
         <div className={styles.container}>
@@ -120,6 +137,11 @@ export function EmbeddingKeysSettings(): React.ReactElement {
                     }}
                     data-testid="embedding-keys"
                 />
+                {problems.map(s => (
+                    <p key={s.vendor} className={styles.keyProblem} data-testid={`embedding-key-problem-${s.vendor}`}>
+                        {vendorLabel(s.vendor)}: {s.detail}
+                    </p>
+                ))}
             </div>
         </div>
     )

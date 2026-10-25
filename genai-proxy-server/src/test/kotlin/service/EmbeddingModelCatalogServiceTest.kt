@@ -59,23 +59,34 @@ class EmbeddingModelCatalogServiceTest {
 
         val result = service.probeAndStore(cid, voyage, "key", existing)
 
-        assertEquals(listOf("voyage-3", "voyage-4"), result)
-        coVerify { catalogRepo.putProbed(cid, "VOYAGE", listOf("voyage-3", "voyage-4"), any()) }
+        assertEquals(EmbeddingCatalog.Models(listOf("voyage-3", "voyage-4")), result)
+        coVerify { catalogRepo.putProbed(cid, "VOYAGE", listOf("voyage-3", "voyage-4"), any(), false) }
     }
 
     @Test
-    fun `probeAndStore returns null and does not persist on vendor error`() = runTest {
+    fun `probeAndStore persists the auth-failed verdict and reports KeyCannotEmbed`() = runTest {
         coEvery { retrieval.probeEmbeddingModels(any()) } returns listOf(
             VendorProbeResult(provider = "voyage", supported = emptyList(), inconclusive = emptyList(), error = "authentication failed")
         )
         val result = service.probeAndStore(cid, voyage, "badkey", existing = null)
 
-        assertNull(result)
-        coVerify(exactly = 0) { catalogRepo.putProbed(any(), any(), any(), any()) }
+        assertEquals(EmbeddingCatalog.KeyCannotEmbed, result)
+        coVerify { catalogRepo.putProbed(cid, "VOYAGE", emptyList(), any(), true) }
     }
 
     @Test
-    fun `getValidModels serves fresh cache without probing`() = runTest {
+    fun `probeAndStore returns null and does not persist on other vendor errors`() = runTest {
+        coEvery { retrieval.probeEmbeddingModels(any()) } returns listOf(
+            VendorProbeResult(provider = "voyage", supported = emptyList(), inconclusive = emptyList(), error = "no embedding models for provider voyage")
+        )
+        val result = service.probeAndStore(cid, voyage, "key", existing = null)
+
+        assertNull(result)
+        coVerify(exactly = 0) { catalogRepo.putProbed(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `getCatalog serves fresh cache without probing`() = runTest {
         val key = "key"
         val fp = service.fingerprint(key)
         coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns ProbedModels(
@@ -84,9 +95,57 @@ class EmbeddingModelCatalogServiceTest {
             keyFingerprint = fp
         )
 
-        val models = service.getValidModels(cid, voyage, key)
+        val catalog = service.getCatalog(cid, voyage, key)
 
-        assertEquals(listOf("voyage-4-large"), models)
+        assertEquals(EmbeddingCatalog.Models(listOf("voyage-4-large")), catalog)
+        coVerify(exactly = 0) { retrieval.probeEmbeddingModels(any()) }
+    }
+
+    @Test
+    fun `getCatalog keeps a recent auth-failed verdict without probing`() = runTest {
+        val key = "key"
+        coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns ProbedModels(
+            models = emptyList(),
+            lastProbedAt = Instant.now(),   // within the retry cooldown
+            keyFingerprint = service.fingerprint(key),
+            authFailed = true
+        )
+
+        val catalog = service.getCatalog(cid, voyage, key)
+
+        assertEquals(EmbeddingCatalog.KeyCannotEmbed, catalog)
+        coVerify(exactly = 0) { retrieval.probeEmbeddingModels(any()) }
+    }
+
+    @Test
+    fun `getCatalog re-probes an auth-failed verdict after the retry window`() = runTest {
+        val key = "key"
+        coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns ProbedModels(
+            models = emptyList(),
+            lastProbedAt = Instant.now().minusSeconds(10 * 60),  // past the cooldown
+            keyFingerprint = service.fingerprint(key),
+            authFailed = true
+        )
+        // The customer fixed the key's permissions vendor-side: probe now passes.
+        coEvery { retrieval.probeEmbeddingModels(any()) } returns listOf(
+            VendorProbeResult(provider = "voyage", supported = listOf("voyage-4"), inconclusive = emptyList(), error = null)
+        )
+
+        val catalog = service.getCatalog(cid, voyage, key)
+
+        assertEquals(EmbeddingCatalog.Models(listOf("voyage-4")), catalog)
+        coVerify { catalogRepo.putProbed(cid, "VOYAGE", listOf("voyage-4"), any(), false) }
+    }
+
+    @Test
+    fun `cachedKeyCannotEmbed reads the stored verdict only`() = runTest {
+        coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns ProbedModels(
+            models = emptyList(), lastProbedAt = Instant.now(), keyFingerprint = "fp", authFailed = true
+        )
+        assertEquals(true, service.cachedKeyCannotEmbed(cid, voyage))
+
+        coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns null
+        assertEquals(false, service.cachedKeyCannotEmbed(cid, voyage))
         coVerify(exactly = 0) { retrieval.probeEmbeddingModels(any()) }
     }
 
@@ -124,6 +183,23 @@ class EmbeddingModelCatalogServiceTest {
     }
 
     @Test
+    fun `assertModelSupported throws when the key cannot embed at all`() = runTest {
+        coEvery { credsRepo.getCustomerApiKey("VOYAGE", cid) } returns "enc"
+        coEvery { kms.decrypt("enc") } returns "key"
+        coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns ProbedModels(
+            models = emptyList(),
+            lastProbedAt = Instant.now(),
+            keyFingerprint = service.fingerprint("key"),
+            authFailed = true
+        )
+
+        val ex = assertFailsWith<IllegalArgumentException> {
+            service.assertModelSupported(cid, "voyage-4-large")
+        }
+        assertEquals(true, ex.message!!.contains("cannot run embeddings"))
+    }
+
+    @Test
     fun `assertModelSupported throws when no key is configured`() = runTest {
         coEvery { credsRepo.getCustomerApiKey("VOYAGE", cid) } returns null
 
@@ -134,7 +210,7 @@ class EmbeddingModelCatalogServiceTest {
 
     @Test
     fun `assertModelSupported allows the save when the valid set cannot be determined`() = runTest {
-        // Probe infra down (empty result) AND no cache -> getValidModels null -> don't block.
+        // Probe infra down (empty result) AND no cache -> Undetermined -> don't block.
         coEvery { credsRepo.getCustomerApiKey("VOYAGE", cid) } returns "enc"
         coEvery { kms.decrypt("enc") } returns "key"
         coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns null

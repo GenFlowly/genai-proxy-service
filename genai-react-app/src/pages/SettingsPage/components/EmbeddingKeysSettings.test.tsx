@@ -34,7 +34,6 @@ describe('EmbeddingKeysSettings', () => {
         isAuthenticated: true,
         getAccessTokenSilently: mockGetAccessTokenSilently,
         updateVendorApiKeyStatus: mockUpdateVendorApiKeyStatus,
-        aiVendorAPIKeyStatusList: [],
         ...overrides,
     });
 
@@ -66,13 +65,43 @@ describe('EmbeddingKeysSettings', () => {
         expect(screen.getByTestId('embedding-keys-VOYAGE-status-pill')).toHaveTextContent('Not set');
     });
 
-    test('OpenAI shows as set when the vendor page already stored a key', async () => {
-        mockUseAuth.mockReturnValue(authValue({ aiVendorAPIKeyStatusList: [validOpenAIStatus] }));
+    test('OpenAI shows as set when the backend reports the shared key as usable', async () => {
+        mockGetEmbeddingKeys.mockResolvedValue({
+            statuses: [
+                { vendor: EmbeddingVendor.OPENAI, isAPIKeyValid: true, status: APIKeyStatus.VALID },
+                { vendor: EmbeddingVendor.VOYAGE, isAPIKeyValid: false, status: APIKeyStatus.NOT_SET },
+            ],
+        });
 
         render(<EmbeddingKeysSettings />);
 
-        expect(screen.getByTestId('embedding-keys-OPENAI-status-pill')).toHaveTextContent('Key set');
+        await waitFor(() =>
+            expect(screen.getByTestId('embedding-keys-OPENAI-status-pill')).toHaveTextContent('Key set')
+        );
         expect(screen.getByTestId('embedding-keys-VOYAGE-status-pill')).toHaveTextContent('Not set');
+    });
+
+    test('a stored key that cannot embed shows Not set with the backend detail', async () => {
+        mockGetEmbeddingKeys.mockResolvedValue({
+            statuses: [
+                {
+                    vendor: EmbeddingVendor.OPENAI,
+                    isAPIKeyValid: false,
+                    status: APIKeyStatus.INVALID,
+                    detail: 'This key cannot access embedding models — update its permissions, or save a key that can.',
+                },
+                { vendor: EmbeddingVendor.VOYAGE, isAPIKeyValid: false, status: APIKeyStatus.NOT_SET },
+            ],
+        });
+
+        render(<EmbeddingKeysSettings />);
+
+        await waitFor(() =>
+            expect(screen.getByTestId('embedding-key-problem-OPENAI')).toHaveTextContent(
+                'OpenAI: This key cannot access embedding models'
+            )
+        );
+        expect(screen.getByTestId('embedding-keys-OPENAI-status-pill')).toHaveTextContent('Not set');
     });
 
     test('Voyage shows as set from the embedding-keys endpoint', async () => {
@@ -125,6 +154,8 @@ describe('EmbeddingKeysSettings', () => {
             });
             expect(mockUpdateVendorApiKeyStatus).toHaveBeenCalledWith(validOpenAIStatus);
         });
+        // The pill reflects the save optimistically (capability lands async)
+        expect(screen.getByTestId('embedding-keys-OPENAI-status-pill')).toHaveTextContent('Key set');
         expect(mockStoreEmbeddingKey).not.toHaveBeenCalled();
     });
 
