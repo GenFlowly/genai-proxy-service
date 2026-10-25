@@ -40,6 +40,8 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     instructionsTableName: process.env.INSTRUCTIONS_TABLE_NAME || 'Instructions',
     customerApiKeyTableName: process.env.CUSTOMER_API_KEY_TABLE_NAME || 'CustomerVendorApiKeys',
     purgeAllowedClientIds: process.env.PURGE_ALLOWED_CLIENT_IDS,
+    customerApiUsageTableName: process.env.CUSTOMER_API_USAGE_TABLE_NAME || 'CustomerAIUsage',
+    aiModelCatalogTableName: process.env.AI_MODEL_CATALOG_TABLE_NAME || 'AIModelCatalog',
 });
 
 const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-StepFunctionsV2Stack`, {
