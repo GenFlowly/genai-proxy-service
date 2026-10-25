@@ -4,8 +4,20 @@
 .sidebarWrapper {
   @include sidebar-base(left);
   z-index: 20; // Ensure it sits above CenterSection content (z=10) but below Navbar (z=30)
-  border: none; // The page-background gap separates panels instead
+
+  // Same macOS card material as the history sidebar's cards (the component
+  // library's sidebar-card chrome): translucent, blurred, hairline-edged —
+  // so both sidebars' edges read identically against the page background
+  --sidebar-material: rgba(243, 243, 246, 0.78);
+  --sidebar-hairline: rgba(0, 0, 0, 0.08);
+  --sidebar-hover-fill: rgba(0, 0, 0, 0.05);
+
+  background-color: var(--sidebar-material);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--sidebar-hairline);
   border-radius: $widget-radius;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
   overflow: hidden; // Clip content and the footer toggle to the rounded corners
 
   // In-flow flex child: the center section resizes dynamically as this
@@ -28,17 +40,25 @@
     width: 100%;
     padding: 0.5rem;
     border: none;
-    border-top: 1px solid $color-border;
+    border-top: 1px solid var(--sidebar-hairline);
     border-radius: 0;
     box-shadow: none;
-    background-color: $color-sidebar-background;
+    background-color: transparent; // The card material shows through
 
     &:hover {
       padding: 0.5rem; // Neutralize the mixin's slide effect
-      background-color: $color-background-hover;
+      background-color: var(--sidebar-hover-fill);
       color: $color-text-primary;
     }
   }
+}
+
+:global([data-theme='dark']) .sidebarWrapper {
+  --sidebar-material: rgba(38, 38, 42, 0.72);
+  --sidebar-hairline: rgba(255, 255, 255, 0.09);
+  --sidebar-hover-fill: rgba(255, 255, 255, 0.07);
+
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 /* 📱 Mobile view: modal covering everything below the navbar (see MobileFullPageModal in @genflowly/component-library) */
