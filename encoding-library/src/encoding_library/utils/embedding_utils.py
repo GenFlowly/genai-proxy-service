@@ -2,6 +2,19 @@ import math
 from typing import Any, Dict, List, Optional
 
 
+class EmbeddingKeyMissing(Exception):
+    """A hosted embedding model was requested without an API key for its
+    provider. Hosted embeddings run exclusively on the customer's own key
+    (CustomerVendorApiKeys) — there is no platform-wide fallback."""
+
+    def __init__(self, provider: str):
+        self.provider = provider
+        super().__init__(
+            f"No API key available for embedding provider '{provider}' — "
+            "the customer has not stored one."
+        )
+
+
 class VoyageContextualizedEmbeddings:
     """
     Encoder for Voyage contextualized chunk embedding models (voyage-context-*),
@@ -16,16 +29,16 @@ class VoyageContextualizedEmbeddings:
 
     ENDPOINT = "https://api.voyageai.com/v1/contextualizedembeddings"
 
-    def __init__(self, model: str):
+    def __init__(self, model: str, api_key: str):
+        if not api_key:
+            raise EmbeddingKeyMissing("voyage")
         self.model = model
+        self.api_key = api_key
 
     def _call(self, inputs: List[List[str]], input_type: str) -> List[List[List[float]]]:
-        import os
         import requests
         from encoding_library.utils.retry import is_transient_http_error, retry_call
-        api_key = os.environ.get("VOYAGE_API_KEY")
-        if not api_key:
-            raise ValueError("VOYAGE_API_KEY environment variable is not set")
+        api_key = self.api_key
         def _post():
             # raise_for_status inside the retried call so 429/5xx retry too,
             # not just connection errors.
@@ -54,10 +67,18 @@ class VoyageContextualizedEmbeddings:
         return self._call([[text]], input_type="query")[0][0]
 
 
-def get_embedding_model(model_type_str: Optional[str] = None, model_name_str: Optional[str] = None) -> Any:
+def get_embedding_model(
+    model_type_str: Optional[str] = None,
+    model_name_str: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> Any:
     """
     Instantiates and returns the appropriate Langchain embedding model.
     Defaults to sentence-transformer / all-MiniLM-L6-v2 if not specified.
+
+    Hosted providers (voyage/openai) embed on the given api_key — the
+    customer's own, never an environment variable; raises EmbeddingKeyMissing
+    without one. Local sentence-transformer models ignore api_key.
     """
     from encoding_library.utils.model_registry import resolve_model, is_contextualized_model
     model_type, model_name = resolve_model(model_type_str, model_name_str)
@@ -65,18 +86,36 @@ def get_embedding_model(model_type_str: Optional[str] = None, model_name_str: Op
     if model_type == "sentence-transformer":
         from langchain_huggingface import HuggingFaceEmbeddings
         return HuggingFaceEmbeddings(model_name=model_name)
-    elif model_type == "openai":
-        # Requires OPENAI_API_KEY in the environment
-        from langchain_openai import OpenAIEmbeddings
-        return OpenAIEmbeddings(model=model_name)
-    elif model_type == "voyage":
-        # Requires VOYAGE_API_KEY in the environment
-        if is_contextualized_model(model_name):
-            return VoyageContextualizedEmbeddings(model=model_name)
-        from langchain_voyageai import VoyageAIEmbeddings
-        return VoyageAIEmbeddings(model=model_name)
-    else:
+    if model_type not in ("openai", "voyage"):
         raise ValueError(f"Unknown language model type specified: {model_type}")
+    if not api_key:
+        raise EmbeddingKeyMissing(model_type)
+    if model_type == "openai":
+        from langchain_openai import OpenAIEmbeddings
+        return OpenAIEmbeddings(model=model_name, api_key=api_key)
+    if is_contextualized_model(model_name):
+        return VoyageContextualizedEmbeddings(model=model_name, api_key=api_key)
+    from langchain_voyageai import VoyageAIEmbeddings
+    return VoyageAIEmbeddings(model=model_name, api_key=api_key)
+
+
+def get_embedding_model_for_customer(
+    customer_id: str,
+    model_type_str: Optional[str] = None,
+    model_name_str: Optional[str] = None,
+) -> Any:
+    """
+    get_embedding_model with the key resolved from the customer's stored
+    credentials (CustomerVendorApiKeys, KMS-decrypted). Raises
+    EmbeddingKeyMissing when a hosted model is requested and the customer has
+    no key for its provider.
+    """
+    from encoding_library.utils.model_registry import resolve_model
+    from encoding_library.utils.vendor_keys import get_customer_embedding_key
+
+    model_type, model_name = resolve_model(model_type_str, model_name_str)
+    api_key = get_customer_embedding_key(customer_id, model_type)
+    return get_embedding_model(model_type, model_name, api_key=api_key)
 
 def create_chunks(
     text_to_encode: str,

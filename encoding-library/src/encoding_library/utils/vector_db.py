@@ -16,53 +16,38 @@ kms_client = boto3.client('kms', region_name=region_name)
 VECTOR_DB_TABLE_NAME = os.environ.get('CUSTOMER_VECTOR_DB_CONFIG_TABLE', 'CustomerVectorDBConfig')
 vector_db_table = dynamodb.Table(VECTOR_DB_TABLE_NAME)
 
-GLOBAL_ZILLIZ_ENDPOINT = os.environ.get('ZILLIZ_ENDPOINT')
-GLOBAL_ZILLIZ_TOKEN = os.environ.get('ZILLIZ_TOKEN')
+
+class VectorDBNotConfigured(Exception):
+    """The customer has no (or an incomplete) CustomerVectorDBConfig row — a
+    customer state, not an infrastructure failure. There is no platform-wide
+    fallback vector DB; a real DynamoDB/KMS failure propagates as its own
+    exception instead of being folded into this one."""
+
+    def __init__(self, customer_id: str):
+        self.customer_id = customer_id
+        super().__init__(f"No vector DB configured for customer '{customer_id}'.")
+
 
 def get_zilliz_credentials(customer_id: str) -> Tuple[str, str]:
     """
-    Fetches Zilliz endpoint and token from DynamoDB, decrypting them with KMS.
-    Falls back to environment variables if DynamoDB record is missing or fetching fails.
+    Fetches this customer's Zilliz endpoint and token from DynamoDB, decrypting
+    them with KMS. Raises VectorDBNotConfigured when the customer has no (or
+    an incomplete) config row; any other failure (DynamoDB/KMS unreachable)
+    propagates as-is.
     """
-    logger.info(f"Fetching Zilliz credentials from DynamoDB for {customer_id}")
-    try:
-        logger.info(f"Calling DynamoDB get_item for {customer_id}")
-        response = vector_db_table.get_item(
-            Key={'customerId': customer_id}
-        )
-        logger.info(f"DynamoDB response received for {customer_id}")
-        item = response.get('Item')
-        if not item:
-            if GLOBAL_ZILLIZ_ENDPOINT and GLOBAL_ZILLIZ_TOKEN:
-                logger.info(f"No vector DB config for {customer_id} — using system's vector DB")
-                return GLOBAL_ZILLIZ_ENDPOINT, GLOBAL_ZILLIZ_TOKEN
-            raise ValueError(f"No vector DB configuration found for customer {customer_id}")
-            
-        encrypted_endpoint = item.get('endpoint')
-        encrypted_token = item.get('token')
-        
-        if not encrypted_endpoint or not encrypted_token:
-            if GLOBAL_ZILLIZ_ENDPOINT and GLOBAL_ZILLIZ_TOKEN:
-                logger.info(f"Incomplete vector DB config for {customer_id} — using system's vector DB")
-                return GLOBAL_ZILLIZ_ENDPOINT, GLOBAL_ZILLIZ_TOKEN
-            raise ValueError(f"Incomplete Zilliz configuration for customer {customer_id}")
-            
-        endpoint_bytes = base64.b64decode(encrypted_endpoint)
-        decrypted_endpoint = kms_client.decrypt(CiphertextBlob=endpoint_bytes)['Plaintext'].decode('utf-8')
-        
-        token_bytes = base64.b64decode(encrypted_token)
-        decrypted_token = kms_client.decrypt(CiphertextBlob=token_bytes)['Plaintext'].decode('utf-8')
-        
-        return decrypted_endpoint, decrypted_token
-    except Exception as e:
-        logger.error(f"Failed to fetch Zilliz credentials for {customer_id}: {str(e)}")
-        if GLOBAL_ZILLIZ_ENDPOINT and GLOBAL_ZILLIZ_TOKEN:
-            # Alarmed on: the customer may silently be querying the system
-            # vector DB instead of their own.
-            count("zilliz_credential_fallback_total")
-            logger.info(f"Error fetching vector DB config for {customer_id} — using system's vector DB")
-            return GLOBAL_ZILLIZ_ENDPOINT, GLOBAL_ZILLIZ_TOKEN
-        raise e
+    response = vector_db_table.get_item(Key={'customerId': customer_id})
+    item = response.get('Item')
+    if not item or not item.get('endpoint') or not item.get('token'):
+        count("vector_db_not_configured_total")
+        raise VectorDBNotConfigured(customer_id)
+
+    decrypted_endpoint = kms_client.decrypt(
+        CiphertextBlob=base64.b64decode(item['endpoint'])
+    )['Plaintext'].decode('utf-8')
+    decrypted_token = kms_client.decrypt(
+        CiphertextBlob=base64.b64decode(item['token'])
+    )['Plaintext'].decode('utf-8')
+    return decrypted_endpoint, decrypted_token
 
 
 def get_milvus_client(customer_id: str):

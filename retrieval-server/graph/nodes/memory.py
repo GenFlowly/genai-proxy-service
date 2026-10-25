@@ -117,12 +117,14 @@ def _milvus_client(customer_id: str):
     return get_milvus_client(customer_id)
 
 
-def _embed_query(query: str, model_type: Optional[str], model_name: Optional[str]) -> Optional[list]:
+def _embed_query(
+    customer_id: str, query: str, model_type: Optional[str], model_name: Optional[str]
+) -> Optional[list]:
     # Lazy import: the embedding stack loads models into process memory.
     from encoding_library.utils.embedding_utils import create_embeddings
-    from graph.nodes.retrieval import _get_cached_embedding_model
+    from graph.nodes.retrieval import customer_embedding_model
 
-    encoder = _get_cached_embedding_model(model_type, model_name)
+    encoder = customer_embedding_model(customer_id, model_type, model_name)
     embeddings = create_embeddings([query], encoder)
     if not embeddings:
         return None
@@ -222,7 +224,7 @@ def _recall_episodic(
 
     best_score: dict[str, float] = {}
     for (model_type, model_name), collection_names in grouped.items():
-        vector = _embed_query(query, model_type, model_name)
+        vector = _embed_query(customer_id, query, model_type, model_name)
         if vector is None:
             count("embedding_failure_total", source="memory_recall", model=model_name or "")
             logger.error(

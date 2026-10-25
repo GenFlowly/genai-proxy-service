@@ -4,9 +4,11 @@ Client for the Voyage AI Batch API (asynchronous embeddings at discounted rates)
 Workflow: upload a JSONL file of requests -> create a batch job -> poll status
 -> download the output file once completed.
 Docs: https://docs.voyageai.com/docs/batch-inference
+
+Every call takes the api_key explicitly — the customer's own Voyage key,
+never a platform-wide environment variable.
 """
 import json
-import os
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -21,10 +23,10 @@ BATCH_STATUS_COMPLETED = "completed"
 BATCH_STATUS_FAILED = {"failed", "cancelled", "expired"}
 
 
-def _headers() -> Dict[str, str]:
-    api_key = os.environ.get("VOYAGE_API_KEY")
+def _headers(api_key: str) -> Dict[str, str]:
     if not api_key:
-        raise ValueError("VOYAGE_API_KEY environment variable is not set")
+        from encoding_library.utils.embedding_utils import EmbeddingKeyMissing
+        raise EmbeddingKeyMissing("voyage")
     return {"Authorization": f"Bearer {api_key}"}
 
 
@@ -60,11 +62,11 @@ def build_embeddings_jsonl(batches: List[Dict[str, Any]], model_name: Optional[s
     return "\n".join(lines)
 
 
-def upload_batch_file(jsonl_content: str) -> str:
+def upload_batch_file(jsonl_content: str, api_key: str) -> str:
     """Upload the JSONL input file; returns the file id."""
     response = requests.post(
         f"{VOYAGE_API_BASE}/files",
-        headers=_headers(),
+        headers=_headers(api_key),
         files={"file": ("batch_input.jsonl", jsonl_content.encode("utf-8"), "application/jsonl")},
         data={"purpose": "batch"},
         timeout=120,
@@ -76,7 +78,7 @@ def upload_batch_file(jsonl_content: str) -> str:
     return file_id
 
 
-def create_batch(input_file_id: str, model_name: str,
+def create_batch(input_file_id: str, model_name: str, api_key: str,
                  request_params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Create an embeddings batch job; returns the batch object (incl. 'id')."""
     from encoding_library.utils.model_registry import is_contextualized_model
@@ -89,7 +91,7 @@ def create_batch(input_file_id: str, model_name: str,
         params.update(request_params)
     response = requests.post(
         f"{VOYAGE_API_BASE}/batches",
-        headers={**_headers(), "Content-Type": "application/json"},
+        headers={**_headers(api_key), "Content-Type": "application/json"},
         json={
             "endpoint": endpoint,
             "completion_window": "12h",
@@ -106,16 +108,16 @@ def create_batch(input_file_id: str, model_name: str,
     return batch
 
 
-def get_batch(batch_id: str) -> Dict[str, Any]:
+def get_batch(batch_id: str, api_key: str) -> Dict[str, Any]:
     """Fetch batch job status/details."""
-    response = requests.get(f"{VOYAGE_API_BASE}/batches/{batch_id}", headers=_headers(), timeout=60)
+    response = requests.get(f"{VOYAGE_API_BASE}/batches/{batch_id}", headers=_headers(api_key), timeout=60)
     response.raise_for_status()
     return response.json()
 
 
-def download_file_content(file_id: str) -> str:
+def download_file_content(file_id: str, api_key: str) -> str:
     """Download a (result) file's content as text."""
-    response = requests.get(f"{VOYAGE_API_BASE}/files/{file_id}/content", headers=_headers(), timeout=300)
+    response = requests.get(f"{VOYAGE_API_BASE}/files/{file_id}/content", headers=_headers(api_key), timeout=300)
     response.raise_for_status()
     return response.text
 
