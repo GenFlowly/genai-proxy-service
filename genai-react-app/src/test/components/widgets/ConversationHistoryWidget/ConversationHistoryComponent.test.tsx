@@ -414,6 +414,12 @@ describe('ConversationHistoryComponent', () => {
             const pinnedHeader = screen.getByText('Pinned')
             const item = screen.getByTestId('conv-history-item-conv-2')
             expect(pinnedHeader.compareDocumentPosition(item)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+
+            // Pinned lives outside the scrollable list (it must not scroll
+            // away); only the Recents list scrolls
+            const scrollList = screen.getByTestId('history-scroll-list')
+            expect(within(scrollList).queryByTestId('conv-history-item-conv-1')).not.toBeInTheDocument()
+            expect(within(scrollList).getByTestId('conv-history-item-conv-2')).toBeInTheDocument()
         })
 
         test('pinning moves the item to Pinned and shows a toast', async () => {
