@@ -15,8 +15,6 @@ env:
   AWS_REGION: us-east-1
   ENCODING_CDK_PATH: encoding-server-cdk
   AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
-  ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
-  ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
   STAGE: production
 
 jobs:
@@ -276,9 +274,6 @@ jobs:
           CREATE_AND_STORE_IMAGE_TAG: ${{ env.CREATE_AND_STORE_IMAGE_TAG }}
           CREATE_COLLECTIONS_IMAGE_TAG: ${{ env.CREATE_COLLECTIONS_IMAGE_TAG }}
           AUTH0_SPA_DOMAIN: ${{ env.AUTH0_SPA_DOMAIN }}
-          ZILLIZ_ENDPOINT: ${{ secrets.ZILLIZ_ENDPOINT }}
-          ZILLIZ_TOKEN: ${{ secrets.ZILLIZ_TOKEN }}
-          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
           ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
           # Passed by the CDK app (bin/cdk.ts) into the purge-vectors Lambda's
           # environment. POST /purge-vectors deletes a customer's or a conversation's

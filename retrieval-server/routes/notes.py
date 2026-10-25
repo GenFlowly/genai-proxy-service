@@ -9,6 +9,7 @@ from encoding_library.observability import count
 from encoding_library.utils.model_registry import build_collection_description, resolve_model
 from encoding_library.utils.vector_db import (
     CUSTOMER_ID_MAX_LENGTH,
+    VectorDBNotConfigured,
     add_customer_id_field,
     collection_data_type,
     customer_filter,
@@ -100,6 +101,10 @@ async def delete_note_vectors(req: DeleteNoteVectorsRequest):
             logger.info("No note collections found for customer %s; nothing to delete", req.customer_id)
 
         return {"status": "success", "deleted": deleted_counts}
+    except VectorDBNotConfigured:
+        # No vector DB means nothing was ever stored — deletion is a no-op.
+        logger.info("No vector DB configured for customer %s; nothing to delete", req.customer_id)
+        return {"status": "success", "deleted": {}}
     except Exception as e:
         logger.error("Failed to delete note vectors for customer=%s note_key=%s: %s",
                      req.customer_id, req.note_key, e, exc_info=True)
@@ -162,8 +167,8 @@ async def encode_memory(req: EncodeMemoryRequest):
 
     # Lazy import: pulls in the embedding stack, which module import (and the
     # route-less unit tests) must not pay for.
-    from encoding_library.utils.embedding_utils import create_embeddings
-    from graph.nodes.retrieval import _get_cached_embedding_model
+    from encoding_library.utils.embedding_utils import EmbeddingKeyMissing, create_embeddings
+    from graph.nodes.retrieval import customer_embedding_model
 
     model_type, model_name = resolve_model(req.model_type, req.model_name)
     collection_name = shared_collection_name("memory", model_name)
@@ -173,7 +178,7 @@ async def encode_memory(req: EncodeMemoryRequest):
     )
 
     try:
-        encoder = _get_cached_embedding_model(model_type, model_name)
+        encoder = customer_embedding_model(req.customer_id, model_type, model_name)
         embeddings = create_embeddings([req.memory_value], encoder)
         if not embeddings or not embeddings[0].get("vector"):
             count("embedding_failure_total", source="encode_memory", model=model_name)
@@ -210,6 +215,13 @@ async def encode_memory(req: EncodeMemoryRequest):
         return {"status": "success", "collection": collection_name}
     except HTTPException:
         raise
+    except (EmbeddingKeyMissing, VectorDBNotConfigured) as e:
+        # Customer state, not an infrastructure failure — 409 so the caller's
+        # retry machinery treats it as permanent rather than retrying a 500.
+        logger.warning(
+            "Cannot encode memory for customer=%s: %s", req.customer_id, e
+        )
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(
             "Failed to encode memory for customer=%s memory_key=%s: %s",
@@ -251,6 +263,9 @@ async def delete_memory_vectors(req: DeleteMemoryVectorsRequest):
             logger.info("No memory collections found for customer %s; nothing to delete", req.customer_id)
 
         return {"status": "success", "deleted": deleted_counts}
+    except VectorDBNotConfigured:
+        logger.info("No vector DB configured for customer %s; nothing to delete", req.customer_id)
+        return {"status": "success", "deleted": {}}
     except Exception as e:
         logger.error("Failed to delete memory vectors for customer=%s memory_key=%s: %s",
                      req.customer_id, req.memory_key, e, exc_info=True)
@@ -293,6 +308,9 @@ async def delete_instruction_vectors(req: DeleteInstructionVectorsRequest):
             logger.info("No instruction collections found for customer %s; nothing to delete", req.customer_id)
 
         return {"status": "success", "deleted": deleted_counts}
+    except VectorDBNotConfigured:
+        logger.info("No vector DB configured for customer %s; nothing to delete", req.customer_id)
+        return {"status": "success", "deleted": {}}
     except Exception as e:
         logger.error("Failed to delete instruction vectors for customer=%s instruction_key=%s: %s",
                      req.customer_id, req.instruction_key, e, exc_info=True)

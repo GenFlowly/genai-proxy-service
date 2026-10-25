@@ -4,7 +4,11 @@ from typing import Any
 from pymilvus import MilvusClient
 
 from encoding_library.observability import count, track
-from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model
+from encoding_library.utils.embedding_utils import (
+    create_embeddings,
+    get_embedding_model,
+    get_embedding_model_for_customer,
+)
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
 from encoding_library.utils.vector_db import collection_data_type, customer_filter, get_milvus_client
 
@@ -13,12 +17,20 @@ logger = logging.getLogger(__name__)
 _embedding_model_cache: dict[tuple[str, str], Any] = {}
 
 
-def _get_cached_embedding_model(model_type: str | None, model_name: str | None) -> Any:
+def customer_embedding_model(customer_id: str, model_type: str | None, model_name: str | None) -> Any:
+    """Embedding encoder for one customer. Local sentence-transformer models
+    are heavyweight and keyless, so they stay cached per model; hosted models
+    (voyage/openai) are cheap API wrappers built per call on the customer's own
+    stored key — never cached, since a model-keyed cache would reuse one
+    customer's key for another. Raises EmbeddingKeyMissing when the customer
+    has no key for a hosted provider."""
     key = resolve_model(model_type, model_name)
-    if key not in _embedding_model_cache:
-        logger.info("Loading embedding model type=%s name=%s (first time)", key[0], key[1])
-        _embedding_model_cache[key] = get_embedding_model(model_type, model_name)
-    return _embedding_model_cache[key]
+    if key[0] == "sentence-transformer":
+        if key not in _embedding_model_cache:
+            logger.info("Loading embedding model type=%s name=%s (first time)", key[0], key[1])
+            _embedding_model_cache[key] = get_embedding_model(*key)
+        return _embedding_model_cache[key]
+    return get_embedding_model_for_customer(customer_id, *key)
 
 
 # Shared collections injected into generation context as knowledge.
@@ -99,7 +111,7 @@ async def search_knowledge(
     # comparable within one model, but COSINE keeps them on the same [0,1]-ish scale.
     for (group_model_type, group_model_name), collection_names in grouped.items():
         logger.info("Node retrieval: embedding query with model_type=%s model_name=%s for %d collection(s)", group_model_type, group_model_name, len(collection_names))
-        encoder = _get_cached_embedding_model(group_model_type, group_model_name)
+        encoder = customer_embedding_model(customer_id, group_model_type, group_model_name)
         query_embeddings = create_embeddings([query], encoder)
         if not query_embeddings:
             count("embedding_failure_total", source="retrieve", model=group_model_name)

@@ -11,13 +11,14 @@ from encoding_library.models.memory_request_internal_state import MemoryRequestI
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.utils.embedding_utils import create_chunks
 from encoding_library.utils.model_registry import resolve_model, get_chunking_params
+from encoding_library.utils.vendor_keys import get_customer_embedding_key
 from encoding_library.utils.voyage_batch import (
     build_embeddings_jsonl,
     upload_batch_file,
     create_batch,
 )
 
-from encoding_library.observability import setup_logging, track
+from encoding_library.observability import count, setup_logging, track
 
 from services.content_logging import default_log_level
 
@@ -132,16 +133,21 @@ def _note_to_state(item: Dict[str, Any]) -> Tuple[str, str, MemoryRequestInterna
     return customer_id, note_key, state
 
 
-def _submit_group(model_name: str, states: List[Dict[str, Any]], refs: List[Dict[str, str]]) -> str:
+def _submit_group(
+    customer_id: str, model_name: str, api_key: str,
+    states: List[Dict[str, Any]], refs: List[Dict[str, str]],
+) -> str:
     """
-    Submit one Voyage batch job for a same-model group; returns batch_id.
-    Per-note documents are already staged in S3 (see handler); the job row stores
-    the ordered ref list ({customer_id, note_key, s3_key}) so the poller can
-    download them in JSONL order and map results by custom_id b{i}c{j}.
+    Submit one Voyage batch job for a same-customer, same-model group; returns
+    batch_id. A job runs on exactly one Voyage API key, so it can never mix
+    customers. Per-note documents are already staged in S3 (see handler); the
+    job row stores the ordered ref list ({customer_id, note_key, s3_key}) so
+    the poller can download them in JSONL order and map results by custom_id
+    b{i}c{j}.
     """
     jsonl = build_embeddings_jsonl(states, model_name)
-    file_id = upload_batch_file(jsonl)
-    batch = create_batch(file_id, model_name)
+    file_id = upload_batch_file(jsonl, api_key)
+    batch = create_batch(file_id, model_name, api_key)
     batch_id = batch["id"]
 
     now = _now()
@@ -151,6 +157,7 @@ def _submit_group(model_name: str, states: List[Dict[str, Any]], refs: List[Dict
             "batch_id": {"S": batch_id},
             "status": {"S": "in_progress"},
             "source": {"S": "notes-accumulator"},
+            "customer_id": {"S": customer_id},
             "note_refs_json": {"S": json.dumps(refs)},
             "model_name": {"S": model_name},
             "note_count": {"N": str(len(refs))},
@@ -184,8 +191,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if not pending:
         return {"pending": 0, "submitted_jobs": 0, "notes_submitted": 0}
 
-    # Claim + chunk, grouping by model (one Voyage job per distinct model).
-    groups: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    # Claim + chunk, grouping by (customer, model) — a Voyage batch job runs on
+    # exactly one API key, so customers can never share a job.
+    groups: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    customer_keys: Dict[str, Any] = {}
     batch_marker = "pending-submit"
     for item in pending:
         if item.get("is_delete", {}).get("BOOL"):
@@ -193,6 +202,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         customer_id, note_key, state = _note_to_state(item)
         if (state.model_type or "") != "voyage":
             logger.warning(f"Note {note_key} has non-voyage model '{state.model_type}'; skipping.")
+            continue
+
+        if customer_id not in customer_keys:
+            try:
+                customer_keys[customer_id] = get_customer_embedding_key(customer_id, "voyage")
+            except Exception as e:
+                logger.error(f"Failed to resolve voyage key for customer {customer_id}: {e}")
+                customer_keys[customer_id] = None
+        api_key = customer_keys[customer_id]
+        if not api_key:
+            # Leave unclaimed (still 'pending') — picked up again once the
+            # customer stores a key, rather than claimed into a job that can
+            # never submit.
+            count("voyage_batch_no_customer_key_total")
+            logger.warning(f"Customer {customer_id} has no Voyage key; leaving note {note_key} pending.")
             continue
 
         if not _claim_note(customer_id, note_key, batch_marker):
@@ -221,18 +245,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             ContentType="application/json",
         )
 
-        key = (state.model_type, state.model_name)
+        key = (customer_id, state.model_type, state.model_name)
         g = groups.setdefault(key, {"states": [], "refs": []})
         g["states"].append(state.to_dict())
         g["refs"].append({"customer_id": customer_id, "note_key": note_key, "s3_key": s3_key})
 
     submitted_jobs = 0
     notes_submitted = 0
-    for (model_type, model_name), g in groups.items():
+    for (customer_id, model_type, model_name), g in groups.items():
         if not g["states"]:
             continue
         try:
-            batch_id = _submit_group(model_name, g["states"], g["refs"])
+            batch_id = _submit_group(customer_id, model_name, customer_keys[customer_id], g["states"], g["refs"])
             # Stamp batch_id + the note's document key onto each claimed note (O(1) lookup)
             for ref in g["refs"]:
                 dynamodb.update_item(
