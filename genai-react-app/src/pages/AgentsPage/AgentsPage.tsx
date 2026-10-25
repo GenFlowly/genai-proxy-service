@@ -8,6 +8,7 @@ import {
     Chip,
     Grid,
     GridCol,
+    Icon,
     PageHeader,
     PillButton,
     ResizableSidebar,
@@ -25,6 +26,7 @@ import { forkAgent, getCustomerAgents } from '../../services/agentsService'
 import { AGENT_CATEGORIES, Agent, agentCategory, effectiveDefaultAgentId } from '../../models/agents.models'
 import { useAI } from '../../context/AIContext'
 import { formatServerDateTime } from '../../utils/timeUtils'
+import { ICONS } from '../../constants/icons'
 import AgentsCategoryNav, {
     CATEGORY_ICONS,
     CATEGORY_LABEL_KEYS,
@@ -55,18 +57,36 @@ interface AgentCardProps {
     agent: Agent
     /** True only for the ONE effective default agent (pick → own default → System). */
     isEffectiveDefault: boolean
-    onEdit: (agent: Agent) => void
-    /** System agents are read-only: View opens the editor read-only, Fork creates an editable copy. */
+    /** Opens the agent: read-only viewer for System agents, editor for own ones. */
+    onOpen: (agent: Agent) => void
+    /** System agents are read-only; Fork creates an editable copy. */
     onFork: (agent: Agent) => void
     forking: boolean
 }
 
-function AgentCard({ agent, isEffectiveDefault, onEdit, onFork, forking }: AgentCardProps) {
+function AgentCard({ agent, isEffectiveDefault, onOpen, onFork, forking }: AgentCardProps) {
     const { t } = useTranslation()
     const [expanded, setExpanded] = useState(false)
 
     return (
-        <div className={`${styles.card} ${isEffectiveDefault ? styles.cardDefault : ''}`}>
+        // The whole tile opens the agent; inner controls stop propagation.
+        <div
+            className={`${styles.card} ${isEffectiveDefault ? styles.cardDefault : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(agent)}
+            onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onOpen(agent)
+                }
+            }}
+            aria-label={t(
+                agent.isSystem ? 'agentsPage.agentCard.viewAriaLabel' : 'agentsPage.agentCard.editAriaLabel',
+                { name: agent.name }
+            )}
+            data-testid={`agent-card-${agent.graphId}`}
+        >
             {/* Card header */}
             <div className={styles.cardHeader}>
                 <div className={styles.cardTitleRow}>
@@ -85,34 +105,18 @@ function AgentCard({ agent, isEffectiveDefault, onEdit, onFork, forking }: Agent
                     {agent.isSystem && (
                         <span className={styles.systemBadge}>{t('agentsPage.agentCard.systemBadge')}</span>
                     )}
-                    {agent.isSystem ? (
-                        <>
-                            <button
-                                type="button"
-                                className={styles.editBtn}
-                                onClick={() => onEdit(agent)}
-                                aria-label={t('agentsPage.agentCard.viewAriaLabel', { name: agent.name })}
-                            >
-                                👁️ {t('agentsPage.agentCard.view')}
-                            </button>
-                            <button
-                                type="button"
-                                className={styles.editBtn}
-                                onClick={() => onFork(agent)}
-                                disabled={forking}
-                                aria-label={t('agentsPage.agentCard.forkAriaLabel', { name: agent.name })}
-                            >
-                                🔱 {t('agentsPage.agentCard.fork')}
-                            </button>
-                        </>
-                    ) : (
+                    {agent.isSystem && (
                         <button
                             type="button"
                             className={styles.editBtn}
-                            onClick={() => onEdit(agent)}
-                            aria-label={t('agentsPage.agentCard.editAriaLabel', { name: agent.name })}
+                            onClick={e => {
+                                e.stopPropagation()
+                                onFork(agent)
+                            }}
+                            disabled={forking}
+                            aria-label={t('agentsPage.agentCard.forkAriaLabel', { name: agent.name })}
                         >
-                            ✏️ {t('agentsPage.agentCard.edit')}
+                            <Icon src={ICONS.GIT_FORK} size={16} /> {t('agentsPage.agentCard.fork')}
                         </button>
                     )}
                 </div>
@@ -150,14 +154,18 @@ function AgentCard({ agent, isEffectiveDefault, onEdit, onFork, forking }: Agent
             {/* Collapsible details */}
             <button
                 className={styles.detailsToggle}
-                onClick={() => setExpanded(v => !v)}
+                onClick={e => {
+                    e.stopPropagation()
+                    setExpanded(v => !v)
+                }}
                 type="button"
                 aria-expanded={expanded}
             >
                 {expanded ? t('agentsPage.agentCard.hideDetails') : t('agentsPage.agentCard.showDetails')}
             </button>
             {expanded && (
-                <div className={styles.details}>
+                // Clicks here select/copy ids — they must not open the agent
+                <div className={styles.details} onClick={e => e.stopPropagation()}>
                     <div className={styles.detailRow}>
                         <span className={styles.detailLabel}>{t('agentsPage.agentCard.graphId')}</span>
                         <code className={styles.detailValue}>{agent.graphId}</code>
@@ -239,7 +247,7 @@ export default function AgentsPage() {
     useEffect(() => { fetchAgents() }, [fetchAgents])
 
     // Navigate to the full-screen edit page (read-only for System agents)
-    const handleEdit = (agent: Agent) => navigate(`/agents/${agent.graphId}`)
+    const handleOpen = (agent: Agent) => navigate(`/agents/${agent.graphId}`)
 
     // Fork a System agent into an editable customer-owned copy and open it
     const handleFork = async (agent: Agent) => {
@@ -396,7 +404,7 @@ export default function AgentsPage() {
                                             <AgentCard
                                                 agent={agent}
                                                 isEffectiveDefault={agent.graphId === defaultId}
-                                                onEdit={handleEdit}
+                                                onOpen={handleOpen}
                                                 onFork={handleFork}
                                                 forking={forking}
                                             />

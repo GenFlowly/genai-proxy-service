@@ -178,19 +178,21 @@ describe('AgentsPage Component', () => {
         expect(screen.getAllByText('Retrieval').length).toBeGreaterThan(0);
     });
 
-    test('renders Edit button for each agent', async () => {
+    test('the whole tile is a button that opens the agent', async () => {
         (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
             agents: [mockAgent],
         });
         renderPage();
         await waitFor(() =>
-            expect(screen.getByRole('button', { name: /edit agent default graph/i })).toBeInTheDocument()
+            expect(screen.getByTestId('agent-card-graph-001')).toBeInTheDocument()
         );
+        expect(screen.getByTestId('agent-card-graph-001')).toHaveAttribute('role', 'button');
+        expect(screen.getByTestId('agent-card-graph-001')).toHaveAccessibleName('Edit agent Default Graph');
     });
 
     // ── Collapsible details ───────────────────────────────────────────────────
 
-    test('expands details section when "Show details" is clicked', async () => {
+    test('expands details section when "Show details" is clicked, without opening the agent', async () => {
         (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
             agents: [mockAgent],
         });
@@ -200,6 +202,8 @@ describe('AgentsPage Component', () => {
         await userEvent.click(screen.getByText('▼ Show details'));
         expect(screen.getByText('Graph ID')).toBeInTheDocument();
         expect(screen.getByText('graph-001')).toBeInTheDocument();
+        // The toggle sits inside the clickable tile but must not navigate
+        expect(mockNavigate).not.toHaveBeenCalled();
     });
 
     test('collapses details section when "Hide details" is clicked', async () => {
@@ -218,16 +222,14 @@ describe('AgentsPage Component', () => {
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    test('navigates to /agents/:graphId when Edit button is clicked', async () => {
+    test('navigates to /agents/:graphId when the tile is clicked', async () => {
         (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
             agents: [mockAgent],
         });
         renderPage();
-        await waitFor(() =>
-            screen.getByRole('button', { name: /edit agent default graph/i })
-        );
+        await waitFor(() => screen.getByTestId('agent-card-graph-001'));
 
-        await userEvent.click(screen.getByRole('button', { name: /edit agent default graph/i }));
+        await userEvent.click(screen.getByTestId('agent-card-graph-001'));
         expect(mockNavigate).toHaveBeenCalledWith('/agents/graph-001');
     });
 
@@ -248,7 +250,7 @@ describe('AgentsPage Component', () => {
 
     // ── System default agents ─────────────────────────────────────────────────
 
-    test('shows System badge, read-only hint, and View/Fork actions for a system agent', async () => {
+    test('system agent tile opens read-only (View) and carries only a Fork button', async () => {
         const systemAgent = {
             ...mockAgent,
             graphId: 'system-graph-001',
@@ -263,9 +265,13 @@ describe('AgentsPage Component', () => {
         expect(
             screen.getByText('Shared system agent — read-only. Fork it to get your own editable copy.')
         ).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /view agent shared default/i })).toBeInTheDocument();
+        // The tile itself is the View affordance — no separate View button
+        expect(screen.getByTestId('agent-card-system-graph-001')).toHaveAccessibleName('View agent Shared Default');
+        expect(screen.queryByText(/👁️|View/)).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: /fork agent shared default/i })).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /edit agent shared default/i })).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getByTestId('agent-card-system-graph-001'));
+        expect(mockNavigate).toHaveBeenCalledWith('/agents/system-graph-001');
     });
 
     test('forking a system agent calls the fork endpoint and opens the fork', async () => {
