@@ -549,24 +549,24 @@ export default function ConversationHistoryComponent() {
         },
     ]
 
-    // The History panel below it: global Pinned and Recents only; each
-    // section is omitted when empty
-    const historyGroups: SidebarListGroup[] = [
-        ...(globalPinned.length > 0
-            ? [{
-                id: 'pinned',
-                label: t('conversation.conversationHistory.pinned'),
-                items: toTreeRows(globalPinned, true),
-            }]
-            : []),
-        ...(globalRecent.length > 0
-            ? [{
-                id: 'recent',
-                label: t('conversation.conversationHistory.recents'),
-                items: toTreeRows(globalRecent, false),
-            }]
-            : []),
-    ]
+    // The History panel below it: global Pinned sits in the panel's fixed
+    // (non-scrolling) block, so it stays put — uncapped, pushing Recents
+    // down as it grows — while only the Recents list scrolls
+    const historyFixedGroups: SidebarListGroup[] = globalPinned.length > 0
+        ? [{
+            id: 'pinned',
+            label: t('conversation.conversationHistory.pinned'),
+            items: toTreeRows(globalPinned, true),
+        }]
+        : []
+
+    const historyGroups: SidebarListGroup[] = globalRecent.length > 0
+        ? [{
+            id: 'recent',
+            label: t('conversation.conversationHistory.recents'),
+            items: toTreeRows(globalRecent, false),
+        }]
+        : []
 
     return (
         <>
@@ -589,6 +589,8 @@ export default function ConversationHistoryComponent() {
                 bottom={
                     <SidebarListPanel
                         groups={historyGroups}
+                        fixedGroups={historyFixedGroups}
+                        testIds={{ list: 'history-scroll-list' }}
                         isLoading={isLoading}
                         hasError={error}
                         errorText={t('conversation.conversationHistory.failedToLoad')}
