@@ -11,6 +11,7 @@ import { useConversation } from '../../../context/ConversationContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { useWindowSize } from '../../../hooks/useWindowSize'
 import MobileHeader, { MobileHeaderMenuItem } from '../MobileHeader/MobileHeader'
+import { NAV_ITEMS } from '../NavbarMenuWidget/NavbarMenu'
 import ConversationHistoryComponent from '../ConversationHistoryWidget/ConversationHistoryComponent'
 import styles from './ConversationHeader.module.scss'
 import { useToast } from '../../../context/ToastContext'
@@ -145,7 +146,9 @@ export default function ConversationHeader(): React.ReactElement | null {
                 )}
                 onSubtitleClick={() => setPickerOpen(true)}
                 menuItems={menuItems}
-                menuTitle={t('conversation.conversationHistory.title')}
+                // The menu heading names the page you're on — the same label
+                // as this page's navbar item, not the menu's content
+                menuTitle={NAV_ITEMS.find(item => item.id === 'chat')?.label}
                 menuContent={<ConversationHistoryComponent />}
             >
                 {modals}

@@ -313,7 +313,6 @@
             "removeFromProject": "Remove from project",
             "removeFromProjectFailed": "Failed to remove from project",
             "removedFromProject": "Removed from project",
-            "title": "Recent",
             "unpinConversation": "Unpin conversation",
             "unpinFailed": "Failed to unpin conversation",
             "unpinnedToast": "Conversation unpinned"
