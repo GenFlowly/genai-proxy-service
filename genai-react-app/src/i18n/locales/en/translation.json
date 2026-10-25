@@ -609,7 +609,7 @@
             "sectionAiVectorDb": "Vector DB Connection",
             "sectionDeveloper": "Developer",
             "sectionProfile": "Profile",
-            "sectionActions": "Default Actions",
+            "sectionDefaults": "Defaults",
             "sectionTools": "Tools",
             "sectionConnectors": "Connectors"
         },
@@ -622,32 +622,38 @@
             "logout": "Logout",
             "profile": "Profile",
             "title": "Settings",
-            "actionAgents": "Default Actions",
+            "defaults": "Defaults",
             "tools": "Tools",
             "connectors": "Connectors"
         },
         "embeddingKeysSettings": {
             "title": "Embedding Model API Keys",
-            "subtitle": "Bring your own keys for the embedding models that index and search your data. The OpenAI key is shared with the LLM API Keys page — one key serves both.",
+            "subtitle": "Bring your own keys for the embedding models that index and search your data. The OpenAI key is shared with the LLM API Keys page — one key serves both. Default embedding models are chosen on the Defaults page.",
+            "voyageLabel": "Voyage AI"
+        },
+        "embeddingDefaults": {
+            "title": "Default embedding models",
+            "subtitle": "Used to index and search your data. Pick a provider, then one of its models — only providers with an embedding API key saved on the Embedding Model API Keys page are listed. Unset categories use the platform default (voyage-4-large).",
             "voyageLabel": "Voyage AI",
-            "defaultModelLabel": "Default embedding models",
-            "defaultModelHint": "Used to index and search your data. Pick a provider, then one of its models — only providers with a saved API key are listed. Unset categories use the platform default (voyage-4-large).",
             "category_conversations": "Conversations",
             "category_notes": "Notes",
             "vendorHint": "Provider",
             "vendorPlaceholder": "Select provider",
             "modelHint": "Model",
             "modelPlaceholder": "Select model",
-            "noModels": "Save an embedding API key above to choose a model.",
-            "modelSavedToast": "Default embedding model saved",
-            "modelSaveErrorToast": "Failed to save default embedding model"
+            "noModels": "Save an embedding API key on the Embedding Model API Keys page to choose a model.",
+            "save": "Save",
+            "saving": "Saving…",
+            "savedToast": "Default embedding model saved",
+            "saveErrorToast": "Failed to save default embedding model",
+            "loginFirstToast": "Please log in first"
         },
         "vectorDbSettings": {
             "title": "Vector DB Connection",
             "subtitle": "Connect your own vector database and storage used for retrieval."
         },
         "instructionDefaults": {
-            "title": "Default instruction",
+            "title": "Default System Prompt / Instruction for Conversations",
             "subtitle": "Choose which instruction (persona) applies when you start a chat without selecting one.",
             "modeLabel": "When no instruction is selected, use",
             "modeHint": "Fallback",
@@ -663,19 +669,25 @@
             "saveErrorToast": "Failed to save instruction preferences",
             "loginFirstToast": "Please log in first"
         },
-        "actionAgents": {
-            "title": "Default Actions",
-            "subtitle": "Choose which of your agents handles each built-in action. Leave an action on the platform default to use the standard behavior.",
+        "defaultAgents": {
+            "title": "Default Agents",
+            "subtitle": "Choose which agent powers each built-in action, and which agent handles new conversations. Leave an action on the platform default to use the standard behavior.",
+            "titleAgent": "Title Agent",
+            "learnAboutMeAgent": "Learn about Me Agent",
+            "instructionPersonaAgent": "Instruction Persona Agent",
+            "conversationAgent": "Conversation Agent",
+            "conversationPlaceholder": "Select an agent",
+            "systemBadge": "System",
             "agentHint": "Agent",
             "platformDefault": "Platform default",
             "noAgents": "You have no agents yet — create one on the Agents page to use it here.",
             "loading": "Loading…",
             "save": "Save",
             "saving": "Saving…",
-            "savedToast": "Default actions saved",
-            "saveErrorToast": "Failed to save default actions",
-            "loadErrorToast": "Failed to load default actions",
-            "loginFirstToast": "Sign in to change default actions",
+            "savedToast": "Default agents saved",
+            "saveErrorToast": "Failed to save default agents",
+            "loadErrorToast": "Failed to load default agents",
+            "loginFirstToast": "Sign in to change default agents",
             "platformDefaultNamed": "Platform default — {{agent}}"
         },
         "toolsSettings": {

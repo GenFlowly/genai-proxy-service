@@ -84,7 +84,7 @@ describe('SettingsPage', () => {
             // Menu page is shown, not a settings section
             expect(screen.getByText('Profile')).toBeInTheDocument();
             expect(screen.getByText('AI Settings')).toBeInTheDocument();
-            expect(screen.getByText('Default Actions')).toBeInTheDocument();
+            expect(screen.getByText('Defaults')).toBeInTheDocument();
             expect(screen.queryByTestId('profile-settings')).not.toBeInTheDocument();
 
             // Breadcrumbs: Menu > Settings
@@ -106,12 +106,12 @@ describe('SettingsPage', () => {
             fireEvent.click(screen.getByText('AI Settings'));
             expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
             expect(screen.queryByTestId('ai-settings')).not.toBeInTheDocument();
-            expect(screen.getByText('Default Actions')).toBeInTheDocument();
+            expect(screen.getByText('Defaults')).toBeInTheDocument();
 
             // Tapping a child opens that section full page: no sidebar menu items around it
             fireEvent.click(screen.getByText('LLM API Keys'));
             expect(screen.getByTestId('ai-settings')).toBeInTheDocument();
-            expect(screen.queryByText('Default Actions')).not.toBeInTheDocument();
+            expect(screen.queryByText('Defaults')).not.toBeInTheDocument();
         });
 
         test('section routes render without the sidebar on mobile', () => {
