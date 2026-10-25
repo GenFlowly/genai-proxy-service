@@ -212,41 +212,92 @@ describe('ConversationHistoryComponent', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/chat/conv-1')
     })
 
-    test('shows Load more button when hasMore is true', async () => {
-        mockGetCustomerConversations.mockResolvedValue({
-            conversations: defaultConversations,
-            lastEvaluatedKey: 'some-key',
-        })
+    // Replaces the panel's observer with a stub whose callbacks the test can
+    // fire, simulating the end sentinel scrolling into view
+    const stubIntersectionObserver = () => {
+        const callbacks: IntersectionObserverCallback[] = []
+        const real = window.IntersectionObserver
+        window.IntersectionObserver = class {
+            constructor(cb: IntersectionObserverCallback) {
+                callbacks.push(cb)
+            }
+            observe = jest.fn()
+            disconnect = jest.fn()
+            unobserve = jest.fn()
+        } as unknown as typeof IntersectionObserver
+        return {
+            reachEnd: () => act(() => {
+                callbacks[callbacks.length - 1](
+                    [{ isIntersecting: true } as IntersectionObserverEntry],
+                    {} as IntersectionObserver,
+                )
+            }),
+            restore: () => { window.IntersectionObserver = real },
+        }
+    }
 
-        render(<ConversationHistoryComponent />)
-
-        await waitFor(() => {
-            expect(screen.getByTestId('conv-history-load-more')).toBeInTheDocument()
-        })
-
-        expect(screen.getByTestId('conv-history-load-more')).toHaveTextContent('Load more')
-    })
-
-    test('loads next page when Load more is clicked', async () => {
+    test('auto-loads the next page when the end of the list scrolls into view', async () => {
         const page2 = [{ conversationId: 'conv-3', title: 'Third', createdAt: null, updatedAt: null }]
         mockGetCustomerConversations
             .mockResolvedValueOnce({ conversations: defaultConversations, lastEvaluatedKey: 'page2-key' })
             .mockResolvedValueOnce({ conversations: page2, lastEvaluatedKey: null })
 
-        render(<ConversationHistoryComponent />)
+        const io = stubIntersectionObserver()
+        try {
+            render(<ConversationHistoryComponent />)
 
-        await waitFor(() => {
-            expect(screen.getByTestId('conv-history-load-more')).toBeInTheDocument()
-        })
+            await waitFor(() => {
+                expect(screen.getByTestId('history-end-sentinel')).toBeInTheDocument()
+            })
+            // No manual button in the normal idle state
+            expect(screen.queryByTestId('conv-history-load-more')).not.toBeInTheDocument()
 
-        fireEvent.click(screen.getByTestId('conv-history-load-more'))
+            io.reachEnd()
 
-        await waitFor(() => {
-            expect(screen.getByTestId('conv-history-item-conv-3')).toBeInTheDocument()
-        })
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-item-conv-3')).toBeInTheDocument()
+            })
+            // Original items still present; next page requested from the cursor
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+            expect(mockGetCustomerConversations).toHaveBeenLastCalledWith('mock-token', 15, 'page2-key')
+        } finally {
+            io.restore()
+        }
+    })
 
-        // Original items still present
-        expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+    test('a failed page load pauses auto-loading and offers a manual retry', async () => {
+        const page2 = [{ conversationId: 'conv-3', title: 'Third', createdAt: null, updatedAt: null }]
+        mockGetCustomerConversations
+            .mockResolvedValueOnce({ conversations: defaultConversations, lastEvaluatedKey: 'page2-key' })
+            .mockRejectedValueOnce(new Error('boom'))
+            .mockResolvedValueOnce({ conversations: page2, lastEvaluatedKey: null })
+
+        const io = stubIntersectionObserver()
+        try {
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('history-end-sentinel')).toBeInTheDocument()
+            })
+
+            io.reachEnd()
+
+            // The failure surfaces the manual button instead of auto-retrying
+            // (while the fetch is in flight it reads "Loading…")
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-load-more')).toHaveTextContent('Load more')
+            })
+            expect(screen.queryByTestId('history-end-sentinel')).not.toBeInTheDocument()
+
+            fireEvent.click(screen.getByTestId('conv-history-load-more'))
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-item-conv-3')).toBeInTheDocument()
+            })
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        } finally {
+            io.restore()
+        }
     })
 
     test('patches title of existing item when conversationTitle changes', async () => {
