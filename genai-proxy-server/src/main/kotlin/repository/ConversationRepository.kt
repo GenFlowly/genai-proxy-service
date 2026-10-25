@@ -70,7 +70,8 @@ data class ConversationAttributes(
  */
 class ConversationRepository(
     private val dynamoDbClient: DynamoDbClient,
-    private val logger: KLogger
+    private val logger: KLogger,
+    private val usageRollupRepository: UsageRollupRepository
 ) {
 
     suspend fun createConversation(
@@ -926,6 +927,19 @@ class ConversationRepository(
                 "Saved message for conversation {} to DynamoDB",
                 message.conversationId
             )
+
+            // Fans the turn's cost/tokens into the Cost and Usage rollup.
+            // Skipped for preserveCreatedAt copies (conversation forks) —
+            // those replay an already-counted historical message, so fanning
+            // them in again would double-count it. Best-effort: never let a
+            // rollup failure fail the message save.
+            if (!preserveCreatedAt) {
+                try {
+                    usageRollupRepository.incrementLlmUsage(message)
+                } catch (e: Exception) {
+                    logger.warn("Failed to record usage rollup for message {}", message.messageId, e)
+                }
+            }
         } catch (e: Exception) {
             logger.error("Failed to create Message in DynamoDB", e)
             throw e

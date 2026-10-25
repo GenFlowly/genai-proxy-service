@@ -7,7 +7,7 @@ import styles from './SettingsSidebar.module.scss'
 
 import { useNavigate, useLocation } from 'react-router-dom'
 
-export type SettingsTab = 'profile' | 'ai' | 'defaults' | 'tools' | 'connectors' | 'developer'
+export type SettingsTab = 'profile' | 'ai' | 'usage' | 'defaults' | 'tools' | 'connectors' | 'developer'
 
 interface SettingsNavChild {
     key: string
@@ -69,6 +69,34 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
                     key: 'vector-db',
                     label: t('settingsPage.settingsSidebar.aiVectorDb'),
                     path: '/settings/ai/vector-db',
+                },
+            ],
+        },
+        {
+            key: 'usage',
+            label: t('settingsPage.settingsSidebar.usage'),
+            icon: ICONS.TOKENS,
+            path: '/settings/usage',
+            children: [
+                {
+                    key: 'llm-models',
+                    label: t('settingsPage.settingsSidebar.usageLlmModels'),
+                    path: '/settings/usage/llm-models',
+                },
+                {
+                    key: 'embedding-models',
+                    label: t('settingsPage.settingsSidebar.usageEmbeddingModels'),
+                    path: '/settings/usage/embedding-models',
+                },
+                {
+                    key: 'vector-db',
+                    label: t('settingsPage.settingsSidebar.usageVectorDb'),
+                    path: '/settings/usage/vector-db',
+                },
+                {
+                    key: 'web-search',
+                    label: t('settingsPage.settingsSidebar.usageWebSearch'),
+                    path: '/settings/usage/web-search',
                 },
             ],
         },
@@ -146,7 +174,11 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
                                     {item.children.map(child => (
                                         <button
                                             key={child.key}
-                                            className={`${styles.childButton} ${activeTab === child.key ? styles.active : ''}`}
+                                            // Scoped to this parent section: child keys are only unique
+                                            // within their own parent (e.g. 'vector-db' exists under both
+                                            // 'ai' and 'usage'), so matching activeTab alone would
+                                            // cross-highlight siblings of the same name in another section.
+                                            className={`${styles.childButton} ${isInSection(item) && activeTab === child.key ? styles.active : ''}`}
                                             onClick={() => navigate(child.path)}
                                         >
                                             <span>{child.label}</span>

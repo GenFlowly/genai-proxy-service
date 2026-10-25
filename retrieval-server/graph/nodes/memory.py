@@ -125,7 +125,7 @@ def _embed_query(
     from graph.nodes.retrieval import customer_embedding_model
 
     encoder = customer_embedding_model(customer_id, model_type, model_name)
-    embeddings = create_embeddings([query], encoder)
+    embeddings = create_embeddings([query], encoder, customer_id=customer_id)
     if not embeddings:
         return None
     return embeddings[0].get("vector")

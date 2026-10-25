@@ -95,11 +95,20 @@ def retry(operation: str,
           backoff_rate: float = DEFAULT_BACKOFF_RATE,
           max_delay: float = DEFAULT_MAX_DELAY,
           retry_on: Tuple[Type[BaseException], ...] = (Exception,),
-          retry_if: Optional[Callable[[BaseException], bool]] = None):
+          retry_if: Optional[Callable[[BaseException], bool]] = None,
+          on_done: Optional[Callable[[bool], None]] = None):
     """Decorator: retry the wrapped sync or async callable with backoff.
 
     retry_on: exception types eligible for retry (others re-raise at once).
     retry_if: optional predicate refining retry_on, e.g. "HTTP 5xx/429 only".
+    on_done: optional, called exactly once per logical call — on_done(True)
+        right before a successful return, on_done(False) right before the
+        final raise (covers both "retries exhausted" and "hit a
+        non-retryable error immediately"). Never called on interim retry
+        attempts (those already have retry_attempt_total). Used to count a
+        call whether it ultimately succeeded or failed — a failed-after-
+        retries external call still consumed real backend work on each
+        attempt, so counting only successes would under-report usage.
     """
     def decorator(fn):
         if inspect.iscoroutinefunction(fn):
@@ -107,11 +116,16 @@ def retry(operation: str,
             async def async_wrapper(*args, **kwargs):
                 for attempt in range(max_attempts):
                     try:
-                        return await fn(*args, **kwargs)
+                        result = await fn(*args, **kwargs)
+                        if on_done is not None:
+                            on_done(True)
+                        return result
                     except BaseException as exc:
                         if attempt >= max_attempts - 1 or not _should_retry(exc, retry_on, retry_if):
                             if attempt >= max_attempts - 1 and _should_retry(exc, retry_on, retry_if):
                                 _on_exhausted(operation, max_attempts, exc)
+                            if on_done is not None:
+                                on_done(False)
                             raise
                         delay = _delay_for(attempt, base_delay, backoff_rate, max_delay)
                         _on_retry(operation, attempt, max_attempts, exc, delay)
@@ -122,11 +136,16 @@ def retry(operation: str,
         def sync_wrapper(*args, **kwargs):
             for attempt in range(max_attempts):
                 try:
-                    return fn(*args, **kwargs)
+                    result = fn(*args, **kwargs)
+                    if on_done is not None:
+                        on_done(True)
+                    return result
                 except BaseException as exc:
                     if attempt >= max_attempts - 1 or not _should_retry(exc, retry_on, retry_if):
                         if attempt >= max_attempts - 1 and _should_retry(exc, retry_on, retry_if):
                             _on_exhausted(operation, max_attempts, exc)
+                        if on_done is not None:
+                            on_done(False)
                         raise
                     delay = _delay_for(attempt, base_delay, backoff_rate, max_delay)
                     _on_retry(operation, attempt, max_attempts, exc, delay)
@@ -165,16 +184,25 @@ class RetryingProxy:
     growing the collection unboundedly.
     """
 
-    def __init__(self, target: Any, operation: str = "external_call", **retry_kwargs):
+    def __init__(
+        self,
+        target: Any,
+        operation: str = "external_call",
+        on_complete: Optional[Callable[[str, bool], None]] = None,
+        **retry_kwargs,
+    ):
         object.__setattr__(self, "_target", target)
         object.__setattr__(self, "_operation", operation)
+        object.__setattr__(self, "_on_complete", on_complete)
         object.__setattr__(self, "_retry_kwargs", retry_kwargs)
 
     def __getattr__(self, name: str) -> Any:
         attr = getattr(self._target, name)
         if name.startswith("_") or not callable(attr):
             return attr
-        return retry(f"{self._operation}.{name}", **self._retry_kwargs)(attr)
+        on_complete = self._on_complete
+        on_done = (lambda success: on_complete(name, success)) if on_complete is not None else None
+        return retry(f"{self._operation}.{name}", on_done=on_done, **self._retry_kwargs)(attr)
 
     def __repr__(self) -> str:
         return f"RetryingProxy({self._target!r})"
