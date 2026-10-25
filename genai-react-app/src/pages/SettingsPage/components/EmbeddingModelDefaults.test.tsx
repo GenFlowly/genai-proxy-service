@@ -4,20 +4,22 @@ import userEvent from '@testing-library/user-event';
 import { EmbeddingModelDefaults } from './EmbeddingModelDefaults';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
-import { getEmbeddingModels, EmbeddingVendor } from '../../../services/embeddingKeysService';
+import { EmbeddingVendor } from '../../../services/embeddingKeysService';
+import { embeddingModelsCache } from '../../../services/defaultsCacheService';
 import { saveAIConfigPreferences } from '../../../services/saveAIConfigService';
 
 jest.mock('../../../context/AuthContext');
 jest.mock('../../../context/ToastContext');
-jest.mock('../../../services/embeddingKeysService', () => ({
-    ...jest.requireActual('../../../services/embeddingKeysService'),
-    getEmbeddingModels: jest.fn(),
+// The component reads the model catalog through the cache layer
+jest.mock('../../../services/defaultsCacheService', () => ({
+    embeddingModelsCache: { getCached: jest.fn(), fetch: jest.fn() },
 }));
 jest.mock('../../../services/saveAIConfigService');
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseToast = useToast as jest.Mock;
-const mockGetEmbeddingModels = getEmbeddingModels as jest.Mock;
+const mockModelsCached = embeddingModelsCache.getCached as jest.Mock;
+const mockModelsFetch = embeddingModelsCache.fetch as jest.Mock;
 const mockSavePreferences = saveAIConfigPreferences as jest.Mock;
 
 describe('EmbeddingModelDefaults', () => {
@@ -35,13 +37,14 @@ describe('EmbeddingModelDefaults', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockGetAccessTokenSilently.mockResolvedValue('test-token');
-        mockGetEmbeddingModels.mockResolvedValue({ vendorModels: [] });
+        mockModelsCached.mockReturnValue(null);
+        mockModelsFetch.mockResolvedValue({ vendorModels: [] });
         mockUseAuth.mockReturnValue(authValue());
         mockUseToast.mockReturnValue({ showToast: mockShowToast });
     });
 
     test('vendor pick filters the model dropdown and saves per-category defaults', async () => {
-        mockGetEmbeddingModels.mockResolvedValue({
+        mockModelsFetch.mockResolvedValue({
             vendorModels: [
                 { vendor: EmbeddingVendor.VOYAGE, models: ['voyage-4', 'voyage-4-large'] },
                 { vendor: EmbeddingVendor.OPENAI, models: ['text-embedding-3-large'] },
@@ -50,7 +53,7 @@ describe('EmbeddingModelDefaults', () => {
         mockSavePreferences.mockResolvedValue(undefined);
 
         render(<EmbeddingModelDefaults />);
-        await waitFor(() => expect(mockGetEmbeddingModels).toHaveBeenCalledWith('test-token'));
+        await waitFor(() => expect(mockModelsFetch).toHaveBeenCalledWith('test-token', 'cust-123'));
 
         // Conversations: Voyage → voyage-4-large
         await userEvent.selectOptions(
@@ -79,7 +82,7 @@ describe('EmbeddingModelDefaults', () => {
     });
 
     test('changing the vendor clears the previously selected model', async () => {
-        mockGetEmbeddingModels.mockResolvedValue({
+        mockModelsFetch.mockResolvedValue({
             vendorModels: [
                 { vendor: EmbeddingVendor.VOYAGE, models: ['voyage-4'] },
                 { vendor: EmbeddingVendor.OPENAI, models: ['text-embedding-3-large'] },
@@ -87,7 +90,7 @@ describe('EmbeddingModelDefaults', () => {
         });
 
         render(<EmbeddingModelDefaults />);
-        await waitFor(() => expect(mockGetEmbeddingModels).toHaveBeenCalled());
+        await waitFor(() => expect(mockModelsFetch).toHaveBeenCalled());
 
         await userEvent.selectOptions(
             screen.getByTestId('embedding-vendor-select-notes'), EmbeddingVendor.VOYAGE);
@@ -105,7 +108,7 @@ describe('EmbeddingModelDefaults', () => {
                 embeddingModelNotes: 'text-embedding-3-large',
             },
         }));
-        mockGetEmbeddingModels.mockResolvedValue({
+        mockModelsFetch.mockResolvedValue({
             vendorModels: [
                 { vendor: EmbeddingVendor.VOYAGE, models: ['voyage-4'] },
                 { vendor: EmbeddingVendor.OPENAI, models: ['text-embedding-3-large'] },
@@ -123,23 +126,39 @@ describe('EmbeddingModelDefaults', () => {
         });
     });
 
+    test('renders the cached model list instantly while the refresh is pending', async () => {
+        mockModelsCached.mockReturnValue({
+            vendorModels: [{ vendor: EmbeddingVendor.VOYAGE, models: ['voyage-4'] }],
+        });
+        mockModelsFetch.mockReturnValue(new Promise(() => undefined));
+
+        render(<EmbeddingModelDefaults />);
+
+        await userEvent.selectOptions(
+            screen.getByTestId('embedding-vendor-select-conversations'), EmbeddingVendor.VOYAGE);
+        expect(screen.getByTestId('embedding-vendor-select-conversations')).toHaveValue(EmbeddingVendor.VOYAGE);
+        expect(
+            screen.queryByText('Save an embedding API key on the Embedding Model API Keys page to choose a model.')
+        ).not.toBeInTheDocument();
+    });
+
     test('shows the no-models hint when no provider has a key', async () => {
         render(<EmbeddingModelDefaults />);
 
-        await waitFor(() => expect(mockGetEmbeddingModels).toHaveBeenCalled());
+        await waitFor(() => expect(mockModelsFetch).toHaveBeenCalled());
         expect(
             screen.getByText('Save an embedding API key on the Embedding Model API Keys page to choose a model.')
         ).toBeInTheDocument();
     });
 
     test('shows an error toast when saving fails', async () => {
-        mockGetEmbeddingModels.mockResolvedValue({
+        mockModelsFetch.mockResolvedValue({
             vendorModels: [{ vendor: EmbeddingVendor.VOYAGE, models: ['voyage-4'] }],
         });
         mockSavePreferences.mockRejectedValueOnce(new Error('save failed'));
 
         render(<EmbeddingModelDefaults />);
-        await waitFor(() => expect(mockGetEmbeddingModels).toHaveBeenCalled());
+        await waitFor(() => expect(mockModelsFetch).toHaveBeenCalled());
 
         await userEvent.selectOptions(
             screen.getByTestId('embedding-vendor-select-conversations'), EmbeddingVendor.VOYAGE);

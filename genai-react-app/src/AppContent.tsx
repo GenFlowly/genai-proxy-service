@@ -2,6 +2,7 @@ import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from './context/AuthContext'
+import { useDefaultsPrefetch } from './hooks/useDefaultsPrefetch'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage/SettingsPage'
 import MemoryPage from './pages/MemoryPage/MemoryPage'
@@ -20,6 +21,7 @@ import { ToastProvider } from './context/ToastContext'
 export default function AppContent(): React.ReactElement {
     const { t } = useTranslation()
     const { isLoading } = useAuth()
+    useDefaultsPrefetch()
 
     if (isLoading) return <div>{t("layout.appContent.loading")}</div>
 
