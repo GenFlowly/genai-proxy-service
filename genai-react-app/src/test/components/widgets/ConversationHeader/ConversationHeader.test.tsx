@@ -31,9 +31,10 @@ jest.mock('../../../../components/common/InstructionPickerModal/InstructionPicke
 }))
 jest.mock('../../../../components/widgets/MobileHeader/MobileHeader', () => ({
     __esModule: true,
-    default: ({ title, subtitle, onSubtitleClick, children }: any) => (
+    default: ({ title, subtitle, onSubtitleClick, menuTitle, children }: any) => (
         <div data-testid="mobile-header">
             <span>{title}</span>
+            <span data-testid="mobile-menu-title">{menuTitle}</span>
             <button data-testid="mobile-subtitle" onClick={onSubtitleClick}>{subtitle}</button>
             {children}
         </div>
@@ -367,6 +368,20 @@ describe('ConversationHeader', () => {
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByTestId('loaded-instruction')).toHaveTextContent('Plain Persona')
+    })
+
+    test("mobile: the slide-out menu is titled after the page's navbar item", () => {
+        mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+            resetConversation: jest.fn(),
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        expect(screen.getByTestId('mobile-menu-title')).toHaveTextContent('Chat')
     })
 
     test('mobile: subtitle shows Choose instruction when none is loaded and opens the picker', () => {
