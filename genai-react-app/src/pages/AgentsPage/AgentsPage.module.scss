@@ -100,6 +100,12 @@
     transition: box-shadow var(--transition-fast), transform var(--transition-fast);
     min-width: 0; // Grid items must be allowed to shrink below content width
     height: 100%; // Fill the grid cell so cards in a row align
+    cursor: pointer; // The whole tile opens the agent
+
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: 2px;
+    }
 
     // Hover lift only on devices that actually hover (avoids sticky-hover jumps on touch)
     @media (hover: hover) {

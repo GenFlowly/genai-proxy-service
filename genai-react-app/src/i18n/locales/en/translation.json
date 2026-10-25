@@ -3,7 +3,6 @@
         "agentCard": {
             "created": "Created",
             "defaultBadge": "Default",
-            "edit": "Edit",
             "editAriaLabel": "Edit agent {{name}}",
             "entryPoint": "Entry point",
             "fork": "Fork",
@@ -17,7 +16,6 @@
             "showDetails": "▼ Show details",
             "systemBadge": "System",
             "systemHint": "Shared system agent — read-only. Fork it to get your own editable copy.",
-            "view": "View",
             "viewAriaLabel": "View agent {{name}}"
         },
         "agentsPage": {
