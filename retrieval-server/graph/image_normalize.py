@@ -115,8 +115,19 @@ MAX_RAW_SOURCE_BYTES = _env_int("IMAGE_MAX_RAW_SOURCE_BYTES", 400 * 1024 * 1024)
 # HEIC (8064x6048 = 48.8 MP x 7.2 = 351 MB) and 50 MP PNG/TIFF; WebP and
 # JPEG 2000 decode at 2-3x the cost per pixel, so their pixel limits are lower.
 # Larger JPEGs (Samsung 108/200 MP) still work: they decode at 1/2–1/8 scale
-# via draft(). Sized for a ~200-350 MB server baseline on the 1 GB VM.
+# via draft(). Sized for a ~200-350 MB server baseline on the 1 GB VM — see
+# _effective_decode_budget() below, which tightens this at decode time
+# against the baseline actually measured right now rather than trusting that
+# assumption to stay true as the rest of the server grows.
 MAX_DECODE_BYTES = _env_int("IMAGE_MAX_DECODE_BYTES", 370_000_000)
+# Left for the rest of the process after a decode completes: other in-flight
+# requests, the encode step that follows this same decode, and the kernel's
+# own bookkeeping. A decode that would eat into this is refused with a
+# typed, per-request ImageTooLargeError instead of risking the OOM killer
+# taking the whole server down for every customer (see the Oct 2026 incident:
+# the server's baseline had grown past what MAX_DECODE_BYTES was tuned
+# against, so a single image decode's real cost outran the static estimate).
+_MEMORY_SAFETY_MARGIN_BYTES = _env_int("IMAGE_MEMORY_SAFETY_MARGIN_BYTES", 200 * 1024 * 1024)
 
 # libjpeg-turbo's memory cap per (de)compress object, in its decimal "M". A
 # JPEG whose scans don't each cover every component (progressive, or
@@ -1090,13 +1101,39 @@ def _progressive_jpeg_bytes_per_pixel(im: Image.Image) -> float:
     return 2.0 * samples + 1.0
 
 
+def _available_memory_bytes() -> int | None:
+    """Linux's own estimate (MemAvailable in /proc/meminfo) of memory a new
+    allocation could get right now without swapping, or None when unreadable
+    (non-Linux dev machines, sandboxes without /proc)."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
+def _effective_decode_budget(max_decode_bytes: int) -> int:
+    """max_decode_bytes, tightened to what the machine can actually spare
+    right now minus _MEMORY_SAFETY_MARGIN_BYTES. Only ever lowers the static
+    budget, never raises it — a host where /proc/meminfo isn't readable just
+    gets the static budget unchanged, same as before this existed."""
+    available = _available_memory_bytes()
+    if available is None:
+        return max_decode_bytes
+    return min(max_decode_bytes, max(0, available - _MEMORY_SAFETY_MARGIN_BYTES))
+
+
 def _check_decode_cost(im: Image.Image, fmt: str, decoded: tuple[int, int],
                        source_size: tuple[int, int], max_decode_bytes: int, data: bytes = b"") -> None:
+    budget = _effective_decode_budget(max_decode_bytes)
     per_pixel = _decode_cost_per_pixel(im, fmt, data)
-    if decoded[0] * decoded[1] * per_pixel > max_decode_bytes:
+    if decoded[0] * decoded[1] * per_pixel > budget:
         has_alpha = im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info
         label = f"{fmt} (with transparency)" if has_alpha else fmt
-        raise ImageTooLargeError(_pixels_message(source_size, int(max_decode_bytes / per_pixel), label))
+        raise ImageTooLargeError(_pixels_message(source_size, int(budget / per_pixel), label))
 
 
 def _jp2_reduce_factor(size: tuple[int, int], max_edge: int) -> int:

@@ -5,8 +5,18 @@ import { ThinkingStep, WebSource } from "../models/conversation.models";
 import { AttachmentRef } from "../models/attachment.models";
 import { fetchWithRetry } from "../utils/apiUtils";
 
-/** Vendor failure relayed mid-stream by the proxy ({"t":"err"} chunk). */
+/** Vendor failure relayed mid-stream by the proxy ({"t":"err"} chunk, or a {"t":"done","status":"error"} terminal frame). */
 export class StreamGenerationError extends Error {}
+
+/**
+ * The stream ended without ever receiving a {"t":"done"} terminal frame — the
+ * connection was cut before the server could say whether generation finished
+ * or failed. Treated more leniently than StreamGenerationError: the caller
+ * should try to recover the persisted message and only show an error if that
+ * also comes up empty, since this is the normal shape of e.g. a backgrounded
+ * mobile tab where the server-side generation keeps running to completion.
+ */
+export class StreamTruncatedError extends Error {}
 
 export interface StreamMetadata {
     conversationId: string | null;
@@ -73,6 +83,7 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
 
     const decoder = new TextDecoder("utf-8");
     let lineBuffer = "";
+    let doneFrameReceived = false;
 
     const processLine = (line: string) => {
         const trimmed = line.trim();
@@ -130,6 +141,17 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
                     typeof msg.v === "string" && msg.v ? msg.v : "Generation failed"
                 );
             }
+            else if (msg.t === "done") {
+                // Terminal frame: the server's definitive word on how the
+                // stream ended. "ok"/"cancelled" need no action here — the
+                // loop below only cares that status was "error".
+                doneFrameReceived = true;
+                if (msg.status === "error") {
+                    throw new StreamGenerationError(
+                        typeof msg.m === "string" && msg.m ? msg.m : "Generation failed"
+                    );
+                }
+            }
             // other types (heartbeat, etc.) are silently ignored
         } catch (e) {
             if (e instanceof StreamGenerationError) throw e;
@@ -157,6 +179,14 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
         }
         // Flush any remaining partial line
         if (lineBuffer) processLine(lineBuffer);
+        if (!doneFrameReceived) {
+            // The connection closed before the server's terminal frame
+            // arrived — we can't tell "finished" from "cut off mid-response".
+            // Callers should attempt recovery before treating this as fatal.
+            throw new StreamTruncatedError(
+                "Connection to the server was lost before the response finished."
+            );
+        }
     } catch (error) {
         console.error("Error reading stream", error);
         throw error;
