@@ -590,13 +590,18 @@ export default function ConversationHistoryComponent() {
                     <SidebarListPanel
                         groups={historyGroups}
                         fixedGroups={historyFixedGroups}
-                        testIds={{ list: 'history-scroll-list' }}
+                        testIds={{ list: 'history-scroll-list', endSentinel: 'history-end-sentinel' }}
+                        // Older pages stream in as the end of the list nears;
+                        // paused while a fetch runs and after a failure —
+                        // auto-retrying a failing request would loop, so the
+                        // footer button below is the post-failure retry
+                        onEndReached={hasMore && !isLoading && !error ? handleLoadMore : undefined}
                         isLoading={isLoading}
                         hasError={error}
                         errorText={t('conversation.conversationHistory.failedToLoad')}
                         emptyText={t('conversation.conversationHistory.noConversationsYet')}
                         listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
-                        footer={hasMore && (
+                        footer={hasMore && (isLoading || error) && (
                             <SidebarListLoadMore
                                 label={isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
                                 onClick={handleLoadMore}
