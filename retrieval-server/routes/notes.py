@@ -179,7 +179,7 @@ async def encode_memory(req: EncodeMemoryRequest):
 
     try:
         encoder = customer_embedding_model(req.customer_id, model_type, model_name)
-        embeddings = create_embeddings([req.memory_value], encoder)
+        embeddings = create_embeddings([req.memory_value], encoder, customer_id=req.customer_id)
         if not embeddings or not embeddings[0].get("vector"):
             count("embedding_failure_total", source="encode_memory", model=model_name)
             raise RuntimeError(f"embedding returned no vector (model {model_type}/{model_name})")

@@ -10,6 +10,7 @@ import AgentGraphEditorPage from './pages/AgentGraphEditorPage'
 import RequestAgentsPage from './pages/RequestAgentsPage'
 import NodePresetsPage from './pages/NodePresetsPage'
 import VendorAllowlistPage from './pages/VendorAllowlistPage'
+import UsageRateCardPage from './pages/UsageRateCardPage'
 import { onboardCustomer } from './services/onboardService'
 
 const NAV_ITEMS: { path: string; label: string }[] = [
@@ -19,6 +20,7 @@ const NAV_ITEMS: { path: string; label: string }[] = [
     { path: '/default-agents', label: 'Default Agents' },
     { path: '/mappings', label: 'Default Actions Mapping' },
     { path: '/node-presets', label: 'Node Presets' },
+    { path: '/usage-rate-card', label: 'Cost and Usage Rate Card' },
 ]
 
 export default function App() {
@@ -134,6 +136,7 @@ export default function App() {
                         <Route path="/mappings" element={<RequestAgentsPage />} />
                         <Route path="/default-agents/mappings" element={<Navigate to="/mappings" replace />} />
                         <Route path="/node-presets" element={<NodePresetsPage />} />
+                        <Route path="/usage-rate-card" element={<UsageRateCardPage />} />
                         <Route path="/request-agents" element={<Navigate to="/default-agents" replace />} />
                         <Route path="/default-graph" element={<Navigate to="/default-agents" replace />} />
                         <Route path="*" element={<Navigate to="/system-api-keys" replace />} />

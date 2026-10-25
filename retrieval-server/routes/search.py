@@ -149,7 +149,7 @@ async def search(req: SearchRequest):
         by_item: dict[tuple[str, str], dict] = {}
         for (model_type, model_name), collections in grouped.items():
             encoder = customer_embedding_model(req.customer_id, model_type, model_name)
-            query_embeddings = create_embeddings([req.query], encoder)
+            query_embeddings = create_embeddings([req.query], encoder, customer_id=req.customer_id)
             if not query_embeddings:
                 count("embedding_failure_total", source="search", model=model_name)
                 logger.error("Query embedding failed for model %s/%s", model_type, model_name)

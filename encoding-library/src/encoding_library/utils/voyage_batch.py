@@ -10,7 +10,7 @@ never a platform-wide environment variable.
 """
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -122,9 +122,19 @@ def download_file_content(file_id: str, api_key: str) -> str:
     return response.text
 
 
-def parse_batch_results(jsonl_content: str) -> Dict[str, List[float]]:
+def parse_batch_results(jsonl_content: str) -> Tuple[Dict[str, List[float]], Optional[int]]:
     """
-    Parse the output JSONL into {"b{bi}c{ci}": embedding vector}.
+    Parse the output JSONL into ({"b{bi}c{ci}": embedding vector}, total_tokens).
+
+    total_tokens sums each line's response.body.usage.total_tokens — the same
+    field the (non-batch) voyageai SDK reads off a live embeddings/
+    contextualized-embeddings response, since a batch line's body is that same
+    per-request API response shape. Not verified against a live batch
+    response at the time this was written: if a line's body has no "usage"
+    field, it's simply not counted (total_tokens may end up None if NO line
+    carries one) rather than raising — a missing token count must never
+    break result parsing.
+
     Lines with a non-200 response or an error are skipped (and logged).
 
     Handles both result shapes:
@@ -134,6 +144,8 @@ def parse_batch_results(jsonl_content: str) -> Dict[str, List[float]]:
       "b{bi}c{ci}" keys so downstream mapping is identical for both.
     """
     vectors: Dict[str, List[float]] = {}
+    total_tokens = 0
+    saw_tokens = False
     for line in jsonl_content.splitlines():
         line = line.strip()
         if not line:
@@ -148,7 +160,12 @@ def parse_batch_results(jsonl_content: str) -> Dict[str, List[float]]:
         if record.get("error") or response.get("status_code") != 200:
             logger.warning(f"Batch request {custom_id} failed: {record.get('error') or response.get('status_code')}")
             continue
-        data = (response.get("body") or {}).get("data") or []
+        body = response.get("body") or {}
+        data = body.get("data") or []
+        line_tokens = (body.get("usage") or {}).get("total_tokens")
+        if line_tokens is not None:
+            total_tokens += line_tokens
+            saw_tokens = True
         if not custom_id or not data:
             continue
         first = data[0]
@@ -159,4 +176,4 @@ def parse_batch_results(jsonl_content: str) -> Dict[str, List[float]]:
                 vectors[f"{custom_id}c{ci}"] = item.get("embedding")
         else:
             vectors[custom_id] = first.get("embedding")
-    return vectors
+    return vectors, (total_tokens if saw_tokens else None)

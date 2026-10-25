@@ -29,6 +29,11 @@ _DEFAULT_MAX_RESULTS = 5
 # no longer advertised in the schema (still accepted and clamped if passed).
 _MAX_RESULTS_CAP = 5
 _DEFAULT_NEWS_DAYS = 7
+_DEFAULT_SEARCH_DEPTH = "basic"
+# Tavily bills 'advanced' at 2x 'basic' — see https://docs.tavily.com pricing.
+# Cost and Usage's Web Search page prices on these exact counts (see
+# record_web_search_usage).
+_CREDITS_PER_SEARCH_DEPTH = {"basic": 1, "advanced": 2}
 
 
 def _clean_domains(value) -> list[str]:
@@ -111,6 +116,17 @@ class WebSearchTool(GraphTool):
                     "raise it for slower-moving stories."
                 ),
             },
+            "search_depth": {
+                "type": "string",
+                "enum": ["basic", "advanced"],
+                "description": (
+                    "Use 'advanced' for queries needing deeper, more thorough results — "
+                    "technical research, comparisons, or anything 'basic' came back thin "
+                    "or off-target for. 'advanced' costs more search credits, so reach for "
+                    "it only when a query genuinely needs the extra depth. Use 'basic' "
+                    "(default) for most lookups."
+                ),
+            },
             # max_results is deliberately NOT advertised: models asked for the
             # cap whenever offered one. run() still clamps a value a model
             # passes anyway.
@@ -151,6 +167,8 @@ class WebSearchTool(GraphTool):
             )
 
         topic = args.get("topic") if args.get("topic") in ("general", "news") else "general"
+        search_depth = args.get("search_depth") if args.get("search_depth") in _CREDITS_PER_SEARCH_DEPTH \
+            else _DEFAULT_SEARCH_DEPTH
         try:
             max_results = int(args.get("max_results") or _DEFAULT_MAX_RESULTS)
         except (TypeError, ValueError):
@@ -160,7 +178,7 @@ class WebSearchTool(GraphTool):
         payload: dict = {
             "query": query,
             "max_results": max_results,
-            "search_depth": "basic",
+            "search_depth": search_depth,
             "topic": topic,
             "include_answer": False,
         }
@@ -181,11 +199,14 @@ class WebSearchTool(GraphTool):
             payload["exclude_domains"] = exclude_domains
 
         logger.info(
-            "web_search: customer=%s topic=%s max_results=%d query='%s'",
-            context.customer_id, topic, max_results, query[:100],
+            "web_search: customer=%s topic=%s search_depth=%s max_results=%d query='%s'",
+            context.customer_id, topic, search_depth, max_results, query[:100],
         )
         try:
             data = await self._search(payload, api_key)
+            # Tavily bills the call itself, not the result count — record usage
+            # as soon as the request succeeds, even if 0 results come back.
+            self._record_usage(context.customer_id, search_depth)
         except Exception as e:
             logger.error("web_search: FAILED — %s", e, exc_info=True)
             # Tavily's auth/quota statuses are terminal for the whole turn —
@@ -234,6 +255,22 @@ class WebSearchTool(GraphTool):
             "information may be outdated."
         )
         return ToolResult(content=preamble, sources=sources)
+
+    @staticmethod
+    def _record_usage(customer_id: str, search_depth: str) -> None:
+        """Best-effort: never let a usage-recording failure affect a
+        successful search. See encoding_library.utils.usage_tracking —
+        record_web_search_usage writes raw credit counts only (no pricing
+        here); genai-proxy-server's UsageSummaryService prices them at read
+        time against the admin rate card, same as Vector DB."""
+        try:
+            from encoding_library.utils.usage_tracking import record_web_search_usage
+            credits = _CREDITS_PER_SEARCH_DEPTH[search_depth]
+            record_web_search_usage(customer_id, search_depth, credits)
+        except Exception:
+            logger.warning(
+                "web_search: failed to record usage for customer=%s", customer_id, exc_info=True
+            )
 
     async def _search(self, payload: dict, api_key: str) -> dict:
         """POST to Tavily with a light retry on transient network errors — the

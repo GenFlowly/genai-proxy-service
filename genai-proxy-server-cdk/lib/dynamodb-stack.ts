@@ -67,6 +67,16 @@ export class DynamoDBStack extends cdk.Stack {
             sortKey: { name: 'model', type: dynamodb.AttributeType.STRING },
         };
 
+        // Per-customer usage/cost rollup backing the Cost and Usage settings
+        // pages. Provisioned ahead of an earlier attempt at this feature that
+        // never shipped — the table was empty, so its key schema is reused
+        // rather than replaced. usageDate is NOT a bare date: it is
+        // "{YYYY-MM-DD}#{category}#{dim2}#{dim3}" (category = llm|embedding|
+        // vector_db|web_search; dim2/dim3 = vendor/model, or opType, or
+        // searchDepth), so one bounded Query per customer per date range
+        // ("usageDate BETWEEN from AND to~") returns every category/vendor/
+        // model/op-type combination in range — no GSI, no conversation
+        // fan-out. See genai-proxy-server/repository/UsageRollupRepository.kt.
         const customerApiUsageTableProps: CreateTableProps = {
             tableName: 'CustomerAIUsage',
             partitionKey: {
@@ -74,6 +84,19 @@ export class DynamoDBStack extends cdk.Stack {
                 type: dynamodb.AttributeType.STRING
             },
             sortKey: { name: 'usageDate', type: dynamodb.AttributeType.STRING },
+        };
+
+        // Admin-configurable per-unit rates for the two usage categories with
+        // no real per-request vendor price (Vector DB ops, Web Search
+        // credits) — priced at READ time, unlike AIModelCatalog which prices
+        // LLM/embedding usage at write time. PK=category, SK=rateKey.
+        const usageRateCardTableProps: CreateTableProps = {
+            tableName: 'UsageRateCard',
+            partitionKey: {
+                name: 'category',
+                type: dynamodb.AttributeType.STRING
+            },
+            sortKey: { name: 'rateKey', type: dynamodb.AttributeType.STRING },
         };
 
         const conversationTableProps: CreateTableProps = {
@@ -628,6 +651,7 @@ export class DynamoDBStack extends cdk.Stack {
         const nodePresetsTable = createDefaultDynamoDbTable(this, nodePresetsTableProps);
         const customerProjectsTable = createDefaultDynamoDbTable(this, customerProjectsTableProps);
         const purgeJobsTable = createDefaultDynamoDbTable(this, purgeJobsTableProps);
+        const usageRateCardTable = createDefaultDynamoDbTable(this, usageRateCardTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
@@ -638,7 +662,7 @@ export class DynamoDBStack extends cdk.Stack {
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
             requestAgentMapTable, customerMemoryTable, nodePresetsTable, customerProjectsTable,
-            purgeJobsTable
+            purgeJobsTable, usageRateCardTable
         );
     }
 }

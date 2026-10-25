@@ -29,7 +29,9 @@ class ConversationProjectReadTest {
 
     private val cust = "cust-1"
     private val client = mockk<DynamoDbClient>()
-    private val repository = ConversationRepository(client, mockk<KLogger>(relaxed = true))
+    private val repository = ConversationRepository(
+        client, mockk<KLogger>(relaxed = true), mockk<UsageRollupRepository>(relaxed = true)
+    )
 
     private fun s(v: String): AttributeValue = AttributeValue.builder().s(v).build()
 

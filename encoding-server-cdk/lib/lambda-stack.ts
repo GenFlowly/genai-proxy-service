@@ -41,6 +41,11 @@ export interface LambdaStackProps extends cdk.StackProps {
     customerApiKeyTableName: string;
     /** Auth0 client ids allowed to call POST /purge-vectors (comma-separated; empty refuses all). */
     purgeAllowedClientIds?: string;
+    // Cost and Usage settings pages: per-customer usage/cost rollup (write) and
+    // embedding model pricing (read) — see genai-proxy-server's
+    // UsageRollupRepository/ModelCatalogService for the owning side.
+    customerApiUsageTableName: string;
+    aiModelCatalogTableName: string;
 }
 
 export class LambdaStack extends cdk.Stack {
@@ -70,6 +75,12 @@ export class LambdaStack extends cdk.Stack {
         const instructionsTable = dynamodb.Table.fromTableName(this, 'InstructionsTable', props.instructionsTableName);
         const customerApiKeyTable = dynamodb.Table.fromTableName(this, 'CustomerVendorApiKeysTable', props.customerApiKeyTableName);
         const customerApiKeyEnv = { CUSTOMER_API_KEY_TABLE: props.customerApiKeyTableName };
+        const customerApiUsageTable = dynamodb.Table.fromTableName(this, 'CustomerApiUsageTable', props.customerApiUsageTableName);
+        const aiModelCatalogTable = dynamodb.Table.fromTableName(this, 'AIModelCatalogTable', props.aiModelCatalogTableName);
+        const usageTrackingEnv = {
+            CUSTOMER_API_USAGE_TABLE: props.customerApiUsageTableName,
+            AI_MODEL_CATALOG_TABLE: props.aiModelCatalogTableName,
+        };
 
         // Drives each lambda's log level and user-content gating — see
         // genai-proxy-server/development.md "Logging policy".
@@ -188,6 +199,7 @@ export class LambdaStack extends cdk.Stack {
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
                 CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
                 INSTRUCTIONS_TABLE: props.instructionsTableName,
+                ...usageTrackingEnv,
             },
         });
         customerVectorDBConfigTable.grantReadData(this.createAndStoreLambda);
@@ -197,6 +209,10 @@ export class LambdaStack extends cdk.Stack {
         // their milvus_ids after insertion.
         customerNotesTable.grantReadWriteData(this.createAndStoreLambda);
         instructionsTable.grantReadWriteData(this.createAndStoreLambda);
+        // Cost and Usage: writes per-customer embedding usage after each
+        // embed call, reads AIModelCatalog to price it.
+        customerApiUsageTable.grantReadWriteData(this.createAndStoreLambda);
+        aiModelCatalogTable.grantReadData(this.createAndStoreLambda);
         this.createAndStoreLambda.addToRolePolicy(new iam.PolicyStatement({
             actions: ['kms:Decrypt'],
             resources: ['*'],
@@ -252,6 +268,7 @@ export class LambdaStack extends cdk.Stack {
                 CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
                 ...customerApiKeyEnv,
                 ...documentsEnv,
+                ...usageTrackingEnv,
             },
         });
         props.customerDocumentsBucket.grantReadWrite(this.pollVoyageBatchesLambda);
@@ -261,6 +278,11 @@ export class LambdaStack extends cdk.Stack {
         customerNotesTable.grantReadWriteData(this.pollVoyageBatchesLambda);
         // Resolves the job's customer's Voyage key to poll/download their batch.
         customerApiKeyTable.grantReadData(this.pollVoyageBatchesLambda);
+        // Cost and Usage: records the completed batch job's embedding usage
+        // (job row already carries customer_id/model_name) against the
+        // catalog's batch-discounted rate.
+        customerApiUsageTable.grantReadWriteData(this.pollVoyageBatchesLambda);
+        aiModelCatalogTable.grantReadData(this.pollVoyageBatchesLambda);
         this.pollVoyageBatchesLambda.addToRolePolicy(new iam.PolicyStatement({
             actions: ['kms:Decrypt'],
             resources: ['*'],
