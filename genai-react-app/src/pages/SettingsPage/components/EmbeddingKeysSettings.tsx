@@ -7,48 +7,22 @@ import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendor
 import {
     EmbeddingKeyStatus,
     EmbeddingVendor,
-    EmbeddingVendorModels,
     getEmbeddingKeys,
-    getEmbeddingModels,
     storeEmbeddingKey,
 } from '../../../services/embeddingKeysService'
-import { saveAIConfigPreferences } from '../../../services/saveAIConfigService'
-import { useToast } from '../../../context/ToastContext'
-import { ICONS } from '../../../constants/icons'
 import {
-    InputSelectWithHint,
-    PillButton,
     VendorApiKeysManager,
     VendorApiKeyRowData,
 } from '@genflowly/component-library'
 import { VendorBrandName } from '../../../components/common/BrandName/BrandName'
-import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import styles from './EmbeddingKeysSettings.module.scss'
-
-/** Data categories that can each carry their own default embedding model. */
-type EmbeddingCategory = 'conversations' | 'notes'
-
-interface CategorySelection {
-    vendor: string
-    model: string
-}
-
-const CATEGORIES: EmbeddingCategory[] = ['conversations', 'notes']
-
-/** Infer the owning vendor from the model's naming convention. */
-function vendorForModel(model: string): string {
-    if (model.startsWith('voyage')) return EmbeddingVendor.VOYAGE
-    if (model.startsWith('text-embedding')) return EmbeddingVendor.OPENAI
-    return ''
-}
 
 /**
  * Bring-your-own API keys for the embedding models that index and search the
  * customer's data. The OpenAI key is the same key as on the LLM API Keys
  * page (one key serves generation and embeddings), so it reads and writes the
  * shared vendor-key state; Voyage is embedding-only and has its own key.
- * Below the keys, per-category default embedding models (conversations,
- * notes) are picked vendor-first, then model.
+ * The per-category default embedding models live on the Defaults page.
  */
 export function EmbeddingKeysSettings(): React.ReactElement {
     const { t } = useTranslation()
@@ -58,18 +32,9 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         getAccessTokenSilently,
         aiVendorAPIKeyStatusList,
         updateVendorApiKeyStatus,
-        aiConfigPreferences,
     } = useAuth()
-    const { showToast } = useToast()
-    const vendorDisplayName = useVendorDisplayNames()
 
     const [voyageStatus, setVoyageStatus] = useState<EmbeddingKeyStatus | null>(null)
-    const [vendorModels, setVendorModels] = useState<EmbeddingVendorModels[]>([])
-    const [selections, setSelections] = useState<Record<EmbeddingCategory, CategorySelection>>({
-        conversations: { vendor: '', model: '' },
-        notes: { vendor: '', model: '' },
-    })
-    const [savingModel, setSavingModel] = useState(false)
 
     const loadStatuses = useCallback(async () => {
         if (!isAuthenticated || !customerId) return
@@ -82,35 +47,9 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         }
     }, [isAuthenticated, customerId, getAccessTokenSilently])
 
-    // Models are fetched with the customer's stored keys — providers without
-    // a saved key come back absent, so the dropdown only offers usable models.
-    const loadModels = useCallback(async () => {
-        if (!isAuthenticated || !customerId) return
-        try {
-            const token = await getAccessTokenSilently()
-            const response = await getEmbeddingModels(token)
-            setVendorModels(response.vendorModels)
-        } catch (err) {
-            console.error('EmbeddingKeysSettings: failed to fetch embedding models', err)
-        }
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
-
     useEffect(() => {
         void loadStatuses()
-        void loadModels()
-    }, [loadStatuses, loadModels])
-
-    // Prefill from the customer's saved preferences; the per-category
-    // preference wins, the legacy single embeddingModel is the fallback.
-    useEffect(() => {
-        const conversations =
-            aiConfigPreferences?.embeddingModelConversations ?? aiConfigPreferences?.embeddingModel ?? ''
-        const notes = aiConfigPreferences?.embeddingModelNotes ?? aiConfigPreferences?.embeddingModel ?? ''
-        setSelections({
-            conversations: { vendor: vendorForModel(conversations), model: conversations },
-            notes: { vendor: vendorForModel(notes), model: notes },
-        })
-    }, [aiConfigPreferences])
+    }, [loadStatuses])
 
     // OpenAI state lives in the shared vendor-key list, so a key stored on
     // the LLM API Keys page shows as set here (and vice versa)
@@ -152,57 +91,10 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         const response = await storeEmbeddingKey(token, vendor as EmbeddingVendor, apiKey)
         if (response.keyStatus.updateSuccessful) {
             setVoyageStatus(response.keyStatus)
-            // A newly stored key unlocks that provider's models
-            void loadModels()
         }
         return {
             success: !!response.keyStatus.updateSuccessful,
             message: response.keyStatus.detail || response.keyStatus.status,
-        }
-    }
-
-    const vendorOptions = useMemo(() => (
-        vendorModels.map(vm => ({
-            label: vm.vendor === EmbeddingVendor.VOYAGE
-                ? t('settingsPage.embeddingKeysSettings.voyageLabel')
-                : vendorDisplayName(vm.vendor),
-            value: vm.vendor,
-        }))
-    ), [vendorModels, t, vendorDisplayName])
-
-    const modelOptionsForVendor = (vendor: string) => (
-        (vendorModels.find(vm => vm.vendor === vendor)?.models ?? [])
-            .map(model => ({ label: model, value: model }))
-    )
-
-    const handleVendorChange = (category: EmbeddingCategory, vendor: string) => {
-        // A new vendor invalidates the previous model choice
-        setSelections(prev => ({ ...prev, [category]: { vendor, model: '' } }))
-    }
-
-    const handleModelChange = (category: EmbeddingCategory, model: string) => {
-        setSelections(prev => ({ ...prev, [category]: { ...prev[category], model } }))
-    }
-
-    const handleSaveModels = async () => {
-        if (!isAuthenticated || !customerId) {
-            showToast(t('settingsPage.aiSettings.loginFirstToast'))
-            return
-        }
-        const prefs: { embeddingModelConversations?: string; embeddingModelNotes?: string } = {}
-        if (selections.conversations.model) prefs.embeddingModelConversations = selections.conversations.model
-        if (selections.notes.model) prefs.embeddingModelNotes = selections.notes.model
-        if (!prefs.embeddingModelConversations && !prefs.embeddingModelNotes) return
-        try {
-            setSavingModel(true)
-            const token = await getAccessTokenSilently()
-            await saveAIConfigPreferences(token, { aiConfigPreferences: prefs })
-            showToast(t('settingsPage.embeddingKeysSettings.modelSavedToast'))
-        } catch (error: any) {
-            console.error('Failed to save default embedding models:', error)
-            showToast(error?.message || t('settingsPage.embeddingKeysSettings.modelSaveErrorToast'))
-        } finally {
-            setSavingModel(false)
         }
     }
 
@@ -228,57 +120,6 @@ export function EmbeddingKeysSettings(): React.ReactElement {
                     }}
                     data-testid="embedding-keys"
                 />
-
-                <div className={styles.field}>
-                    <label className={styles.fieldLabel}>
-                        {t('settingsPage.embeddingKeysSettings.defaultModelLabel')}
-                    </label>
-                    <p className={styles.emptyHint}>
-                        {t('settingsPage.embeddingKeysSettings.defaultModelHint')}
-                    </p>
-                    {vendorOptions.length === 0 && (
-                        <p className={styles.emptyHint}>
-                            {t('settingsPage.embeddingKeysSettings.noModels')}
-                        </p>
-                    )}
-                    {CATEGORIES.map(category => (
-                        <div key={category} className={styles.categoryBlock}>
-                            <label className={styles.fieldLabel}>
-                                {t(`settingsPage.embeddingKeysSettings.category_${category}`)}
-                            </label>
-                            <div className={styles.categoryRow}>
-                                <InputSelectWithHint
-                                    hint={t('settingsPage.embeddingKeysSettings.vendorHint')}
-                                    placeholder={t('settingsPage.embeddingKeysSettings.vendorPlaceholder')}
-                                    value={selections[category].vendor}
-                                    onChange={(val: string) => handleVendorChange(category, val)}
-                                    options={vendorOptions}
-                                    data-testid={`embedding-vendor-select-${category}`}
-                                />
-                                <InputSelectWithHint
-                                    hint={t('settingsPage.embeddingKeysSettings.modelHint')}
-                                    placeholder={t('settingsPage.embeddingKeysSettings.modelPlaceholder')}
-                                    value={selections[category].model}
-                                    onChange={(val: string) => handleModelChange(category, val)}
-                                    options={modelOptionsForVendor(selections[category].vendor)}
-                                    data-testid={`embedding-model-select-${category}`}
-                                />
-                            </div>
-                        </div>
-                    ))}
-                    <div className={styles.footer}>
-                        <PillButton
-                            onClick={handleSaveModels}
-                            label={savingModel
-                                ? t('settingsPage.aiSettings.savingLabel')
-                                : t('settingsPage.aiSettings.save')}
-                            icon={ICONS.SAVE_ICON}
-                            disabled={savingModel
-                                || (!selections.conversations.model && !selections.notes.model)}
-                            data-testid="save-default-embedding-model"
-                        />
-                    </div>
-                </div>
             </div>
         </div>
     )

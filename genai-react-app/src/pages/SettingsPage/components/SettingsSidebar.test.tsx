@@ -34,7 +34,7 @@ describe('SettingsSidebar', () => {
         
         expect(screen.getByText('Profile')).toBeInTheDocument();
         expect(screen.getByText('AI Settings')).toBeInTheDocument();
-        expect(screen.getByText('Default Actions')).toBeInTheDocument();
+        expect(screen.getByText('Defaults')).toBeInTheDocument();
         expect(screen.getByText('Logout')).toBeInTheDocument();
     });
 

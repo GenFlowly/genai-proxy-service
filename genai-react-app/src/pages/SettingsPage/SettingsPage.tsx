@@ -7,7 +7,7 @@ import { ProfileSettings } from './components/ProfileSettings'
 import { AISettings } from './components/AISettings'
 import { EmbeddingKeysSettings } from './components/EmbeddingKeysSettings'
 import { VectorDBSettings } from './components/VectorDBSettings'
-import { ActionAgentSettings } from './components/ActionAgentSettings'
+import { DefaultsSettings } from './components/DefaultsSettings'
 import { ToolsSettings } from './components/ToolsSettings'
 import { ConnectorsSettings } from './components/ConnectorsSettings'
 import { DeveloperSettings } from './components/DeveloperSettings'
@@ -25,7 +25,7 @@ const SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY = 'settings_sidebar_width_rem'
 const SECTION_LABEL_KEYS: Record<string, string> = {
     profile: 'settingsPage.settingsPage.sectionProfile',
     ai: 'settingsPage.settingsPage.sectionAi',
-    actions: 'settingsPage.settingsPage.sectionActions',
+    defaults: 'settingsPage.settingsPage.sectionDefaults',
     tools: 'settingsPage.settingsPage.sectionTools',
     connectors: 'settingsPage.settingsPage.sectionConnectors',
     developer: 'settingsPage.settingsPage.sectionDeveloper',
@@ -93,9 +93,10 @@ export default function SettingsPage(): React.ReactElement {
                             <Route path="ai/llm-keys" element={<AISettings />} />
                             <Route path="ai/embedding-keys" element={<EmbeddingKeysSettings />} />
                             <Route path="ai/vector-db" element={<VectorDBSettings />} />
-                            {/* The Default Preferences page was folded into Default Actions */}
-                            <Route path="ai/defaults" element={<Navigate to="/settings/actions" replace />} />
-                            <Route path="actions" element={<ActionAgentSettings />} />
+                            {/* Old URLs of the Defaults page (formerly Default Preferences, then Default Actions) */}
+                            <Route path="ai/defaults" element={<Navigate to="/settings/defaults" replace />} />
+                            <Route path="actions" element={<Navigate to="/settings/defaults" replace />} />
+                            <Route path="defaults" element={<DefaultsSettings />} />
                             <Route path="tools" element={<ToolsSettings />} />
                             <Route path="connectors" element={<ConnectorsSettings />} />
                             <Route path="developer" element={<DeveloperSettings />} />
