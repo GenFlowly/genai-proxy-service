@@ -18,7 +18,9 @@ data class ProbedModels(
     val models: List<String>,
     val lastProbedAt: Instant?,
     /** sha256 prefix of the key the list was probed with — a rotation invalidates it. */
-    val keyFingerprint: String?
+    val keyFingerprint: String?,
+    /** True when the probe's vendor rejected the key itself (auth) — the key can't embed at all. */
+    val authFailed: Boolean = false
 )
 
 /**
@@ -39,6 +41,7 @@ class EmbeddingModelCatalogRepository(
         private const val MODELS_ATTR = "models"
         private const val LAST_PROBED_ATTR = "lastProbedAt"
         private const val KEY_FINGERPRINT_ATTR = "keyFingerprint"
+        private const val AUTH_FAILED_ATTR = "authFailed"
         private const val LEASE_UNTIL_ATTR = "leaseUntil"
     }
 
@@ -60,7 +63,8 @@ class EmbeddingModelCatalogRepository(
             ProbedModels(
                 models = item[MODELS_ATTR]?.l()?.mapNotNull { it.s() } ?: emptyList(),
                 lastProbedAt = item[LAST_PROBED_ATTR]?.s()?.let { runCatching { Instant.parse(it) }.getOrNull() },
-                keyFingerprint = item[KEY_FINGERPRINT_ATTR]?.s()
+                keyFingerprint = item[KEY_FINGERPRINT_ATTR]?.s(),
+                authFailed = item[AUTH_FAILED_ATTR]?.bool() ?: false
             )
         }
 
@@ -68,7 +72,8 @@ class EmbeddingModelCatalogRepository(
         customerId: String,
         vendor: String,
         models: List<String>,
-        keyFingerprint: String
+        keyFingerprint: String,
+        authFailed: Boolean = false
     ) = withContext(Dispatchers.IO) {
         val item = mapOf(
             CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
@@ -76,7 +81,8 @@ class EmbeddingModelCatalogRepository(
             MODELS_ATTR to AttributeValue.builder()
                 .l(models.map { AttributeValue.builder().s(it).build() }).build(),
             LAST_PROBED_ATTR to AttributeValue.builder().s(Instant.now().toString()).build(),
-            KEY_FINGERPRINT_ATTR to AttributeValue.builder().s(keyFingerprint).build()
+            KEY_FINGERPRINT_ATTR to AttributeValue.builder().s(keyFingerprint).build(),
+            AUTH_FAILED_ATTR to AttributeValue.builder().bool(authFailed).build()
         )
         dynamoDbClient.putItem(
             PutItemRequest.builder()

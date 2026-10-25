@@ -68,6 +68,15 @@ class CustomerCredentialsService(
         return if (result.valid) {
             val stored = storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
             logger.info { "API Key validated and stored for vendor $vendor: $stored" }
+            // An OPENAI chat key doubles as the embedding key, and chat
+            // validation (models.list) can pass for a key that cannot embed.
+            // Refresh the embedding catalog now so capability — or the lack
+            // of it — is known before any embedding picker opens.
+            if (vendor.name == com.genflowly.models.EmbeddingVendor.OPENAI.name) {
+                embeddingModelCatalogService.probeOnKeyChangeAsync(
+                    customerId, com.genflowly.models.EmbeddingVendor.OPENAI, apiKey
+                )
+            }
             com.genflowly.models.AIVendorAPIKeyStatus(
                 aiVendor = vendor,
                 isAPIKeyValid = true,
@@ -269,7 +278,9 @@ class CustomerCredentialsService(
 
     /**
      * Embedding models the customer can pick as their default, per provider.
-     * Only providers with a stored API key are listed — no key, no models.
+     * Only providers with a stored API key that can actually embed are listed
+     * — no key, no models; a key the vendor rejects for embeddings hides the
+     * provider exactly as if no key were set.
      */
     suspend fun getEmbeddingModels(customerId: String): List<com.genflowly.models.EmbeddingVendorModels> {
         val keysByVendor = com.genflowly.models.EmbeddingVendor.entries.mapNotNull { vendor ->
@@ -281,13 +292,17 @@ class CustomerCredentialsService(
 
         // Serve the probed list — only models this key actually embeds — never
         // the raw LiteLLM catalog (which lists models the encoder rejects, e.g.
-        // voyage-multimodal-*). Null (probe infra down, no cache) surfaces as an
-        // empty list rather than reintroducing unvalidated options.
-        return keysByVendor.map { (vendor, key) ->
-            com.genflowly.models.EmbeddingVendorModels(
-                vendor = vendor,
-                models = embeddingModelCatalogService.getValidModels(customerId, vendor, key).orEmpty()
-            )
+        // voyage-multimodal-*). Undetermined (probe infra down, no cache)
+        // surfaces as an empty list rather than reintroducing unvalidated
+        // options.
+        return keysByVendor.mapNotNull { (vendor, key) ->
+            when (val catalog = embeddingModelCatalogService.getCatalog(customerId, vendor, key)) {
+                is EmbeddingCatalog.Models ->
+                    com.genflowly.models.EmbeddingVendorModels(vendor = vendor, models = catalog.models)
+                EmbeddingCatalog.KeyCannotEmbed -> null
+                EmbeddingCatalog.Undetermined ->
+                    com.genflowly.models.EmbeddingVendorModels(vendor = vendor, models = emptyList())
+            }
         }
     }
 
@@ -309,14 +324,23 @@ class CustomerCredentialsService(
             val hasKey = !item?.get("apiKey")?.s().isNullOrBlank()
             // Legacy items may lack the validity flag: a stored key counts as valid.
             val isValid = hasKey && (item?.get("isAPIKeyValid")?.bool() ?: true)
+            // A stored, vendor-accepted key can still be unable to EMBED (an
+            // OpenAI key passes chat validation but 403s on /v1/embeddings).
+            // Fold the probe verdict in so the embedding UI reports such a key
+            // as unusable instead of silently offering no models.
+            val cannotEmbed = isValid && embeddingModelCatalogService.cachedKeyCannotEmbed(customerId, vendor)
             com.genflowly.models.EmbeddingKeyStatus(
                 vendor = vendor,
-                isAPIKeyValid = isValid,
+                isAPIKeyValid = isValid && !cannotEmbed,
                 status = when {
                     !hasKey -> com.genflowly.models.APIKeyStatus.NOT_SET
+                    cannotEmbed -> com.genflowly.models.APIKeyStatus.INVALID
                     isValid -> com.genflowly.models.APIKeyStatus.VALID
                     else -> com.genflowly.models.APIKeyStatus.INVALID
-                }
+                },
+                detail = if (cannotEmbed) {
+                    "This key cannot access embedding models — update its permissions, or save a key that can."
+                } else null
             )
         }
     }

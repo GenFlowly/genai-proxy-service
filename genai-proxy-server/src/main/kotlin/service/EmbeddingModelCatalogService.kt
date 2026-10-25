@@ -35,6 +35,18 @@ private val logger = KotlinLogging.logger {}
  * Callers get the probed list, never the raw LiteLLM catalog — that catalog is
  * only the candidate universe fed to the probe.
  */
+/** Outcome of asking which embedding models a vendor key can use. */
+sealed interface EmbeddingCatalog {
+    /** The probed list of embeddable models (possibly empty). */
+    data class Models(val models: List<String>) : EmbeddingCatalog
+
+    /** The vendor rejected the key itself (auth) — it cannot embed at all. */
+    object KeyCannotEmbed : EmbeddingCatalog
+
+    /** Probe infra down and no cache — callers must not draw conclusions. */
+    object Undetermined : EmbeddingCatalog
+}
+
 class EmbeddingModelCatalogService(
     private val kmsProvider: KMSProvider,
     private val customerCredentialsRepository: CustomerCredentialsRepository,
@@ -49,6 +61,13 @@ class EmbeddingModelCatalogService(
         private const val SWEEP_LEASE_MS = 60L * 60 * 1000
         // After a successful sweep, block the next one for ~a week.
         private const val SWEEP_COOLDOWN_MS = REFRESH_INTERVAL_MS
+        // Vendor-level error string the retrieval server's probe returns when the
+        // key fails auth (routes/probe_models.py) — the one failure that means
+        // "this key can't embed at all" rather than "the probe infra is down".
+        private const val AUTH_FAILED_PROBE_ERROR = "authentication failed"
+        // An auth failure can be fixed vendor-side (key permissions) without
+        // rotating the key, so retry the verdict after minutes, not weekly.
+        private val AUTH_RETRY_AFTER: Duration = Duration.ofMinutes(5)
     }
 
     /** Stable 16-hex-char fingerprint of a key, so a rotation invalidates the cache. */
@@ -66,21 +85,31 @@ class EmbeddingModelCatalogService(
     }
 
     /**
-     * The models [vendor]'s key can embed for this customer, or null when it
-     * genuinely couldn't be determined (probe infra down and no cache) — callers
-     * distinguish "no models" from "don't know". Serves the cache when the key
-     * is unchanged (refreshing in the background if stale); otherwise (cold start
-     * or rotated key) probes inline.
+     * What [vendor]'s key can embed for this customer. Serves the cache when
+     * the key is unchanged (refreshing in the background if stale); otherwise
+     * (cold start or rotated key) probes inline. A cached auth-failed verdict
+     * is retried inline after [AUTH_RETRY_AFTER] so a permissions fix on the
+     * vendor side heals without a key rotation.
      */
-    suspend fun getValidModels(
+    suspend fun getCatalog(
         customerId: String,
         vendor: EmbeddingVendor,
         decryptedKey: String
-    ): List<String>? {
+    ): EmbeddingCatalog {
         val fp = fingerprint(decryptedKey)
         val existing = runCatching { embeddingModelCatalogRepository.getProbed(customerId, vendor.name) }.getOrNull()
 
         if (existing != null && existing.keyFingerprint == fp) {
+            if (existing.authFailed) {
+                return if (isOlderThan(existing.lastProbedAt, AUTH_RETRY_AFTER)) {
+                    // A failed retry keeps the standing verdict: the key was
+                    // rejected outright and nothing has shown otherwise.
+                    probeAndStore(customerId, vendor, decryptedKey, existing)
+                        ?: EmbeddingCatalog.KeyCannotEmbed
+                } else {
+                    EmbeddingCatalog.KeyCannotEmbed
+                }
+            }
             if (isStale(existing.lastProbedAt)) {
                 // stale-while-revalidate: serve now, refresh out of band.
                 appScope.launch {
@@ -88,26 +117,40 @@ class EmbeddingModelCatalogService(
                         .onFailure { logger.warn(it) { "Background embedding re-probe failed for $customerId/$vendor" } }
                 }
             }
-            return existing.models
+            return EmbeddingCatalog.Models(existing.models)
         }
 
-        // Cold start or rotated key: probe now. On failure fall back to any prior
-        // list (soft — old models are likely still valid for the same vendor);
-        // null only when there is nothing at all to serve.
-        return probeAndStore(customerId, vendor, decryptedKey, existing) ?: existing?.models
+        // Cold start or rotated key: probe now. On an indeterminate failure fall
+        // back to any prior usable list (soft — old models are likely still
+        // valid for the same vendor); Undetermined only when nothing is known.
+        return probeAndStore(customerId, vendor, decryptedKey, existing)
+            ?: existing?.takeIf { !it.authFailed }?.let { EmbeddingCatalog.Models(it.models) }
+            ?: EmbeddingCatalog.Undetermined
     }
 
     /**
-     * Probe [vendor] with [decryptedKey], persist the result, and return the new
-     * valid list. Returns null on transport failure or a vendor-level error
-     * (e.g. auth) — the prior list is left untouched in that case.
+     * True when the stored probe verdict says this vendor's key was rejected
+     * outright. Cache-only (no KMS, no probe) so key-status reads stay cheap;
+     * the verdict is rewritten within seconds of a key save (probe-on-key-
+     * change) or the next model listing, so a rotated key self-corrects.
+     */
+    suspend fun cachedKeyCannotEmbed(customerId: String, vendor: EmbeddingVendor): Boolean =
+        runCatching { embeddingModelCatalogRepository.getProbed(customerId, vendor.name) }
+            .getOrNull()?.authFailed == true
+
+    /**
+     * Probe [vendor] with [decryptedKey], persist the result, and return the
+     * outcome. An auth rejection persists as a [EmbeddingCatalog.KeyCannotEmbed]
+     * verdict (so status endpoints can report the unusable key); transport
+     * failures and other vendor-level errors return null and leave the prior
+     * row untouched.
      */
     suspend fun probeAndStore(
         customerId: String,
         vendor: EmbeddingVendor,
         decryptedKey: String,
         existing: ProbedModels?
-    ): List<String>? {
+    ): EmbeddingCatalog? {
         val provider = vendor.toProviderString()
         val result = retrievalServerClient
             .probeEmbeddingModels(mapOf(provider to decryptedKey))
@@ -116,6 +159,15 @@ class EmbeddingModelCatalogService(
                 logger.warn { "Embedding probe returned no result for $customerId/$vendor — keeping prior list" }
                 return null
             }
+        if (result.error == AUTH_FAILED_PROBE_ERROR) {
+            logger.warn { "Embedding probe for $customerId/$vendor: the key failed authentication" }
+            runCatching {
+                embeddingModelCatalogRepository.putProbed(
+                    customerId, vendor.name, emptyList(), fingerprint(decryptedKey), authFailed = true
+                )
+            }.onFailure { logger.warn(it) { "Failed to persist auth-failed verdict for $customerId/$vendor" } }
+            return EmbeddingCatalog.KeyCannotEmbed
+        }
         if (result.error != null) {
             logger.warn { "Embedding probe for $customerId/$vendor errored: ${result.error} — keeping prior list" }
             return null
@@ -123,15 +175,17 @@ class EmbeddingModelCatalogService(
 
         // supported ∪ (previouslyValid ∩ inconclusive): keep models that only
         // failed transiently this round so a rate-limit blip can't drop them.
-        val prev = existing?.models.orEmpty().toSet()
+        val prev = existing?.takeIf { !it.authFailed }?.models.orEmpty().toSet()
         val merged = (result.supported.toSet() + result.inconclusive.filter { it in prev }).sorted()
 
         runCatching {
-            embeddingModelCatalogRepository.putProbed(customerId, vendor.name, merged, fingerprint(decryptedKey))
+            embeddingModelCatalogRepository.putProbed(
+                customerId, vendor.name, merged, fingerprint(decryptedKey), authFailed = false
+            )
         }.onFailure { logger.warn(it) { "Failed to persist probed embedding models for $customerId/$vendor" } }
 
         logger.info { "Probed ${merged.size} embedding models for $customerId/$vendor" }
-        return merged
+        return EmbeddingCatalog.Models(merged)
     }
 
     /** Decrypts the customer's stored key for [vendor], or null when unset. */
@@ -167,7 +221,13 @@ class EmbeddingModelCatalogService(
             ?: throw IllegalArgumentException(
                 "No ${vendor.name} embedding key is configured — add the key before selecting a $vendor model"
             )
-        val valid = getValidModels(customerId, vendor, key) ?: return // undetermined -> don't block
+        val valid = when (val catalog = getCatalog(customerId, vendor, key)) {
+            is EmbeddingCatalog.Models -> catalog.models
+            EmbeddingCatalog.KeyCannotEmbed -> throw IllegalArgumentException(
+                "Your ${vendor.name} key cannot run embeddings — update the key's permissions or save a different key"
+            )
+            EmbeddingCatalog.Undetermined -> return // undetermined -> don't block
+        }
         if (modelName !in valid) {
             throw IllegalArgumentException(
                 "Embedding model '$modelName' is not supported by your ${vendor.name} key. " +
@@ -233,6 +293,8 @@ class EmbeddingModelCatalogService(
         }
     }
 
-    private fun isStale(lastProbedAt: Instant?): Boolean =
-        lastProbedAt == null || Duration.between(lastProbedAt, Instant.now()) >= STALE_AFTER
+    private fun isStale(lastProbedAt: Instant?): Boolean = isOlderThan(lastProbedAt, STALE_AFTER)
+
+    private fun isOlderThan(at: Instant?, age: Duration): Boolean =
+        at == null || Duration.between(at, Instant.now()) >= age
 }
