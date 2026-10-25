@@ -46,6 +46,18 @@ export const endpoints = {
     unassignConversationProject: (conversationId: string) =>
         `${BASE}${API_PREFIX}/conversation/unassign-project?conversationId=${encodeURIComponent(conversationId)}`,
     getAIUsage: `${BASE}${API_PREFIX}/message/usage`,
+    // Cost and Usage settings pages — aggregate per-customer summaries over a date range.
+    // usageLlm and usageEmbedding are live; usageVectorDb/usageWebSearch 404 until their
+    // instrumentation phases land (the frontend treats that as "not tracked yet", not an
+    // error — see getUsageService.ts).
+    usageLlm: (from: string, to: string) =>
+        `${BASE}${API_PREFIX}/usage/llm?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    usageEmbedding: (from: string, to: string) =>
+        `${BASE}${API_PREFIX}/usage/embedding?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    usageVectorDb: (from: string, to: string) =>
+        `${BASE}${API_PREFIX}/usage/vector-db?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    usageWebSearch: (from: string, to: string) =>
+        `${BASE}${API_PREFIX}/usage/web-search?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     searchUsers: `${BASE}${API_PREFIX}/users/search`,
     getProfile: `${BASE}${API_PREFIX}/profile`,
     updateUsername: `${BASE}${API_PREFIX}/profile/username`,

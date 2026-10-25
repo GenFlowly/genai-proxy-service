@@ -7,6 +7,10 @@ import { ProfileSettings } from './components/ProfileSettings'
 import { AISettings } from './components/AISettings'
 import { EmbeddingKeysSettings } from './components/EmbeddingKeysSettings'
 import { VectorDBSettings } from './components/VectorDBSettings'
+import { LlmUsageSettings } from './components/usage/LlmUsageSettings'
+import { EmbeddingUsageSettings } from './components/usage/EmbeddingUsageSettings'
+import { VectorDbUsageSettings } from './components/usage/VectorDbUsageSettings'
+import { WebSearchUsageSettings } from './components/usage/WebSearchUsageSettings'
 import { DefaultsSettings } from './components/DefaultsSettings'
 import { ToolsSettings } from './components/ToolsSettings'
 import { ConnectorsSettings } from './components/ConnectorsSettings'
@@ -33,6 +37,15 @@ const SECTION_LABEL_KEYS: Record<string, string> = {
     'llm-keys': 'settingsPage.settingsPage.sectionAiModelKeys',
     'embedding-keys': 'settingsPage.settingsPage.sectionAiEmbeddingKeys',
     'vector-db': 'settingsPage.settingsPage.sectionAiVectorDb',
+    // Usage sub-sections
+    usage: 'settingsPage.settingsPage.sectionUsage',
+    'llm-models': 'settingsPage.settingsPage.sectionUsageLlmModels',
+    'embedding-models': 'settingsPage.settingsPage.sectionUsageEmbeddingModels',
+    'web-search': 'settingsPage.settingsPage.sectionUsageWebSearch',
+    // 'usage/vector-db' is deliberately namespaced: the bare 'vector-db' key
+    // above already belongs to the AI section, and the lookup below checks
+    // the last-two-segment form first so this one wins over that one here.
+    'usage/vector-db': 'settingsPage.settingsPage.sectionUsageVectorDb',
 }
 
 export default function SettingsPage(): React.ReactElement {
@@ -48,7 +61,13 @@ export default function SettingsPage(): React.ReactElement {
     const { setLeftSidebarExpanded } = useLayout()
 
     // Breadcrumbs (mobile only): Menu > Settings [> Section]
-    const sectionKey = SECTION_LABEL_KEYS[location.pathname.split('/').pop() || '']
+    // Checked as the last-two-segment form first (e.g. 'usage/vector-db')
+    // so sub-pages that share a leaf segment name across parent sections
+    // (AI's and Usage's 'vector-db') each resolve to their own label.
+    const pathSegments = location.pathname.split('/').filter(Boolean)
+    const sectionKey =
+        SECTION_LABEL_KEYS[pathSegments.slice(-2).join('/')] ??
+        SECTION_LABEL_KEYS[pathSegments[pathSegments.length - 1] || '']
     const breadcrumbItems: BreadcrumbItem[] = [
         // "Menu" reopens the mobile menu overlay
         { label: t('settingsPage.settingsPage.breadcrumbMenu'), onClick: () => setLeftSidebarExpanded(true) },
@@ -93,6 +112,12 @@ export default function SettingsPage(): React.ReactElement {
                             <Route path="ai/llm-keys" element={<AISettings />} />
                             <Route path="ai/embedding-keys" element={<EmbeddingKeysSettings />} />
                             <Route path="ai/vector-db" element={<VectorDBSettings />} />
+                            {/* Usage is a parent section: its sub-pages live under /settings/usage/* */}
+                            <Route path="usage" element={<Navigate to="/settings/usage/llm-models" replace />} />
+                            <Route path="usage/llm-models" element={<LlmUsageSettings />} />
+                            <Route path="usage/embedding-models" element={<EmbeddingUsageSettings />} />
+                            <Route path="usage/vector-db" element={<VectorDbUsageSettings />} />
+                            <Route path="usage/web-search" element={<WebSearchUsageSettings />} />
                             {/* Old URLs of the Defaults page (formerly Default Preferences, then Default Actions) */}
                             <Route path="ai/defaults" element={<Navigate to="/settings/defaults" replace />} />
                             <Route path="actions" element={<Navigate to="/settings/defaults" replace />} />

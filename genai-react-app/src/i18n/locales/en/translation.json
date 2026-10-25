@@ -607,7 +607,12 @@
             "sectionProfile": "Profile",
             "sectionDefaults": "Defaults",
             "sectionTools": "Tools",
-            "sectionConnectors": "Connectors"
+            "sectionConnectors": "Connectors",
+            "sectionUsage": "Cost and Usage",
+            "sectionUsageLlmModels": "LLM Models",
+            "sectionUsageEmbeddingModels": "Embedding Models",
+            "sectionUsageVectorDb": "Vector DB",
+            "sectionUsageWebSearch": "Web Search"
         },
         "settingsSidebar": {
             "aiSettings": "AI Settings",
@@ -620,7 +625,12 @@
             "title": "Settings",
             "defaults": "Defaults",
             "tools": "Tools",
-            "connectors": "Connectors"
+            "connectors": "Connectors",
+            "usage": "Cost and Usage",
+            "usageLlmModels": "LLM Models",
+            "usageEmbeddingModels": "Embedding Models",
+            "usageVectorDb": "Vector DB",
+            "usageWebSearch": "Web Search"
         },
         "embeddingKeysSettings": {
             "title": "Embedding Model API Keys",
@@ -647,6 +657,53 @@
         "vectorDbSettings": {
             "title": "Vector DB Connection",
             "subtitle": "Connect your own vector database and storage used for retrieval."
+        },
+        "usageCommon": {
+            "dateRangeLast7Days": "Last 7 days",
+            "dateRangeLast30Days": "Last 30 days",
+            "dateRangeLast90Days": "Last 90 days",
+            "dateRangeFrom": "From",
+            "dateRangeTo": "To",
+            "dateRangePresetsLabel": "Date range",
+            "totalCost": "Total cost",
+            "requests": "Requests",
+            "byVendor": "By vendor",
+            "byModel": "By model",
+            "vendor": "Vendor",
+            "model": "Model",
+            "tokens": "Tokens",
+            "loading": "Loading usage…",
+            "error": "Couldn't load usage data. Please try again.",
+            "notTrackedYetTitle": "Not tracked yet",
+            "notTrackedYetBody": "This usage category isn't instrumented yet — check back soon.",
+            "estimateDisclaimer": "Estimated cost — calculated from your operation volume at an admin-set rate, not a real bill from your provider."
+        },
+        "llmUsageSettings": {
+            "title": "LLM Model Usage",
+            "subtitle": "Cost and usage across your own LLM API keys for the selected date range.",
+            "empty": "No LLM usage recorded for this date range.",
+            "trackedSinceNote": "Usage tracking started recently — a range spanning that date will look like a ramp-up, not a real increase in cost."
+        },
+        "embeddingUsageSettings": {
+            "title": "Embedding Model Usage",
+            "subtitle": "Cost and usage for embedding calls made with your own keys.",
+            "empty": "No embedding usage recorded for this date range."
+        },
+        "vectorDbUsageSettings": {
+            "title": "Vector DB Usage",
+            "subtitle": "An estimated cost for your vector database operations, based on an admin-configurable rate card — not a real bill from your provider.",
+            "byOperation": "By operation",
+            "operation": "Operation",
+            "operationCount": "Count",
+            "empty": "No vector DB usage recorded for this date range."
+        },
+        "webSearchUsageSettings": {
+            "title": "Web Search Usage",
+            "subtitle": "An estimated cost for web search tool calls, based on an admin-configurable rate card — not a real bill from your provider.",
+            "byDepth": "By search depth",
+            "searchDepth": "Search depth",
+            "credits": "Credits",
+            "empty": "No web search usage recorded for this date range."
         },
         "instructionDefaults": {
             "title": "Default System Prompt / Instruction for Conversations",
