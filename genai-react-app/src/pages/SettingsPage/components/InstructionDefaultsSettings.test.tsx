@@ -42,7 +42,7 @@ describe('InstructionDefaultsSettings', () => {
 
     test('renders the section (preferred mode by default shows the picker)', () => {
         render(<InstructionDefaultsSettings />);
-        expect(screen.getByText('Default instruction')).toBeInTheDocument();
+        expect(screen.getByText('Default System Prompt / Instruction for Conversations')).toBeInTheDocument();
         expect(screen.getByText('Preferred instruction')).toBeInTheDocument();
         expect(screen.getByText('Save preferences')).toBeInTheDocument();
     });
