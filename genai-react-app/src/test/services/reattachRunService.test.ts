@@ -15,6 +15,7 @@ describe('reattachRunService', () => {
             read: jest.fn()
                 .mockResolvedValueOnce({ done: false, value: enc.encode('{"t":"c","v":"Hi"}\n') })
                 .mockResolvedValueOnce({ done: false, value: enc.encode('{"t":"ai","v":{"prompt":"Approve?","run_id":"r1"}}\n') })
+                .mockResolvedValueOnce({ done: false, value: enc.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn(),
         };

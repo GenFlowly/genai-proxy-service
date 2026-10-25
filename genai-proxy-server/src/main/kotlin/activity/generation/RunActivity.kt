@@ -4,6 +4,7 @@ import com.genflowly.ResponseHeaders
 import com.genflowly.Routes
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.toNdjsonFrame
+import com.genflowly.models.retrieval.doneNdjsonFrame
 import com.genflowly.providers.RunsClient
 import com.genflowly.utils.MemoryRedaction
 import com.genflowly.service.ConversationAccessDeniedException
@@ -93,10 +94,16 @@ fun Route.registerRunRoutes(
                         } else chunk
                         safeChunk?.toNdjsonFrame()?.let { write(it); flush() }
                     }
+                    // Terminal frame so a client reconnecting via reattach can
+                    // tell the relay actually reached the run's end, not just
+                    // that this connection happened to close.
+                    write(doneNdjsonFrame("ok"))
+                    flush()
                 } catch (e: java.io.IOException) {
                     logger.warn("Reattach stream closed by client: {}", e.message)
                 } catch (e: Exception) {
                     logger.error("Error during reattach stream for run {}", runId, e)
+                    runCatching { write(doneNdjsonFrame("error", e.message)); flush() }
                 }
             }
         }
