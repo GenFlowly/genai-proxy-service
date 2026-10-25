@@ -1,0 +1,111 @@
+@import '../../../../styles/themes.scss';
+@import '../../../../styles/mixins.scss';
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.headerBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    .title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: $color-text-primary;
+        margin: 0;
+        letter-spacing: -0.01em;
+    }
+
+    .subtitle {
+        font-size: 0.95rem;
+        color: $color-text-muted;
+        margin: 0;
+    }
+}
+
+.statusText {
+    font-size: 0.9rem;
+    color: $color-text-muted;
+    margin: 0;
+}
+
+// Stat tile row — see the dataviz skill's figure contract: sentence-case
+// label, auto-compact semibold value, no delta/trend (this view has no
+// prior-period comparison yet).
+.statTiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.statTile {
+    @include card-base;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1.25rem 1.5rem;
+    min-width: 11rem;
+    max-width: none;
+    flex: 0 1 auto;
+}
+
+.statLabel {
+    font-size: 0.8rem;
+    color: $color-text-muted;
+}
+
+.statValue {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: $color-text-primary;
+    letter-spacing: -0.01em;
+}
+
+.breakdownBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.breakdownTitle {
+    font-size: 1rem;
+    font-weight: 600;
+    color: $color-text-primary;
+    margin: 0;
+}
+
+// The breakdown is tabular data, not a chart — a plain table is the WCAG
+// baseline form this skill calls for when no comparison/trend is involved.
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+
+    th,
+    td {
+        text-align: left;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid $color-border;
+    }
+
+    th {
+        color: $color-text-muted;
+        font-weight: 500;
+        font-size: 0.8rem;
+    }
+
+    td {
+        color: $color-text-primary;
+    }
+}
+
+// Numeric columns align right with tabular figures so digits stay aligned
+// down a column — proportional figures are reserved for the stat tiles above.
+.numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
