@@ -502,7 +502,9 @@ class RetrievalServerClient(
                 }
             }.execute { response ->
                 if (!response.status.isSuccess()) {
-                    logger.error { "Retrieval server error ${response.status}" }
+                    val body = runCatching { response.bodyAsText() }.getOrNull()
+                    logger.error { "Retrieval server error ${response.status}: $body" }
+                    send(StreamChunk.Error(message = "Retrieval server returned ${response.status}", errorType = "retrieval_server_error"))
                     return@execute
                 }
                 val channel = response.bodyAsChannel()
@@ -520,7 +522,15 @@ class RetrievalServerClient(
                 }
             }
         } catch (e: Exception) {
+            // The read loop above only ever completes the flow normally or
+            // throws here — without this chunk the caller sees a clean
+            // end-of-stream indistinguishable from a real finish, and
+            // silently persists whatever partial text had streamed in as if
+            // it were the complete answer (see the Oct 2026 incident where a
+            // retrieval-server OOM mid-stream produced a truncated "final"
+            // message with no error shown to the user).
             logger.error(e) { "Streaming from retrieval server failed" }
+            send(StreamChunk.Error(message = "Connection to the retrieval server was lost mid-response.", errorType = "transport_error"))
         }
     }.flowOn(Dispatchers.IO)
 

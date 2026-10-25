@@ -7,7 +7,7 @@ import { AIConfig, useAI } from './AIContext'
 import { useLayout } from './LayoutContext'
 import { useToast } from './ToastContext'
 import { generateText } from '../services/generateTextService'
-import { generateTextStream, StreamMetadata, AwaitingInput } from '../services/generateTextStreamService'
+import { generateTextStream, StreamMetadata, AwaitingInput, StreamGenerationError } from '../services/generateTextStreamService'
 import { reattachRun } from '../services/reattachRunService'
 import { resumeRun as resumeRunApi } from '../services/resumeRunService'
 import { getAIUsageActivity } from '../services/getAIUsageService'
@@ -1039,7 +1039,17 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                                 })
                                 return { ...block, responseMessages: msgs }
                             }))
-                            finishVendorMessage(null)
+                            // A StreamGenerationError is the server explicitly
+                            // saying generation failed (vendor error / dropped
+                            // retrieval-server connection) — the recovered text
+                            // is whatever was salvaged, not a complete answer,
+                            // so still flag it rather than presenting it as a
+                            // clean finish. Any other error reaching here (e.g.
+                            // a plain dropped connection while the server-side
+                            // generation kept running, as with a backgrounded
+                            // mobile tab) recovered a real, complete answer —
+                            // stay silent.
+                            finishVendorMessage(err instanceof StreamGenerationError ? err.message : null)
                             return
                         }
                     }

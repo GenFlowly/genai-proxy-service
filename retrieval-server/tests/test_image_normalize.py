@@ -551,6 +551,25 @@ class RejectionTests(unittest.TestCase):
             normalize_image(webp, "image/webp", max_edge=500, max_decode_bytes=budget)
         self.assertIn("WEBP", str(ctx.exception))
 
+    def test_decode_budget_is_tightened_when_the_machine_is_low_on_memory(self):
+        im = _photo_like(1000, 800)
+        png = _encode(im, "PNG")  # 0.8 MP x 6 B/px = 4.8 MB estimated decode cost
+        # Comfortably within the static budget on its own...
+        normalize_image(png, "image/png", max_edge=500, max_decode_bytes=50_000_000)
+        # ...but refused once the machine itself reports too little headroom,
+        # even though the static budget alone would have allowed it.
+        with patch.object(image_normalize, "_available_memory_bytes", return_value=10_000_000):
+            with self.assertRaises(ImageTooLargeError):
+                normalize_image(png, "image/png", max_edge=500, max_decode_bytes=50_000_000)
+
+    def test_decode_budget_falls_back_to_the_static_limit_when_meminfo_is_unreadable(self):
+        im = _photo_like(1000, 800)
+        png = _encode(im, "PNG")
+        with patch.object(image_normalize, "_available_memory_bytes", return_value=None):
+            with self.assertRaises(ImageTooLargeError):
+                normalize_image(png, "image/png", max_edge=500, max_decode_bytes=1_000_000)
+            normalize_image(png, "image/png", max_edge=500, max_decode_bytes=50_000_000)
+
     def test_only_common_image_formats_are_opened(self):
         # ICO decodes inside open() (before any guard), FITS/BLP in Python
         # loops: such formats are refused like any unsupported file.

@@ -1,8 +1,9 @@
 import { endpoints } from '../config/endpoints'
 
-/** The two Cost and Usage categories priced at READ time (vs. LLM/Embedding,
- * priced from AIModelCatalog at write time) — see UsageRollupRepository. */
-export type UsageRateCardCategory = 'vector_db' | 'web_search'
+/** The Cost and Usage category priced at READ time (vs. LLM/Embedding, priced
+ * from AIModelCatalog at write time) — see UsageRollupRepository. Vector DB
+ * has no rate card: Zilliz bills by data size/compute, not per operation. */
+export type UsageRateCardCategory = 'web_search'
 
 export interface UsageRateCardEntry {
     category: UsageRateCardCategory

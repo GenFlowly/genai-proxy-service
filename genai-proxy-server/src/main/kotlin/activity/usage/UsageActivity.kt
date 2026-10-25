@@ -22,9 +22,10 @@ private val logger = LoggerFactory.getLogger("UsageActivity")
  * UsageRollupRepository). Web-app only (Auth0 JWT) — developer API keys are
  * not currently extended here, matching Notes/Search.
  *
- * All four endpoints are live. Vector DB and Web Search are always an
- * ESTIMATE (isEstimate=true) — see UsageSummaryService.getVectorDbUsage /
- * getWebSearchUsage.
+ * All four endpoints are live. Web Search is always an ESTIMATE
+ * (isEstimate=true) — see UsageSummaryService.getWebSearchUsage. Vector DB
+ * carries no cost figure at all (Zilliz bills by data size/compute units,
+ * not per operation call) — see getVectorDbUsage.
  */
 fun Route.registerUsageRoutes(
     usageSummaryService: UsageSummaryService,
@@ -71,8 +72,8 @@ fun Route.registerUsageRoutes(
 
         get(Routes.USAGE_VECTOR_DB, {
             tags("Usage")
-            summary = "Per-customer estimated vector DB usage"
-            description = "Operation-volume estimate for a date range (isEstimate=true) — never a real Zilliz bill. Web-app only."
+            summary = "Per-customer vector DB operation counts"
+            description = "Raw search/query/insert/upsert/delete counts for a date range — no cost figure (Zilliz bills by data size/compute, not per operation). Web-app only."
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)

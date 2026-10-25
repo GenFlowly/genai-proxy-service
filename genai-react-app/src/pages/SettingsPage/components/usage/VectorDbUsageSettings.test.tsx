@@ -44,23 +44,22 @@ describe('VectorDbUsageSettings', () => {
         )
     })
 
-    test('renders totals, the operation breakdown, and the estimate disclaimer once the backend returns real usage', async () => {
+    test('renders the operation breakdown and the no-cost note once the backend returns real usage, with no dollar figure anywhere', async () => {
         mockGetVectorDbUsage.mockResolvedValue({
-            totalCostUsd: 2.5,
-            isEstimate: true,
             breakdown: [
-                { key: 'search', count: 100, costUsd: 2.0 },
-                { key: 'insert', count: 50, costUsd: 0.5 },
+                { opType: 'search', count: 100 },
+                { opType: 'insert', count: 50 },
             ],
         })
 
         render(<VectorDbUsageSettings />)
 
-        await waitFor(() => expect(screen.getByTestId('vector-db-usage-total-cost')).toBeInTheDocument())
+        await waitFor(() => expect(screen.getByTestId('vector-db-usage-no-cost-note')).toBeInTheDocument())
         expect(screen.queryByTestId('vector-db-usage-not-tracked-yet')).not.toBeInTheDocument()
-        expect(screen.getByTestId('vector-db-usage-estimate-banner')).toBeInTheDocument()
-        expect(screen.getByTestId('vector-db-usage-total-cost')).toHaveTextContent('$2.50')
         expect(screen.getByText('search')).toBeInTheDocument()
         expect(screen.getByText('insert')).toBeInTheDocument()
+        expect(screen.getByText('100')).toBeInTheDocument()
+        expect(screen.getByText('50')).toBeInTheDocument()
+        expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
     })
 })

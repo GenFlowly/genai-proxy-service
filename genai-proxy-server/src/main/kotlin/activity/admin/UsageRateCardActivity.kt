@@ -21,10 +21,13 @@ import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("UsageRateCardActivity")
 
-// Categories this admin UI manages — the only two Cost and Usage categories
-// priced at read time (see UsageRollupRepository's doc comment). LLM/
-// Embedding are priced from AIModelCatalog instead and have no rate card.
-private val MANAGED_CATEGORIES = listOf("vector_db", "web_search")
+// Categories this admin UI manages. LLM/Embedding are priced from
+// AIModelCatalog at write time and have no rate card. Vector DB has no rate
+// card either — Zilliz bills by data size/compute units, not per operation
+// call, so there is no per-unit USD figure that means anything (see
+// UsageSummaryService.getVectorDbUsage). Web Search is the only category
+// genuinely priced per-unit (Tavily credits) at read time.
+private val MANAGED_CATEGORIES = listOf("web_search")
 
 /**
  * Admin-panel endpoints for the Vector DB / Web Search rate card: the
