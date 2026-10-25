@@ -1880,7 +1880,7 @@
         },
         {
           "type": "timeseries",
-          "title": "Silent failures (writeback / zilliz fallback)",
+          "title": "Silent failures (writeback / vector DB not configured)",
           "datasource": {
             "type": "cloudwatch",
             "uid": "bfxh1tvnrnu9sf"
@@ -1996,14 +1996,14 @@
               "metricQueryType": 0,
               "metricEditorMode": 0,
               "namespace": "GenFlowly",
-              "metricName": "zilliz_credential_fallback_total",
+              "metricName": "vector_db_not_configured_total",
               "statistic": "Sum",
               "dimensions": {},
               "matchExact": false,
               "region": "default",
               "period": "",
               "expression": "",
-              "label": "zilliz fallback",
+              "label": "vector DB not configured",
               "id": "",
               "alias": ""
             }

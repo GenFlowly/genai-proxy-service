@@ -5,15 +5,16 @@ from pydantic import BaseModel
 
 from content_logging import redact
 from encoding_library.observability import count, track
-from encoding_library.utils.embedding_utils import create_embeddings
+from encoding_library.utils.embedding_utils import EmbeddingKeyMissing, create_embeddings
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
 from encoding_library.utils.vector_db import (
+    VectorDBNotConfigured,
     collection_data_type,
     customer_filter,
     escape_filter_value,
     get_milvus_client,
 )
-from graph.nodes.retrieval import _get_cached_embedding_model
+from graph.nodes.retrieval import customer_embedding_model
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ async def search(req: SearchRequest):
         # Best chunk hit per (type, group key) across all collections
         by_item: dict[tuple[str, str], dict] = {}
         for (model_type, model_name), collections in grouped.items():
-            encoder = _get_cached_embedding_model(model_type, model_name)
+            encoder = customer_embedding_model(req.customer_id, model_type, model_name)
             query_embeddings = create_embeddings([req.query], encoder)
             if not query_embeddings:
                 count("embedding_failure_total", source="search", model=model_name)
@@ -205,6 +206,12 @@ async def search(req: SearchRequest):
             len(by_item), len(results),
         )
         return {"results": results}
+    except (EmbeddingKeyMissing, VectorDBNotConfigured) as e:
+        # Customer state, not an infrastructure failure: no stored key for the
+        # embedding provider, or no vector DB configured. 409 so the caller
+        # can tell the user why instead of showing mysteriously empty results.
+        logger.warning("Unified search unavailable for customer=%s: %s", req.customer_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error("Unified search failed for customer=%s: %s", req.customer_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Search failed")

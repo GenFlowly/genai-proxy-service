@@ -7,6 +7,7 @@ from typing import Dict, Any, List
 import boto3
 from botocore.exceptions import ClientError
 
+from encoding_library.utils.vendor_keys import get_customer_embedding_key
 from encoding_library.utils.voyage_batch import (
     get_batch,
     download_file_content,
@@ -172,8 +173,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Legacy single-blob staging key (per-doc submit path); notes-accumulator
         # jobs carry note_refs_json instead and leave this None.
         staging_key = job.get("payload_s3_key", {}).get("S")
+        customer_id = job.get("customer_id", {}).get("S")
         try:
-            batch = get_batch(batch_id)
+            api_key = get_customer_embedding_key(customer_id, "voyage") if customer_id else None
+            if not api_key:
+                # The customer's key was removed after the job was submitted —
+                # leave it in_progress; nothing to poll until a key exists again.
+                logger.warning(f"Batch {batch_id}: customer {customer_id} has no Voyage key; skipping.")
+                still_running += 1
+                continue
+
+            batch = get_batch(batch_id, api_key)
             status = batch.get("status", "unknown")
 
             if status == "completed":
@@ -188,7 +198,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     failed += 1
                     continue
 
-                vectors_by_id = parse_batch_results(download_file_content(output_file_id))
+                vectors_by_id = parse_batch_results(download_file_content(output_file_id, api_key))
                 batches = _load_batches(job)
                 stored, missing = store_batch_results(batches, vectors_by_id, context)
 

@@ -7,7 +7,7 @@ from encoding_library.chunkers.enums import ChunkingType
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.observability import set_request_id, setup_logging, track
-from encoding_library.utils.embedding_utils import create_chunks, get_embedding_model
+from encoding_library.utils.embedding_utils import create_chunks, get_embedding_model_for_customer
 from encoding_library.utils.model_registry import get_chunking_params
 
 from services.content_logging import default_log_level
@@ -39,7 +39,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         chunking_type = memory_request_internal_state.chunking_type or ChunkingType.RECURSIVE.value
         encoder = None
         if chunking_type == ChunkingType.SEMANTIC.value:
-            encoder = get_embedding_model(
+            encoder = get_embedding_model_for_customer(
+                memory_request_internal_state.customer_id,
                 memory_request_internal_state.model_type,
                 memory_request_internal_state.model_name,
             )

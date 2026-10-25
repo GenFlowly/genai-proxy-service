@@ -128,6 +128,8 @@ class SearchKnowledgeBaseTool(GraphTool):
         # Imported here, not at module top: pulls in pymilvus + the embedding
         # stack, which registry construction (and the graph_tools-only unit
         # tests) must not pay for.
+        from encoding_library.utils.embedding_utils import EmbeddingKeyMissing
+        from encoding_library.utils.vector_db import VectorDBNotConfigured
         from graph.nodes.retrieval import search_knowledge
 
         try:
@@ -137,6 +139,32 @@ class SearchKnowledgeBaseTool(GraphTool):
                 top_n=top_k,
                 similarity_threshold=min_score,
                 search_params=_DEFAULT_SEARCH_PARAMS,
+            )
+        except EmbeddingKeyMissing:
+            # Chat stays ungrounded rather than failing the turn: no stored
+            # embedding key means the knowledge base simply can't be searched.
+            logger.warning(
+                "search_knowledge_base: no embedding key for customer=%s", context.customer_id
+            )
+            return ToolResult(
+                content=(
+                    "Knowledge base search is unavailable (no embedding provider key "
+                    "configured). Answer from the conversation alone and tell the user "
+                    "their knowledge base won't be searched until they add an "
+                    "embedding API key in settings."
+                )
+            )
+        except VectorDBNotConfigured:
+            # Same degrade path: no stored vector DB means nothing to search.
+            logger.warning(
+                "search_knowledge_base: no vector DB configured for customer=%s", context.customer_id
+            )
+            return ToolResult(
+                content=(
+                    "Knowledge base search is unavailable (no vector database "
+                    "configured). Answer from the conversation alone and tell the user "
+                    "their knowledge base won't be searched until one is connected."
+                )
             )
         except Exception as e:
             # Degrade to a message the model can act on — an exception here
