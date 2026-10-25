@@ -6,6 +6,7 @@ import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.toNdjsonFrame
+import com.genflowly.models.retrieval.doneNdjsonFrame
 import com.genflowly.models.retrieval.parseGeneratedArtifacts
 import com.genflowly.models.retrieval.toConversationMessage
 import com.genflowly.models.retrieval.toFileRefs
@@ -633,6 +634,7 @@ class GenerationOrchestrator(
                 logger.info("Generation {} cancelled — persisting {} streamed char(s)", responseMessageId, sb.length)
             } catch (e: Exception) {
                 logger.error("Error during streaming", e)
+                capturedErrorMessage = capturedErrorMessage ?: e.message
                 runCatching { emit("\n\n[Error: ${e.message}]") }
             } finally {
                 val responseText = sb.toString()
@@ -697,6 +699,17 @@ class GenerationOrchestrator(
                 } catch (e: Exception) {
                     logger.error("Failed to persist streamed response $responseMessageId", e)
                 } finally {
+                    // Terminal frame BEFORE close: without an explicit status the
+                    // client can't tell "generation finished" from "the connection
+                    // died mid-response" — both look like a clean stream end — and
+                    // would silently treat a truncated answer as complete.
+                    val doneStatus = when {
+                        cancelled -> "cancelled"
+                        capturedErrorMessage != null -> "error"
+                        success -> "ok"
+                        else -> "error"
+                    }
+                    runCatching { emit(doneNdjsonFrame(doneStatus, capturedErrorMessage)) }
                     // Close AFTER persistence so a connected client's stream end
                     // implies the message is queryable (usage fetch follows it).
                     chunkChannel.close()

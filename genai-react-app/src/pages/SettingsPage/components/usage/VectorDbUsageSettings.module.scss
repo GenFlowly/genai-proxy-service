@@ -1,5 +1,4 @@
 @import '../../../../styles/themes.scss';
-@import '../../../../styles/mixins.scss';
 
 .container {
     display: flex;
@@ -33,38 +32,9 @@
     margin: 0;
 }
 
-.statTiles {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-
-.statTile {
-    @include card-base;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    padding: 1.25rem 1.5rem;
-    min-width: 11rem;
-    max-width: none;
-    flex: 0 1 auto;
-}
-
-.statLabel {
-    font-size: 0.8rem;
-    color: $color-text-muted;
-}
-
-.statValue {
-    font-size: 1.75rem;
-    font-weight: 600;
-    color: $color-text-primary;
-    letter-spacing: -0.01em;
-}
-
-// Always visible whenever real data renders — Vector DB totals are never a
-// real vendor bill, only an operation-volume estimate (see page subtitle).
-.estimateBanner {
+// Always visible whenever real data renders — explains why there's no cost
+// column on this page at all (see page subtitle / doc comment).
+.noCostNote {
     font-size: 0.85rem;
     color: $color-text-muted;
     background: $color-background-secondary;

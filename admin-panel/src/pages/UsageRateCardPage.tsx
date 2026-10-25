@@ -7,28 +7,31 @@ import {
     putUsageRateCardEntry,
 } from '../services/usageRateCardService'
 
-// The rate keys each category's UsageSummaryService read path actually looks
-// up (by dim3 — opType for vector_db, searchDepth for web_search; see
-// genai-proxy-server's UsageSummaryService.getEstimatedUsage). Rows for keys
-// with no saved rate yet default to $0 here until an admin sets one.
+// The rate keys this category's UsageSummaryService read path actually looks
+// up (by dim3 — searchDepth; see genai-proxy-server's
+// UsageSummaryService.getWebSearchUsage). Rows with no saved rate yet default
+// to $0 here until an admin sets one.
+//
+// Vector DB deliberately has no rate card: Zilliz bills by data size/compute
+// units on the customer's own cluster, not per operation call, so there's no
+// per-unit USD figure that would mean anything — see
+// UsageSummaryService.getVectorDbUsage, which returns raw op counts only.
 const CATEGORY_RATE_KEYS: Record<UsageRateCardCategory, string[]> = {
-    vector_db: ['search', 'query', 'insert', 'upsert', 'delete'],
     web_search: ['basic', 'advanced'],
 }
 
 const CATEGORY_LABELS: Record<UsageRateCardCategory, string> = {
-    vector_db: 'Vector DB (USD per operation)',
     web_search: 'Web Search (USD per credit)',
 }
 
 /**
- * Admin rates for the two Cost and Usage categories with no real per-request
- * vendor price — Vector DB op counts and Web Search credits. Customers never
- * see a real bill for these (BYOK Zilliz cluster / Tavily credits); the
- * numbers here are read-time multipliers UsageSummaryService applies to raw
- * counts, producing an estimate the UI labels "Estimated cost". Editing a
- * rate re-prices every past date range on its next read — this is
- * acceptable for an estimate, but is a real, immediate effect.
+ * Admin rates for the Cost and Usage category with no real per-request
+ * vendor price exposed to us — Web Search credits (Tavily). Customers never
+ * see a real bill for these; the numbers here are read-time multipliers
+ * UsageSummaryService applies to raw credit counts, producing an estimate
+ * the UI labels "Estimated cost". Editing a rate re-prices every past date
+ * range on its next read — this is acceptable for an estimate, but is a
+ * real, immediate effect.
  */
 export default function UsageRateCardPage() {
     const { getAccessTokenSilently } = useAuth0()
@@ -92,10 +95,11 @@ export default function UsageRateCardPage() {
         <section className="page">
             <h2>Cost and Usage Rate Card</h2>
             <p className="page-description">
-                Per-unit USD rates for the two Cost and Usage categories with no real vendor bill to read
-                (the customer's own Zilliz cluster, Tavily search credits). These are estimates priced at
-                read time — editing a rate changes what every past date range shows for that category the
-                next time a customer loads the page, not just new usage.
+                Per-unit USD rates for the Cost and Usage categories with no real vendor bill to read
+                (Tavily search credits). These are estimates priced at read time — editing a rate changes
+                what every past date range shows the next time a customer loads the page, not just new
+                usage. Vector DB has no rate card here — Zilliz bills by data size and compute, not
+                per operation, so its Cost and Usage page shows raw operation counts only.
             </p>
 
             {loadError && <div className="banner error">{loadError}</div>}

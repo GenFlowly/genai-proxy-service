@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonPrimitive
  *   ga = generated files    ai = awaiting input       err = error
  *   cr = content reset (discard accumulated content — a new round follows)
  *   sr = stop reason (vendor's raw finish reason for the terminated turn)
+ *   done = terminal frame, see [doneNdjsonFrame]
  *
  * `json`-backed chunks are already valid JSON (object/array) and are embedded
  * as-is; text values are JSON-escaped via JsonPrimitive.
@@ -30,4 +31,19 @@ fun StreamChunk.toNdjsonFrame(): String? = when (this) {
     is StreamChunk.AwaitingInput -> "{\"t\":\"ai\",\"v\":$json}\n"
     is StreamChunk.Error -> "{\"t\":\"err\",\"v\":${JsonPrimitive(message)}}\n"
     is StreamChunk.Usage -> null
+}
+
+/**
+ * Terminal frame marking the definitive end of a generation stream, emitted by
+ * the generation orchestrator (after the response is persisted or confirmed
+ * unpersisted) and by the durable-run reattach route (after its relay loop
+ * ends). Without this, the client cannot tell "the server finished" from "the
+ * connection died mid-response" — both look identical as a closed stream —
+ * so it would silently treat a truncated response as complete. [status] is
+ * "ok" | "error" | "cancelled"; [message] carries the error reason when
+ * [status] is "error".
+ */
+fun doneNdjsonFrame(status: String, message: String? = null): String {
+    val messageField = message?.let { ",\"m\":${JsonPrimitive(it)}" } ?: ""
+    return "{\"t\":\"done\",\"status\":${JsonPrimitive(status)}$messageField}\n"
 }

@@ -1,4 +1,4 @@
-import { generateTextStream } from '../../services/generateTextStreamService';
+import { generateTextStream, StreamGenerationError, StreamTruncatedError } from '../../services/generateTextStreamService';
 import { fetchWithRetry } from '../../utils/apiUtils';
 import { endpoints } from '../../config/endpoints';
 import { HttpMethod } from '../../constants/http';
@@ -27,6 +27,7 @@ describe('generateTextStreamService', () => {
             read: jest.fn()
                 .mockResolvedValueOnce({ done: false, value: chunk1 })
                 .mockResolvedValueOnce({ done: false, value: chunk2 })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn()
         };
@@ -114,6 +115,7 @@ describe('generateTextStreamService', () => {
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"k","v":"legacy flat step"}\n') })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ks","v":${JSON.stringify(doneStep)}}\n`) })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"Answer"}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn()
         };
@@ -156,6 +158,7 @@ describe('generateTextStreamService', () => {
         const mockReader = {
             read: jest.fn()
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"ks","v":"not an object"}\n{"t":"ks","v":{"name":"missing node id"}}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn()
         };
@@ -198,6 +201,7 @@ describe('generateTextStreamService', () => {
             read: jest.fn()
                 .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ga","v":${JSON.stringify(gaPayload)}}\n`) })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"Your PDF is ready"}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn()
         };
@@ -384,6 +388,7 @@ describe('generateTextStreamService', () => {
             read: jest.fn()
                 .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ai","v":${JSON.stringify(payload)}}\n`) })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"resumed"}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn(),
         };
@@ -413,6 +418,7 @@ describe('generateTextStreamService', () => {
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"Let me search."}\n') })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"cr"}\n') })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"The answer is 9."}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn(),
         };
@@ -435,6 +441,46 @@ describe('generateTextStreamService', () => {
         // The reset arrived between the preamble and the final answer
         expect(seen).toEqual(['delta:Let me search.', 'reset', 'delta:The answer is 9.']);
         expect(text).toBe('The answer is 9.');
+    });
+
+    test('generateTextStream throws StreamGenerationError on a done:error terminal frame', async () => {
+        const encoder = new TextEncoder();
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"partial "}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"error","m":"Connection to the retrieval server was lost mid-response."}\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+        mockFetchWithRetry.mockResolvedValue({ ok: true, headers: new Map(), body: { getReader: () => mockReader } });
+
+        const onDelta = jest.fn();
+        await expect(generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            onDelta
+        )).rejects.toThrow(StreamGenerationError);
+        expect(onDelta).toHaveBeenCalledWith('partial ');
+    });
+
+    test('generateTextStream throws StreamTruncatedError when the body closes with no done frame', async () => {
+        const encoder = new TextEncoder();
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"partial "}\n') })
+                // Connection dropped: no "done" frame, just end of stream.
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+        mockFetchWithRetry.mockResolvedValue({ ok: true, headers: new Map(), body: { getReader: () => mockReader } });
+
+        const onDelta = jest.fn();
+        await expect(generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            onDelta
+        )).rejects.toThrow(StreamTruncatedError);
+        expect(onDelta).toHaveBeenCalledWith('partial ');
     });
 });
 // Trigger coverage run
