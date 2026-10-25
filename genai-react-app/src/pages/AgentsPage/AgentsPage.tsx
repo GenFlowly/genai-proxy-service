@@ -307,7 +307,6 @@ export default function AgentsPage() {
                     <Navbar />
                     <PageHeader
                         title={t('agentsPage.agentsPage.title')}
-                        subtitle={t('agentsPage.agentsPage.subtitle')}
                         actions={
                             <PillButton
                                 label={t('agentsPage.agentsPage.createAgent')}

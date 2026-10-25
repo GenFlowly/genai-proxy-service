@@ -27,8 +27,7 @@
             "noMatchesSubtitle": "No agents match the selected category and filter.",
             "noMatchesTitle": "Nothing here",
             "retry": "Retry",
-            "subtitle": "AI pipelines powering your conversations",
-            "title": "My Agents",
+            "title": "Agents",
             "createAgent": "Create agent"
         },
         "categories": {
