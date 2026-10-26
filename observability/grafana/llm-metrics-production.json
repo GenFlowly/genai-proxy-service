@@ -401,13 +401,101 @@
       "description": "Total LLM spend per vendor and model over the dashboard time range."
     },
     {
+      "type": "stat",
+      "title": "Total tokens per vendor",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (vendor) (increase(llm_tokens_total{app=~\".*-production\"}[$__range]))",
+          "legendFormat": "{{vendor}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Total LLM tokens used per vendor over the dashboard time range."
+    },
+    {
+      "type": "stat",
+      "title": "Total tokens per vendor-model",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (vendor, model) (increase(llm_tokens_total{app=~\".*-production\"}[$__range]))",
+          "legendFormat": "{{vendor}} {{model}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "description": "Total LLM tokens used per vendor and model over the dashboard time range."
+    },
+    {
       "type": "row",
       "title": "Vendor: $vendor",
       "collapsed": true,
       "repeat": "vendor",
       "gridPos": {
         "x": 0,
-        "y": 26,
+        "y": 34,
         "w": 24,
         "h": 1
       },
@@ -421,7 +509,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 27,
+            "y": 35,
             "w": 12,
             "h": 8
           },
@@ -519,7 +607,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 35,
+            "y": 43,
             "w": 12,
             "h": 8
           },
@@ -617,7 +705,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 43,
+            "y": 51,
             "w": 12,
             "h": 8
           },
@@ -716,7 +804,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 51,
+            "y": 59,
             "w": 12,
             "h": 8
           },
@@ -814,7 +902,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 59,
+            "y": 67,
             "w": 12,
             "h": 8
           },
@@ -912,7 +1000,7 @@
           },
           "gridPos": {
             "x": 0,
-            "y": 67,
+            "y": 75,
             "w": 12,
             "h": 8
           },
