@@ -95,9 +95,9 @@ object DynamoDBConstants {
     const val CUSTOMER_GRAPHS_GSI_KEY = "customerIdIndex"
 
     // Owner (customerId attribute) of the admin-published default graph that
-    // every customer without an own default graph falls back to. Mirrors
-    // SYSTEM_INSTRUCTION_CREATOR: one graph, edited in place via the admin
-    // panel; customer edits fork it into a customer-owned copy.
+    // every customer without an own default graph falls back to: one graph,
+    // edited in place via the admin panel; customer edits fork it into a
+    // customer-owned copy.
     const val SYSTEM_GRAPH_OWNER = "System"
 
     // Shared versioning keys used by both CustomerGraphNodes and CustomerGraphs.
@@ -162,11 +162,6 @@ object DynamoDBConstants {
     // GSI on Conversation table keyed by conversationId only, enabling lookup
     // of a conversation without knowing its owner (needed for shared conversations).
     const val CONVERSATION_ID_GSI_KEY = "conversationIdIndex"
-
-    // Creator value marking the single global default instruction, managed via
-    // the admin panel. It keeps one instruction id whose version increases; the
-    // latest version is the default used when a customer selects none.
-    const val SYSTEM_INSTRUCTION_CREATOR = "System"
 
     // Instruction usage tracking
     const val INSTRUCTION_USAGE_TABLE = "InstructionUsage"

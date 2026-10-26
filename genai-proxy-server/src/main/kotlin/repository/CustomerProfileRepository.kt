@@ -330,8 +330,6 @@ class CustomerProfileRepository(
         embeddingModel: String? = null,
         embeddingModelConversations: String? = null,
         embeddingModelNotes: String? = null,
-        preferredInstructionId: String? = null,
-        instructionFallbackMode: String? = null,
         preferredAgentId: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
@@ -395,18 +393,6 @@ class CustomerProfileRepository(
                 attrValues[":embeddingModelNotes"] = AttributeValue.builder().s(embeddingModelNotes).build()
             }
 
-            if (preferredInstructionId != null) {
-                updateParts.add("#preferredInstructionId = :preferredInstructionId")
-                attrNames["#preferredInstructionId"] = "preferredInstructionId"
-                attrValues[":preferredInstructionId"] = AttributeValue.builder().s(preferredInstructionId).build()
-            }
-
-            if (instructionFallbackMode != null) {
-                updateParts.add("#instructionFallbackMode = :instructionFallbackMode")
-                attrNames["#instructionFallbackMode"] = "instructionFallbackMode"
-                attrValues[":instructionFallbackMode"] = AttributeValue.builder().s(instructionFallbackMode).build()
-            }
-
             // Blank = clear (revert to the default agent), non-blank = set.
             val removeParts = mutableListOf<String>()
             if (preferredAgentId != null) {
@@ -465,8 +451,6 @@ class CustomerProfileRepository(
                 embeddingModel = item["embeddingModel"]?.s(),
                 embeddingModelConversations = item["embeddingModelConversations"]?.s(),
                 embeddingModelNotes = item["embeddingModelNotes"]?.s(),
-                preferredInstructionId = item["preferredInstructionId"]?.s(),
-                instructionFallbackMode = item["instructionFallbackMode"]?.s(),
                 preferredAgentId = item["preferredAgentId"]?.s()
             )
         }

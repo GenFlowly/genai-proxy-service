@@ -7,8 +7,6 @@ export interface SaveAIConfigPreferencesRequest {
     aiConfigPreferences: {
         preferredModels?: AIConfig[]
         preferredGenerativeMode?: string
-        preferredInstructionId?: string
-        instructionFallbackMode?: string
         /** Preferred conversation agent (graphId). Empty string clears it. */
         preferredAgentId?: string
         /** Legacy single default embedding model name (e.g. voyage-4-large). */

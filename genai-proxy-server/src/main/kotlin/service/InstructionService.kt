@@ -51,41 +51,6 @@ class InstructionService(
      * to the SYSTEM default. Returns the full instruction or null if nothing
      * resolves (caller then proceeds with no instruction).
      */
-    suspend fun resolveDefaultInstruction(customerId: String): InstructionResponse? {
-        val prefs = customerProfileRepository.getAIConfigPreferences(customerId)
-
-        // Preferred mode (default): use the customer's preferred instruction.
-        if (prefs?.instructionFallbackMode != "lastUsed") {
-            val pid = prefs?.preferredInstructionId
-            if (!pid.isNullOrBlank()) {
-                val v = instructionRepository.getLatestInstructionVersion(pid)
-                if (v != null) getInstructionVersion(customerId, pid, v)?.let { return it }
-            }
-        } else {
-            // Last-used mode.
-            val lastId = instructionRepository.getLastUsedInstructionId(customerId)
-            if (!lastId.isNullOrBlank()) {
-                val v = instructionRepository.getLatestInstructionVersion(lastId)
-                if (v != null) getInstructionVersion(customerId, lastId, v)?.let { return it }
-            }
-        }
-
-        // Ultimate fallback: the global SYSTEM default instruction. getDefaultSystemInstruction
-        // already fetched it in full — map it directly rather than re-fetching.
-        val system = instructionRepository.getDefaultSystemInstruction() ?: return null
-        return InstructionResponse(
-            id = system.id,
-            version = system.version ?: 1,
-            name = system.name,
-            instruction = system.instructions,
-            icon = system.icon,
-            color = system.color,
-            category = system.category,
-            tags = system.tags,
-            role = ShareRole.VIEW
-        )
-    }
-
     suspend fun getInstructionVersion(
         customerId: String,
         instructionId: String,
