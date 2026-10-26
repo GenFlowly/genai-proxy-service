@@ -77,8 +77,6 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
                     request.aiConfigPreferences?.embeddingModel,
                     request.aiConfigPreferences?.embeddingModelConversations,
                     request.aiConfigPreferences?.embeddingModelNotes,
-                    request.aiConfigPreferences?.preferredInstructionId,
-                    request.aiConfigPreferences?.instructionFallbackMode,
                     request.aiConfigPreferences?.preferredAgentId
                 )
 

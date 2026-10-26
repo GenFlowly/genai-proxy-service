@@ -147,35 +147,6 @@ class InstructionRepository(
         }
 
     /**
-     * The global default instruction: the SYSTEM-created instruction at its
-     * latest version (SYSTEM keeps one id whose version increases). Null if none
-     * has been seeded.
-     */
-    // Resolved fresh each call so a newly published System version takes effect
-    // immediately. The lookup is a single indexed query; the resolved version's
-    // content is then served from the immutable instruction cache downstream.
-    suspend fun getDefaultSystemInstruction(): com.genflowly.models.Instruction? =
-        getInstructionsByCreator(DynamoDBConstants.SYSTEM_INSTRUCTION_CREATOR)
-            .maxByOrNull { it.version ?: 0 }
-
-    /**
-     * The customer's most-recently-used instruction id (by lastUsedAt), or null
-     * if they have never used one. Backs the "lastUsed" fallback mode.
-     */
-    suspend fun getLastUsedInstructionId(customerId: String): String? =
-        withContext(Dispatchers.IO) {
-            val request = QueryRequest.builder()
-                .tableName(DynamoDBConstants.INSTRUCTION_USAGE_TABLE)
-                .keyConditionExpression("$CUSTOMER_ID_KEY = :cid")
-                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
-                .build()
-
-            dynamoDbClient.query(request).items()
-                .maxByOrNull { it[DynamoDBConstants.INSTRUCTION_LAST_USED_KEY]?.s() ?: "" }
-                ?.get(INSTRUCTION_ID_KEY)?.s()
-        }
-
-    /**
      * The customer's most-recently-used instruction ids ordered by lastUsedAt
      * descending, at most [limit] entries. Backs the "recently used" picker.
      */

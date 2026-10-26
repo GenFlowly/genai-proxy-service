@@ -54,7 +54,7 @@ class GenerationOrchestratorSystemPromptTest {
     )
 
     init {
-        coEvery { instructionService.resolveDefaultInstruction(cust) } returns InstructionResponse(
+        coEvery { instructionService.getInstructionVersion(cust, "i1", 1) } returns InstructionResponse(
             id = "i1", version = 1, name = "Coach", instruction = instruction
         )
         coEvery { conversationService.resolveWritableConversationId(cust, any(), any(), any()) } returns "conv-1"
@@ -76,7 +76,7 @@ class GenerationOrchestratorSystemPromptTest {
     @Test
     fun `UI turn sends instruction plus math guidance to the vendor and persists the raw instruction`() = runTest {
         orchestrator.processTextGenerateRequest(
-            aiConfig, "", "", "explain entropy", null, null, "REACT_APP", cust
+            aiConfig, "i1", "1", "explain entropy", null, null, "REACT_APP", cust
         )
 
         coVerify {
@@ -98,7 +98,7 @@ class GenerationOrchestratorSystemPromptTest {
     @Test
     fun `streamed UI turn sends the decorated system prompt`() = runTest {
         val result = orchestrator.processTextGenerateStreamRequest(
-            aiConfig, "", "", "explain entropy", null, null, "REACT_APP", cust
+            aiConfig, "i1", "1", "explain entropy", null, null, "REACT_APP", cust
         )
         // Drain the relay — completes once background generation finished.
         result.flow.toList()
@@ -117,7 +117,7 @@ class GenerationOrchestratorSystemPromptTest {
     @Test
     fun `non-UI client turn reaches the vendor unaltered`() = runTest {
         orchestrator.processTextGenerateRequest(
-            aiConfig, "", "", "explain entropy", null, null, "SOME_API_CLIENT", cust
+            aiConfig, "i1", "1", "explain entropy", null, null, "SOME_API_CLIENT", cust
         )
 
         coVerify {
