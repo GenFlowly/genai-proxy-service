@@ -17,12 +17,17 @@ primary_region = "iad"
 # .internal path nothing could (2026-10-10 outage: a boot-crashing image
 # exhausted Fly's restart budget and the machine stayed stopped through a
 # "successful" redeploy). Only a private Flycast IP is allocated — no public
-# IPs — so the app remains unreachable from the public internet. Unlike dev,
-# production stays always-on (no auto stop) to avoid cold starts.
+# IPs — so the app remains unreachable from the public internet.
+#
+# min_machines_running = 1 keeps one machine up under normal load; the 2nd
+# machine (scale count 2) is a cold standby — auto_stop_machines lets Fly
+# stop it when idle (unbilled while stopped) and auto_start_machines lets Fly
+# start it on the next request if the primary exhausts its restart budget and
+# stays down (the 2026-10-10 scenario above).
 [http_service]
   internal_port = 5001
   force_https = false
-  auto_stop_machines = false
+  auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 1
 
@@ -46,6 +51,8 @@ primary_region = "iad"
 
 # Right-sized 2026-09: embeddings are API-backed (Voyage) — no local torch /
 # sentence-transformers resident in memory, and CPU sat under 1% of one core.
+# Bumped 1024mb -> 2048mb 2026-10-25: process RSS was climbing to the 1 GB
+# ceiling and getting OOM-killed every ~3.5h (root cause still open).
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "1024mb"
+  memory = "2048mb"
