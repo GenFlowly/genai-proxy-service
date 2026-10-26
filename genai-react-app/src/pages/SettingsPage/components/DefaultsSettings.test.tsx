@@ -22,10 +22,7 @@ jest.mock('../../../services/defaultsCacheService', () => ({
     requestAgentsCache: { getCached: jest.fn(), fetch: jest.fn() },
     customerAgentsCache: { getCached: jest.fn(), fetch: jest.fn() },
 }));
-// The sibling sections have their own test suites
-jest.mock('./InstructionDefaultsSettings', () => ({
-    InstructionDefaultsSettings: () => <div data-testid="instruction-defaults-section" />,
-}));
+// The sibling section has its own test suite
 jest.mock('./EmbeddingModelDefaults', () => ({
     EmbeddingModelDefaults: () => <div data-testid="embedding-defaults-section" />,
 }));
@@ -165,9 +162,8 @@ describe('DefaultsSettings', () => {
         ]);
     });
 
-    test('renders the other two sections', async () => {
+    test('renders the embedding defaults section', async () => {
         await renderLoaded();
-        expect(screen.getByTestId('instruction-defaults-section')).toBeInTheDocument();
         expect(screen.getByTestId('embedding-defaults-section')).toBeInTheDocument();
     });
 

@@ -101,26 +101,17 @@ class GenerationOrchestrator(
     }
 
     /**
-     * Resolve the instruction to use for a generation request, returning the full
-     * instruction (no second fetch downstream). An explicit selection is fetched
-     * directly; a blank selection resolves the customer's default (preferred /
-     * last-used / SYSTEM). The default is an enhancement, not a requirement — any
-     * failure to resolve it degrades to no instruction (plain chat), never a 500.
+     * Resolve the instruction to use for a generation request. A blank
+     * selection means no persona — plain chat, no system prompt — rather than
+     * guessing at a default.
      */
     private suspend fun resolveInstruction(
         customerId: String,
         instructionId: String,
         instructionVersion: String
     ): InstructionResponse? {
-        if (instructionId.isNotBlank()) {
-            return instructionService.getInstructionVersion(customerId, instructionId, instructionVersion.toIntOrNull() ?: 1)
-        }
-        return try {
-            instructionService.resolveDefaultInstruction(customerId)
-        } catch (e: Exception) {
-            logger.warn("Failed to resolve default instruction for customer {}; proceeding with none", customerId, e)
-            null
-        }
+        if (instructionId.isBlank()) return null
+        return instructionService.getInstructionVersion(customerId, instructionId, instructionVersion.toIntOrNull() ?: 1)
     }
 
     /**
@@ -166,9 +157,7 @@ class GenerationOrchestrator(
         }
         validateAgentAccess(agentId, customerId)
 
-        // An explicit selection wins; otherwise resolve the customer's default
-        // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
-        // returns the full instruction, so there is no second fetch here.
+        // Blank instructionId means no persona — plain chat, nothing to resolve.
         val instructionResp = resolveInstruction(customerId, instructionId, instructionVersion)
         // Memory injection is a graph concern (the MEMORY node): here we only
         // make the governance call — request consent AND the account setting.
@@ -370,9 +359,7 @@ class GenerationOrchestrator(
         }
         validateAgentAccess(agentId, customerId)
 
-        // An explicit selection wins; otherwise resolve the customer's default
-        // (preferred / last-used, ultimately the SYSTEM instruction). Resolution
-        // returns the full instruction, so there is no second fetch here.
+        // Blank instructionId means no persona — plain chat, nothing to resolve.
         val instructionResp = resolveInstruction(customerId, instructionId, instructionVersion)
         // Memory injection is a graph concern (the MEMORY node): here we only
         // make the governance call — request consent AND the account setting.

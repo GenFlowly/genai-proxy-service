@@ -19,7 +19,6 @@ import {
     effectiveDefaultAgentId,
 } from '../../../models/agents.models'
 import { ICONS } from '../../../constants/icons'
-import { InstructionDefaultsSettings } from './InstructionDefaultsSettings'
 import { EmbeddingModelDefaults } from './EmbeddingModelDefaults'
 import styles from './DefaultsSettings.module.scss'
 
@@ -75,13 +74,12 @@ function rowMappedGraphId(row: MappingRow): string {
 }
 
 /**
- * The Defaults settings page, in three sections:
+ * The Defaults settings page, in two sections:
  * 1. Default Agents — which agent powers each built-in action (titles,
  *    memory extraction, instruction personas; the action list comes from the
  *    backend RequestType registry, so new actions appear automatically) plus
  *    the Conversation Agent handling new chats (AIConfigPreferences.preferredAgentId).
- * 2. Default system prompt / instruction for conversations.
- * 3. Default embedding models per data category.
+ * 2. Default embedding models per data category.
  */
 export function DefaultsSettings(): React.ReactElement {
     const { t } = useTranslation()
@@ -314,7 +312,6 @@ export function DefaultsSettings(): React.ReactElement {
                 </div>
             )}
 
-            <InstructionDefaultsSettings />
             <EmbeddingModelDefaults />
         </div>
     )
