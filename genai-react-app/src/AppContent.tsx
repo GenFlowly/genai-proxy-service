@@ -12,6 +12,7 @@ import InstructionsPage from './pages/InstructionsPage/InstructionsPage'
 import InstructionDetailPage from './pages/InstructionDetailPage/InstructionDetailPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
 
 import { AIProvider } from './context/AIContext'
 import { ConversationProvider } from './context/ConversationContext'
@@ -20,10 +21,17 @@ import { ToastProvider } from './context/ToastContext'
 
 export default function AppContent(): React.ReactElement {
     const { t } = useTranslation()
-    const { isLoading } = useAuth()
+    const { isLoading, isOnboarding, isAuthenticated, onboardingCompleted, completeOnboarding } = useAuth()
     useDefaultsPrefetch()
 
     if (isLoading) return <div>{t("layout.appContent.loading")}</div>
+
+    // isAuthenticated here is the strict flag (Auth0 session + /onboard success);
+    // isOnboarding means the /onboard sync call itself is still in flight — wait
+    // for it so the wizard isn't flashed for an account that's already done.
+    if (isAuthenticated && !isOnboarding && onboardingCompleted === false) {
+        return <OnboardingWizard onDone={completeOnboarding} />
+    }
 
     return (
         <LayoutProvider>

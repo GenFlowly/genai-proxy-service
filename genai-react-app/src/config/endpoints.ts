@@ -62,6 +62,7 @@ export const endpoints = {
     getProfile: `${BASE}${API_PREFIX}/profile`,
     updateUsername: `${BASE}${API_PREFIX}/profile/username`,
     updateDiscoverability: `${BASE}${API_PREFIX}/profile/discoverability`,
+    completeOnboarding: `${BASE}${API_PREFIX}/profile/onboarding-completed`,
     getCustomerAgents: `${BASE}${API_PREFIX}/agents`,
     getRequestAgents: `${BASE}${API_PREFIX}/request-agents`,
     requestAgentMapping: (requestType: string) => `${BASE}${API_PREFIX}/request-agents/${requestType}`,

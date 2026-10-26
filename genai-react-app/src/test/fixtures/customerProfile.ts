@@ -33,5 +33,6 @@ export const mockOnboardResponse = {
         { id: "INS-8092d447-81bb-42f2-9c5b-2f7248789c29", version: 1, name: "Technical Learning Specialist", instruction: "I want to learn Fine tuning prompts from scratch. Create a complete roadmap from beginner to advanced that you can follow with weekly milestones." },
         { id: "INS-9a3cf562-bbb7-41fa-9aa4-979d1f9f9a0b", version: 1, name: "User Flow Designer", instruction: "You are a product manager.\nYou design the user flow for consumer facing software apps. \nYour goal is to build easy to use flows for softwares. " },
         { id: "INS-a546aa87-3626-4b10-8a69-ef9f753294d6", version: 1, name: "Copyright Attorney", instruction: "You are a copyright expert with vast legal knowledge." }
-    ]
+    ],
+    onboardingCompleted: true
 };

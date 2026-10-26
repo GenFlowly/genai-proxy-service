@@ -55,6 +55,7 @@ class UsernameGenerationTest {
         val profile = puts.first { it.tableName() == DynamoDBConstants.CUSTOMER_PROFILE_TABLE }
         assertEquals(username, profile.item()["username"]?.s())
         assertEquals(false, profile.item()["isDiscoverable"]?.bool())
+        assertEquals(false, profile.item()["onboardingCompleted"]?.bool())
         assertTrue(profile.item().containsKey("createdAt"))
     }
 
@@ -151,5 +152,17 @@ class UsernameGenerationTest {
 
         assertEquals("existing-user", item["username"]?.s())
         assertEquals(0, writes)
+    }
+
+    @Test
+    fun `markOnboardingCompleted flips the flag to true`() = runTest {
+        val updates = mutableListOf<UpdateItemRequest>()
+        every { client.updateItem(capture(updates)) } returns UpdateItemResponse.builder().build()
+
+        provider.markOnboardingCompleted("auth0|abc", "REACT_APP")
+
+        assertEquals(1, updates.size)
+        assertTrue(updates[0].updateExpression()!!.contains("SET onboardingCompleted = :c"))
+        assertEquals(true, updates[0].expressionAttributeValues()[":c"]?.bool())
     }
 }

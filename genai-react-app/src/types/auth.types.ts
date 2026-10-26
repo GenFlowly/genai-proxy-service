@@ -30,6 +30,10 @@ export interface AuthContextType {
     // authenticated user; strict isAuthenticated stays false until it succeeds
     isOnboarding: boolean;
     isInstructionsLoaded: boolean;
+    // null until the first /onboard sync resolves; false means this account has
+    // never dismissed the first-time setup wizard
+    onboardingCompleted: boolean | null;
+    completeOnboarding: () => Promise<void>;
     loginWithRedirect: (options?: any) => Promise<void>;
     logout: (options: { returnTo: string; localOnly?: boolean }) => void;
     getAccessTokenSilently: () => Promise<string>;

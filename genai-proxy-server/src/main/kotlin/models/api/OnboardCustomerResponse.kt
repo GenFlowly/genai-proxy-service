@@ -12,6 +12,7 @@ data class OnboardCustomerResponse(
     val customerName: String?,
     val customerPicture: String?,
     val customerInstructions: List<InstructionResponse>?,
-    val vectorDBConfigStatusList: List<VectorDBConfigStatus> = emptyList()
+    val vectorDBConfigStatusList: List<VectorDBConfigStatus> = emptyList(),
+    val onboardingCompleted: Boolean = true
 )
 

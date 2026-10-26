@@ -1,0 +1,44 @@
+@import '../../styles/themes.scss';
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: $color-background;
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 32rem;
+    background-color: $color-background-secondary;
+    border: 1px solid $color-border-light;
+    border-radius: 12px;
+    padding: 2rem;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.skipHint {
+    font-size: 0.75rem;
+    color: $color-text-muted;
+    margin: -0.75rem 0 0;
+}
+
+.error {
+    font-size: 0.8125rem;
+    color: $color-error;
+    margin: 0;
+}

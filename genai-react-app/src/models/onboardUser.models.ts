@@ -29,4 +29,6 @@ export interface OnboardCustomerResponse {
         status: VectorDBConfigStatusValue
         updateSuccessful: boolean
     }[]
+    /** False only for an account that has never dismissed the first-time setup wizard */
+    onboardingCompleted: boolean
 }
