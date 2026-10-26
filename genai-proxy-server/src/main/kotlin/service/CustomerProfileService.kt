@@ -111,7 +111,8 @@ class CustomerProfileService(
                 name = existingCustomer["name"]?.s(),
                 picture = existingCustomer["picture"]?.s(),
                 username = existingCustomer["username"]?.s(),
-                isDiscoverable = existingCustomer["isDiscoverable"]?.bool() ?: false
+                isDiscoverable = existingCustomer["isDiscoverable"]?.bool() ?: false,
+                onboardingCompleted = existingCustomer["onboardingCompleted"]?.bool() ?: true
             )
         }
 
@@ -157,7 +158,8 @@ class CustomerProfileService(
             name = name,
             picture = picture,
             username = generatedUsername,
-            isDiscoverable = false
+            isDiscoverable = false,
+            onboardingCompleted = false
         )
     }
 
@@ -195,7 +197,8 @@ class CustomerProfileService(
                 customerName = customerProfile.name ?: "User",
                 customerPicture = customerProfile.picture,
                 customerInstructions = customerInstructions.await(),
-                vectorDBConfigStatusList = vectorDBConfigStatusList.await()
+                vectorDBConfigStatusList = vectorDBConfigStatusList.await(),
+                onboardingCompleted = customerProfile.onboardingCompleted
             )
         }
     }
@@ -210,6 +213,9 @@ class CustomerProfileService(
 
     suspend fun updateDiscoverability(sub: String, client: String, isDiscoverable: Boolean) =
         customerProfileRepository.updateDiscoverability(sub, client, isDiscoverable)
+
+    suspend fun completeOnboarding(sub: String, client: String) =
+        customerProfileRepository.markOnboardingCompleted(sub, client)
 
     suspend fun searchByUsername(usernamePrefix: String) =
         customerProfileRepository.searchByUsername(usernamePrefix)

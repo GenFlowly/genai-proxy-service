@@ -93,3 +93,19 @@ export async function updateDiscoverability(token: string, isDiscoverable: boole
         return false;
     }
 }
+
+export async function completeOnboarding(token: string): Promise<boolean> {
+    const response = await fetchWithRetry(endpoints.completeOnboarding, {
+        method: HttpMethod.POST,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Complete Onboarding failed: ${response.status} ${response.statusText}`);
+    }
+
+    return true;
+}
