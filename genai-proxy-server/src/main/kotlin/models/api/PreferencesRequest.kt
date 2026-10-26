@@ -23,12 +23,6 @@ data class AIConfigPreferences(
     // category-specific -> legacy embeddingModel -> platform default.
     val embeddingModelConversations: String? = null,
     val embeddingModelNotes: String? = null,
-    // Fallback instruction when a request selects none:
-    // instructionFallbackMode = "preferred" -> use preferredInstructionId;
-    // "lastUsed" -> use the customer's most-recently-used instruction.
-    // Either way, resolution ultimately falls back to the SYSTEM default.
-    val preferredInstructionId: String? = null,
-    val instructionFallbackMode: String? = null,
     // Preferred conversation agent (graphId). Empty string clears the
     // preference (revert to the server-side default agent); null leaves it
     // unchanged.

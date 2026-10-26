@@ -45,7 +45,7 @@ class GenerationOrchestratorTitleKickoffTest {
     )
 
     init {
-        coEvery { instructionService.resolveDefaultInstruction(cust) } returns InstructionResponse(
+        coEvery { instructionService.getInstructionVersion(cust, "i1", 1) } returns InstructionResponse(
             id = "i1", version = 1, name = "Coach", instruction = "be kind"
         )
         coEvery {
@@ -55,15 +55,21 @@ class GenerationOrchestratorTitleKickoffTest {
         coEvery { conversationService.getLatestMessageId(any()) } returns "prev-1"
     }
 
-    private suspend fun run(conversationId: String?, prompt: String, client: String) {
+    private suspend fun run(
+        conversationId: String?,
+        prompt: String,
+        client: String,
+        instructionId: String = "",
+        instructionVersion: String = ""
+    ) {
         orchestrator.processTextGenerateStreamRequest(
-            emptyList(), "", "", prompt, conversationId, null, client, cust
+            emptyList(), instructionId, instructionVersion, prompt, conversationId, null, client, cust
         )
     }
 
     @Test
     fun `new UI conversation kicks off title generation with the resolved instruction name`() = runTest {
-        run(conversationId = null, prompt = prompt, client = "REACT_APP")
+        run(conversationId = null, prompt = prompt, client = "REACT_APP", instructionId = "i1", instructionVersion = "1")
 
         verify(exactly = 1) {
             managementService.launchTitleGenerationAsync("conv-new", cust, prompt, "Coach")

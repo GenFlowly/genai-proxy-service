@@ -34,8 +34,6 @@ class CustomerProfileService(
         embeddingModel: String? = null,
         embeddingModelConversations: String? = null,
         embeddingModelNotes: String? = null,
-        preferredInstructionId: String? = null,
-        instructionFallbackMode: String? = null,
         preferredAgentId: String? = null
     ) {
         customerProfileRepository.savePreferences(
@@ -47,8 +45,6 @@ class CustomerProfileService(
             embeddingModel,
             embeddingModelConversations,
             embeddingModelNotes,
-            preferredInstructionId,
-            instructionFallbackMode,
             preferredAgentId
         )
     }
