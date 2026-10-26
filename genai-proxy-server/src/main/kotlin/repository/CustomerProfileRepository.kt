@@ -86,6 +86,7 @@ class CustomerProfileRepository(
 
             put("username", AttributeValue.builder().s(generatedUsername).build())
             put("isDiscoverable", AttributeValue.builder().bool(false).build())
+            put("onboardingCompleted", AttributeValue.builder().bool(false).build())
         }
 
         val item = withTimestamps(baseItem)
@@ -235,6 +236,22 @@ class CustomerProfileRepository(
             ))
             .updateExpression("SET isDiscoverable = :d")
             .expressionAttributeValues(mapOf(":d" to AttributeValue.builder().bool(isDiscoverable).build()))
+            .build()
+        dynamoDbClient.updateItem(updateReq)
+    }
+
+    suspend fun markOnboardingCompleted(
+        sub: String,
+        client: String
+    ) = withContext(Dispatchers.IO) {
+        val updateReq = UpdateItemRequest.builder()
+            .tableName(CUSTOMER_PROFILE_TABLE)
+            .key(mapOf(
+                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+            ))
+            .updateExpression("SET onboardingCompleted = :c")
+            .expressionAttributeValues(mapOf(":c" to AttributeValue.builder().bool(true).build()))
             .build()
         dynamoDbClient.updateItem(updateReq)
     }

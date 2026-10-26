@@ -503,6 +503,45 @@
             "updatedAtTime": "Updated at {{time}}"
         }
     },
+    "onboarding": {
+        "stepLabel": "Step {{current}} of {{total}}",
+        "back": "Back",
+        "skipStep": "Skip this step",
+        "skipSetup": "Skip setup",
+        "skipHint": "You can set these up anytime from Settings.",
+        "saveAndContinue": "Save & continue",
+        "finish": "Finish setup",
+        "alreadyConfigured": "Already set up — you can replace it below or continue.",
+        "genericSaveError": "Couldn't save that. Check the value and try again.",
+        "completeError": "Couldn't finish setup. Check your connection and try again.",
+        "llm": {
+            "title": "Connect an AI model",
+            "description": "Bring your own API key from an AI provider so you can start chatting. You can add more providers later in Settings.",
+            "linkLabel": "Get an API key",
+            "vendorHint": "Provider",
+            "keyHint": "API key",
+            "keyPlaceholder": "sk-...",
+            "pickVendorError": "Pick a provider before saving a key."
+        },
+        "zilliz": {
+            "title": "Connect your vector database",
+            "description": "Zilliz Cloud stores your conversation and note embeddings so you can search and recall them later.",
+            "linkLabel": "Create a free Zilliz Cloud cluster",
+            "invalidEndpoint": "That doesn't look like a valid Zilliz Cloud endpoint.",
+            "invalidToken": "That doesn't look like a valid Zilliz Cloud token."
+        },
+        "voyage": {
+            "title": "Connect Voyage AI",
+            "description": "Voyage AI generates the embeddings used to index and search your conversations and notes.",
+            "linkLabel": "Get a Voyage AI API key",
+            "keyPlaceholder": "pa-..."
+        },
+        "tavily": {
+            "title": "Connect web search",
+            "description": "Lets assistants search the web for current information during a conversation.",
+            "linkLabel": "Get a Tavily API key"
+        }
+    },
     "profileWidget": {
         "profileSettingsWidget": {
             "discoverable": "Discoverable",

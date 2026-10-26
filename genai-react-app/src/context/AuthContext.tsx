@@ -9,6 +9,7 @@ import React, {
 import { useAuth0 } from '@auth0/auth0-react'
 import { AuthContextType, User } from '../types/auth.types'
 import { onboardCustomer } from '../services/onboardUserService'
+import { completeOnboarding as completeOnboardingRequest } from '../services/userService'
 import { OnboardCustomerResponse } from '../models/onboardUser.models'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { InstructionResponse } from '../models/instruction.models'
@@ -62,6 +63,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     )
     const [aiVendorAPIKeyStatusList, setAiVendorAPIKeyStatusList] = useState<AIVendorAPIKeyStatus[]>([])
     const [vectorDBConfigStatusList, setVectorDBConfigStatusList] = useState<any[]>([]);
+    // null until the first /onboard sync resolves; false drives the first-time
+    // setup wizard gate in AppContent — distinct from isOnboarding below, which
+    // means "the /onboard sync call itself is in flight"
+    const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null)
     const [aiConfigPreferences, setAiConfigPreferences] = useState<OnboardCustomerResponse['aiConfigPreferences'] | null>(null);
     const [customerInstructions, setCustomerInstructions] = useState<InstructionResponse[]>([])
     const [customerName, setCustomerName] = useState<string | undefined>(undefined)
@@ -201,6 +206,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                         if (onboardData.vectorDBConfigStatusList) {
                             setVectorDBConfigStatusList(onboardData.vectorDBConfigStatusList);
                         }
+                        setOnboardingCompleted(onboardData.onboardingCompleted)
                     }
                     onboardFailedRef.current = false
                     console.log('User onboarded successfully');
@@ -349,6 +355,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         })
     }
 
+    // Not optimistic: callers (the onboarding wizard) keep showing the current
+    // step and surface an inline error on failure, rather than this dismissing
+    // the wizard before the server has actually recorded completion.
+    const completeOnboarding = useCallback(async (): Promise<void> => {
+        const token = await getAccessTokenSilently()
+        await completeOnboardingRequest(token)
+        setOnboardingCompleted(true)
+    }, [getAccessTokenSilently])
+
     const updateVectorDBConfigStatus = (status: StoreCustomerVectorDBConfigResponse['configStatus']) => {
         setVectorDBConfigStatusList(prev => {
             const index = prev.findIndex(s => s.vendor === status.vendor)
@@ -384,6 +399,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         isLoading: auth0Loading,
         isOnboarding: isAuthenticated && isInternalLoading,
         isInstructionsLoaded,
+        onboardingCompleted,
+        completeOnboarding,
         customerId,
         setCustomerId,
         loginWithRedirect,

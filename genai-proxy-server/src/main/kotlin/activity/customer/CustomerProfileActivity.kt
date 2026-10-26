@@ -112,5 +112,33 @@ fun Route.registerCustomerProfileSettingsRoutes(
                 call.respond(HttpStatusCode.InternalServerError)
             }
         }
+
+        post(Routes.COMPLETE_ONBOARDING, {
+            tags("Customer")
+            summary = "Mark first-time onboarding as completed"
+            description = "Dismisses the first-time setup wizard for this customer, whether finished or skipped. " +
+                    "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Onboarding marked as completed"
+                    body<SuccessResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                }
+            }
+        }) {
+            val principal = call.principal<JWTPrincipal>()
+            val sub = principal?.payload?.subject ?: return@post call.respond(HttpStatusCode.Unauthorized)
+            val client = "REACT_APP"
+
+            try {
+                customerProfileService.completeOnboarding(sub, client)
+                call.respond(HttpStatusCode.OK, mapOf("success" to true))
+            } catch (e: Exception) {
+                logger.error("Failed to complete onboarding", e)
+                call.respond(HttpStatusCode.InternalServerError)
+            }
+        }
     }
 }
