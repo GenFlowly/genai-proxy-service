@@ -28,6 +28,13 @@ jest.mock('../context/ToastContext', () => ({
 jest.mock('../pages/LandingPage', () => () => <div data-testid="landing-page" />)
 jest.mock('../pages/SettingsPage/SettingsPage', () => () => <div data-testid="settings-page" />)
 jest.mock('../pages/MemoryPage/MemoryPage', () => () => <div data-testid="memory-page" />)
+jest.mock('../components/onboarding/OnboardingWizard', () => ({
+    OnboardingWizard: ({ onDone }: any) => (
+        <div data-testid="onboarding-wizard-mock">
+            <button data-testid="onboarding-wizard-mock-done" onClick={() => onDone()} />
+        </div>
+    ),
+}))
 
 const mockLoginWithRedirect = jest.fn()
 jest.mock('@auth0/auth0-react', () => ({
@@ -135,6 +142,45 @@ describe('AppContent', () => {
             loginWithRedirect: mockLoginWithRedirect,
         })
         renderAt('/chat/some-id')
+        expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+    })
+
+    test('shows the onboarding wizard instead of routes when onboardingCompleted is false', () => {
+        mockUseAuth.mockReturnValue({
+            isLoading: false,
+            isAuthenticated: true,
+            isOnboarding: false,
+            onboardingCompleted: false,
+            completeOnboarding: jest.fn(),
+        })
+        renderAt('/chat')
+        expect(screen.getByTestId('onboarding-wizard-mock')).toBeInTheDocument()
+        expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
+    })
+
+    test('does not show the onboarding wizard while the /onboard sync is still in flight', () => {
+        mockUseAuth.mockReturnValue({
+            isLoading: false,
+            isAuthenticated: true,
+            isOnboarding: true,
+            onboardingCompleted: false,
+            completeOnboarding: jest.fn(),
+        })
+        renderAt('/chat')
+        expect(screen.queryByTestId('onboarding-wizard-mock')).not.toBeInTheDocument()
+        expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+    })
+
+    test('does not show the onboarding wizard once onboarding is completed', () => {
+        mockUseAuth.mockReturnValue({
+            isLoading: false,
+            isAuthenticated: true,
+            isOnboarding: false,
+            onboardingCompleted: true,
+            completeOnboarding: jest.fn(),
+        })
+        renderAt('/chat')
+        expect(screen.queryByTestId('onboarding-wizard-mock')).not.toBeInTheDocument()
         expect(screen.getByTestId('landing-page')).toBeInTheDocument()
     })
 })
