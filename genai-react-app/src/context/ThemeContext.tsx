@@ -19,11 +19,21 @@ const getInitialThemeMode = (): ThemeMode => {
     return (localStorage.getItem('theme') as ThemeMode | null) || 'system'
 }
 
+// Mirrors --color-primary from themes.scss for each theme. The browser/OS
+// chrome (PWA title bar, status bar, task switcher) reads the <meta
+// name="theme-color"> tag, which can't reference a CSS variable, so the
+// value is kept in sync here instead.
+const PRIMARY_COLOR: Record<EffectiveTheme, string> = {
+    light: '#006BE8',
+    dark: '#0a84ff',
+}
+
 // data-color-mode drives third-party @uiw components (markdown editor/preview),
 // which otherwise fall back to the browser's prefers-color-scheme instead of the app theme
 const applyThemeAttributes = (theme: EffectiveTheme) => {
     document.documentElement.setAttribute('data-theme', theme)
     document.documentElement.setAttribute('data-color-mode', theme)
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', PRIMARY_COLOR[theme])
 }
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {

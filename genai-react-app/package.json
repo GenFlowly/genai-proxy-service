@@ -43,7 +43,8 @@
       "!src/**/*Core.tsx",
       "!src/test/**/*",
       "!src/reportWebVitals.ts",
-      "!src/index.tsx"
+      "!src/index.tsx",
+      "!src/service-worker.ts"
     ],
     "coverageReporters": [
       "text",

@@ -21,9 +21,10 @@ jest.mock('../context/LayoutContext', () => ({
     LayoutProvider: ({ children }: any) => <>{children}</>,
 }))
 jest.mock('../context/ToastContext', () => ({
-    useToast: jest.fn(),
+    useToast: jest.fn(() => ({ showToast: jest.fn() })),
     ToastProvider: ({ children }: any) => <>{children}</>,
 }))
+jest.mock('../components/common/ServiceWorkerUpdateNotifier/ServiceWorkerUpdateNotifier', () => () => null)
 
 jest.mock('../pages/LandingPage', () => () => <div data-testid="landing-page" />)
 jest.mock('../pages/SettingsPage/SettingsPage', () => () => <div data-testid="settings-page" />)

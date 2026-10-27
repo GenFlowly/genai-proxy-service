@@ -3,12 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content, viewport-fit=cover" />
+    <!-- Default/light-theme value; ThemeContext overwrites this at runtime to track --color-primary for the active theme. -->
+    <meta name="theme-color" content="#006BE8" />
     <meta
       name="description"
       content="Prompt Engineering and AI conversations"
     />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="AI Proxy" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <!--
       Link-preview (Open Graph) defaults. For publicly shared /chat/:id
       pages the Cloudflare router worker rewrites og:title and <title>
@@ -19,7 +24,7 @@
     <meta property="og:title" content="AI Proxy" />
     <meta property="og:description" content="Prompt Engineering and AI conversations" />
     <meta name="twitter:card" content="summary" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
