@@ -14,7 +14,7 @@ jest.mock('../../context/SidebarMenuContext', () => ({
 }));
 
 describe('usePageTitle Hook', () => {
-    const DEFAULT_TITLE = 'Privacy AI';
+    const DEFAULT_TITLE = 'AI Proxy';
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -37,7 +37,7 @@ describe('usePageTitle Hook', () => {
         (useParams as jest.Mock).mockReturnValue({ conversationId: '123' });
         (useSidebarMenu as jest.Mock).mockReturnValue({ activeWidgetId: null });
 
-        const customTitle = 'Custom Conversation Title | Genflowly';
+        const customTitle = 'Custom Conversation Title';
         document.title = customTitle;
 
         renderHook(() => usePageTitle());
