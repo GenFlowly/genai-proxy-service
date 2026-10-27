@@ -53,7 +53,7 @@ export default function App() {
     if (error) {
         return (
             <div className="centered">
-                <h1>GenFlowly Admin Panel</h1>
+                <h1>AI Proxy Admin Panel</h1>
                 <div className="banner error">Sign-in failed: {error.message}</div>
                 <button
                     className="primary"
@@ -79,7 +79,7 @@ export default function App() {
     if (!isAuthenticated) {
         return (
             <div className="centered">
-                <h1>GenFlowly Admin Panel</h1>
+                <h1>AI Proxy Admin Panel</h1>
                 <p>Internal tool — sign in to continue.</p>
                 <button className="primary" onClick={() => loginWithRedirect()}>
                     Sign in
@@ -95,7 +95,7 @@ export default function App() {
     return (
         <div className="app">
             <header className="app-header">
-                <h1>GenFlowly Admin Panel</h1>
+                <h1>AI Proxy Admin Panel</h1>
                 <div className="user-info">
                     <span>{user?.email}</span>
                     <button
