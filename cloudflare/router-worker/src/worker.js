@@ -41,7 +41,7 @@ function withConversationTitle(response, title, pageUrl) {
   return new HTMLRewriter()
     .on("title", {
       element(el) {
-        el.setInnerContent(`${title} | Genflowly`);
+        el.setInnerContent(title);
       },
     })
     .on('meta[property="og:title"]', {
