@@ -365,7 +365,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
 
                 // Restore the page title from the saved conversation title
                 if (data.title) {
-                    document.title = `${data.title} | Genflowly`
+                    document.title = data.title
                     setConversationTitle(data.title)
                 } else {
                     setConversationTitle(null)
@@ -1157,7 +1157,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         instructionName: instruction?.name
                     }).then(res => {
                         if (res.title) {
-                            document.title = `${res.title} | Genflowly`
+                            document.title = res.title
                             setConversationTitle(res.title)
                         }
                     }).catch(err => console.warn("Background title generation failed", err))
