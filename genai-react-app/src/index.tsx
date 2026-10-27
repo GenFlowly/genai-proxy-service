@@ -8,6 +8,7 @@ import './i18n';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { LayoutProvider } from "./context/LayoutContext";
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement
@@ -21,3 +22,12 @@ root.render(
 );
 
 reportWebVitals();
+
+// Registered unconditionally at boot (ahead of auth/onboarding gating) so
+// precaching starts on first visit; the update-available toast is wired up
+// later in AppContent, once ToastProvider exists.
+serviceWorkerRegistration.register({
+    onUpdate: () => {
+        window.dispatchEvent(new CustomEvent(serviceWorkerRegistration.SW_UPDATE_AVAILABLE_EVENT));
+    },
+});

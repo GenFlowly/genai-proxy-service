@@ -98,8 +98,12 @@
     --mobile-content-width: calc(100vw - (2 * var(--mobile-content-inset)));
 
     // Height of the fixed MobileHeader overlay (40px circle buttons + 0.5rem
-    // vertical padding). Content that must clear the header offsets by this.
-    --mobile-header-height: 3.5rem;
+    // vertical padding, growing to clear a device notch/Dynamic Island in
+    // standalone PWA mode — see MobileHeader.module.scss in component-library).
+    // Content that must clear the header offsets by this.
+    --mobile-header-height: calc(
+        3rem + max(0.5rem, env(safe-area-inset-top, 0px))
+    );
 
     // Vertical padding for request/response widgets — identical top & bottom,
     // desktop & mobile
