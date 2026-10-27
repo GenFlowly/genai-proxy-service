@@ -13,6 +13,7 @@ import InstructionDetailPage from './pages/InstructionDetailPage/InstructionDeta
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
+import ServiceWorkerUpdateNotifier from './components/common/ServiceWorkerUpdateNotifier/ServiceWorkerUpdateNotifier'
 
 import { AIProvider } from './context/AIContext'
 import { ConversationProvider } from './context/ConversationContext'
@@ -36,6 +37,7 @@ export default function AppContent(): React.ReactElement {
     return (
         <LayoutProvider>
             <ToastProvider>
+                <ServiceWorkerUpdateNotifier />
                 <AIProvider>
                     <ConversationProvider>
                         <Routes>
