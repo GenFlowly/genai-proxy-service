@@ -3,7 +3,7 @@ import { useLocation, useParams } from 'react-router-dom'
 import { useSidebarMenu } from '../context/SidebarMenuContext'
 import { SIDEBAR_MENU_REGISTRY } from '../config/SidebarMenuConfig'
 
-const DEFAULT_TITLE = 'Privacy AI'
+const DEFAULT_TITLE = 'AI Proxy'
 
 const ROUTE_TITLES: Record<string, string> = {
     '/chat': DEFAULT_TITLE,
