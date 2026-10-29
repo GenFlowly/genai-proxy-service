@@ -72,11 +72,25 @@ export function setExpandedProject(projectId: string, expanded: boolean): void {
     expandedProjects.set(projectId, expanded)
 }
 
+// Same idea for the panel's own top-level sections (Projects, Pinned,
+// Recents): remembers whether the user collapsed one, for the rest of the
+// session.
+const expandedSections = new Map<string, boolean>()
+
+export function getExpandedSection(sectionId: string): boolean | undefined {
+    return expandedSections.get(sectionId)
+}
+
+export function setExpandedSection(sectionId: string, expanded: boolean): void {
+    expandedSections.set(sectionId, expanded)
+}
+
 /** Logout hook / test helper: forget everything, for every customer. */
 export function clearHistoryCache(): void {
     cache = null
     cacheCustomerId = null
     expandedProjects.clear()
+    expandedSections.clear()
     try {
         Object.keys(localStorage).forEach(key => {
             if (key.endsWith(KEY_SUFFIX)) localStorage.removeItem(key)
