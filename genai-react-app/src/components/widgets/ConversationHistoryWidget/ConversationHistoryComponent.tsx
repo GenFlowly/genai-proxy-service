@@ -23,7 +23,7 @@ import { CONVERSATION_FORKED_EVENT } from '../../../constants/events'
 import { SidebarListPanel, SidebarListGroup, SidebarListItem, SidebarListLoadMore, Modal, InputTextWithHint, VerticalSplit } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
-import { loadHistoryCache, saveHistoryCache, getExpandedProject, setExpandedProject } from './historyCache'
+import { loadHistoryCache, saveHistoryCache, getExpandedProject, setExpandedProject, getExpandedSection, setExpandedSection } from './historyCache'
 import { formatServerDateTime, formatServerTime, parseServerDate } from '../../../utils/timeUtils'
 
 const PAGE_SIZE = 15
@@ -537,6 +537,10 @@ export default function ConversationHistoryComponent() {
         {
             id: 'projects',
             label: t('conversation.conversationHistory.projects'),
+            collapsible: true,
+            defaultExpanded: getExpandedSection('projects') ?? true,
+            onToggle: expanded => setExpandedSection('projects', expanded),
+            testId: 'conv-history-projects-heading',
             actions: [
                 {
                     icon: <Icon src={ICONS.FOLDER_PLUS} size={14} aria-hidden={true} />,
@@ -551,11 +555,18 @@ export default function ConversationHistoryComponent() {
 
     // The History panel below it: global Pinned sits in the panel's fixed
     // (non-scrolling) block, so it stays put — uncapped, pushing Recents
-    // down as it grows — while only the Recents list scrolls
+    // down as it grows — while only the Recents list scrolls. Both headers
+    // are collapsible: collapsing Pinned hands its space straight to Recents
+    // (it's a flex block that hugs its content), collapsing Recents just
+    // empties the scroll area — either way the panel reflows on its own.
     const historyFixedGroups: SidebarListGroup[] = globalPinned.length > 0
         ? [{
             id: 'pinned',
             label: t('conversation.conversationHistory.pinned'),
+            collapsible: true,
+            defaultExpanded: getExpandedSection('pinned') ?? true,
+            onToggle: expanded => setExpandedSection('pinned', expanded),
+            testId: 'conv-history-pinned-heading',
             items: toTreeRows(globalPinned, true),
         }]
         : []
@@ -564,6 +575,10 @@ export default function ConversationHistoryComponent() {
         ? [{
             id: 'recent',
             label: t('conversation.conversationHistory.recents'),
+            collapsible: true,
+            defaultExpanded: getExpandedSection('recent') ?? true,
+            onToggle: expanded => setExpandedSection('recent', expanded),
+            testId: 'conv-history-recents-heading',
             items: toTreeRows(globalRecent, false),
         }]
         : []
