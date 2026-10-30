@@ -1,0 +1,659 @@
+aiohappyeyeballs==2.7.1
+    # via aiohttp
+aiohttp==3.14.5
+    # via
+    #   fireworks-ai
+    #   httpx-aiohttp
+    #   langchain-community
+    #   langchain-fireworks
+    #   langchain-nvidia-ai-endpoints
+    #   langchain-together
+    #   langchain-xai
+    #   litellm
+    #   voyageai
+aiolimiter==1.3.0
+    # via voyageai
+aiosignal==1.4.0
+    # via aiohttp
+annotated-doc==0.0.5
+    # via fastapi
+annotated-types==0.8.0
+    # via pydantic
+anthropic==2.3.0
+    # via langchain-anthropic
+anyio==4.15.1
+    # via
+    #   anthropic
+    #   fireworks-ai
+    #   google-genai
+    #   groq
+    #   httpx
+    #   httpx2
+    #   langsmith
+    #   mcp
+    #   openai
+    #   perplexityai
+    #   sse-starlette
+    #   starlette
+    #   watchfiles
+arabic-reshaper==3.0.1
+    # via xhtml2pdf
+attrs==26.1.0
+    # via
+    #   aiohttp
+    #   jsonschema
+    #   referencing
+boto3==1.43.122
+    # via
+    #   -r requirements.txt
+    #   genflowly-encoding-library
+    #   litellm
+botocore==1.43.122
+    # via
+    #   boto3
+    #   s3transfer
+cachetools==7.2.7
+    # via pymilvus
+certifi==2026.10.23
+    # via
+    #   fireworks-ai
+    #   httpcore
+    #   httpx
+    #   langchain-core
+    #   langchain-openai
+    #   litellm
+    #   requests
+cffi==2.1.1
+    # via cryptography
+charset-normalizer==3.5.2
+    # via
+    #   pdfminer-six
+    #   reportlab
+    #   requests
+click==8.5.0
+    # via
+    #   dbos
+    #   huggingface-hub
+    #   litellm
+    #   uvicorn
+cohere==5.21.1
+    # via langchain-cohere
+croniter==6.2.4
+    # via dbos
+cryptography==50.0.2
+    # via
+    #   google-auth
+    #   pdfminer-six
+    #   pyjwt
+cssselect2==0.10.1
+    # via svglib
+dbos==3.4.0
+    # via -r requirements.txt
+distro==1.9.0
+    # via
+    #   fireworks-ai
+    #   google-genai
+    #   groq
+    #   langsmith
+    #   openai
+    #   perplexityai
+docstring-parser==0.18.0
+    # via anthropic
+fastapi==0.162.0
+    # via -r requirements.txt
+fastavro==1.13.1
+    # via cohere
+fastuuid==0.14.0
+    # via litellm
+filelock==3.32.7
+    # via
+    #   huggingface-hub
+    #   litellm
+filetype==1.2.0
+    # via langchain-google-genai
+fireworks-ai==1.2.30
+    # via langchain-fireworks
+frozenlist==1.8.0
+    # via
+    #   aiohttp
+    #   aiosignal
+fsspec==2026.9.0
+    # via huggingface-hub
+genflowly-encoding-library==0.1.39
+    # via -r requirements.txt
+google-auth==2.62.0
+    # via google-genai
+google-genai==2.34.0
+    # via langchain-google-genai
+greenlet==3.5.6
+    # via sqlalchemy
+groq==0.37.1
+    # via langchain-groq
+grpcio==1.85.0
+    # via pymilvus
+h11==0.16.0
+    # via
+    #   httpcore
+    #   httpcore2
+    #   langchain-together
+    #   uvicorn
+h2==4.4.1
+    # via httpx
+hf-xet==1.7.1
+    # via huggingface-hub
+hpack==4.2.0
+    # via h2
+html5lib==1.1
+    # via xhtml2pdf
+httpcore==1.0.9
+    # via httpx
+httpcore2==2.16.0
+    # via httpx2
+httptools==0.9.0
+    # via uvicorn
+httpx==0.28.1
+    # via
+    #   -r requirements.txt
+    #   cohere
+    #   fireworks-ai
+    #   google-genai
+    #   groq
+    #   httpx-aiohttp
+    #   huggingface-hub
+    #   langchain-core
+    #   langchain-litellm
+    #   langchain-mistralai
+    #   langgraph-sdk
+    #   litellm
+    #   openai
+    #   perplexityai
+httpx-aiohttp==0.2.0
+    # via fireworks-ai
+httpx-sse==0.4.3
+    # via
+    #   langchain-community
+    #   langchain-mistralai
+httpx2==2.16.0
+    # via
+    #   anthropic
+    #   langsmith
+    #   litellm
+    #   mcp
+huggingface-hub==1.33.0
+    # via
+    #   litellm
+    #   tokenizers
+hyperframe==6.1.0
+    # via h2
+idna==3.20
+    # via
+    #   anyio
+    #   httpx
+    #   httpx2
+    #   requests
+    #   yarl
+importlib-metadata==8.9.0
+    # via litellm
+jinja2==3.1.6
+    # via litellm
+jiter==0.18.0
+    # via
+    #   anthropic
+    #   openai
+jmespath==1.1.0
+    # via
+    #   boto3
+    #   botocore
+jsonpatch==1.38
+    # via langchain-core
+jsonpointer==3.6
+    # via jsonpatch
+jsonschema==4.26.0
+    # via
+    #   litellm
+    #   mcp
+jsonschema-specifications==2025.9.1
+    # via jsonschema
+langchain-anthropic==1.7.7
+    # via -r requirements.txt
+langchain-classic==1.0.8
+    # via langchain-community
+langchain-cohere==0.6.0
+    # via -r requirements.txt
+langchain-community==0.4.2
+    # via langchain-experimental
+langchain-core==1.7.3
+    # via
+    #   -r requirements.txt
+    #   langchain-anthropic
+    #   langchain-classic
+    #   langchain-cohere
+    #   langchain-community
+    #   langchain-deepseek
+    #   langchain-experimental
+    #   langchain-fireworks
+    #   langchain-google-genai
+    #   langchain-groq
+    #   langchain-litellm
+    #   langchain-mistralai
+    #   langchain-nvidia-ai-endpoints
+    #   langchain-openai
+    #   langchain-perplexity
+    #   langchain-text-splitters
+    #   langchain-together
+    #   langchain-voyageai
+    #   langchain-xai
+    #   langgraph
+    #   langgraph-checkpoint
+    #   langgraph-prebuilt
+    #   langgraph-sdk
+langchain-deepseek==1.1.1
+    # via -r requirements.txt
+langchain-experimental==0.4.2
+    # via genflowly-encoding-library
+langchain-fireworks==1.7.1
+    # via -r requirements.txt
+langchain-google-genai==4.4.2
+    # via -r requirements.txt
+langchain-groq==1.1.3
+    # via -r requirements.txt
+langchain-litellm==0.11.2
+    # via -r requirements.txt
+langchain-mistralai==1.1.6
+    # via -r requirements.txt
+langchain-nvidia-ai-endpoints==1.5.0
+    # via -r requirements.txt
+langchain-openai==1.7.3
+    # via
+    #   -r requirements.txt
+    #   genflowly-encoding-library
+    #   langchain-deepseek
+    #   langchain-together
+    #   langchain-xai
+langchain-perplexity==1.4.2
+    # via -r requirements.txt
+langchain-protocol==0.0.20
+    # via
+    #   langchain-core
+    #   langgraph-sdk
+langchain-text-splitters==1.1.3
+    # via
+    #   -r requirements.txt
+    #   genflowly-encoding-library
+    #   langchain-classic
+    #   voyageai
+langchain-together==0.4.0
+    # via -r requirements.txt
+langchain-voyageai==0.4.1
+    # via genflowly-encoding-library
+langchain-xai==1.3.0
+    # via -r requirements.txt
+langgraph==1.2.18
+    # via -r requirements.txt
+langgraph-checkpoint==4.3.1
+    # via
+    #   langgraph
+    #   langgraph-checkpoint-postgres
+    #   langgraph-prebuilt
+langgraph-checkpoint-postgres==3.2.0
+    # via -r requirements.txt
+langgraph-prebuilt==1.1.1
+    # via langgraph
+langgraph-sdk==0.4.10
+    # via langgraph
+langsmith==0.14.16
+    # via
+    #   langchain-classic
+    #   langchain-community
+    #   langchain-core
+    #   langchain-together
+litellm==1.106.6
+    # via
+    #   -r requirements.txt
+    #   langchain-litellm
+lxml==6.1.3
+    # via svglib
+markdown==3.11.2
+    # via -r requirements.txt
+markupsafe==3.0.4
+    # via jinja2
+mcp==2.3.0
+    # via
+    #   -r requirements.txt
+    #   litellm
+mcp-types==2.3.0
+    # via mcp
+multidict==7.2.1
+    # via
+    #   aiohttp
+    #   yarl
+numpy==2.4.6
+    # via
+    #   langchain-community
+    #   pandas
+    #   rawpy
+    #   voyageai
+openai==2.54.0
+    # via
+    #   langchain-fireworks
+    #   langchain-openai
+    #   litellm
+opentelemetry-api==1.45.2
+    # via
+    #   anthropic
+    #   fastapi
+    #   mcp
+orjson==3.13.0
+    # via
+    #   langgraph-checkpoint-postgres
+    #   langgraph-sdk
+    #   langsmith
+    #   pymilvus
+ormsgpack==1.13.0
+    # via langgraph-checkpoint
+packaging==26.3
+    # via
+    #   huggingface-hub
+    #   langchain-core
+    #   langsmith
+    #   litellm
+pandas==3.1.0
+    # via pymilvus
+pdfminer-six==20260107
+    # via pdfplumber
+pdfplumber==0.11.10
+    # via -r requirements.txt
+perplexityai==0.46.1
+    # via langchain-perplexity
+pi-heif==1.4.0
+    # via -r requirements.txt
+pillow==13.0.0
+    # via
+    #   -r requirements.txt
+    #   pdfplumber
+    #   pi-heif
+    #   reportlab
+    #   svglib
+    #   voyageai
+    #   xhtml2pdf
+prometheus-client==0.26.0
+    # via
+    #   -r requirements.txt
+    #   genflowly-encoding-library
+    #   prometheus-fastapi-instrumentator
+prometheus-fastapi-instrumentator==8.1.0
+    # via -r requirements.txt
+propcache==0.5.4
+    # via
+    #   aiohttp
+    #   yarl
+protobuf==7.36.2
+    # via pymilvus
+psycopg==3.3.6
+    # via
+    #   -r requirements.txt
+    #   dbos
+    #   langgraph-checkpoint-postgres
+psycopg-binary==3.3.6
+    # via psycopg
+psycopg-pool==3.3.3
+    # via
+    #   langgraph-checkpoint-postgres
+    #   psycopg
+pyasn1==0.6.5
+    # via pyasn1-modules
+pyasn1-modules==0.4.2
+    # via google-auth
+pycparser==3.12
+    # via cffi
+pydantic==2.14.2
+    # via
+    #   -r requirements.txt
+    #   anthropic
+    #   cohere
+    #   fastapi
+    #   fireworks-ai
+    #   genflowly-encoding-library
+    #   google-genai
+    #   groq
+    #   langchain-anthropic
+    #   langchain-classic
+    #   langchain-cohere
+    #   langchain-core
+    #   langchain-google-genai
+    #   langchain-litellm
+    #   langchain-mistralai
+    #   langchain-voyageai
+    #   langgraph
+    #   langsmith
+    #   litellm
+    #   mcp
+    #   mcp-types
+    #   openai
+    #   perplexityai
+    #   pydantic-settings
+    #   voyageai
+pydantic-core==2.50.2
+    # via
+    #   cohere
+    #   pydantic
+pydantic-settings==2.16.2
+    # via
+    #   langchain-community
+    #   litellm
+pyjwt==2.15.1
+    # via mcp
+pymilvus==3.0.2
+    # via -r requirements.txt
+pypdf==6.21.4
+    # via xhtml2pdf
+pypdfium2==5.14.0
+    # via
+    #   -r requirements.txt
+    #   pdfplumber
+python-dateutil==2.9.0.post0
+    # via
+    #   botocore
+    #   croniter
+    #   dbos
+    #   pandas
+python-dotenv==1.2.4
+    # via
+    #   litellm
+    #   pydantic-settings
+    #   pymilvus
+    #   uvicorn
+python-multipart==0.0.32
+    # via mcp
+pyyaml==6.0.3
+    # via
+    #   dbos
+    #   huggingface-hub
+    #   langchain-classic
+    #   langchain-community
+    #   langchain-core
+    #   litellm
+    #   uvicorn
+rawpy==0.27.1
+    # via -r requirements.txt
+referencing==0.37.0
+    # via
+    #   jsonschema
+    #   jsonschema-specifications
+regex==2026.9.29
+    # via tiktoken
+reportlab==5.1.0
+    # via
+    #   svglib
+    #   xhtml2pdf
+requests==2.34.2
+    # via
+    #   cohere
+    #   genflowly-encoding-library
+    #   google-auth
+    #   google-genai
+    #   langchain-classic
+    #   langchain-community
+    #   langchain-fireworks
+    #   langchain-nvidia-ai-endpoints
+    #   langchain-together
+    #   langchain-xai
+    #   langsmith
+    #   pymilvus
+    #   requests-toolbelt
+    #   tiktoken
+    #   voyageai
+requests-toolbelt==1.0.0
+    # via langsmith
+rpds-py==2026.9.1
+    # via
+    #   jsonschema
+    #   referencing
+s3transfer==0.19.3
+    # via boto3
+six==1.17.0
+    # via
+    #   html5lib
+    #   python-dateutil
+sniffio==1.3.1
+    # via
+    #   anthropic
+    #   fireworks-ai
+    #   google-genai
+    #   groq
+    #   langsmith
+    #   openai
+    #   perplexityai
+sqlalchemy==2.1.6
+    # via
+    #   dbos
+    #   langchain-classic
+    #   langchain-community
+sse-starlette==3.6.0
+    # via mcp
+starlette==1.10.0
+    # via
+    #   fastapi
+    #   mcp
+    #   prometheus-fastapi-instrumentator
+    #   sse-starlette
+svglib==2.3.2
+    # via xhtml2pdf
+tenacity==9.1.4
+    # via
+    #   google-genai
+    #   langchain-community
+    #   langchain-core
+    #   voyageai
+tiktoken==0.14.0
+    # via
+    #   genflowly-encoding-library
+    #   langchain-openai
+    #   litellm
+tinycss2==1.5.1
+    # via
+    #   cssselect2
+    #   svglib
+tokenizers==0.23.3
+    # via
+    #   cohere
+    #   langchain-mistralai
+    #   litellm
+    #   voyageai
+tqdm==4.70.1
+    # via
+    #   huggingface-hub
+    #   openai
+truststore==0.10.5
+    # via
+    #   httpcore2
+    #   httpx2
+types-pyyaml==6.0.12.20260906
+    # via langchain-cohere
+types-requests==2.33.0.20261006
+    # via cohere
+typing-extensions==4.16.0
+    # via
+    #   aiohttp
+    #   aiosignal
+    #   anthropic
+    #   anyio
+    #   cohere
+    #   fastapi
+    #   fireworks-ai
+    #   google-genai
+    #   groq
+    #   grpcio
+    #   httpx2
+    #   huggingface-hub
+    #   langchain-core
+    #   langchain-litellm
+    #   langchain-protocol
+    #   langsmith
+    #   litellm
+    #   mcp
+    #   mcp-types
+    #   openai
+    #   opentelemetry-api
+    #   perplexityai
+    #   psycopg
+    #   psycopg-pool
+    #   pydantic
+    #   pydantic-core
+    #   pydantic-settings
+    #   referencing
+    #   sqlalchemy
+    #   starlette
+    #   typing-inspection
+typing-inspection==0.4.4
+    # via
+    #   fastapi
+    #   mcp
+    #   pydantic
+    #   pydantic-settings
+urllib3==2.8.0
+    # via
+    #   botocore
+    #   langchain-together
+    #   requests
+    #   types-requests
+uuid-utils==0.19.0
+    # via
+    #   langchain-core
+    #   langsmith
+uvicorn==0.54.0
+    # via
+    #   -r requirements.txt
+    #   mcp
+uvloop==0.23.0
+    # via uvicorn
+voyageai==0.5.0
+    # via
+    #   genflowly-encoding-library
+    #   langchain-voyageai
+watchfiles==1.3.0
+    # via uvicorn
+webencodings==0.6.1
+    # via
+    #   cssselect2
+    #   html5lib
+    #   tinycss2
+websockets==17.3
+    # via
+    #   -r requirements.txt
+    #   google-genai
+    #   langgraph-sdk
+    #   langsmith
+    #   uvicorn
+xhtml2pdf==0.2.28
+    # via -r requirements.txt
+xxhash==4.0.2
+    # via
+    #   langgraph
+    #   langsmith
+yarl==1.25.1
+    # via aiohttp
+zipp==4.1.2
+    # via importlib-metadata
+zstandard==0.25.0
+    # via langsmith
