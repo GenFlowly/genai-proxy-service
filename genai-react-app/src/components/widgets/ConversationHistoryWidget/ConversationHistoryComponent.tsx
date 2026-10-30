@@ -41,7 +41,15 @@ interface ProjectBucket {
     recent: ConversationSummary[]
 }
 
-export default function ConversationHistoryComponent() {
+interface ConversationHistoryComponentProps {
+    // Fired synchronously on tap/click, before the conversation has loaded —
+    // lets a mobile full-screen overlay close itself immediately instead of
+    // waiting on the (async, failure-prone) conversation load to flip some
+    // unrelated piece of state
+    onSelect?: () => void
+}
+
+export default function ConversationHistoryComponent({ onSelect }: ConversationHistoryComponentProps = {}) {
     const { t } = useTranslation()
     const { getAccessTokenSilently, isAuthenticated, customerId } = useAuth()
     const { conversationId, conversationTitle, pendingProjectId, startConversationInProject } = useConversation()
@@ -221,6 +229,7 @@ export default function ConversationHistoryComponent() {
 
     const handleNavigate = (convId: string) => {
         navigate(`/chat/${convId}`)
+        onSelect?.()
     }
 
     const handleArchive = async (e: React.MouseEvent, convId: string) => {
