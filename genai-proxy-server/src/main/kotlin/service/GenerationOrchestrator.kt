@@ -28,6 +28,8 @@ import com.genflowly.models.AttachmentRef
 import com.genflowly.models.Message
 import com.genflowly.models.toCredentialKey
 import com.genflowly.models.toProviderString
+import com.genflowly.observability.Metrics
+import com.genflowly.observability.metricVendor
 import org.slf4j.LoggerFactory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -496,6 +498,7 @@ class GenerationOrchestrator(
             val sb = StringBuilder()
             var capturedUsage: StreamChunk.Usage? = null
             var capturedErrorMessage: String? = null
+            var capturedErrorType: String? = null
             var capturedThinkingDurationMs: Long? = null
             var capturedToolCallsJson: String? = null
             var capturedWebSourcesJson: String? = null
@@ -612,9 +615,10 @@ class GenerationOrchestrator(
                             // Vendor failure surfaced mid-stream — the concise reason is
                             // relayed (below) and any partial text is kept and persisted.
                             capturedErrorMessage = chunk.message
+                            capturedErrorType = chunk.errorType ?: "provider_error"
                             logger.warn(
                                 "Generation {} failed mid-stream ({}): {}",
-                                responseMessageId, chunk.errorType ?: "provider_error", chunk.message
+                                responseMessageId, capturedErrorType, chunk.message
                             )
                         }
                         is StreamChunk.AwaitingInput ->
@@ -631,6 +635,7 @@ class GenerationOrchestrator(
             } catch (e: Exception) {
                 logger.error("Error during streaming", e)
                 capturedErrorMessage = capturedErrorMessage ?: e.message
+                capturedErrorType = capturedErrorType ?: "exception"
                 runCatching { emit("\n\n[Error: ${e.message}]") }
             } finally {
                 val responseText = sb.toString()
@@ -705,6 +710,17 @@ class GenerationOrchestrator(
                         success -> "ok"
                         else -> "error"
                     }
+                    // One increment per generation outcome. Failures carry the
+                    // failure KIND as status (transport_error, rate_limit, …) —
+                    // mid-stream deaths never become an HTTP 5xx (the response
+                    // already streamed as 200), so this counter is the only
+                    // alertable signal for them.
+                    Metrics.count(
+                        "generation_total", 1.0,
+                        "status" to if (doneStatus == "error") (capturedErrorType ?: "error") else doneStatus,
+                        "vendor" to config.aiVendor.metricVendor(),
+                        "model" to config.model,
+                    )
                     runCatching { emit(doneNdjsonFrame(doneStatus, capturedErrorMessage)) }
                     // Close AFTER persistence so a connected client's stream end
                     // implies the message is queryable (usage fetch follows it).

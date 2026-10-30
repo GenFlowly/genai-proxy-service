@@ -37,13 +37,32 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: retrieval-server/requirements.txt
+          cache-dependency-path: retrieval-server/requirements.lock.txt
+
+      # The same push that bumps the encoding-library pin also publishes it
+      # (publish-encoding-library.yml) — pip here can race the PyPI upload
+      # and its CDN propagation, which failed this very deploy twice on
+      # 2026-10-30. Wait for the pinned version to be servable first.
+      - name: Wait for the pinned encoding-library on PyPI
+        working-directory: retrieval-server
+        run: |
+          VERSION=$(sed -n 's/^genflowly-encoding-library==\(.*\)$/\1/p' requirements.lock.txt | head -1)
+          if [ -z "$VERSION" ]; then echo "::error::no encoding-library pin found in requirements.lock.txt"; exit 1; fi
+          for i in $(seq 1 30); do
+            if curl -sf "https://pypi.org/pypi/genflowly-encoding-library/${VERSION}/json" > /dev/null; then
+              echo "genflowly-encoding-library ${VERSION} is on PyPI"; exit 0
+            fi
+            echo "waiting for genflowly-encoding-library ${VERSION} on PyPI (${i}/30)"; sleep 10
+          done
+          echo "::error::genflowly-encoding-library ${VERSION} never appeared on PyPI"; exit 1
 
       - name: Test Retrieval Server
         working-directory: retrieval-server
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock.txt
+          pip install -q flake8 flake8-bugbear
+          flake8 . --count --select=E9,F63,F7,F82,B019 --show-source --statistics
           python -m unittest discover -s tests -t . -v
 
       - name: Configure AWS credentials
