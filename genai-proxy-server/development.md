@@ -291,6 +291,7 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `llm_tokens_total` | vendor, model, direction (`input`\|`output`\|`cache_read`\|`cache_creation`) | retrieval-server LLM nodes |
 | `llm_cost_usd_total` | vendor, model | Kotlin proxy (`CostCalculationService`) |
 | `llm_cost_unpriced_total` | vendor, model | Kotlin proxy — turns with no catalog pricing (cost silently null) |
+| `generation_total` | vendor, model, status (`ok`\|`cancelled`\|failure kind: `transport_error`\|`rate_limit`\|`model_not_found`\|`provider_error`\|`exception`\|…) | Kotlin proxy (`GenerationOrchestrator`) — one per generation outcome; the ONLY alertable signal for mid-stream deaths, which never become HTTP 5xx |
 | `vector_store_total` / `_duration_seconds` | status | store_embeddings lambda |
 | `vector_store_chunks_total` | data_type | store_embeddings lambda |
 | `vector_store_ddb_writeback_failure_total` | data_type | store_embeddings lambda |
@@ -358,3 +359,45 @@ val result = Metrics.tracked("some_op") { doWork() }   // = Python @track
 - **Vendor labels**: always use `AIVendor.metricVendor()` (`CLAUDE` → `"anthropic"`) so one Grafana query spans the proxy and the retrieval-server.
 - **Cost** is emitted inside `CostCalculationService.computeCostUsd` — one point covers non-streaming, streaming and voice; do not add per-call-site emissions. `llm_cost_unpriced_total` counts turns that produced no cost for lack of catalog pricing.
 - **HTTP metrics** come free from the `MicrometerMetrics` Ktor plugin (`ktor_http_server_requests_*`); per-request access logs come from `CallLogging`, JSON-formatted by logback's LogstashEncoder with a `request_id` MDC field from the `CallId` plugin (honors/returns `X-Request-Id`).
+
+## Python dependency locking & memory-safety review rules
+
+Born out of the October 2026 retrieval-server OOM incident
+(`documents/Incidents/RetrievalServerMemoryLeakIncidentOct2026.md`): a cache
+removal whose cost was asserted rather than measured, amplified by an
+unpinned dependency's bug, leaked ~31 MB per embedding call for four days
+before a user report surfaced it.
+
+### Lockfiles (retrieval-server, encoding-server)
+
+- `requirements*.txt` are the human-edited intent (floor pins); the images and
+  CI install ONLY from the committed `requirements*.lock.txt` exact-pin locks.
+- After editing any `requirements*.txt`, regenerate with
+  `scripts/compile-python-locks.sh` and commit the lock diff alongside. The
+  script resolves inside the same base images the Dockerfiles build from
+  (linux/CPython 3.11) — never run `pip-compile` on your Mac for these.
+- A dependency bump is therefore always a reviewable lock diff — "what changed
+  between deploys" is `git diff` on the lock, not registry-image forensics.
+- `encoding-library` itself is a library and deliberately keeps ranges, no
+  lock.
+- Deploy workflows wait for the pinned `genflowly-encoding-library` version to
+  be servable on PyPI before installing — the publish workflow runs on the
+  same push, and pip racing the upload/CDN has failed deploys before.
+
+### Memory-safety review rules (Python)
+
+- Removing or weakening any cache is a **perf-sensitive change**: it needs a
+  measurement, not a docstring assertion ("cheap API wrapper" cost 31 MB/call).
+- Constructing a third-party SDK client per call is **presumed expensive until
+  benchmarked** — prefer a bounded cache keyed by credential hash when clients
+  carry per-customer secrets (see `encoding_library.utils.embedding_utils`).
+- `functools.lru_cache`/`functools.cache` on an instance method pins `self`
+  in a class-level cache forever — CI enforces flake8-bugbear **B019** on the
+  Python services.
+- Module-level dict caches must be bounded: use
+  `retrieval-server/graph/bounded_cache.py` (LRU + TTL eviction), never a bare
+  `dict` that only ever grows.
+- **Stopgaps carry a leash**: any mitigation that masks a defect (RAM bump,
+  retry loop, timeout raise) ships with a tracked follow-up issue AND an alert
+  that fires if the defect persists — a stopgap with neither silently becomes
+  the status quo.
