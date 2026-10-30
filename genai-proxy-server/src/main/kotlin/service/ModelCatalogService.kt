@@ -149,8 +149,8 @@ class ModelCatalogService(
     // Provider-id (retrieval-server /embedding-providers, LiteLLM-shaped) ->
     // the EmbeddingVendor this codebase keys embedding rows/credentials under.
     // AIVendor.of() is NOT used here: it lowercases to "voyage", inconsistent
-    // with AIVendor.EMBEDDING_ONLY_NAMES = setOf("VOYAGE") and every other
-    // place Voyage is keyed (CustomerVendorApiKeys, CustomerEmbeddingModels).
+    // with AIVendor.EMBEDDING_ONLY_NAMES and every other place Voyage is keyed
+    // (CustomerVendorApiKeys, CustomerEmbeddingModels).
     private val embeddingProviderToVendor = mapOf(
         "voyage" to EmbeddingVendor.VOYAGE,
         "openai" to EmbeddingVendor.OPENAI

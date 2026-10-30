@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -9,6 +8,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 
 from encoding_library.observability import count, observe
+from graph.bounded_cache import BoundedCache
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -48,18 +48,19 @@ _DEFAULT_RECALL_RECENCY_WEIGHT = 0.2
 _DEFAULT_RECALL_HALF_LIFE_DAYS = 30.0
 
 _CACHE_TTL_SECONDS = 60
+_CACHE_MAX_SIZE = 256
 
 _dynamodb = None
 
-# customer_id -> (loaded_at_monotonic, ALL memory items). CORE filtering and
-# EPISODIC lookup both read from this one cached DDB query.
-_memory_cache: dict[str, tuple[float, list[dict]]] = {}
+# customer_id -> ALL memory items. CORE filtering and EPISODIC lookup both
+# read from this one cached DDB query.
+_memory_cache = BoundedCache(_CACHE_MAX_SIZE, ttl_seconds=_CACHE_TTL_SECONDS)
 
-# customer_id -> (loaded_at_monotonic, {(model_type, model_name): [collection]}).
-# Listing/describing collections costs Zilliz round-trips on a node that runs
-# every turn; memory collections only change when a customer's first memory is
-# encoded, so short staleness is harmless.
-_collection_cache: dict[str, tuple[float, dict]] = {}
+# customer_id -> {(model_type, model_name): [collection]}. Listing/describing
+# collections costs Zilliz round-trips on a node that runs every turn; memory
+# collections only change when a customer's first memory is encoded, so short
+# staleness is harmless.
+_collection_cache = BoundedCache(_CACHE_MAX_SIZE, ttl_seconds=_CACHE_TTL_SECONDS)
 
 
 def _get_dynamodb():
@@ -89,12 +90,11 @@ def _load_memories(customer_id: str) -> list[dict]:
 
 
 def _get_cached_memories(customer_id: str) -> list[dict]:
-    now = time.monotonic()
     cached = _memory_cache.get(customer_id)
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
+    if cached is not None:
+        return cached
     memories = _load_memories(customer_id)
-    _memory_cache[customer_id] = (now, memories)
+    _memory_cache.set(customer_id, memories)
     return memories
 
 
@@ -147,10 +147,9 @@ def _memory_collections(client, customer_id: str, fallback_model: tuple) -> dict
     customer-scoped. The request-supplied fallback model only applies to
     collections without metadata, so caching across requests is safe in
     practice."""
-    now = time.monotonic()
     cached = _collection_cache.get(customer_id)
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
+    if cached is not None:
+        return cached
 
     from encoding_library.utils.model_registry import parse_collection_description, resolve_model
 
@@ -166,7 +165,7 @@ def _memory_collections(client, customer_id: str, fallback_model: tuple) -> dict
         except Exception as e:
             logger.warning("Could not read metadata for collection '%s': %s", name, e)
         grouped.setdefault(model, []).append(name)
-    _collection_cache[customer_id] = (now, grouped)
+    _collection_cache.set(customer_id, grouped)
     return grouped
 
 

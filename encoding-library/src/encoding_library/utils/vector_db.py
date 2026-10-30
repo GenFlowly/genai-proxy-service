@@ -1,6 +1,10 @@
+import hashlib
 import os
 import logging
 import base64
+import threading
+from collections import OrderedDict
+
 import boto3
 from typing import Tuple
 
@@ -69,10 +73,62 @@ def _record_vector_db_op(customer_id: str, op_name: str, success: bool) -> None:
         logger.warning("Failed to record vector_db usage op=%s", op_name, exc_info=True)
 
 
+# MilvusClients are cached per (endpoint, token hash) — the same identity
+# pymilvus (>=2.5) uses to dedupe the underlying gRPC channel. pymilvus never
+# disconnects registered channels on its own, so uncached per-call
+# construction retained one channel per credential rotation for the process
+# lifetime. Every MilvusClient in this codebase is constructed through this
+# cache, which is what makes close-on-evict safe: an evicted entry is the
+# only owner of its connection alias. Credentials still resolve per call, so
+# a rotation takes effect immediately as a new cache key.
+_MILVUS_CACHE_MAX = 64
+_milvus_cache: "OrderedDict[tuple, object]" = OrderedDict()
+_milvus_cache_lock = threading.Lock()
+
+
+def _cached_milvus_client(endpoint: str, token: str):
+    cache_key = (endpoint, hashlib.sha256(token.encode("utf-8")).hexdigest())
+    with _milvus_cache_lock:
+        client = _milvus_cache.get(cache_key)
+        if client is not None:
+            _milvus_cache.move_to_end(cache_key)
+            return client
+
+    from pymilvus import MilvusClient
+    client = retry_call(
+        MilvusClient,
+        uri=endpoint,
+        token=token,
+        timeout=10.0,
+        secure=endpoint.startswith("https://"),
+        operation="milvus.connect",
+    )
+    logger.info("MilvusClient connected for %s", endpoint)
+
+    evicted = []
+    with _milvus_cache_lock:
+        existing = _milvus_cache.get(cache_key)
+        if existing is not None:
+            # Lost a construction race: the duplicate shares the winner's
+            # deduped channel, so dropping it unclosed leaks nothing — and
+            # closing it would disconnect the shared alias under the winner.
+            return existing
+        _milvus_cache[cache_key] = client
+        while len(_milvus_cache) > _MILVUS_CACHE_MAX:
+            evicted.append(_milvus_cache.popitem(last=False)[1])
+    for old in evicted:
+        try:
+            old.close()
+        except Exception:
+            logger.warning("Failed to close evicted MilvusClient", exc_info=True)
+    return client
+
+
 def get_milvus_client(customer_id: str):
     """
-    Creates and returns an authenticated MilvusClient for the given customer.
-    Credentials are fetched via get_zilliz_credentials.
+    Authenticated Milvus client for the given customer. Credentials are
+    fetched per call via get_zilliz_credentials; the underlying connection is
+    shared through _cached_milvus_client.
     """
     zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
 
@@ -81,16 +137,7 @@ def get_milvus_client(customer_id: str):
         zilliz_endpoint = f"{zilliz_endpoint}:443"
 
     try:
-        from pymilvus import MilvusClient
-        client = retry_call(
-            MilvusClient,
-            uri=zilliz_endpoint,
-            token=zilliz_token,
-            timeout=10.0,
-            secure=zilliz_endpoint.startswith("https://"),
-            operation="milvus.connect",
-        )
-        logger.info(f"MilvusClient connected for customer {customer_id}")
+        client = _cached_milvus_client(zilliz_endpoint, zilliz_token)
         # Every Milvus call (search/insert/delete/...) retries with backoff
         # and fans search/query/insert/upsert/delete into the Cost and Usage
         # rollup (both on success and on failed-after-retries, by design).

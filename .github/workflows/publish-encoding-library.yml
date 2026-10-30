@@ -22,7 +22,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        # 3.9/3.10 are EOL and absent from the ubuntu-latest (26.04) runner
+        # image; 3.11 is what the retrieval server and lambdas actually run.
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4

@@ -19,11 +19,11 @@ _embedding_model_cache: dict[tuple[str, str], Any] = {}
 
 def customer_embedding_model(customer_id: str, model_type: str | None, model_name: str | None) -> Any:
     """Embedding encoder for one customer. Local sentence-transformer models
-    are heavyweight and keyless, so they stay cached per model; hosted models
-    (voyage/openai) are cheap API wrappers built per call on the customer's own
-    stored key — never cached, since a model-keyed cache would reuse one
-    customer's key for another. Raises EmbeddingKeyMissing when the customer
-    has no key for a hosted provider."""
+    are heavyweight and keyless, so they stay cached here per model; hosted
+    models (voyage/openai) resolve the customer's stored credentials per call
+    and are cached inside encoding_library keyed by credential hash — clients
+    are reused without ever serving one customer's key to another. Raises
+    EmbeddingKeyMissing when the customer has no key for a hosted provider."""
     key = resolve_model(model_type, model_name)
     if key[0] == "sentence-transformer":
         if key not in _embedding_model_cache:

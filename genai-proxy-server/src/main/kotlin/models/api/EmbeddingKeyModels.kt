@@ -7,17 +7,25 @@ import kotlinx.serialization.Serializable
  * key with the text-generation vendor of the same name (one key, stored once
  * in CustomerVendorApiKeys); VOYAGE is embedding-only and lives outside the
  * [AIVendor] enum so it never shows up in text-generation vendor lists or
- * failover chains.
+ * failover chains. HUGGINGFACE is not an embedding provider: it is an optional
+ * Hugging Face Hub token the retrieval server uses to authenticate tokenizer
+ * downloads for Voyage models. It shares this credential flow and table but is
+ * never validated, probed, or offered as a model source.
  */
 @Serializable
 enum class EmbeddingVendor {
     OPENAI,
-    VOYAGE;
+    VOYAGE,
+    HUGGINGFACE;
+
+    /** False for HUGGINGFACE — a Hub download token, not an embedding key. */
+    val embeds: Boolean get() = this != HUGGINGFACE
 
     /** Retrieval-server provider string used for key validation. */
     fun toProviderString(): String = when (this) {
         OPENAI -> "openai"
         VOYAGE -> "voyage"
+        HUGGINGFACE -> error("HUGGINGFACE is a Hub token — it has no embedding provider to validate against")
     }
 }
 

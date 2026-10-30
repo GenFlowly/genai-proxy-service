@@ -1,6 +1,7 @@
 package com.genflowly.activity.customer
 
 import com.genflowly.Routes
+import com.genflowly.models.EmbeddingVendor
 import com.genflowly.models.GetCustomerEmbeddingKeysResponse
 import com.genflowly.models.GetEmbeddingModelsResponse
 import com.genflowly.models.StoreCustomerEmbeddingKeyRequest
@@ -8,6 +9,7 @@ import com.genflowly.models.StoreCustomerEmbeddingKeyResponse
 import com.genflowly.service.CustomerCredentialsService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.requireAuthenticatedCustomerId
+import io.github.smiley4.ktoropenapi.delete
 import io.github.smiley4.ktoropenapi.get
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
@@ -27,9 +29,10 @@ fun Route.registerEmbeddingKeyRoutes(
         get(Routes.EMBEDDING_KEYS, {
             tags("Customer")
             summary = "Embedding API key status per provider"
-            description = "Key status for every embedding provider (OpenAI, Voyage). The OpenAI " +
-                    "key is shared with the text-generation vendor of the same name, so a key " +
-                    "stored on either page reads as set on both."
+            description = "Key status for every embedding-page credential (OpenAI, Voyage, and " +
+                    "the optional Hugging Face Hub token). The OpenAI key is shared with the " +
+                    "text-generation vendor of the same name, so a key stored on either page " +
+                    "reads as set on both."
             response {
                 code(HttpStatusCode.OK) {
                     description = "Status per embedding provider"
@@ -89,6 +92,42 @@ fun Route.registerEmbeddingKeyRoutes(
                 apiKey = request.apiKey
             )
             call.respond(StoreCustomerEmbeddingKeyResponse(keyStatus = keyStatus))
+        }
+
+        delete(Routes.EMBEDDING_KEY, {
+            tags("Customer")
+            summary = "Delete a stored embedding-page credential"
+            description = "Removes the stored credential for the given vendor. Only HUGGINGFACE " +
+                    "(the optional Hugging Face Hub token) is deletable: the OpenAI row doubles " +
+                    "as the LLM key and the Voyage key backs stored embedding preferences."
+            request {
+                pathParameter<String>("vendor") {
+                    description = "Credential vendor to delete (HUGGINGFACE)"
+                }
+            }
+            response {
+                code(HttpStatusCode.NoContent) {
+                    description = "Credential removed"
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Unknown or non-deletable vendor"
+                    body<String>()
+                }
+            }
+        }) {
+            val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+            val vendor = call.parameters["vendor"]
+                ?.let { name -> EmbeddingVendor.entries.firstOrNull { it.name == name } }
+                ?: return@delete call.respond(HttpStatusCode.BadRequest, "Unknown vendor")
+            if (vendor.embeds) {
+                return@delete call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Only the ${EmbeddingVendor.HUGGINGFACE.name} token can be deleted"
+                )
+            }
+            logger.info("Deleting {} credential for customerId {}", vendor, customerId)
+            customerCredentialsService.deleteEmbeddingKey(customerId, vendor)
+            call.respond(HttpStatusCode.NoContent)
         }
     }
 }
