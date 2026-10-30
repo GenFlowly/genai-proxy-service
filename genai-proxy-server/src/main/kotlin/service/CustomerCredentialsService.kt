@@ -239,7 +239,9 @@ class CustomerCredentialsService(
     // ─── Embedding API keys ───────────────────────────────────────────────────
     // Same CustomerVendorApiKeys table, keyed by EmbeddingVendor name. OPENAI
     // shares the text-generation vendor's row (one key for both uses); VOYAGE
-    // gets its own row that the AIVendor-based readers above silently skip.
+    // and HUGGINGFACE get their own rows that the AIVendor-based readers above
+    // silently skip. The HUGGINGFACE row's sort key is a contract with the
+    // retrieval server, which reads it for Hub tokenizer downloads.
 
     /**
      * Validates an embedding key against the provider and stores it encrypted
@@ -250,6 +252,18 @@ class CustomerCredentialsService(
         vendor: com.genflowly.models.EmbeddingVendor,
         apiKey: String
     ): com.genflowly.models.EmbeddingKeyStatus {
+        if (!vendor.embeds) {
+            // A Hub token is not an inference key — there is no provider call
+            // to validate it against, and nothing to probe. Store as-is.
+            storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
+            logger.info { "Stored $vendor token without provider validation" }
+            return com.genflowly.models.EmbeddingKeyStatus(
+                vendor = vendor,
+                isAPIKeyValid = true,
+                status = com.genflowly.models.APIKeyStatus.VALID,
+                updateSuccessful = true
+            )
+        }
         val result = retrievalServerClient.validateProviderKeyDetailed(vendor.toProviderString(), apiKey)
 
         return if (result.valid) {
@@ -283,7 +297,7 @@ class CustomerCredentialsService(
      * provider exactly as if no key were set.
      */
     suspend fun getEmbeddingModels(customerId: String): List<com.genflowly.models.EmbeddingVendorModels> {
-        val keysByVendor = com.genflowly.models.EmbeddingVendor.entries.mapNotNull { vendor ->
+        val keysByVendor = com.genflowly.models.EmbeddingVendor.entries.filter { it.embeds }.mapNotNull { vendor ->
             val decrypted = customerCredentialsRepository.getCustomerApiKey(vendor.name, customerId)
                 ?.let { kmsProvider.decrypt(it) }
             if (decrypted.isNullOrBlank()) null else vendor to decrypted
@@ -327,8 +341,10 @@ class CustomerCredentialsService(
             // A stored, vendor-accepted key can still be unable to EMBED (an
             // OpenAI key passes chat validation but 403s on /v1/embeddings).
             // Fold the probe verdict in so the embedding UI reports such a key
-            // as unusable instead of silently offering no models.
-            val cannotEmbed = isValid && embeddingModelCatalogService.cachedKeyCannotEmbed(customerId, vendor)
+            // as unusable instead of silently offering no models. Non-embedding
+            // credentials (the HUGGINGFACE token) are never probed.
+            val cannotEmbed = vendor.embeds && isValid &&
+                embeddingModelCatalogService.cachedKeyCannotEmbed(customerId, vendor)
             com.genflowly.models.EmbeddingKeyStatus(
                 vendor = vendor,
                 isAPIKeyValid = isValid && !cannotEmbed,
@@ -343,6 +359,16 @@ class CustomerCredentialsService(
                 } else null
             )
         }
+    }
+
+    /**
+     * Removes a stored embedding-page credential. Restricted to non-embedding
+     * tokens (HUGGINGFACE): the OPENAI row doubles as the LLM key, and VOYAGE
+     * removal would strand stored embedding-model preferences and collections.
+     */
+    suspend fun deleteEmbeddingKey(customerId: String, vendor: com.genflowly.models.EmbeddingVendor) {
+        require(!vendor.embeds) { "Only the ${com.genflowly.models.EmbeddingVendor.HUGGINGFACE.name} token can be deleted" }
+        customerCredentialsRepository.deleteCustomerApiKey(customerId, vendor.name)
     }
 
     // ─── Vector DB config ─────────────────────────────────────────────────────

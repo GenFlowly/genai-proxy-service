@@ -166,6 +166,25 @@ class CustomerCredentialsRepository(
             results
         }
 
+    suspend fun deleteCustomerApiKey(customerId: String, aiVendor: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                dynamoDbClient.deleteItem(
+                    DeleteItemRequest.builder()
+                        .tableName(CUSTOMER_API_KEY_TABLE)
+                        .key(mapOf(
+                            CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                            AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()
+                        ))
+                        .build()
+                )
+                logger.info("Deleted API key for $customerId / $aiVendor")
+            } catch (e: Exception) {
+                logger.error("Failed to delete API key for $customerId / $aiVendor", e)
+                throw e
+            }
+        }
+
     suspend fun initCustomerApiKey(
         customerId: String,
         aiVendor: String

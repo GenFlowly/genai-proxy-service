@@ -2,5 +2,5 @@
 # store client — this step embeds AND inserts so vectors never cross a Step
 # Functions state boundary (256KB payload cap).
 -r requirements.txt
-genflowly-encoding-library[ml]>=0.1.38
+genflowly-encoding-library[ml]>=0.1.39
 pymilvus>=2.4.0

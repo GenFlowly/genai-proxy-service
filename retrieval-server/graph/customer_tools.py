@@ -21,6 +21,7 @@ from typing import Optional
 import boto3
 from boto3.dynamodb.conditions import Key
 
+from graph.bounded_cache import BoundedCache
 from graph_tools.providers import HttpTool, ToolDefinitionError, mcp_tools_from_record
 
 logger = logging.getLogger(__name__)
@@ -28,9 +29,12 @@ logger = logging.getLogger(__name__)
 TOOLS_TABLE_NAME = os.environ.get("CUSTOMER_TOOLS_TABLE", "CustomerTools")
 
 # Matches graph_loader's TTL: long enough to spare the table during an agent
-# loop, short enough that an edit lands without a deploy.
+# loop, short enough that an edit lands without a deploy. The TTL check stays
+# caller-side so an expired entry survives for the stale-serve path when a
+# reload fails; only the LRU bound evicts.
 _CACHE_TTL_SECONDS = 60
-_cache: dict[str, tuple[float, list[dict]]] = {}
+_CACHE_MAX_SIZE = 256
+_cache = BoundedCache(_CACHE_MAX_SIZE)
 
 _dynamodb = None
 
@@ -85,7 +89,7 @@ def records_for(customer_id: str) -> list[dict]:
         return cached[1]
     try:
         records = _load_records(customer_id)
-        _cache[customer_id] = (now, records)
+        _cache.set(customer_id, (now, records))
         return records
     except Exception:
         logger.exception("Failed to load tool records for customer=%s", customer_id)

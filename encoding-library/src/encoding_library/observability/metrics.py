@@ -16,7 +16,12 @@ logged at DEBUG.
 Dimension policy (see development.md "Observability" section): only the keys
 in ALLOWED_DIMENSIONS are emitted. ``customer_id`` is deliberately excluded —
 per-customer label values explode Prometheus cardinality and CloudWatch
-metric count; customer context belongs in logs.
+metric count; customer context belongs in logs. Values are also bounded:
+non-printable characters are stripped, values are truncated to
+LABEL_VALUE_MAX_LENGTH characters, and each label name admits at most
+MAX_LABEL_VALUES distinct values per process — any later value is emitted as
+"other", because some label values (BYOK model ids, customer tool names) are
+request-controlled and would otherwise mint unbounded time series.
 """
 from __future__ import annotations
 
@@ -33,11 +38,16 @@ ALLOWED_DIMENSIONS = {
     "tool", "direction", "source",
 }
 
+LABEL_VALUE_MAX_LENGTH = 64
+MAX_LABEL_VALUES = 50
+_OVERFLOW_LABEL_VALUE = "other"
+
 _DEFAULT_NAMESPACE = "GenFlowly"
 
 _lock = threading.Lock()
 _emitter = None
 _service = "unknown"
+_label_values_seen: dict[str, set[str]] = {}
 
 
 def configure_observability(service: str, backend: str | None = None,
@@ -73,9 +83,33 @@ def _clean(dims: dict) -> dict:
         if k not in ALLOWED_DIMENSIONS:
             logger.debug("Dropping disallowed metric dimension %r", k)
             continue
-        cleaned[k] = str(v) if v is not None else ""
+        cleaned[k] = _bound_value(k, v)
     cleaned["service"] = _service
     return cleaned
+
+
+def _bound_value(label: str, value) -> str:
+    # Overflow maps to "other" instead of dropping the sample so metric totals
+    # stay correct; the per-label tracking set is capped at MAX_LABEL_VALUES
+    # entries by construction, and label names are bounded by
+    # ALLOWED_DIMENSIONS, so tracking memory itself cannot grow unboundedly.
+    try:
+        if value is None:
+            return ""
+        text = "".join(ch for ch in str(value) if ch.isprintable())
+        text = text[:LABEL_VALUE_MAX_LENGTH]
+        if not text:
+            return ""
+        with _lock:
+            seen = _label_values_seen.setdefault(label, set())
+            if text in seen:
+                return text
+            if len(seen) < MAX_LABEL_VALUES:
+                seen.add(text)
+                return text
+        return _OVERFLOW_LABEL_VALUE
+    except Exception:
+        return _OVERFLOW_LABEL_VALUE
 
 
 def _get_emitter():
