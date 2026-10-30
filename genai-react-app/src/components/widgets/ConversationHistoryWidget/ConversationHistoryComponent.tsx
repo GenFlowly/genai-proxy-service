@@ -73,6 +73,21 @@ export default function ConversationHistoryComponent() {
     // re-reads the session expansion memory
     const [expandEpochs, setExpandEpochs] = useState<Record<string, number>>({})
 
+    // Mirrors the Projects/Pinned/Recents sections' own expanded state (the
+    // library owns the real toggle; this is just our copy, kept in sync via
+    // onToggle) so we can tell the split when every section is collapsed —
+    // otherwise its panes keep reserving their full dragged/fill height and
+    // a big dead block sits below the collapsed headers
+    const [sectionExpanded, setSectionExpanded] = useState<Record<string, boolean>>(() => ({
+        projects: getExpandedSection('projects') ?? true,
+        pinned: getExpandedSection('pinned') ?? true,
+        recent: getExpandedSection('recent') ?? true,
+    }))
+    const toggleSection = (id: string, expanded: boolean) => {
+        setExpandedSection(id, expanded)
+        setSectionExpanded(prev => ({ ...prev, [id]: expanded }))
+    }
+
     // Only persist state to the cache once a real load has happened, so an
     // empty "never loaded" state can't masquerade as "no conversations"
     const hasLoadedRef = React.useRef(!!cached)
@@ -538,8 +553,8 @@ export default function ConversationHistoryComponent() {
             id: 'projects',
             label: t('conversation.conversationHistory.projects'),
             collapsible: true,
-            defaultExpanded: getExpandedSection('projects') ?? true,
-            onToggle: expanded => setExpandedSection('projects', expanded),
+            defaultExpanded: sectionExpanded.projects,
+            onToggle: expanded => toggleSection('projects', expanded),
             testId: 'conv-history-projects-heading',
             actions: [
                 {
@@ -564,8 +579,8 @@ export default function ConversationHistoryComponent() {
             id: 'pinned',
             label: t('conversation.conversationHistory.pinned'),
             collapsible: true,
-            defaultExpanded: getExpandedSection('pinned') ?? true,
-            onToggle: expanded => setExpandedSection('pinned', expanded),
+            defaultExpanded: sectionExpanded.pinned,
+            onToggle: expanded => toggleSection('pinned', expanded),
             testId: 'conv-history-pinned-heading',
             items: toTreeRows(globalPinned, true),
         }]
@@ -576,18 +591,31 @@ export default function ConversationHistoryComponent() {
             id: 'recent',
             label: t('conversation.conversationHistory.recents'),
             collapsible: true,
-            defaultExpanded: getExpandedSection('recent') ?? true,
-            onToggle: expanded => setExpandedSection('recent', expanded),
+            defaultExpanded: sectionExpanded.recent,
+            onToggle: expanded => toggleSection('recent', expanded),
             testId: 'conv-history-recents-heading',
             items: toTreeRows(globalRecent, false),
         }]
         : []
+
+    // Every present section collapsed means there's nothing left to scroll,
+    // so the split should hug its (header-only) content instead of still
+    // reserving its full dragged/fill height — see VerticalSplit's
+    // `collapsed` prop. A section that isn't rendered at all can't block this.
+    const presentSections = [
+        projectBuckets.length > 0 && 'projects',
+        globalPinned.length > 0 && 'pinned',
+        globalRecent.length > 0 && 'recent',
+    ].filter((id): id is string => !!id)
+    const allSectionsCollapsed = presentSections.length > 0
+        && presentSections.every(id => !sectionExpanded[id])
 
     return (
         <>
             <VerticalSplit
                 storageKey={HISTORY_SPLIT_STORAGE_KEY}
                 separatorLabel={t('conversation.conversationHistory.resizePanels')}
+                collapsed={allSectionsCollapsed}
                 handleTestId="history-split-handle"
                 topTestId="projects-pane"
                 bottomTestId="history-pane"
