@@ -28,6 +28,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from encoding_library.observability import configure_observability, set_request_id, setup_logging
 
 from routes.connectors import router as connectors_router
+from routes.debug_memory import router as debug_memory_router
 from routes.embedding_providers import router as embedding_providers_router
 from routes.model_metadata import router as model_metadata_router
 from routes.models import router as models_router
@@ -127,6 +128,8 @@ app.include_router(voice_router)
 app.include_router(validate_key_router)
 app.include_router(realtime_secret_router)
 app.include_router(call_control_router)
+# 404s unless MEMORY_DEBUG_ENDPOINT=1 (investigation windows only).
+app.include_router(debug_memory_router)
 
 
 @app.get("/health")

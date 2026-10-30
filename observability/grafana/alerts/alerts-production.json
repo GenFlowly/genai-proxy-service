@@ -1,0 +1,502 @@
+[
+  {
+    "uid": "ret-mem-headroom-prod",
+    "title": "Retrieval-server memory headroom < 15%",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "fly_instance_memory_mem_available{app=\"genai-retrieval-server-production\"} / fly_instance_memory_mem_total{app=\"genai-retrieval-server-production\"} < 0.15"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "30m",
+    "annotations": {
+      "summary": "retrieval-server VM has had <15% memory available for 30m — on the current leak profile that is hours from an OOM kill. Check process_resident_memory_bytes slope; incident runbook: documents/Incidents/RetrievalServerMemoryLeakIncidentOct2026.md §11."
+    },
+    "labels": { "severity": "warning", "service": "retrieval-server" }
+  },
+  {
+    "uid": "ret-restart-churn-prod",
+    "title": "Retrieval-server restarted >2x in 24h",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "changes(process_start_time_seconds{app=\"genai-retrieval-server-production\"}[24h]) > 2"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "5m",
+    "annotations": {
+      "summary": "More than 2 process restarts in 24h on retrieval-server prod — likely OOM-kill churn (deploys annotate dashboards; expected restarts are explainable). fly logs will only have the shallow buffer: pull Fly Prometheus history per the incident runbook."
+    },
+    "labels": { "severity": "warning", "service": "retrieval-server" }
+  },
+  {
+    "uid": "ret-rss-slope-prod",
+    "title": "Retrieval-server RSS growing >20 MB/h for 6h",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "deriv(process_resident_memory_bytes{app=\"genai-retrieval-server-production\"}[3h]) > 5825"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "6h",
+    "annotations": {
+      "summary": "Slow-leak catcher: RSS has grown >20 MB/h (3h derivative, threshold 5825 B/s) for 6 hours straight on retrieval-server prod. The healthy baseline is <6 MB/h. File a ticket before it becomes an OOM pager."
+    },
+    "labels": { "severity": "warning", "service": "retrieval-server" }
+  },
+  {
+    "uid": "proxy-gen-transport-prod",
+    "title": "Generations dying mid-stream (transport_error)",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "sum(rate(generation_total{app=\"genai-proxy-server-production\",status=\"transport_error\"}[10m])) > 0"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "10m",
+    "annotations": {
+      "summary": "Generations are failing mid-stream with transport_error — the retrieval server is dying under them (the Oct 2026 OOM incident's exact signature). These failures NEVER appear as HTTP 5xx because the response already streamed as 200. Check retrieval-server for OOM kills first."
+    },
+    "labels": { "severity": "critical", "service": "genai-proxy-server" }
+  },
+  {
+    "uid": "proxy-gen-failshare-prod",
+    "title": "Generation failure share > 5%",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "sum(rate(generation_total{app=\"genai-proxy-server-production\",status!~\"ok|cancelled\"}[15m])) / sum(rate(generation_total{app=\"genai-proxy-server-production\"}[15m])) > 0.05"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "15m",
+    "annotations": {
+      "summary": "More than 5% of chat generations are failing (any kind: rate_limit storms, deprecated/missing models, bad keys, provider outages). Break down by status label on generation_total to see which kind."
+    },
+    "labels": { "severity": "warning", "service": "genai-proxy-server" }
+  },
+  {
+    "uid": "ret-stream-errors-prod",
+    "title": "Retrieval-server stream errors sustained",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "sum(rate(stream_error_total{app=\"genai-retrieval-server-production\"}[10m])) > 0"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "10m",
+    "annotations": {
+      "summary": "stream_error_total is firing continuously on retrieval-server prod — LLM vendor streams are erroring out (this fired during the Oct 2026 incident window)."
+    },
+    "labels": { "severity": "warning", "service": "retrieval-server" }
+  },
+  {
+    "uid": "proxy-http-5xx-prod",
+    "title": "Proxy HTTP 5xx share > 2%",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "sum(rate(ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-production\",status=~\"5..\"}[10m])) / sum(rate(ktor_http_server_requests_seconds_count{app=\"genai-proxy-server-production\"}[10m])) > 0.02"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "10m",
+    "annotations": {
+      "summary": "More than 2% of proxy HTTP responses are 5xx. Note: mid-stream generation deaths do NOT show here — see the generation_total alerts for those."
+    },
+    "labels": { "severity": "warning", "service": "genai-proxy-server" }
+  },
+  {
+    "uid": "ret-http-5xx-prod",
+    "title": "Retrieval-server HTTP 5xx share > 2%",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "sum(rate(http_requests_total{app=\"genai-retrieval-server-production\",status=~\"5..\"}[10m])) / sum(rate(http_requests_total{app=\"genai-retrieval-server-production\"}[10m])) > 0.02"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "10m",
+    "annotations": {
+      "summary": "More than 2% of retrieval-server HTTP responses are 5xx."
+    },
+    "labels": { "severity": "warning", "service": "retrieval-server" }
+  },
+  {
+    "uid": "retry-exhausted-prod",
+    "title": "Dependency retries exhausted (milvus/voyage/tavily/...)",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "sum by (operation) (rate(retry_exhausted_total{app=~\".*-production\"}[15m])) > 0"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "15m",
+    "annotations": {
+      "summary": "An external dependency is failing after all retry attempts (operation label says which: milvus, voyage, tavily, …) — the earliest signal that a dependency is down, before users notice."
+    },
+    "labels": { "severity": "warning" }
+  },
+  {
+    "uid": "llm-failshare-prod",
+    "title": "LLM call failure share > 10% for a vendor",
+    "ruleGroup": "genflowly-production",
+    "folderUID": "genflowly-production",
+    "orgID": 1,
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": { "from": 600, "to": 0 },
+        "datasourceUid": "__PROM_DS_UID__",
+        "model": {
+          "refId": "A",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "expr": "sum by (vendor) (rate(llm_request_total{app=\"genai-retrieval-server-production\",status!=\"ok\"}[15m])) / sum by (vendor) (rate(llm_request_total{app=\"genai-retrieval-server-production\"}[15m])) > 0.1"
+        }
+      },
+      {
+        "refId": "B",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+      },
+      {
+        "refId": "C",
+        "relativeTimeRange": { "from": 0, "to": 0 },
+        "datasourceUid": "__expr__",
+        "model": {
+          "refId": "C",
+          "type": "threshold",
+          "expression": "B",
+          "conditions": [
+            { "evaluator": { "params": [-1e308], "type": "gt" }, "operator": { "type": "and" }, "query": { "params": ["C"] }, "reducer": { "type": "last", "params": [] }, "type": "query" }
+          ]
+        }
+      }
+    ],
+    "noDataState": "OK",
+    "execErrState": "Error",
+    "for": "15m",
+    "annotations": {
+      "summary": "One LLM vendor's calls are failing >10% of the time (vendor label says which) — vendor outage, exhausted quota, or a bad stored key; distinct from our own 5xx."
+    },
+    "labels": { "severity": "warning", "service": "retrieval-server" }
+  }
+]
