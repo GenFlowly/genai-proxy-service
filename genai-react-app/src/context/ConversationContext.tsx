@@ -323,7 +323,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
         onAwaitingInput?: (payload: AwaitingInput) => void,
         onContentReset?: () => void,
-        onStopReason?: (reason: string) => void
+        onStopReason?: (reason: string) => void,
+        regenerateMessageId?: string
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -339,6 +340,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             agentId: selectedAgentId,
             // Starting fresh inside a project: the new conversation is born in it
             projectId: (idOverride || conversationIdRef.current) ? undefined : pendingProjectIdRef.current,
+            regenerateMessageId,
         }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
     }
 
@@ -694,10 +696,17 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
 
         let { aiConfigs, finalSelectedResponseId, promptToUse } = prep
 
-        // Regeneration resends the turn's original attachments so the backend
-        // matches the existing user message instead of creating a new one
+        // Regeneration resends the turn's original attachments as part of the input
         const attachmentsToUse = attachments ?? prep.conversationBlock.attachments ?? []
-        
+
+        // Regenerate reuses the turn's existing user message — its id travels
+        // on every response in the block as previousMessageId — instead of
+        // letting the backend guess from prompt text, which only works while
+        // the original send is still mid-flight, never for a later Regenerate.
+        const regenerateMessageId = vendorToRegenerate
+            ? prep.conversationBlock.responseMessages.find(m => m.previousMessageId)?.previousMessageId
+            : undefined
+
         if (vendorToRegenerate) {
              aiConfigs = aiConfigs.filter(c => c.aiVendor === vendorToRegenerate)
              if (aiConfigs.length === 0) {
@@ -985,7 +994,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         handleGeneratedAttachments,
                         handleAwaitingInput,
                         handleContentReset,
-                        handleStopReason
+                        handleStopReason,
+                        regenerateMessageId
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer
