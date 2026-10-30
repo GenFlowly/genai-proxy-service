@@ -280,7 +280,14 @@ export default function AgentsPage() {
             ),
             isActive: category === filter,
             ariaCurrent: 'true' as const,
-            onSelect: () => setCategory(filter),
+            onSelect: () => {
+                setCategory(filter)
+                // No-op on desktop (the mobile overlay isn't open there);
+                // on mobile this closes the overlay the same way picking a
+                // conversation/note already does, instead of leaving the
+                // category list sitting open over the now-filtered grid
+                setLeftSidebarExpanded(false)
+            },
             testId: `agents-category-${filter.toLowerCase()}`,
         })),
     }
@@ -301,6 +308,18 @@ export default function AgentsPage() {
                             'data-testid': 'create-agent-button',
                         },
                     ]}
+                    menuTitle={t('agentsPage.categories.sectionLabel')}
+                    menuContent={(
+                        <SidebarListPanel
+                            groups={[categoryGroup]}
+                            isLoading={loading}
+                            hasError={false}
+                            errorText=""
+                            emptyText=""
+                            listAriaLabel={t('agentsPage.categories.navAriaLabel')}
+                            data-testid="agents-category-panel-mobile"
+                        />
+                    )}
                 />
             ) : (
                 <>

@@ -4,9 +4,9 @@ FROM public.ecr.aws/lambda/python:3.11 AS builder
 # Install build dependencies
 RUN yum install -y gcc gcc-c++ make cmake
 
-# Copy and install dependencies
-COPY requirements.txt /tmp/
-RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements.txt --target /tmp/python
+# Install from the exact-pin lock (scripts/compile-python-locks.sh)
+COPY requirements.lock.txt /tmp/
+RUN pip install --only-binary=:all: --no-cache-dir -r /tmp/requirements.lock.txt --target /tmp/python
 
 # Runtime stage
 FROM public.ecr.aws/lambda/python:3.11

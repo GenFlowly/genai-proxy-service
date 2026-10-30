@@ -1,0 +1,17 @@
+# Ships every Fly app's logs in the genflowly org to Grafana Cloud Loki
+# (superfly/fly-log-shipper = Vector tailing the org's NATS log stream).
+# Deploy + required secrets: see README.md in this directory. Must run
+# continuously — no auto-stop, exactly one machine.
+app = "genflowly-log-shipper"
+primary_region = "iad"
+
+[build]
+  image = "ghcr.io/superfly/fly-log-shipper:latest"
+
+[env]
+  # Sink selection is secret-driven: setting the LOKI_* secrets activates the
+  # Loki sink; no other sink is configured.
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

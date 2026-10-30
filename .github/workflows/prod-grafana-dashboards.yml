@@ -11,6 +11,7 @@ on:
     paths:
       - 'observability/grafana/*-production.json'
       - 'observability/grafana/datasources/*-production.json'
+      - 'observability/grafana/alerts/*-production.json'
       - '.github/workflows/prod-grafana-dashboards.yml'
   workflow_dispatch:
 
@@ -78,3 +79,39 @@ jobs:
             fi
             jq -r '"  -> \(.status) uid=\(.uid) \(.url)"' /tmp/resp.json
           done
+
+          # Alert rules as code: observability/grafana/alerts/alerts-$STAGE.json
+          # holds an array of Grafana provisioning alert rules with
+          # __PROM_DS_UID__ as a datasource placeholder, resolved here against
+          # the stack's Prometheus datasource. X-Disable-Provenance keeps the
+          # rules editable in the UI between deploys; this upsert-by-uid wins
+          # on the next run. Contact points / notification policies are NOT
+          # managed here — rules fire into the default notification policy.
+          alerts_file="observability/grafana/alerts/alerts-$STAGE.json"
+          if [[ -f "$alerts_file" ]]; then
+            prom_uid=$(curl -s "$GRAFANA_URL/api/datasources" "${auth[@]}" \
+              | jq -r '[.[] | select(.type=="prometheus")] | (map(select(.isDefault)) + .) | first.uid // empty')
+            if [[ -z "$prom_uid" ]]; then
+              echo "WARNING: no Prometheus datasource visible to the SA token — skipping alert rules (token needs datasource read)"
+            else
+              echo "Deploying alert rules against Prometheus datasource $prom_uid"
+              jq -c --arg ds "$prom_uid" '.[] | walk(if . == "__PROM_DS_UID__" then $ds else . end)' "$alerts_file" \
+                | while IFS= read -r rule; do
+                uid=$(jq -r '.uid' <<<"$rule")
+                title=$(jq -r '.title' <<<"$rule")
+                code=$(curl -s -o /tmp/ar_get.json -w '%{http_code}' \
+                  "$GRAFANA_URL/api/v1/provisioning/alert-rules/$uid" "${auth[@]}")
+                case "$code" in
+                  200) method=PUT;  target="$GRAFANA_URL/api/v1/provisioning/alert-rules/$uid" ;;
+                  404) method=POST; target="$GRAFANA_URL/api/v1/provisioning/alert-rules" ;;
+                  *)   echo "Alert rule lookup for '$title' failed ($code):"; cat /tmp/ar_get.json; exit 1 ;;
+                esac
+                code=$(curl -s -o /tmp/ar_resp.json -w '%{http_code}' -X "$method" "$target" \
+                  "${auth[@]}" -H "X-Disable-Provenance: true" -d "$rule")
+                if [[ "$code" != "200" && "$code" != "201" ]]; then
+                  echo "Alert rule upsert for '$title' failed ($code):"; cat /tmp/ar_resp.json; exit 1
+                fi
+                echo "  -> alert rule '$title' ($uid) upserted via $method"
+              done
+            fi
+          fi
