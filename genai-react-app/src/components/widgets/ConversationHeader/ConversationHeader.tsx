@@ -29,7 +29,7 @@ export default function ConversationHeader(): React.ReactElement | null {
     const { getAccessTokenSilently } = useAuth0()
     const { entitlements, customerInstructions } = useAuth()
     const { selectedInstructionId, setSelectedInstructionId, setSystemPrompt } = useAI()
-    const { toggleRightSidebar } = useLayout()
+    const { toggleRightSidebar, setLeftSidebarExpanded } = useLayout()
     const { width } = useWindowSize()
     const isMobile = width <= 768
     const [isPickerOpen, setPickerOpen] = useState(false)
@@ -149,7 +149,7 @@ export default function ConversationHeader(): React.ReactElement | null {
                 // The menu heading names the page you're on — the same label
                 // as this page's navbar item, not the menu's content
                 menuTitle={NAV_ITEMS.find(item => item.id === 'chat')?.label}
-                menuContent={<ConversationHistoryComponent />}
+                menuContent={<ConversationHistoryComponent onSelect={() => setLeftSidebarExpanded(false)} />}
             >
                 {modals}
             </MobileHeader>

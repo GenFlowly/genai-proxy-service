@@ -212,6 +212,21 @@ describe('ConversationHistoryComponent', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/chat/conv-1')
     })
 
+    test('fires onSelect synchronously on item click, alongside navigate', async () => {
+        const onSelect = jest.fn()
+        render(<ConversationHistoryComponent onSelect={onSelect} />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        })
+
+        fireEvent.click(screen.getByTestId('conv-history-item-conv-1'))
+        // Lets a mobile overlay close itself immediately instead of waiting
+        // on the (async, failure-prone) conversation load
+        expect(onSelect).toHaveBeenCalledTimes(1)
+        expect(mockNavigate).toHaveBeenCalledWith('/chat/conv-1')
+    })
+
     // Replaces the panel's observer with a stub whose callbacks the test can
     // fire, simulating the end sentinel scrolling into view
     const stubIntersectionObserver = () => {

@@ -1,10 +1,11 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 import AgentsPage from '../../pages/AgentsPage/AgentsPage';
 import { useAuth } from '../../context/AuthContext';
+import { useWindowSize } from '../../hooks/useWindowSize';
 import * as agentsService from '../../services/agentsService';
 
 // ── Static mocks ──────────────────────────────────────────────────────────────
@@ -26,6 +27,29 @@ jest.mock('../../context/LayoutContext', () => ({
 
 jest.mock('../../hooks/usePageTitle', () => ({
     usePageTitle: jest.fn(),
+}));
+
+jest.mock('../../hooks/useWindowSize', () => ({
+    useWindowSize: jest.fn(),
+}));
+
+// Lightweight stand-in for the app's MobileHeader: exposes the pieces this
+// suite cares about (menuTitle, menuContent) without the real component's
+// overlay/open-close chrome, which has its own dedicated tests
+jest.mock('../../components/widgets/MobileHeader/MobileHeader', () => ({
+    __esModule: true,
+    default: ({ title, menuItems, menuTitle, menuContent }: any) => (
+        <div data-testid="mobile-header">
+            <span>{title}</span>
+            <span data-testid="mobile-menu-title">{menuTitle}</span>
+            {menuItems?.map((item: any) => (
+                <button key={item['data-testid']} data-testid={item['data-testid']} onClick={item.onClick}>
+                    {item.label}
+                </button>
+            ))}
+            <div data-testid="mobile-menu-content">{menuContent}</div>
+        </div>
+    ),
 }));
 
 const mockShowToast = jest.fn();
@@ -85,6 +109,7 @@ describe('AgentsPage Component', () => {
         (useAuth as jest.Mock).mockReturnValue({
             getAccessTokenSilently: mockGetAccessTokenSilently,
         });
+        (useWindowSize as jest.Mock).mockReturnValue({ width: 1200 });
     });
 
     // ── Loading → empty state ─────────────────────────────────────────────────
@@ -335,6 +360,39 @@ describe('AgentsPage Component', () => {
         await userEvent.click(screen.getByTestId('agents-category-conversation'));
         expect(screen.getByText('Default Graph')).toBeInTheDocument();
         expect(screen.queryByText('Memory Agent')).not.toBeInTheDocument();
+    });
+
+    // ── Mobile ─────────────────────────────────────────────────────────────────
+
+    describe('on mobile', () => {
+        beforeEach(() => {
+            (useWindowSize as jest.Mock).mockReturnValue({ width: 500 });
+        });
+
+        test('the category sidebar is available in the mobile menu, and picking one closes the overlay', async () => {
+            const memoryAgent = {
+                ...mockAgent,
+                graphId: 'graph-mem',
+                name: 'Memory Agent',
+                isDefault: false,
+                category: 'MEMORY',
+            };
+            (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+                agents: [mockAgent, memoryAgent],
+            });
+            renderPage();
+            await waitFor(() => expect(screen.getByTestId('mobile-header')).toBeInTheDocument());
+
+            expect(screen.getByTestId('mobile-menu-title')).toHaveTextContent('Categories');
+            const menuContent = screen.getByTestId('mobile-menu-content');
+            const memoryCategoryBtn = within(menuContent).getByTestId('agents-category-memory');
+
+            await userEvent.click(memoryCategoryBtn);
+
+            // Same close-on-select behavior as the conversation/notes lists:
+            // picking something in the mobile menu dismisses it immediately
+            expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(false);
+        });
     });
 
     test('"Created by me" chip hides System agents', async () => {
