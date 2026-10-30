@@ -269,6 +269,27 @@ class MemoryNodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {})
 
 
+class MemoryCacheTests(unittest.TestCase):
+    """The per-customer memory cache: TTL hits skip DDB, size stays bounded."""
+
+    def setUp(self):
+        memory_mod._memory_cache.clear()
+
+    def test_memories_are_served_from_cache_within_the_ttl(self):
+        loader = MagicMock(return_value=[_mem("MEM#a", "CORE", "Works as an engineer.")])
+        with patch.object(memory_mod, "_load_memories", loader):
+            first = memory_mod._get_cached_memories("cust-1")
+            second = memory_mod._get_cached_memories("cust-1")
+        self.assertEqual(first, second)
+        loader.assert_called_once()
+
+    def test_cache_never_grows_past_its_bound(self):
+        with patch.object(memory_mod, "_load_memories", return_value=[]):
+            for i in range(memory_mod._CACHE_MAX_SIZE + 50):
+                memory_mod._get_cached_memories(f"cust-{i}")
+        self.assertEqual(len(memory_mod._memory_cache), memory_mod._CACHE_MAX_SIZE)
+
+
 class RecencyHelperTests(unittest.TestCase):
     def test_timestamp_parsing_tolerates_z_and_nanoseconds(self):
         # Real DDB rows carry both plain-seconds and 9-digit fractional forms

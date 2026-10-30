@@ -9,6 +9,7 @@ export const endpoints = {
     storeCustomerVendorApiKey: `${BASE}${API_PREFIX}/store-api-key`,
     storeCustomerVendorConfig: `${BASE}${API_PREFIX}/store-vendor-config`,
     getEmbeddingKeys: `${BASE}${API_PREFIX}/embedding-keys`,
+    deleteEmbeddingKey: (vendor: string) => `${BASE}${API_PREFIX}/embedding-keys/${encodeURIComponent(vendor)}`,
     storeEmbeddingKey: `${BASE}${API_PREFIX}/store-embedding-key`,
     getEmbeddingModels: `${BASE}${API_PREFIX}/embedding-models`,
     storeCustomerVectorDBConfig: `${BASE}${API_PREFIX}/store-vector-db-config`,

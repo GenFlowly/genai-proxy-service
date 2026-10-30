@@ -7,6 +7,7 @@ import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
 from encoding_library.observability import count
+from graph.bounded_cache import BoundedCache
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,12 @@ SYSTEM_GRAPH_OWNER = "System"
 # Short TTL instead of process-lifetime caching: customer forks and System
 # publishes must take effect without a restart. One entry per owner id
 # (customers and SYSTEM_GRAPH_OWNER alike): owner -> (loaded_at, result).
+# The TTL check stays caller-side (not in BoundedCache) so an expired entry
+# survives for the stale-serve path when a reload fails; only the LRU bound
+# evicts.
 _CACHE_TTL_SECONDS = 60
-_graph_cache: dict[str, tuple[float, Optional[tuple[dict, list[dict]]]]] = {}
+_CACHE_MAX_SIZE = 128
+_graph_cache = BoundedCache(_CACHE_MAX_SIZE)
 
 
 def _get_dynamodb():
@@ -111,7 +116,7 @@ def _get_cached(cache_key: str, loader) -> Optional[tuple[dict, list[dict]]]:
         return cached[1]
     try:
         result = loader()
-        _graph_cache[cache_key] = (now, result)
+        _graph_cache.set(cache_key, (now, result))
         return result
     except Exception:
         logger.exception("Failed to load graph for key=%s", cache_key)

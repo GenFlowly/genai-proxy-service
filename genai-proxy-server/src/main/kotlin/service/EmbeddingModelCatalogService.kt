@@ -248,7 +248,7 @@ class EmbeddingModelCatalogService(
         }
         var completed = false
         try {
-            val vendorNames = EmbeddingVendor.entries.map { it.name }.toSet()
+            val vendorNames = EmbeddingVendor.entries.filter { it.embeds }.map { it.name }.toSet()
             val items = customerCredentialsRepository.scanEmbeddingKeyItems(vendorNames)
             logger.info { "Embedding model sweep starting: ${items.size} key row(s) to probe" }
 

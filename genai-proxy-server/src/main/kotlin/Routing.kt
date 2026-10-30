@@ -97,6 +97,7 @@ object Routes {
     const val STORE_API_KEY = "$API_V1/store-api-key"
     const val STORE_VENDOR_CONFIG = "$API_V1/store-vendor-config"
     const val EMBEDDING_KEYS = "$API_V1/embedding-keys"
+    const val EMBEDDING_KEY = "$API_V1/embedding-keys/{vendor}"
     const val STORE_EMBEDDING_KEY = "$API_V1/store-embedding-key"
     const val EMBEDDING_MODELS = "$API_V1/embedding-models"
     const val STORE_VECTOR_DB_CONFIG = "$API_V1/store-vector-db-config"

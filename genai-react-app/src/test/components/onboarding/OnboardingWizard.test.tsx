@@ -26,7 +26,7 @@ jest.mock('../../../services/storeCustomerVectorDBConfigService', () => ({
 }))
 
 jest.mock('../../../services/embeddingKeysService', () => ({
-    EmbeddingVendor: { OPENAI: 'OPENAI', VOYAGE: 'VOYAGE' },
+    EmbeddingVendor: { OPENAI: 'OPENAI', VOYAGE: 'VOYAGE', HUGGINGFACE: 'HUGGINGFACE' },
     getEmbeddingKeys: jest.fn(),
     storeEmbeddingKey: jest.fn(),
 }))
@@ -301,6 +301,55 @@ describe('OnboardingWizard', () => {
             fireEvent.click(screen.getByTestId('onboarding-continue'))
 
             await waitFor(() => expect(screen.getByTestId('onboarding-step-message')).toHaveTextContent('voyage says no'))
+        })
+
+        test('renders the optional Hugging Face token field', async () => {
+            await goToVoyageStep()
+            expect(screen.getByTestId('onboarding-hf-token-input')).toBeInTheDocument()
+        })
+
+        test('continuing with both fields empty advances without saving anything', async () => {
+            await goToVoyageStep()
+            fireEvent.click(screen.getByTestId('onboarding-continue'))
+
+            expect(await screen.findByTestId('onboarding-tavily-key-input')).toBeInTheDocument()
+            expect(storeEmbeddingKey).not.toHaveBeenCalled()
+        })
+
+        test('saves only the Hugging Face token when the Voyage key is left empty', async () => {
+            ;(storeEmbeddingKey as jest.Mock).mockResolvedValueOnce({
+                keyStatus: { vendor: 'HUGGINGFACE', isAPIKeyValid: true, status: 'API key is valid', updateSuccessful: true },
+            })
+            await goToVoyageStep()
+            fireEvent.change(screen.getByTestId('onboarding-hf-token-input'), { target: { value: 'hf_token' } })
+            fireEvent.click(screen.getByTestId('onboarding-continue'))
+
+            expect(await screen.findByTestId('onboarding-tavily-key-input')).toBeInTheDocument()
+            expect(storeEmbeddingKey).toHaveBeenCalledTimes(1)
+            expect(storeEmbeddingKey).toHaveBeenCalledWith('token', 'HUGGINGFACE', 'hf_token')
+        })
+
+        test('saves both the Voyage key and the Hugging Face token when both are entered', async () => {
+            await goToVoyageStep()
+            fireEvent.change(screen.getByTestId('onboarding-voyage-key-input'), { target: { value: 'pa-voyage-key' } })
+            fireEvent.change(screen.getByTestId('onboarding-hf-token-input'), { target: { value: 'hf_token' } })
+            fireEvent.click(screen.getByTestId('onboarding-continue'))
+
+            expect(await screen.findByTestId('onboarding-tavily-key-input')).toBeInTheDocument()
+            expect(storeEmbeddingKey).toHaveBeenCalledWith('token', 'VOYAGE', 'pa-voyage-key')
+            expect(storeEmbeddingKey).toHaveBeenCalledWith('token', 'HUGGINGFACE', 'hf_token')
+        })
+
+        test('shows the error and stays when the Hugging Face token save fails', async () => {
+            ;(storeEmbeddingKey as jest.Mock).mockResolvedValueOnce({
+                keyStatus: { vendor: 'HUGGINGFACE', isAPIKeyValid: false, status: 'API key is not valid', updateSuccessful: false, detail: 'hub says no' },
+            })
+            await goToVoyageStep()
+            fireEvent.change(screen.getByTestId('onboarding-hf-token-input'), { target: { value: 'hf_bad' } })
+            fireEvent.click(screen.getByTestId('onboarding-continue'))
+
+            await waitFor(() => expect(screen.getByTestId('onboarding-step-message')).toHaveTextContent('hub says no'))
+            expect(screen.getByTestId('onboarding-hf-token-input')).toBeInTheDocument()
         })
     })
 

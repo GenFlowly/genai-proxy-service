@@ -1,5 +1,8 @@
+import hashlib
 import logging
 import math
+import threading
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -84,18 +87,91 @@ class VoyageContextualizedEmbeddings:
         return self._call([[text]], input_type="query")[0][0]
 
 
+# Hosted embedding clients are cached per (model, credential hashes). A fresh
+# voyageai client per call is NOT a cheap wrapper: voyageai's
+# BaseClient.tokenizer is functools.lru_cache on an instance method, so the
+# class-level cache pins every (client, model) pair's ~31MB HF tokenizer for
+# the process lifetime (see
+# documents/Incidents/RetrievalServerMemoryLeakIncidentOct2026.md). Cache keys
+# hold sha256 hashes, never plaintext; a rotated key is a new entry, and two
+# customers share a client only when their stored credentials are
+# byte-identical — the same isolation the api_key contract guarantees.
+_CLIENT_CACHE_MAX = 32
+_client_cache: "OrderedDict[tuple, Any]" = OrderedDict()
+_client_cache_lock = threading.Lock()
+
+
+def _sha256(value: Optional[str]) -> str:
+    return hashlib.sha256((value or "").encode("utf-8")).hexdigest()
+
+
+def _cached_client(cache_key: tuple, build) -> Any:
+    with _client_cache_lock:
+        client = _client_cache.get(cache_key)
+        if client is not None:
+            _client_cache.move_to_end(cache_key)
+            return client
+    # Built outside the lock: construction may fetch a tokenizer over the
+    # network. A concurrent duplicate loses the race below and is discarded.
+    client = build()
+    with _client_cache_lock:
+        existing = _client_cache.get(cache_key)
+        if existing is not None:
+            return existing
+        _client_cache[cache_key] = client
+        while len(_client_cache) > _CLIENT_CACHE_MAX:
+            _client_cache.popitem(last=False)
+    return client
+
+
+def _attach_voyage_tokenizer(embeddings: Any, model: str, hf_token: Optional[str]) -> None:
+    """Pin the model's HF tokenizer to this client instance, shadowing
+    voyageai's class-level lru_cache (BaseClient.tokenizer) so nothing is
+    retained beyond the client's own lifetime. The pinned loader ignores the
+    model argument because each cached client embeds exactly one model.
+    hf_token (the customer's own, optional) authenticates the Hub download;
+    it is passed per call and never exported into the process environment —
+    this process serves many customers. Preload failure degrades to the SDK's
+    lazy anonymous load."""
+    try:
+        from tokenizers import Tokenizer
+        kwargs = {"token": hf_token} if hf_token else {}
+        try:
+            tokenizer = Tokenizer.from_pretrained(f"voyageai/{model}", **kwargs)
+        except TypeError:
+            # tokenizers < 0.20 spells the kwarg auth_token.
+            tokenizer = Tokenizer.from_pretrained(f"voyageai/{model}", auth_token=hf_token)
+        tokenizer.no_truncation()
+    except Exception as e:
+        logger.warning(
+            "Voyage tokenizer preload failed for %s (SDK lazy load will apply): %s", model, e
+        )
+        return
+
+    def _pinned(_model: str) -> Any:
+        return tokenizer
+
+    embeddings._client.tokenizer = _pinned
+    embeddings._aclient.tokenizer = _pinned
+
+
 def get_embedding_model(
     model_type_str: Optional[str] = None,
     model_name_str: Optional[str] = None,
     api_key: Optional[str] = None,
+    hf_token: Optional[str] = None,
 ) -> Any:
     """
-    Instantiates and returns the appropriate Langchain embedding model.
-    Defaults to sentence-transformer / all-MiniLM-L6-v2 if not specified.
+    Returns the appropriate Langchain embedding model, cached per
+    (model, credential hashes) for hosted providers. Defaults to
+    sentence-transformer / all-MiniLM-L6-v2 if not specified.
 
     Hosted providers (voyage/openai) embed on the given api_key — the
     customer's own, never an environment variable; raises EmbeddingKeyMissing
-    without one. Local sentence-transformer models ignore api_key.
+    without one. hf_token (optional, also the customer's own) authenticates
+    Voyage tokenizer downloads from the HF Hub. Local sentence-transformer
+    models ignore both and are not cached here — consumers cache those per
+    model, they are keyless so cross-customer reuse is safe.
     """
     from encoding_library.utils.model_registry import resolve_model, is_contextualized_model
     model_type, model_name = resolve_model(model_type_str, model_name_str)
@@ -107,13 +183,26 @@ def get_embedding_model(
         raise ValueError(f"Unknown language model type specified: {model_type}")
     if not api_key:
         raise EmbeddingKeyMissing(model_type)
+
+    cache_key = (model_type, model_name, _sha256(api_key), _sha256(hf_token))
+
     if model_type == "openai":
         from langchain_openai import OpenAIEmbeddings
-        return OpenAIEmbeddings(model=model_name, api_key=api_key)
+        return _cached_client(
+            cache_key, lambda: OpenAIEmbeddings(model=model_name, api_key=api_key)
+        )
     if is_contextualized_model(model_name):
-        return VoyageContextualizedEmbeddings(model=model_name, api_key=api_key)
+        return _cached_client(
+            cache_key, lambda: VoyageContextualizedEmbeddings(model=model_name, api_key=api_key)
+        )
     from langchain_voyageai import VoyageAIEmbeddings
-    return VoyageAIEmbeddings(model=model_name, api_key=api_key)
+
+    def _build_voyage() -> Any:
+        client = VoyageAIEmbeddings(model=model_name, api_key=api_key)
+        _attach_voyage_tokenizer(client, model_name, hf_token)
+        return client
+
+    return _cached_client(cache_key, _build_voyage)
 
 
 def get_embedding_model_for_customer(
@@ -122,17 +211,23 @@ def get_embedding_model_for_customer(
     model_name_str: Optional[str] = None,
 ) -> Any:
     """
-    get_embedding_model with the key resolved from the customer's stored
-    credentials (CustomerVendorApiKeys, KMS-decrypted). Raises
+    get_embedding_model with credentials resolved per call from the customer's
+    stored rows (CustomerVendorApiKeys, KMS-decrypted): the provider api_key,
+    plus the optional Hugging Face token for standard Voyage models (the only
+    path that downloads a tokenizer). Per-call resolution keeps rotation
+    immediate — a changed key simply misses the client cache. Raises
     EmbeddingKeyMissing when a hosted model is requested and the customer has
     no key for its provider.
     """
-    from encoding_library.utils.model_registry import resolve_model
-    from encoding_library.utils.vendor_keys import get_customer_embedding_key
+    from encoding_library.utils.model_registry import is_contextualized_model, resolve_model
+    from encoding_library.utils.vendor_keys import get_customer_embedding_key, get_customer_hf_token
 
     model_type, model_name = resolve_model(model_type_str, model_name_str)
     api_key = get_customer_embedding_key(customer_id, model_type)
-    return get_embedding_model(model_type, model_name, api_key=api_key)
+    hf_token = None
+    if model_type == "voyage" and not is_contextualized_model(model_name):
+        hf_token = get_customer_hf_token(customer_id)
+    return get_embedding_model(model_type, model_name, api_key=api_key, hf_token=hf_token)
 
 def create_chunks(
     text_to_encode: str,

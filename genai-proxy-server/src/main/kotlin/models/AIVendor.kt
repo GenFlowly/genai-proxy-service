@@ -38,8 +38,9 @@ value class AIVendor(val name: String) {
         val entries: List<AIVendor> = listOf(OPENAI, CLAUDE, GEMINI)
 
         // Rows in CustomerVendorApiKeys that are NOT text-generation vendors
-        // (embedding-only) — AI-vendor readers must keep skipping them.
-        private val EMBEDDING_ONLY_NAMES = setOf("VOYAGE")
+        // (the VOYAGE embedding key, the HUGGINGFACE Hub token) — AI-vendor
+        // readers must keep skipping them.
+        private val EMBEDDING_ONLY_NAMES = setOf("VOYAGE", "HUGGINGFACE")
 
         /**
          * Normalizes any spelling of a vendor to its canonical form: legacy

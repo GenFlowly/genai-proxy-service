@@ -218,4 +218,14 @@ class EmbeddingModelCatalogServiceTest {
 
         service.assertModelSupported(cid, "voyage-multimodal-3.5") // no throw
     }
+
+    @Test
+    fun `weekly sweep scans only embedding vendors, never the HUGGINGFACE token rows`() = runTest {
+        coEvery { catalogRepo.tryAcquireSweepLease(any()) } returns true
+        coEvery { credsRepo.scanEmbeddingKeyItems(any()) } returns emptyList()
+
+        service.refreshAll()
+
+        coVerify { credsRepo.scanEmbeddingKeyItems(setOf("OPENAI", "VOYAGE")) }
+    }
 }

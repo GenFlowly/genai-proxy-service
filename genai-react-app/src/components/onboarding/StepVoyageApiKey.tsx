@@ -6,12 +6,14 @@ import { APIKeyStatus } from '../../models/storeCustomerVendorAPIKeys.models'
 import { EmbeddingVendor, getEmbeddingKeys, storeEmbeddingKey } from '../../services/embeddingKeysService'
 import { OnboardingStepShell } from './OnboardingStepShell'
 import { OnboardingStepProps } from './OnboardingStep.types'
+import shellStyles from './OnboardingStepShell.module.scss'
 
 export function StepVoyageApiKey({ onBack, onNext, isLastStep, finishing }: OnboardingStepProps): React.ReactElement {
     const { t } = useTranslation()
     const { isAuthenticated, getAccessTokenSilently } = useAuth()
 
     const [keyInput, setKeyInput] = useState('')
+    const [hfTokenInput, setHfTokenInput] = useState('')
     const [alreadyConfigured, setAlreadyConfigured] = useState(false)
     const [busy, setBusy] = useState(false)
     const [message, setMessage] = useState<string | null>(null)
@@ -37,7 +39,8 @@ export function StepVoyageApiKey({ onBack, onNext, isLastStep, finishing }: Onbo
 
     const handleContinue = async () => {
         const key = keyInput.trim()
-        if (!key) {
+        const hfToken = hfTokenInput.trim()
+        if (!key && !hfToken) {
             onNext()
             return
         }
@@ -45,13 +48,23 @@ export function StepVoyageApiKey({ onBack, onNext, isLastStep, finishing }: Onbo
         setMessage(null)
         try {
             const token = await getAccessTokenSilently()
-            const response = await storeEmbeddingKey(token, EmbeddingVendor.VOYAGE, key)
-            if (response.keyStatus.updateSuccessful) {
-                onNext()
-            } else {
-                setMessage(response.keyStatus.detail || response.keyStatus.status)
-                setMessageKind('error')
+            if (key) {
+                const response = await storeEmbeddingKey(token, EmbeddingVendor.VOYAGE, key)
+                if (!response.keyStatus.updateSuccessful) {
+                    setMessage(response.keyStatus.detail || response.keyStatus.status)
+                    setMessageKind('error')
+                    return
+                }
             }
+            if (hfToken) {
+                const response = await storeEmbeddingKey(token, EmbeddingVendor.HUGGINGFACE, hfToken)
+                if (!response.keyStatus.updateSuccessful) {
+                    setMessage(response.keyStatus.detail || response.keyStatus.status)
+                    setMessageKind('error')
+                    return
+                }
+            }
+            onNext()
         } catch (err) {
             setMessage(err instanceof Error ? err.message : t('onboarding.genericSaveError'))
             setMessageKind('error')
@@ -84,6 +97,16 @@ export function StepVoyageApiKey({ onBack, onNext, isLastStep, finishing }: Onbo
                 disabled={busy}
                 onChange={e => setKeyInput(e.target.value)}
                 data-testid="onboarding-voyage-key-input"
+            />
+            <p className={shellStyles.description}>{t('onboarding.voyage.hfTokenNote')}</p>
+            <InputTextWithHint
+                hint={t('onboarding.voyage.hfTokenHint')}
+                type="password"
+                placeholder={t('onboarding.voyage.hfTokenPlaceholder')}
+                value={hfTokenInput}
+                disabled={busy}
+                onChange={e => setHfTokenInput(e.target.value)}
+                data-testid="onboarding-hf-token-input"
             />
         </OnboardingStepShell>
     )

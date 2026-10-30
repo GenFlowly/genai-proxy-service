@@ -10,7 +10,9 @@ back, and accumulates usage from response.done for metering.
 
 State is process-local (an in-memory registry of live WebSockets) — the same
 single-process assumption the voice WebSocket relay already makes. A control
-leg dies silently with the call; detach() or the remote close reaps it.
+leg dies silently with the call; detach() or the remote close reaps it, and
+attach() sweeps out anything closed or idle past IDLE_REAP_SECONDS as a
+backstop.
 """
 import asyncio
 import json
@@ -22,6 +24,10 @@ import websockets
 logger = logging.getLogger(__name__)
 
 REALTIME_URL = "wss://api.openai.com/v1/realtime"
+
+# A control leg idle this long is presumed orphaned and swept on the next
+# attach(); a live call keeps touching last_activity through its reader.
+IDLE_REAP_SECONDS = 3600.0
 
 # Caller events we will forward to the session. Everything else is refused —
 # in particular input_audio_buffer.* (audio belongs to the browser leg).
@@ -43,6 +49,7 @@ class CallControl:
         self.webhook_url = webhook_url
         self.webhook_secret = webhook_secret
         self.attached_at = time.time()
+        self.last_activity = time.time()
         self.closed = False
         self.close_reason: str | None = None
         self.reader_task: asyncio.Task | None = None
@@ -55,6 +62,9 @@ class CallControl:
         }
         self.tool_calls_relayed = 0
         self.last_error: str | None = None
+
+    def touch(self) -> None:
+        self.last_activity = time.time()
 
     def summary(self) -> dict:
         return {
@@ -71,10 +81,28 @@ class CallControl:
 _registry: dict[str, CallControl] = {}
 
 
+def _discard(control: CallControl) -> None:
+    # Identity check: a reaped leg must never evict a fresh control that was
+    # re-attached under the same call_id.
+    if _registry.get(control.call_id) is control:
+        del _registry[control.call_id]
+
+
+async def _sweep() -> None:
+    now = time.time()
+    for control in list(_registry.values()):
+        if control.closed:
+            _discard(control)
+        elif now - control.last_activity > IDLE_REAP_SECONDS:
+            logger.info("Reaping idle control channel for call %s", control.call_id)
+            await _close(control, "idle_reaped")
+
+
 def get_control(call_id: str, customer_id: str) -> CallControl | None:
     control = _registry.get(call_id)
     if control is None or control.customer_id != customer_id:
         return None
+    control.touch()
     return control
 
 
@@ -82,10 +110,12 @@ async def attach(call_id: str, api_key: str, customer_id: str,
                  session_update: dict | None,
                  webhook_url: str | None, webhook_secret: str | None) -> CallControl:
     """Opens the control WebSocket for a live call and starts its reader."""
+    await _sweep()
     existing = _registry.get(call_id)
     if existing is not None and not existing.closed:
         if existing.customer_id != customer_id:
             raise PermissionError("call_id is attached by another customer")
+        existing.touch()
         return existing  # idempotent re-attach
 
     url = f"{REALTIME_URL}?call_id={call_id}"
@@ -114,13 +144,14 @@ async def send_events(control: CallControl, events: list[dict]) -> int:
             raise ValueError(f"Event type not allowed on the control channel: {etype!r}")
         await control.ws.send(json.dumps(event))
         sent += 1
+    control.touch()
     return sent
 
 
 async def detach(control: CallControl, reason: str = "detached") -> dict:
     summary = control.summary()
     await _close(control, reason)
-    _registry.pop(control.call_id, None)
+    _discard(control)
     return summary
 
 
@@ -135,12 +166,14 @@ async def _close(control: CallControl, reason: str) -> None:
         await control.ws.close()
     except Exception:
         pass
+    _discard(control)
 
 
 async def _reader(control: CallControl) -> None:
     """Reads session events: accumulates usage, relays function calls."""
     try:
         async for raw in control.ws:
+            control.touch()
             try:
                 event = json.loads(raw)
             except json.JSONDecodeError:
@@ -167,6 +200,7 @@ async def _reader(control: CallControl) -> None:
     finally:
         control.closed = True
         control.close_reason = control.close_reason or "remote_closed"
+        _discard(control)
 
 
 def _record_usage(control: CallControl, event: dict) -> None:

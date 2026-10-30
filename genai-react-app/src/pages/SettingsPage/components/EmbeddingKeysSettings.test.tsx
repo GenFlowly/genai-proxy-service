@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { EmbeddingKeysSettings } from './EmbeddingKeysSettings';
 import { useAuth } from '../../../context/AuthContext';
 import {
+    deleteEmbeddingKey,
     getEmbeddingKeys,
     storeEmbeddingKey,
     EmbeddingVendor,
@@ -17,12 +18,14 @@ jest.mock('../../../services/embeddingKeysService', () => ({
     ...jest.requireActual('../../../services/embeddingKeysService'),
     getEmbeddingKeys: jest.fn(),
     storeEmbeddingKey: jest.fn(),
+    deleteEmbeddingKey: jest.fn(),
 }));
 jest.mock('../../../services/storeCustomerVendorApiKeysService');
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockGetEmbeddingKeys = getEmbeddingKeys as jest.Mock;
 const mockStoreEmbeddingKey = storeEmbeddingKey as jest.Mock;
+const mockDeleteEmbeddingKey = deleteEmbeddingKey as jest.Mock;
 const mockStoreCustomerVendorApiKey = storeCustomerVendorApiKey as jest.Mock;
 
 describe('EmbeddingKeysSettings', () => {
@@ -157,6 +160,74 @@ describe('EmbeddingKeysSettings', () => {
         // The pill reflects the save optimistically (capability lands async)
         expect(screen.getByTestId('embedding-keys-OPENAI-status-pill')).toHaveTextContent('Key set');
         expect(mockStoreEmbeddingKey).not.toHaveBeenCalled();
+    });
+
+    test('renders the optional Hugging Face token row, unset by default', async () => {
+        render(<EmbeddingKeysSettings />);
+
+        await waitFor(() => expect(mockGetEmbeddingKeys).toHaveBeenCalled());
+        expect(screen.getByTestId('hf-token-HUGGINGFACE-status-pill')).toHaveTextContent('Not set');
+        // Unset token -> nothing to remove
+        expect(screen.queryByTestId('hf-token-HUGGINGFACE-remove-key')).not.toBeInTheDocument();
+    });
+
+    test('saves the Hugging Face token through the embedding endpoint and flips the status', async () => {
+        mockStoreEmbeddingKey.mockResolvedValue({
+            keyStatus: {
+                vendor: EmbeddingVendor.HUGGINGFACE,
+                isAPIKeyValid: true,
+                status: APIKeyStatus.VALID,
+                updateSuccessful: true,
+            },
+        });
+
+        render(<EmbeddingKeysSettings />);
+        await userEvent.type(screen.getByTestId('hf-token-HUGGINGFACE-key-input'), 'hf_test');
+        await userEvent.click(screen.getByTestId('hf-token-HUGGINGFACE-save-key'));
+
+        await waitFor(() => {
+            expect(mockStoreEmbeddingKey).toHaveBeenCalledWith('test-token', EmbeddingVendor.HUGGINGFACE, 'hf_test');
+            expect(screen.getByTestId('hf-token-HUGGINGFACE-status-pill')).toHaveTextContent('Key set');
+        });
+        expect(mockStoreCustomerVendorApiKey).not.toHaveBeenCalled();
+    });
+
+    test('removes a stored Hugging Face token and resets the status', async () => {
+        mockGetEmbeddingKeys.mockResolvedValue({
+            statuses: [
+                { vendor: EmbeddingVendor.OPENAI, isAPIKeyValid: false, status: APIKeyStatus.NOT_SET },
+                { vendor: EmbeddingVendor.VOYAGE, isAPIKeyValid: false, status: APIKeyStatus.NOT_SET },
+                { vendor: EmbeddingVendor.HUGGINGFACE, isAPIKeyValid: true, status: APIKeyStatus.VALID },
+            ],
+        });
+        mockDeleteEmbeddingKey.mockResolvedValue(undefined);
+
+        render(<EmbeddingKeysSettings />);
+        await waitFor(() =>
+            expect(screen.getByTestId('hf-token-HUGGINGFACE-status-pill')).toHaveTextContent('Key set')
+        );
+        await userEvent.click(screen.getByTestId('hf-token-HUGGINGFACE-remove-key'));
+
+        await waitFor(() => {
+            expect(mockDeleteEmbeddingKey).toHaveBeenCalledWith('test-token', EmbeddingVendor.HUGGINGFACE);
+            expect(screen.getByTestId('hf-token-HUGGINGFACE-status-pill')).toHaveTextContent('Not set');
+        });
+    });
+
+    test('the OpenAI and Voyage rows have no remove button', async () => {
+        mockGetEmbeddingKeys.mockResolvedValue({
+            statuses: [
+                { vendor: EmbeddingVendor.OPENAI, isAPIKeyValid: true, status: APIKeyStatus.VALID },
+                { vendor: EmbeddingVendor.VOYAGE, isAPIKeyValid: true, status: APIKeyStatus.VALID },
+            ],
+        });
+
+        render(<EmbeddingKeysSettings />);
+        await waitFor(() =>
+            expect(screen.getByTestId('embedding-keys-VOYAGE-status-pill')).toHaveTextContent('Key set')
+        );
+        expect(screen.queryByTestId('embedding-keys-OPENAI-remove-key')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('embedding-keys-VOYAGE-remove-key')).not.toBeInTheDocument();
     });
 
     test('rejected Voyage key keeps the status unset', async () => {

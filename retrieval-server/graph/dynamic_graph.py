@@ -4,6 +4,7 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
+from graph.bounded_cache import BoundedCache
 from graph.nodes.human_input import human_input
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
@@ -12,15 +13,18 @@ from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
 
+_CACHE_MAX_SIZE = 128
+
 # customer_id -> (graph_identity, compiled_graph, max_iterations). The identity
 # is (graphId, latestVersion): a mismatch means the customer's resolved graph
-# changed (edit, fork, or a new System publish) and forces a rebuild.
-_graph_cache: dict[str, tuple[tuple, Any, int]] = {}
+# changed (edit, fork, or a new System publish) and forces a rebuild. No TTL —
+# identity mismatch is the refresh trigger; the bound alone caps memory.
+_graph_cache = BoundedCache(_CACHE_MAX_SIZE)
 
 # Same shape/keying as _graph_cache but holds the checkpointer-bound (durable)
 # compilation used by the /runs path — kept separate so durable and stateless
 # graphs for the same customer coexist instead of evicting each other.
-_durable_graph_cache: dict[str, tuple[tuple, Any, int]] = {}
+_durable_graph_cache = BoundedCache(_CACHE_MAX_SIZE)
 
 # safety cap on how many times the graph can loop through a cycle before LangGraph forcibly aborts the run
 _DEFAULT_MAX_ITERATIONS = 10
@@ -174,7 +178,7 @@ def get_or_build_graph(customer_id: str, graph_record: dict, nodes: list[dict]) 
     cached = _graph_cache.get(customer_id)
     if cached is None or cached[0] != identity:
         compiled, max_iterations = build_graph_for_customer(graph_record, nodes)
-        _graph_cache[customer_id] = (identity, compiled, max_iterations)
+        _graph_cache.set(customer_id, (identity, compiled, max_iterations))
         return compiled, max_iterations
     return cached[1], cached[2]
 
@@ -190,7 +194,7 @@ def get_or_build_durable_graph(
     cached = _durable_graph_cache.get(customer_id)
     if cached is None or cached[0] != identity:
         compiled, max_iterations = build_durable_graph_for_customer(graph_record, nodes, checkpointer)
-        _durable_graph_cache[customer_id] = (identity, compiled, max_iterations)
+        _durable_graph_cache.set(customer_id, (identity, compiled, max_iterations))
         return compiled, max_iterations
     return cached[1], cached[2]
 

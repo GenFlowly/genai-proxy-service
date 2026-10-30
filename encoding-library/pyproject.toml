@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genflowly-encoding-library"
-version = "0.1.38"
+version = "0.1.39"
 description = "Text encoding and chunking library."
 dependencies = [
     "requests>=2.31.0",
@@ -14,7 +14,12 @@ dependencies = [
     "tiktoken",
     "langchain-experimental",
     "langchain-openai",
-    "langchain-voyageai"
+    "langchain-voyageai",
+    # voyageai 0.5.x: BaseClient.tokenizer is functools.lru_cache on an
+    # instance method — embedding_utils' client cache and per-instance
+    # tokenizer pinning are built around that layout; re-evaluate on a 0.6
+    # upgrade.
+    "voyageai>=0.5.0,<0.6"
 ]
 requires-python = ">=3.9"
 
